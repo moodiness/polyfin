@@ -1,0 +1,13 @@
+# Private configuration
+.env
+.env.*
+!.env.example
+*.env
+/compose.override.yaml
+
+# Generated Go and frontend output
+/bin/
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store

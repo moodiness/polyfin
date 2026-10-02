@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Container version="2">
+  <Name>Polyfin</Name>
+  <Repository>ghcr.io/moodiness/polyfin:latest</Repository>
+  <Registry>https://github.com/moodiness/polyfin/pkgs/container/polyfin</Registry>
+  <TemplateURL>https://raw.githubusercontent.com/moodiness/polyfin/main/templates/unraid/polyfin.xml</TemplateURL>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/moodiness/polyfin/issues</Support>
+  <Project>https://github.com/moodiness/polyfin</Project>
+  <Overview>Polyfin is a self-hosted, Jellyfin-compatible media server for Stremio addons. It is designed to let Jellyfin apps on TVs, phones and computers browse and play what your own addons provide, with multiple users and transcoding.&#xD;
+&#xD;
+EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet. Current releases provide the server foundation and the admin page at /admin/.&#xD;
+&#xD;
+REQUIRED: A PostgreSQL 18 container must already be running, for example the official postgres:18 image with a dedicated database and user named polyfin. Enter its address in PostgreSQL URL as postgresql://USER:PASSWORD@HOST:5432/DATABASE, where HOST is the PostgreSQL container name on a shared custom Docker network or the Unraid server IP. Use a URL-safe password such as the output of openssl rand -hex 24. Polyfin waits for the database and creates its tables automatically.&#xD;
+&#xD;
+Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
+  <Category>MediaServer:Video</Category>
+  <WebUI>http://[IP]:[PORT:8096]/admin/</WebUI>
+  <Icon>https://raw.githubusercontent.com/moodiness/polyfin/main/web/public/polyfin.png</Icon>
+  <ExtraParams>--restart unless-stopped --security-opt=no-new-privileges --cap-drop=ALL --read-only</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>PostgreSQL 18</Requires>
+
+  <Config Name="HTTP port" Target="8096" Default="8096" Mode="tcp" Description="Port for Jellyfin apps and the admin page. 8096 is the port Jellyfin apps try by default." Type="Port" Display="always" Required="true" Mask="false">8096</Config>
+  <Config Name="PostgreSQL URL" Target="POLYFIN_DATABASE_URL" Default="" Mode="" Description="Connection URL of your PostgreSQL 18 database, for example postgresql://polyfin:YOUR_PASSWORD@postgres:5432/polyfin. Keep the password URL-safe." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Log level" Target="POLYFIN_LOG_LEVEL" Default="info|debug|warn|error" Mode="" Description="Amount of detail in the container log. Use debug only while troubleshooting." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
+</Container>
