@@ -53,6 +53,8 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Items/{itemId}/SpecialFeatures", h.itemExtras)
 	signedIn(http.MethodGet, "/Items/{itemId}/LocalTrailers", h.itemExtras)
 	signedIn(http.MethodGet, "/Items/{itemId}/ThemeMedia", h.themeMedia)
+	signedIn(http.MethodGet, "/Items/{itemId}/Intros", h.intros)
+	signedIn(http.MethodGet, "/Users/{userId}/Items/{itemId}/Intros", h.intros)
 }
 
 // problemDetails is the RFC 9457 body ASP.NET answers with when it rejects
@@ -1049,10 +1051,13 @@ func (h *Handler) itemRequest(w http.ResponseWriter, r *http.Request, bind func(
 	return id, true
 }
 
+// auxiliaryItemExists reports whether an item exists for the caller, a
+// version of a title counting as an item.
 func (h *Handler) auxiliaryItemExists(r *http.Request, id accounts.ID) (bool, error) {
 	_, err := h.Library.Item(r.Context(), callerFrom(r.Context()).User, id)
 	if errors.Is(err, library.ErrNotFound) {
-		return false, nil
+		_, isVersion := h.Library.VersionOwner(id)
+		return isVersion, nil
 	}
 	return err == nil, err
 }
@@ -1084,6 +1089,13 @@ func (h *Handler) itemCollections(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) itemExtras(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.itemRequest(w, r, func(bindErrors) {}); ok {
 		writeJSON(w, http.StatusOK, []struct{}{})
+	}
+}
+
+// intros lists the videos played before an item: none in Polyfin.
+func (h *Handler) intros(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.itemRequest(w, r, func(bindErrors) {}); ok {
+		writeJSON(w, http.StatusOK, emptyResult{Items: []struct{}{}})
 	}
 }
 

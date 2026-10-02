@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -33,8 +37,10 @@ type Options struct {
 	WebSocketPort int
 	// Library browses the catalogs of users' addons.
 	Library *library.Service
-	// Stremio downloads artwork referenced by addons.
+	// Stremio downloads artwork and subtitles referenced by addons.
 	Stremio *stremio.Client
+	// Playback analyzes, decides on and serves the versions of titles.
+	Playback *playback.Service
 	// Preferences stores the display preferences of Jellyfin apps.
 	Preferences *preferences.Store
 	Logger      *slog.Logger
@@ -43,13 +49,23 @@ type Options struct {
 // Handler serves the Jellyfin API.
 type Handler struct {
 	Options
-	routes http.Handler
-	images imageCache
+	routes   http.Handler
+	images   imageCache
+	sessions *playback.Sessions
+	// subtitleFiles remembers the subtitle files described for each item,
+	// for players that fetch them without credentials.
+	subtitleFiles *cache.Cache[accounts.ID, []library.ExternalSubtitle]
+	subtitleCache *cache.Cache[accounts.ID, []subtitles.Cue]
 }
 
 // New returns the Jellyfin API handler.
 func New(options Options) *Handler {
-	h := &Handler{Options: options}
+	h := &Handler{
+		Options:       options,
+		sessions:      playback.NewSessions(),
+		subtitleFiles: cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
+		subtitleCache: cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
+	}
 	rt := &router{}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -83,6 +99,7 @@ func New(options Options) *Handler {
 
 	h.browseRoutes(rt)
 	h.auxiliaryRoutes(rt)
+	h.playbackRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

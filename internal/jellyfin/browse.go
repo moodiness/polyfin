@@ -84,14 +84,31 @@ func (h *Handler) browseError(w http.ResponseWriter, r *http.Request, err error)
 	processingError(w, http.StatusBadGateway)
 }
 
-func (h *Handler) dtos(items []library.Item, fields fieldSet, keep func(library.Item) bool) []BaseItemDto {
+// dtos describes listed items. When the request asks for MediaSources or
+// MediaStreams, movies and episodes carry what is known of their versions.
+func (h *Handler) dtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, keep func(library.Item) bool) []BaseItemDto {
 	result := make([]BaseItemDto, 0, len(items))
 	for _, item := range items {
 		if keep == nil || keep(item) {
-			result = append(result, h.newItemDto(item, fields, false))
+			result = append(result, h.listDto(r, user, item, fields))
 		}
 	}
 	return result
+}
+
+func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item, fields fieldSet) BaseItemDto {
+	dto := h.newItemDto(item, fields, false)
+	sources, streams := fields.has("MediaSources"), fields.has("MediaStreams")
+	if sources || streams {
+		h.addMediaSources(r, user, &dto, item, item.ID, false)
+		if !sources {
+			dto.MediaSources = nil
+		}
+		if !streams {
+			dto.MediaStreams = nil
+		}
+	}
+	return dto
 }
 
 // folderDtos describes libraries and ancestors, which Jellyfin always
@@ -150,7 +167,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if item, err := h.Library.Item(r.Context(), user, id); err == nil && keep(item) {
-				items = append(items, h.newItemDto(item, fields, false))
+				items = append(items, h.listDto(r, user, item, fields))
 			}
 		}
 		items = nonNilItems(items)
@@ -163,7 +180,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			h.browseError(w, r, err)
 			return
 		}
-		items := h.dtos(found, fields, keep)
+		items := h.dtos(r, user, found, fields, keep)
 		writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
 		return
 	}
@@ -189,7 +206,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, QueryResult{Items: h.dtos(page.Items, fields, keep), TotalRecordCount: page.Total, StartIndex: start})
+	writeJSON(w, http.StatusOK, QueryResult{Items: h.dtos(r, user, page.Items, fields, keep), TotalRecordCount: page.Total, StartIndex: start})
 }
 
 // genreFilter returns the genre a listing is narrowed to, given by name
@@ -288,7 +305,7 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.dtos(page.Items, requestedFields(r), itemTypeFilter(r)))
+	writeJSON(w, http.StatusOK, h.dtos(r, user, page.Items, requestedFields(r), itemTypeFilter(r)))
 }
 
 func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
@@ -299,11 +316,17 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := h.Library.Item(r.Context(), user, id)
+	if errors.Is(err, library.ErrNotFound) {
+		// Apps open a version as an item by its media source id.
+		item, err = h.title(r.Context(), user, id)
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.newItemDto(item, requestedFields(r), true))
+	dto := h.newItemDto(item, requestedFields(r), true)
+	h.addMediaSources(r, user, &dto, item, id, true)
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
@@ -312,6 +335,10 @@ func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.viewer(w, r, b, notFoundProblem)
 	if !ok {
 		return
+	}
+	if owner, isVersion := h.Library.VersionOwner(id); isVersion {
+		// A version opened as an item sits where its title does.
+		id = owner
 	}
 	folders, err := h.Library.Ancestors(r.Context(), user, id)
 	if err != nil {
@@ -333,7 +360,7 @@ func (h *Handler) seasons(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	items := h.dtos(seasons, requestedFields(r), nil)
+	items := h.dtos(r, user, seasons, requestedFields(r), nil)
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 }
 
@@ -366,7 +393,7 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 	if hasNumber && !hasSeasonID {
 		episodes = slices.DeleteFunc(episodes, func(item library.Item) bool { return item.ParentIndexNumber != number })
 	}
-	items := h.dtos(episodes, requestedFields(r), nil)
+	items := h.dtos(r, user, episodes, requestedFields(r), nil)
 	if limit < 0 {
 		limit = len(items)
 	}

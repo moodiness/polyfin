@@ -3,14 +3,14 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect and browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, but nothing can be played yet. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, and play the versions their device supports as they are, with the addons' subtitles. Polyfin does not transcode yet, so a version the app cannot play as is (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
 
 ## Features
 
 - **Jellyfin-compatible API**: standard Jellyfin clients sign in, browse, search, and play. Polyfin targets the Jellyfin 12.1 API.
 - **Stremio addons as the content source**: AIOMetadata for catalogs and metadata, AIOStreams for streams and subtitles, and any other addon that speaks the standard Stremio protocol.
   - Stremio catalogs become Jellyfin libraries. An addon's collection catalogs (such as AIOMetadata's) become collection libraries, where each collection gathers the catalogs it groups, movies and series together.
-  - Stremio streams become versions (media sources) of the same item.
+  - Stremio streams become versions (media sources) of the same item, and addon subtitles become external subtitle tracks.
 - **Multiple users**: separate accounts with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points, and Next Up are tracked per user.
 - **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS transcoder, built on FFmpeg for remote sources. See the [transcoding design](docs/transcoding.md).
 
@@ -24,7 +24,7 @@ Jellyfin client ──Jellyfin API──> Polyfin ──Stremio protocol──> 
       └── transcoding: HLS <── FFmpeg (reads the stream through Polyfin's cache, serves the segments)
 ```
 
-Polyfin always handles authentication, accounts, browsing, metadata, source selection, and playback state. It only reads the remote stream itself when transcoding, so the direct play or transcoding decision determines how much bandwidth the server uses.
+Polyfin always handles authentication, accounts, browsing, metadata, source selection, and playback state. It reads the remote stream itself only when transcoding, or to relay a source the app could not reach (one that needs request headers or is on a local network address) or a redirect it could not follow, so the direct play or transcoding decision determines how much bandwidth the server uses. Apps never see the addons' stream URLs: they receive Polyfin's own, signed for the user.
 
 ## Compatible clients
 
@@ -60,6 +60,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 
 **Artwork:** Polyfin relays images from the addons' artwork servers, so Jellyfin apps only ever talk to Polyfin.
 
+**Playback:** a title's details list every stream the addons offer as a version. The first time a version is played, Polyfin analyzes it with ffprobe (a few seconds) and keeps the result, then tells the app whether it can play it as is, as a Jellyfin server would. When the app has not picked a version, one that cannot be read is skipped in favor of the next. Active playback appears in Jellyfin apps' dashboards.
+
 **Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
 
 ## Configuration
@@ -69,12 +71,13 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 | `POLYFIN_DATABASE_URL` | (required) | PostgreSQL URL, e.g. `postgresql://polyfin:password@postgres:5432/polyfin` |
 | `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
 | `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
 
 The Compose files read their own settings (passwords, ports, image version) from `.env`; see [`.env.example`](.env.example).
 
 ## Development
 
-Requirements: Go 1.27, Node.js 24, and a PostgreSQL 18 server. With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts one on `127.0.0.1:5432`.
+Requirements: Go 1.27, Node.js 24, a PostgreSQL 18 server, and ffprobe (FFmpeg 9.0 or later) to play titles. With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts one on `127.0.0.1:5432`.
 
 ```sh
 export POLYFIN_DATABASE_URL=postgresql://polyfin:password@127.0.0.1:5432/polyfin

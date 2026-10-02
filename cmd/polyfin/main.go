@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
@@ -50,6 +52,7 @@ Environment:
   POLYFIN_DATABASE_URL  PostgreSQL URL (required)
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_LOG_LEVEL     debug, info, warn or error (default info)
+  POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
 `
 
 func main() {
@@ -121,6 +124,18 @@ func serve(ctx context.Context) error {
 	signIns := throttle.New(signInFailures, signInWindow)
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
+	secret, err := database.Secret(ctx, pool)
+	if err != nil {
+		return err
+	}
+	if _, err := exec.LookPath(cfg.FFprobe); err != nil {
+		logger.Warn("ffprobe was not found: nothing can be played until it is installed", "ffprobe", cfg.FFprobe)
+	}
+	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), logger)
+	if err != nil {
+		return err
+	}
+	defer player.Close()
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
@@ -144,6 +159,7 @@ func serve(ctx context.Context) error {
 				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
 				Library:       library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language }),
 				Stremio:       addonClient,
+				Playback:      player,
 				Preferences:   preferences.New(pool),
 				Logger:        logger,
 			}),

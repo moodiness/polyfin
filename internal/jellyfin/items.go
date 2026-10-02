@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // UserItemData is a user's state for an item. Polyfin does not record
@@ -86,22 +87,22 @@ type BaseItemDto struct {
 	ParentBackdropItemId     string            `json:",omitempty"`
 	ParentBackdropImageTags  []string          `json:",omitempty"`
 	LocalTrailerCount        *int              `json:",omitempty"`
-	UserData                 UserItemData
-	RecursiveItemCount       *int      `json:",omitempty"`
-	ChildCount               *int      `json:",omitempty"`
-	SeriesName               string    `json:",omitempty"`
-	SeriesId                 string    `json:",omitempty"`
-	SeasonId                 string    `json:",omitempty"`
-	SpecialFeatureCount      *int      `json:",omitempty"`
-	DisplayPreferencesId     string    `json:",omitempty"`
-	Status                   string    `json:",omitempty"`
-	AirDays                  *[]string `json:",omitempty"`
-	Tags                     *[]string `json:",omitempty"`
-	PrimaryImageAspectRatio  *float64  `json:",omitempty"`
-	SeriesPrimaryImageTag    string    `json:",omitempty"`
-	SeasonName               string    `json:",omitempty"`
-	CollectionType           string    `json:",omitempty"`
-	DisplayOrder             string    `json:",omitempty"`
+	UserData                 UserItemData      `json:",omitzero"`
+	RecursiveItemCount       *int              `json:",omitempty"`
+	ChildCount               *int              `json:",omitempty"`
+	SeriesName               string            `json:",omitempty"`
+	SeriesId                 string            `json:",omitempty"`
+	SeasonId                 string            `json:",omitempty"`
+	SpecialFeatureCount      *int              `json:",omitempty"`
+	DisplayPreferencesId     string            `json:",omitempty"`
+	Status                   string            `json:",omitempty"`
+	AirDays                  *[]string         `json:",omitempty"`
+	Tags                     *[]string         `json:",omitempty"`
+	PrimaryImageAspectRatio  *float64          `json:",omitempty"`
+	SeriesPrimaryImageTag    string            `json:",omitempty"`
+	SeasonName               string            `json:",omitempty"`
+	CollectionType           string            `json:",omitempty"`
+	DisplayOrder             string            `json:",omitempty"`
 	ImageTags                map[string]string
 	BackdropImageTags        []string
 	ImageBlurHashes          map[string]map[string]string
@@ -117,6 +118,63 @@ type BaseItemDto struct {
 	LockData               *bool     `json:",omitempty"`
 	CumulativeRunTimeTicks *int64    `json:",omitempty"`
 	DateLastMediaAdded     *Time     `json:",omitempty"`
+	// Container, MediaSources, MediaStreams, HasSubtitles, Width, Height
+	// and Trickplay describe a movie's or episode's versions.
+	Container    string                  `json:",omitempty"`
+	MediaSources *[]MediaSourceInfo      `json:",omitempty"`
+	MediaStreams *[]playback.MediaStream `json:",omitempty"`
+	HasSubtitles *bool                   `json:",omitempty"`
+	Width        *int                    `json:",omitempty"`
+	Height       *int                    `json:",omitempty"`
+	// Trickplay is always empty: Polyfin makes no trickplay images.
+	Trickplay *struct{} `json:",omitempty"`
+}
+
+// addMediaSources describes a movie's or episode's versions in its DTO, as
+// Jellyfin does in item details and, when asked, in listings. opened is the
+// identifier the item was asked by: its own, or one of its versions'. Item
+// details ask the addons for streams; listings only show what is known.
+func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, opened accounts.ID, detail bool) {
+	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
+		return
+	}
+	var sources []MediaSourceInfo
+	if detail {
+		p, err := h.playable(r.Context(), user, item)
+		if err != nil {
+			h.Logger.Warn("The versions of a title could not be listed", "error", err)
+		}
+		sources = h.mediaSources(r, p, opened)
+	} else if p := h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
+		sources = h.mediaSources(r, p, opened)
+	} else {
+		sources = []MediaSourceInfo{h.placeholderSource(r, item)}
+	}
+	dto.Id = opened.String()
+	dto.MediaSources = &sources
+	if detail {
+		dto.Trickplay = &struct{}{}
+	}
+	if len(sources) == 0 {
+		dto.MediaStreams = &[]playback.MediaStream{}
+		return
+	}
+	first := sources[0]
+	dto.MediaStreams = &first.MediaStreams
+	dto.Container = first.Container
+	for _, stream := range first.MediaStreams {
+		switch stream.Type {
+		case "Subtitle":
+			// Jellyfin leaves the flag out for titles without subtitles.
+			if detail {
+				dto.HasSubtitles = new(true)
+			}
+		case "Video":
+			if dto.Width == nil {
+				dto.Width, dto.Height = stream.Width, stream.Height
+			}
+		}
+	}
 }
 
 // fieldSet holds the optional fields a request asked for.

@@ -220,11 +220,17 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 }
 
 type PlayerStateInfo struct {
-	CanSeek       bool
-	IsPaused      bool
-	IsMuted       bool
-	RepeatMode    string
-	PlaybackOrder string
+	PositionTicks       *int64 `json:",omitempty"`
+	CanSeek             bool
+	IsPaused            bool
+	IsMuted             bool
+	VolumeLevel         *int   `json:",omitempty"`
+	AudioStreamIndex    *int   `json:",omitempty"`
+	SubtitleStreamIndex *int   `json:",omitempty"`
+	MediaSourceId       string `json:",omitempty"`
+	PlayMethod          string `json:",omitempty"`
+	RepeatMode          string
+	PlaybackOrder       string
 }
 
 type ClientCapabilities struct {
@@ -246,6 +252,7 @@ type SessionInfo struct {
 	Client                string
 	LastActivityDate      Time
 	LastPlaybackCheckIn   Time
+	LastPausedDate        *Time `json:",omitempty"`
 	DeviceName            string
 	DeviceId              string
 	ApplicationVersion    string
@@ -253,6 +260,7 @@ type SessionInfo struct {
 	SupportsMediaControl  bool
 	SupportsRemoteControl bool
 	NowPlayingQueue       []struct{}
+	NowPlayingItem        *BaseItemDto `json:",omitempty"`
 	HasCustomDeviceName   bool
 	ServerId              string
 	SupportedCommands     []string

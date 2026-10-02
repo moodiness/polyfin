@@ -1,0 +1,8 @@
+{
+  "DirectPlayProfiles": [
+    { "Type": "Video", "Container": "mp4", "VideoCodec": "h264", "AudioCodec": "mp3" }
+  ],
+  "TranscodingProfiles": [
+    { "Type": "Video", "Container": "ts", "Protocol": "hls", "VideoCodec": "h264", "AudioCodec": "aac", "Context": "Streaming" }
+  ]
+}
