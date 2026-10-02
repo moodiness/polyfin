@@ -181,13 +181,19 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	// AAC starts before zero, with its priming; the MP4 header of E-AC-3
 	// needs its first packet; converted audio is decoded from where FFmpeg
-	// starts.
-	for _, c := range []struct{ codec, convert string }{{"aac", ""}, {"eac3", ""}, {"eac3", "aac"}} {
+	// starts; converted video gets keyframes where the source has them.
+	for _, c := range []struct {
+		codec, convert string
+		encode         bool
+	}{{"aac", "", false}, {"eac3", "", false}, {"eac3", "aac", false}, {"aac", "", true}} {
 		input, keyframes := source(t, ffmpeg, ffprobe, c.codec)
 		for _, format := range []Format{FMP4, TS} {
 			name := c.codec + " in " + format.Extension()
-			if c.convert != "" {
+			switch {
+			case c.convert != "":
 				name = c.codec + " converted to " + c.convert + " in " + format.Extension()
+			case c.encode:
+				name = "video converted to H.264 in " + format.Extension()
 			}
 			t.Run(name, func(t *testing.T) {
 				m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
@@ -195,12 +201,18 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer m.Close()
+				if c.encode && !slices.Contains(m.Encoders(), "libx264") {
+					t.Skip("FFmpeg has no libx264")
+				}
 				plan := NewPlan(keyframes, 30*time.Second)
 				released := make(chan struct{})
 				open := func(context.Context) (Remux, func(), error) {
 					remux := Remux{Input: input, Video: 0, Audio: 1, Format: format, Plan: plan}
 					if c.convert != "" {
 						remux.AudioCodec, remux.AudioChannels, remux.AudioBitrate = c.convert, 2, 128_000
+					}
+					if c.encode {
+						remux.Encode = &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 128, Height: 72, Bitrate: 300_000, FrameRate: 24}
 					}
 					return remux, func() { close(released) }, nil
 				}
@@ -285,6 +297,12 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 						t.Errorf("converted audio: %q", got)
 					}
 				}
+				if c.encode {
+					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "csv=p=0", all).Output()
+					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != "h264,128,72,yuv420p" {
+						t.Errorf("converted video: %q", got)
+					}
+				}
 				if _, err := m.Segment(ctx, key, open, plan.Len()); err != ErrNotFound {
 					t.Errorf("segment past the end: %v", err)
 				}
@@ -296,6 +314,42 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestHDRIsConvertedToSDR(t *testing.T) {
+	ffmpeg, ffprobe := tools(t)
+	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if !m.HasFilters("zscale", "tonemap") || !slices.Contains(m.Encoders(), "libx264") {
+		t.Skip("FFmpeg cannot convert HDR to SDR")
+	}
+	// Video tagged as HDR10: BT.2020 primaries and the PQ transfer.
+	input := filepath.Join(t.TempDir(), "hdr.mkv")
+	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24", "-t", "8",
+		"-vf", "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc", "-c:v", "libx264", "-force_key_frames", "0,6",
+		input).CombinedOutput(); err != nil {
+		t.Fatalf("make the source: %v: %s", err, out)
+	}
+	plan := NewPlan(seconds(0, 6), 8*time.Second)
+	open := func(context.Context) (Remux, func(), error) {
+		return Remux{Input: input, Video: 0, Audio: -1, Format: TS, Plan: plan,
+			Encode: &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 320, Height: 180, Bitrate: 500_000, FrameRate: 24, ToneMap: true}}, func() {}, nil
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	f, err := m.Segment(ctx, Key{Session: "session", Audio: -1, Format: TS}, open, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,pix_fmt,color_transfer,color_primaries",
+		"-of", "csv=p=0", f.Name()).Output()
+	if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != "h264,yuv420p,bt709,bt709" {
+		t.Errorf("converted video: %q", got)
 	}
 }
 

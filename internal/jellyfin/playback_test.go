@@ -368,6 +368,44 @@ func TestAudioTheAppCannotTakeIsConverted(t *testing.T) {
 	}
 }
 
+func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts with the encoders FFmpeg has")
+	}
+	p := playing(t)
+	p.remuxable(t)
+	// jellyfin-web asks again without copying the video when a file failed
+	// to play as it is.
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000,
+		"EnableDirectPlay": false, "AllowVideoStreamCopy": false, "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	target := response.MediaSources[0].TranscodingUrl
+	if !strings.HasSuffix(target, "&TranscodeReasons=DirectPlayError&allowVideoStreamCopy=false") {
+		t.Fatalf("TranscodingUrl: %s", target)
+	}
+	base := p.url + strings.Split(target, "master.m3u8")[0]
+	query := strings.SplitN(target, "?", 2)[1]
+	if _, _, master := fetchText(t, base+"master.m3u8?"+query); !strings.Contains(master, `CODECS="avc1.640029,Opus",RESOLUTION=64x64`) {
+		t.Errorf("master playlist:\n%s", master)
+	}
+	status, _, segment := fetchText(t, base+"hls1/main/-1.mp4?"+query)
+	_, _, first := fetchText(t, base+"hls1/main/0.mp4?"+query)
+	path := filepath.Join(t.TempDir(), "0.mp4")
+	if err := os.WriteFile(path, []byte(segment+first), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := exec.Command(filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), "-v", "error", "-select_streams", "v",
+		"-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "csv=p=0", path).Output()
+	if got := strings.TrimSpace(string(out)); status != http.StatusOK || got != "h264,64,64,yuv420p" {
+		t.Errorf("segment: %d, video %q", status, got)
+	}
+}
+
 func mustID(t *testing.T, s string) accounts.ID {
 	t.Helper()
 	id, err := accounts.ParseID(s)
