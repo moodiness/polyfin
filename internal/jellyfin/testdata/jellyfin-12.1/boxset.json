@@ -1,0 +1,66 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "ChildCount": 0,
+  "DateCreated": "",
+  "DateLastMediaAdded": "",
+  "DisplayOrder": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "Etag": "",
+  "ExternalUrls": [],
+  "GenreItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Genres": [
+    ""
+  ],
+  "Id": "",
+  "ImageBlurHashes": {},
+  "ImageTags": {},
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "",
+  "Name": "",
+  "OfficialRating": "",
+  "ParentId": "",
+  "Path": "",
+  "People": [],
+  "PlayAccess": "",
+  "PremiereDate": "",
+  "ProductionYear": 0,
+  "ProviderIds": {},
+  "RecursiveItemCount": 0,
+  "RemoteTrailers": [],
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "Studios": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false,
+    "PlayedPercentage": 0,
+    "UnplayedItemCount": 0
+  }
+}

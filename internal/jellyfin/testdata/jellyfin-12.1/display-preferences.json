@@ -1,0 +1,21 @@
+{
+  "Client": "",
+  "CustomPrefs": {
+    "chromecastVersion": "",
+    "dashboardTheme": null,
+    "enableNextVideoInfoOverlay": "",
+    "skipBackLength": "",
+    "skipForwardLength": "",
+    "tvhome": null
+  },
+  "Id": "",
+  "PrimaryImageHeight": 0,
+  "PrimaryImageWidth": 0,
+  "RememberIndexing": false,
+  "RememberSorting": false,
+  "ScrollDirection": "",
+  "ShowBackdrop": false,
+  "ShowSidebar": false,
+  "SortBy": "",
+  "SortOrder": ""
+}

@@ -7,7 +7,10 @@ import (
 	"net/http"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -28,13 +31,20 @@ type Options struct {
 	SignIns *throttle.Failures
 	// WebSocketPort is the port apps reach the server on.
 	WebSocketPort int
-	Logger        *slog.Logger
+	// Library browses the catalogs of users' addons.
+	Library *library.Service
+	// Stremio downloads artwork referenced by addons.
+	Stremio *stremio.Client
+	// Preferences stores the display preferences of Jellyfin apps.
+	Preferences *preferences.Store
+	Logger      *slog.Logger
 }
 
 // Handler serves the Jellyfin API.
 type Handler struct {
 	Options
 	routes http.Handler
+	images imageCache
 }
 
 // New returns the Jellyfin API handler.
@@ -70,6 +80,9 @@ func New(options Options) *Handler {
 	signedIn(http.MethodPost, "/Sessions/Logout", h.logout)
 	signedIn(http.MethodPost, "/Sessions/Capabilities", h.capabilities)
 	signedIn(http.MethodPost, "/Sessions/Capabilities/Full", h.fullCapabilities)
+
+	h.browseRoutes(rt)
+	h.auxiliaryRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

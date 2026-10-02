@@ -21,9 +21,9 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// DefaultLibraries is how many libraries a scope gets automatically when
-// addons are installed. Each library adds a row to the home screen of
-// Jellyfin apps.
+// DefaultLibraries bounds how many libraries a scope gets automatically when
+// addons are installed; it is not a limit on the libraries an administrator
+// enables. Each library adds a row to the home screen of Jellyfin apps.
 const DefaultLibraries = 20
 
 var (
@@ -131,8 +131,8 @@ func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (string
 	return manifestURL, manifest, err
 }
 
-// Install adds an addon at the end of the scope and enables its browsable
-// movie and series catalogs until the scope has DefaultLibraries.
+// Install adds an addon at the end of the scope and enables some of its
+// catalogs as libraries (see enableDefaults).
 func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confined bool) (Addon, error) {
 	manifestURL, manifest, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
@@ -162,6 +162,11 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 	return addon, err
 }
 
+// enableDefaults makes libraries of a new addon's catalogs. An addon that
+// groups its catalogs into collections (such as AIOMetadata) already says how
+// to organize them: its browsable collection catalogs become the libraries.
+// Otherwise its browsable movie and series catalogs do, until the scope has
+// DefaultLibraries.
 func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) error {
 	var count, last int
 	err := tx.QueryRow(ctx, `SELECT count(*), coalesce(max(l.position), 0) FROM libraries l
@@ -169,11 +174,15 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 	if err != nil {
 		return err
 	}
+	wanted := func(catalog stremio.Catalog) bool { return catalog.Type == "movie" || catalog.Type == "series" }
+	if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
+		wanted = func(catalog stremio.Catalog) bool { return catalog.Type == "collection" }
+	}
 	for _, catalog := range addon.Manifest.Catalogs {
 		if count >= DefaultLibraries {
 			break
 		}
-		if !catalog.Browsable() || (catalog.Type != "movie" && catalog.Type != "series") {
+		if !catalog.Browsable() || !wanted(catalog) {
 			continue
 		}
 		last++
