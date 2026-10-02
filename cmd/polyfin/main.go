@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/throttle"
 	webui "github.com/moodiness/polyfin/web"
 )
@@ -124,6 +126,7 @@ func serve(ctx context.Context) error {
 				ServerID:     serverID,
 				Database:     pool,
 				Accounts:     store,
+				Addons:       addons.New(pool, stremio.NewClient(version)),
 				QuickConnect: quickConnect,
 				SignIns:      signIns,
 				SetupCode:    setupCode,

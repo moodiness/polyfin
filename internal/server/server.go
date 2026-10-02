@@ -16,7 +16,8 @@ const (
 	readyWait   = 2 * time.Second
 	// Hashed build files never change content under the same name.
 	immutableCache = "public, max-age=31536000, immutable"
-	adminPolicy    = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+	// Addon logos are hosted by each addon, over https.
+	adminPolicy = "default-src 'self'; img-src 'self' https:; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
 )
 
 // Pinger reports whether the database answers.

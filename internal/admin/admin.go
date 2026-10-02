@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
@@ -38,6 +39,7 @@ type Options struct {
 	ServerID     string
 	Database     Pinger
 	Accounts     *accounts.Store
+	Addons       *addons.Store
 	QuickConnect *quickconnect.Store
 	SignIns      *throttle.Failures
 	// SetupCode authorizes creating the first administrator. It is printed
@@ -74,6 +76,17 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
+
+	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
+	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
+	mux.Handle("PUT /admin/api/scopes/{scope}/addons/order", h.signedIn(h.reorderAddons))
+	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
+	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
+	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
+	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
+	mux.Handle("GET /admin/api/account/addon-preferences", h.signedIn(h.addonPreferences))
+	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
 
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")

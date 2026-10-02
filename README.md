@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, but there is nothing to browse or play yet. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, and addons and libraries can be configured, but there is nothing to browse or play in the apps yet. No image is published before the first release.
 
 ## Features
 
@@ -53,6 +53,8 @@ docker compose -f compose.yaml -f compose.build.yaml up -d --build
 Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its tables on startup.
 
 **First run:** until an administrator exists, Polyfin prints a one-time setup code in its log (`docker compose logs polyfin`). Enter it on the setup page to create the administrator, then create the other accounts under **Users**. Jellyfin apps sign in with these accounts, by password or with **Quick Connect**: the app shows a 6-digit code that a signed-in user approves on the Quick Connect page.
+
+**Addons:** paste an addon's manifest URL (from its configure page) under **Addons** to share it with every user, then pick under **Libraries** which of its catalogs become libraries in Jellyfin apps. Each user can also add their own addons and libraries under **My addons**, and turn the server's addons off for themselves. Manifest URLs usually contain your addon settings or keys: Polyfin never shows them in full. Only administrators can install addons hosted on a local network address.
 
 **Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
 

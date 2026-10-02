@@ -15,6 +15,9 @@ const en = {
     quickConnect: 'Quick Connect',
     account: 'My account',
     users: 'Users',
+    myAddons: 'My addons',
+    addons: 'Addons',
+    libraries: 'Libraries',
     settings: 'Settings',
     signedInAs: (name: string) => `Signed in as ${name}`,
     signOut: 'Sign out',
@@ -31,6 +34,10 @@ const en = {
     passwordRule: 'At least 8 characters.',
     nameRule: "1 to 64 characters: letters, digits, spaces and - _ ' . @ +",
     passwordMismatch: 'The two passwords do not match.',
+    moveUp: (name: string) => `Move ${name} up`,
+    moveDown: (name: string) => `Move ${name} down`,
+    moved: (name: string, position: number, count: number) =>
+      `${name} moved to position ${position} of ${count}.`,
   },
   errors: {
     generic: 'Something went wrong. Please try again.',
@@ -53,6 +60,18 @@ const en = {
     last_administrator:
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
+    invalid_manifest_url:
+      'Enter an addon manifest URL starting with https://, http:// or stremio:// and ending in /manifest.json.',
+    addon_exists: 'This addon is already installed here.',
+    addon_unreachable:
+      'The addon could not be reached. Check the URL and that the addon is online, then try again.',
+    invalid_manifest: 'This URL did not return a Stremio addon manifest.',
+    private_network:
+      'This addon is on a local network address. Only administrators can install such addons.',
+    invalid_order: 'The addon list changed in the meantime. It has been refreshed: try again.',
+    invalid_library:
+      'A library refers to a catalog that no longer exists or cannot be browsed. Remove the libraries marked as no longer available, then save again.',
+    invalid_library_name: 'Library names must be 1 to 64 characters long.',
   },
   status: {
     title: 'Server status',
@@ -186,6 +205,113 @@ const en = {
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
     saved: 'Settings saved.',
+  },
+  stremioTypes: {
+    movie: 'Movies',
+    series: 'Series',
+    channel: 'Channels',
+    tv: 'TV',
+  },
+  stremioResources: {
+    catalog: 'Catalogs',
+    meta: 'Details',
+    stream: 'Streams',
+    subtitles: 'Subtitles',
+    addon_catalog: 'Addon catalogs',
+  },
+  addons: {
+    title: 'Addons',
+    description:
+      'Stremio addons installed here are shared with every user of this server. Each user can turn them off and add their own addons from “My addons”.',
+    installTitle: 'Install an addon',
+    manifestUrl: 'Manifest URL',
+    manifestUrlPlaceholder: 'https://…/manifest.json',
+    manifestUrlHint:
+      'Copy the install link from the addon’s configure page. It often contains your settings or keys: Polyfin keeps it private and only ever shows a shortened form.',
+    install: 'Install',
+    installing: 'Installing…',
+    installed: (name: string) => `${name} has been installed.`,
+    listTitleShared: 'Server addons',
+    listTitleMine: 'Your addons',
+    listHelp:
+      'Addons are used in this order. Turning one off hides its libraries in Jellyfin apps without losing them.',
+    emptyShared: 'No addon is installed on this server yet.',
+    emptyMine: 'You have not installed any addon yet.',
+    version: (version: string) => `Version ${version}`,
+    off: 'Turned off',
+    enabled: 'Enabled',
+    provides: 'Provides',
+    types: 'Types',
+    catalogs: 'Catalogs',
+    catalogCount: (count: number) => (count === 1 ? '1 catalog' : `${count} catalogs`),
+    lastRefresh: 'Last refresh',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing…',
+    refreshLabel: (name: string) => `Refresh ${name}`,
+    refreshed: 'The manifest has been downloaded again.',
+    replace: 'Replace URL',
+    replaceLabel: (name: string) => `Replace URL of ${name}`,
+    newManifestUrl: 'New manifest URL',
+    replaceHint:
+      'Use this after reconfiguring the addon on its configure page. Its libraries are kept.',
+    replaceSubmit: 'Replace',
+    replacing: 'Replacing…',
+    replaced: 'The manifest URL has been replaced.',
+    remove: 'Remove',
+    removing: 'Removing…',
+    removeConfirmShared: (name: string) =>
+      `Remove ${name}? Its libraries disappear from Jellyfin apps for every user, and this cannot be undone.`,
+    removeConfirmMine: (name: string) =>
+      `Remove ${name}? Its libraries disappear from your Jellyfin apps, and this cannot be undone.`,
+    removed: (name: string) => `${name} has been removed.`,
+  },
+  libraries: {
+    title: 'Libraries',
+    description:
+      'Choose which catalogs of the server’s addons appear as libraries in Jellyfin apps, for every user.',
+    shownTitle: 'Shown in Jellyfin apps',
+    shownHelp: 'Libraries appear in this order. Leave a name empty to use the catalog name.',
+    shownHelpMine:
+      'Libraries appear in this order, after the server’s libraries if you use them. Leave a name empty to use the catalog name.',
+    defaultHelp:
+      'When an addon is installed, its movie and series catalogs become libraries until there are 20. Each library adds a row to the home screen of Jellyfin apps: with many libraries, it gets slow to load and long to scroll.',
+    count: (count: number) => (count === 1 ? '1 library' : `${count} libraries`),
+    manyWarning: 'More than 20 libraries can make the home screen of Jellyfin apps heavy.',
+    noAddons: 'Install an addon first: its catalogs will be listed here.',
+    shownEmpty: 'No library: Jellyfin apps show nothing from these addons.',
+    name: 'Name in apps',
+    addonOff: 'Addon turned off',
+    missing: 'No longer available',
+    remove: 'Remove',
+    removeLabel: (name: string) => `Remove ${name}`,
+    removedLive: (name: string) => `${name} removed from the libraries.`,
+    availableTitle: 'Available catalogs',
+    availableHelp: 'Adding a catalog shows it as a library, at the end of the list above.',
+    filter: 'Filter',
+    filterPlaceholder: 'Catalog or addon name',
+    type: 'Type',
+    allTypes: 'All types',
+    add: 'Add',
+    addLabel: (name: string) => `Add ${name}`,
+    addedLive: (name: string, position: number) => `${name} added as library ${position}.`,
+    notBrowsable: 'Unavailable',
+    notBrowsableHelp: 'Needs a search or another value, so it cannot be a library.',
+    availableEmpty: 'Every catalog is already shown.',
+    noMatch: 'No catalog matches this filter.',
+    unsaved: 'Unsaved changes',
+    upToDate: 'No unsaved changes',
+    reset: 'Reset',
+    saved: 'Libraries saved.',
+  },
+  myAddons: {
+    title: 'My addons',
+    description:
+      'Add your own Stremio addons and choose which of their catalogs appear as libraries in your Jellyfin apps.',
+    preferenceTitle: 'Server addons',
+    useShared: 'Use the server’s addons',
+    useSharedHelp:
+      'On: you get the server’s addons and libraries, followed by your own. Off: you only get your own addons and libraries.',
+    preferenceSaved: 'Preference saved.',
   },
   notFound: {
     title: 'Page not found',
