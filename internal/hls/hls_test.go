@@ -180,11 +180,16 @@ func probePackets(t *testing.T, ffprobe, path string) []packet {
 func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	// AAC starts before zero, with its priming; the MP4 header of E-AC-3
-	// needs its first packet.
-	for _, codec := range []string{"aac", "eac3"} {
-		input, keyframes := source(t, ffmpeg, ffprobe, codec)
+	// needs its first packet; converted audio is decoded from where FFmpeg
+	// starts.
+	for _, c := range []struct{ codec, convert string }{{"aac", ""}, {"eac3", ""}, {"eac3", "aac"}} {
+		input, keyframes := source(t, ffmpeg, ffprobe, c.codec)
 		for _, format := range []Format{FMP4, TS} {
-			t.Run(codec+" in "+format.Extension(), func(t *testing.T) {
+			name := c.codec + " in " + format.Extension()
+			if c.convert != "" {
+				name = c.codec + " converted to " + c.convert + " in " + format.Extension()
+			}
+			t.Run(name, func(t *testing.T) {
 				m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 				if err != nil {
 					t.Fatal(err)
@@ -193,7 +198,11 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				plan := NewPlan(keyframes, 30*time.Second)
 				released := make(chan struct{})
 				open := func(context.Context) (Remux, func(), error) {
-					return Remux{Input: input, Video: 0, Audio: 1, Format: format, Plan: plan}, func() { close(released) }, nil
+					remux := Remux{Input: input, Video: 0, Audio: 1, Format: format, Plan: plan}
+					if c.convert != "" {
+						remux.AudioCodec, remux.AudioChannels, remux.AudioBitrate = c.convert, 2, 128_000
+					}
+					return remux, func() { close(released) }, nil
 				}
 				key := Key{Session: "session", Audio: 1, Format: format}
 				ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
@@ -237,6 +246,15 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 					if want := plan.Start(n).Seconds(); !strings.Contains(packets[i].Flags, "K") || math.Abs(at-want) > 0.002 {
 						t.Errorf("segment %d starts with %+v (at %.3f), want a keyframe at %.3f", n, packets[i], at, want)
 					}
+					// Its audio starts with the video, wherever FFmpeg started.
+					a := slices.IndexFunc(packets, func(p packet) bool { return p.Type == "audio" })
+					if a < 0 {
+						t.Fatalf("segment %d has no audio", n)
+					}
+					audioAt, _ := strconv.ParseFloat(packets[a].PTS, 64)
+					if audioAt -= timestampOffset.Seconds(); math.Abs(audioAt-plan.Start(n).Seconds()) > 0.25 {
+						t.Errorf("segment %d: audio starts at %.3f, video at %.3f", n, audioAt, plan.Start(n).Seconds())
+					}
 				}
 				// Joined, the segments are the source's 720 frames, in order.
 				all := filepath.Join(dir, "joined")
@@ -259,6 +277,13 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				}
 				if frames != 720 {
 					t.Errorf("%d video frames, want 720", frames)
+				}
+				if c.convert != "" {
+					// MPEG-TS lists its streams twice, in its program too.
+					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name,channels", "-of", "csv=p=0", all).Output()
+					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != c.convert+",2" {
+						t.Errorf("converted audio: %q", got)
+					}
 				}
 				if _, err := m.Segment(ctx, key, open, plan.Len()); err != ErrNotFound {
 					t.Errorf("segment past the end: %v", err)

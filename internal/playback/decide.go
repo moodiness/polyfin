@@ -2,6 +2,7 @@ package playback
 
 import (
 	"math/bits"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -24,6 +25,9 @@ type Options struct {
 	// EnableDirectStream changes nothing on its own: Jellyfin 12.1 answers
 	// the same whether it is set or not.
 	EnableDirectStream bool
+	// ConvertAudio converts the audio of a remux even when the app could
+	// take it as it is, as apps ask with AllowAudioStreamCopy false.
+	ConvertAudio bool
 }
 
 // MediaSource is a version as the decision sees it.
@@ -58,8 +62,61 @@ type Decision struct {
 	// is refused; nil when the DeviceProfile has none for video.
 	Transcoding *TranscodingProfile
 	// Remux is set when direct play is refused but Transcoding can carry
-	// the video and the audio that plays as they are, over HLS.
+	// the video as it is, over HLS. Audio then tells how the audio that
+	// plays reaches the app: copied when nil, else converted.
 	Remux bool
+	Audio *AudioConversion
+}
+
+// AudioConversion is what the audio that plays is converted to when the
+// app cannot take it as it is.
+type AudioConversion struct {
+	// Codec is the FFmpeg encoder: aac, ac3, eac3 or flac.
+	Codec    string
+	Channels int
+	// Bitrate is in bits per second, zero for lossless codecs.
+	Bitrate int64
+}
+
+// encoders are the audio encoders every FFmpeg build has, by preference
+// when a profile takes several.
+var encoders = []string{"aac", "ac3", "eac3", "flac"}
+
+// ConvertAudio is the conversion of audio for a transcoding profile taking
+// codecs, as a comma-separated list, and at most maxChannels channels when
+// it is a number: the first codec of the list FFmpeg encodes, with the
+// audio's channels up to the limit and to what the codec carries. It is
+// nil when the profile takes no codec Polyfin encodes.
+func ConvertAudio(codecs, maxChannels string, channels int) *AudioConversion {
+	codec := ""
+	for name := range strings.SplitSeq(codecs, ",") {
+		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(encoders, name) {
+			codec = name
+			break
+		}
+	}
+	if codec == "" {
+		return nil
+	}
+	if channels <= 0 {
+		channels = 2
+	}
+	if limit, err := strconv.Atoi(maxChannels); err == nil && limit > 0 {
+		channels = min(channels, limit)
+	}
+	// AAC and Dolby Digital go up to 5.1 in the players that take them.
+	if codec != "flac" {
+		channels = min(channels, 6)
+	}
+	conversion := &AudioConversion{Codec: codec, Channels: channels}
+	if codec != "flac" {
+		// About 64 kb/s a channel: 192 kb/s in stereo, 384 kb/s in 5.1.
+		conversion.Bitrate = max(int64(channels)*64_000, 128_000)
+		if channels == 2 {
+			conversion.Bitrate = 192_000
+		}
+	}
+	return conversion
 }
 
 // SubtitleDelivery is how a subtitle stream reaches the app.
@@ -196,7 +253,9 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	} else {
 		decision.Container = singleContainer(source.Container, nil, profile.DirectPlayProfiles)
 		if t := decision.Transcoding; t != nil {
-			decision.Remux = reasons&containerBitrateExceedsLimit == 0 && d.remuxable(t)
+			if reasons&containerBitrateExceedsLimit == 0 {
+				decision.Remux, decision.Audio = d.remux(t, !options.ConvertAudio)
+			}
 			reasons |= d.transcodeReasons(t)
 			if reasons == 0 {
 				reasons = directPlayError
@@ -408,40 +467,51 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	return why
 }
 
-// remuxable reports whether transcoding with t can copy the video and the
-// audio that plays: t is HLS, takes their codecs and the audio's channels,
-// and the codec profiles of its container accept the remux. The remux is
-// what they judge: it carries only the audio that plays, so never a
-// secondary track, and the codec tag it writes.
-func (d *decider) remuxable(t *TranscodingProfile) bool {
+// remux decides whether transcoding with t can copy the video, and how the
+// audio that plays then reaches the app: t is HLS, takes the video's codec,
+// and the codec profiles of its container accept the remux, with the codec
+// tag it writes. The audio is copied when t takes its codec and channels
+// and the codec profiles accept it, as the only audio, so never a
+// secondary track; else it is converted to a codec t takes.
+func (d *decider) remux(t *TranscodingProfile, copyAudio bool) (bool, *AudioConversion) {
 	if !strings.EqualFold(t.Protocol, "hls") || d.video == nil || !listHas(t.VideoCodec, d.video.Codec) {
-		return false
+		return false, nil
+	}
+	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
+	if d.remuxFails("Video", d.video, t.Container, s) {
+		return false, nil
 	}
 	audio := d.played
-	if audio != nil {
-		if !listHas(t.AudioCodec, audio.Codec) {
-			return false
-		}
-		if limit, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > limit {
-			return false
-		}
+	if audio == nil {
+		return true, nil
 	}
-	s := subject{video: d.video, audio: audio, codecTag: RemuxTag(d.video.Codec, t.Container)}
+	s.audio = audio
+	channelsTaken := true
+	if limit, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > limit {
+		channelsTaken = false
+	}
+	if copyAudio && channelsTaken && listHas(t.AudioCodec, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s) {
+		return true, nil
+	}
+	channels := 0
+	if audio.Channels != nil {
+		channels = *audio.Channels
+	}
+	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels)
+	return conversion != nil, conversion
+}
+
+// remuxFails reports whether a codec profile of a type refuses stream in a
+// remux into container.
+func (d *decider) remuxFails(kind string, stream *MediaStream, container string, s subject) bool {
 	for i := range d.profile.CodecProfiles {
 		codec := &d.profile.CodecProfiles[i]
-		var stream *MediaStream
-		switch codec.Type {
-		case "Video":
-			stream = d.video
-		case "VideoAudio":
-			stream = audio
-		}
-		if stream != nil && listHas(codec.Codec, stream.Codec) && listMeets(codec.Container, t.Container) &&
+		if codec.Type == kind && listHas(codec.Codec, stream.Codec) && listMeets(codec.Container, container) &&
 			s.holdAll(codec.ApplyConditions) && s.failures(codec.Conditions) != 0 {
-			return false
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // RemuxTag is the sample entry a remux into container writes for a video

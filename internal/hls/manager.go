@@ -58,6 +58,12 @@ type Remux struct {
 	Input string
 	// Video and Audio are FFmpeg stream indexes; Audio is -1 for none.
 	Video, Audio int
+	// AudioCodec is the encoder the audio is converted with, empty to copy
+	// it; AudioChannels and AudioBitrate, what it is converted to, the
+	// bitrate zero for lossless codecs.
+	AudioCodec    string
+	AudioChannels int
+	AudioBitrate  int64
 	// VideoTag is the sample entry of the video in MP4, such as hvc1 for
 	// HEVC, which Apple players require; empty keeps FFmpeg's.
 	VideoTag string
@@ -657,7 +663,9 @@ func writeFile(path string, data []byte) error {
 func (r Remux) args(n int) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	if n > 0 {
-		args = append(args, "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
+		// Converted audio starts where the demuxer does, on the keyframe,
+		// as copied streams do, instead of at the time asked.
+		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
 	}
 	args = append(args, "-copyts", "-i", r.Input, "-map", "0:"+strconv.Itoa(r.Video))
 	if r.Audio >= 0 {
@@ -666,6 +674,12 @@ func (r Remux) args(n int) []string {
 	args = append(args, "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)
+	}
+	if r.Audio >= 0 && r.AudioCodec != "" {
+		args = append(args, "-c:a", r.AudioCodec, "-ac", strconv.Itoa(r.AudioChannels))
+		if r.AudioBitrate > 0 {
+			args = append(args, "-b:a", strconv.FormatInt(r.AudioBitrate, 10))
+		}
 	}
 	if r.Audio >= 0 {
 		// Audio before zero, such as encoder priming, is not played.
