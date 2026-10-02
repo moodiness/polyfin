@@ -406,6 +406,39 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 	}
 }
 
+func TestImageSubtitlesBrowsersCannotShowAreBurnedIn(t *testing.T) {
+	p := playing(t)
+	// An English PGS track, after the addon's file: stream 3 for Jellyfin.
+	p.remuxable(t, media.Stream{Index: 2, Type: "subtitle", Codec: "hdmv_pgs_subtitle", Language: "eng", Width: 64, Height: 64})
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000, "SubtitleStreamIndex": 3,
+		"DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	source := response.MediaSources[0]
+	i := slices.IndexFunc(source.MediaStreams, func(s playback.MediaStream) bool { return s.Index == 3 })
+	if i < 0 {
+		t.Fatalf("streams: %+v", source.MediaStreams)
+	}
+	track := source.MediaStreams[i]
+	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
+		// Without an encoder, the track is left out and the file plays as
+		// it is.
+		if !source.SupportsDirectPlay || track.DeliveryMethod != "Drop" {
+			t.Errorf("without FFmpeg: direct play %v, track %s", source.SupportsDirectPlay, track.DeliveryMethod)
+		}
+		return
+	}
+	// Chrome shows no PGS: the video is converted, with the track drawn
+	// onto it.
+	if source.SupportsDirectPlay || track.DeliveryMethod != "Encode" || !strings.Contains(source.TranscodingUrl, "&AudioStreamIndex=1&SubtitleStreamIndex=3&") ||
+		!strings.HasSuffix(source.TranscodingUrl, "&SubtitleMethod=Encode&TranscodeReasons=SubtitleCodecNotSupported&allowVideoStreamCopy=false") {
+		t.Errorf("direct play %v, track %s, TranscodingUrl %s", source.SupportsDirectPlay, track.DeliveryMethod, source.TranscodingUrl)
+	}
+}
+
 func mustID(t *testing.T, s string) accounts.ID {
 	t.Helper()
 	id, err := accounts.ParseID(s)
