@@ -57,6 +57,9 @@ type Decision struct {
 	// Transcoding is the profile Jellyfin transcodes with when direct play
 	// is refused; nil when the DeviceProfile has none for video.
 	Transcoding *TranscodingProfile
+	// Remux is set when direct play is refused but Transcoding can carry
+	// the video and the audio that plays as they are, over HLS.
+	Remux bool
 }
 
 // SubtitleDelivery is how a subtitle stream reaches the app.
@@ -193,6 +196,7 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	} else {
 		decision.Container = singleContainer(source.Container, nil, profile.DirectPlayProfiles)
 		if t := decision.Transcoding; t != nil {
+			decision.Remux = reasons&containerBitrateExceedsLimit == 0 && d.remuxable(t)
 			reasons |= d.transcodeReasons(t)
 			if reasons == 0 {
 				reasons = directPlayError
@@ -404,6 +408,60 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	return why
 }
 
+// remuxable reports whether transcoding with t can copy the video and the
+// audio that plays: t is HLS, takes their codecs and the audio's channels,
+// and the codec profiles of its container accept the remux. The remux is
+// what they judge: it carries only the audio that plays, so never a
+// secondary track, and the codec tag it writes.
+func (d *decider) remuxable(t *TranscodingProfile) bool {
+	if !strings.EqualFold(t.Protocol, "hls") || d.video == nil || !listHas(t.VideoCodec, d.video.Codec) {
+		return false
+	}
+	audio := d.played
+	if audio != nil {
+		if !listHas(t.AudioCodec, audio.Codec) {
+			return false
+		}
+		if limit, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > limit {
+			return false
+		}
+	}
+	s := subject{video: d.video, audio: audio, codecTag: RemuxTag(d.video.Codec, t.Container)}
+	for i := range d.profile.CodecProfiles {
+		codec := &d.profile.CodecProfiles[i]
+		var stream *MediaStream
+		switch codec.Type {
+		case "Video":
+			stream = d.video
+		case "VideoAudio":
+			stream = audio
+		}
+		if stream != nil && listHas(codec.Codec, stream.Codec) && listMeets(codec.Container, t.Container) &&
+			s.holdAll(codec.ApplyConditions) && s.failures(codec.Conditions) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// RemuxTag is the sample entry a remux into container writes for a video
+// codec, empty when it writes none: in MP4, hvc1 for HEVC, which Apple
+// players require, and the usual tags of the others.
+func RemuxTag(codec, container string) string {
+	if !strings.EqualFold(container, "mp4") {
+		return ""
+	}
+	switch codec {
+	case "hevc":
+		return "hvc1"
+	case "h264":
+		return "avc1"
+	case "av1":
+		return "av01"
+	}
+	return ""
+}
+
 // singleContainer is the container PlaybackInfo reports for a source
 // listing several: the first of them that matched supports, or when
 // matched is nil any of the video profiles. A source no profile supports
@@ -539,6 +597,9 @@ type subject struct {
 	video, audio *MediaStream
 	// secondary is set when audio is not the source's first audio track.
 	secondary bool
+	// codecTag is the video's codec tag when it is known: only a remux's,
+	// which writes it.
+	codecTag string
 }
 
 // holdAll reports whether every condition holds.
@@ -619,8 +680,11 @@ func (s subject) property(name string) (value, reason) {
 	case "VideoRangeType":
 		return text(video.VideoRangeType), videoRangeTypeNotSupported
 	case "VideoCodecTag":
-		// Jellyfin 12.1 never knows a codec tag: it reports none, even
-		// for MP4.
+		// Jellyfin 12.1 never knows a source's codec tag: it reports none,
+		// even for MP4.
+		if s.codecTag != "" {
+			return text(s.codecTag), videoCodecTagNotSupported
+		}
 		return value{kind: textValue}, videoCodecTagNotSupported
 	case "Width":
 		return number(video.Width), videoResolutionNotSupported

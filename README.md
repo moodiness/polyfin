@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, with the addons' subtitles, and keep each user's watched state, resume points and favorites. Polyfin does not transcode yet, so a version the app cannot play as is (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are or remuxed into HLS, with the addons' subtitles, and keep each user's watched state, resume points and favorites. Polyfin does not convert video or audio yet, so a version whose codecs the app cannot play (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
 
 ## Features
 
@@ -12,7 +12,7 @@ Polyfin is a self-hosted, Jellyfin-compatible server that sources its content fr
   - Stremio catalogs become Jellyfin libraries. An addon's collection catalogs (such as AIOMetadata's) become collection libraries, where each collection gathers the catalogs it groups, movies and series together.
   - Stremio streams become versions (media sources) of the same item, and addon subtitles become external subtitle tracks.
 - **Multiple users**: separate accounts with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points, and Next Up are tracked per user.
-- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS transcoder, built on FFmpeg for remote sources. See the [transcoding design](docs/transcoding.md).
+- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS, built on FFmpeg for remote sources: a remux when the app can play the codecs but not the container, then transcoding. See the [transcoding design](docs/transcoding.md).
 
 ## How it works
 
@@ -74,14 +74,15 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 | `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
 | `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
-| `POLYFIN_CACHE_DIR` | system temporary directory, `/cache` in the Docker image | Where parts of the files being read are kept. Emptied when Polyfin starts. |
-| `POLYFIN_CACHE_SIZE` | `10GB` | Disk space the cache may use, e.g. `10GB` or `512MiB`; at least 256 MiB. Parts read in the last 30 seconds are kept even above it. |
+| `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
+| `POLYFIN_CACHE_DIR` | system temporary directory, `/cache` in the Docker image | Where parts of the files being read, and the HLS segments being played, are kept. Emptied when Polyfin starts. |
+| `POLYFIN_CACHE_SIZE` | `10GB` | Disk space the parts of files being read may use, e.g. `10GB` or `512MiB`; at least 256 MiB. Parts read in the last 30 seconds are kept even above it. HLS segments come on top: about a minute ahead of each player, up to 1 GB for a 4K remux. |
 
 The Compose files read their own settings (passwords, ports, image version) from `.env`; see [`.env.example`](.env.example).
 
 ## Development
 
-Requirements: Go 1.27, Node.js 24, a PostgreSQL 18 server, and ffprobe (FFmpeg 9.0 or later) to play titles. With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts one on `127.0.0.1:5432`.
+Requirements: Go 1.27, Node.js 24, a PostgreSQL 18 server, and FFmpeg 9.0 or later (`ffmpeg` and `ffprobe`) to play titles. With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts one on `127.0.0.1:5432`.
 
 ```sh
 export POLYFIN_DATABASE_URL=postgresql://polyfin:password@127.0.0.1:5432/polyfin
@@ -90,7 +91,7 @@ npm --prefix web run dev      # optional: admin app with hot reload, proxied to 
 make check                    # formatting, vet and tests
 ```
 
-Database tests run when `POLYFIN_TEST_DATABASE_URL` points to a disposable PostgreSQL database; CI always provides one. Each test works in its own schema.
+Database tests run when `POLYFIN_TEST_DATABASE_URL` points to a disposable PostgreSQL database, and remux tests when `POLYFIN_TEST_FFMPEG` names an `ffmpeg` executable with `ffprobe` beside it; CI always provides both. Each database test works in its own schema.
 
 Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.1 server, recorded in `internal/jellyfin/testdata/`. `scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container (requires Docker, curl and jq).
 

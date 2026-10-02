@@ -21,6 +21,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
@@ -53,6 +54,7 @@ type Service struct {
 	opener   source.Opener
 	prober   media.Prober
 	sources  *source.Cache
+	segments *hls.Manager
 	loopback *loopback
 	renew    Renewer
 	signer   Signer
@@ -63,29 +65,36 @@ type Service struct {
 	failures *cache.Cache[accounts.ID, error]
 	live     *cache.Cache[accounts.ID, struct{}]
 	hosts    *cache.Cache[string, bool]
+	// indexes are keyframe times, and unindexed the versions whose index
+	// could not be read.
+	indexes   *cache.Cache[accounts.ID, []time.Duration]
+	unindexed *cache.Cache[accounts.ID, error]
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
-// sources through sources, and renewing expired links with renew, which
-// may be nil.
-func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, renew Renewer, logger *slog.Logger) (*Service, error) {
+// sources through sources, remuxing them with segments, and renewing
+// expired links with renew, which may be nil.
+func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger) (*Service, error) {
 	server, err := newLoopback()
 	if err != nil {
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
 	return &Service{
-		db:       db,
-		opener:   opener,
-		prober:   media.Prober{Path: ffprobePath, Timeout: probeTimeout},
-		sources:  sources,
-		loopback: server,
-		renew:    renew,
-		signer:   signer,
-		logger:   logger,
-		analyses: cache.New[accounts.ID, media.Analysis](2000, time.Hour),
-		failures: cache.New[accounts.ID, error](2000, failureTTL),
-		live:     cache.New[accounts.ID, struct{}](2000, liveTTL),
-		hosts:    cache.New[string, bool](500, 5*time.Minute),
+		db:        db,
+		opener:    opener,
+		prober:    media.Prober{Path: ffprobePath, Timeout: probeTimeout},
+		sources:   sources,
+		segments:  segments,
+		loopback:  server,
+		renew:     renew,
+		signer:    signer,
+		logger:    logger,
+		analyses:  cache.New[accounts.ID, media.Analysis](2000, time.Hour),
+		failures:  cache.New[accounts.ID, error](2000, failureTTL),
+		live:      cache.New[accounts.ID, struct{}](2000, liveTTL),
+		hosts:     cache.New[string, bool](500, 5*time.Minute),
+		indexes:   cache.New[accounts.ID, []time.Duration](200, time.Hour),
+		unindexed: cache.New[accounts.ID, error](2000, failureTTL),
 	}, nil
 }
 
