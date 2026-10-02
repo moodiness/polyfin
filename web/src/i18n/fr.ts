@@ -291,7 +291,7 @@ const fr: Messages = {
     shownHelpMine:
       'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple « Populaires (Films) ».',
     defaultHelp:
-      'À l’installation d’un addon, ses catalogues de collections deviennent des bibliothèques : chacune affiche ses collections (par exemple Netflix ou Prime Video), qui s’ouvrent sur leurs films et séries. Un addon sans collections voit ses catalogues de films et de séries devenir des bibliothèques, jusqu’à 20. Ce n’est qu’un point de départ : activez autant de catalogues que vous voulez. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin.',
+      'À l’installation d’un addon, ses catalogues de collections deviennent des bibliothèques : chacune affiche ses collections (par exemple des genres ou des décennies), qui s’ouvrent sur leurs films et séries. Un addon sans collections voit ses catalogues de films et de séries devenir des bibliothèques, jusqu’à 20. Ce n’est qu’un point de départ : activez autant de catalogues que vous voulez. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin.',
     count: (count: number) => (count <= 1 ? `${count} bibliothèque` : `${count} bibliothèques`),
     manyWarning:
       'Plus de 20 bibliothèques peuvent alourdir l’écran d’accueil des applications Jellyfin.',
