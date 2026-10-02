@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@theme {
+  --color-fin-1: #6d4aff;
+  --color-fin-2: #4c3fd9;
+  --color-fin-3: #5b63f6;
+  --color-fin-4: #3e8ef7;
+  --color-fin-5: #22d3ee;
+  --color-ink: #08080e;
+  --color-surface: #11111a;
+  --color-line: #262635;
+  --color-muted: #a3a3b8;
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The fin palette from base to tip, used sparingly for accents. */
+@utility bg-fin-gradient {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-fin-1),
+    var(--color-fin-2),
+    var(--color-fin-3),
+    var(--color-fin-4),
+    var(--color-fin-5)
+  );
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background-color: var(--color-ink);
+    color: var(--color-zinc-100);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-fin-5);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
