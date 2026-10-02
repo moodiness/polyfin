@@ -114,6 +114,9 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 		SetupCode string `json:"setupCode"`
 		Name      string `json:"name"`
 		Password  string `json:"password"`
+		// Language is the admin interface's language; it becomes the server
+		// language when the server speaks it.
+		Language string `json:"language"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -134,7 +137,7 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_setup_code")
 		return
 	}
-	user, err := h.Accounts.CreateFirstAdministrator(r.Context(), body.Name, body.Password)
+	user, err := h.Accounts.CreateFirstAdministrator(r.Context(), body.Name, body.Password, body.Language)
 	if accountError(w, err) {
 		return
 	}

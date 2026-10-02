@@ -168,6 +168,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidName, http.StatusBadRequest, "invalid_name"},
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
+		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
 		{accounts.ErrSetupComplete, http.StatusConflict, "setup_complete"},

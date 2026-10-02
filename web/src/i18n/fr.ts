@@ -64,6 +64,7 @@ const fr: Messages = {
     last_administrator:
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
+    invalid_language: 'Choisissez la langue du serveur dans la liste.',
     invalid_manifest_url:
       'Saisissez l’URL du manifeste d’un addon, commençant par https://, http:// ou stremio:// et se terminant par /manifest.json.',
     addon_exists: 'Cet addon est déjà installé ici.',
@@ -210,6 +211,9 @@ const fr: Messages = {
     quickConnect: 'Autoriser Quick Connect',
     quickConnectHelp:
       'Permet aux applications TV et mobiles de se connecter avec un code à 6 chiffres autorisé ici.',
+    language: 'Langue des noms générés',
+    languageHelp:
+      'Polyfin nomme lui-même certains éléments dans les applications Jellyfin : les saisons (« Saison 1 », « Épisodes spéciaux »), les épisodes sans titre et le type ajouté aux bibliothèques de même nom (« Populaires (Films) »).',
     legacyAuthorization: 'Autoriser l’authentification héritée',
     legacyAuthorizationHelp:
       'Accepte les anciens en-têtes X-Emby-*, le paramètre api_key et le schéma Emby pour les applications qui en ont encore besoin. Désactivé par défaut, comme dans Jellyfin 12.1.',
@@ -283,9 +287,9 @@ const fr: Messages = {
       'Choisissez quels catalogues des addons du serveur apparaissent comme bibliothèques dans les applications Jellyfin, pour tous les utilisateurs.',
     shownTitle: 'Affichées dans les applications Jellyfin',
     shownHelp:
-      'Les bibliothèques apparaissent dans cet ordre. Laissez un nom vide pour utiliser celui du catalogue.',
+      'Les bibliothèques apparaissent dans cet ordre. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple « Populaires (Films) ».',
     shownHelpMine:
-      'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue.',
+      'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue. Les bibliothèques de même nom reçoivent leur type dans les applications, par exemple « Populaires (Films) ».',
     defaultHelp:
       'À l’installation d’un addon, ses catalogues de collections deviennent des bibliothèques : chacune affiche ses collections (par exemple Netflix ou Prime Video), qui s’ouvrent sur leurs films et séries. Un addon sans collections voit ses catalogues de films et de séries devenir des bibliothèques, jusqu’à 20. Ce n’est qu’un point de départ : activez autant de catalogues que vous voulez. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin.',
     count: (count: number) => (count <= 1 ? `${count} bibliothèque` : `${count} bibliothèques`),
@@ -294,6 +298,7 @@ const fr: Messages = {
     noAddons: 'Installez d’abord un addon : ses catalogues s’afficheront ici.',
     shownEmpty: 'Aucune bibliothèque : les applications Jellyfin n’affichent rien de ces addons.',
     name: 'Nom dans les applications',
+    appName: (name: string) => `Affichée dans les applications sous le nom « ${name} ».`,
     addonOff: 'Addon désactivé',
     missing: 'Plus disponible',
     remove: 'Retirer',

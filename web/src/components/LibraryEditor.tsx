@@ -249,6 +249,10 @@ function LibraryForm({
                 const name = displayName(entry)
                 const titleId = `${baseId}-title-${entry.key}`
                 const inputId = `${baseId}-name-${entry.key}`
+                const appNameId = `${baseId}-app-name-${entry.key}`
+                // The server names saved libraries only: edits may change what apps show.
+                const appName = dirty ? null : library.appName
+                const renamed = appName !== null && appName !== name
                 return (
                   <li
                     key={entry.key}
@@ -281,12 +285,17 @@ function LibraryForm({
                         id={inputId}
                         value={entry.name}
                         onChange={(event) => rename(index, event.target.value)}
-                        placeholder={library.catalogName}
-                        aria-describedby={titleId}
+                        placeholder={appName ?? library.catalogName}
+                        aria-describedby={renamed ? `${titleId} ${appNameId}` : titleId}
                         maxLength={64}
                         autoComplete="off"
                         className={fieldClass}
                       />
+                      {renamed && (
+                        <p id={appNameId} className="mt-1 text-xs text-muted">
+                          {t.libraries.appName(appName)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <MoveButtons

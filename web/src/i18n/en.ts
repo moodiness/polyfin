@@ -60,6 +60,7 @@ const en = {
     last_administrator:
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
+    invalid_language: 'Choose the server language from the list.',
     invalid_manifest_url:
       'Enter an addon manifest URL starting with https://, http:// or stremio:// and ending in /manifest.json.',
     addon_exists: 'This addon is already installed here.',
@@ -198,6 +199,9 @@ const en = {
     serverNameHelp: '1 to 64 characters, shown in Jellyfin apps.',
     quickConnect: 'Allow Quick Connect',
     quickConnectHelp: 'Lets TV and phone apps sign in with a 6-digit code approved here.',
+    language: 'Language of generated names',
+    languageHelp:
+      'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
       'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.1.',
@@ -270,9 +274,10 @@ const en = {
     description:
       'Choose which catalogs of the server’s addons appear as libraries in Jellyfin apps, for every user.',
     shownTitle: 'Shown in Jellyfin apps',
-    shownHelp: 'Libraries appear in this order. Leave a name empty to use the catalog name.',
+    shownHelp:
+      'Libraries appear in this order. Leave a name empty to use the catalog name. Libraries that share a name get their type added in apps, for example “Popular (Movies)”.',
     shownHelpMine:
-      'Libraries appear in this order, after the server’s libraries if you use them. Leave a name empty to use the catalog name.',
+      'Libraries appear in this order, after the server’s libraries if you use them. Leave a name empty to use the catalog name. Libraries that share a name get their type added in apps, for example “Popular (Movies)”.',
     defaultHelp:
       'When an addon is installed, its collection catalogs become libraries: each one shows its collections (for example Netflix or Prime Video), which open on their movies and series. An addon without collections gets its movie and series catalogs as libraries, up to 20. This is only a starting point: enable as many catalogs as you like. Each library adds a row to the home screen of Jellyfin apps.',
     count: (count: number) => (count === 1 ? '1 library' : `${count} libraries`),
@@ -280,6 +285,7 @@ const en = {
     noAddons: 'Install an addon first: its catalogs will be listed here.',
     shownEmpty: 'No library: Jellyfin apps show nothing from these addons.',
     name: 'Name in apps',
+    appName: (name: string) => `Shown in apps as “${name}”.`,
     addonOff: 'Addon turned off',
     missing: 'No longer available',
     remove: 'Remove',

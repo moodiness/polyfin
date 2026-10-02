@@ -47,6 +47,7 @@ type settingsJSON struct {
 	ServerName          string `json:"serverName"`
 	QuickConnectEnabled bool   `json:"quickConnectEnabled"`
 	LegacyAuthorization bool   `json:"legacyAuthorization"`
+	Language            string `json:"language"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -54,6 +55,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ServerName:          settings.ServerName,
 		QuickConnectEnabled: settings.QuickConnectEnabled,
 		LegacyAuthorization: settings.LegacyAuthorization,
+		Language:            settings.Language,
 	}
 }
 
@@ -292,6 +294,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ServerName:          body.ServerName,
 		QuickConnectEnabled: body.QuickConnectEnabled,
 		LegacyAuthorization: body.LegacyAuthorization,
+		Language:            body.Language,
 	})
 	if accountError(w, err) {
 		return

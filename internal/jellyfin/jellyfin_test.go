@@ -54,7 +54,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 		QuickConnect:  quickconnect.New(),
 		SignIns:       throttle.New(failures, time.Minute),
 		WebSocketPort: 8096,
-		Library:       library.New(pool, addonStore, client, logger),
+		Library:       library.New(pool, addonStore, client, logger, func() string { return "en" }),
 		Stremio:       client,
 		Preferences:   preferences.New(pool),
 		Logger:        logger,
@@ -217,7 +217,7 @@ func TestQuickConnect(t *testing.T) {
 		t.Errorf("signed in as %s on %s, want alice on tv", result.User.Name, result.SessionInfo.DeviceName)
 	}
 
-	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin"}); err != nil {
+	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin", Language: "en"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, body := s.call(http.MethodGet, "/QuickConnect/Enabled", "", nil); strings.TrimSpace(string(body)) != "false" {
@@ -235,7 +235,7 @@ func TestLegacyAuthorizationFollowsTheSetting(t *testing.T) {
 	if status, _ := s.call(http.MethodGet, "/Users/Me?api_key="+token, "", nil); status != http.StatusUnauthorized {
 		t.Errorf("api_key by default: got %d, want 401", status)
 	}
-	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin", LegacyAuthorization: true}); err != nil {
+	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin", LegacyAuthorization: true, Language: "en"}); err != nil {
 		t.Fatal(err)
 	}
 	if status, _ := s.call(http.MethodGet, "/Users/Me?api_key="+token, "", nil); status != http.StatusOK {

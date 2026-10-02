@@ -54,6 +54,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 
 **First run:** until an administrator exists, Polyfin prints a one-time setup code in its log (`docker compose logs polyfin`). Enter it on the setup page to create the administrator, then create the other accounts under **Users**. Jellyfin apps sign in with these accounts, by password or with **Quick Connect**: the app shows a 6-digit code that a signed-in user approves on the Quick Connect page.
 
+**Language:** the names Polyfin generates for Jellyfin apps (seasons, untitled episodes, and the type that tells apart libraries with the same name, such as "Popular (Movies)") are in English or French, set under **Settings** and defaulting to the language the setup page was in.
+
 **Addons:** paste an addon's manifest URL (from its configure page) under **Addons** to share it with every user, then pick under **Libraries** which of its catalogs become libraries in Jellyfin apps. When an addon offers collection catalogs, those are enabled first; otherwise its first 20 movie and series catalogs are. This is only a starting point: any number of catalogs can be enabled. Each user can also add their own addons and libraries under **My addons**, and turn the server's addons off for themselves. Manifest URLs usually contain your addon settings or keys: Polyfin never shows them in full. Only administrators can install addons hosted on a local network address.
 
 **Artwork:** Polyfin relays images from the addons' artwork servers, so Jellyfin apps only ever talk to Polyfin.

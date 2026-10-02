@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { fetchSettings, queryClient, queryKeys, saveSettings, type Settings } from '@/api'
 import {
@@ -11,7 +11,7 @@ import {
   TextField,
 } from '@/components/ui'
 import { errorMessage } from '@/format'
-import { useI18n } from '@/i18n'
+import { languages, useI18n, type Language } from '@/i18n'
 
 export default function SettingsPage() {
   const { t } = useI18n()
@@ -36,6 +36,7 @@ export default function SettingsPage() {
 
 function SettingsForm({ initial }: { initial: Settings }) {
   const { t } = useI18n()
+  const languageId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -45,6 +46,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
       setForm(saved)
       // The server name is part of the public status.
       void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+      // Library names in apps follow the server language.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.scopes })
     },
   })
 
@@ -70,6 +73,27 @@ function SettingsForm({ initial }: { initial: Settings }) {
             maxLength={64}
             required
           />
+          <div>
+            <label htmlFor={languageId} className="block text-sm font-medium text-zinc-200">
+              {t.settings.language}
+            </label>
+            <select
+              id={languageId}
+              value={form.language}
+              onChange={(event) => update({ language: event.target.value as Language })}
+              aria-describedby={`${languageId}-hint`}
+              className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+            >
+              {languages.map((code) => (
+                <option key={code} value={code} lang={code}>
+                  {t.language[code].name}
+                </option>
+              ))}
+            </select>
+            <p id={`${languageId}-hint`} className="mt-1 text-xs text-muted">
+              {t.settings.languageHelp}
+            </p>
+          </div>
           <Checkbox
             label={t.settings.quickConnect}
             help={t.settings.quickConnectHelp}

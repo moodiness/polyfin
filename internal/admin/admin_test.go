@@ -111,7 +111,7 @@ func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
 	if _, status, _ := b.call(http.MethodGet, "/status", nil); status["setupRequired"] != true {
 		t.Fatalf("status before setup: %v", status)
 	}
-	account := map[string]string{"name": "admin", "password": "correct horse"}
+	account := map[string]string{"name": "admin", "password": "correct horse", "language": "fr"}
 
 	account["setupCode"] = "WXYZ-WXYZ"
 	if status, body, _ := b.call(http.MethodPost, "/setup", account); status != http.StatusBadRequest || body["error"] != "invalid_setup_code" {
@@ -122,6 +122,9 @@ func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
 	status, body, response := b.call(http.MethodPost, "/setup", account)
 	if status != http.StatusCreated {
 		t.Fatalf("setup: %d %v", status, body)
+	}
+	if got := api.store.Settings().Language; got != "fr" {
+		t.Errorf("server language after a setup in French: %q", got)
 	}
 	cookie := response.Cookies()[0]
 	if !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/admin" {
@@ -135,6 +138,41 @@ func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
 	}
 	if _, status, _ := b.call(http.MethodGet, "/status", nil); status["setupRequired"] != false {
 		t.Errorf("status after setup: %v", status)
+	}
+}
+
+func TestSetupIgnoresLanguagesTheServerDoesNotSpeak(t *testing.T) {
+	api := newTestAPI(t, 10)
+	account := map[string]string{"name": "admin", "password": "correct horse", "setupCode": setupCode, "language": "de"}
+	if status, body, _ := api.browser().call(http.MethodPost, "/setup", account); status != http.StatusCreated {
+		t.Fatalf("setup: %d %v", status, body)
+	}
+	if got := api.store.Settings().Language; got != "en" {
+		t.Errorf("server language after a setup in German: %q", got)
+	}
+}
+
+func TestSettingsLanguage(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["language"] != "en" {
+		t.Errorf("default settings: %v", body)
+	}
+	settings := map[string]any{"serverName": "Maison", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "fr"}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || body["language"] != "fr" {
+		t.Fatalf("saving French: %d %v", status, body)
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["language"] != "fr" || body["serverName"] != "Maison" {
+		t.Errorf("settings after saving: %v", body)
+	}
+	for _, language := range []any{"de", "", nil} {
+		settings["language"] = language
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusBadRequest || body["error"] != "invalid_language" {
+			t.Errorf("language %v: %d %v", language, status, body)
+		}
+	}
+	if got := api.store.Settings().Language; got != "fr" {
+		t.Errorf("a refused language changed the settings: %q", got)
 	}
 }
 
