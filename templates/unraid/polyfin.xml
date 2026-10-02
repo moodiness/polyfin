@@ -10,9 +10,11 @@
   <Project>https://github.com/moodiness/polyfin</Project>
   <Overview>Polyfin is a self-hosted, Jellyfin-compatible media server for Stremio addons. It is designed to let Jellyfin apps on TVs, phones and computers browse and play what your own addons provide, with multiple users and transcoding.&#xD;
 &#xD;
-EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet. Current releases provide the server foundation and the admin page at /admin/.&#xD;
+EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet. Jellyfin apps can sign in, but there is nothing to browse or play yet.&#xD;
 &#xD;
 REQUIRED: A PostgreSQL 18 container must already be running, for example the official postgres:18 image with a dedicated database and user named polyfin. Enter its address in PostgreSQL URL as postgresql://USER:PASSWORD@HOST:5432/DATABASE, where HOST is the PostgreSQL container name on a shared custom Docker network or the Unraid server IP. Use a URL-safe password such as the output of openssl rand -hex 24. Polyfin waits for the database and creates its tables automatically.&#xD;
+&#xD;
+FIRST RUN: open the container log and copy the one-time setup code, then open the WebUI and create the administrator with it.&#xD;
 &#xD;
 Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
   <Category>MediaServer:Video</Category>
