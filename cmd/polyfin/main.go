@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -54,6 +56,8 @@ Environment:
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_LOG_LEVEL     debug, info, warn or error (default info)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
+  POLYFIN_CACHE_DIR     where sources being played are cached (default: a polyfin directory in the system's temporary directory)
+  POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
 `
 
 func main() {
@@ -132,7 +136,13 @@ func serve(ctx context.Context) error {
 	if _, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe was not found: nothing can be played until it is installed", "ffprobe", cfg.FFprobe)
 	}
-	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), logger)
+	sources, err := source.New(filepath.Join(cfg.CacheDir, "sources"), cfg.CacheSize, addonClient, logger)
+	if err != nil {
+		return fmt.Errorf("prepare the source cache: %w", err)
+	}
+	defer sources.Close()
+	lib := library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language })
+	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, lib.Renew, logger)
 	if err != nil {
 		return err
 	}
@@ -158,7 +168,7 @@ func serve(ctx context.Context) error {
 				QuickConnect:  quickConnect,
 				SignIns:       signIns,
 				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
-				Library:       library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language }),
+				Library:       lib,
 				Stremio:       addonClient,
 				Playback:      player,
 				Preferences:   preferences.New(pool),

@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 const (
@@ -42,14 +43,20 @@ const (
 // other failures and its analysis is not kept.
 var ErrStandIn = errors.New("the source is a short clip, not the title")
 
+// Renewer asks the addon that listed a version for a fresh link to the
+// same file; library.Service.Renew is one.
+type Renewer func(ctx context.Context, version library.Version) (library.Version, error)
+
 // Service plays versions.
 type Service struct {
-	db      *pgxpool.Pool
-	opener  Opener
-	prober  media.Prober
-	sources *sourceServer
-	signer  Signer
-	logger  *slog.Logger
+	db       *pgxpool.Pool
+	opener   source.Opener
+	prober   media.Prober
+	sources  *source.Cache
+	loopback *loopback
+	renew    Renewer
+	signer   Signer
+	logger   *slog.Logger
 
 	flight   singleflight.Group
 	analyses *cache.Cache[accounts.ID, media.Analysis]
@@ -58,9 +65,11 @@ type Service struct {
 	hosts    *cache.Cache[string, bool]
 }
 
-// New returns a playback service running ffprobe from ffprobePath.
-func New(db *pgxpool.Pool, opener Opener, ffprobePath string, signer Signer, logger *slog.Logger) (*Service, error) {
-	sources, err := newSourceServer(opener)
+// New returns a playback service running ffprobe from ffprobePath, reading
+// sources through sources, and renewing expired links with renew, which
+// may be nil.
+func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, renew Renewer, logger *slog.Logger) (*Service, error) {
+	server, err := newLoopback()
 	if err != nil {
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
@@ -69,6 +78,8 @@ func New(db *pgxpool.Pool, opener Opener, ffprobePath string, signer Signer, log
 		opener:   opener,
 		prober:   media.Prober{Path: ffprobePath, Timeout: probeTimeout},
 		sources:  sources,
+		loopback: server,
+		renew:    renew,
 		signer:   signer,
 		logger:   logger,
 		analyses: cache.New[accounts.ID, media.Analysis](2000, time.Hour),
@@ -80,7 +91,24 @@ func New(db *pgxpool.Pool, opener Opener, ffprobePath string, signer Signer, log
 
 // Close stops the source server.
 func (s *Service) Close() error {
-	return s.sources.Close()
+	return s.loopback.Close()
+}
+
+// open opens a version's source in the cache, renewing its link when it
+// expires. The caller releases it.
+func (s *Service) open(version library.Version) *source.Source {
+	var renew source.Renewer
+	if s.renew != nil {
+		renew = func(ctx context.Context) (source.Location, error) {
+			fresh, err := s.renew(ctx, version)
+			return locationOf(fresh), err
+		}
+	}
+	return s.sources.Open(version.ID, locationOf(version), renew)
+}
+
+func locationOf(version library.Version) source.Location {
+	return source.Location{URL: version.URL, Headers: version.Headers, Confined: version.Confined}
 }
 
 // Signer returns the service's grant signer.
@@ -120,9 +148,12 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		return media.Analysis{}, err
 	}
 	result, err, _ := s.flight.Do("analyze "+version.ID.String(), func() (any, error) {
-		// ffprobe reads through the source server, so that confined sources
-		// stay confined and required headers are sent.
-		target, release := s.sources.register(sourceOf(version))
+		// ffprobe reads through the source cache, so that confined sources
+		// stay confined, required headers are sent, and what it reads is
+		// kept for playback.
+		src := s.open(version)
+		defer src.Release()
+		target, release := s.loopback.register(src)
 		defer release()
 		started := time.Now()
 		analysis, err := s.prober.Probe(context.WithoutCancel(ctx), target)
@@ -168,49 +199,67 @@ func (s *Service) Failed(version accounts.ID) bool {
 	return failed
 }
 
-func sourceOf(version library.Version) Source {
-	return Source{URL: version.URL, Headers: version.Headers, Confined: version.Confined}
-}
-
 // Serve answers a player's request for a version's bytes. The player is
 // redirected to the source when it can fetch it itself: the source needs
 // no headers, is on a public address, and answers now. Otherwise, or when
-// relay is set, Polyfin relays the bytes, as contentType when set.
+// relay is set, Polyfin relays the bytes, as contentType when set. An
+// expired link is renewed once.
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, relay bool, contentType string) error {
 	if !relay && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
-		if err := s.check(r.Context(), version); err != nil {
+		current, err := s.check(r.Context(), version)
+		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)
 			return err
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		http.Redirect(w, r, version.URL, http.StatusFound)
+		http.Redirect(w, r, current.URL, http.StatusFound)
 		return nil
 	}
-	return Relay(w, r, s.opener, sourceOf(version), contentType)
+	return s.relay(w, r, version, contentType)
 }
 
-// check makes sure a source answers before a player is sent to it: some
-// players give up on the first failure.
-func (s *Service) check(ctx context.Context, version library.Version) error {
+// check makes sure a source answers before a player is sent to it, as some
+// players give up on the first failure, and returns the version with the
+// link that answered.
+func (s *Service) check(ctx context.Context, version library.Version) (library.Version, error) {
 	if _, ok := s.live.Get(version.ID); ok {
-		return nil
+		return version, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
-	header := http.Header{"Range": {"bytes=0-0"}}
-	response, err := s.opener.Open(ctx, http.MethodGet, version.URL, header, version.Confined)
+	status, err := s.firstByte(ctx, version)
+	if err == nil && expired(status) && s.renew != nil {
+		fresh, renewErr := s.renew(ctx, version)
+		if renewErr != nil {
+			err = fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrSourceUnavailable, status, renewErr)
+		} else {
+			version = fresh
+			status, err = s.firstByte(ctx, version)
+		}
+	}
+	if err == nil && status != http.StatusOK && status != http.StatusPartialContent {
+		err = fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, status)
+	}
 	if err != nil {
 		s.failures.Put(version.ID, err)
-		return err
-	}
-	response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
-		err := fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, response.StatusCode)
-		s.failures.Put(version.ID, err)
-		return err
+		return library.Version{}, err
 	}
 	s.live.Put(version.ID, struct{}{})
-	return nil
+	return version, nil
+}
+
+// firstByte asks a source for its first byte and returns the status.
+func (s *Service) firstByte(ctx context.Context, version library.Version) (int, error) {
+	header := http.Header{"Range": {"bytes=0-0"}}
+	for name, value := range version.Headers {
+		header.Set(name, value)
+	}
+	response, err := s.opener.Open(ctx, http.MethodGet, version.URL, header, version.Confined)
+	if err != nil {
+		return 0, err
+	}
+	response.Body.Close()
+	return response.StatusCode, nil
 }
 
 // public reports whether every address of the URL's host is public, so that

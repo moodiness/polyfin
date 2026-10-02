@@ -18,7 +18,9 @@ COPY --from=web /build/web/dist/ ./web/dist/
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin
+# The final stage has no shell to create the cache directory: it is copied.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin \
+	&& mkdir /cache
 
 # Upstream FFmpeg, statically built, to analyze remote sources.
 FROM mwader/static-ffmpeg:9.0.2@sha256:7d9bdaaf887f7e6ce6151f67325c344074b5ff1fb75316011c3376503e449a7b AS ffmpeg
@@ -27,7 +29,11 @@ FROM mwader/static-ffmpeg:9.0.2@sha256:7d9bdaaf887f7e6ce6151f67325c344074b5ff1fb
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
 COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 COPY --from=build /polyfin /polyfin
-ENV POLYFIN_LISTEN=:8096
+# Parts of the files being read. A volume, so that it stays writable in a
+# read-only container; Polyfin empties it when it starts.
+COPY --from=build --chown=65532:65532 /cache /cache
+VOLUME /cache
+ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache
 EXPOSE 8096
 USER 65532:65532
 ENTRYPOINT ["/polyfin"]

@@ -27,6 +27,10 @@ services:
     environment:
       POLYFIN_DATABASE_URL: postgresql://${POSTGRES_USER:-polyfin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-polyfin}
       POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
+      POLYFIN_CACHE_SIZE: ${POLYFIN_CACHE_SIZE:-10GB}
+    # Parts of the files being read, emptied when Polyfin starts.
+    volumes:
+      - polyfin_cache:/cache
     # Reachable on the LAN by default: TVs and phones connect to it directly.
     ports:
       - "${POLYFIN_BIND_IP:-0.0.0.0}:${POLYFIN_PORT:-8096}:8096"
@@ -42,3 +46,4 @@ services:
 
 volumes:
   postgres_data:
+  polyfin_cache:
