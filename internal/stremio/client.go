@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/netip"
@@ -92,17 +93,9 @@ func public(ip netip.Addr) bool {
 	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !cgnat.Contains(ip)
 }
 
-// get downloads a resource. Errors never contain the URL, which usually
-// carries credentials.
-func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid URL", ErrUnreachable)
-	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", c.userAgent)
+// do sends a request with the client allowed for it. Errors never contain
+// the URL, which usually carries credentials.
+func (c *Client) do(request *http.Request, confined bool) (*http.Response, error) {
 	client := c.trusted
 	if confined {
 		client = c.confined
@@ -118,6 +111,23 @@ func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte,
 		}
 		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
 	}
+	return response, nil
+}
+
+// get downloads a resource.
+func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid URL", ErrUnreachable)
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("User-Agent", c.userAgent)
+	response, err := c.do(request, confined)
+	if err != nil {
+		return nil, err
+	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnreachable, response.StatusCode)
@@ -130,6 +140,24 @@ func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte,
 		return nil, fmt.Errorf("%w: response larger than %d bytes", ErrInvalidResponse, maxResponseBytes)
 	}
 	return body, nil
+}
+
+// Open requests a file an addon points to, a stream or a subtitle, to relay
+// it: header is sent as given (byte ranges, the stream's own headers) and
+// the response is returned whatever its status, its body to be closed by
+// the caller.
+func (c *Client) Open(ctx context.Context, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, method, target, nil)
+	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
+		return nil, fmt.Errorf("%w: invalid URL", ErrUnreachable)
+	}
+	maps.Copy(request.Header, header)
+	if request.Header.Get("User-Agent") == "" {
+		request.Header.Set("User-Agent", c.userAgent)
+	}
+	// Byte ranges and lengths must reach the player unchanged.
+	request.Header.Set("Accept-Encoding", "identity")
+	return c.do(request, confined)
 }
 
 // Manifest downloads and validates an addon manifest. confined restricts
@@ -159,20 +187,9 @@ func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byt
 	}
 	request.Header.Set("Accept", "image/*")
 	request.Header.Set("User-Agent", c.userAgent)
-	client := c.trusted
-	if confined {
-		client = c.confined
-	}
-	response, err := client.Do(request)
+	response, err := c.do(request, confined)
 	if err != nil {
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
-			err = urlErr.Err
-		}
-		if errors.Is(err, ErrPrivateNetwork) {
-			return nil, "", ErrPrivateNetwork
-		}
-		return nil, "", fmt.Errorf("%w: %v", ErrUnreachable, err)
+		return nil, "", err
 	}
 	defer response.Body.Close()
 	contentType := response.Header.Get("Content-Type")

@@ -86,3 +86,15 @@ func ServerID(ctx context.Context, db interface {
 	}
 	return id, nil
 }
+
+// Secret returns the server's signing secret, created by a migration. It
+// signs what Polyfin hands to players, so it never leaves the server.
+func Secret(ctx context.Context, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) ([]byte, error) {
+	var secret []byte
+	if err := db.QueryRow(ctx, "SELECT secret FROM server_identity").Scan(&secret); err != nil {
+		return nil, fmt.Errorf("read server secret: %w", err)
+	}
+	return secret, nil
+}

@@ -15,10 +15,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -29,10 +32,12 @@ import (
 const testServerID = "0123456789abcdef0123456789abcdef"
 
 type testServer struct {
-	t      *testing.T
-	store  *accounts.Store
-	addons *addons.Store
-	url    string
+	t       *testing.T
+	store   *accounts.Store
+	addons  *addons.Store
+	library *library.Service
+	pool    *pgxpool.Pool
+	url     string
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -48,19 +53,31 @@ func newTestServer(t *testing.T, failures int) testServer {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := stremio.NewClient("test")
 	addonStore := addons.New(pool, client)
+	secret, err := database.Secret(t.Context(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tests seed analyses instead of running ffprobe, which CI lacks.
+	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = player.Close() })
+	lib := library.New(pool, addonStore, client, logger, func() string { return "en" })
 	server := httptest.NewServer(New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,
 		QuickConnect:  quickconnect.New(),
 		SignIns:       throttle.New(failures, time.Minute),
 		WebSocketPort: 8096,
-		Library:       library.New(pool, addonStore, client, logger, func() string { return "en" }),
+		Library:       lib,
 		Stremio:       client,
+		Playback:      player,
 		Preferences:   preferences.New(pool),
 		Logger:        logger,
 	}))
 	t.Cleanup(server.Close)
-	return testServer{t: t, store: store, addons: addonStore, url: server.URL}
+	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL}
 }
 
 func (s testServer) user(name string, change func(*accounts.UserChanges)) accounts.User {

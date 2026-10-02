@@ -21,6 +21,8 @@ type Config struct {
 	// Listen is the TCP address of the HTTP server, as host:port.
 	Listen   string
 	LogLevel slog.Level
+	// FFprobe is the ffprobe executable, a path or a name looked up in PATH.
+	FFprobe string
 }
 
 // Load reads the configuration through getenv, normally os.Getenv.
@@ -29,6 +31,10 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL: strings.TrimSpace(getenv("POLYFIN_DATABASE_URL")),
 		Listen:      strings.TrimSpace(getenv("POLYFIN_LISTEN")),
 		LogLevel:    slog.LevelInfo,
+		FFprobe:     strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
+	}
+	if cfg.FFprobe == "" {
+		cfg.FFprobe = "ffprobe"
 	}
 	var errs []error
 	if cfg.DatabaseURL == "" {

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -43,9 +43,13 @@ type Service struct {
 	now      func() time.Time
 	language func() string
 
-	pages  *cache[pageKey, []stremio.Meta]
-	metas  *cache[metaKey, stremio.Meta]
+	pages  *cache.Cache[pageKey, []stremio.Meta]
+	metas  *cache.Cache[metaKey, stremio.Meta]
 	flight singleflight.Group
+
+	streamLists   *cache.Cache[streamKey, []stremio.Stream]
+	subtitleLists *cache.Cache[streamKey, []stremio.Subtitle]
+	versions      *cache.Cache[accounts.ID, Version]
 }
 
 type pageKey struct {
@@ -68,14 +72,17 @@ type metaKey struct {
 // at once.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, language func() string) *Service {
 	return &Service{
-		db:       db,
-		addons:   store,
-		client:   client,
-		logger:   logger,
-		now:      time.Now,
-		language: language,
-		pages:    newCache[pageKey, []stremio.Meta](4000, pageTTL),
-		metas:    newCache[metaKey, stremio.Meta](4000, metaTTL),
+		db:            db,
+		addons:        store,
+		client:        client,
+		logger:        logger,
+		now:           time.Now,
+		language:      language,
+		pages:         cache.New[pageKey, []stremio.Meta](4000, pageTTL),
+		metas:         cache.New[metaKey, stremio.Meta](4000, metaTTL),
+		streamLists:   cache.New[streamKey, []stremio.Stream](2000, streamsTTL),
+		subtitleLists: cache.New[streamKey, []stremio.Subtitle](2000, streamsTTL),
+		versions:      cache.New[accounts.ID, Version](20000, versionsTTL),
 	}
 }
 
@@ -230,7 +237,7 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // recent requests.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	key := pageKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, skip}
-	if metas, ok := s.pages.get(key); ok {
+	if metas, ok := s.pages.Get(key); ok {
 		return metas, nil
 	}
 	extra, ok := src.extras(skip)
@@ -242,7 +249,7 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 		if err != nil {
 			return nil, err
 		}
-		s.pages.put(key, metas)
+		s.pages.Put(key, metas)
 		return metas, nil
 	})
 	if err != nil {
@@ -546,7 +553,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 // meta returns an addon's complete description of a title, cached.
 func (s *Service) meta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
 	key := metaKey{addon.addon.ID, metaType, id}
-	if meta, ok := s.metas.get(key); ok {
+	if meta, ok := s.metas.Get(key); ok {
 		return meta, nil
 	}
 	result, err, _ := s.flight.Do(fmt.Sprintf("meta %v", key), func() (any, error) {
@@ -554,36 +561,13 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 		if err != nil {
 			return nil, err
 		}
-		s.metas.put(key, meta)
+		s.metas.Put(key, meta)
 		return meta, nil
 	})
 	if err != nil {
 		return stremio.Meta{}, err
 	}
 	return result.(stremio.Meta), nil
-}
-
-// servesMeta reports whether an addon describes titles of this type and ID.
-func servesMeta(manifest stremio.Manifest, metaType, id string) bool {
-	for _, resource := range manifest.Resources {
-		if resource.Name != "meta" {
-			continue
-		}
-		types, prefixes := resource.Types, resource.IDPrefixes
-		if len(types) == 0 {
-			types = manifest.Types
-		}
-		if len(prefixes) == 0 {
-			prefixes = manifest.IDPrefixes
-		}
-		if !slices.Contains(types, metaType) {
-			continue
-		}
-		if len(prefixes) == 0 || slices.ContainsFunc(prefixes, func(prefix string) bool { return strings.HasPrefix(id, prefix) }) {
-			return true
-		}
-	}
-	return false
 }
 
 // titleMeta finds the complete description of a title among the user's
@@ -605,7 +589,7 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 		})
 	}
 	for _, candidate := range candidates {
-		if !servesMeta(candidate.addon.Manifest, r.Meta.Type, r.Meta.ID) {
+		if !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			continue
 		}
 		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
@@ -1038,5 +1022,5 @@ func (s *Service) cachedMeta(r record) (stremio.Meta, bool) {
 	if r.Addon == nil || r.Meta == nil {
 		return stremio.Meta{}, false
 	}
-	return s.metas.get(metaKey{*r.Addon, r.Meta.Type, r.Meta.ID})
+	return s.metas.Get(metaKey{*r.Addon, r.Meta.Type, r.Meta.ID})
 }

@@ -39,7 +39,7 @@ Each media source is matched against the client's `DeviceProfile` (direct play, 
 
 | Level | What happens | Server cost |
 | --- | --- | --- |
-| Direct play | The stream URL answers with a 302 to the source | None |
+| Direct play | The stream URL answers with a 302 to the source, once the source has answered a one-byte range request; Polyfin relays the bytes instead when the app could not reach the source (request headers, a local network address) or follow the redirect (Findroid, from HTTP to HTTPS) | None, or bandwidth when relaying |
 | Remux | Video and audio copied into HLS; HDR and Dolby Vision untouched | Low, no GPU |
 | Audio transcode | Video copied, audio converted (for example TrueHD or DTS to AAC or E-AC-3) | Low |
 | Full transcode | Video and audio re-encoded | High |
@@ -60,7 +60,7 @@ At startup Polyfin asks FFmpeg which encoders, decoders and filters it has, then
 
 ### Subtitles
 
-Text subtitles (SRT, ASS, WebVTT) are converted to WebVTT and delivered as external tracks, without transcoding the video. Image subtitles (PGS, VobSub) are burned into the video only when the client cannot render them.
+Text subtitles (SRT, ASS, WebVTT) are converted to WebVTT and delivered as external tracks, without transcoding the video. Subtitle files from addons are converted to the format each app asks for: WebVTT, SubRip, ASS, or the JSON track events jellyfin-web reads. Image subtitles (PGS, VobSub) are burned into the video only when the client cannot render them; until Polyfin transcodes, subtitles an app cannot render are left out of what it can play rather than preventing direct play.
 
 ## Risks and fallbacks
 

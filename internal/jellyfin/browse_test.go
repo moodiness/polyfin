@@ -308,9 +308,9 @@ func TestCreditedPeopleHavePhotosAndPages(t *testing.T) {
 var browseShapes = shapeRules{
 	dynamic: []string{"ImageTags", "ImageBlurHashes", "ProviderIds"},
 	absent: map[string][]string{
-		// Polyfin has no files: streams are found at playback.
-		"Path": {"*"}, "Container": {"*"}, "MediaSources": {"*"}, "MediaStreams": {"*"},
-		"Width": {"*"}, "Height": {"*"}, "Trickplay": {"*"},
+		// Polyfin has no files; the test addon has no streams, so the
+		// format and size of the titles are unknown.
+		"Path": {"*"}, "Container": {"*"}, "Width": {"*"}, "Height": {"*"},
 		// Metadata addons do not provide these.
 		"OriginalLanguage": {"*"}, "ProductionLocations": {"*"}, "SeriesStudio": {"*"},
 		"CommunityRating": {"episode", "episodes"},

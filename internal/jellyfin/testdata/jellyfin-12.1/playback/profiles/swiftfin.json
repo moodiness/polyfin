@@ -1,0 +1,310 @@
+{
+  "CodecProfiles": [
+    {
+      "Codec": "h264",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoProfile",
+          "Value": "high|main|baseline|constrained baseline"
+        },
+        {
+          "Condition": "LessThanEqual",
+          "IsRequired": false,
+          "Property": "VideoLevel",
+          "Value": "80"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": true,
+          "Property": "VideoRangeType",
+          "Value": "SDR|DOVIWithSDR"
+        }
+      ],
+      "Type": "Video"
+    },
+    {
+      "Codec": "hevc",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoProfile",
+          "Value": "main|main 10"
+        },
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsInterlaced",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": true,
+          "Property": "VideoRangeType",
+          "Value": "SDR|DOVIWithSDR|HLG|HDR10|HDR10Plus|DOVIWithHLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithEL|DOVIWithELHDR10Plus"
+        }
+      ],
+      "Type": "Video"
+    },
+    {
+      "Codec": "av1",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsInterlaced",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": true,
+          "Property": "VideoRangeType",
+          "Value": "SDR|DOVIWithSDR|HLG|HDR10|HDR10Plus|DOVIWithHLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithEL|DOVIWithELHDR10Plus"
+        }
+      ],
+      "Type": "Video"
+    },
+    {
+      "Codec": "vp9",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsInterlaced",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": true,
+          "Property": "VideoRangeType",
+          "Value": "SDR|DOVIWithSDR|HLG|HDR10|HDR10Plus|DOVIWithHLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithEL|DOVIWithELHDR10Plus"
+        }
+      ],
+      "Type": "Video"
+    }
+  ],
+  "DirectPlayProfiles": [
+    {
+      "AudioCodec": "aac,ac3,alac,amr_nb,amr_wb,dts,eac3,flac,mp1,mp2,mp3,nellymoser,opus,pcm_alaw,pcm_bluray,pcm_dvd,pcm_mulaw,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_u8,speex,vorbis,wavpack,wmalossless,wmapro,wmav1,wmav2",
+      "Type": "Video",
+      "VideoCodec": "dirac,dv,ffv1,flv1,h261,h263,h264,hevc,mjpeg,mpeg1video,mpeg2video,mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,prores,theora,vc1,vp8,vp9,wmv1,wmv2,wmv3"
+    }
+  ],
+  "MaxStaticBitrate": 500000000,
+  "MaxStreamingBitrate": 500000000,
+  "MusicStreamingTranscodingBitrate": 500000000,
+  "SubtitleProfiles": [
+    {
+      "Format": "ass",
+      "Method": "Embed"
+    },
+    {
+      "Format": "cc_dec",
+      "Method": "Embed"
+    },
+    {
+      "Format": "dvbsub",
+      "Method": "Embed"
+    },
+    {
+      "Format": "dvdsub",
+      "Method": "Embed"
+    },
+    {
+      "Format": "libzvbi_teletextdec",
+      "Method": "Embed"
+    },
+    {
+      "Format": "mov_text",
+      "Method": "Embed"
+    },
+    {
+      "Format": "mpl2",
+      "Method": "Embed"
+    },
+    {
+      "Format": "pgssub",
+      "Method": "Embed"
+    },
+    {
+      "Format": "pjs",
+      "Method": "Embed"
+    },
+    {
+      "Format": "realtext",
+      "Method": "Embed"
+    },
+    {
+      "Format": "sami",
+      "Method": "Embed"
+    },
+    {
+      "Format": "ssa",
+      "Method": "Embed"
+    },
+    {
+      "Format": "subrip",
+      "Method": "Embed"
+    },
+    {
+      "Format": "subviewer",
+      "Method": "Embed"
+    },
+    {
+      "Format": "subviewer1",
+      "Method": "Embed"
+    },
+    {
+      "Format": "text",
+      "Method": "Embed"
+    },
+    {
+      "Format": "ttml",
+      "Method": "Embed"
+    },
+    {
+      "Format": "vplayer",
+      "Method": "Embed"
+    },
+    {
+      "Format": "vtt",
+      "Method": "Embed"
+    },
+    {
+      "Format": "xsub",
+      "Method": "Embed"
+    },
+    {
+      "Format": "subrip",
+      "Method": "External"
+    },
+    {
+      "Format": "ass",
+      "Method": "External"
+    },
+    {
+      "Format": "libzvbi_teletextdec",
+      "Method": "External"
+    },
+    {
+      "Format": "mpl2",
+      "Method": "External"
+    },
+    {
+      "Format": "pjs",
+      "Method": "External"
+    },
+    {
+      "Format": "realtext",
+      "Method": "External"
+    },
+    {
+      "Format": "sami",
+      "Method": "External"
+    },
+    {
+      "Format": "ssa",
+      "Method": "External"
+    },
+    {
+      "Format": "subviewer",
+      "Method": "External"
+    },
+    {
+      "Format": "subviewer1",
+      "Method": "External"
+    },
+    {
+      "Format": "text",
+      "Method": "External"
+    },
+    {
+      "Format": "ttml",
+      "Method": "External"
+    },
+    {
+      "Format": "vplayer",
+      "Method": "External"
+    },
+    {
+      "Format": "dvbsub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "dvdsub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "pgssub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "vtt",
+      "Method": "Encode"
+    },
+    {
+      "Format": "xsub",
+      "Method": "Encode"
+    }
+  ],
+  "TranscodingProfiles": [
+    {
+      "Protocol": "hls",
+      "AudioCodec": "aac,ac3,alac,dts,eac3,flac,mp1,mp2,mp3,opus,vorbis",
+      "Container": "mp4",
+      "Context": "Streaming",
+      "EnableAudioVbrEncoding": true,
+      "EnableMpegtsM2TsMode": false,
+      "EnableSubtitlesInManifest": false,
+      "BreakOnNonKeyFrames": true,
+      "CopyTimestamps": false,
+      "EstimateContentLength": false,
+      "MaxAudioChannels": "8",
+      "MinSegments": 2,
+      "Type": "Video",
+      "VideoCodec": "h263,h264,hevc,mjpeg,mpeg1video,mpeg2video,mpeg4,vp9"
+    },
+    {
+      "Protocol": "hls",
+      "AudioCodec": "aac,ac3,alac,dts,eac3,flac,mp1,mp2,mp3,opus,vorbis",
+      "Container": "mp4",
+      "Context": "Streaming",
+      "EnableAudioVbrEncoding": true,
+      "EnableMpegtsM2TsMode": false,
+      "EnableSubtitlesInManifest": false,
+      "BreakOnNonKeyFrames": true,
+      "CopyTimestamps": false,
+      "EstimateContentLength": false,
+      "MaxAudioChannels": "8",
+      "MinSegments": 2,
+      "Type": "Video",
+      "VideoCodec": "vc1"
+    }
+  ]
+}

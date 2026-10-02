@@ -159,22 +159,28 @@ func encodeComponent(value string) string {
 	return out.String()
 }
 
-// Extra is a catalog request property, sent in order.
+// ExtraValue is a resource request property, sent in order.
 type ExtraValue struct {
 	Name  string
 	Value string
 }
 
+// extraPath encodes request properties as the path segment addons expect,
+// with its leading slash, or nothing when there are none.
+func extraPath(extra []ExtraValue) string {
+	if len(extra) == 0 {
+		return ""
+	}
+	pairs := make([]string, 0, len(extra))
+	for _, value := range extra {
+		pairs = append(pairs, encodeComponent(value.Name)+"="+encodeComponent(value.Value))
+	}
+	return "/" + strings.Join(pairs, "&")
+}
+
 // Catalog lists one page of a catalog.
 func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogID string, extra []ExtraValue, confined bool) ([]Meta, error) {
-	target := BaseURL(manifestURL) + "/catalog/" + encodeComponent(catalogType) + "/" + encodeComponent(catalogID)
-	if len(extra) > 0 {
-		pairs := make([]string, 0, len(extra))
-		for _, value := range extra {
-			pairs = append(pairs, encodeComponent(value.Name)+"="+encodeComponent(value.Value))
-		}
-		target += "/" + strings.Join(pairs, "&")
-	}
+	target := BaseURL(manifestURL) + "/catalog/" + encodeComponent(catalogType) + "/" + encodeComponent(catalogID) + extraPath(extra)
 	body, err := c.get(ctx, target+".json", confined)
 	if err != nil {
 		return nil, err
