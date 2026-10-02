@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -231,22 +233,29 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 	}
 }
 
-func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
-	p := playing(t)
-	// The analysis of the file the addon serves for the first version:
-	// Opus, then H.264, for 15 s.
+// remuxable stores the analysis of the file the addon serves for the
+// first version, Opus then H.264 for 15 s, with more streams if given.
+func (p playbackSetup) remuxable(t *testing.T, more ...media.Stream) media.Analysis {
+	t.Helper()
 	info, err := os.Stat(filepath.Join("..", "keyframes", "testdata", "forced.mkv"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	analysis, _ := json.Marshal(media.Analysis{Format: "matroska,webm", Duration: 15008 * time.Millisecond, Size: info.Size(), Bitrate: 25_000, Remote: true,
-		Streams: []media.Stream{
+	analysis := media.Analysis{Format: "matroska,webm", Duration: 15008 * time.Millisecond, Size: info.Size(), Bitrate: 25_000, Remote: true,
+		Streams: append([]media.Stream{
 			{Index: 0, Type: "audio", Codec: "opus", Default: true, Channels: 1, SampleRate: 8000, ChannelLayout: "mono"},
 			{Index: 1, Type: "video", Codec: "h264", Profile: "High", Level: 10, Width: 64, Height: 64, FrameRate: 24, AverageRate: 24, PixelFormat: "yuv420p", BitDepth: 8},
-		}})
-	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", p.versions[0].ID, analysis); err != nil {
+		}, more...)}
+	data, _ := json.Marshal(analysis)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", p.versions[0].ID, data); err != nil {
 		t.Fatal(err)
 	}
+	return analysis
+}
+
+func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
+	p := playing(t)
+	p.remuxable(t)
 	// jellyfin-web asks again without direct play when the file failed to
 	// play as it is.
 	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
@@ -315,6 +324,104 @@ func mustID(t *testing.T, s string) accounts.ID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// fetchText gets a URL with no credentials but those it carries, as
+// players do.
+func fetchText(t *testing.T, target string) (int, http.Header, string) {
+	t.Helper()
+	response, err := http.Get(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	return response.StatusCode, response.Header, string(body)
+}
+
+func TestRemuxesOfferSubtitlesAsRenditions(t *testing.T) {
+	p := playing(t)
+	p.remuxable(t)
+	// A player that takes subtitles from the playlist only, as Swiftfin's
+	// native player does, with jellyfin-web's codecs.
+	var profile map[string]any
+	if err := json.Unmarshal(p.profile(t, "jellyfin-web-chrome"), &profile); err != nil {
+		t.Fatal(err)
+	}
+	profile["SubtitleProfiles"] = []map[string]string{{"Format": "vtt", "Method": "Hls"}}
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000, "EnableDirectPlay": false,
+		"SubtitleStreamIndex": 0, "DeviceProfile": profile})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	source := response.MediaSources[0]
+	if file := source.MediaStreams[0]; file.DeliveryMethod != "Hls" || file.DeliveryUrl != "" {
+		t.Errorf("the addon's subtitle file: %s %s", file.DeliveryMethod, file.DeliveryUrl)
+	}
+	target := source.TranscodingUrl
+	for _, part := range []string{"&AudioStreamIndex=1&SubtitleStreamIndex=0&VideoBitrate=", "&SubtitleMethod=Hls&TranscodeReasons=DirectPlayError"} {
+		if !strings.Contains(target, part) {
+			t.Errorf("TranscodingUrl lacks %q: %s", part, target)
+		}
+	}
+	query := strings.SplitN(target, "?", 2)[1]
+	base := p.url + strings.Split(target, "master.m3u8")[0]
+	_, _, master := fetchText(t, base+"master.m3u8?"+query)
+	if !strings.Contains(master, "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"French - SUBRIP - External\",LANGUAGE=\"fr\",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,URI=\"hls1/subtitles0/main.m3u8?DeviceId=") ||
+		!strings.Contains(master, ",SUBTITLES=\"subs\"\nmain.m3u8?") {
+		t.Errorf("master playlist:\n%s", master)
+	}
+	_, _, playlist := fetchText(t, base+"hls1/subtitles0/main.m3u8?"+query)
+	for _, part := range []string{"#EXT-X-TARGETDURATION:7\n", "#EXTINF:6.000000,\n0.vtt?DeviceId=", "#EXTINF:2.508000,\n2.vtt?", "#EXT-X-ENDLIST"} {
+		if !strings.Contains(playlist, part) {
+			t.Errorf("subtitle playlist lacks %q:\n%s", part, playlist)
+		}
+	}
+	// Cues keep the version's time; the map places them on the remux's.
+	for n, want := range []string{
+		"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:01.000 --> 00:00:04.000\nBonjour\n",
+		"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n",
+	} {
+		status, header, segment := fetchText(t, base+"hls1/subtitles0/"+strconv.Itoa(n)+".vtt?"+query)
+		if status != http.StatusOK || header.Get("Content-Type") != "text/vtt" || segment != want {
+			t.Errorf("segment %d: %d %q", n, status, segment)
+		}
+	}
+	if status, _, _ := fetchText(t, base+"hls1/subtitles5/main.m3u8?"+query); status != http.StatusNotFound {
+		t.Errorf("a subtitle the version lacks: %d", status)
+	}
+}
+
+func TestWholeExtractedTracksAreExternalSubtitles(t *testing.T) {
+	p := playing(t)
+	p.remuxable(t, media.Stream{Index: 2, Type: "subtitle", Codec: "subrip", Language: "eng"})
+	// Earlier remuxes extracted the embedded track over the whole version.
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_subtitles (version_id, extracted) VALUES ($1, $2)", p.versions[0].ID,
+		`{"covered":[[0,15008]],"tracks":{"2":[{"s":1000,"e":2500,"t":"Hello"}]}}`); err != nil {
+		t.Fatal(err)
+	}
+	// jellyfin-web plays the file as it is, and takes subtitles as files.
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000, "SubtitleStreamIndex": 3,
+		"DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	source := response.MediaSources[0]
+	i := slices.IndexFunc(source.MediaStreams, func(s playback.MediaStream) bool { return s.Index == 3 })
+	if !source.SupportsDirectPlay || i < 0 {
+		t.Fatalf("source: %+v", source)
+	}
+	track := source.MediaStreams[i]
+	if track.DeliveryMethod != "External" || !strings.HasSuffix(track.DeliveryUrl, "/Subtitles/3/0/Stream.vtt?ApiKey="+p.token) {
+		t.Fatalf("embedded track: %s %s", track.DeliveryMethod, track.DeliveryUrl)
+	}
+	if status, _, body := fetchText(t, p.url+track.DeliveryUrl); status != http.StatusOK || body != "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello\n" {
+		t.Errorf("track: %d %q", status, body)
+	}
 }
 
 func TestStreamsNeedAGrant(t *testing.T) {

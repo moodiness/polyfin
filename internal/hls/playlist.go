@@ -18,6 +18,8 @@ type Variant struct {
 	FrameRate     float64
 	// Range is SDR, PQ or HLG.
 	Range string
+	// Subtitles are the subtitle tracks offered with the variant.
+	Subtitles []Rendition
 }
 
 // WriteMaster writes a master playlist with one variant, whose media
@@ -36,7 +38,14 @@ func WriteMaster(w io.Writer, v Variant, uri string) error {
 	if v.FrameRate > 0 {
 		attributes = append(attributes, "FRAME-RATE="+strconv.FormatFloat(v.FrameRate, 'f', -1, 64))
 	}
-	_, err := fmt.Fprintf(w, "#EXTM3U\n#EXT-X-STREAM-INF:%s\n%s\n", strings.Join(attributes, ","), uri)
+	var b strings.Builder
+	b.WriteString("#EXTM3U\n")
+	if len(v.Subtitles) > 0 {
+		writeRenditions(&b, v.Subtitles)
+		attributes = append(attributes, `SUBTITLES="subs"`)
+	}
+	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:%s\n%s\n", strings.Join(attributes, ","), uri)
+	_, err := io.WriteString(w, b.String())
 	return err
 }
 

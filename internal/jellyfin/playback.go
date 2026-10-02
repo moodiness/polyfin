@@ -363,9 +363,11 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 		decision = playback.Decide(request.DeviceProfile, described, options)
 		// Polyfin burns nothing into the video yet: a subtitle the app can
-		// only take that way is left out rather than preventing playback.
+		// only take that way is left out rather than preventing playback,
+		// and so is one it would take in HLS when the version cannot be
+		// remuxed.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
-			if method := decision.Subtitles[*selected].Method; method == "Encode" || method == "Hls" {
+			if method := decision.Subtitles[*selected].Method; method == "Encode" || (method == "Hls" && !decision.Remux) {
 				without := options
 				without.SubtitleStreamIndex = new(-1)
 				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.Remux && !decision.Remux) {
@@ -384,25 +386,28 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
 		}
 	}
-	deliverable(decision, streams)
+	// Remuxing needs the keyframe index: a version without one is not
+	// offered for it.
+	remuxed := decision.Remux
+	if remuxed {
+		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
+			h.Logger.Info("A version cannot be remuxed", "addon", version.Addon, "error", err)
+			remuxed = false
+		}
+	}
+	h.deliverable(r.Context(), decision, streams, version, analysis, remuxed)
 
 	source.Container = decision.Container
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
-	if decision.Remux {
-		// Remuxing needs the keyframe index: a version without one is not
-		// offered for it.
-		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
-			h.Logger.Info("A version cannot be remuxed", "addon", version.Addon, "error", err)
-		} else {
-			limit := request.MaxStreamingBitrate.value
-			if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
-				limit = *request.DeviceProfile.MaxStreamingBitrate
-			}
-			source.SupportsTranscoding = true
-			source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
-			source.TranscodingSubProtocol = "hls"
-			source.TranscodingContainer = decision.Transcoding.Container
+	if remuxed {
+		limit := request.MaxStreamingBitrate.value
+		if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
+			limit = *request.DeviceProfile.MaxStreamingBitrate
 		}
+		source.SupportsTranscoding = true
+		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
+		source.TranscodingSubProtocol = "hls"
+		source.TranscodingContainer = decision.Transcoding.Container
 	}
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
@@ -426,18 +431,28 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 }
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
-// Polyfin delivers yet: subtitles in the container reach the app embedded
-// in what it plays as it is, subtitle files as external files, and any
-// other is left out.
-func deliverable(decision playback.Decision, streams []playback.MediaStream) {
+// Polyfin delivers: subtitles in the container reach the app embedded in
+// what it plays as it is, subtitle files and the embedded text tracks
+// remuxes extracted whole as external files, and text subtitles as HLS
+// renditions of a remux. Any other is left out.
+func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, remuxed bool) {
+	files := 0
+	for _, stream := range streams {
+		if stream.Type == "Subtitle" && stream.IsExternal {
+			files++
+		}
+	}
+	whole := h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration)
 	for _, stream := range streams {
 		delivery, ok := decision.Subtitles[stream.Index]
 		if stream.Type != "Subtitle" || !ok {
 			continue
 		}
+		extractable := !stream.IsExternal && playback.ExtractableSubtitle(analysis, stream.Index-files)
 		switch {
-		case delivery.Method == "Embed" && !stream.IsExternal:
-		case delivery.Method == "External" && stream.IsExternal:
+		case delivery.Method == "Embed" && !stream.IsExternal && decision.DirectPlay:
+		case delivery.Method == "External" && (stream.IsExternal || (extractable && whole)):
+		case delivery.Method == "Hls" && remuxed && (stream.IsExternal || extractable):
 		default:
 			decision.Subtitles[stream.Index] = playback.SubtitleDelivery{Method: "Drop"}
 		}
@@ -579,16 +594,27 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		p, _ := h.playable(r.Context(), user, title)
 		files = p.subtitles
 	}
-	// External subtitles come first among a version's streams.
-	if index < 0 || index >= len(files) {
+	// External subtitles come first among a version's streams; embedded
+	// tracks follow, served once remuxes have extracted them whole.
+	var cues []subtitles.Cue
+	switch {
+	case index < 0:
 		processingError(w, http.StatusInternalServerError)
 		return
-	}
-	cues, err := h.subtitleCues(r.Context(), files[index])
-	if err != nil {
-		h.Logger.Warn("A subtitle could not be read", "addon", files[index].Addon, "error", err)
-		processingError(w, http.StatusInternalServerError)
-		return
+	case index >= len(files):
+		var found bool
+		// Jellyfin answers 500 for a subtitle it cannot serve.
+		if cues, found = h.extractedTrack(r, item, index-len(files)); !found {
+			processingError(w, http.StatusInternalServerError)
+			return
+		}
+	default:
+		var err error
+		if cues, err = h.subtitleCues(r.Context(), files[index]); err != nil {
+			h.Logger.Warn("A subtitle could not be read", "addon", files[index].Addon, "error", err)
+			processingError(w, http.StatusInternalServerError)
+			return
+		}
 	}
 	cues = subtitles.From(cues, start)
 	var data []byte
@@ -610,6 +636,26 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+}
+
+// extractedTrack returns an embedded text track of the version a subtitle
+// URL names, stream being its FFmpeg index, if remuxes extracted it whole.
+// The URL carries the caller's token, as Jellyfin writes DeliveryUrls.
+func (h *Handler) extractedTrack(r *http.Request, item accounts.ID, stream int) ([]subtitles.Cue, bool) {
+	user, _, signedIn := h.streamAccess(r)
+	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
+	if !signedIn || !ok {
+		return nil, false
+	}
+	version, err := h.Library.Version(r.Context(), user, item, wanted)
+	if err != nil {
+		return nil, false
+	}
+	analysis, ok := h.Playback.Analyzed(r.Context(), version.ID)
+	if !ok || !playback.ExtractableSubtitle(analysis, stream) {
+		return nil, false
+	}
+	return h.Playback.ExtractedTrack(r.Context(), version.ID, analysis.Duration, stream)
 }
 
 // maxSubtitleBytes bounds subtitle downloads.

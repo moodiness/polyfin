@@ -4,10 +4,12 @@
 package subtitles
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -35,37 +37,65 @@ func Parse(data []byte) ([]Cue, error) {
 	text := strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\r", "\n")
 	var cues []Cue
 	for block := range strings.SplitSeq(text, "\n\n") {
-		lines := strings.Split(strings.Trim(block, "\n"), "\n")
-		timing := -1
-		for i, line := range lines {
-			if strings.Contains(line, "-->") {
-				timing = i
-				break
-			}
-		}
-		// Blocks without timing are headers, notes, styles or indexes on
-		// their own; a cue identifier may precede the timing.
-		if timing < 0 || timing > 1 {
-			continue
-		}
-		start, end, ok := parseTiming(lines[timing])
-		if !ok {
-			continue
-		}
-		var text []string
-		for _, line := range lines[timing+1:] {
-			if line = strings.TrimRight(line, " \t"); line != "" {
-				text = append(text, line)
-			}
-		}
-		if len(text) > 0 {
-			cues = append(cues, Cue{Start: start, End: end, Lines: text})
+		if cue, ok := parseBlock(strings.Split(strings.Trim(block, "\n"), "\n")); ok {
+			cues = append(cues, cue)
 		}
 	}
 	if len(cues) == 0 && !strings.HasPrefix(strings.TrimSpace(text), "WEBVTT") {
 		return nil, ErrUnsupported
 	}
 	return cues, nil
+}
+
+// Scan reads the cues of a WebVTT or SubRip stream as they come, such as
+// FFmpeg's output while it extracts a track, until the stream ends.
+func Scan(r io.Reader, cue func(Cue)) error {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 4096), 1<<20)
+	var block []string
+	flush := func() {
+		if parsed, ok := parseBlock(block); ok {
+			cue(parsed)
+		}
+		block = block[:0]
+	}
+	for scanner.Scan() {
+		line := strings.TrimSuffix(scanner.Text(), "\r")
+		if line == "" {
+			flush()
+			continue
+		}
+		block = append(block, line)
+	}
+	flush()
+	return scanner.Err()
+}
+
+// parseBlock reads a cue from the lines of a block. Blocks without timing
+// are headers, notes, styles or indexes on their own; a cue identifier may
+// precede the timing.
+func parseBlock(lines []string) (Cue, bool) {
+	timing := -1
+	for i, line := range lines {
+		if strings.Contains(line, "-->") {
+			timing = i
+			break
+		}
+	}
+	if timing < 0 || timing > 1 {
+		return Cue{}, false
+	}
+	start, end, ok := parseTiming(lines[timing])
+	if !ok {
+		return Cue{}, false
+	}
+	var text []string
+	for _, line := range lines[timing+1:] {
+		if line = strings.TrimRight(line, " \t"); line != "" {
+			text = append(text, line)
+		}
+	}
+	return Cue{Start: start, End: end, Lines: text}, len(text) > 0
 }
 
 // parseTiming reads "start --> end", with SubRip commas or WebVTT dots
@@ -112,10 +142,15 @@ func parseTimestamp(value string) (time.Duration, bool) {
 	return total, true
 }
 
-// WebVTT writes cues as a WebVTT file.
-func WebVTT(cues []Cue) []byte {
+// WebVTT writes cues as a WebVTT file, with header lines after the
+// signature.
+func WebVTT(cues []Cue, headers ...string) []byte {
 	var out bytes.Buffer
 	out.WriteString("WEBVTT\n")
+	for _, header := range headers {
+		out.WriteString(header)
+		out.WriteByte('\n')
+	}
 	for _, cue := range cues {
 		fmt.Fprintf(&out, "\n%s --> %s\n", timestamp(cue.Start, '.'), timestamp(cue.End, '.'))
 		for _, line := range cue.Lines {

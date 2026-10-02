@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 const (
@@ -35,6 +37,11 @@ const (
 	// tolerance absorbs the rounding between the keyframe index and the
 	// timestamps in FFmpeg's output.
 	tolerance = 2 * time.Millisecond
+	// settle is how long after FFmpeg wrote a part of the video the
+	// subtitle cues shown there count as extracted. FFmpeg converts them in
+	// threads of its own, which may lag behind the video it copies, most
+	// when they start; nothing tells a cue still on its way from no cue.
+	settle = 500 * time.Millisecond
 )
 
 var (
@@ -56,6 +63,11 @@ type Remux struct {
 	VideoTag string
 	Format   Format
 	Plan     Plan
+	// Subtitles are the FFmpeg indexes of the text subtitle streams
+	// extracted into Extracted while remuxing, from the bytes FFmpeg reads
+	// anyway.
+	Subtitles []int
+	Extracted Extracted
 }
 
 // Opener prepares an encoding: what it remuxes, and a function releasing
@@ -170,6 +182,22 @@ func (m *Manager) Segment(ctx context.Context, key Key, open Opener, n int) (*os
 		return nil, ErrNotFound
 	}
 	return e.await(ctx, n)
+}
+
+// Subtitles waits until the extracted subtitles of an encoding cover
+// segment n, starting or moving FFmpeg to it when needed.
+func (m *Manager) Subtitles(ctx context.Context, key Key, open Opener, n int) error {
+	e, err := m.encoding(ctx, key, open)
+	if err != nil {
+		return err
+	}
+	if n < 0 || n >= e.remux.Plan.Len() {
+		return ErrNotFound
+	}
+	if len(e.remux.Subtitles) == 0 {
+		return nil
+	}
+	return e.awaitCovered(ctx, n)
 }
 
 // encoding returns the encoding of key, opening it on first use.
@@ -318,6 +346,40 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 	}
 }
 
+// awaitCovered waits until the extracted subtitles cover segment n. The
+// job making it, or about to, is waited for; another starts from n.
+func (e *encoding) awaitCovered(ctx context.Context, n int) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.used = time.Now()
+	plan := e.remux.Plan
+	for {
+		if e.stopped {
+			return ErrStopped
+		}
+		if e.remux.Extracted.Covers(plan.Start(n), plan.End(n)) {
+			return nil
+		}
+		j := e.job
+		switch {
+		case j != nil && j.done && j.err != nil && !errors.Is(j.err, errStale) && j.start == n:
+			e.job = nil
+			return j.err
+		case j == nil || j.done || n < j.start || n > j.next+reach:
+			e.start(n)
+		}
+		// A player may fetch subtitles ahead of the video: FFmpeg goes on
+		// until it reaches them.
+		if n > e.requested {
+			e.requested = n
+			e.signal()
+		}
+		if err := e.wait(ctx); err != nil {
+			return err
+		}
+	}
+}
+
 // prune removes the segments far from segment n. The caller holds e.mu.
 func (e *encoding) prune(n int) {
 	for i, ready := range e.ready {
@@ -377,19 +439,51 @@ func (e *encoding) start(n int) {
 	go e.run(ctx, j)
 }
 
-// run runs FFmpeg for a job and files what it writes into segments.
+// run runs FFmpeg for a job and files what it writes into segments, and
+// the cues of the subtitles it extracts.
 func (e *encoding) run(ctx context.Context, j *job) {
 	cmd := exec.CommandContext(ctx, e.m.ffmpeg, e.remux.args(j.start)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	output, err := cmd.StdoutPipe()
+	// Each extracted subtitle stream comes on a pipe of its own, from file
+	// descriptor 3 on.
+	var readers []*os.File
+	for range e.remux.Subtitles {
+		if err != nil {
+			break
+		}
+		var r, w *os.File
+		if r, w, err = os.Pipe(); err == nil {
+			readers = append(readers, r)
+			cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+		}
+	}
 	if err == nil {
 		err = cmd.Start()
 	}
+	for _, w := range cmd.ExtraFiles {
+		_ = w.Close()
+	}
 	if err != nil {
+		for _, r := range readers {
+			_ = r.Close()
+		}
 		e.finish(j, fmt.Errorf("start FFmpeg: %w", err))
 		return
+	}
+	var extracting sync.WaitGroup
+	for i, r := range readers {
+		stream := e.remux.Subtitles[i]
+		extracting.Go(func() {
+			defer r.Close()
+			if err := subtitles.Scan(r, func(cue subtitles.Cue) { e.remux.Extracted.Add(stream, cue) }); err != nil {
+				e.m.logger.Warn("A subtitle could not be extracted", "stream", stream, "error", err)
+				// FFmpeg would wait for the pipe to be read.
+				_, _ = io.Copy(io.Discard, r)
+			}
+		})
 	}
 	started := time.Now()
 	e.m.logger.Debug("Started a remux", "from", j.start)
@@ -408,6 +502,9 @@ func (e *encoding) run(ctx context.Context, j *job) {
 	// FFmpeg is waited for once its output is drained or abandoned.
 	_, _ = io.Copy(io.Discard, output)
 	waitErr := cmd.Wait()
+	// The cues FFmpeg wrote before it ended are added before the job
+	// finishes and covers them.
+	extracting.Wait()
 	switch {
 	case replaced:
 		err = errStale
@@ -499,18 +596,40 @@ func (e *encoding) close(j *job) error {
 		return err
 	}
 	e.ready[j.next] = true
+	// The cues starting before the segment just made are counted as
+	// extracted once they had time to come, leaving that segment's length
+	// as a margin too.
+	if j.next > j.start {
+		from, to := e.remux.Plan.Start(j.start), e.remux.Plan.Start(j.next)
+		time.AfterFunc(settle, func() {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			e.cover(from, to)
+			e.signal()
+		})
+	}
 	j.next++
 	e.signal()
 	return nil
 }
 
+// cover records that the subtitles a job extracts cover [from, to).
+func (e *encoding) cover(from, to time.Duration) {
+	if len(e.remux.Subtitles) > 0 {
+		e.remux.Extracted.Cover(from, to)
+	}
+}
+
 // finish records the end of a job; one that reached the end of its output
-// completes its last segment.
+// completes its last segment, and has extracted every cue from its start.
 func (e *encoding) finish(j *job, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err == nil && e.job == j && !e.stopped {
-		err = e.close(j)
+		if err = e.close(j); err == nil {
+			plan := e.remux.Plan
+			e.cover(plan.Start(j.start), plan.End(plan.Len()-1))
+		}
 	}
 	if j.file != nil {
 		_ = j.file.Close()
@@ -533,7 +652,8 @@ func writeFile(path string, data []byte) error {
 
 // args is FFmpeg's command line for a job starting at segment n. Segments
 // keep the source's timestamps, shifted by timestampOffset, so that those
-// of different jobs follow each other.
+// of different jobs follow each other. Extracted subtitles keep the
+// source's own.
 func (r Remux) args(n int) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	if n > 0 {
@@ -553,13 +673,20 @@ func (r Remux) args(n int) []string {
 	}
 	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat(timestampOffset.Seconds(), 'f', -1, 64))
 	if r.Format == TS {
-		return append(args, "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1")
+		args = append(args, "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1")
+	} else {
+		// A fragment per keyframe, with the real decode times: without an
+		// edit list, presentation times are those of the source, for video
+		// as for audio. The movie header waits for the first fragment, as
+		// some codecs, such as E-AC-3, describe themselves in their first
+		// packet.
+		args = append(args, "-use_editlist", "0", "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+delay_moov+default_base_moof+frag_discont", "pipe:1")
 	}
-	// A fragment per keyframe, with the real decode times: without an edit
-	// list, presentation times are those of the source, for video as for
-	// audio. The movie header waits for the first fragment, as some codecs,
-	// such as E-AC-3, describe themselves in their first packet.
-	return append(args, "-use_editlist", "0", "-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+delay_moov+default_base_moof+frag_discont", "pipe:1")
+	// Each subtitle stream is written as WebVTT, cue by cue, on its pipe.
+	for i, stream := range r.Subtitles {
+		args = append(args, "-map", "0:"+strconv.Itoa(stream), "-c:s", "webvtt", "-flush_packets", "1", "-f", "webvtt", "pipe:"+strconv.Itoa(3+i))
+	}
+	return args
 }
 
 // tail keeps the end of what a process writes.

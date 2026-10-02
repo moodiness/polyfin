@@ -273,6 +273,20 @@ func (s *Service) RemuxSegment(ctx context.Context, remux Remux, n int) (*os.Fil
 	return s.segments.Segment(ctx, remux.key(), s.remuxOpener(remux), n)
 }
 
+// RemuxSubtitle returns segment n of an embedded text subtitle track of a
+// remux, stream being its FFmpeg index, once FFmpeg has extracted it.
+func (s *Service) RemuxSubtitle(ctx context.Context, remux Remux, stream, n int) ([]byte, error) {
+	plan, err := s.Plan(ctx, remux.Version)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.segments.Subtitles(ctx, remux.key(), s.remuxOpener(remux), n); err != nil {
+		return nil, err
+	}
+	x := s.extractedOf(ctx, remux.Version.ID)
+	return hls.SubtitleSegment(x.cues(stream, plan.Start(n), plan.End(n)), plan, n), nil
+}
+
 // StopRemux stops the remuxes of a play session.
 func (s *Service) StopRemux(session string) {
 	s.segments.Stop(session)
@@ -283,7 +297,8 @@ func (r Remux) key() hls.Key {
 }
 
 // remuxOpener reads the version through the source cache, which keeps
-// what FFmpeg reads for the next seek.
+// what FFmpeg reads for the next seek. FFmpeg extracts the version's text
+// subtitles at the same time, until the version's are all extracted.
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -303,12 +318,19 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if remux.Format == hls.FMP4 {
 			tag = RemuxTag(video.Codec, "mp4")
 		}
+		x := s.extractedOf(ctx, remux.Version.ID)
+		var streams []int
+		if !x.Covers(0, analysis.Duration) {
+			streams = textSubtitles(analysis)
+		}
 		src := s.open(remux.Version)
 		target, unregister := s.loopback.register(src)
 		release := func() {
 			unregister()
 			src.Release()
+			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
-		return hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan}, release, nil
+		return hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan,
+			Subtitles: streams, Extracted: x}, release, nil
 	}
 }
