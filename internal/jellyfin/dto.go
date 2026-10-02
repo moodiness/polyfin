@@ -1,6 +1,8 @@
 package jellyfin
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -10,22 +12,47 @@ import (
 // Jellyfin omits null values; Go nil slices would encode as null, so every
 // list is initialized.
 
-// Time encodes like .NET: UTC with seven fractional digits.
+// Time encodes like Jellyfin: UTC with up to seven fractional digits,
+// trailing zeros dropped, but all seven when the fraction is zero.
 type Time time.Time
 
 func (t Time) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + time.Time(t).UTC().Format("2006-01-02T15:04:05.0000000Z") + `"`), nil
+	utc := time.Time(t).UTC()
+	text := utc.Format("2006-01-02T15:04:05.0000000")
+	if utc.Nanosecond()/100 != 0 {
+		text = strings.TrimRight(text, "0")
+	}
+	return []byte(`"` + text + `Z"`), nil
 }
 
-// UnmarshalJSON accepts any RFC 3339 date, as apps send dates with various
-// precisions and offsets.
+// UnmarshalJSON accepts the dates apps send (see parseTime); null leaves
+// the date unchanged.
 func (t *Time) UnmarshalJSON(data []byte) error {
-	var parsed time.Time
-	if err := parsed.UnmarshalJSON(data); err != nil {
+	if string(data) == "null" {
+		return nil
+	}
+	text, err := strconv.Unquote(string(data))
+	if err != nil {
 		return err
+	}
+	parsed, ok := parseTime(text)
+	if !ok {
+		return &time.ParseError{Layout: time.RFC3339, Value: text}
 	}
 	*t = Time(parsed)
 	return nil
+}
+
+// parseTime reads a date as ASP.NET binds one: RFC 3339 with any precision,
+// a date and time without a zone, read as UTC, or a date alone.
+func parseTime(text string) (time.Time, bool) {
+	text = strings.TrimSpace(text)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02"} {
+		if parsed, err := time.Parse(layout, text); err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 func optionalTime(t *time.Time) *Time {

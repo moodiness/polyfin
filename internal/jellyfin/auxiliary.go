@@ -36,15 +36,11 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/System/Endpoint", h.endpointInfo)
 	signedIn(http.MethodGet, "/Playback/BitrateTest", h.bitrateTest)
 
-	// Polyfin does not record playback yet.
-	signedIn(http.MethodGet, "/UserItems/Resume", h.userQueryResult)
-	signedIn(http.MethodGet, "/Shows/NextUp", h.userQueryResult)
 	// Polyfin has no live TV, people, studios or artists.
 	signedIn(http.MethodGet, "/LiveTv/Programs", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/LiveTv/Programs/Recommended", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/LiveTv/Channels", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Studios", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/Persons", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Artists", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/SyncPlay/List", h.syncPlayGroups)
 	// Polyfin knows no similar items, extras or theme media of an item.
@@ -996,23 +992,6 @@ func emptyPage(w http.ResponseWriter, r *http.Request, errs bindErrors) {
 
 func (h *Handler) emptyQueryResult(w http.ResponseWriter, r *http.Request) {
 	emptyPage(w, r, bindErrors{})
-}
-
-// userQueryResult serves the lists of a user's playback, which may name
-// another user.
-func (h *Handler) userQueryResult(w http.ResponseWriter, r *http.Request) {
-	errs := bindErrors{}
-	startIndex, _ := errs.int32(r, "startIndex")
-	errs.int32(r, "limit")
-	userID, set := errs.guid(r, "userId")
-	if len(errs) > 0 {
-		validationProblem(w, errs)
-		return
-	}
-	if _, ok := h.targetUser(w, r, userID, set, notFoundProblem); !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, emptyResult{Items: []struct{}{}, StartIndex: startIndex})
 }
 
 func (h *Handler) syncPlayGroups(w http.ResponseWriter, _ *http.Request) {

@@ -8,6 +8,9 @@
 # two seasons) and a BoxSet, so browsing responses can be recorded too. It
 # fetches metadata from TMDB, which needs network access.
 #
+# User data (played, favorites, resume points, Next Up) is recorded next, by a
+# separate user, so that the browsing fixtures keep an untouched user's shape.
+#
 # Playback is recorded last, on a separate library of short clips covering
 # the codecs Polyfin decides on, plus a .strm movie whose URL points at a
 # static file server container (Polyfin's remote sources). Besides shape
@@ -225,6 +228,68 @@ get "/Items?userId=$user&limit=100&recursive=true&searchTerm=sintel&fields=Prima
 get "/DisplayPreferences/usersettings?userId=$user&client=emby" | save display-preferences
 get "/UserItems/Resume?userId=$user&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false" | save resume
 get /System/Endpoint | save system-endpoint
+
+# User data, as a second user whose plays and favorites no fixture above sees.
+# The clips are shorter than MinResumeDurationSeconds, so playback reports
+# would mark them played: resume points are set through the UserData endpoint.
+post "$base/Users/New" --header "Authorization: $signed" --data '{"Name":"viewer","Password":"viewer-password"}' >/dev/null
+viewer_client='MediaBrowser Client="Polyfin fixtures", Device="Fixtures", DeviceId="polyfin-fixtures-viewer", Version="1.0.0"'
+viewer_authentication=$(post "$base/Users/AuthenticateByName" --header "Authorization: $viewer_client" \
+	--data '{"Username":"viewer","Pw":"viewer-password"}')
+viewer=$(jq --raw-output .User.Id <<<"$viewer_authentication")
+viewer_signed="$viewer_client, Token=\"$(jq --raw-output .AccessToken <<<"$viewer_authentication")\""
+vget() { curl --silent --show-error --fail --header "Authorization: $viewer_signed" "$base$1"; }
+vpost() { post "$base$1" --header "Authorization: $viewer_signed" "${@:2}"; }
+movie_named() {
+	get "/Items?userId=$user&recursive=true&includeItemTypes=Movie&fields=Path" |
+		jq --exit-status --raw-output --arg file "/$1.mkv" '.Items[] | select(.Path | endswith($file)) | .Id'
+}
+episode_numbered() {
+	get "/Shows/$series/Episodes?userId=$user" |
+		jq --exit-status --raw-output --argjson season "$1" --argjson number "$2" \
+			'.Items[] | select(.ParentIndexNumber == $season and .IndexNumber == $number) | .Id'
+}
+# Sets a resume point at 40% of the item's runtime, last played the given
+# number of seconds ago (Resume and Next Up order by it).
+resume_at() {
+	local runtime data
+	runtime=$(vget "/Users/$viewer/Items/$1" | jq --exit-status '.RunTimeTicks')
+	data=$(jq --null-input --compact-output --argjson ticks "$((runtime * 2 / 5))" --argjson ago "$2" \
+		'{PlaybackPositionTicks: $ticks, LastPlayedDate: (now - $ago | todate)}')
+	vpost "/UserItems/$1/UserData?userId=$viewer" --data "$data" >/dev/null
+}
+# Saves a list whose first item, the only one its shape keeps, must be the
+# given one.
+save_led_by() {
+	local json
+	json=$(cat)
+	jq --exit-status --arg id "$2" '.Items[0].Id == $id' <<<"$json" >/dev/null || {
+		echo "$1: expected $2 first, got $(jq --compact-output '[.Items[].Name]' <<<"$json")" >&2
+		return 1
+	}
+	save "$1" <<<"$json"
+}
+sintel=$(movie_named 'Sintel (2010)')
+tears=$(movie_named 'Tears of Steel (2012)')
+s01e02=$(episode_numbered 1 2)
+s02e01=$(episode_numbered 2 1)
+vpost "/UserPlayedItems/$movie?userId=$viewer" | save user-item-data
+vpost "/UserFavoriteItems/$sintel?userId=$viewer" | save favorite-user-data
+# S01E01 watched, then rewatched to 40%; S02E01 started; S01E02 is Next Up.
+vpost "/Users/$viewer/PlayedItems/$episode?DatePlayed=$(jq --null-input --raw-output 'now - 7200 | todate')" >/dev/null
+resume_at "$tears" 3600
+resume_at "$episode" 120
+resume_at "$s02e01" 60
+# The home page's rows and the Favorites tab, with jellyfin-web 12.1's
+# parameters; its Next Up cutoff is a date, 365 days back by default.
+vget "/UserItems/Resume?userId=$viewer&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false" |
+	save_led_by resume-items "$s02e01"
+vget "/Shows/NextUp?userId=$viewer&limit=24&fields=PrimaryImageAspectRatio&fields=DateCreated&fields=Path&fields=MediaSourceCount&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&nextUpDateCutoff=$(jq --null-input --raw-output 'now - 365 * 86400 | strftime("%Y-%m-%d")')&enableTotalRecordCount=false&enableResumable=false&enableRewatching=false" |
+	save_led_by next-up "$s01e02"
+vget "/Users/$viewer/Items?SortBy=SeriesSortName%2CSortName&SortOrder=Ascending&Filters=IsFavorite&Recursive=true&Fields=PrimaryImageAspectRatio&CollapseBoxSetItems=false&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&Limit=20&IncludeItemTypes=Movie" |
+	save_led_by favorites "$sintel"
+vget "/Users/$viewer/Items/$series" | save series-in-progress
+vget "/Shows/$series/Episodes?userId=$viewer&$counts,Overview" | save_led_by episodes-in-progress "$episode"
 
 # Playback, on its own library so that the browsing fixtures above stay as
 # they were.

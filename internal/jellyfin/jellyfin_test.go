@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 const testServerID = "0123456789abcdef0123456789abcdef"
@@ -74,6 +75,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 		Stremio:       client,
 		Playback:      player,
 		Preferences:   preferences.New(pool),
+		UserData:      userdata.New(pool),
 		Logger:        logger,
 	}))
 	t.Cleanup(server.Close)

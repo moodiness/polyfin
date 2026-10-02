@@ -35,18 +35,32 @@ func (h *Handler) playbackRoutes(rt *router) {
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startTicks}/{file}", http.HandlerFunc(h.subtitle))
 	signedIn(http.MethodDelete, "/Videos/ActiveEncodings", h.noContent)
 
-	signedIn(http.MethodPost, "/Sessions/Playing", h.reportPlayback("playbackStartInfo", h.sessions.Start))
-	signedIn(http.MethodPost, "/Sessions/Playing/Progress", h.reportPlayback("playbackProgressInfo", h.sessions.Progress))
-	signedIn(http.MethodPost, "/Sessions/Playing/Stopped", h.reportPlayback("playbackStopInfo", func(device, _ accounts.ID, _ playback.PlayState) {
-		h.sessions.Stop(device)
-	}))
+	signedIn(http.MethodPost, "/Sessions/Playing", h.reportPlayback("playbackStartInfo", playbackStarted))
+	signedIn(http.MethodPost, "/Sessions/Playing/Progress", h.reportPlayback("playbackProgressInfo", playbackProgressed))
+	signedIn(http.MethodPost, "/Sessions/Playing/Stopped", h.reportPlayback("playbackStopInfo", playbackStopped))
 	signedIn(http.MethodPost, "/Sessions/Playing/Ping", h.pingPlayback)
 	signedIn(http.MethodGet, "/Sessions", h.listSessions)
 	for _, prefix := range []string{"/PlayingItems/{itemId}", "/Users/{userId}/PlayingItems/{itemId}"} {
-		signedIn(http.MethodPost, prefix, h.legacyReport(h.sessions.Start))
-		signedIn(http.MethodPost, prefix+"/Progress", h.legacyReport(h.sessions.Progress))
-		signedIn(http.MethodDelete, prefix, h.legacyReport(func(device, _ accounts.ID, _ playback.PlayState) { h.sessions.Stop(device) }))
+		signedIn(http.MethodPost, prefix, h.legacyReport(playbackStarted))
+		signedIn(http.MethodPost, prefix+"/Progress", h.legacyReport(playbackProgressed))
+		signedIn(http.MethodDelete, prefix, h.legacyReport(playbackStopped))
 	}
+}
+
+// record applies a playback report to the device's session and to the
+// user's data.
+func (h *Handler) record(r *http.Request, event playbackEvent, state playback.PlayState, positionKnown bool) {
+	c := callerFrom(r.Context())
+	before, _ := h.sessions.Playing(c.Device.ID)
+	switch event {
+	case playbackStarted:
+		h.sessions.Start(c.Device.ID, c.User.ID, state)
+	case playbackProgressed:
+		h.sessions.Progress(c.Device.ID, c.User.ID, state)
+	case playbackStopped:
+		h.sessions.Stop(c.Device.ID)
+	}
+	h.track(r.Context(), c.User, event, state, positionKnown, before)
 }
 
 func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {
@@ -128,7 +142,7 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	}
 	// Jellyfin describes the item as on its page, without what concerns
 	// the user or managing the item.
-	dto := h.newItemDto(item, nil, true)
+	dto := h.newItemDto(item, nil, true, userState{})
 	h.addMediaSources(r, user, &dto, item, playing.Item, false)
 	dto.MediaSources, dto.HasSubtitles, dto.People, dto.RemoteTrailers = nil, nil, nil, nil
 	dto.CanDelete, dto.CanDownload, dto.LockData, dto.LockedFields, dto.Tags = nil, nil, nil, nil, nil
@@ -650,7 +664,7 @@ func (report playbackReport) state() playback.PlayState {
 
 // reportPlayback records a playback report posted as JSON. Like Jellyfin, it
 // accepts reports for unknown items and answers nothing.
-func (h *Handler) reportPlayback(parameter string, record func(device, user accounts.ID, state playback.PlayState)) http.HandlerFunc {
+func (h *Handler) reportPlayback(parameter string, event playbackEvent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !jsonContent(r.Header.Get("Content-Type")) {
 			unsupportedMediaTypeProblem(w)
@@ -673,8 +687,7 @@ func (h *Handler) reportPlayback(parameter string, record func(device, user acco
 			validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, parameter: {"The " + parameter + " field is required."}})
 			return
 		}
-		c := callerFrom(r.Context())
-		record(c.Device.ID, c.User.ID, report.state())
+		h.record(r, event, report.state(), report.PositionTicks.set)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -691,32 +704,32 @@ func (h *Handler) pingPlayback(w http.ResponseWriter, r *http.Request) {
 
 // legacyReport records a report sent the older way, as query parameters on
 // /PlayingItems/{itemId}.
-func (h *Handler) legacyReport(record func(device, user accounts.ID, state playback.PlayState)) http.HandlerFunc {
+func (h *Handler) legacyReport(event playbackEvent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b := bindErrors{}
 		item := b.pathID(r, "itemId")
 		// Positions in ticks overflow 32 bits after four minutes.
 		var position int64
+		positionKnown := false
 		if raw := strings.TrimSpace(query(r, "positionTicks")); raw != "" {
 			value, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
 				b.add("positionTicks", notValid(raw))
 			}
-			position = value
+			position, positionKnown = value, true
 		}
 		paused, _ := b.bool(r, "isPaused")
 		if len(b) > 0 {
 			validationProblem(w, b)
 			return
 		}
-		c := callerFrom(r.Context())
-		record(c.Device.ID, c.User.ID, playback.PlayState{
+		h.record(r, event, playback.PlayState{
 			Item:          item,
 			MediaSourceID: query(r, "mediaSourceId"),
 			PlaySessionID: query(r, "playSessionId"),
 			Position:      time.Duration(position) * 100,
 			Paused:        paused,
-		})
+		}, positionKnown)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

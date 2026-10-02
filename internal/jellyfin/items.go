@@ -13,14 +13,17 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
-// UserItemData is a user's state for an item. Polyfin does not record
-// playback yet: every item is unplayed and not a favorite.
+// UserItemData is what a user did with an item: Jellyfin's
+// UserItemDataDto, in its key order.
 type UserItemData struct {
+	Rating                *float64 `json:",omitempty"`
 	PlayedPercentage      *float64 `json:",omitempty"`
 	UnplayedItemCount     *int     `json:",omitempty"`
 	PlaybackPositionTicks int64
 	PlayCount             int
 	IsFavorite            bool
+	Likes                 *bool `json:",omitempty"`
+	LastPlayedDate        *Time `json:",omitempty"`
 	Played                bool
 	Key                   string
 	ItemId                string
@@ -216,10 +219,10 @@ var itemTypes = map[library.Kind]string{
 	library.KindPerson:     "Person",
 }
 
-// newItemDto describes an item. detail is true for an item's own
-// description, which carries every field; listings carry the base fields
-// plus those in fields.
-func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool) BaseItemDto {
+// newItemDto describes an item, with what the user did with it in state.
+// detail is true for an item's own description, which carries every field;
+// listings carry the base fields plus those in fields.
+func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, state userState) BaseItemDto {
 	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode
 	folder := !playable && item.Kind != library.KindPerson
 	dto := BaseItemDto{
@@ -237,13 +240,10 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool) Ba
 		ImageBlurHashes:   map[string]map[string]string{},
 		LocationType:      "FileSystem",
 		MediaType:         mediaType(item.Kind),
-		UserData:          UserItemData{Key: hyphenated(item.ID), ItemId: item.ID.String()},
+		UserData:          state.of(item),
 	}
 	if item.Kind == library.KindEpisode && !item.Available {
 		dto.LocationType = "Virtual"
-	}
-	if folder && item.Kind != library.KindLibrary {
-		dto.UserData.PlayedPercentage = new(0.0)
 	}
 	if item.PremiereDate != nil {
 		dto.PremiereDate = new(Time(*item.PremiereDate))
@@ -293,10 +293,6 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool) Ba
 		dto.SeriesId = item.SeriesID.String()
 		dto.ParentBackdropItemId = item.SeriesID.String()
 		dto.ParentBackdropImageTags = []string{}
-	}
-	if item.Contents != nil {
-		// Nothing is played yet: every released episode is unplayed.
-		dto.UserData.UnplayedItemCount = new(item.Contents.Released)
 	}
 	h.setImages(&dto, item)
 
@@ -455,18 +451,22 @@ type QueryResult struct {
 }
 
 // itemTypeFilter keeps the item types a request includes and drops those it
-// excludes; mediaTypes further keeps only items of those media types.
+// excludes; mediaTypes further keeps only items of those media types, and
+// the IsFolder and IsNotFolder filters only folders or the others.
 func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	include := listQuery(r, "includeItemTypes")
 	exclude := listQuery(r, "excludeItemTypes")
 	media := listQuery(r, "mediaTypes")
+	filters := listQuery(r, "filters")
+	matches := func(list []string, value string) bool {
+		return slices.ContainsFunc(list, func(t string) bool { return strings.EqualFold(t, value) })
+	}
+	folders, others := matches(filters, "IsFolder"), matches(filters, "IsNotFolder")
 	return func(item library.Item) bool {
-		matches := func(list []string, value string) bool {
-			return slices.ContainsFunc(list, func(t string) bool { return strings.EqualFold(t, value) })
-		}
 		itemType := itemTypes[item.Kind]
+		folder := item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindPerson
 		return (len(include) == 0 || matches(include, itemType)) && !matches(exclude, itemType) &&
-			(len(media) == 0 || matches(media, mediaType(item.Kind)))
+			(len(media) == 0 || matches(media, mediaType(item.Kind))) && (!folders || folder) && (!others || !folder)
 	}
 }
 
