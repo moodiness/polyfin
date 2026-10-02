@@ -60,7 +60,22 @@ At startup Polyfin asks FFmpeg which encoders, decoders and filters it has, then
 
 ### Subtitles
 
-Text subtitles (SRT, ASS, WebVTT) are converted to WebVTT and delivered as external tracks, without transcoding the video. Subtitle files from addons are converted to the format each app asks for: WebVTT, SubRip, ASS, or the JSON track events jellyfin-web reads. Image subtitles (PGS, VobSub) are burned into the video only when the client cannot render them; until Polyfin transcodes, subtitles an app cannot render are left out of what it can play rather than preventing direct play.
+A subtitle never costs a video transcode when a cheaper path exists. For each track and each app, Polyfin uses the first of these that works:
+
+| Track | App renders it inside the file (`Embed`) | Otherwise |
+| --- | --- | --- |
+| Addon subtitle file | Not applicable | Converted to the format the app asks for: WebVTT, SubRip, ASS, or the JSON track events jellyfin-web reads |
+| Embedded text (SubRip, ASS/SSA, WebVTT, mov_text) | Left in the file, in direct play and remux | Extracted to an external track, or to a segmented WebVTT rendition in HLS |
+| Embedded image (PGS, VobSub, DVB) | Left in the file, in direct play and Matroska remux | Burned into the video, which needs a full transcode |
+
+- **Extraction from remote sources.** Subtitle packets are interleaved through the whole file, so extracting an embedded track reads all of it: 40 to 80 GB for a Blu-ray remux. Polyfin therefore extracts text tracks while it remuxes or transcodes, from bytes it reads anyway, as a separate output that grows with playback. It keeps the result per version, so that later playbacks get the whole track at once.
+- **HLS renditions.** Players that only take subtitles from the playlist, such as AVPlayer in Swiftfin's native player, get segmented WebVTT renditions aligned on the video timeline (`X-TIMESTAMP-MAP`).
+- **ASS/SSA** stays ASS for players that render it, so positions, styles and effects survive, together with the fonts the Matroska file carries as attachments (`MediaAttachments`). Attachments sit in one element near the start or the end of the file and are read with a few range requests. Other players get WebVTT or SubRip, without styles.
+- **Image subtitles** cannot become text without OCR. When a player cannot render them, they are burned in: the only case where a subtitle forces a video transcode. A forced track, which only covers foreign-language passages, is burned in alone. Optional OCR into a reusable SubRip track (Tesseract) may come later; its quality varies.
+- **Choice.** Polyfin follows Jellyfin's decision (`Embed`, then `External`, then `Hls`, then `Encode`), but does not burn in a track when a text subtitle in the same language exists, for example from an addon.
+- **Timing and text.** After a seek in a transcoded stream, subtitle URLs carry the start position, and extracted tracks keep the source's timestamps. Text is served in UTF-8, with a fallback for legacy encodings.
+
+Until Polyfin transcodes, subtitles an app could only get burned in are left out of what it can play rather than preventing direct play.
 
 ## Risks and fallbacks
 
@@ -71,8 +86,8 @@ Text subtitles (SRT, ASS, WebVTT) are converted to WebVTT and delivered as exter
 ## Delivery order
 
 1. Direct play and ffprobe analysis.
-2. Remux.
-3. Software transcoding.
+2. Remux, with the extraction of embedded text subtitles and fonts.
+3. Software transcoding, with burned-in image subtitles.
 4. Hardware acceleration.
 5. Multiple variants and separate audio renditions.
 
