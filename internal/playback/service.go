@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -69,6 +70,10 @@ type Service struct {
 	// could not be read.
 	indexes   *cache.Cache[accounts.ID, []time.Duration]
 	unindexed *cache.Cache[accounts.ID, error]
+	// extractions are the subtitles remuxes extract, shared by the remuxes
+	// of a version.
+	extractedMu sync.Mutex
+	extractions *cache.Cache[accounts.ID, *extracted]
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -80,21 +85,22 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
 	return &Service{
-		db:        db,
-		opener:    opener,
-		prober:    media.Prober{Path: ffprobePath, Timeout: probeTimeout},
-		sources:   sources,
-		segments:  segments,
-		loopback:  server,
-		renew:     renew,
-		signer:    signer,
-		logger:    logger,
-		analyses:  cache.New[accounts.ID, media.Analysis](2000, time.Hour),
-		failures:  cache.New[accounts.ID, error](2000, failureTTL),
-		live:      cache.New[accounts.ID, struct{}](2000, liveTTL),
-		hosts:     cache.New[string, bool](500, 5*time.Minute),
-		indexes:   cache.New[accounts.ID, []time.Duration](200, time.Hour),
-		unindexed: cache.New[accounts.ID, error](2000, failureTTL),
+		db:          db,
+		opener:      opener,
+		prober:      media.Prober{Path: ffprobePath, Timeout: probeTimeout},
+		sources:     sources,
+		segments:    segments,
+		loopback:    server,
+		renew:       renew,
+		signer:      signer,
+		logger:      logger,
+		analyses:    cache.New[accounts.ID, media.Analysis](2000, time.Hour),
+		failures:    cache.New[accounts.ID, error](2000, failureTTL),
+		live:        cache.New[accounts.ID, struct{}](2000, liveTTL),
+		hosts:       cache.New[string, bool](500, 5*time.Minute),
+		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour),
+		unindexed:   cache.New[accounts.ID, error](2000, failureTTL),
+		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
 	}, nil
 }
 

@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are or remuxed into HLS, with the addons' subtitles, and keep each user's watched state, resume points and favorites. Polyfin does not convert video or audio yet, so a version whose codecs the app cannot play (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are or remuxed into HLS, with the addons' subtitles and the text subtitles inside the files, and keep each user's watched state, resume points and favorites. Polyfin does not convert video or audio yet, so a version whose codecs the app cannot play (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
 
 ## Features
 

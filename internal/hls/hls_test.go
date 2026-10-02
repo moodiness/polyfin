@@ -94,6 +94,32 @@ hls1/main/2.mp4?a=b
 	}
 }
 
+func TestSubtitleRenditionsFollowHLSRules(t *testing.T) {
+	var master bytes.Buffer
+	err := WriteMaster(&master, Variant{Bandwidth: 1_000_000, Subtitles: []Rendition{
+		{Name: "French", Language: "fr", URI: "s0.m3u8"},
+		{Name: "French", Language: "fr", URI: "s1.m3u8"},
+		{Name: `Forced "signs"`, Language: "fr", Forced: true, URI: "s2.m3u8"},
+		{Name: "English", Language: "en", Default: true, URI: "s3.m3u8"},
+	}}, "main.m3u8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Names differ within the group; a default track is autoselected, and
+	// so is a forced one.
+	want := `#EXTM3U
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",LANGUAGE="fr",DEFAULT=NO,AUTOSELECT=NO,FORCED=NO,URI="s0.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French 2",LANGUAGE="fr",DEFAULT=NO,AUTOSELECT=NO,FORCED=NO,URI="s1.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Forced 'signs'",LANGUAGE="fr",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES,URI="s2.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,URI="s3.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,AVERAGE-BANDWIDTH=1000000,SUBTITLES="subs"
+main.m3u8
+`
+	if master.String() != want {
+		t.Errorf("master playlist:\n%s", master.String())
+	}
+}
+
 // tools returns FFmpeg and ffprobe, named by POLYFIN_TEST_FFMPEG, or skips
 // the test.
 func tools(t *testing.T) (string, string) {
