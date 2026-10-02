@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -228,9 +229,9 @@ func TestDecideConditions(t *testing.T) {
 	}
 }
 
-func TestRemuxOnlyWhatTheAppCanPlayCopied(t *testing.T) {
+func TestRemuxesCopyTheVideoAndConvertWhatAudioTheAppCannotTake(t *testing.T) {
 	// A Matroska remux: HEVC with Dolby Vision over HDR10, a French
-	// E-AC-3 track flagged default, then English AAC in stereo.
+	// E-AC-3 track flagged default, then English AAC in 5.1.
 	source := MediaSource{
 		Container: "mkv",
 		Bitrate:   60_000_000,
@@ -238,53 +239,75 @@ func TestRemuxOnlyWhatTheAppCanPlayCopied(t *testing.T) {
 			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main 10", Level: new(153.0), VideoRangeType: "DOVIWithHDR10",
 				Width: new(3840), Height: new(2160), AverageFrameRate: new(23.976)},
 			{Type: "Audio", Index: 1, Codec: "eac3", IsDefault: true, Channels: new(6)},
-			{Type: "Audio", Index: 2, Codec: "aac", Channels: new(2)},
+			{Type: "Audio", Index: 2, Codec: "aac", Channels: new(6)},
 		},
 	}
+	sdr := source
+	sdr.Streams = slices.Clone(source.Streams)
+	sdr.Streams[0].VideoRangeType = "SDR"
+	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}
 	tests := []struct {
 		name    string
 		profile string
+		source  MediaSource
 		options Options
 		remux   bool
+		audio   *AudioConversion
 		reasons []string
 	}{
 		// Its native player takes HEVC in MP4 tagged hvc1 only, which a
 		// remux writes, and E-AC-3.
-		{"Swiftfin's native player", "swiftfin-native", Options{}, true, []string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
+		{"Swiftfin's native player", "swiftfin-native", source, Options{}, true, nil, []string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
+		// An app may ask for the audio to be converted all the same.
+		{"audio copy refused", "swiftfin-native", source, Options{ConvertAudio: true}, true, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 384_000},
+			[]string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
 		// Chrome refuses Dolby Vision, which a remux keeps.
-		{"Dolby Vision in Chrome", "jellyfin-web-chrome", Options{AudioStreamIndex: new(2)}, false,
+		{"Dolby Vision in Chrome", "jellyfin-web-chrome", source, Options{AudioStreamIndex: new(2)}, false, nil,
 			[]string{"SecondaryAudioNotSupported", "VideoRangeTypeNotSupported"}},
+		// Chrome takes AAC in stereo, and no E-AC-3: both are converted
+		// to stereo AAC.
+		{"5.1 AAC in Chrome", "jellyfin-web-chrome", sdr, Options{AudioStreamIndex: new(2)}, true, stereo, []string{"SecondaryAudioNotSupported"}},
+		{"E-AC-3 in Chrome", "jellyfin-web-chrome", sdr, Options{}, true, stereo, []string{"AudioCodecNotSupported"}},
 		// A remux cannot lower the bitrate.
-		{"over the bitrate limit", "swiftfin-native", Options{MaxStreamingBitrate: 20_000_000}, false,
+		{"over the bitrate limit", "swiftfin-native", source, Options{MaxStreamingBitrate: 20_000_000}, false, nil,
 			[]string{"ContainerBitrateExceedsLimit"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			options := test.options
 			options.EnableDirectPlay, options.EnableDirectStream = true, true
-			got := Decide(readDeviceProfile(t, test.profile), source, options)
-			if got.DirectPlay || got.Remux != test.remux || !slices.Equal(got.Reasons, test.reasons) {
-				t.Errorf("DirectPlay %v, Remux %v, Reasons %v; want remux %v, reasons %v", got.DirectPlay, got.Remux, got.Reasons, test.remux, test.reasons)
+			got := Decide(readDeviceProfile(t, test.profile), test.source, options)
+			if got.DirectPlay || got.Remux != test.remux || !reflect.DeepEqual(got.Audio, test.audio) || !slices.Equal(got.Reasons, test.reasons) {
+				t.Errorf("DirectPlay %v, Remux %v, Audio %+v, Reasons %v; want remux %v, audio %+v, reasons %v",
+					got.DirectPlay, got.Remux, got.Audio, got.Reasons, test.remux, test.audio, test.reasons)
 			}
 		})
 	}
-	// Chrome takes AAC in HLS, in stereo only unless the app allows more:
-	// the English track is copied, the French E-AC-3 one is not.
-	sdr := source
-	sdr.Streams = slices.Clone(source.Streams)
-	sdr.Streams[0].VideoRangeType = "SDR"
-	sdr.Streams[2].Channels = new(6)
+	// With more channels allowed, Chrome takes the AAC track as it is.
 	chrome := readDeviceProfile(t, "jellyfin-web-chrome")
-	for _, channels := range []string{"2", "6"} {
-		for i := range chrome.TranscodingProfiles {
-			chrome.TranscodingProfiles[i].MaxAudioChannels = channels
-		}
-		english := Decide(chrome, sdr, Options{AudioStreamIndex: new(2), EnableDirectPlay: true, EnableDirectStream: true})
-		if english.Remux != (channels == "6") {
-			t.Errorf("English 5.1 AAC with %s channels allowed: remux %v", channels, english.Remux)
-		}
+	for i := range chrome.TranscodingProfiles {
+		chrome.TranscodingProfiles[i].MaxAudioChannels = "6"
 	}
-	if french := Decide(chrome, sdr, Options{EnableDirectPlay: true, EnableDirectStream: true}); french.Remux {
-		t.Error("E-AC-3 remuxed for Chrome")
+	if english := Decide(chrome, sdr, Options{AudioStreamIndex: new(2), EnableDirectPlay: true, EnableDirectStream: true}); !english.Remux || english.Audio != nil {
+		t.Errorf("5.1 AAC with 6 channels allowed: remux %v, audio %+v", english.Remux, english.Audio)
+	}
+}
+
+func TestAudioIsConvertedToTheFirstCodecFFmpegEncodes(t *testing.T) {
+	for _, test := range []struct {
+		codecs, maxChannels string
+		channels            int
+		want                *AudioConversion
+	}{
+		{"aac,mp2,opus,flac", "2", 8, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		{"mp3,eac3,aac", "", 8, &AudioConversion{Codec: "eac3", Channels: 6, Bitrate: 384_000}},
+		{"FLAC", "8", 8, &AudioConversion{Codec: "flac", Channels: 8}},
+		{"aac", "", 1, &AudioConversion{Codec: "aac", Channels: 1, Bitrate: 128_000}},
+		{"aac", "", 0, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		{"mp2,opus", "2", 6, nil},
+	} {
+		if got := ConvertAudio(test.codecs, test.maxChannels, test.channels); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("ConvertAudio(%q, %q, %d) = %+v, want %+v", test.codecs, test.maxChannels, test.channels, got, test.want)
+		}
 	}
 }

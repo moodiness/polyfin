@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are or remuxed into HLS, with the addons' subtitles and the text subtitles inside the files, and keep each user's watched state, resume points and favorites. Polyfin does not convert video or audio yet, so a version whose codecs the app cannot play (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are or remuxed into HLS, with the audio converted when the app cannot take it, with the addons' subtitles and the text subtitles inside the files, and keep each user's watched state, resume points and favorites. Polyfin does not convert video yet, so a version whose video the app cannot play (such as 4K Dolby Vision in a web browser) does not play. No image is published before the first release.
 
 ## Features
 
@@ -12,7 +12,7 @@ Polyfin is a self-hosted, Jellyfin-compatible server that sources its content fr
   - Stremio catalogs become Jellyfin libraries. An addon's collection catalogs (such as AIOMetadata's) become collection libraries, where each collection gathers the catalogs it groups, movies and series together.
   - Stremio streams become versions (media sources) of the same item, and addon subtitles become external subtitle tracks.
 - **Multiple users**: separate accounts with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points, and Next Up are tracked per user.
-- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS, built on FFmpeg for remote sources: a remux when the app can play the codecs but not the container, then transcoding. See the [transcoding design](docs/transcoding.md).
+- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS, built on FFmpeg for remote sources: a remux when the app can play the video but not the container, converting the audio when the app cannot take it, then video transcoding. See the [transcoding design](docs/transcoding.md).
 
 ## How it works
 

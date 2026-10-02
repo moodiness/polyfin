@@ -41,7 +41,7 @@ Each media source is matched against the client's `DeviceProfile` (direct play, 
 | --- | --- | --- |
 | Direct play | The stream URL answers with a 302 to the source, once the source has answered a one-byte range request; Polyfin relays the bytes instead when the app could not reach the source (request headers, a local network address) or follow the redirect (Findroid, from HTTP to HTTPS) | None, or bandwidth when relaying |
 | Remux | Video and audio copied into HLS; HDR and Dolby Vision untouched. Offered when the app's HLS transcoding profile takes the video codec and the codec and channels of the audio track that plays, and its codec profiles accept the remux, with the codec tag it writes (`hvc1` for HEVC in MP4, which Apple players require). A remux cannot lower the bitrate. | Low, no GPU |
-| Audio transcode | Video copied, audio converted (for example TrueHD or DTS to AAC or E-AC-3) | Low |
+| Audio transcode | Video copied as in a remux, audio converted (for example TrueHD or DTS to AAC). Offered when the video can be copied but the audio that plays cannot, or the app refuses the copy (`AllowAudioStreamCopy: false`). The audio becomes the first codec of the transcoding profile FFmpeg encodes in every build (AAC, AC-3, E-AC-3 or FLAC), with the source's channels up to the profile's `MaxAudioChannels` and 5.1, at about 64 kb/s a channel (192 kb/s in stereo). The `TranscodingUrl` asks for it with Jellyfin's `allowAudioStreamCopy=false`, and FFmpeg decodes the audio from the keyframe it starts on, as copied streams start, rather than from the time asked. | Low |
 | Full transcode | Video and audio re-encoded | High |
 
 Every decision that is not direct play reports Jellyfin's `TranscodeReasons`.

@@ -3,10 +3,12 @@ package jellyfin
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -317,6 +319,55 @@ func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
 	}
 }
 
+func TestAudioTheAppCannotTakeIsConverted(t *testing.T) {
+	p := playing(t)
+	p.remuxable(t)
+	ask := func(profile string, more map[string]any) MediaSourceInfo {
+		t.Helper()
+		body := map[string]any{"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000,
+			"DeviceProfile": p.profile(t, profile)}
+		maps.Copy(body, more)
+		status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), body)
+		var response playbackInfoResponse
+		if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+			t.Fatalf("%d %s", status, data)
+		}
+		return response.MediaSources[0]
+	}
+	// The app takes H.264, and AAC only: the Opus audio becomes AAC.
+	source := ask("minimal", nil)
+	target := source.TranscodingUrl
+	if source.SupportsDirectPlay || !source.SupportsTranscoding || source.TranscodingContainer != "ts" ||
+		!strings.HasSuffix(target, "&TranscodeReasons=ContainerNotSupported,AudioCodecNotSupported&allowAudioStreamCopy=false") ||
+		strings.Contains(target, "AudioSampleRate") {
+		t.Fatalf("source: %+v", source)
+	}
+	base := p.url + strings.Split(target, "master.m3u8")[0]
+	query := strings.SplitN(target, "?", 2)[1]
+	if _, _, master := fetchText(t, base+"master.m3u8?"+query); !strings.Contains(master, `CODECS="avc1.64000A,mp4a.40.2"`) {
+		t.Errorf("master playlist:\n%s", master)
+	}
+	if ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG"); ffmpeg != "" {
+		status, _, segment := fetchText(t, base+"hls1/main/0.ts?"+query)
+		path := filepath.Join(t.TempDir(), "0.ts")
+		if err := os.WriteFile(path, []byte(segment), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		out, _ := exec.Command(filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), "-v", "error", "-select_streams", "a",
+			"-show_entries", "stream=codec_name,channels", "-of", "csv=p=0", path).Output()
+		if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); status != http.StatusOK || got != "aac,1" {
+			t.Errorf("segment: %d, audio %q", status, got)
+		}
+	}
+	// jellyfin-web takes Opus, unless it asks for the audio to be converted.
+	if copied := ask("jellyfin-web-chrome", map[string]any{"EnableDirectPlay": false}); strings.Contains(copied.TranscodingUrl, "allowAudioStreamCopy") {
+		t.Errorf("Opus converted for jellyfin-web: %s", copied.TranscodingUrl)
+	}
+	if converted := ask("jellyfin-web-chrome", map[string]any{"EnableDirectPlay": false, "AllowAudioStreamCopy": false}); !strings.HasSuffix(converted.TranscodingUrl, "&allowAudioStreamCopy=false") {
+		t.Errorf("copy refused: %s", converted.TranscodingUrl)
+	}
+}
+
 func mustID(t *testing.T, s string) accounts.ID {
 	t.Helper()
 	id, err := accounts.ParseID(s)
@@ -573,8 +624,8 @@ var playbackShapes = shapeRules{
 		// Jellyfin counts no reference frames in remote sources, which
 		// Polyfin's all are; the local clips had some.
 		"RefFrames": {"item-media-sources", "playback-info"},
-		// The AC3 audio of this file needs converting for jellyfin-web,
-		// which Polyfin does not do yet: it offers no remux.
+		// The test addon serves bytes that are not a Matroska file: without
+		// a keyframe index, no remux is offered.
 		"TranscodingUrl": {"playback-info"}, "TranscodingContainer": {"playback-info"},
 		// Metadata addons do not provide these.
 		"OriginalLanguage": {"*"}, "ProductionLocations": {"*"},

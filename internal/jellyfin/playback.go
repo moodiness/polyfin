@@ -194,13 +194,14 @@ func (n *looseInt) UnmarshalJSON(data []byte) error {
 
 // playbackInfoRequest is the PlaybackInfoDto apps post.
 type playbackInfoRequest struct {
-	MaxStreamingBitrate looseInt
-	AudioStreamIndex    looseInt
-	SubtitleStreamIndex looseInt
-	MediaSourceId       string
-	DeviceProfile       *playback.DeviceProfile
-	EnableDirectPlay    *bool
-	EnableDirectStream  *bool
+	MaxStreamingBitrate  looseInt
+	AudioStreamIndex     looseInt
+	SubtitleStreamIndex  looseInt
+	MediaSourceId        string
+	DeviceProfile        *playback.DeviceProfile
+	EnableDirectPlay     *bool
+	EnableDirectStream   *bool
+	AllowAudioStreamCopy *bool
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -223,6 +224,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	if value, ok := b.bool(r, "enableDirectStream"); ok {
 		request.EnableDirectStream = new(value)
+	}
+	if value, ok := b.bool(r, "allowAudioStreamCopy"); ok {
+		request.AllowAudioStreamCopy = new(value)
 	}
 	request.MediaSourceId = query(r, "mediaSourceId")
 	if r.Method == http.MethodPost && !h.readPlaybackInfoBody(w, r, b, &request) {
@@ -333,6 +337,9 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	if posted.EnableDirectStream != nil {
 		request.EnableDirectStream = posted.EnableDirectStream
 	}
+	if posted.AllowAudioStreamCopy != nil {
+		request.AllowAudioStreamCopy = posted.AllowAudioStreamCopy
+	}
 	return true
 }
 
@@ -346,6 +353,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
 		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
+		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
 	// to.

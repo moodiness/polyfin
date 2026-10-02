@@ -32,6 +32,8 @@ type Remux struct {
 	// (ffprobe's); -1 plays none.
 	Audio  int
 	Format hls.Format
+	// Convert is what the audio is converted to; nil copies it.
+	Convert *AudioConversion
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -173,6 +175,10 @@ func (s *Service) Variant(ctx context.Context, remux Remux) (hls.Variant, error)
 	}
 	codecs := []string{videoCodecString(video)}
 	if audio, ok := streamOf(analysis, remux.Audio); ok {
+		if remux.Convert != nil {
+			// What the encoder writes: AAC-LC from FFmpeg's.
+			audio = media.Stream{Codec: remux.Convert.Codec}
+		}
 		codecs = append(codecs, audioCodecString(audio))
 	}
 	// A partial list would make players refuse codecs they could play.
@@ -330,7 +336,11 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			src.Release()
 			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
-		return hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan,
-			Subtitles: streams, Extracted: x}, release, nil
+		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan,
+			Subtitles: streams, Extracted: x}
+		if c := remux.Convert; c != nil && audio >= 0 {
+			r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate
+		}
+		return r, release, nil
 	}
 }

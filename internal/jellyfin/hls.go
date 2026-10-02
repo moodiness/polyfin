@@ -57,7 +57,8 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 		if audioBitrate > 0 {
 			q.add("AudioBitrate", strconv.FormatInt(audioBitrate, 10))
 		}
-		if audio.SampleRate != nil {
+		// Jellyfin gives the sample rate of the audio it keeps.
+		if audio.SampleRate != nil && decision.Audio == nil {
 			q.add("AudioSampleRate", strconv.Itoa(*audio.SampleRate))
 		}
 	}
@@ -85,6 +86,11 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 		q.add("SubtitleMethod", "Encode")
 	}
 	q.add("TranscodeReasons", strings.Join(decision.Reasons, ","))
+	// Audio converted rather than copied is asked as Jellyfin's own
+	// parameter does it, after the reasons.
+	if decision.Audio != nil {
+		q.add("allowAudioStreamCopy", "false")
+	}
 	return "/videos/" + hyphenated(item) + "/master.m3u8?" + q.String()
 }
 
@@ -163,6 +169,17 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
 	}
 	remux := playback.Remux{Session: session, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
+	// The conversion PlaybackInfo chose follows from the URL, as it would
+	// for Jellyfin.
+	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
+		channels := 0
+		for _, stream := range analysis.Streams {
+			if stream.Index == remux.Audio {
+				channels = stream.Channels
+			}
+		}
+		remux.Convert = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
+	}
 	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files}, true
 }
 
