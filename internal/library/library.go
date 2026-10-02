@@ -36,11 +36,12 @@ var ErrSeasonNotFound = errors.New("season not found")
 
 // Service browses the libraries of users.
 type Service struct {
-	db     *pgxpool.Pool
-	addons *addons.Store
-	client *stremio.Client
-	logger *slog.Logger
-	now    func() time.Time
+	db       *pgxpool.Pool
+	addons   *addons.Store
+	client   *stremio.Client
+	logger   *slog.Logger
+	now      func() time.Time
+	language func() string
 
 	pages  *cache[pageKey, []stremio.Meta]
 	metas  *cache[metaKey, stremio.Meta]
@@ -62,17 +63,25 @@ type metaKey struct {
 	id       string
 }
 
-// New returns a library service.
-func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger) *Service {
+// New returns a library service. language returns the server language, one
+// of accounts.Languages; it is read for every request, so a change applies
+// at once.
+func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, language func() string) *Service {
 	return &Service{
-		db:     db,
-		addons: store,
-		client: client,
-		logger: logger,
-		now:    time.Now,
-		pages:  newCache[pageKey, []stremio.Meta](4000, pageTTL),
-		metas:  newCache[metaKey, stremio.Meta](4000, metaTTL),
+		db:       db,
+		addons:   store,
+		client:   client,
+		logger:   logger,
+		now:      time.Now,
+		language: language,
+		pages:    newCache[pageKey, []stremio.Meta](4000, pageTTL),
+		metas:    newCache[metaKey, stremio.Meta](4000, metaTTL),
 	}
+}
+
+// words returns the generated names in the current server language.
+func (s *Service) words() words {
+	return vocabularyOf(s.language())
 }
 
 // installed is an addon a user can use, with how to reach it.
@@ -103,6 +112,8 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 		scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 	}
 	var v view
+	var visible []addons.Library
+	var entries []installed
 	for _, scope := range scopes {
 		// The server's addons were installed by an administrator; a user's own
 		// addons may only reach the local network if that user is one.
@@ -124,25 +135,24 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			return view{}, err
 		}
 		for _, l := range libraries {
-			entry, active := byID[l.AddonID]
-			if !l.Enabled || !active {
-				continue
+			if entry, active := byID[l.AddonID]; l.Enabled && active {
+				visible = append(visible, l)
+				entries = append(entries, entry)
 			}
-			name := l.Catalog.Name
-			if l.Name != nil {
-				name = *l.Name
-			}
-			v.libraries = append(v.libraries, library{
-				item: Item{
-					ID:             itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID)),
-					Kind:           KindLibrary,
-					Name:           name,
-					CollectionType: collectionType(l.Catalog.Type),
-				},
-				addon:   entry,
-				catalog: l.Catalog,
-			})
 		}
+	}
+	for i, name := range LibraryNames(visible, s.language()) {
+		l := visible[i]
+		v.libraries = append(v.libraries, library{
+			item: Item{
+				ID:             itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID)),
+				Kind:           KindLibrary,
+				Name:           name,
+				CollectionType: collectionType(l.Catalog.Type),
+			},
+			addon:   entries[i],
+			catalog: l.Catalog,
+		})
 	}
 	return v, nil
 }
@@ -655,13 +665,13 @@ func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) 
 			return Item{}, err
 		}
 		if r.Kind == KindSeason {
-			for _, season := range seasons(series, meta, s.now()) {
+			for _, season := range seasons(series, meta, s.words(), s.now()) {
 				if season.ID == id {
 					return season, nil
 				}
 			}
 		} else {
-			for _, episode := range episodes(series, meta, nil, s.now()) {
+			for _, episode := range episodes(series, meta, nil, s.words(), s.now()) {
 				if episode.ID == id {
 					return episode, nil
 				}
@@ -709,14 +719,6 @@ func seasonNumbers(meta stremio.Meta) []int {
 	return numbers
 }
 
-// seasonName names a season as Jellyfin does.
-func seasonName(number int) string {
-	if number == 0 {
-		return "Specials"
-	}
-	return "Season " + strconv.Itoa(number)
-}
-
 // seasonPoster returns a season's own artwork, if the addon has one.
 func seasonPoster(meta stremio.Meta, number int) string {
 	if meta.Extras == nil {
@@ -751,13 +753,13 @@ func contents(meta stremio.Meta, season *int, now time.Time) *Contents {
 	return c
 }
 
-func seasons(series Item, meta stremio.Meta, now time.Time) []Item {
+func seasons(series Item, meta stremio.Meta, w words, now time.Time) []Item {
 	var result []Item
 	for _, number := range seasonNumbers(meta) {
 		item := Item{
 			ID:           itemID(seasonKey(meta.ID, number)),
 			Kind:         KindSeason,
-			Name:         seasonName(number),
+			Name:         w.seasonName(number),
 			ParentID:     series.ID,
 			SeriesID:     series.ID,
 			SeriesName:   series.Name,
@@ -786,7 +788,7 @@ func seasons(series Item, meta stremio.Meta, now time.Time) []Item {
 	return result
 }
 
-func episodes(series Item, meta stremio.Meta, season *int, now time.Time) []Item {
+func episodes(series Item, meta stremio.Meta, season *int, w words, now time.Time) []Item {
 	var result []Item
 	for _, video := range meta.Videos {
 		number := int(video.Season)
@@ -806,7 +808,7 @@ func episodes(series Item, meta stremio.Meta, season *int, now time.Time) []Item
 			SeriesName:        series.Name,
 			SeriesPoster:      series.Images.Primary,
 			SeasonID:          itemID(seasonKey(meta.ID, number)),
-			SeasonName:        seasonName(number),
+			SeasonName:        w.seasonName(number),
 			SeasonPoster:      seasonPoster(meta, number),
 			IndexNumber:       video.EpisodeNumber(),
 			ParentIndexNumber: number,
@@ -815,7 +817,7 @@ func episodes(series Item, meta stremio.Meta, season *int, now time.Time) []Item
 			StremioID:         video.ID,
 		}
 		if item.Name == "" {
-			item.Name = "Episode " + strconv.Itoa(item.IndexNumber)
+			item.Name = w.episodeName(item.IndexNumber)
 		}
 		if item.PremiereDate != nil {
 			item.ProductionYear = item.PremiereDate.Year()
@@ -841,7 +843,7 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 	if err != nil {
 		return nil, err
 	}
-	result := seasons(series, meta, s.now())
+	result := seasons(series, meta, s.words(), s.now())
 	records := make([]record, 0, len(result))
 	for _, season := range result {
 		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason,
@@ -872,7 +874,7 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 			return nil, ErrSeasonNotFound
 		}
 	}
-	result := episodes(series, meta, season, s.now())
+	result := episodes(series, meta, season, s.words(), s.now())
 	records := make([]record, 0, len(result)+len(seasonNumbers(meta)))
 	for _, number := range seasonNumbers(meta) {
 		records = append(records, record{ID: itemID(seasonKey(meta.ID, number)), Key: seasonKey(meta.ID, number), Kind: KindSeason,

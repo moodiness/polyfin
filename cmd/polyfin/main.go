@@ -142,7 +142,7 @@ func serve(ctx context.Context) error {
 				QuickConnect:  quickConnect,
 				SignIns:       signIns,
 				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
-				Library:       library.New(pool, addonStore, addonClient, logger),
+				Library:       library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language }),
 				Stremio:       addonClient,
 				Preferences:   preferences.New(pool),
 				Logger:        logger,

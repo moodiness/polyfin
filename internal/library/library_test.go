@@ -110,12 +110,13 @@ func titles(kind string, count int, genres ...string) []stremio.Meta {
 }
 
 type env struct {
-	t       *testing.T
-	service *Service
-	addons  *addons.Store
-	users   *accounts.Store
-	admin   accounts.User
-	member  accounts.User
+	t        *testing.T
+	service  *Service
+	addons   *addons.Store
+	users    *accounts.Store
+	admin    accounts.User
+	member   accounts.User
+	language *string // the server language the service reads
 }
 
 func newEnv(t *testing.T) env {
@@ -132,8 +133,9 @@ func newEnv(t *testing.T) env {
 	member, _ := users.CreateUser(t.Context(), accounts.NewUser{Name: "member", Password: "correct horse"})
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
-	return env{t: t, service: New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil))),
-		addons: store, users: users, admin: admin, member: member}
+	language := new("en")
+	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return *language })
+	return env{t: t, service: service, addons: store, users: users, admin: admin, member: member, language: language}
 }
 
 // install serves addon and installs it in scope as a trusted (local) addon.
@@ -459,5 +461,116 @@ func TestUsersOnlyReachTheirLibraries(t *testing.T) {
 	mine := e.library(e.member, "Top")
 	if _, err := e.service.Children(t.Context(), e.member, mine.ID, 0, 10, ""); !errors.Is(err, stremio.ErrPrivateNetwork) {
 		t.Errorf("a member's local addon was reached: %v", err)
+	}
+}
+
+func TestLibraryNamesTellCollisionsApart(t *testing.T) {
+	catalog := func(addon, kind, name string) addons.Library {
+		return addons.Library{AddonName: addon, Catalog: stremio.Catalog{Type: kind, ID: kind + name, Name: name}}
+	}
+	custom := func(addon, kind, name, custom string) addons.Library {
+		l := catalog(addon, kind, name)
+		l.Name = &custom
+		return l
+	}
+	for _, tc := range []struct {
+		name      string
+		language  string
+		libraries []addons.Library
+		want      []string
+	}{
+		{"distinct names are kept", "en",
+			[]addons.Library{catalog("A", "movie", "Popular"), catalog("A", "series", "Trending"), custom("A", "movie", "Top", "Best")},
+			[]string{"Popular", "Trending", "Best"}},
+		{"content types in English", "en",
+			[]addons.Library{catalog("A", "movie", "Popular"), catalog("A", "series", " popular "), catalog("A", "collection", "POPULAR"),
+				catalog("A", "anime.movie", "Netflix"), catalog("A", "anime.series", "Netflix"), catalog("A", "tv", "Netflix")},
+			[]string{"Popular (Movies)", "popular (Shows)", "POPULAR (Collections)", "Netflix (Movies)", "Netflix (Shows)", "Netflix (tv)"}},
+		{"content types in French", "fr",
+			[]addons.Library{catalog("A", "movie", "Populaires"), catalog("A", "series", "Populaires"), catalog("A", "collection", "Populaires")},
+			[]string{"Populaires (Films)", "Populaires (Séries)", "Populaires (Collections)"}},
+		{"unknown languages fall back to English", "de",
+			[]addons.Library{catalog("A", "movie", "Top"), catalog("A", "series", "Top")},
+			[]string{"Top (Movies)", "Top (Shows)"}},
+		{"the same type from two addons gets the addon name", "fr",
+			[]addons.Library{catalog("AIOMetadata", "movie", "Top"), catalog("Cinemeta", "movie", "Top"), catalog("Cinemeta", "series", "Top")},
+			[]string{"Top (Films, AIOMetadata)", "Top (Films, Cinemeta)", "Top (Séries)"}},
+		{"the same addon twice gets a counter", "en",
+			[]addons.Library{catalog("A", "movie", "Top"), catalog("A", "movie", "Top"), catalog("A", "movie", "Top")},
+			[]string{"Top (Movies, A)", "Top (Movies, A) (2)", "Top (Movies, A) (3)"}},
+		{"counters skip names in use", "en",
+			[]addons.Library{catalog("A", "movie", "Top"), catalog("A", "movie", "Top"), custom("B", "series", "X", "Top (Movies, A) (2)")},
+			[]string{"Top (Movies, A)", "Top (Movies, A) (3)", "Top (Movies, A) (2)"}},
+		{"a custom name is kept and the catalog names are suffixed", "en",
+			[]addons.Library{catalog("A", "movie", "Netflix"), custom("A", "series", "Shows", "netflix"), catalog("A", "series", "Netflix")},
+			[]string{"Netflix (Movies)", "netflix", "Netflix (Shows)"}},
+		{"custom names given twice get their type", "en",
+			[]addons.Library{custom("A", "movie", "Popular", "Mine"), custom("A", "series", "Popular", "Mine")},
+			[]string{"Mine (Movies)", "Mine (Shows)"}},
+		{"custom names of the same type get their addon", "fr",
+			[]addons.Library{custom("A", "movie", "Popular", "Mine"), custom("B", "movie", "Popular", "Mine")},
+			[]string{"Mine (Films, A)", "Mine (Films, B)"}},
+	} {
+		if got := LibraryNames(tc.libraries, tc.language); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
+	e := newEnv(t)
+	show := stremio.Meta{ID: "tt200", Type: "series", Name: "Show", Videos: []stremio.Video{
+		{ID: "tt200:0:1", Title: "Behind the scenes", Season: 0, Episode: 1, Released: "2019-12-01T00:00:00Z"},
+		{ID: "tt200:1:1", Title: "Pilot", Season: 1, Episode: 1, Released: "2020-01-01T00:00:00Z"},
+		{ID: "tt200:1:2", Season: 1, Episode: 2, Released: "2020-01-08T00:00:00Z"},
+	}}
+	preview := show
+	preview.Videos = nil
+	addon := &fakeAddon{
+		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie", "series"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: []string{"series"}, IDPrefixes: []string{"tt"}}},
+			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}, {Type: "series", ID: "top", Name: "Top"}}},
+		catalogs: map[string][]stremio.Meta{"movie/top": titles("movie", 1), "series/top": {preview}},
+		metas:    map[string]stremio.Meta{"series/tt200": show},
+	}
+	e.install(addons.Shared(), addon)
+
+	english, err := e.service.Libraries(t.Context(), e.member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(english); !slices.Equal(got, []string{"Top (Movies)", "Top (Shows)"}) {
+		t.Fatalf("libraries in English: %v", got)
+	}
+	page, _ := e.service.Children(t.Context(), e.member, english[1].ID, 0, 10, "")
+	series := page.Items[0]
+	seasons, _ := e.service.Seasons(t.Context(), e.member, series.ID)
+	episodes, _ := e.service.Episodes(t.Context(), e.member, series.ID, nil)
+	if got := names(seasons); !slices.Equal(got, []string{"Specials", "Season 1"}) {
+		t.Errorf("seasons in English: %v", got)
+	}
+	if got := names(episodes); !slices.Equal(got, []string{"Behind the scenes", "Pilot", "Episode 2"}) {
+		t.Errorf("episodes in English: %v", got)
+	}
+
+	// The language applies at once, and identifiers stay.
+	*e.language = "fr"
+	french, _ := e.service.Libraries(t.Context(), e.member)
+	if got := names(french); !slices.Equal(got, []string{"Top (Films)", "Top (Séries)"}) {
+		t.Errorf("libraries in French: %v", got)
+	}
+	if french[0].ID != english[0].ID || french[1].ID != english[1].ID {
+		t.Errorf("library identifiers changed with the language")
+	}
+	seasons, _ = e.service.Seasons(t.Context(), e.member, series.ID)
+	if got := names(seasons); !slices.Equal(got, []string{"Épisodes spéciaux", "Saison 1"}) {
+		t.Errorf("seasons in French: %v", got)
+	}
+	episodes, _ = e.service.Episodes(t.Context(), e.member, series.ID, &seasons[1].ID)
+	if got := names(episodes); !slices.Equal(got, []string{"Pilot", "Épisode 2"}) || episodes[1].SeasonName != "Saison 1" {
+		t.Errorf("season 1 in French: %v (season %q)", got, episodes[1].SeasonName)
+	}
+	if item, err := e.service.Item(t.Context(), e.member, seasons[0].ID); err != nil || item.Name != "Épisodes spéciaux" {
+		t.Errorf("specials by identifier: %q %v", item.Name, err)
 	}
 }

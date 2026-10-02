@@ -138,9 +138,12 @@ func (s *Store) SetupRequired(ctx context.Context) (bool, error) {
 	return !exists, err
 }
 
-// CreateFirstAdministrator creates the first administrator, once.
-func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password string) (User, error) {
+// CreateFirstAdministrator creates the first administrator, once. language,
+// the language the administrator set the server up in, becomes the server
+// language when it is one of Languages; anything else is ignored.
+func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, language string) (User, error) {
 	var user User
+	var settings *Settings
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
 			return err
@@ -154,8 +157,17 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password str
 		}
 		var err error
 		user, err = createUser(ctx, tx, NewUser{Name: name, Password: password, IsAdministrator: true, IsHidden: true})
-		return err
+		if err != nil || !ValidLanguage(language) {
+			return err
+		}
+		settings = &Settings{}
+		return tx.QueryRow(ctx, `UPDATE settings SET language = $1
+			RETURNING server_name, quick_connect_enabled, legacy_authorization, language`, language).
+			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language)
 	})
+	if err == nil && settings != nil {
+		s.settings.Store(settings)
+	}
 	return user, err
 }
 

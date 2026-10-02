@@ -88,14 +88,67 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 	}
 }
 
-func TestTheLastEnabledAdministratorIsProtected(t *testing.T) {
+func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	admin, err := store.CreateFirstAdministrator(ctx, "admin", "correct horse")
+	if got := store.Settings().Language; got != "en" {
+		t.Errorf("default language: %q", got)
+	}
+	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr"}
+	if _, err := store.UpdateSettings(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, store.db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreateFirstAdministrator(ctx, "second", "correct horse"); !errors.Is(err, ErrSetupComplete) {
+	if got := reopened.Settings(); got != want {
+		t.Errorf("settings after reopening: %+v, want %+v", got, want)
+	}
+	for _, language := range []string{"", "de", "FR", "fr-FR"} {
+		changed := want
+		changed.Language = language
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidLanguage) {
+			t.Errorf("language %q: got %v", language, err)
+		}
+	}
+	if got := store.Settings(); got != want {
+		t.Errorf("a refused update changed the settings: %+v", got)
+	}
+}
+
+func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
+	for _, tc := range []struct{ given, want string }{{"fr", "fr"}, {"en", "en"}, {"de", "en"}, {"", "en"}} {
+		store := newStore(t)
+		if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", tc.given); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := Open(t.Context(), store.db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cached, stored := store.Settings().Language, reopened.Settings().Language; cached != tc.want || stored != tc.want {
+			t.Errorf("setup in %q: language %q (stored %q), want %q", tc.given, cached, stored, tc.want)
+		}
+	}
+	// A refused setup changes nothing.
+	store := newStore(t)
+	if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "short", "fr"); !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("setup with a short password: %v", err)
+	}
+	if got := store.Settings().Language; got != "en" {
+		t.Errorf("a refused setup set the language to %q", got)
+	}
+}
+
+func TestTheLastEnabledAdministratorIsProtected(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	admin, err := store.CreateFirstAdministrator(ctx, "admin", "correct horse", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateFirstAdministrator(ctx, "second", "correct horse", ""); !errors.Is(err, ErrSetupComplete) {
 		t.Fatalf("second setup: got %v", err)
 	}
 	no, yes := false, true

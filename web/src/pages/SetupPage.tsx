@@ -6,7 +6,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 
 export default function SetupPage() {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const [setupCode, setSetupCode] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -29,7 +29,9 @@ export default function SetupPage() {
     event.preventDefault()
     const mismatched = password !== confirmation
     setMismatch(mismatched)
-    if (!mismatched) mutation.mutate({ setupCode: setupCode.trim(), name: name.trim(), password })
+    // The server adopts the interface language for the names it generates.
+    if (!mismatched)
+      mutation.mutate({ setupCode: setupCode.trim(), name: name.trim(), password, language })
   }
 
   return (

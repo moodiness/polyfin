@@ -3,10 +3,12 @@ package admin
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -55,22 +57,55 @@ type libraryJSON struct {
 	CatalogID   string  `json:"catalogId"`
 	CatalogName string  `json:"catalogName"`
 	Name        *string `json:"name"`
-	Enabled     bool    `json:"enabled"`
-	Browsable   bool    `json:"browsable"`
+	// AppName is the name Jellyfin apps show, which tells apart libraries
+	// with the same name; nil when apps do not show the library.
+	AppName   *string `json:"appName"`
+	Enabled   bool    `json:"enabled"`
+	Browsable bool    `json:"browsable"`
 }
 
-func writeLibraries(w http.ResponseWriter, libraries []addons.Library) {
+// writeLibraries answers a scope's libraries with the names apps show
+// them under. A user's own libraries follow the server's when they use
+// them, as in their apps; the server's are named as for a user without
+// libraries of their own.
+func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope addons.Scope, libraries []addons.Library) {
+	var shown []addons.Library
+	if scope.Owner != nil {
+		shared, err := h.Addons.UsesSharedAddons(r.Context(), *scope.Owner)
+		if err == nil && shared {
+			var list []addons.Library
+			list, err = h.Addons.Libraries(r.Context(), addons.Shared())
+			shown = slices.DeleteFunc(list, func(l addons.Library) bool { return !l.Enabled || !l.AddonActive })
+		}
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
+	first := len(shown)
+	var positions []int // libraries index of each shown library of the scope
+	for i, l := range libraries {
+		if l.Enabled && l.AddonActive {
+			shown = append(shown, l)
+			positions = append(positions, i)
+		}
+	}
+	appNames := make([]*string, len(libraries))
+	for i, name := range library.LibraryNames(shown, h.Accounts.Settings().Language)[first:] {
+		appNames[positions[i]] = &name
+	}
 	result := make([]libraryJSON, 0, len(libraries))
-	for _, library := range libraries {
+	for i, l := range libraries {
 		result = append(result, libraryJSON{
-			AddonID:     library.AddonID.String(),
-			AddonName:   library.AddonName,
-			CatalogType: library.Catalog.Type,
-			CatalogID:   library.Catalog.ID,
-			CatalogName: library.Catalog.Name,
-			Name:        library.Name,
-			Enabled:     library.Enabled,
-			Browsable:   library.Catalog.Browsable(),
+			AddonID:     l.AddonID.String(),
+			AddonName:   l.AddonName,
+			CatalogType: l.Catalog.Type,
+			CatalogID:   l.Catalog.ID,
+			CatalogName: l.Catalog.Name,
+			Name:        l.Name,
+			AppName:     appNames[i],
+			Enabled:     l.Enabled,
+			Browsable:   l.Catalog.Browsable(),
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -275,7 +310,7 @@ func (h *handler) listLibraries(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeLibraries(w, libraries)
+	h.writeLibraries(w, r, scope, libraries)
 }
 
 func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
@@ -312,7 +347,7 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeLibraries(w, libraries)
+	h.writeLibraries(w, r, scope, libraries)
 }
 
 func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {

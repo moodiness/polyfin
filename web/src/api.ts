@@ -1,4 +1,5 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
+import type { Language } from '@/i18n'
 
 export type Status = {
   name: string
@@ -42,6 +43,8 @@ export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
   legacyAuthorization: boolean
+  /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
+  language: Language
 }
 
 export type NewUser = {
@@ -87,6 +90,8 @@ export type Library = {
   catalogName: string
   /** Custom name; null shows the catalog name. */
   name: string | null
+  /** Name Jellyfin apps show, told apart from same-named libraries; null when apps do not show it. */
+  appName: string | null
   enabled: boolean
   browsable: boolean
 }
@@ -146,8 +151,13 @@ const seg = encodeURIComponent
 export const fetchStatus = (signal?: AbortSignal) =>
   request<Status>('GET', '/status', undefined, signal)
 
-export const setup = async (body: { setupCode: string; name: string; password: string }) =>
-  (await request<{ user: SessionUser }>('POST', '/setup', body)).user
+/** `language` is the interface language; the server adopts it when it speaks it. */
+export const setup = async (body: {
+  setupCode: string
+  name: string
+  password: string
+  language: Language
+}) => (await request<{ user: SessionUser }>('POST', '/setup', body)).user
 
 export const signIn = async (body: { name: string; password: string }) =>
   (await request<{ user: SessionUser }>('POST', '/session', body)).user
@@ -241,6 +251,8 @@ export const queryKeys = {
   users: ['users'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
+  /** Prefix of every scope: invalidating it refreshes all addons and libraries. */
+  scopes: ['scopes'] as const,
   /** Prefix of everything a scope owns: invalidating it refreshes its addons and libraries. */
   scope: (scope: Scope) => ['scopes', scope] as const,
   addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
