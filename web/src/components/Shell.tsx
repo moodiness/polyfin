@@ -70,17 +70,20 @@ function SignedInBar({ user }: { user: SessionUser }) {
     { to: '/', label: t.nav.status, end: true },
     { to: '/quick-connect', label: t.nav.quickConnect, end: false },
     { to: '/account', label: t.nav.account, end: false },
+    { to: '/my-addons', label: t.nav.myAddons, end: false },
     ...(user.isAdministrator
       ? [
           { to: '/users', label: t.nav.users, end: false },
+          { to: '/addons', label: t.nav.addons, end: false },
+          { to: '/libraries', label: t.nav.libraries, end: false },
           { to: '/settings', label: t.nav.settings, end: false },
         ]
       : []),
   ]
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 pb-3 sm:px-6 md:flex-row md:items-center md:justify-between">
-      <nav aria-label={t.nav.label}>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 pb-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+      <nav aria-label={t.nav.label} className="min-w-0">
         <ul className="flex flex-wrap gap-1">
           {links.map((link) => (
             <li key={link.to}>
@@ -101,7 +104,7 @@ function SignedInBar({ user }: { user: SessionUser }) {
           ))}
         </ul>
       </nav>
-      <div className="flex items-center justify-between gap-3 md:justify-end">
+      <div className="flex items-center justify-between gap-3 lg:shrink-0 lg:justify-end">
         <p className="min-w-0 truncate text-sm text-muted">{t.nav.signedInAs(user.name)}</p>
         <button
           type="button"

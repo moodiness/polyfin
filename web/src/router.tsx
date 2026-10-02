@@ -8,7 +8,10 @@ import { buttonSecondary, Loading, Notice, PageHeader } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import AccountPage from '@/pages/AccountPage'
+import AddonsPage from '@/pages/AddonsPage'
+import LibrariesPage from '@/pages/LibrariesPage'
 import LoginPage from '@/pages/LoginPage'
+import MyAddonsPage from '@/pages/MyAddonsPage'
 import QuickConnectPage from '@/pages/QuickConnectPage'
 import SettingsPage from '@/pages/SettingsPage'
 import SetupPage from '@/pages/SetupPage'
@@ -122,10 +125,13 @@ export const router = createBrowserRouter(
         { path: 'login', element: <Navigate to="/" replace /> },
         { path: 'quick-connect', element: <QuickConnectPage /> },
         { path: 'account', element: <AccountPage /> },
+        { path: 'my-addons', element: <MyAddonsPage /> },
         {
           element: <AdminOnly />,
           children: [
             { path: 'users', element: <UsersPage /> },
+            { path: 'addons', element: <AddonsPage /> },
+            { path: 'libraries', element: <LibrariesPage /> },
             { path: 'settings', element: <SettingsPage /> },
           ],
         },

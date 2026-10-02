@@ -15,6 +15,11 @@ export function errorMessage(t: Messages, error: unknown): string {
   return t.errors.generic
 }
 
+/** Localized name of a Stremio type or resource; values without a translation are shown as sent. */
+export function stremioLabel(labels: Readonly<Record<string, string>>, value: string): string {
+  return Object.hasOwn(labels, value) ? labels[value] : value
+}
+
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],

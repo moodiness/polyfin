@@ -1,4 +1,4 @@
-import { useId, useRef, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useI18n } from '@/i18n'
 import { dateTime, relativeTime } from '@/format'
 
@@ -158,6 +158,73 @@ export function Loading() {
     <p role="status" className="text-muted">
       {t.common.loading}
     </p>
+  )
+}
+
+const moveButton =
+  'inline-flex size-10 items-center justify-center rounded-lg border border-line bg-ink text-base text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line'
+
+/**
+ * Up and down buttons for one item of an ordered list. After a move, focus follows the item (or
+ * jumps to its other button once it reaches an end) so it can be moved again from the keyboard.
+ */
+export function MoveButtons({
+  name,
+  index,
+  count,
+  onMove,
+}: {
+  name: string
+  index: number
+  count: number
+  onMove: (to: number) => void
+}) {
+  const { t } = useI18n()
+  const up = useRef<HTMLButtonElement>(null)
+  const down = useRef<HTMLButtonElement>(null)
+  const moved = useRef<'up' | 'down' | null>(null)
+  const first = index === 0
+  const last = index === count - 1
+
+  useEffect(() => {
+    const direction = moved.current
+    if (direction === null) return
+    moved.current = null
+    const target = direction === 'up' ? (first ? down : up) : last ? up : down
+    target.current?.focus()
+  }, [index, first, last])
+
+  return (
+    <div className="flex gap-1">
+      <button
+        ref={up}
+        type="button"
+        className={moveButton}
+        disabled={first}
+        aria-label={t.common.moveUp(name)}
+        title={t.common.moveUp(name)}
+        onClick={() => {
+          moved.current = 'up'
+          onMove(index - 1)
+        }}
+      >
+        <span aria-hidden="true">↑</span>
+      </button>
+      <button
+        ref={down}
+        type="button"
+        className={moveButton}
+        disabled={last}
+        aria-label={t.common.moveDown(name)}
+        title={t.common.moveDown(name)}
+        onClick={() => {
+          moved.current = 'down'
+          onMove(index + 1)
+        }}
+      >
+        <span aria-hidden="true">↓</span>
+      </button>
+    </div>
   )
 }
 

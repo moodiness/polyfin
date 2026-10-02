@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
@@ -48,6 +50,7 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 		ServerID:     "0123456789abcdef0123456789abcdef",
 		Database:     pinger{},
 		Accounts:     store,
+		Addons:       addons.New(pool, stremio.NewClient("test")),
 		QuickConnect: quickConnect,
 		SignIns:      throttle.New(failures, time.Minute),
 		SetupCode:    setupCode,

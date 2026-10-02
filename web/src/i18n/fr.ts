@@ -17,6 +17,9 @@ const fr: Messages = {
     quickConnect: 'Quick Connect',
     account: 'Mon compte',
     users: 'Utilisateurs',
+    myAddons: 'Mes addons',
+    addons: 'Addons',
+    libraries: 'Bibliothèques',
     settings: 'Paramètres',
     signedInAs: (name: string) => `Connecté en tant que ${name}`,
     signOut: 'Se déconnecter',
@@ -33,6 +36,10 @@ const fr: Messages = {
     passwordRule: 'Au moins 8 caractères.',
     nameRule: "De 1 à 64 caractères : lettres, chiffres, espaces et - _ ' . @ +",
     passwordMismatch: 'Les deux mots de passe ne correspondent pas.',
+    moveUp: (name: string) => `Monter ${name}`,
+    moveDown: (name: string) => `Descendre ${name}`,
+    moved: (name: string, position: number, count: number) =>
+      `${name} est maintenant en position ${position} sur ${count}.`,
   },
   errors: {
     generic: 'Une erreur est survenue. Veuillez réessayer.',
@@ -57,6 +64,18 @@ const fr: Messages = {
     last_administrator:
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
+    invalid_manifest_url:
+      'Saisissez l’URL du manifeste d’un addon, commençant par https://, http:// ou stremio:// et se terminant par /manifest.json.',
+    addon_exists: 'Cet addon est déjà installé ici.',
+    addon_unreachable:
+      'Impossible de joindre l’addon. Vérifiez l’URL et que l’addon est en ligne, puis réessayez.',
+    invalid_manifest: 'Cette URL n’a pas renvoyé de manifeste d’addon Stremio.',
+    private_network:
+      'Cet addon se trouve à une adresse du réseau local. Seuls les administrateurs peuvent installer ce type d’addon.',
+    invalid_order: 'La liste des addons a changé entre-temps. Elle a été actualisée : réessayez.',
+    invalid_library:
+      'Une bibliothèque fait référence à un catalogue qui n’existe plus ou ne peut pas être parcouru. Retirez les bibliothèques signalées comme plus disponibles, puis enregistrez à nouveau.',
+    invalid_library_name: 'Le nom d’une bibliothèque doit comporter de 1 à 64 caractères.',
   },
   status: {
     title: 'État du serveur',
@@ -198,6 +217,118 @@ const fr: Messages = {
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
     saved: 'Paramètres enregistrés.',
+  },
+  stremioTypes: {
+    movie: 'Films',
+    series: 'Séries',
+    channel: 'Chaînes',
+    tv: 'TV',
+  },
+  stremioResources: {
+    catalog: 'Catalogues',
+    meta: 'Fiches',
+    stream: 'Flux',
+    subtitles: 'Sous-titres',
+    addon_catalog: 'Catalogues d’addons',
+  },
+  addons: {
+    title: 'Addons',
+    description:
+      'Les addons Stremio installés ici sont partagés avec tous les utilisateurs de ce serveur. Chacun peut les désactiver et ajouter ses propres addons depuis « Mes addons ».',
+    installTitle: 'Installer un addon',
+    manifestUrl: 'URL du manifeste',
+    manifestUrlPlaceholder: 'https://…/manifest.json',
+    manifestUrlHint:
+      'Copiez le lien d’installation depuis la page de configuration de l’addon. Il contient souvent vos réglages ou vos clés : Polyfin le garde privé et n’en affiche jamais qu’une version abrégée.',
+    install: 'Installer',
+    installing: 'Installation…',
+    installed: (name: string) => `${name} a été installé.`,
+    listTitleShared: 'Addons du serveur',
+    listTitleMine: 'Vos addons',
+    listHelp:
+      'Les addons sont utilisés dans cet ordre. En désactiver un masque ses bibliothèques dans les applications Jellyfin sans les perdre.',
+    emptyShared: 'Aucun addon n’est encore installé sur ce serveur.',
+    emptyMine: 'Vous n’avez encore installé aucun addon.',
+    version: (version: string) => `Version ${version}`,
+    off: 'Désactivé',
+    enabled: 'Activé',
+    provides: 'Fournit',
+    types: 'Types',
+    catalogs: 'Catalogues',
+    catalogCount: (count: number) => (count <= 1 ? `${count} catalogue` : `${count} catalogues`),
+    lastRefresh: 'Dernière actualisation',
+    refresh: 'Actualiser',
+    refreshing: 'Actualisation…',
+    refreshLabel: (name: string) => `Actualiser ${name}`,
+    refreshed: 'Le manifeste a été téléchargé à nouveau.',
+    replace: 'Remplacer l’URL',
+    replaceLabel: (name: string) => `Remplacer l’URL de ${name}`,
+    newManifestUrl: 'Nouvelle URL du manifeste',
+    replaceHint:
+      'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées.',
+    replaceSubmit: 'Remplacer',
+    replacing: 'Remplacement…',
+    replaced: 'L’URL du manifeste a été remplacée.',
+    remove: 'Supprimer',
+    removing: 'Suppression…',
+    removeConfirmShared: (name: string) =>
+      `Supprimer ${name} ? Ses bibliothèques disparaîtront des applications Jellyfin de tous les utilisateurs, et cette action est irréversible.`,
+    removeConfirmMine: (name: string) =>
+      `Supprimer ${name} ? Ses bibliothèques disparaîtront de vos applications Jellyfin, et cette action est irréversible.`,
+    removed: (name: string) => `${name} a été supprimé.`,
+  },
+  libraries: {
+    title: 'Bibliothèques',
+    description:
+      'Choisissez quels catalogues des addons du serveur apparaissent comme bibliothèques dans les applications Jellyfin, pour tous les utilisateurs.',
+    shownTitle: 'Affichées dans les applications Jellyfin',
+    shownHelp:
+      'Les bibliothèques apparaissent dans cet ordre. Laissez un nom vide pour utiliser celui du catalogue.',
+    shownHelpMine:
+      'Les bibliothèques apparaissent dans cet ordre, après celles du serveur si vous les utilisez. Laissez un nom vide pour utiliser celui du catalogue.',
+    defaultHelp:
+      'À l’installation d’un addon, ses catalogues de films et de séries deviennent des bibliothèques jusqu’à en compter 20. Chaque bibliothèque ajoute une rangée à l’écran d’accueil des applications Jellyfin : avec beaucoup de bibliothèques, il devient lent à charger et long à parcourir.',
+    count: (count: number) => (count <= 1 ? `${count} bibliothèque` : `${count} bibliothèques`),
+    manyWarning:
+      'Plus de 20 bibliothèques peuvent alourdir l’écran d’accueil des applications Jellyfin.',
+    noAddons: 'Installez d’abord un addon : ses catalogues s’afficheront ici.',
+    shownEmpty: 'Aucune bibliothèque : les applications Jellyfin n’affichent rien de ces addons.',
+    name: 'Nom dans les applications',
+    addonOff: 'Addon désactivé',
+    missing: 'Plus disponible',
+    remove: 'Retirer',
+    removeLabel: (name: string) => `Retirer ${name}`,
+    removedLive: (name: string) => `${name} a été retiré des bibliothèques.`,
+    availableTitle: 'Catalogues disponibles',
+    availableHelp:
+      'Ajouter un catalogue l’affiche comme bibliothèque, à la fin de la liste ci-dessus.',
+    filter: 'Filtrer',
+    filterPlaceholder: 'Nom du catalogue ou de l’addon',
+    type: 'Type',
+    allTypes: 'Tous les types',
+    add: 'Ajouter',
+    addLabel: (name: string) => `Ajouter ${name}`,
+    addedLive: (name: string, position: number) =>
+      `${name} a été ajouté comme bibliothèque n° ${position}.`,
+    notBrowsable: 'Indisponible',
+    notBrowsableHelp:
+      'Nécessite une recherche ou une autre valeur : il ne peut pas devenir une bibliothèque.',
+    availableEmpty: 'Tous les catalogues sont déjà affichés.',
+    noMatch: 'Aucun catalogue ne correspond à ce filtre.',
+    unsaved: 'Modifications non enregistrées',
+    upToDate: 'Aucune modification en attente',
+    reset: 'Réinitialiser',
+    saved: 'Bibliothèques enregistrées.',
+  },
+  myAddons: {
+    title: 'Mes addons',
+    description:
+      'Ajoutez vos propres addons Stremio et choisissez quels catalogues apparaissent comme bibliothèques dans vos applications Jellyfin.',
+    preferenceTitle: 'Addons du serveur',
+    useShared: 'Utiliser les addons du serveur',
+    useSharedHelp:
+      'Activé : vous profitez des addons et bibliothèques du serveur, suivis des vôtres. Désactivé : vous ne voyez que vos propres addons et bibliothèques.',
+    preferenceSaved: 'Préférence enregistrée.',
   },
   notFound: {
     title: 'Page introuvable',

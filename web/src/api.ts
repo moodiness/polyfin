@@ -59,6 +59,43 @@ export type UserPatch = Partial<{
   isDisabled: boolean
 }>
 
+/** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
+export type Scope = 'shared' | 'me'
+
+export type Addon = {
+  id: string
+  name: string
+  version: string
+  description: string
+  logo: string | null
+  /** Redacted: the credentials it may embed are never returned. */
+  manifestUrl: string
+  enabled: boolean
+  resources: string[]
+  types: string[]
+  catalogCount: number
+  refreshedAt: string
+}
+
+export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string }>
+
+export type Library = {
+  addonId: string
+  addonName: string
+  catalogType: string
+  catalogId: string
+  catalogName: string
+  /** Custom name; null shows the catalog name. */
+  name: string | null
+  enabled: boolean
+  browsable: boolean
+}
+
+/** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
+export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
+
+export type AddonPreferences = { useSharedAddons: boolean }
+
 /** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
 export class ApiError extends Error {
   readonly status: number
@@ -163,6 +200,40 @@ export const fetchSettings = (signal?: AbortSignal) =>
 
 export const saveSettings = (settings: Settings) => request<Settings>('PUT', '/settings', settings)
 
+const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
+
+export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
+  request<Addon[]>('GET', `${scopePath(scope)}/addons`, undefined, signal)
+
+export const installAddon = (scope: Scope, manifestUrl: string) =>
+  request<Addon>('POST', `${scopePath(scope)}/addons`, { manifestUrl })
+
+export const updateAddon = (scope: Scope, id: string, patch: AddonPatch) =>
+  request<Addon>('PATCH', `${scopePath(scope)}/addons/${seg(id)}`, patch)
+
+export const refreshAddon = (scope: Scope, id: string) =>
+  request<Addon>('POST', `${scopePath(scope)}/addons/${seg(id)}/refresh`)
+
+export const deleteAddon = (scope: Scope, id: string) =>
+  request<void>('DELETE', `${scopePath(scope)}/addons/${seg(id)}`)
+
+/** Sets the order of the scope's addons; `ids` must list every addon of the scope. */
+export const orderAddons = (scope: Scope, ids: string[]) =>
+  request<void>('PUT', `${scopePath(scope)}/addons/order`, { ids })
+
+export const fetchLibraries = (scope: Scope, signal?: AbortSignal) =>
+  request<Library[]>('GET', `${scopePath(scope)}/libraries`, undefined, signal)
+
+/** Replaces the scope's enabled libraries with `libraries`, in this order. */
+export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
+  request<Library[]>('PUT', `${scopePath(scope)}/libraries`, { libraries })
+
+export const fetchAddonPreferences = (signal?: AbortSignal) =>
+  request<AddonPreferences>('GET', '/account/addon-preferences', undefined, signal)
+
+export const saveAddonPreferences = (preferences: AddonPreferences) =>
+  request<AddonPreferences>('PUT', '/account/addon-preferences', preferences)
+
 export const queryKeys = {
   status: ['status'] as const,
   session: ['session'] as const,
@@ -170,6 +241,11 @@ export const queryKeys = {
   users: ['users'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
+  /** Prefix of everything a scope owns: invalidating it refreshes its addons and libraries. */
+  scope: (scope: Scope) => ['scopes', scope] as const,
+  addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
+  libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
+  addonPreferences: ['account', 'addon-preferences'] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */
