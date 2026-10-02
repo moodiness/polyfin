@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development. There is no release to install yet.
+> Polyfin is in early development: today it runs the server, its database and the admin page, but Jellyfin clients cannot connect yet. No image is published before the first release.
 
 ## Features
 
@@ -12,7 +12,7 @@ Polyfin is a self-hosted, Jellyfin-compatible server that sources its content fr
   - Stremio catalogs become Jellyfin libraries.
   - Stremio streams become versions (media sources) of the same item.
 - **Multiple users**: separate accounts with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points, and Next Up are tracked per user.
-- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise on-the-fly ffmpeg transcoding to HLS.
+- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS transcoder, built on FFmpeg for remote sources. See the [transcoding design](docs/transcoding.md).
 
 ## How it works
 
@@ -21,7 +21,7 @@ Jellyfin client ──Jellyfin API──> Polyfin ──Stremio protocol──> 
       │                              │
       │ direct play: 302 ────────────┼──────────────> debrid / provider URL
       │                              │
-      └── transcoding: HLS <── ffmpeg (reads the debrid URL, serves the segments)
+      └── transcoding: HLS <── FFmpeg (reads the stream through Polyfin's cache, serves the segments)
 ```
 
 Polyfin always handles authentication, accounts, browsing, metadata, source selection, and playback state. It only reads the remote stream itself when transcoding, so the direct play or transcoding decision determines how much bandwidth the server uses.
@@ -34,8 +34,48 @@ Polyfin targets the clients that connect to a Jellyfin server, including:
 - Swiftfin
 - Findroid
 - Streamyfin
+- Nuvio
+- Strand
 - Official Jellyfin apps
 - Kodi
+
+## Quick start (Docker)
+
+Until the first release, build the image from source. Requirements: Docker with Compose v2.
+
+```sh
+git clone https://github.com/moodiness/polyfin.git
+cd polyfin
+cp .env.example .env    # then set POSTGRES_PASSWORD, e.g. openssl rand -hex 24
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its tables on startup.
+
+**Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
+
+## Configuration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POLYFIN_DATABASE_URL` | (required) | PostgreSQL URL, e.g. `postgresql://polyfin:password@postgres:5432/polyfin` |
+| `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
+| `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+
+The Compose files read their own settings (passwords, ports, image version) from `.env`; see [`.env.example`](.env.example).
+
+## Development
+
+Requirements: Go 1.27, Node.js 24, and a PostgreSQL 18 server. With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts one on `127.0.0.1:5432`.
+
+```sh
+export POLYFIN_DATABASE_URL=postgresql://polyfin:password@127.0.0.1:5432/polyfin
+make dev                      # builds the admin app, then runs the server on :8096
+npm --prefix web run dev      # optional: admin app with hot reload, proxied to :8096
+make check                    # formatting, vet and tests
+```
+
+Database tests run when `POLYFIN_TEST_DATABASE_URL` points to a disposable PostgreSQL database; CI always provides one. Each test works in its own schema.
 
 ## Legal disclaimer
 
