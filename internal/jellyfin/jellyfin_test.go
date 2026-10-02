@@ -16,8 +16,12 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
@@ -25,9 +29,10 @@ import (
 const testServerID = "0123456789abcdef0123456789abcdef"
 
 type testServer struct {
-	t     *testing.T
-	store *accounts.Store
-	url   string
+	t      *testing.T
+	store  *accounts.Store
+	addons *addons.Store
+	url    string
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -40,16 +45,22 @@ func newTestServer(t *testing.T, failures int) testServer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	client := stremio.NewClient("test")
+	addonStore := addons.New(pool, client)
 	server := httptest.NewServer(New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,
 		QuickConnect:  quickconnect.New(),
 		SignIns:       throttle.New(failures, time.Minute),
 		WebSocketPort: 8096,
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Library:       library.New(pool, addonStore, client, logger),
+		Stremio:       client,
+		Preferences:   preferences.New(pool),
+		Logger:        logger,
 	}))
 	t.Cleanup(server.Close)
-	return testServer{t: t, store: store, url: server.URL}
+	return testServer{t: t, store: store, addons: addonStore, url: server.URL}
 }
 
 func (s testServer) user(name string, change func(*accounts.UserChanges)) accounts.User {
@@ -284,18 +295,40 @@ func TestResponsesMatchJellyfin(t *testing.T) {
 		if err := json.Unmarshal(body, &got); err != nil {
 			t.Fatalf("%s: %v in %s", fixture, err, body)
 		}
-		for _, difference := range compareShapes(fixture, want, got) {
+		for _, difference := range compareShapes(fixture, want, got, shapeRules{}) {
 			t.Error(difference)
 		}
 	}
 }
 
-func compareShapes(path string, want, got any) []string {
+// shapeRules relaxes a shape comparison where Polyfin cannot have the data
+// Jellyfin had when the fixture was recorded.
+type shapeRules struct {
+	// dynamic names objects keyed by data, such as image types: their keys
+	// are not compared.
+	dynamic []string
+	// absent maps a field Polyfin leaves out to the fixtures concerned, or
+	// "*" for all; returned maps a field Polyfin sends that the recorded
+	// items lacked.
+	absent, returned map[string][]string
+}
+
+// allowed reports whether rules list key for the fixture path belongs to.
+func allowed(rules map[string][]string, path, key string) bool {
+	fixture, _, _ := strings.Cut(path, ".")
+	fixture, _, _ = strings.Cut(fixture, "[")
+	return slices.Contains(rules[key], "*") || slices.Contains(rules[key], fixture)
+}
+
+func compareShapes(path string, want, got any, rules shapeRules) []string {
 	switch want := want.(type) {
 	case map[string]any:
 		object, ok := got.(map[string]any)
 		if !ok {
 			return []string{fmt.Sprintf("%s: got %T, want an object", path, got)}
+		}
+		if key := path[strings.LastIndexAny(path, ".]")+1:]; slices.Contains(rules.dynamic, key) {
+			return nil
 		}
 		var differences []string
 		keys := make([]string, 0, len(want)+len(object))
@@ -313,11 +346,15 @@ func compareShapes(path string, want, got any) []string {
 			actual, inGot := object[key]
 			switch {
 			case !inGot:
-				differences = append(differences, fmt.Sprintf("%s.%s: missing", path, key))
+				if !allowed(rules.absent, path, key) {
+					differences = append(differences, fmt.Sprintf("%s.%s: missing", path, key))
+				}
 			case !inWant:
-				differences = append(differences, fmt.Sprintf("%s.%s: not returned by Jellyfin", path, key))
+				if !allowed(rules.returned, path, key) {
+					differences = append(differences, fmt.Sprintf("%s.%s: not returned by Jellyfin", path, key))
+				}
 			default:
-				differences = append(differences, compareShapes(path+"."+key, expected, actual)...)
+				differences = append(differences, compareShapes(path+"."+key, expected, actual, rules)...)
 			}
 		}
 		return differences
@@ -327,7 +364,7 @@ func compareShapes(path string, want, got any) []string {
 			return []string{fmt.Sprintf("%s: got %T, want an array", path, got)}
 		}
 		if len(want) > 0 && len(array) > 0 {
-			return compareShapes(path+"[0]", want[0], array[0])
+			return compareShapes(path+"[0]", want[0], array[0], rules)
 		}
 		return nil
 	default:

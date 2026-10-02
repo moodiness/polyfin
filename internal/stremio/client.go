@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -27,6 +28,11 @@ var (
 	// ErrPrivateNetwork reports a request to a local network address from a
 	// client that may only reach public addresses.
 	ErrPrivateNetwork = errors.New("addresses on local networks are not allowed")
+	// ErrInvalidResponse reports a resource response that is not valid JSON
+	// of the expected form.
+	ErrInvalidResponse = errors.New("invalid addon response")
+	// ErrNotFound reports a resource the addon does not have.
+	ErrNotFound = errors.New("not found by the addon")
 )
 
 // Client fetches addon resources. Requests made on behalf of untrusted users
@@ -121,7 +127,7 @@ func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte,
 		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
 	}
 	if len(body) > maxResponseBytes {
-		return nil, fmt.Errorf("%w: response larger than %d bytes", ErrInvalidManifest, maxResponseBytes)
+		return nil, fmt.Errorf("%w: response larger than %d bytes", ErrInvalidResponse, maxResponseBytes)
 	}
 	return body, nil
 }
@@ -130,8 +136,55 @@ func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte,
 // the request to public addresses.
 func (c *Client) Manifest(ctx context.Context, manifestURL string, confined bool) (Manifest, error) {
 	body, err := c.get(ctx, manifestURL, confined)
+	if errors.Is(err, ErrInvalidResponse) {
+		return Manifest{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
 	if err != nil {
 		return Manifest{}, err
 	}
 	return ParseManifest(body)
+}
+
+// maxImageBytes bounds artwork downloads.
+const maxImageBytes = 15 << 20
+
+// Image downloads artwork referenced by an addon. Only image responses are
+// accepted, so an addon cannot make the server relay arbitrary content.
+func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
+		return nil, "", fmt.Errorf("%w: invalid image URL", ErrUnreachable)
+	}
+	request.Header.Set("Accept", "image/*")
+	request.Header.Set("User-Agent", c.userAgent)
+	client := c.trusted
+	if confined {
+		client = c.confined
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		if errors.Is(err, ErrPrivateNetwork) {
+			return nil, "", ErrPrivateNetwork
+		}
+		return nil, "", fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	defer response.Body.Close()
+	contentType := response.Header.Get("Content-Type")
+	if response.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
+		return nil, "", fmt.Errorf("%w: HTTP %d %s", ErrUnreachable, response.StatusCode, contentType)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	if len(body) > maxImageBytes {
+		return nil, "", fmt.Errorf("%w: image larger than %d bytes", ErrInvalidResponse, maxImageBytes)
+	}
+	return body, contentType, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync/atomic"
 	"testing"
 
@@ -92,6 +93,27 @@ func TestInstallEnablesBrowsableCatalogsUpToTheDefault(t *testing.T) {
 	}
 	if got := enabled(t, store, Shared()); len(got) != DefaultLibraries {
 		t.Errorf("libraries after a second addon: %d", len(got))
+	}
+}
+
+func TestInstallPrefersCollectionCatalogs(t *testing.T) {
+	store, _ := newStore(t)
+	streaming := stremio.Catalog{Type: "collection", ID: "streaming", Extra: []stremio.Extra{{Name: "genre", IsRequired: true, Options: []string{"None"}}}}
+	unbrowsable := stremio.Catalog{Type: "collection", ID: "search", Extra: []stremio.Extra{{Name: "search", IsRequired: true}}}
+	addon := newFakeAddon(t, append([]stremio.Catalog{unbrowsable}, append(catalogs("movie", 3), streaming)...))
+	if _, err := store.Install(t.Context(), Shared(), addon.url("a"), false); err != nil {
+		t.Fatal(err)
+	}
+	if ids := enabled(t, store, Shared()); !slices.Equal(ids, []string{"streaming"}) {
+		t.Errorf("default libraries of an addon with collections: %v", ids)
+	}
+	// Only a browsable collection catalog counts.
+	other := newFakeAddon(t, append([]stremio.Catalog{unbrowsable}, catalogs("series", 2)...))
+	if _, err := store.Install(t.Context(), Shared(), other.url("b"), false); err != nil {
+		t.Fatal(err)
+	}
+	if ids := enabled(t, store, Shared()); !slices.Equal(ids, []string{"streaming", "series-0", "series-1"}) {
+		t.Errorf("default libraries after an addon without browsable collections: %v", ids)
 	}
 }
 

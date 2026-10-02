@@ -115,14 +115,6 @@ func cors(next http.Handler) http.Handler {
 // query returns a query parameter matched without regard to case, as
 // ASP.NET binds them.
 func query(r *http.Request, name string) string {
-	values := r.URL.Query()
-	if value, ok := values[name]; ok && len(value) > 0 {
-		return value[0]
-	}
-	for key, value := range values {
-		if strings.EqualFold(key, name) && len(value) > 0 {
-			return value[0]
-		}
-	}
-	return ""
+	value, _ := queryParam(r, name)
+	return value
 }

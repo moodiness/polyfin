@@ -274,7 +274,7 @@ const en = {
     shownHelpMine:
       'Libraries appear in this order, after the server’s libraries if you use them. Leave a name empty to use the catalog name.',
     defaultHelp:
-      'When an addon is installed, its movie and series catalogs become libraries until there are 20. Each library adds a row to the home screen of Jellyfin apps: with many libraries, it gets slow to load and long to scroll.',
+      'When an addon is installed, its collection catalogs become libraries: each one shows its collections (for example Netflix or Prime Video), which open on their movies and series. An addon without collections gets its movie and series catalogs as libraries, up to 20. This is only a starting point: enable as many catalogs as you like. Each library adds a row to the home screen of Jellyfin apps.',
     count: (count: number) => (count === 1 ? '1 library' : `${count} libraries`),
     manyWarning: 'More than 20 libraries can make the home screen of Jellyfin apps heavy.',
     noAddons: 'Install an addon first: its catalogs will be listed here.',

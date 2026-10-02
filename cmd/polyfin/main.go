@@ -19,6 +19,8 @@ import (
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -117,6 +119,8 @@ func serve(ctx context.Context) error {
 	}
 	quickConnect := quickconnect.New()
 	signIns := throttle.New(signInFailures, signInWindow)
+	addonClient := stremio.NewClient(version)
+	addonStore := addons.New(pool, addonClient)
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
@@ -126,7 +130,7 @@ func serve(ctx context.Context) error {
 				ServerID:     serverID,
 				Database:     pool,
 				Accounts:     store,
-				Addons:       addons.New(pool, stremio.NewClient(version)),
+				Addons:       addonStore,
 				QuickConnect: quickConnect,
 				SignIns:      signIns,
 				SetupCode:    setupCode,
@@ -138,6 +142,9 @@ func serve(ctx context.Context) error {
 				QuickConnect:  quickConnect,
 				SignIns:       signIns,
 				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
+				Library:       library.New(pool, addonStore, addonClient, logger),
+				Stremio:       addonClient,
+				Preferences:   preferences.New(pool),
 				Logger:        logger,
 			}),
 			Logger: logger,
