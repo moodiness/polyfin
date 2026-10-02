@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/userdata"
 	webui "github.com/moodiness/polyfin/web"
 )
 
@@ -161,6 +162,7 @@ func serve(ctx context.Context) error {
 				Stremio:       addonClient,
 				Playback:      player,
 				Preferences:   preferences.New(pool),
+				UserData:      userdata.New(pool),
 				Logger:        logger,
 			}),
 			Logger: logger,

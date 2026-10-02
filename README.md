@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, and play the versions their device supports as they are, with the addons' subtitles. Polyfin does not transcode yet, so a version the app cannot play as is (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, with the addons' subtitles, and keep each user's watched state, resume points and favorites. Polyfin does not transcode yet, so a version the app cannot play as is (such as a 4K Dolby Vision remux in a web browser) does not play. No image is published before the first release.
 
 ## Features
 
@@ -61,6 +61,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 **Artwork:** Polyfin relays images from the addons' artwork servers, so Jellyfin apps only ever talk to Polyfin.
 
 **Playback:** a title's details list every stream the addons offer as a version. The first time a version is played, Polyfin analyzes it with ffprobe (a few seconds) and keeps the result, then tells the app whether it can play it as is, as a Jellyfin server would. When the app has not picked a version, one that cannot be read is skipped in favor of the next. Active playback appears in Jellyfin apps' dashboards.
+
+**Watch state:** each user's played titles, resume points, favorites and ratings are kept by Polyfin, so they follow the user from one Jellyfin app to another. Playback moves the resume point and marks a title played near its end, with Jellyfin's thresholds. Continue Watching lists what is under way, and Next Up the next episode of each series being watched. Marking a series or a season played marks its released episodes.
 
 **Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
 

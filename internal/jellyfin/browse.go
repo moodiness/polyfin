@@ -84,20 +84,32 @@ func (h *Handler) browseError(w http.ResponseWriter, r *http.Request, err error)
 	processingError(w, http.StatusBadGateway)
 }
 
-// dtos describes listed items. When the request asks for MediaSources or
-// MediaStreams, movies and episodes carry what is known of their versions.
-func (h *Handler) dtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, keep func(library.Item) bool) []BaseItemDto {
+// dtos describes listed items, with what the user did with them. When the
+// request asks for MediaSources or MediaStreams, movies and episodes carry
+// what is known of their versions.
+func (h *Handler) dtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, keep func(library.Item) bool) ([]BaseItemDto, error) {
+	if keep != nil {
+		items = slices.DeleteFunc(slices.Clone(items), func(item library.Item) bool { return !keep(item) })
+	}
+	state, err := h.userState(r.Context(), user, items)
+	if err != nil {
+		return nil, err
+	}
+	return h.listDtos(r, user, items, fields, state), nil
+}
+
+// listDtos describes listed items, with what the user did with them in
+// state.
+func (h *Handler) listDtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, state userState) []BaseItemDto {
 	result := make([]BaseItemDto, 0, len(items))
 	for _, item := range items {
-		if keep == nil || keep(item) {
-			result = append(result, h.listDto(r, user, item, fields))
-		}
+		result = append(result, h.listDto(r, user, item, fields, state))
 	}
 	return result
 }
 
-func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item, fields fieldSet) BaseItemDto {
-	dto := h.newItemDto(item, fields, false)
+func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item, fields fieldSet, state userState) BaseItemDto {
+	dto := h.newItemDto(item, fields, false, state)
 	sources, streams := fields.has("MediaSources"), fields.has("MediaStreams")
 	if sources || streams {
 		h.addMediaSources(r, user, &dto, item, item.ID, false)
@@ -113,12 +125,16 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 
 // folderDtos describes libraries and ancestors, which Jellyfin always
 // describes in full.
-func (h *Handler) folderDtos(items []library.Item) []BaseItemDto {
+func (h *Handler) folderDtos(r *http.Request, user accounts.User, items []library.Item) ([]BaseItemDto, error) {
+	state, err := h.userState(r.Context(), user, items)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]BaseItemDto, 0, len(items))
 	for _, item := range items {
-		result = append(result, h.newItemDto(item, nil, true))
+		result = append(result, h.newItemDto(item, nil, true, state))
 	}
-	return result
+	return result, nil
 }
 
 // paging binds startIndex and limit; a missing or negative limit is
@@ -142,7 +158,11 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	items := h.folderDtos(libraries)
+	items, err := h.folderDtos(r, user, libraries)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 }
 
@@ -160,17 +180,22 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	keep := itemTypeFilter(r)
 
 	if ids := listQuery(r, "ids"); len(ids) > 0 {
-		var items []BaseItemDto
+		var wanted []accounts.ID
 		for _, raw := range ids {
-			id, ok := parseGUID(raw)
-			if !ok {
-				continue
-			}
-			if item, err := h.Library.Item(r.Context(), user, id); err == nil && keep(item) {
-				items = append(items, h.listDto(r, user, item, fields))
+			if id, ok := parseGUID(raw); ok {
+				wanted = append(wanted, id)
 			}
 		}
-		items = nonNilItems(items)
+		found, err := h.Library.Items(r.Context(), user, wanted)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		items, err := h.dtos(r, user, found, fields, keep)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 		return
 	}
@@ -180,13 +205,21 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			h.browseError(w, r, err)
 			return
 		}
-		items := h.dtos(r, user, found, fields, keep)
+		items, err := h.dtos(r, user, found, fields, keep)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
 		return
 	}
-	if !hasParent || isFiltered(r) {
-		// Without a folder, Jellyfin apps ask for favorites, recently played or
-		// whole-server listings; Polyfin has no such state yet.
+	if filter, ok := stateFilterOf(r); ok {
+		h.stateListing(w, r, user, filter, parent, hasParent, start, limit)
+		return
+	}
+	if !hasParent {
+		// Without a folder, Jellyfin apps ask for whole-server listings,
+		// which remote catalogs cannot answer.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
@@ -206,7 +239,12 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, QueryResult{Items: h.dtos(r, user, page.Items, fields, keep), TotalRecordCount: page.Total, StartIndex: start})
+	items, err := h.dtos(r, user, page.Items, fields, keep)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: page.Total, StartIndex: start})
 }
 
 // genreFilter returns the genre a listing is narrowed to, given by name
@@ -235,30 +273,6 @@ func (h *Handler) genreFilter(r *http.Request, user accounts.User, parent accoun
 		}
 	}
 	return "", false
-}
-
-// isFiltered reports filters on user state (favorites, played, resumable):
-// no item matches them until Polyfin records it.
-func isFiltered(r *http.Request) bool {
-	for _, filter := range listQuery(r, "filters") {
-		switch strings.ToLower(filter) {
-		case "isfavorite", "isplayed", "isresumable", "likes", "isfavoriteorlikes":
-			return true
-		}
-	}
-	for _, name := range []string{"isFavorite", "isPlayed"} {
-		if value, set := boolQuery(r, name); set && value {
-			return true
-		}
-	}
-	return false
-}
-
-func nonNilItems(items []BaseItemDto) []BaseItemDto {
-	if items == nil {
-		return []BaseItemDto{}
-	}
-	return items
 }
 
 func pageOf(items []BaseItemDto, start, limit, total int) QueryResult {
@@ -305,7 +319,18 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.dtos(r, user, page.Items, requestedFields(r), itemTypeFilter(r)))
+	keep := itemTypeFilter(r)
+	items := slices.DeleteFunc(slices.Clone(page.Items), func(item library.Item) bool { return !keep(item) })
+	state, err := h.userState(r.Context(), user, items)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	// Like a new Jellyfin user's (HidePlayedInLatest), Polyfin users do not
+	// see what they played among the latest titles, unless isPlayed asks.
+	played, explicit := boolQuery(r, "isPlayed")
+	items = slices.DeleteFunc(items, func(item library.Item) bool { return state.of(item).Played != (explicit && played) })
+	writeJSON(w, http.StatusOK, h.listDtos(r, user, items, requestedFields(r), state))
 }
 
 func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
@@ -324,7 +349,12 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	dto := h.newItemDto(item, requestedFields(r), true)
+	state, err := h.userState(r.Context(), user, []library.Item{item})
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	dto := h.newItemDto(item, requestedFields(r), true, state)
 	h.addMediaSources(r, user, &dto, item, id, true)
 	writeJSON(w, http.StatusOK, dto)
 }
@@ -345,7 +375,12 @@ func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.folderDtos(folders))
+	items, err := h.folderDtos(r, user, folders)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) seasons(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +395,11 @@ func (h *Handler) seasons(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	items := h.dtos(r, user, seasons, requestedFields(r), nil)
+	items, err := h.dtos(r, user, seasons, requestedFields(r), nil)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 }
 
@@ -393,7 +432,11 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 	if hasNumber && !hasSeasonID {
 		episodes = slices.DeleteFunc(episodes, func(item library.Item) bool { return item.ParentIndexNumber != number })
 	}
-	items := h.dtos(r, user, episodes, requestedFields(r), nil)
+	items, err := h.dtos(r, user, episodes, requestedFields(r), nil)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	if limit < 0 {
 		limit = len(items)
 	}

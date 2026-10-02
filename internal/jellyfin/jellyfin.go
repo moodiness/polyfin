@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 const (
@@ -43,7 +44,9 @@ type Options struct {
 	Playback *playback.Service
 	// Preferences stores the display preferences of Jellyfin apps.
 	Preferences *preferences.Store
-	Logger      *slog.Logger
+	// UserData stores what each user did with each item.
+	UserData *userdata.Store
+	Logger   *slog.Logger
 }
 
 // Handler serves the Jellyfin API.
@@ -56,6 +59,8 @@ type Handler struct {
 	// for players that fetch them without credentials.
 	subtitleFiles *cache.Cache[accounts.ID, []library.ExternalSubtitle]
 	subtitleCache *cache.Cache[accounts.ID, []subtitles.Cue]
+	// runtimes remembers the runtime of the version each report names.
+	runtimes *cache.Cache[string, time.Duration]
 }
 
 // New returns the Jellyfin API handler.
@@ -65,6 +70,7 @@ func New(options Options) *Handler {
 		sessions:      playback.NewSessions(),
 		subtitleFiles: cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
 		subtitleCache: cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
+		runtimes:      cache.New[string, time.Duration](2000, 12*time.Hour),
 	}
 	rt := &router{}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
@@ -100,6 +106,7 @@ func New(options Options) *Handler {
 	h.browseRoutes(rt)
 	h.auxiliaryRoutes(rt)
 	h.playbackRoutes(rt)
+	h.userDataRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

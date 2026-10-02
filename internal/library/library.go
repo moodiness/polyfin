@@ -608,6 +608,44 @@ func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) 
 	if err != nil {
 		return Item{}, err
 	}
+	return s.item(ctx, v, id)
+}
+
+// Items describes the items of ids the user can reach, in order. Items
+// that no longer exist, or whose addon fails to describe them, are left
+// out.
+func (s *Service) Items(ctx context.Context, user accounts.User, ids []accounts.ID) ([]Item, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	found := make([]*Item, len(ids))
+	var g errgroup.Group
+	g.SetLimit(8)
+	for i, id := range ids {
+		g.Go(func() error {
+			item, err := s.item(ctx, v, id)
+			if err != nil {
+				if !errors.Is(err, ErrNotFound) {
+					s.logger.Debug("An item could not be described", "item", id, "error", err)
+				}
+				return nil
+			}
+			found[i] = &item
+			return nil
+		})
+	}
+	_ = g.Wait()
+	items := make([]Item, 0, len(ids))
+	for _, item := range found {
+		if item != nil {
+			items = append(items, *item)
+		}
+	}
+	return items, nil
+}
+
+func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	if l, ok := v.library(id); ok {
 		return l.item, nil
 	}
