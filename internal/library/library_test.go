@@ -280,38 +280,38 @@ func TestCollectionsGroupCatalogs(t *testing.T) {
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie", "series", "collection"},
 			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
 			Catalogs: []stremio.Catalog{
-				{Type: "collection", ID: "streaming", Name: "Streaming", Extra: []stremio.Extra{{Name: "genre", IsRequired: true, Options: []string{"None"}}}},
-				{Type: "movie", ID: "nfx", Name: "Netflix movies", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Action"}}}},
-				{Type: "series", ID: "nfx", Name: "Netflix series"},
+				{Type: "collection", ID: "themes", Name: "Themes", Extra: []stremio.Extra{{Name: "genre", IsRequired: true, Options: []string{"None"}}}},
+				{Type: "movie", ID: "space", Name: "Space movies", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Action"}}}},
+				{Type: "series", ID: "space", Name: "Space series"},
 				{Type: "movie", ID: "search", Name: "Search", Extra: []stremio.Extra{{Name: "search", IsRequired: true}}},
 			}},
 		catalogs: map[string][]stremio.Meta{
-			"collection/streaming": {{ID: "col:netflix", Type: "collection", Name: "Netflix", Poster: "https://images.example/netflix.png"}},
-			"movie/nfx":            append(append([]stremio.Meta{}, movies...), series[0]), // a duplicate across catalogs
-			"series/nfx":           series,
+			"collection/themes": {{ID: "col:space", Type: "collection", Name: "Space", Poster: "https://images.example/space.png"}},
+			"movie/space":       append(append([]stremio.Meta{}, movies...), series[0]), // a duplicate across catalogs
+			"series/space":      series,
 		},
 		metas: map[string]stremio.Meta{
-			"collection/col:netflix": {ID: "col:netflix", Type: "collection", Name: "Netflix", Collection: &stremio.Collection{Sources: []stremio.CollectionSource{
-				{Type: "movie", CatalogID: "nfx", Genre: "Action"}, {Type: "series", CatalogID: "nfx"},
+			"collection/col:space": {ID: "col:space", Type: "collection", Name: "Space", Collection: &stremio.Collection{Sources: []stremio.CollectionSource{
+				{Type: "movie", CatalogID: "space", Genre: "Action"}, {Type: "series", CatalogID: "space"},
 			}}},
 		},
 	}
-	for i := range addon.catalogs["movie/nfx"] {
-		addon.catalogs["movie/nfx"][i].Genres = []string{"Action"}
+	for i := range addon.catalogs["movie/space"] {
+		addon.catalogs["movie/space"][i].Genres = []string{"Action"}
 	}
 	e.install(addons.Shared(), addon)
 
 	// An addon with collections gets its collection catalogs as libraries.
 	libraries, _ := e.service.Libraries(t.Context(), e.member)
-	if got := names(libraries); !slices.Equal(got, []string{"Streaming"}) {
+	if got := names(libraries); !slices.Equal(got, []string{"Themes"}) {
 		t.Fatalf("default libraries: %v", got)
 	}
 	page, err := e.service.Children(t.Context(), e.member, libraries[0].ID, 0, 10, "")
 	if err != nil || len(page.Items) != 1 || page.Items[0].Kind != KindCollection {
 		t.Fatalf("collections: %+v %v", page, err)
 	}
-	netflix := page.Items[0]
-	page, err = e.service.Children(t.Context(), e.member, netflix.ID, 0, 10, "")
+	space := page.Items[0]
+	page, err = e.service.Children(t.Context(), e.member, space.ID, 0, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,11 +319,11 @@ func TestCollectionsGroupCatalogs(t *testing.T) {
 	if got := names(page.Items); !slices.Equal(got, want) {
 		t.Fatalf("collection content: %v, want %v (interleaved, without the duplicate)", got, want)
 	}
-	if !slices.ContainsFunc(addon.catalogRequests(), func(r string) bool { return strings.HasPrefix(r, "catalog/movie/nfx/genre=Action") }) {
+	if !slices.ContainsFunc(addon.catalogRequests(), func(r string) bool { return strings.HasPrefix(r, "catalog/movie/space/genre=Action") }) {
 		t.Errorf("the source's genre was not requested: %v", addon.catalogRequests())
 	}
 	ancestors, _ := e.service.Ancestors(t.Context(), e.member, page.Items[0].ID)
-	if got := names(ancestors); !slices.Equal(got, []string{"Netflix", "Streaming"}) {
+	if got := names(ancestors); !slices.Equal(got, []string{"Space", "Themes"}) {
 		t.Errorf("ancestors: %v", got)
 	}
 }
@@ -484,8 +484,8 @@ func TestLibraryNamesTellCollisionsApart(t *testing.T) {
 			[]string{"Popular", "Trending", "Best"}},
 		{"content types in English", "en",
 			[]addons.Library{catalog("A", "movie", "Popular"), catalog("A", "series", " popular "), catalog("A", "collection", "POPULAR"),
-				catalog("A", "anime.movie", "Netflix"), catalog("A", "anime.series", "Netflix"), catalog("A", "tv", "Netflix")},
-			[]string{"Popular (Movies)", "popular (Shows)", "POPULAR (Collections)", "Netflix (Movies)", "Netflix (Shows)", "Netflix (tv)"}},
+				catalog("A", "anime.movie", "Classics"), catalog("A", "anime.series", "Classics"), catalog("A", "tv", "Classics")},
+			[]string{"Popular (Movies)", "popular (Shows)", "POPULAR (Collections)", "Classics (Movies)", "Classics (Shows)", "Classics (tv)"}},
 		{"content types in French", "fr",
 			[]addons.Library{catalog("A", "movie", "Populaires"), catalog("A", "series", "Populaires"), catalog("A", "collection", "Populaires")},
 			[]string{"Populaires (Films)", "Populaires (Séries)", "Populaires (Collections)"}},
@@ -502,8 +502,8 @@ func TestLibraryNamesTellCollisionsApart(t *testing.T) {
 			[]addons.Library{catalog("A", "movie", "Top"), catalog("A", "movie", "Top"), custom("B", "series", "X", "Top (Movies, A) (2)")},
 			[]string{"Top (Movies, A)", "Top (Movies, A) (3)", "Top (Movies, A) (2)"}},
 		{"a custom name is kept and the catalog names are suffixed", "en",
-			[]addons.Library{catalog("A", "movie", "Netflix"), custom("A", "series", "Shows", "netflix"), catalog("A", "series", "Netflix")},
-			[]string{"Netflix (Movies)", "netflix", "Netflix (Shows)"}},
+			[]addons.Library{catalog("A", "movie", "Classics"), custom("A", "series", "Shows", "classics"), catalog("A", "series", "Classics")},
+			[]string{"Classics (Movies)", "classics", "Classics (Shows)"}},
 		{"custom names given twice get their type", "en",
 			[]addons.Library{custom("A", "movie", "Popular", "Mine"), custom("A", "series", "Popular", "Mine")},
 			[]string{"Mine (Movies)", "Mine (Shows)"}},
