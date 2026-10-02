@@ -43,6 +43,20 @@ func ExtractableSubtitle(analysis media.Analysis, index int) bool {
 	return slices.Contains(textSubtitles(analysis), index)
 }
 
+// imageSubtitleCodecs are the subtitle codecs FFmpeg draws onto video.
+var imageSubtitleCodecs = []string{"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle"}
+
+// BurnableSubtitle reports whether the subtitle stream of a version with
+// FFmpeg index index can be burned into converted video: an image one.
+func BurnableSubtitle(analysis media.Analysis, index int) bool {
+	for _, stream := range analysis.Streams {
+		if stream.Index == index {
+			return stream.Type == "subtitle" && slices.Contains(imageSubtitleCodecs, stream.Codec)
+		}
+	}
+	return false
+}
+
 // LanguageTag is the RFC 5646 tag of a track's language, as HLS names
 // languages: the ISO 639-1 code when there is one ("fra" gives "fr"), else
 // the code as given, and nothing for undetermined languages.

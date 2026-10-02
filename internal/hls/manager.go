@@ -93,10 +93,14 @@ type VideoEncoding struct {
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
+	// Burn is the FFmpeg index of an image subtitle stream burned into the
+	// video, nil for none.
+	Burn *int
 }
 
-// args are FFmpeg's video options for a job starting at segment n.
-func (v *VideoEncoding) args(plan Plan, n int) []string {
+// filters is the filter chain of the video: 8-bit, at the size asked, in
+// SDR.
+func (v *VideoEncoding) filters() string {
 	var filters []string
 	if v.Deinterlace {
 		filters = append(filters, "yadif")
@@ -108,7 +112,28 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 		filters = append(filters, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
 			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv")
 	}
-	filters = append(filters, "format=yuv420p")
+	return strings.Join(append(filters, "format=yuv420p"), ",")
+}
+
+// burnGraph is the filter graph burning subtitle stream burn into video
+// stream video, as output [video]. The subtitle's canvas, the size of the
+// video it was made for, is scaled to the width of the converted video
+// keeping its shape, and laid at the bottom: a video cropped since keeps
+// the subtitles near its bottom edge. It is laid after the conversion to
+// SDR, which would dim its colors.
+//
+// FFmpeg repeats the canvas for every packet read from the source, which
+// is over a thousand a second with TrueHD audio: the canvas is first
+// brought to the video's frame rate, or scaling the repeats makes the
+// conversion several times slower.
+func (v *VideoEncoding) burnGraph(video, burn int) string {
+	return "[0:" + strconv.Itoa(video) + "]" + v.filters() + "[converted];" +
+		"[0:" + strconv.Itoa(burn) + "]fps=" + strconv.FormatFloat(v.FrameRate, 'f', -1, 64) + ",scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
+		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass,format=yuv420p[video]"
+}
+
+// args are FFmpeg's encoder options for a job starting at segment n.
+func (v *VideoEncoding) args(plan Plan, n int) []string {
 	// The encoder compares times in its frame rate's time base, where a
 	// keyframe's exact time can fall just before the time asked: each is
 	// asked a fraction of a frame early.
@@ -121,9 +146,12 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
 	}
-	args := []string{"-c:v", v.Encoder, "-preset", "veryfast", "-vf", strings.Join(filters, ","),
+	args := []string{"-c:v", v.Encoder, "-preset", "veryfast",
 		"-b:v", strconv.FormatInt(v.Bitrate, 10), "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
 		"-force_key_frames", strings.Join(times, ","), "-sc_threshold", "0"}
+	if v.Burn == nil {
+		args = append(args, "-vf", v.filters())
+	}
 	if v.Encoder == "libx264" {
 		args = append(args, "-profile:v", "high", "-level:v", v.Level)
 	} else {
@@ -724,7 +752,13 @@ func (r Remux) args(n int) []string {
 		// as copied streams do, instead of at the time asked.
 		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
 	}
-	args = append(args, "-copyts", "-i", r.Input, "-map", "0:"+strconv.Itoa(r.Video))
+	args = append(args, "-copyts", "-i", r.Input)
+	video := "0:" + strconv.Itoa(r.Video)
+	if r.Encode != nil && r.Encode.Burn != nil {
+		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, *r.Encode.Burn))
+		video = "[video]"
+	}
+	args = append(args, "-map", video)
 	if r.Audio >= 0 {
 		args = append(args, "-map", "0:"+strconv.Itoa(r.Audio))
 	}

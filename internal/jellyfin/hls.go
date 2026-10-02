@@ -42,9 +42,13 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	if audio != nil {
 		q.add("AudioStreamIndex", strconv.Itoa(audio.Index))
 	}
-	// A subtitle in HLS is the one the master playlist selects.
-	hlsSubtitle := decision.SubtitleStreamIndex >= 0 && decision.Subtitles[decision.SubtitleStreamIndex].Method == "Hls"
-	if hlsSubtitle {
+	// A subtitle in HLS is the one the master playlist selects; one burned
+	// in, the one FFmpeg draws onto the video.
+	method := ""
+	if decision.SubtitleStreamIndex >= 0 {
+		method = decision.Subtitles[decision.SubtitleStreamIndex].Method
+	}
+	if method == "Hls" || method == "Encode" {
 		q.add("SubtitleStreamIndex", strconv.Itoa(decision.SubtitleStreamIndex))
 	}
 	audioBitrate := int64(0)
@@ -81,8 +85,8 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	q.add("EnableAudioVbrEncoding", "true")
 	q.add("Tag", version.ID.String())
 	switch {
-	case hlsSubtitle:
-		q.add("SubtitleMethod", "Hls")
+	case method == "Hls" || method == "Encode":
+		q.add("SubtitleMethod", method)
 	case decision.SubtitleStreamIndex < 0:
 		q.add("SubtitleMethod", "Encode")
 	}
@@ -181,6 +185,12 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 			limit, _ := strconv.ParseInt(query(r, "videoBitrate"), 10, 64)
 			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, streams[i], h.Playback.Capabilities())
 		}
+	}
+	// A subtitle burned in is an image track inside the file, counted after
+	// the addons' files.
+	if index, err := strconv.Atoi(query(r, "subtitleStreamIndex")); err == nil && remux.ConvertVideo != nil &&
+		strings.EqualFold(query(r, "subtitleMethod"), "Encode") && playback.BurnableSubtitle(analysis, index-len(files)) {
+		remux.Burn = new(index - len(files))
 	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
 		channels := 0

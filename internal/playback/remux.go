@@ -36,6 +36,9 @@ type Remux struct {
 	// converted to; nil copies them.
 	ConvertVideo *VideoConversion
 	ConvertAudio *AudioConversion
+	// Burn is the FFmpeg index of the image subtitle burned into converted
+	// video, nil for none.
+	Burn *int
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -356,7 +359,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 				rate = video.FrameRate
 			}
 			r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace}
+				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn}
 		}
 		if c := remux.ConvertAudio; c != nil && audio >= 0 {
 			r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate

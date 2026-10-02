@@ -294,24 +294,35 @@ func defaultAudio(streams []playback.MediaStream) *int {
 }
 
 // defaultSubtitle is the subtitle shown unless another is asked: a forced
-// embedded track, else none (-1). Subtitles addons find are offered, never
-// imposed. It is absent when there are no subtitles at all, as Jellyfin
-// reports it.
+// embedded track, else none (-1). A text one in the language of the first
+// is preferred, as an app may only take an image one burned into converted
+// video. Subtitles addons find are offered, never imposed. It is absent
+// when there are no subtitles at all, as Jellyfin reports it.
 func defaultSubtitle(streams []playback.MediaStream) *int {
 	found := false
-	for _, stream := range streams {
+	var forced *playback.MediaStream
+	for i, stream := range streams {
 		if stream.Type != "Subtitle" {
 			continue
 		}
 		found = true
-		if stream.IsForced && !stream.IsExternal {
+		if !stream.IsForced || stream.IsExternal {
+			continue
+		}
+		if forced == nil {
+			forced = &streams[i]
+		}
+		if stream.IsTextSubtitleStream && stream.Language == forced.Language {
 			return new(stream.Index)
 		}
 	}
-	if !found {
-		return nil
+	switch {
+	case forced != nil:
+		return new(forced.Index)
+	case found:
+		return new(-1)
 	}
-	return new(-1)
+	return nil
 }
 
 // subtitleURL is a subtitle's DeliveryUrl: relative, with the caller's

@@ -379,12 +379,21 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 	if request.DeviceProfile != nil {
 		described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 		decision = playback.Decide(request.DeviceProfile, described, options)
-		// Polyfin burns nothing into the video yet: a subtitle the app can
-		// only take that way is left out rather than preventing playback,
-		// and so is one it would take in HLS when the version cannot be
-		// streamed so.
+		// A subtitle the app can only take burned into the video is burned
+		// in when it is an image track inside the file and the video can be
+		// converted, as burning it in requires. Any other is left out
+		// rather than preventing playback, and so is one the app would take
+		// in HLS when the version cannot be streamed so.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
-			if method := decision.Subtitles[*selected].Method; method == "Encode" || (method == "Hls" && !decision.HLS) {
+			method := decision.Subtitles[*selected].Method
+			if method == "Encode" && burnable(streams, analysis, *selected) {
+				burn := options
+				burn.ConvertVideo = true
+				if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil {
+					decision, method = burned, ""
+				}
+			}
+			if method == "Encode" || (method == "Hls" && !decision.HLS) {
 				without := options
 				without.SubtitleStreamIndex = new(-1)
 				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.HLS && !decision.HLS) {
@@ -450,9 +459,10 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
 // Polyfin delivers: subtitles in the container reach the app embedded in
 // what it plays as it is, subtitle files and the embedded text tracks
-// remuxes extracted whole as external files, and text subtitles as HLS
-// renditions of a remux. Any other is left out.
-func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, remuxed bool) {
+// remuxes extracted whole as external files, text subtitles as HLS
+// renditions, and the image track chosen burned into converted video. Any
+// other is left out.
+func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, streamed bool) {
 	files := 0
 	for _, stream := range streams {
 		if stream.Type == "Subtitle" && stream.IsExternal {
@@ -469,11 +479,25 @@ func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, s
 		switch {
 		case delivery.Method == "Embed" && !stream.IsExternal && decision.DirectPlay:
 		case delivery.Method == "External" && (stream.IsExternal || (extractable && whole)):
-		case delivery.Method == "Hls" && remuxed && (stream.IsExternal || extractable):
+		case delivery.Method == "Hls" && streamed && (stream.IsExternal || extractable):
+		case delivery.Method == "Encode" && streamed && decision.Video != nil && stream.Index == decision.SubtitleStreamIndex &&
+			burnable(streams, analysis, stream.Index):
 		default:
 			decision.Subtitles[stream.Index] = playback.SubtitleDelivery{Method: "Drop"}
 		}
 	}
+}
+
+// burnable reports whether the subtitle stream of Jellyfin index index can
+// be burned into converted video: an image track inside the file.
+func burnable(streams []playback.MediaStream, analysis media.Analysis, index int) bool {
+	files := 0
+	for _, stream := range streams {
+		if stream.Type == "Subtitle" && stream.IsExternal {
+			files++
+		}
+	}
+	return index >= files && playback.BurnableSubtitle(analysis, index-files)
 }
 
 // streamAccess finds who a media request plays for. Players send no
