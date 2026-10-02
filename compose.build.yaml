@@ -1,0 +1,11 @@
+# Build Polyfin from this checkout instead of pulling the published image:
+#   docker compose -f compose.yaml -f compose.build.yaml up --build
+# The local tag keeps a source build from shadowing a published ghcr.io tag.
+services:
+  polyfin:
+    image: polyfin-local:dev
+    pull_policy: build
+    build:
+      context: .
+      args:
+        VERSION: ${POLYFIN_VERSION:-dev}

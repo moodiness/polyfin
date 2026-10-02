@@ -1,0 +1,44 @@
+name: polyfin
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-polyfin}
+      POSTGRES_USER: ${POSTGRES_USER:-polyfin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    # Loopback only, for local development tools. Polyfin reaches it over the
+    # Compose network.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # PostgreSQL 18 keeps its versioned data directory below this path.
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    stop_grace_period: 1m
+    restart: unless-stopped
+
+  polyfin:
+    image: ghcr.io/moodiness/polyfin:${POLYFIN_VERSION:-latest}
+    environment:
+      POLYFIN_DATABASE_URL: postgresql://${POSTGRES_USER:-polyfin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-polyfin}
+      POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
+    # Reachable on the LAN by default: TVs and phones connect to it directly.
+    ports:
+      - "${POLYFIN_BIND_IP:-0.0.0.0}:${POLYFIN_PORT:-8096}:8096"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

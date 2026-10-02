@@ -1,0 +1,14 @@
+.git/
+.github/
+**/.env
+**/.env.*
+**/*.env
+compose.override.yaml
+bin/
+web/node_modules/
+web/dist/
+**/*.tsbuildinfo
+**/.DS_Store
+docs/
+templates/
+assets/
