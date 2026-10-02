@@ -1,9 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from 'react-router'
 import { queryClient } from '@/api'
 import { LanguageProvider } from '@/i18n'
-import App from '@/App'
+import { router } from '@/router'
 import '@/index.css'
 
 const root = document.getElementById('root')
@@ -13,7 +14,7 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-        <App />
+        <RouterProvider router={router} />
       </LanguageProvider>
     </QueryClientProvider>
   </StrictMode>,

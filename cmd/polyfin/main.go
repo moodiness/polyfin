@@ -13,9 +13,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/admin"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
+	"github.com/moodiness/polyfin/internal/throttle"
 	webui "github.com/moodiness/polyfin/web"
 )
 
@@ -25,6 +30,9 @@ var version = "dev"
 const (
 	readHeaderTimeout = 10 * time.Second
 	shutdownTimeout   = 15 * time.Second
+	// Failed password and setup code attempts allowed per client address.
+	signInFailures = 10
+	signInWindow   = 15 * time.Minute
 )
 
 const usage = `Usage: polyfin [command]
@@ -72,7 +80,7 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
-	admin, err := webui.Assets()
+	adminApp, err := webui.Assets()
 	if err != nil {
 		return err
 	}
@@ -89,18 +97,47 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	store, err := accounts.Open(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("load settings: %w", err)
+	}
+	var setupCode string
+	if required, err := store.SetupRequired(ctx); err != nil {
+		return err
+	} else if required {
+		setupCode = admin.NewSetupCode()
+		logger.Warn("No administrator yet: open /admin/ and create one with this setup code", "setup_code", setupCode)
+	}
 
 	listener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err
 	}
+	quickConnect := quickconnect.New()
+	signIns := throttle.New(signInFailures, signInWindow)
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
-			Version:  version,
-			ServerID: serverID,
 			Database: pool,
-			Admin:    admin,
-			Logger:   logger,
+			Admin:    adminApp,
+			AdminAPI: admin.New(admin.Options{
+				Version:      version,
+				ServerID:     serverID,
+				Database:     pool,
+				Accounts:     store,
+				QuickConnect: quickConnect,
+				SignIns:      signIns,
+				SetupCode:    setupCode,
+				Logger:       logger,
+			}),
+			Jellyfin: jellyfin.New(jellyfin.Options{
+				ServerID:      serverID,
+				Accounts:      store,
+				QuickConnect:  quickConnect,
+				SignIns:       signIns,
+				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
+				Logger:        logger,
+			}),
+			Logger: logger,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

@@ -1,0 +1,190 @@
+// Package admin serves the JSON API of the admin interface.
+package admin
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"math/big"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/throttle"
+)
+
+const (
+	cookieName = "polyfin_session"
+	cookiePath = "/admin"
+	maxBody    = 64 << 10
+	readyWait  = 2 * time.Second
+)
+
+// Pinger reports whether the database answers.
+type Pinger interface {
+	Ping(context.Context) error
+}
+
+// Options are the dependencies of the admin API.
+type Options struct {
+	Version      string
+	ServerID     string
+	Database     Pinger
+	Accounts     *accounts.Store
+	QuickConnect *quickconnect.Store
+	SignIns      *throttle.Failures
+	// SetupCode authorizes creating the first administrator. It is printed
+	// in the server log at startup while no administrator exists.
+	SetupCode string
+	Logger    *slog.Logger
+}
+
+type handler struct {
+	Options
+}
+
+// New returns the handler of every /admin/api/ route.
+func New(options Options) http.Handler {
+	h := &handler{Options: options}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/api/status", h.status)
+	mux.HandleFunc("POST /admin/api/setup", h.setup)
+	mux.HandleFunc("POST /admin/api/session", h.signIn)
+
+	mux.Handle("GET /admin/api/session", h.signedIn(h.session))
+	mux.Handle("DELETE /admin/api/session", h.signedIn(h.signOut))
+	mux.Handle("PUT /admin/api/account/password", h.signedIn(h.changePassword))
+	mux.Handle("GET /admin/api/account/devices", h.signedIn(h.ownDevices))
+	mux.Handle("DELETE /admin/api/account/devices/{id}", h.signedIn(h.revokeOwnDevice))
+	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
+	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
+
+	mux.Handle("GET /admin/api/users", h.administrator(h.users))
+	mux.Handle("POST /admin/api/users", h.administrator(h.createUser))
+	mux.Handle("PATCH /admin/api/users/{id}", h.administrator(h.updateUser))
+	mux.Handle("DELETE /admin/api/users/{id}", h.administrator(h.deleteUser))
+	mux.Handle("GET /admin/api/users/{id}/devices", h.administrator(h.userDevices))
+	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
+	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
+	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
+
+	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
+		writeError(w, http.StatusNotFound, "not_found")
+	})
+	return sameOrigin(mux)
+}
+
+// NewSetupCode returns a random code formatted XXXX-XXXX, without letters
+// and digits that are easy to confuse.
+func NewSetupCode() string {
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	code := make([]byte, 0, 9)
+	for i := range 8 {
+		if i == 4 {
+			code = append(code, '-')
+		}
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
+		code = append(code, alphabet[n.Int64()])
+	}
+	return string(code)
+}
+
+func normalizeSetupCode(code string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(code), "-", ""))
+}
+
+// sameOrigin refuses state-changing requests sent by another site. The
+// session cookie is SameSite=Strict as well; this also covers browsers
+// that would send it.
+func sameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if origin := r.Header.Get("Origin"); origin != "" {
+				parsed, err := url.Parse(origin)
+				if err != nil || !strings.EqualFold(parsed.Host, r.Host) {
+					writeError(w, http.StatusForbidden, "cross_origin")
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func writeError(w http.ResponseWriter, status int, code string) {
+	writeJSON(w, status, map[string]string{"error": code})
+}
+
+func decode(w http.ResponseWriter, r *http.Request, into any) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody)).Decode(into); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return false
+	}
+	return true
+}
+
+func (h *handler) internalError(w http.ResponseWriter, r *http.Request, err error) {
+	h.Logger.Error("Admin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	writeError(w, http.StatusInternalServerError, "internal")
+}
+
+// accountError answers the client-facing account errors and reports
+// whether err was one of them.
+func accountError(w http.ResponseWriter, err error) bool {
+	for _, known := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{accounts.ErrInvalidName, http.StatusBadRequest, "invalid_name"},
+		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
+		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
+		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
+		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
+		{accounts.ErrSetupComplete, http.StatusConflict, "setup_complete"},
+		{accounts.ErrNotFound, http.StatusNotFound, "not_found"},
+		{accounts.ErrWrongPassword, http.StatusForbidden, "wrong_password"},
+		{accounts.ErrInvalidCredentials, http.StatusUnauthorized, "invalid_credentials"},
+		{accounts.ErrDisabled, http.StatusForbidden, "account_disabled"},
+	} {
+		if errors.Is(err, known.err) {
+			writeError(w, known.status, known.code)
+			return true
+		}
+	}
+	return false
+}
+
+// throttled answers 429 when the client exhausted its failed attempts.
+func (h *handler) throttled(w http.ResponseWriter, key string) bool {
+	allowed, wait := h.SignIns.Allowed(key)
+	if allowed {
+		return false
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+	writeError(w, http.StatusTooManyRequests, "too_many_attempts")
+	return true
+}
+
+func setupCodeMatches(expected, given string) bool {
+	if expected == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(normalizeSetupCode(expected)), []byte(normalizeSetupCode(given))) == 1
+}
