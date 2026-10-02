@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 		audioBitrate = *audio.BitRate
 	}
 	if limit > 0 {
-		q.add("VideoBitrate", strconv.FormatInt(limit-audioBitrate, 10))
+		q.add("VideoBitrate", strconv.FormatInt(playback.VideoLimit(limit, audio), 10))
 	}
 	if audio != nil {
 		if audioBitrate > 0 {
@@ -86,8 +87,11 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 		q.add("SubtitleMethod", "Encode")
 	}
 	q.add("TranscodeReasons", strings.Join(decision.Reasons, ","))
-	// Audio converted rather than copied is asked as Jellyfin's own
-	// parameter does it, after the reasons.
+	// Video and audio converted rather than copied are asked as Jellyfin's
+	// own parameters do it, after the reasons.
+	if decision.Video != nil {
+		q.add("allowVideoStreamCopy", "false")
+	}
 	if decision.Audio != nil {
 		q.add("allowAudioStreamCopy", "false")
 	}
@@ -169,8 +173,15 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
 	}
 	remux := playback.Remux{Session: session, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
-	// The conversion PlaybackInfo chose follows from the URL, as it would
-	// for Jellyfin.
+	// The conversions PlaybackInfo chose follow from the URL, as they
+	// would for Jellyfin, through the same functions.
+	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
+		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
+		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
+			limit, _ := strconv.ParseInt(query(r, "videoBitrate"), 10, 64)
+			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, streams[i], h.Playback.Capabilities())
+		}
+	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
 		channels := 0
 		for _, stream := range analysis.Streams {
@@ -178,7 +189,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 				channels = stream.Channels
 			}
 		}
-		remux.Convert = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
+		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
 	}
 	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files}, true
 }

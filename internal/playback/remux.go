@@ -32,8 +32,10 @@ type Remux struct {
 	// (ffprobe's); -1 plays none.
 	Audio  int
 	Format hls.Format
-	// Convert is what the audio is converted to; nil copies it.
-	Convert *AudioConversion
+	// ConvertVideo and ConvertAudio are what the video and the audio are
+	// converted to; nil copies them.
+	ConvertVideo *VideoConversion
+	ConvertAudio *AudioConversion
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -174,10 +176,16 @@ func (s *Service) Variant(ctx context.Context, remux Remux) (hls.Variant, error)
 		v.FrameRate = math.Round(video.FrameRate*1000) / 1000
 	}
 	codecs := []string{videoCodecString(video)}
+	if c := remux.ConvertVideo; c != nil {
+		// What the encoder writes, at most its peak rate with the audio.
+		codecs[0] = c.CodecString(v.FrameRate)
+		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
+		v.Bandwidth = c.Bitrate*3/2 + 640_000
+	}
 	if audio, ok := streamOf(analysis, remux.Audio); ok {
-		if remux.Convert != nil {
+		if remux.ConvertAudio != nil {
 			// What the encoder writes: AAC-LC from FFmpeg's.
-			audio = media.Stream{Codec: remux.Convert.Codec}
+			audio = media.Stream{Codec: remux.ConvertAudio.Codec}
 		}
 		codecs = append(codecs, audioCodecString(audio))
 	}
@@ -320,9 +328,13 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Type == "audio" {
 			audio = stream.Index
 		}
+		codec := video.Codec
+		if remux.ConvertVideo != nil {
+			codec = remux.ConvertVideo.Codec
+		}
 		tag := ""
 		if remux.Format == hls.FMP4 {
-			tag = RemuxTag(video.Codec, "mp4")
+			tag = RemuxTag(codec, "mp4")
 		}
 		x := s.extractedOf(ctx, remux.Version.ID)
 		var streams []int
@@ -338,7 +350,15 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		}
 		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan,
 			Subtitles: streams, Extracted: x}
-		if c := remux.Convert; c != nil && audio >= 0 {
+		if c := remux.ConvertVideo; c != nil {
+			rate := video.AverageRate
+			if rate <= 0 {
+				rate = video.FrameRate
+			}
+			r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
+				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace}
+		}
+		if c := remux.ConvertAudio; c != nil && audio >= 0 {
 			r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate
 		}
 		return r, release, nil

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,13 +68,68 @@ type Remux struct {
 	// VideoTag is the sample entry of the video in MP4, such as hvc1 for
 	// HEVC, which Apple players require; empty keeps FFmpeg's.
 	VideoTag string
-	Format   Format
-	Plan     Plan
+	// Encode converts the video; nil copies it.
+	Encode *VideoEncoding
+	Format Format
+	Plan   Plan
 	// Subtitles are the FFmpeg indexes of the text subtitle streams
 	// extracted into Extracted while remuxing, from the bytes FFmpeg reads
 	// anyway.
 	Subtitles []int
 	Extracted Extracted
+}
+
+// VideoEncoding is what a job converts the video to: 8-bit, progressive,
+// with a keyframe at the start of every segment, so that the segments of
+// a conversion follow those of a remux of the same version.
+type VideoEncoding struct {
+	// Encoder is libx264 or libx265; Level, the codec level it declares.
+	Encoder, Level string
+	Width, Height  int
+	// Bitrate is the average the encoder aims for, in bits per second.
+	Bitrate int64
+	// FrameRate is the source's, frames a second.
+	FrameRate float64
+	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
+	// progressive.
+	ToneMap, Deinterlace bool
+}
+
+// args are FFmpeg's video options for a job starting at segment n.
+func (v *VideoEncoding) args(plan Plan, n int) []string {
+	var filters []string
+	if v.Deinterlace {
+		filters = append(filters, "yadif")
+	}
+	filters = append(filters, "scale="+strconv.Itoa(v.Width)+":"+strconv.Itoa(v.Height))
+	if v.ToneMap {
+		// To linear light in floating point, to BT.709 primaries, tone
+		// mapped, then to the BT.709 transfer and matrix in limited range.
+		filters = append(filters, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
+			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv")
+	}
+	filters = append(filters, "format=yuv420p")
+	// The encoder compares times in its frame rate's time base, where a
+	// keyframe's exact time can fall just before the time asked: each is
+	// asked a fraction of a frame early.
+	rate := v.FrameRate
+	if rate <= 0 {
+		rate = 24
+	}
+	lead := 0.4 / rate
+	times := make([]string, 0, plan.Len()-n)
+	for k := n; k < plan.Len(); k++ {
+		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
+	}
+	args := []string{"-c:v", v.Encoder, "-preset", "veryfast", "-vf", strings.Join(filters, ","),
+		"-b:v", strconv.FormatInt(v.Bitrate, 10), "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
+		"-force_key_frames", strings.Join(times, ","), "-sc_threshold", "0"}
+	if v.Encoder == "libx264" {
+		args = append(args, "-profile:v", "high", "-level:v", v.Level)
+	} else {
+		args = append(args, "-profile:v", "main", "-x265-params", "log-level=error:level-idc="+v.Level)
+	}
+	return args
 }
 
 // Opener prepares an encoding: what it remuxes, and a function releasing
@@ -98,6 +154,7 @@ type Manager struct {
 	dir    string
 	logger *slog.Logger
 	done   chan struct{}
+	can    capabilities
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -114,7 +171,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), encodings: map[Key]*encoding{}}
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), encodings: map[Key]*encoding{}}
 	go m.stopIdle()
 	return m, nil
 }
@@ -672,6 +729,9 @@ func (r Remux) args(n int) []string {
 		args = append(args, "-map", "0:"+strconv.Itoa(r.Audio))
 	}
 	args = append(args, "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
+	if r.Encode != nil {
+		args = append(args, r.Encode.args(r.Plan, n)...)
+	}
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)
 	}

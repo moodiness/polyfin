@@ -202,6 +202,7 @@ type playbackInfoRequest struct {
 	EnableDirectPlay     *bool
 	EnableDirectStream   *bool
 	AllowAudioStreamCopy *bool
+	AllowVideoStreamCopy *bool
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -227,6 +228,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	if value, ok := b.bool(r, "allowAudioStreamCopy"); ok {
 		request.AllowAudioStreamCopy = new(value)
+	}
+	if value, ok := b.bool(r, "allowVideoStreamCopy"); ok {
+		request.AllowVideoStreamCopy = new(value)
 	}
 	request.MediaSourceId = query(r, "mediaSourceId")
 	if r.Method == http.MethodPost && !h.readPlaybackInfoBody(w, r, b, &request) {
@@ -340,6 +344,9 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	if posted.AllowAudioStreamCopy != nil {
 		request.AllowAudioStreamCopy = posted.AllowAudioStreamCopy
 	}
+	if posted.AllowVideoStreamCopy != nil {
+		request.AllowVideoStreamCopy = posted.AllowVideoStreamCopy
+	}
 	return true
 }
 
@@ -354,6 +361,8 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
+		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
+		Can:                 h.Playback.Capabilities(),
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
 	// to.
@@ -373,12 +382,12 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		// Polyfin burns nothing into the video yet: a subtitle the app can
 		// only take that way is left out rather than preventing playback,
 		// and so is one it would take in HLS when the version cannot be
-		// remuxed.
+		// streamed so.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
-			if method := decision.Subtitles[*selected].Method; method == "Encode" || (method == "Hls" && !decision.Remux) {
+			if method := decision.Subtitles[*selected].Method; method == "Encode" || (method == "Hls" && !decision.HLS) {
 				without := options
 				without.SubtitleStreamIndex = new(-1)
-				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.Remux && !decision.Remux) {
+				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.HLS && !decision.HLS) {
 					decision = retry
 				}
 			}
@@ -394,20 +403,20 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
 		}
 	}
-	// Remuxing needs the keyframe index: a version without one is not
-	// offered for it.
-	remuxed := decision.Remux
-	if remuxed {
+	// Streaming over HLS needs the keyframe index: a version without one
+	// is not offered for it.
+	streamed := decision.HLS
+	if streamed {
 		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
-			h.Logger.Info("A version cannot be remuxed", "addon", version.Addon, "error", err)
-			remuxed = false
+			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+			streamed = false
 		}
 	}
-	h.deliverable(r.Context(), decision, streams, version, analysis, remuxed)
+	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
 
 	source.Container = decision.Container
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
-	if remuxed {
+	if streamed {
 		limit := request.MaxStreamingBitrate.value
 		if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
 			limit = *request.DeviceProfile.MaxStreamingBitrate
