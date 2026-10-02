@@ -1,94 +1,12 @@
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchStatus } from '@/api'
-import { languages, useI18n } from '@/i18n'
+import { fetchStatus, queryKeys } from '@/api'
+import { useI18n } from '@/i18n'
 
-const repositoryUrl = 'https://github.com/moodiness/polyfin'
-
-export default function App() {
-  const { t } = useI18n()
-
-  return (
-    <div className="flex min-h-dvh flex-col">
-      <div aria-hidden="true" className="bg-fin-gradient h-0.5" />
-      <header className="border-b border-line">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <img
-              src={`${import.meta.env.BASE_URL}polyfin.svg`}
-              alt=""
-              width={40}
-              height={40}
-              className="size-10 shrink-0 drop-shadow-[0_0_14px_rgb(34_211_238/0.35)]"
-            />
-            <div className="min-w-0">
-              <p className="truncate text-lg leading-tight font-semibold tracking-tight text-white">
-                {t.header.productName}
-              </p>
-              <p className="truncate text-sm text-muted">{t.header.subtitle}</p>
-            </div>
-          </div>
-          <LanguageSwitch />
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-          {t.status.title}
-        </h1>
-        <p className="mt-2 text-muted">{t.status.description}</p>
-        <div className="mt-8">
-          <StatusPanel />
-        </div>
-      </main>
-
-      <footer className="border-t border-line">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 text-sm sm:px-6">
-          <a
-            href={repositoryUrl}
-            rel="noreferrer"
-            className="rounded-sm text-fin-5 underline decoration-fin-5/40 underline-offset-4 transition-colors hover:decoration-fin-5"
-          >
-            {t.footer.sourceCode}
-          </a>
-        </div>
-      </footer>
-    </div>
-  )
-}
-
-function LanguageSwitch() {
-  const { language, setLanguage, t } = useI18n()
-
-  return (
-    <div
-      role="group"
-      aria-label={t.language.label}
-      className="inline-flex shrink-0 rounded-lg border border-line bg-surface p-0.5"
-    >
-      {languages.map((code) => (
-        <button
-          key={code}
-          type="button"
-          lang={code}
-          title={t.language[code].name}
-          aria-pressed={language === code}
-          onClick={() => setLanguage(code)}
-          className={`min-w-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            language === code ? 'bg-fin-2 text-white' : 'text-muted hover:text-white'
-          }`}
-        >
-          {t.language[code].short}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function StatusPanel() {
+export default function StatusPanel() {
   const { language, t } = useI18n()
   const { data, error, isFetching, dataUpdatedAt, refetch } = useQuery({
-    queryKey: ['status'],
+    queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
     refetchInterval: 10_000,
   })

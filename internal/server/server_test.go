@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -17,17 +16,22 @@ type database struct{ err error }
 
 func (d database) Ping(context.Context) error { return d.err }
 
+// owner answers with its name, so tests see which handler served a path.
+func owner(name string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(name)) })
+}
+
 func handler(db Pinger) http.Handler {
 	return New(Options{
-		Version:  "1.2.3",
-		ServerID: "0123456789abcdef0123456789abcdef",
 		Database: db,
 		Admin: fstest.MapFS{
 			"index.html":         {Data: []byte("<!doctype html><title>Polyfin</title>")},
 			"polyfin.svg":        {Data: []byte("<svg/>")},
 			"assets/app-1a2b.js": {Data: []byte("console.log(1)")},
 		},
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminAPI: owner("admin api"),
+		Jellyfin: owner("jellyfin"),
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 }
 
@@ -50,7 +54,6 @@ func TestAdminApplicationRouting(t *testing.T) {
 		{"/admin/assets/app-1a2b.js", http.StatusOK, "console.log", immutableCache},
 		{"/admin/polyfin.svg", http.StatusOK, "<svg/>", "no-cache"},
 		{"/admin/assets/app-old.js", http.StatusNotFound, "", ""},
-		{"/admin/api/unknown", http.StatusNotFound, `"error"`, "no-store"},
 	} {
 		response := get(h, tc.target)
 		if response.Code != tc.status {
@@ -94,14 +97,17 @@ func TestReadinessFollowsTheDatabase(t *testing.T) {
 	}
 }
 
-func TestStatusReportsAnUnavailableDatabase(t *testing.T) {
-	response := get(handler(database{err: errors.New("connection refused")}), "/admin/api/status")
-	var status Status
-	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
-		t.Fatal(err)
-	}
-	want := Status{Name: "Polyfin", Version: "1.2.3", ServerID: "0123456789abcdef0123456789abcdef", Database: "unavailable"}
-	if response.Code != http.StatusOK || status != want {
-		t.Fatalf("got %d %+v, want 200 %+v", response.Code, status, want)
+func TestPathsReachTheirOwner(t *testing.T) {
+	h := handler(database{})
+	for target, want := range map[string]string{
+		"/admin/api/users":    "admin api",
+		"/admin/api/missing":  "admin api",
+		"/Users/Me":           "jellyfin",
+		"/System/Info/Public": "jellyfin",
+		"/web/index.html":     "jellyfin",
+	} {
+		if got := get(h, target).Body.String(); got != want {
+			t.Errorf("%s served by %q, want %q", target, got, want)
+		}
 	}
 }

@@ -1,0 +1,222 @@
+import { useId, useRef, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useI18n } from '@/i18n'
+import { dateTime, relativeTime } from '@/format'
+
+export const buttonPrimary =
+  'inline-flex min-h-10 items-center justify-center rounded-lg bg-fin-2 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-fin-1 disabled:cursor-progress disabled:opacity-70'
+export const buttonSecondary =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-70'
+export const buttonDanger =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-progress disabled:opacity-70'
+
+export function PageHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-8">
+      <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h1>
+      <p className="mt-2 text-muted">{description}</p>
+    </div>
+  )
+}
+
+export function Card({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-5">
+      {title !== undefined && <h2 className="mb-4 text-lg font-semibold text-white">{title}</h2>}
+      {children}
+    </section>
+  )
+}
+
+type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'onChange'> & {
+  label: string
+  hint?: string
+  error?: string
+  onValue: (value: string) => void
+}
+
+export function TextField({ label, hint, error, onValue, className, ...input }: TextFieldProps) {
+  const id = useId()
+  const hintId = `${id}-hint`
+  const errorId = `${id}-error`
+  const describedBy = [hint && hintId, error && errorId].filter(Boolean).join(' ') || undefined
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-zinc-200">
+        {label}
+      </label>
+      <input
+        id={id}
+        {...input}
+        onChange={(event) => onValue(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        className={`mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white placeholder:text-zinc-500 aria-invalid:border-rose-400 ${className ?? ''}`}
+      />
+      {hint && (
+        <p id={hintId} className="mt-1 text-xs text-muted">
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1 text-sm text-rose-300">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function Checkbox({
+  label,
+  help,
+  checked,
+  onChange,
+}: {
+  label: string
+  help?: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <div className="flex items-start gap-3">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-describedby={help ? `${id}-help` : undefined}
+        className="mt-0.5 size-5 shrink-0 accent-fin-3"
+      />
+      <div>
+        <label htmlFor={id} className="text-sm font-medium text-zinc-100">
+          {label}
+        </label>
+        {help && (
+          <p id={`${id}-help`} className="text-xs text-muted">
+            {help}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function Notice({ kind, children }: { kind: 'error' | 'success'; children: ReactNode }) {
+  return kind === 'error' ? (
+    <div
+      role="alert"
+      className="flex gap-2 rounded-lg border border-rose-400/40 bg-rose-400/5 p-3 text-sm text-rose-200"
+    >
+      <span aria-hidden="true">⚠</span>
+      <p>{children}</p>
+    </div>
+  ) : (
+    <div
+      role="status"
+      className="flex gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/5 p-3 text-sm text-emerald-200"
+    >
+      <span aria-hidden="true">✓</span>
+      <p>{children}</p>
+    </div>
+  )
+}
+
+export function Badge({
+  tone,
+  children,
+}: {
+  tone: 'fin' | 'muted' | 'danger'
+  children: ReactNode
+}) {
+  const tones = {
+    fin: 'border-fin-4/50 text-fin-5',
+    muted: 'border-line text-muted',
+    danger: 'border-rose-400/50 text-rose-300',
+  }
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  )
+}
+
+export function RelativeTime({ iso }: { iso: string }) {
+  const { language, t } = useI18n()
+  return (
+    <time dateTime={iso} title={dateTime(iso, language)}>
+      {relativeTime(iso, language, t.time.justNow)}
+    </time>
+  )
+}
+
+export function Loading() {
+  const { t } = useI18n()
+  return (
+    <p role="status" className="text-muted">
+      {t.common.loading}
+    </p>
+  )
+}
+
+/** A button that asks for confirmation in a modal native dialog before acting. */
+export function ConfirmButton({
+  label,
+  busyLabel,
+  message,
+  busy,
+  onConfirm,
+}: {
+  label: string
+  busyLabel: string
+  message: string
+  busy: boolean
+  onConfirm: () => void
+}) {
+  const { t } = useI18n()
+  const dialog = useRef<HTMLDialogElement>(null)
+  const messageId = useId()
+
+  return (
+    <>
+      <button
+        type="button"
+        className={buttonDanger}
+        disabled={busy}
+        onClick={() => dialog.current?.showModal()}
+      >
+        {busy ? busyLabel : label}
+      </button>
+      <dialog
+        ref={dialog}
+        aria-describedby={messageId}
+        aria-label={label}
+        className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-5 text-zinc-100 backdrop:bg-black/70"
+      >
+        <p id={messageId}>{message}</p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            autoFocus
+            className={buttonSecondary}
+            onClick={() => dialog.current?.close()}
+          >
+            {t.common.cancel}
+          </button>
+          <button
+            type="button"
+            className={buttonDanger}
+            onClick={() => {
+              dialog.current?.close()
+              onConfirm()
+            }}
+          >
+            {t.common.confirm}
+          </button>
+        </div>
+      </dialog>
+    </>
+  )
+}

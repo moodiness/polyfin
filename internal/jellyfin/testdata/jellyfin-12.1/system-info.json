@@ -1,0 +1,33 @@
+{
+  "CachePath": "",
+  "CanLaunchWebBrowser": false,
+  "CanSelfRestart": false,
+  "CastReceiverApplications": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "CompletedInstallations": [],
+  "EncoderLocation": "",
+  "HasPendingRestart": false,
+  "HasUpdateAvailable": false,
+  "Id": "",
+  "InternalMetadataPath": "",
+  "IsShuttingDown": false,
+  "ItemsByNamePath": "",
+  "LocalAddress": "",
+  "LogPath": "",
+  "OperatingSystem": "",
+  "OperatingSystemDisplayName": "",
+  "ProductName": "",
+  "ProgramDataPath": "",
+  "ServerName": "",
+  "StartupWizardCompleted": false,
+  "SupportsLibraryMonitor": false,
+  "SystemArchitecture": "",
+  "TranscodingTempPath": "",
+  "Version": "",
+  "WebPath": "",
+  "WebSocketPortNumber": 0
+}

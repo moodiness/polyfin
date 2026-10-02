@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -27,20 +26,14 @@ type Pinger interface {
 
 // Options are the dependencies of the HTTP handler.
 type Options struct {
-	Version  string
-	ServerID string
 	Database Pinger
 	// Admin is the built admin application: index.html and its assets.
-	Admin  fs.FS
-	Logger *slog.Logger
-}
-
-// Status is the public summary shown by the admin application.
-type Status struct {
-	Name     string `json:"name"`
-	Version  string `json:"version"`
-	ServerID string `json:"serverId"`
-	Database string `json:"database"`
+	Admin fs.FS
+	// AdminAPI serves /admin/api/.
+	AdminAPI http.Handler
+	// Jellyfin serves every path not owned by Polyfin itself.
+	Jellyfin http.Handler
+	Logger   *slog.Logger
 }
 
 // New returns the handler serving every Polyfin route.
@@ -59,26 +52,11 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, adminPrefix, http.StatusFound)
 	})
-
-	mux.HandleFunc("GET /admin/api/status", func(w http.ResponseWriter, r *http.Request) {
-		database := "unavailable"
-		if databaseReady(r.Context(), options.Database) {
-			database = "ready"
-		}
-		writeJSON(w, http.StatusOK, Status{
-			Name:     "Polyfin",
-			Version:  options.Version,
-			ServerID: options.ServerID,
-			Database: database,
-		})
-	})
-	// Unknown API paths must answer as an API, not with the application page.
-	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-	})
+	mux.Handle("/admin/api/", options.AdminAPI)
 	// No method in the pattern: it would conflict with "/admin/api/", which
 	// must answer every method. adminApp restricts methods itself.
 	mux.Handle("/admin/", adminApp(options.Admin, options.Logger))
+	mux.Handle("/", options.Jellyfin)
 
 	return securityHeaders(mux)
 }
@@ -151,11 +129,4 @@ func writeText(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
 }
