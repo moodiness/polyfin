@@ -74,6 +74,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 | `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
 | `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
+| `POLYFIN_CACHE_DIR` | system temporary directory, `/cache` in the Docker image | Where parts of the files being read are kept. Emptied when Polyfin starts. |
+| `POLYFIN_CACHE_SIZE` | `10GB` | Disk space the cache may use, e.g. `10GB` or `512MiB`; at least 256 MiB. Parts read in the last 30 seconds are kept even above it. |
 
 The Compose files read their own settings (passwords, ports, image version) from `.env`; see [`.env.example`](.env.example).
 

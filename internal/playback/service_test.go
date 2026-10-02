@@ -19,27 +19,35 @@ import (
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/testdb"
 )
 
-// fakeSource answers like a remote file server, recording requests.
+// fakeSource answers like a remote file server, recording requests. Links
+// listed in expired answer 403.
 type fakeSource struct {
-	status int
-	body   []byte
+	status  int
+	body    []byte
+	expired map[string]bool
 
 	mu       sync.Mutex
 	requests []http.Header
+	targets  []string
 	confined []bool
 }
 
-func (f *fakeSource) Open(_ context.Context, _, _ string, header http.Header, confined bool) (*http.Response, error) {
+func (f *fakeSource) Open(_ context.Context, _, target string, header http.Header, confined bool) (*http.Response, error) {
 	f.mu.Lock()
 	f.requests = append(f.requests, header.Clone())
+	f.targets = append(f.targets, target)
 	f.confined = append(f.confined, confined)
 	f.mu.Unlock()
 	status := f.status
 	if status == 0 {
 		status = http.StatusPartialContent
+	}
+	if f.expired[target] {
+		status = http.StatusForbidden
 	}
 	return &http.Response{
 		StatusCode: status,
@@ -54,13 +62,19 @@ func (f *fakeSource) Open(_ context.Context, _, _ string, header http.Header, co
 	}, nil
 }
 
-func newService(t *testing.T, opener Opener, ffprobe string) *Service {
+func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewer) *Service {
 	t.Helper()
 	pool := testdb.New(t)
 	if err := database.Migrate(t.Context(), pool); err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	sources, err := source.New(t.TempDir(), 1<<30, opener, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sources.Close() })
+	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), sources, renew, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,8 +95,8 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 		{"player that cannot follow redirects", library.Version{URL: "https://93.184.216.34/movie.mkv"}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			source := &fakeSource{body: []byte("\x1a\x45\xdf\xa3")}
-			s := newService(t, source, "ffprobe")
+			origin := &fakeSource{body: []byte("\x1a\x45\xdf\xa3")}
+			s := newService(t, origin, "ffprobe", nil)
 			tc.version.ID = accounts.ID{1}
 			request := httptest.NewRequest(http.MethodGet, "/Videos/x/stream", nil)
 			request.Header.Set("Range", "bytes=0-3")
@@ -95,8 +109,8 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 					t.Fatalf("got %d to %q", response.Code, response.Header().Get("Location"))
 				}
 				// The source was checked before the player was sent to it.
-				if len(source.requests) != 1 || source.requests[0].Get("Range") != "bytes=0-0" {
-					t.Errorf("checks: %v", source.requests)
+				if len(origin.requests) != 1 || origin.requests[0].Get("Range") != "bytes=0-0" {
+					t.Errorf("checks: %v", origin.requests)
 				}
 				return
 			}
@@ -107,7 +121,7 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 			if response.Header().Get("Set-Cookie") != "" {
 				t.Error("a source's cookie reached the player")
 			}
-			sent := source.requests[0]
+			sent := origin.requests[0]
 			if sent.Get("Range") != "bytes=0-3" || sent.Get("Referer") != tc.version.Headers["Referer"] {
 				t.Errorf("headers sent to the source: %v", sent)
 			}
@@ -116,8 +130,8 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 }
 
 func TestServeRefusesSourcesThatDoNotAnswer(t *testing.T) {
-	source := &fakeSource{status: http.StatusNotFound}
-	s := newService(t, source, "ffprobe")
+	origin := &fakeSource{status: http.StatusNotFound}
+	s := newService(t, origin, "ffprobe", nil)
 	version := library.Version{ID: accounts.ID{2}, URL: "https://93.184.216.34/gone.mkv"}
 	response := httptest.NewRecorder()
 	err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, false, "")
@@ -126,6 +140,32 @@ func TestServeRefusesSourcesThatDoNotAnswer(t *testing.T) {
 	}
 	if !s.Failed(version.ID) {
 		t.Error("a dead source is not remembered as failed")
+	}
+}
+
+func TestExpiredLinksAreRenewedBeforeServing(t *testing.T) {
+	const old, fresh = "https://93.184.216.34/old.mkv", "https://93.184.216.34/new.mkv"
+	for _, relay := range []bool{false, true} {
+		origin := &fakeSource{body: []byte("\x1a\x45\xdf\xa3"), expired: map[string]bool{old: true}}
+		renewals := 0
+		s := newService(t, origin, "ffprobe", func(_ context.Context, version library.Version) (library.Version, error) {
+			renewals++
+			version.URL = fresh
+			return version, nil
+		})
+		response := httptest.NewRecorder()
+		version := library.Version{ID: accounts.ID{3}, URL: old}
+		if err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, relay, ""); err != nil {
+			t.Fatalf("relay %v: %v", relay, err)
+		}
+		switch {
+		case renewals != 1:
+			t.Errorf("relay %v: %d renewals", relay, renewals)
+		case !relay && (response.Code != http.StatusFound || response.Header().Get("Location") != fresh):
+			t.Errorf("redirect: %d to %q", response.Code, response.Header().Get("Location"))
+		case relay && (response.Code != http.StatusPartialContent || origin.targets[len(origin.targets)-1] != fresh):
+			t.Errorf("relay: %d from %v", response.Code, origin.targets)
+		}
 	}
 }
 
@@ -161,7 +201,7 @@ func TestAnalysesAreKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, runs := fakeProbe(t, string(probe), false)
-	s := newService(t, &fakeSource{}, path)
+	s := newService(t, &fakeSource{}, path, nil)
 	version := library.Version{ID: accounts.ID{3}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
 	first, err := s.Analyze(t.Context(), version)
 	if err != nil {
@@ -175,7 +215,7 @@ func TestAnalysesAreKept(t *testing.T) {
 		t.Fatalf("second analysis ran ffprobe again: %d runs, %v", runs(), err)
 	}
 	// Another process finds it in the database.
-	other, err := New(s.db, &fakeSource{}, path, s.signer, s.logger)
+	other, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, nil, s.logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +229,7 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 	clip := `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "30.000000"},
 		"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 3840, "height": 2160}]}`
 	path, runs := fakeProbe(t, clip, false)
-	s := newService(t, &fakeSource{}, path)
+	s := newService(t, &fakeSource{}, path, nil)
 	movie := library.Version{ID: accounts.ID{5}, URL: "https://93.184.216.34/movie.mkv", Runtime: 2 * time.Hour}
 	if _, err := s.Analyze(t.Context(), movie); !errors.Is(err, ErrStandIn) {
 		t.Fatalf("a 30 s clip for a 2 h movie: %v", err)
@@ -210,7 +250,7 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 
 func TestUnreadableVersionsAreNotAnalyzedAgain(t *testing.T) {
 	path, runs := fakeProbe(t, "", true)
-	s := newService(t, &fakeSource{}, path)
+	s := newService(t, &fakeSource{}, path, nil)
 	version := library.Version{ID: accounts.ID{4}, URL: "https://93.184.216.34/page.html"}
 	for range 2 {
 		if _, err := s.Analyze(t.Context(), version); !errors.Is(err, media.ErrNotMedia) {

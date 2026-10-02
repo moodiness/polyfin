@@ -20,10 +20,10 @@ flowchart LR
 
 FFmpeg and ffprobe never open the remote URL. They read an internal Polyfin URL, served by a reader that:
 
-- fetches the source in blocks with range requests and keeps them in a bounded disk cache, so a seek or an FFmpeg restart reads the cache instead of downloading again;
-- opens one upstream connection per source, whatever the number of FFmpeg processes, which respects debrid limits on concurrent connections;
+- fetches the source in 1 MiB blocks with range requests and keeps them in a bounded disk cache, so a seek or an FFmpeg restart reads the cache instead of downloading again. Blocks are stored in files of 64 MiB, and the least recently read files are evicted first, so reading a long file to its end stays within the limit; what was read in the last 30 seconds is kept;
+- opens one upstream connection per source, whatever the number of FFmpeg processes, which respects debrid limits on concurrent connections. It reads ahead of the last reader, and serves the blocks readers wait for before the ones read ahead;
 - adds the request headers a stream requires (Stremio `behaviorHints.proxyHeaders`);
-- when the link expires (HTTP 403 or 410), asks the addon for the **same release** again (same infohash and file) and resumes transparently;
+- when the link expires (HTTP 401, 403, 404 or 410), asks the addon for the **same release** again (same file name and size) and resumes transparently; a busy source (HTTP 429 or 5xx) is retried, honoring `Retry-After`;
 - accounts bandwidth per user.
 
 ### Analysis

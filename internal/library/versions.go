@@ -3,12 +3,14 @@ package library
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -33,11 +35,20 @@ type Version struct {
 	Size     int64
 	// Addon is the name of the addon that listed the stream.
 	Addon string
+	// Origin is where the stream was listed, to ask again for it when its
+	// link expires.
+	Origin Origin
 	// Confined is true when the stream may only be fetched from public
 	// addresses.
 	Confined bool
 	// Runtime is the item's runtime, used until the stream is analyzed.
 	Runtime time.Duration
+}
+
+// Origin is the addon that listed a stream and what it listed it for.
+type Origin struct {
+	Addon    accounts.ID
+	Type, ID string
 }
 
 // ExternalSubtitle is a subtitle file an addon offers for an item.
@@ -147,18 +158,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 			if !stream.Playable() {
 				continue
 			}
-			version := Version{
-				Item:     t.item,
-				Name:     versionName(stream),
-				URL:      stream.URL,
-				Headers:  stream.RequestHeaders(),
-				Filename: stream.BehaviorHints.Filename,
-				Size:     int64(stream.BehaviorHints.VideoSize),
-				Addon:    serving[i].addon.Manifest.Name,
-				Confined: serving[i].confined,
-				Runtime:  t.runtime,
-			}
-			version.ID = versionID(t.item, version)
+			version := newVersion(t, serving[i], stream)
 			if seen[version.ID] {
 				continue
 			}
@@ -195,6 +195,54 @@ func (s *Service) Version(ctx context.Context, user accounts.User, item, id acco
 func (s *Service) VersionOwner(id accounts.ID) (accounts.ID, bool) {
 	version, ok := s.versions.Get(id)
 	return version.Item, ok
+}
+
+// Renew asks the addon that listed a version for its streams again and
+// returns the same file with the link the addon gives now, for links that
+// expired. Every listing of the version uses the new link afterwards.
+func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
+	addon, err := s.addons.Find(ctx, old.Origin.Addon)
+	if errors.Is(err, addons.ErrNotFound) {
+		return Version{}, ErrNotFound
+	}
+	if err != nil {
+		return Version{}, err
+	}
+	entry := installed{addon: addon, confined: old.Confined}
+	streams, err := s.client.Streams(ctx, addon.ManifestURL, old.Origin.Type, old.Origin.ID, old.Confined)
+	if err != nil {
+		return Version{}, err
+	}
+	s.streamLists.Put(streamKey{addon.ID, old.Origin.Type, old.Origin.ID}, streams)
+	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
+	for _, stream := range streams {
+		if !stream.Playable() {
+			continue
+		}
+		if version := newVersion(t, entry, stream); version.ID == old.ID {
+			s.versions.Put(version.ID, version)
+			return version, nil
+		}
+	}
+	return Version{}, ErrNotFound
+}
+
+// newVersion describes a stream an addon listed for a target.
+func newVersion(t target, entry installed, stream stremio.Stream) Version {
+	version := Version{
+		Item:     t.item,
+		Name:     versionName(stream),
+		URL:      stream.URL,
+		Headers:  stream.RequestHeaders(),
+		Filename: stream.BehaviorHints.Filename,
+		Size:     int64(stream.BehaviorHints.VideoSize),
+		Addon:    entry.addon.Manifest.Name,
+		Origin:   Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Confined: entry.confined,
+		Runtime:  t.runtime,
+	}
+	version.ID = versionID(t.item, version)
+	return version
 }
 
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {

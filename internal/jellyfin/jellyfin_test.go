@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -58,13 +59,18 @@ func newTestServer(t *testing.T, failures int) testServer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sources, err := source.New(t.TempDir(), 1<<30, client, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sources.Close() })
+	lib := library.New(pool, addonStore, client, logger, func() string { return "en" })
 	// Tests seed analyses instead of running ffprobe, which CI lacks.
-	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), logger)
+	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), sources, lib.Renew, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = player.Close() })
-	lib := library.New(pool, addonStore, client, logger, func() string { return "en" })
 	server := httptest.NewServer(New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,

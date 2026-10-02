@@ -29,6 +29,7 @@ type fakeAddon struct {
 	manifest stremio.Manifest
 	catalogs map[string][]stremio.Meta // "type/id" → every item
 	metas    map[string]stremio.Meta   // "type/id" → complete meta
+	streams  map[string][]stremio.Stream
 	pageSize int
 	// short shortens the page at a skip by that many items, as addons that
 	// filter their catalogs do.
@@ -83,6 +84,12 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta})
+	case parts[0] == "stream" && len(parts) == 3:
+		id, _ := url.PathUnescape(parts[2])
+		a.mu.Lock()
+		streams := a.streams[parts[1]+"/"+id]
+		a.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 	default:
 		http.NotFound(w, r)
 	}
@@ -572,5 +579,51 @@ func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
 	}
 	if item, err := e.service.Item(t.Context(), e.member, seasons[0].ID); err != nil || item.Name != "Épisodes spéciaux" {
 		t.Errorf("specials by identifier: %q %v", item.Name, err)
+	}
+}
+
+func TestExpiredLinksAreRenewedWithTheSameFile(t *testing.T) {
+	e := newEnv(t)
+	movies := titles("movie", 1)
+	stream := func(link string) stremio.Stream {
+		return stremio.Stream{Name: "1080p", URL: link, BehaviorHints: stremio.StreamBehavior{Filename: "movie.mkv", VideoSize: 4_000_000_000}}
+	}
+	addon := &fakeAddon{
+		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}},
+		catalogs: map[string][]stremio.Meta{"movie/top": movies},
+		metas:    map[string]stremio.Meta{"movie/" + movies[0].ID: movies[0]},
+		streams:  map[string][]stremio.Stream{"movie/" + movies[0].ID: {stream("https://cdn.example/old")}},
+	}
+	e.install(addons.Shared(), addon)
+	libraries, _ := e.service.Libraries(t.Context(), e.member)
+	page, err := e.service.Children(t.Context(), e.member, libraries[0].ID, 0, 10, "")
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("listing: %+v %v", page, err)
+	}
+	versions, err := e.service.Versions(t.Context(), e.member, page.Items[0].ID)
+	if err != nil || len(versions) != 1 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	old := versions[0]
+	// The addon now gives another link to the same file, among others.
+	addon.mu.Lock()
+	addon.streams["movie/"+movies[0].ID] = []stremio.Stream{{Name: "720p", URL: "https://cdn.example/other",
+		BehaviorHints: stremio.StreamBehavior{Filename: "other.mkv", VideoSize: 1_000}}, stream("https://cdn.example/new")}
+	addon.mu.Unlock()
+	renewed, err := e.service.Renew(t.Context(), old)
+	if err != nil || renewed.ID != old.ID || renewed.URL != "https://cdn.example/new" {
+		t.Fatalf("renewed: %+v %v", renewed, err)
+	}
+	if current, _ := e.service.Version(t.Context(), e.member, old.Item, old.ID); current.URL != renewed.URL {
+		t.Errorf("the version still has the old link: %s", current.URL)
+	}
+	// A file the addon no longer lists cannot be renewed.
+	addon.mu.Lock()
+	addon.streams["movie/"+movies[0].ID] = nil
+	addon.mu.Unlock()
+	if _, err := e.service.Renew(t.Context(), old); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a file gone: %v", err)
 	}
 }

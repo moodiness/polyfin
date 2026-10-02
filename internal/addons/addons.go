@@ -120,6 +120,11 @@ func (s *Store) addon(ctx context.Context, db queryer, scope Scope, id accounts.
 	return scanAddon(db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner))
 }
 
+// Find returns an installed addon by identifier, whoever installed it.
+func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
+	return scanAddon(s.db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1", id))
+}
+
 // fetch normalizes a manifest URL and downloads the manifest. confined
 // keeps the request on public addresses (see stremio.Client).
 func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (string, stremio.Manifest, error) {
