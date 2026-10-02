@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
@@ -74,7 +75,12 @@ func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewe
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sources.Close() })
-	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), sources, renew, logger)
+	segments, err := hls.NewManager("ffmpeg", t.TempDir(), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(segments.Close)
+	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), sources, segments, renew, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +221,7 @@ func TestAnalysesAreKept(t *testing.T) {
 		t.Fatalf("second analysis ran ffprobe again: %d runs, %v", runs(), err)
 	}
 	// Another process finds it in the database.
-	other, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, nil, s.logger)
+	other, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ FFmpeg and ffprobe never open the remote URL. They read an internal Polyfin URL,
 On the first playback of a source, cached in PostgreSQL per media source:
 
 - **ffprobe** gives the exact container, codecs, profiles, bit depth, HDR and Dolby Vision type, audio channels, duration and subtitle tracks. Parsing release names is not reliable enough to decide how to play a file.
-- **Keyframe index**, read from the container's own index with a few range requests instead of the whole file: Matroska `Cues` and MP4 sync samples (`stss`).
+- **Keyframe index**, read on the first remux from the container's own index with a few range requests instead of the whole file: Matroska `Cues` (FFmpeg's muxer lists every video keyframe there) and the MP4 sample tables (`stts`, `ctts`, `stss` and the edit list). A file without one (Matroska written without `Cues`, fragmented MP4, MPEG-TS) is not remuxed.
 
 ### Decision
 
@@ -40,7 +40,7 @@ Each media source is matched against the client's `DeviceProfile` (direct play, 
 | Level | What happens | Server cost |
 | --- | --- | --- |
 | Direct play | The stream URL answers with a 302 to the source, once the source has answered a one-byte range request; Polyfin relays the bytes instead when the app could not reach the source (request headers, a local network address) or follow the redirect (Findroid, from HTTP to HTTPS) | None, or bandwidth when relaying |
-| Remux | Video and audio copied into HLS; HDR and Dolby Vision untouched | Low, no GPU |
+| Remux | Video and audio copied into HLS; HDR and Dolby Vision untouched. Offered when the app's HLS transcoding profile takes the video codec and the codec and channels of the audio track that plays, and its codec profiles accept the remux, with the codec tag it writes (`hvc1` for HEVC in MP4, which Apple players require). A remux cannot lower the bitrate. | Low, no GPU |
 | Audio transcode | Video copied, audio converted (for example TrueHD or DTS to AAC or E-AC-3) | Low |
 | Full transcode | Video and audio re-encoded | High |
 
@@ -48,10 +48,10 @@ Every decision that is not direct play reports Jellyfin's `TranscodeReasons`.
 
 ### HLS on demand
 
-- **Segments follow the source's keyframes.** Remuxed renditions are cut exactly there; transcoded renditions force their keyframes at the same timestamps. All renditions share one timeline, so a player can switch quality mid-playback, including between remux and transcode, without a gap.
+- **Segments follow the source's keyframes.** Remuxed renditions are cut exactly there: each segment ends on the first keyframe 6 seconds or more after its start. Transcoded renditions will force their keyframes at the same timestamps. All renditions share one timeline, so a player can switch quality mid-playback, including between remux and transcode, without a gap. Segments keep the source's timestamps, shifted by 10 seconds so that frames decoded before zero keep positive ones, so the segments of FFmpeg runs started at different places follow each other.
 - **Several variants** in the master playlist: the negotiated one first, lower qualities after. HLS master playlists with several variants are standard (RFC 8216) and Jellyfin servers already return them.
 - **Audio tracks as separate renditions**, so changing language does not restart video encoding. Client support must be verified client by client.
-- **Encoders start at the requested segment**, run a bounded window ahead of the player, pause when far ahead, and stop on `Sessions/Playing/Stopped` or when idle. Two viewers of the same source and quality share one encoder.
+- **Encoders start at the requested segment**, run a bounded window ahead of the player (10 segments), pause when far ahead, and stop on `Sessions/Playing/Stopped`, on `DELETE /Videos/ActiveEncodings` or after 3 idle minutes. A request more than 3 segments past the one being made, or before it, starts FFmpeg again from there; the source cache makes that cheap. Two viewers of the same source and quality will share one encoder.
 - Segments are fragmented MP4 or MPEG-TS, as the client's transcoding profile asks.
 
 ### Hardware acceleration

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -59,6 +60,9 @@ func streamingAddon(t *testing.T) string {
 			_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": []stremio.Subtitle{}})
 		case path == "/files/movie.fr.srt":
 			_, _ = io.WriteString(w, "1\r\n00:00:01,000 --> 00:00:04,000\r\nBonjour\r\n")
+		case path == "/files/remux.mkv":
+			// A real Matroska file, whose index remuxing reads.
+			http.ServeFile(w, r, filepath.Join("..", "keyframes", "testdata", "forced.mkv"))
 		case strings.HasPrefix(path, "/files/"):
 			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
@@ -227,6 +231,92 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 	}
 }
 
+func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
+	p := playing(t)
+	// The analysis of the file the addon serves for the first version:
+	// Opus, then H.264, for 15 s.
+	info, err := os.Stat(filepath.Join("..", "keyframes", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis, _ := json.Marshal(media.Analysis{Format: "matroska,webm", Duration: 15008 * time.Millisecond, Size: info.Size(), Bitrate: 25_000, Remote: true,
+		Streams: []media.Stream{
+			{Index: 0, Type: "audio", Codec: "opus", Default: true, Channels: 1, SampleRate: 8000, ChannelLayout: "mono"},
+			{Index: 1, Type: "video", Codec: "h264", Profile: "High", Level: 10, Width: 64, Height: 64, FrameRate: 24, AverageRate: 24, PixelFormat: "yuv420p", BitDepth: 8},
+		}})
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", p.versions[0].ID, analysis); err != nil {
+		t.Fatal(err)
+	}
+	// jellyfin-web asks again without direct play when the file failed to
+	// play as it is.
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000, "EnableDirectPlay": false,
+		"DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	source := response.MediaSources[0]
+	if source.SupportsDirectPlay || !source.SupportsTranscoding || source.TranscodingSubProtocol != "hls" || source.TranscodingContainer != "mp4" {
+		t.Fatalf("source: %+v", source)
+	}
+	target := source.TranscodingUrl
+	// The subtitle file comes first: the audio is stream 1.
+	for _, part := range []string{"/videos/" + hyphenated(mustID(t, p.movie)) + "/master.m3u8?DeviceId=", "&MediaSourceId=" + p.movie + "&VideoCodec=av1,hevc,h264,vp9&AudioCodec=aac,mp2,opus,flac&AudioStreamIndex=1&",
+		"&SegmentContainer=mp4&MinSegments=2&PlaySessionId=" + url.QueryEscape(response.PlaySessionId) + "&ApiKey=" + p.token + "&", "&SubtitleMethod=Encode&TranscodeReasons=DirectPlayError"} {
+		if !strings.Contains(target, part) {
+			t.Errorf("TranscodingUrl lacks %q: %s", part, target)
+		}
+	}
+	// Players fetch the playlists and segments with no credentials but the
+	// URL's.
+	get := func(target string) (int, http.Header, string) {
+		t.Helper()
+		response, err := http.Get(p.url + target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		return response.StatusCode, response.Header, string(body)
+	}
+	status, header, master := get(target)
+	if status != http.StatusOK || header.Get("Content-Type") != "application/vnd.apple.mpegurl" ||
+		!strings.Contains(master, `CODECS="avc1.64000A,Opus",RESOLUTION=64x64,FRAME-RATE=24`) || !strings.Contains(master, "\nmain.m3u8?DeviceId=") {
+		t.Fatalf("master playlist: %d %s", status, master)
+	}
+	base := strings.Split(target, "master.m3u8")[0]
+	_, _, media := get(base + strings.TrimSpace(strings.Split(master, "\n")[2]))
+	for _, part := range []string{"#EXT-X-TARGETDURATION:7\n", "#EXT-X-MAP:URI=\"hls1/main/-1.mp4?DeviceId=",
+		"#EXTINF:6.000000, nodesc\nhls1/main/0.mp4?", "#EXTINF:6.500000, nodesc\nhls1/main/1.mp4?", "#EXTINF:2.508000, nodesc\nhls1/main/2.mp4?", "#EXT-X-ENDLIST"} {
+		if !strings.Contains(media, part) {
+			t.Errorf("media playlist lacks %q:\n%s", part, media)
+		}
+	}
+	query := strings.SplitN(target, "?", 2)[1]
+	if status, _, _ := get(base + "hls1/main/0.mp4?" + strings.ReplaceAll(query, "PlaySessionId=", "PlaySessionId=forged")); status != http.StatusUnauthorized {
+		t.Errorf("a forged play session got %d", status)
+	}
+	if os.Getenv("POLYFIN_TEST_FFMPEG") != "" {
+		status, header, segment := get(base + "hls1/main/1.mp4?" + query)
+		if status != http.StatusOK || header.Get("Content-Type") != "video/mp4" || !strings.Contains(segment[:64], "moof") {
+			t.Errorf("segment: %d %s", status, header.Get("Content-Type"))
+		}
+	}
+	if status, _ := p.call(http.MethodDelete, "/Videos/ActiveEncodings?deviceId=tv&playSessionId="+url.QueryEscape(response.PlaySessionId), app("tv", p.token), nil); status != http.StatusNoContent {
+		t.Errorf("stopping the remux: %d", status)
+	}
+}
+
+func mustID(t *testing.T, s string) accounts.ID {
+	t.Helper()
+	id, err := accounts.ParseID(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func TestStreamsNeedAGrant(t *testing.T) {
 	p := playing(t)
 	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token),
@@ -376,7 +466,8 @@ var playbackShapes = shapeRules{
 		// Jellyfin counts no reference frames in remote sources, which
 		// Polyfin's all are; the local clips had some.
 		"RefFrames": {"item-media-sources", "playback-info"},
-		// Polyfin does not transcode yet.
+		// The AC3 audio of this file needs converting for jellyfin-web,
+		// which Polyfin does not do yet: it offers no remux.
 		"TranscodingUrl": {"playback-info"}, "TranscodingContainer": {"playback-info"},
 		// Metadata addons do not provide these.
 		"OriginalLanguage": {"*"}, "ProductionLocations": {"*"},

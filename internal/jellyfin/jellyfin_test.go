@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
@@ -65,8 +66,18 @@ func newTestServer(t *testing.T, failures int) testServer {
 	}
 	t.Cleanup(func() { _ = sources.Close() })
 	lib := library.New(pool, addonStore, client, logger, func() string { return "en" })
+	// Remuxes run FFmpeg when tests are given one.
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		ffmpeg = "ffmpeg-not-installed"
+	}
+	segments, err := hls.NewManager(ffmpeg, t.TempDir(), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(segments.Close)
 	// Tests seed analyses instead of running ffprobe, which CI lacks.
-	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), sources, lib.Renew, logger)
+	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), sources, segments, lib.Renew, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

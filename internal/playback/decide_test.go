@@ -227,3 +227,64 @@ func TestDecideConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestRemuxOnlyWhatTheAppCanPlayCopied(t *testing.T) {
+	// A Matroska remux: HEVC with Dolby Vision over HDR10, a French
+	// E-AC-3 track flagged default, then English AAC in stereo.
+	source := MediaSource{
+		Container: "mkv",
+		Bitrate:   60_000_000,
+		Streams: []MediaStream{
+			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main 10", Level: new(153.0), VideoRangeType: "DOVIWithHDR10",
+				Width: new(3840), Height: new(2160), AverageFrameRate: new(23.976)},
+			{Type: "Audio", Index: 1, Codec: "eac3", IsDefault: true, Channels: new(6)},
+			{Type: "Audio", Index: 2, Codec: "aac", Channels: new(2)},
+		},
+	}
+	tests := []struct {
+		name    string
+		profile string
+		options Options
+		remux   bool
+		reasons []string
+	}{
+		// Its native player takes HEVC in MP4 tagged hvc1 only, which a
+		// remux writes, and E-AC-3.
+		{"Swiftfin's native player", "swiftfin-native", Options{}, true, []string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
+		// Chrome refuses Dolby Vision, which a remux keeps.
+		{"Dolby Vision in Chrome", "jellyfin-web-chrome", Options{AudioStreamIndex: new(2)}, false,
+			[]string{"SecondaryAudioNotSupported", "VideoRangeTypeNotSupported"}},
+		// A remux cannot lower the bitrate.
+		{"over the bitrate limit", "swiftfin-native", Options{MaxStreamingBitrate: 20_000_000}, false,
+			[]string{"ContainerBitrateExceedsLimit"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			options := test.options
+			options.EnableDirectPlay, options.EnableDirectStream = true, true
+			got := Decide(readDeviceProfile(t, test.profile), source, options)
+			if got.DirectPlay || got.Remux != test.remux || !slices.Equal(got.Reasons, test.reasons) {
+				t.Errorf("DirectPlay %v, Remux %v, Reasons %v; want remux %v, reasons %v", got.DirectPlay, got.Remux, got.Reasons, test.remux, test.reasons)
+			}
+		})
+	}
+	// Chrome takes AAC in HLS, in stereo only unless the app allows more:
+	// the English track is copied, the French E-AC-3 one is not.
+	sdr := source
+	sdr.Streams = slices.Clone(source.Streams)
+	sdr.Streams[0].VideoRangeType = "SDR"
+	sdr.Streams[2].Channels = new(6)
+	chrome := readDeviceProfile(t, "jellyfin-web-chrome")
+	for _, channels := range []string{"2", "6"} {
+		for i := range chrome.TranscodingProfiles {
+			chrome.TranscodingProfiles[i].MaxAudioChannels = channels
+		}
+		english := Decide(chrome, sdr, Options{AudioStreamIndex: new(2), EnableDirectPlay: true, EnableDirectStream: true})
+		if english.Remux != (channels == "6") {
+			t.Errorf("English 5.1 AAC with %s channels allowed: remux %v", channels, english.Remux)
+		}
+	}
+	if french := Decide(chrome, sdr, Options{EnableDirectPlay: true, EnableDirectStream: true}); french.Remux {
+		t.Error("E-AC-3 remuxed for Chrome")
+	}
+}

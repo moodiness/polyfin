@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/admin"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -56,7 +57,8 @@ Environment:
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_LOG_LEVEL     debug, info, warn or error (default info)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
-  POLYFIN_CACHE_DIR     where sources being played are cached (default: a polyfin directory in the system's temporary directory)
+  POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
+  POLYFIN_CACHE_DIR     where sources being played and their remuxes are kept (default: a polyfin directory in the system's temporary directory)
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
 `
 
@@ -136,13 +138,21 @@ func serve(ctx context.Context) error {
 	if _, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe was not found: nothing can be played until it is installed", "ffprobe", cfg.FFprobe)
 	}
+	if _, err := exec.LookPath(cfg.FFmpeg); err != nil {
+		logger.Warn("FFmpeg was not found: apps that cannot play a file as it is cannot play it", "ffmpeg", cfg.FFmpeg)
+	}
 	sources, err := source.New(filepath.Join(cfg.CacheDir, "sources"), cfg.CacheSize, addonClient, logger)
 	if err != nil {
 		return fmt.Errorf("prepare the source cache: %w", err)
 	}
 	defer sources.Close()
+	segments, err := hls.NewManager(cfg.FFmpeg, filepath.Join(cfg.CacheDir, "segments"), logger)
+	if err != nil {
+		return fmt.Errorf("prepare the segment directory: %w", err)
+	}
+	defer segments.Close()
 	lib := library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language })
-	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, lib.Renew, logger)
+	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger)
 	if err != nil {
 		return err
 	}

@@ -31,9 +31,10 @@ func (h *Handler) playbackRoutes(rt *router) {
 	// Players fetch media and subtitles without credentials, as Jellyfin
 	// allows: see streamAccess.
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{file}", http.HandlerFunc(h.stream))
+	rt.handle(http.MethodGet, "/Videos/{itemId}/hls1/{playlistId}/{file}", http.HandlerFunc(h.hlsSegment))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{file}", http.HandlerFunc(h.subtitle))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startTicks}/{file}", http.HandlerFunc(h.subtitle))
-	signedIn(http.MethodDelete, "/Videos/ActiveEncodings", h.noContent)
+	signedIn(http.MethodDelete, "/Videos/ActiveEncodings", h.stopEncodings)
 
 	signedIn(http.MethodPost, "/Sessions/Playing", h.reportPlayback("playbackStartInfo", playbackStarted))
 	signedIn(http.MethodPost, "/Sessions/Playing/Progress", h.reportPlayback("playbackProgressInfo", playbackProgressed))
@@ -59,6 +60,9 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 		h.sessions.Progress(c.Device.ID, c.User.ID, state)
 	case playbackStopped:
 		h.sessions.Stop(c.Device.ID)
+		if state.PlaySessionID != "" {
+			h.Playback.StopRemux(state.PlaySessionID)
+		}
 	}
 	h.track(r.Context(), c.User, event, state, positionKnown, before)
 }
@@ -264,11 +268,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
 			continue
 		}
-		source := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request)
-		writeJSON(w, http.StatusOK, playbackInfoResponse{
-			MediaSources:  []MediaSourceInfo{source},
-			PlaySessionId: h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)}),
-		})
+		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
+		source := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session)
+		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{source}, PlaySessionId: session})
 		return
 	}
 	writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
@@ -335,8 +337,9 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 }
 
 // decidedSource describes the version an app is about to play, with the
-// decision for its device profile.
-func (h *Handler) decidedSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, request playbackInfoRequest) MediaSourceInfo {
+// decision for its device profile; session is the play session a remux
+// belongs to.
+func (h *Handler) decidedSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, request playbackInfoRequest, session string) MediaSourceInfo {
 	source := h.baseSource(r, p, version, id, analysis, true)
 	streams := source.MediaStreams
 	options := playback.Options{
@@ -359,13 +362,13 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 	if request.DeviceProfile != nil {
 		described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 		decision = playback.Decide(request.DeviceProfile, described, options)
-		// Without a transcoder, a subtitle the app can only take burned into
-		// the video is left out rather than preventing playback.
+		// Polyfin burns nothing into the video yet: a subtitle the app can
+		// only take that way is left out rather than preventing playback.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
 			if method := decision.Subtitles[*selected].Method; method == "Encode" || method == "Hls" {
 				without := options
 				without.SubtitleStreamIndex = new(-1)
-				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay {
+				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.Remux && !decision.Remux) {
 					decision = retry
 				}
 			}
@@ -385,6 +388,22 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 
 	source.Container = decision.Container
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
+	if decision.Remux {
+		// Remuxing needs the keyframe index: a version without one is not
+		// offered for it.
+		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
+			h.Logger.Info("A version cannot be remuxed", "addon", version.Addon, "error", err)
+		} else {
+			limit := request.MaxStreamingBitrate.value
+			if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
+				limit = *request.DeviceProfile.MaxStreamingBitrate
+			}
+			source.SupportsTranscoding = true
+			source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
+			source.TranscodingSubProtocol = "hls"
+			source.TranscodingContainer = decision.Transcoding.Container
+		}
+	}
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
 	}
@@ -407,9 +426,9 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 }
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
-// Polyfin delivers without a transcoder: subtitles in the container reach
-// the app embedded, subtitle files as external files, and any other is
-// left out.
+// Polyfin delivers yet: subtitles in the container reach the app embedded
+// in what it plays as it is, subtitle files as external files, and any
+// other is left out.
 func deliverable(decision playback.Decision, streams []playback.MediaStream) {
 	for _, stream := range streams {
 		delivery, ok := decision.Subtitles[stream.Index]
@@ -456,6 +475,10 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 // optional container extension.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
+	if strings.EqualFold(extension, "m3u8") && (strings.EqualFold(name, "master") || strings.EqualFold(name, "main")) {
+		h.hlsPlaylist(w, r, name)
+		return
+	}
 	if !strings.EqualFold(name, "stream") {
 		processingError(w, http.StatusNotFound)
 		return

@@ -24,8 +24,10 @@ type Config struct {
 	// Listen is the TCP address of the HTTP server, as host:port.
 	Listen   string
 	LogLevel slog.Level
-	// FFprobe is the ffprobe executable, a path or a name looked up in PATH.
+	// FFprobe and FFmpeg are the executables, paths or names looked up in
+	// PATH.
 	FFprobe string
+	FFmpeg  string
 	// CacheDir keeps the blocks of the sources being played, and CacheSize
 	// bounds the space they take, in bytes.
 	CacheDir  string
@@ -46,11 +48,15 @@ func Load(getenv func(string) string) (Config, error) {
 		Listen:      strings.TrimSpace(getenv("POLYFIN_LISTEN")),
 		LogLevel:    slog.LevelInfo,
 		FFprobe:     strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
+		FFmpeg:      strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
 		CacheDir:    strings.TrimSpace(getenv("POLYFIN_CACHE_DIR")),
 		CacheSize:   defaultCacheSize,
 	}
 	if cfg.FFprobe == "" {
 		cfg.FFprobe = "ffprobe"
+	}
+	if cfg.FFmpeg == "" {
+		cfg.FFmpeg = "ffmpeg"
 	}
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = filepath.Join(os.TempDir(), "polyfin")

@@ -52,9 +52,11 @@ type MediaSourceInfo struct {
 	// RequiredHttpHeaders is always empty: players ignore it, and sources
 	// that need headers are relayed.
 	RequiredHttpHeaders        map[string]string
+	TranscodingUrl             string `json:",omitempty"`
 	TranscodingSubProtocol     string
-	DefaultAudioStreamIndex    *int `json:",omitempty"`
-	DefaultSubtitleStreamIndex *int `json:",omitempty"`
+	TranscodingContainer       string `json:",omitempty"`
+	DefaultAudioStreamIndex    *int   `json:",omitempty"`
+	DefaultSubtitleStreamIndex *int   `json:",omitempty"`
 }
 
 // playable is a movie or an episode with its versions and the subtitle
