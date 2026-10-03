@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -39,36 +38,6 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Users/{userId}/Items/Resume", h.resume)
 	signedIn(http.MethodGet, "/Shows/NextUp", h.nextUp)
 	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
-	signedIn(http.MethodGet, "/Persons", h.persons)
-}
-
-// persons lists the people the user marked as favorites, when asked for
-// them; Polyfin keeps no index of everyone credited.
-func (h *Handler) persons(w http.ResponseWriter, r *http.Request) {
-	b := bindErrors{}
-	start, limit := b.paging(r, -1)
-	favorite, _ := b.bool(r, "isFavorite")
-	user, ok := h.viewer(w, r, b, notFoundProblem)
-	if !ok {
-		return
-	}
-	if !favorite {
-		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
-		return
-	}
-	entries, err := h.UserData.Favorites(r.Context(), user.ID)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
-	items, err := h.Library.Items(r.Context(), user, entryIDs(entries))
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
-	items = slices.DeleteFunc(items, func(item library.Item) bool { return item.Kind != library.KindPerson })
-	slices.SortStableFunc(items, func(a, b library.Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
-	h.writeItems(w, r, user, window(items, start, limit), start, len(items))
 }
 
 // userState is what a user did with the items of one response.

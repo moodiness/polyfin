@@ -681,12 +681,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			item.Contents = contents(meta, nil, s.now())
 		}
 		// Apps show the credited people and open them by identifier.
-		credits := make([]record, 0, len(item.People))
-		for _, person := range item.People {
-			credits = append(credits, record{ID: person.ID, Key: personKey(person.Name), Kind: KindPerson,
-				Person: &Person{Name: person.Name, Image: person.Image}, Confined: r.Confined})
-		}
-		return item, s.save(ctx, credits)
+		return item, s.saveCredits(ctx, id, item.People, r.Confined)
 	case KindSeason, KindEpisode:
 		series, meta, err := s.series(ctx, v, r.seriesItemID())
 		if err != nil {
@@ -930,20 +925,7 @@ func (s *Service) Search(ctx context.Context, user accounts.User, term string, k
 	var sources []source
 	for _, entry := range v.addons {
 		for _, catalog := range entry.addon.Manifest.Catalogs {
-			kind, ok := titleKind(catalog.Type)
-			if !ok || !slices.Contains(kinds, kind) {
-				continue
-			}
-			searchable := false
-			for _, extra := range catalog.Extra {
-				if extra.Name == "search" {
-					searchable = true
-				} else if extra.IsRequired && len(extra.Options) == 0 {
-					searchable = false
-					break
-				}
-			}
-			if searchable {
+			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchable(catalog) {
 				sources = append(sources, source{addon: entry, catalog: catalog, search: term})
 			}
 		}

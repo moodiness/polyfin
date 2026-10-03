@@ -285,6 +285,16 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
 		return
 	}
+	if people := listQuery(r, "personIds"); len(people) > 0 {
+		var ids []accounts.ID
+		for _, raw := range people {
+			if id, ok := parseGUID(raw); ok {
+				ids = append(ids, id)
+			}
+		}
+		h.personListing(w, r, user, ids, start, limit)
+		return
+	}
 	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
@@ -434,6 +444,10 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		h.browseError(w, r, err)
+		return
+	}
+	if item.Kind == library.KindPerson {
+		h.writePerson(w, r, user, item)
 		return
 	}
 	state, err := h.userState(r.Context(), user, []library.Item{item})

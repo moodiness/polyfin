@@ -502,8 +502,8 @@ func TestFavoritePeopleAreListed(t *testing.T) {
 	if got := tr.list(t, "/Persons?isFavorite=true&userId="+tr.user); !slices.Equal(got, []string{actor.Id}) {
 		t.Errorf("favorite people: %v", got)
 	}
-	if got := tr.list(t, "/Persons"); len(got) != 0 {
-		t.Errorf("people: %v", got)
+	if got := tr.list(t, "/Persons?isFavorite=false"); len(got) != 0 {
+		t.Errorf("people not marked favorite: %v", got)
 	}
 }
 

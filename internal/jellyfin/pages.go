@@ -52,6 +52,7 @@ type namedItemDto struct {
 	SpecialFeatureCount      int
 	DisplayPreferencesId     string
 	Tags                     []string
+	PrimaryImageAspectRatio  *float64 `json:",omitempty"`
 	ImageTags                map[string]string
 	BackdropImageTags        []string
 	ImageBlurHashes          map[string]map[string]string
