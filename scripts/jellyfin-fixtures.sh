@@ -20,6 +20,11 @@
 # playback/profiles/ are inputs: jellyfin-web-chrome was captured from the
 # real web client, the other clients' were reconstructed from their sources.
 #
+# Subtitles come after, on a library of their own: a clip with embedded
+# SubRip and ASS tracks, fonts and a cover, whose unscrubbed answers (media
+# source, PlaybackInfo, attachments, tracks in each format, encoding
+# options) go to ass/.
+#
 # Requirements: Docker, curl, jq, ffmpeg, ffprobe. Usage: scripts/jellyfin-fixtures.sh
 set -euo pipefail
 
@@ -501,6 +506,126 @@ request PlaylistUsers GET "/Playlists/$playlist/Users" "$signed"
 kept playlist-users
 request PlaylistUser GET "/Playlists/$playlist/Users/$user" "$signed"
 kept playlist-user
+
+# Subtitles and attachments, last and on a library of their own so that no
+# fixture above sees the clip: an MKV with a French SubRip track, an English
+# ASS track using what renderers must keep (two styles, italics, a \N break,
+# a positioned sign, a \h hard space), three dummy fonts with the MIME types
+# muxers write (Odd.ttf's is one jellyfin-web does not list) and a JPEG
+# cover, which FFmpeg's demuxer turns into an attached picture. ass/ holds
+# unscrubbed answers, with tokens redacted: the media source, the
+# PlaybackInfo decisions, the attachment route, the tracks in each subtitle
+# format, and the encoding options jellyfin-web reads its fallback font from.
+ass_media="$media/subtitles/ass-srt-fonts-mkv"
+sources="$media/sources"
+mkdir -p "$ass_media" "$sources"
+printf '1\n00:00:01,000 --> 00:00:04,000\nPremi\303\250re r\303\251plique.\n\n2\n00:00:05,000 --> 00:00:08,000\n<i>Seconde</i> r\303\251plique.\n' >"$sources/fr.srt"
+cat >"$sources/en.ass" <<'EOF'
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 640
+PlayResY: 360
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Test,24,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,20,20,20,1
+Style: Sign,Odd,18,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,1,0,8,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,First line\Nsecond line
+Dialogue: 0,0:00:02.00,0:00:05.00,Sign,,0,0,0,,{\pos(320,40)}A SIGN
+Dialogue: 0,0:00:05.00,0:00:08.00,Default,Bob,0,0,0,,{\i1}Italic{\i0} words\hwith a hard space
+EOF
+# Fonts with dummy bytes: Jellyfin only stores and serves them.
+printf 'dummy TrueType font\n' >"$sources/Test.ttf"
+printf 'dummy OpenType font\n' >"$sources/Test.otf"
+printf 'dummy odd font\n' >"$sources/Odd.ttf"
+encode -f lavfi -i 'testsrc2=size=64x64:rate=1:duration=1' -frames:v 1 "$sources/cover.jpg"
+encode -f lavfi -i "$pattern" -f lavfi -i "$(tone 440)" -i "$sources/fr.srt" -i "$sources/en.ass" \
+	-map 0:v -map 1:a -map 2:s -map 3:s -c:v libx264 -b:v 1M -pix_fmt yuv420p -c:a aac -b:a 128k \
+	-c:s:0 srt -c:s:1 ass -metadata:s:a:0 language=eng \
+	-metadata:s:s:0 language=fre -metadata:s:s:1 language=eng -metadata:s:s:1 title='Signs & Songs' \
+	-attach "$sources/Test.ttf" -metadata:s:t:0 mimetype=application/x-truetype-font \
+	-attach "$sources/Test.otf" -metadata:s:t:1 mimetype=application/vnd.ms-opentype \
+	-attach "$sources/Odd.ttf" -metadata:s:t:2 mimetype=application/x-font-ttf \
+	-attach "$sources/cover.jpg" -metadata:s:t:3 mimetype=image/jpeg \
+	"$ass_media/ass-srt-fonts-mkv.mkv"
+post "$base/Library/VirtualFolders?name=Subtitles&collectionType=movies&paths=%2Fmedia%2Fsubtitles&refreshLibrary=true" \
+	--header "Authorization: $signed" --data '{"LibraryOptions":{}}'
+subtitles_scanned() {
+	indexed Movie 10 && return 0
+	idle && post "$base/Library/Refresh" --header "Authorization: $signed" && sleep 10
+	return 1
+}
+await 'the subtitles clip' subtitles_scanned
+await 'the library scan' idle
+ass_out="$out/ass"
+mkdir -p "$ass_out"
+ass=$(get "/Items?userId=$user&recursive=true&includeItemTypes=Movie&fields=Path" |
+	jq --exit-status --raw-output '.Items[] | select(.Path | endswith("/ass-srt-fonts-mkv.mkv")) | .Id')
+redact='walk(if type == "string" then gsub("(?<k>api_key|ApiKey)=[^&]*"; "\(.k)=<redacted>"; "i") else . end)'
+ass_source=$(get "/Users/$user/Items/$ass" | jq '.MediaSources[0]')
+jq --sort-keys "$redact" <<<"$ass_source" >"$ass_out/media-source.json"
+ass_playback_info() {
+	post "$base/Items/$ass/PlaybackInfo" --header "Authorization: $signed" \
+		--data "$(jq --null-input --arg user "$user" --arg id "$ass" --argjson options "$1" \
+			--slurpfile profile "$playback_out/profiles/jellyfin-web-chrome.json" \
+			'$options + {UserId: $user, MediaSourceId: $id, DeviceProfile: $profile[0]}')" |
+		jq --argjson options "$1" '{options: $options, MediaSource: .MediaSources[0]}'
+}
+ass_index=$(jq --exit-status '.MediaStreams[] | select(.Type == "Subtitle" and .Codec == "ass") | .Index' <<<"$ass_source")
+srt_index=$(jq --exit-status '.MediaStreams[] | select(.Type == "Subtitle" and .Codec != "ass") | .Index' <<<"$ass_source")
+{
+	ass_playback_info '{}'
+	ass_playback_info "{\"SubtitleStreamIndex\":$ass_index}"
+	ass_playback_info "{\"SubtitleStreamIndex\":$srt_index}"
+} | jq --slurp --sort-keys "$redact" >"$ass_out/playback-info.json"
+
+# Answers recorded by key: status, Content-Type and length, plus whether the
+# bytes equal the attached file when one is expected, else the body.
+ass_answers='{}'
+answer() {
+	local key=$1 path=$2 file=$3 headers code same=null
+	headers=$(mktemp)
+	code=$(curl --silent --show-error --output "$headers.body" --dump-header "$headers" --write-out '%{http_code}' \
+		"${@:4}" "$base$path")
+	if [[ -n $file ]]; then
+		same=false
+		cmp --silent "$file" "$headers.body" && same=true
+	fi
+	ass_answers=$(jq --compact-output --arg key "$key" --argjson code "$code" --argjson same "$same" \
+		--arg type "$(tr -d '\r' <"$headers" | sed -n 's/^[Cc]ontent-[Tt]ype: //p' | tail -n 1)" \
+		--argjson length "$(wc -c <"$headers.body")" --rawfile body "$headers.body" \
+		'.[$key] = {status: $code, contentType: $type, length: $length}
+			+ (if $same != null then {equalsAttachedFile: $same} else {} end)
+			+ (if $code >= 400 or $same == null then {body: ($body | fromjson? // $body)} else {} end)' <<<"$ass_answers")
+	rm -f "$headers" "$headers.body"
+}
+attachment() { printf '/Videos/%s/%s/Attachments/%s' "$1" "$2" "$3"; }
+while IFS=$'\t' read -r index name; do
+	answer "Attachment $name anonymous" "$(attachment "$ass" "$ass" "$index")" "$sources/$name"
+	answer "Attachment $name signed" "$(attachment "$ass" "$ass" "$index")" "$sources/$name" \
+		--header "Authorization: $signed"
+done < <(jq --raw-output '.MediaAttachments[] | [.Index, .FileName] | @tsv' <<<"$ass_source")
+missing=0123456789abcdef0123456789abcdef
+first=$(jq --exit-status '.MediaAttachments[0].Index' <<<"$ass_source")
+answer 'Attachment wrong index' "$(attachment "$ass" "$ass" 99)" '' --header "Authorization: $signed"
+answer 'Attachment wrong media source' "$(attachment "$ass" "$missing" "$first")" '' --header "Authorization: $signed"
+answer 'Attachment wrong item' "$(attachment "$missing" "$ass" "$first")" '' --header "Authorization: $signed"
+answer 'Encoding configuration as viewer' /System/Configuration/encoding '' --header "Authorization: $viewer_signed"
+answer 'Encoding configuration as administrator' /System/Configuration/encoding '' --header "Authorization: $signed"
+answer 'Unknown configuration key' /System/Configuration/unknown '' --header "Authorization: $signed"
+answer 'Fallback fonts as viewer' /FallbackFont/Fonts '' --header "Authorization: $viewer_signed"
+answer 'Fallback fonts as administrator' /FallbackFont/Fonts '' --header "Authorization: $signed"
+jq --sort-keys . <<<"$ass_answers" >"$ass_out/answers.json"
+
+# The tracks as Jellyfin serves them, from the start.
+for format in ass js vtt srt; do
+	get "/Videos/$ass/$ass/Subtitles/$ass_index/0/Stream.$format" >"$ass_out/ass-track.$format"
+done
+get "/Videos/$ass/$ass/Subtitles/$srt_index/0/Stream.ass" >"$ass_out/srt-track.ass"
 
 jq --sort-keys . <<<"$statuses" >"$out/next-statuses.json"
 save next-error-bodies <<<"$error_bodies"
