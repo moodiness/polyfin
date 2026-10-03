@@ -66,13 +66,14 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-i", video, "-i", sup, "-map", "0", "-map", "1", "-c", "copy", input).CombinedOutput(); err != nil {
 		t.Fatalf("add the subtitles: %v: %s", err, out)
 	}
-	// In software, then on each GPU found, which takes larger pictures.
-	for _, gpu := range []string{"", "nvenc", "vaapi"} {
-		name := gpu
-		if name == "" {
-			name = "software"
-		}
-		t.Run(name, func(t *testing.T) {
+	// In software, then on each GPU found, which takes larger pictures, and
+	// on an NVIDIA GPU that tone maps, the subtitles laid over the frames
+	// libplacebo returns.
+	for _, variant := range []struct {
+		name, gpu string
+		toneMap   bool
+	}{{"software", "", false}, {"nvenc", "nvenc", false}, {"vaapi", "vaapi", false}, {"nvenc tone mapped", "nvenc", true}} {
+		t.Run(variant.name, func(t *testing.T) {
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
@@ -80,13 +81,16 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 			defer m.Close()
 			encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 160, Height: 90, Bitrate: 1_000_000, FrameRate: 24, Burn: new(2)}
 			switch {
-			case gpu != "":
-				hw, ok := m.DetectHardware(gpu, "")
+			case variant.gpu != "":
+				hw, ok := m.DetectHardware(variant.gpu, "")
 				i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "h264_") })
 				if !ok || i < 0 {
-					t.Skip("no GPU encodes H.264 with " + gpu)
+					t.Skip("no GPU encodes H.264 with " + variant.gpu)
 				}
-				encoding = &VideoEncoding{Encoder: hw.Encoders[i], Level: "4.1", Width: 320, Height: 180, Bitrate: 2_000_000, FrameRate: 24, Burn: new(2), Hardware: &hw}
+				if variant.toneMap && !hw.ToneMapping {
+					t.Skip("no GPU tone maps with " + variant.gpu)
+				}
+				encoding = &VideoEncoding{Encoder: hw.Encoders[i], Level: "4.1", Width: 320, Height: 180, Bitrate: 2_000_000, FrameRate: 24, Burn: new(2), ToneMap: variant.toneMap, Hardware: &hw}
 			case !slices.Contains(m.Encoders(), "libx264"):
 				t.Skip("FFmpeg has no libx264")
 			}

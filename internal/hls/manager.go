@@ -108,18 +108,26 @@ func (v *VideoEncoding) filters() string {
 }
 
 // convert is the filter chain bringing the video to the size asked, in
-// SDR, before the pixel format the encoder takes.
+// SDR, before the pixel format the encoder takes. On a GPU that tone maps,
+// libplacebo scales and tone maps in one pass, applying the Dolby Vision
+// metadata FFmpeg's decoder exports, and with the BT.2390 curve, which keeps
+// midtones brighter than the processor's Hable.
 func (v *VideoEncoding) convert() string {
 	var filters []string
 	if v.Deinterlace {
 		filters = append(filters, "yadif")
 	}
-	filters = append(filters, "scale="+strconv.Itoa(v.Width)+":"+strconv.Itoa(v.Height))
-	if v.ToneMap {
+	size := "w=" + strconv.Itoa(v.Width) + ":h=" + strconv.Itoa(v.Height)
+	switch {
+	case v.toneMapsOnGPU():
+		filters = append(filters, "libplacebo="+size+":format=yuv420p:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping=bt.2390")
+	case v.ToneMap:
 		// To linear light in floating point, to BT.709 primaries, tone
 		// mapped, then to the BT.709 transfer and matrix in limited range.
-		filters = append(filters, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
+		filters = append(filters, "scale="+size, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
 			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv")
+	default:
+		filters = append(filters, "scale="+size)
 	}
 	return strings.Join(filters, ",")
 }
@@ -774,8 +782,8 @@ func (r Remux) args(n int) []string {
 		// as copied streams do, instead of at the time asked.
 		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
 	}
-	if r.Encode != nil && r.Encode.Hardware != nil {
-		args = append(args, r.Encode.Hardware.inputs()...)
+	if r.Encode != nil {
+		args = append(args, r.Encode.inputs()...)
 	}
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)

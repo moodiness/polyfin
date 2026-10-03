@@ -155,7 +155,7 @@ func serve(ctx context.Context) error {
 	defer segments.Close()
 	switch hw, ok := segments.DetectHardware(cfg.Acceleration, cfg.VAAPIDevice); {
 	case ok:
-		logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders)
+		logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders, "tone_mapping", hw.ToneMapping)
 	case cfg.Acceleration == "auto":
 		logger.Info("Video is converted in software: no GPU encodes")
 	case cfg.Acceleration != "none":

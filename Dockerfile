@@ -59,9 +59,11 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates
 
 # The same Debian on both platforms. amd64 adds libva and the VA drivers of
-# AMD and Intel GPUs, Intel's from non-free; arm64 boards have none of
-# these GPUs, and so their image runs nothing under emulation. NVIDIA's
-# libraries come from the NVIDIA container runtime on either platform.
+# AMD and Intel GPUs, Intel's from non-free, and what NVIDIA's Vulkan driver
+# loads besides itself (the Vulkan loader, EGL, X11's extension library),
+# for tone mapping HDR on NVIDIA GPUs through libplacebo; arm64 boards have
+# none of these GPUs, and so their image runs nothing under emulation.
+# NVIDIA's own libraries come from the NVIDIA container runtime.
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime-arm64
 
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime-amd64
@@ -70,6 +72,7 @@ FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee
 RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends libva2 libva-drm2 mesa-va-drivers intel-media-va-driver-non-free \
+		libvulkan1 libegl1 libxext6 \
 	&& rm -rf /var/lib/apt/lists/*
 
 # A stage of this file, chosen by platform: no tag to give.
@@ -83,10 +86,10 @@ COPY --from=build /polyfin /polyfin
 # read-only container; Polyfin empties it when it starts.
 COPY --from=build --chown=65532:65532 /cache /cache
 VOLUME /cache
-# NVIDIA's runtime exposes the GPUs and the video libraries to containers
-# that ask for it; other runtimes ignore these. Mesa would keep a shader
-# cache in a home directory the read-only image does not have.
-ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
+# NVIDIA's runtime exposes the GPUs and the video and Vulkan libraries to
+# containers that ask for it; other runtimes ignore these. Mesa would keep
+# a shader cache in a home directory the read-only image does not have.
+ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
 	MESA_SHADER_CACHE_DISABLE=true
 EXPOSE 8096
 USER 65532:65532

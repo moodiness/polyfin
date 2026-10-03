@@ -20,6 +20,11 @@ type Hardware struct {
 	Device string
 	// Encoders are those that encoded on it at startup, such as h264_nvenc.
 	Encoders []string
+	// ToneMapping is set when the GPU also scales video and tone maps HDR
+	// to SDR, through libplacebo on its Vulkan driver, which applies Dolby
+	// Vision's metadata: NVIDIA GPUs only. On AMD GPUs, the frames libplacebo
+	// imports from memory set off a fault in the Linux driver.
+	ToneMapping bool
 }
 
 // hardwareMethods are the GPU methods by preference, named as
@@ -54,6 +59,7 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 				}
 			}
 			if len(hw.Encoders) > 0 {
+				hw.ToneMapping = hw.Method == "cuda" && slices.Contains(m.can.filters, "libplacebo") && m.toneMaps(hw)
 				m.hardware = &hw
 				return hw, true
 			}
@@ -61,6 +67,26 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	}
 	return Hardware{}, false
 }
+
+// toneMaps reports whether hw tone maps a quarter of a second of test
+// pattern, tagged as HDR10, on its Vulkan device: NVIDIA's Vulkan driver
+// may be missing from the container, or fail.
+func (m *Manager) toneMaps(hw Hardware) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	hw.ToneMapping = true
+	v := VideoEncoding{Width: 160, Height: 90, ToneMap: true, Hardware: &hw}
+	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error"}, toneMappingDevices...)
+	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
+		"-vf", "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"+v.filters(),
+		"-c:v", hw.Encoders[0], "-f", "null", "-")
+	return exec.CommandContext(ctx, m.ffmpeg, args...).Run() == nil
+}
+
+// toneMappingDevices open the NVIDIA GPU for CUDA and its Vulkan device
+// derived from it, for filters: libplacebo runs on the GPU that decodes and
+// encodes, whichever other GPUs Vulkan sees.
+var toneMappingDevices = []string{"-init_hw_device", "cuda=cu", "-init_hw_device", "vulkan=vk@cu", "-filter_hw_device", "vk"}
 
 // Hardware is the GPU DetectHardware chose, nil for none.
 func (m *Manager) Hardware() *Hardware {
@@ -102,12 +128,24 @@ func (hw Hardware) devices() []string {
 	return nil
 }
 
-// inputs are FFmpeg's input options decoding video on the GPU, into memory.
-func (hw Hardware) inputs() []string {
-	if hw.Method == "vaapi" {
+// inputs are FFmpeg's input options of a conversion on a GPU: decoding on
+// it, into memory, and, to tone map there, the devices libplacebo needs.
+func (v *VideoEncoding) inputs() []string {
+	hw := v.Hardware
+	switch {
+	case hw == nil:
+		return nil
+	case hw.Method == "vaapi":
 		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
+	case v.toneMapsOnGPU():
+		return append(slices.Clone(toneMappingDevices), "-hwaccel", "cuda", "-hwaccel_device", "cu")
 	}
 	return []string{"-hwaccel", "cuda"}
+}
+
+// toneMapsOnGPU reports whether the conversion tone maps HDR on its GPU.
+func (v *VideoEncoding) toneMapsOnGPU() bool {
+	return v.ToneMap && v.Hardware != nil && v.Hardware.ToneMapping
 }
 
 // output ends a filter chain: frames as the encoder takes them, uploaded

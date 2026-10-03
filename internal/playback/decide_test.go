@@ -428,3 +428,34 @@ func TestVideoIsConvertedOnTheGPUThatEncodesTheCodec(t *testing.T) {
 		}
 	}
 }
+
+func TestHDRIsToneMappedOnTheGPUWithoutTheProcessorsLimits(t *testing.T) {
+	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
+	vaapi := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
+	hdr10 := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)}
+	profile5 := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "DOVI", Width: new(3840), Height: new(2160)}
+	for _, test := range []struct {
+		name   string
+		codecs string
+		gpu    *hls.Hardware
+		video  MediaStream
+		want   *VideoConversion
+	}{
+		{"HDR10 on a GPU that tone maps", "h264", nvidia, hdr10,
+			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 10_000_000, ToneMap: true, Hardware: nvidia}},
+		{"Dolby Vision profile 5 on a GPU that tone maps", "h264", nvidia, profile5,
+			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 10_000_000, ToneMap: true, Hardware: nvidia}},
+		// HEVC only: encoded in software, so tone mapped on the processor.
+		{"HDR10 encoded in software", "hevc", nvidia, hdr10,
+			&VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}},
+		{"Dolby Vision profile 5 encoded in software", "hevc", nvidia, profile5, nil},
+		{"HDR10 on a GPU that does not tone map", "h264", vaapi, hdr10,
+			&VideoConversion{Codec: "h264", Encoder: "h264_vaapi", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true, Hardware: vaapi}},
+		{"Dolby Vision profile 5 on a GPU that does not tone map", "h264", vaapi, profile5, nil},
+	} {
+		can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true, Hardware: test.gpu}
+		if got := ConvertVideo(test.codecs, 0, test.video, can); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
+		}
+	}
+}
