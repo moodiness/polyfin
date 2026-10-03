@@ -107,8 +107,13 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "/Videos/x/stream", nil)
 			request.Header.Set("Range", "bytes=0-3")
 			response := httptest.NewRecorder()
-			if err := s.Serve(response, request, tc.version, tc.relay, "video/x-matroska"); err != nil {
+			// Downloads name the file in both cases.
+			delivery := Delivery{Relay: tc.relay, ContentType: "video/x-matroska", Attachment: "Movie (2008) é.mkv"}
+			if err := s.Serve(response, request, tc.version, delivery); err != nil {
 				t.Fatal(err)
+			}
+			if got, want := response.Header().Get("Content-Disposition"), `attachment; filename="Movie (2008) _.mkv"; filename*=UTF-8''Movie%20%282008%29%20%C3%A9.mkv`; got != want {
+				t.Errorf("Content-Disposition: %q, want %q", got, want)
 			}
 			if tc.redirect {
 				if response.Code != http.StatusFound || response.Header().Get("Location") != tc.version.URL {
@@ -140,12 +145,16 @@ func TestServeRefusesSourcesThatDoNotAnswer(t *testing.T) {
 	s := newService(t, origin, "ffprobe", nil)
 	version := library.Version{ID: accounts.ID{2}, URL: "https://93.184.216.34/gone.mkv"}
 	response := httptest.NewRecorder()
-	err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, false, "")
+	err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, Delivery{Attachment: "gone.mkv"})
 	if !errors.Is(err, ErrSourceUnavailable) || response.Code != http.StatusBadGateway {
 		t.Fatalf("got %d, %v", response.Code, err)
 	}
 	if !s.Failed(version.ID) {
 		t.Error("a dead source is not remembered as failed")
+	}
+	// The error is not saved as the file.
+	if response.Header().Get("Content-Disposition") != "" {
+		t.Errorf("error answered as an attachment: %v", response.Header())
 	}
 }
 
@@ -161,7 +170,7 @@ func TestExpiredLinksAreRenewedBeforeServing(t *testing.T) {
 		})
 		response := httptest.NewRecorder()
 		version := library.Version{ID: accounts.ID{3}, URL: old}
-		if err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, relay, ""); err != nil {
+		if err := s.Serve(response, httptest.NewRequest(http.MethodGet, "/", nil), version, Delivery{Relay: relay}); err != nil {
 			t.Fatalf("relay %v: %v", relay, err)
 		}
 		switch {

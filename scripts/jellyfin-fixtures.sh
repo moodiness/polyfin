@@ -689,3 +689,56 @@ jq --null-input --sort-keys --argjson detail "$chapters_detail" --argjson listed
 	'{detail: $detail.Chapters, listing: $listed.Items[0].Chapters,
 		listingWithoutTheField: ($unasked.Items[0] | has("Chapters")), nowPlaying: $playing.Chapters}' \
 	>"$chapters_out/chapters.json"
+# Downloads: GET /Items/{itemId}/Download, as jellyfin-web and Streamyfin
+# call it, with the token in the ApiKey parameter or the Authorization
+# header. downloads/answers.json holds, by key, the status and the headers
+# that matter, and the body of errors; downloads/can-download.json holds
+# CanDownload where apps read it.
+download_answers='{}'
+download_answer() {
+	local key=$1 path=$2 headers code
+	headers=$(mktemp)
+	code=$(curl --silent --show-error --output "$headers.body" --dump-header "$headers" --write-out '%{http_code}' \
+		"${@:3}" "$base$path")
+	header() { tr -d '\r' <"$headers" | sed -n "s/^$1: //Ip" | tail -n 1; }
+	download_answers=$(jq --compact-output --arg key "$key" --argjson code "$code" \
+		--arg type "$(header Content-Type)" --arg disposition "$(header Content-Disposition)" \
+		--arg ranges "$(header Accept-Ranges)" --arg range "$(header Content-Range)" \
+		--argjson length "$(wc -c <"$headers.body")" --rawfile body "$headers.body" \
+		'.[$key] = {status: $code, contentType: $type, contentDisposition: $disposition,
+			acceptRanges: $ranges, contentRange: $range, length: $length}
+			+ (if $code >= 400 then {body: ($body | fromjson? // $body)} else {} end)' <<<"$download_answers")
+	rm -f "$headers" "$headers.body"
+}
+download_token=$(sed -n 's/.*Token="\([^"]*\)".*/\1/p' <<<"$signed")
+download_answer 'Movie with the token in ApiKey' "/Items/$movie/Download?ApiKey=$download_token"
+download_answer 'Movie with the token in the header' "/Items/$movie/Download" --header "Authorization: $signed"
+download_answer 'Movie, a byte range' "/Items/$movie/Download?ApiKey=$download_token" --header 'Range: bytes=0-99'
+download_answer 'Movie, HEAD' "/Items/$movie/Download?ApiKey=$download_token" --head
+download_answer 'Episode' "/Items/$episode/Download?ApiKey=$download_token"
+download_answer 'Remote movie (.strm)' "/Items/$strm/Download?ApiKey=$download_token"
+download_answer 'Series' "/Items/$series/Download?ApiKey=$download_token"
+download_answer 'Unknown item' "/Items/$missing/Download?ApiKey=$download_token"
+download_answer 'Not an id' "/Items/nothing/Download?ApiKey=$download_token"
+download_answer 'Anonymous' "/Items/$movie/Download"
+download_answer 'Wrong token' "/Items/$movie/Download?ApiKey=$missing"
+# The viewer, with content downloading turned off for a moment.
+viewer_policy=$(get "/Users/$viewer" | jq --compact-output .Policy)
+post "$base/Users/$viewer/Policy" --header "Authorization: $signed" \
+	--data "$(jq --compact-output '.EnableContentDownloading = false' <<<"$viewer_policy")"
+download_answer 'Viewer not allowed to download' "/Items/$movie/Download" --header "Authorization: $viewer_signed"
+post "$base/Users/$viewer/Policy" --header "Authorization: $signed" --data "$viewer_policy"
+download_answer 'Viewer allowed to download' "/Items/$movie/Download" --header "Authorization: $viewer_signed"
+mkdir -p "$out/downloads"
+jq --sort-keys . <<<"$download_answers" >"$out/downloads/answers.json"
+can_download() { get "$1" | jq "$2"; }
+jq --null-input --sort-keys \
+	--argjson movie "$(can_download "/Users/$user/Items/$movie" .CanDownload)" \
+	--argjson episode "$(can_download "/Users/$user/Items/$episode" .CanDownload)" \
+	--argjson remote "$(can_download "/Users/$user/Items/$strm" .CanDownload)" \
+	--argjson series "$(can_download "/Users/$user/Items/$series" .CanDownload)" \
+	--argjson listed "$(can_download "/Shows/$series/Episodes?seasonId=$season&userId=$user&fields=CanDownload,Path" \
+		'.Items[0] | {CanDownload, Path: (.Path | type)}')" \
+	--argjson unasked "$(can_download "/Shows/$series/Episodes?seasonId=$season&userId=$user" '.Items[0] | has("CanDownload")')" \
+	'{movieDetail: $movie, episodeDetail: $episode, remoteMovieDetail: $remote, seriesDetail: $series,
+		episodeListedWithTheFields: $listed, listingWithoutTheFieldHasIt: $unasked}' >"$out/downloads/can-download.json"

@@ -56,18 +56,22 @@ type BaseItemPerson struct {
 // sends on request (the Fields parameter) or in an item's own description
 // are pointers or omitted when empty.
 type BaseItemDto struct {
-	Name                     string
-	OriginalTitle            string `json:",omitempty"`
-	ServerId                 string
-	Id                       string
-	Etag                     string             `json:",omitempty"`
-	PlaylistItemId           string             `json:",omitempty"` // the entry a playlist lists the item as
-	DateCreated              *Time              `json:",omitempty"`
-	CanDelete                *bool              `json:",omitempty"`
-	CanDownload              *bool              `json:",omitempty"`
-	SortName                 string             `json:",omitempty"`
-	PremiereDate             *Time              `json:",omitempty"`
-	ExternalUrls             *[]MediaUrl        `json:",omitempty"`
+	Name           string
+	OriginalTitle  string `json:",omitempty"`
+	ServerId       string
+	Id             string
+	Etag           string      `json:",omitempty"`
+	PlaylistItemId string      `json:",omitempty"` // the entry a playlist lists the item as
+	DateCreated    *Time       `json:",omitempty"`
+	CanDelete      *bool       `json:",omitempty"`
+	CanDownload    *bool       `json:",omitempty"`
+	SortName       string      `json:",omitempty"`
+	PremiereDate   *Time       `json:",omitempty"`
+	ExternalUrls   *[]MediaUrl `json:",omitempty"`
+	// Path is the name a movie's or an episode's version downloads as:
+	// Polyfin has no file of its own, and apps take the file name of a
+	// download from it.
+	Path                     string             `json:",omitempty"`
 	EnableMediaSourceDisplay *bool              `json:",omitempty"`
 	OfficialRating           string             `json:",omitempty"`
 	ChannelId                *string            // always sent, null
@@ -152,6 +156,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)
+		h.setDownload(r, dto, item, p.ordered(opened), true)
 	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)
 	} else {
@@ -320,6 +325,10 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	if detail || fields.has("CanDelete") {
 		dto.CanDelete = new(false)
 	}
+	if detail || fields.has("CanDownload") {
+		// Until its versions are known; see setDownload.
+		dto.CanDownload = new(false)
+	}
 	if detail || fields.has("SortName") {
 		dto.SortName = strings.ToLower(item.Name)
 	}
@@ -337,7 +346,6 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 			dto.OriginalTitle = item.Name
 		}
 		dto.Etag = nameID("etag", item.ID.String())
-		dto.CanDownload = new(false)
 		dto.ExternalUrls = new(externalURLs(item.ProviderIDs, item.Kind))
 		dto.EnableMediaSourceDisplay = new(true)
 		dto.Taglines = &[]string{}

@@ -1,0 +1,11 @@
+{
+  "episodeDetail": true,
+  "episodeListedWithTheFields": {
+    "CanDownload": true,
+    "Path": "string"
+  },
+  "listingWithoutTheFieldHasIt": false,
+  "movieDetail": true,
+  "remoteMovieDetail": true,
+  "seriesDetail": false
+}
