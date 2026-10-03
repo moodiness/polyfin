@@ -19,7 +19,9 @@ func TestParseReadsWhatTheRecordedClipsLack(t *testing.T) {
 				{"side_data_type": "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)"}
 			 ]},
 			{"index": 1, "codec_type": "audio", "codec_name": "eac3", "channels": 6, "sample_rate": "48000", "disposition": {"forced": 0},
-			 "tags": {"language": "fre", "title": "VFF"}}
+			 "tags": {"language": "fre", "title": "VFF"}},
+			{"index": 2, "codec_type": "attachment", "codec_name": "ttf", "codec_tag_string": "[0][0][0][0]",
+			 "tags": {"filename": "Sign.ttf", "mimetype": "application/x-truetype-font", "comment": "Signs"}}
 		]
 	}`))
 	if err != nil {
@@ -38,6 +40,11 @@ func TestParseReadsWhatTheRecordedClipsLack(t *testing.T) {
 	}
 	if audio := analysis.Streams[1]; audio.Language != "fre" || audio.Title != "VFF" || audio.SampleRate != 48000 {
 		t.Errorf("audio: %+v", audio)
+	}
+	// Fonts an ASS track uses are listed to apps by file name and type.
+	if font := analysis.Streams[2]; font.Type != "attachment" || font.FileName != "Sign.ttf" ||
+		font.MimeType != "application/x-truetype-font" || font.Comment != "Signs" {
+		t.Errorf("attachment: %+v", font)
 	}
 }
 

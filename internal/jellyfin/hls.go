@@ -18,7 +18,6 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
-	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 // transcodingURL is a remux's TranscodingUrl: relative, with Jellyfin's
@@ -359,9 +358,9 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	}
 	var data []byte
 	if index < len(req.files) {
-		var cues []subtitles.Cue
-		if cues, err = h.subtitleCues(r.Context(), req.files[index]); err == nil {
-			data = hls.SubtitleSegment(cues, plan, n)
+		var text subtitleText
+		if text, err = h.subtitleFile(r.Context(), req.files[index]); err == nil {
+			data = hls.SubtitleSegment(text.cues, plan, n)
 		}
 	} else {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)

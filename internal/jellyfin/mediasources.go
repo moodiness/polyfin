@@ -46,7 +46,7 @@ type MediaSourceInfo struct {
 	VideoType                           string
 	HasSegments                         bool
 	MediaStreams                        []playback.MediaStream
-	MediaAttachments                    []struct{}
+	MediaAttachments                    []MediaAttachment
 	Formats                             []string
 	Bitrate                             *int64 `json:",omitempty"`
 	// RequiredHttpHeaders is always empty: players ignore it, and sources
@@ -179,7 +179,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		ETag:                   version.ID.String(),
 		SupportsProbing:        true,
 		VideoType:              "VideoFile",
-		MediaAttachments:       []struct{}{},
+		MediaAttachments:       []MediaAttachment{},
 		Formats:                []string{},
 		RequiredHttpHeaders:    map[string]string{},
 		TranscodingSubProtocol: "http",
@@ -188,6 +188,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	size, runtime := version.Size, version.Runtime
 	if analyzed {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(), language)
+		source.MediaAttachments = mediaAttachments(analysis)
 		size = cmp.Or(analysis.Size, size)
 		runtime = cmp.Or(analysis.Duration, runtime)
 		if analysis.Bitrate > 0 {

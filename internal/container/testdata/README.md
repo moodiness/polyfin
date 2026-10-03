@@ -51,3 +51,11 @@ ffprobe -v error -show_entries packet=stream_index,pts_time,duration_time -of cs
 
 with the text of the SubRip cues, and the ASS events as Matroska stores
 them: `ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text`.
+
+`subtitles.ffprobe.json` is ffprobe's view of `subtitles.mkv`, which
+Polyfin's analysis reads, for the tests that play it end to end:
+
+```sh
+ffprobe -v error -print_format json -show_format -show_streams subtitles.mkv |
+  jq --arg name subtitles.mkv '.format.filename = $name' >subtitles.ffprobe.json
+```

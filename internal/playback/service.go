@@ -22,10 +22,12 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 const (
@@ -74,6 +76,22 @@ type Service struct {
 	// of a version.
 	extractedMu sync.Mutex
 	extractions *cache.Cache[accounts.ID, *extracted]
+	// locations are the subtitle streams versions' indexes list, and
+	// unlocated the versions whose index could not be read.
+	locations *cache.Cache[accounts.ID, []int]
+	unlocated *cache.Cache[accounts.ID, error]
+	// tracks are subtitle tracks read whole through indexes, untracked
+	// those that could not be, and trackReads and hostReads bound the
+	// reads under way, over every host and from each.
+	tracks     *cache.Cache[trackKey, Track]
+	untracked  *cache.Cache[trackKey, error]
+	trackReads chan struct{}
+	hostReads  hostSlots
+	// trackCues are the cues of tracks read whole, for their HLS segments.
+	trackCues *cache.Cache[trackKey, []subtitles.Cue]
+	// attached are the files versions carry, read once for the fonts a
+	// track asks for together.
+	attached *cache.Cache[accounts.ID, []container.Attachment]
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -101,6 +119,13 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour),
 		unindexed:   cache.New[accounts.ID, error](2000, failureTTL),
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
+		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
+		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
+		tracks:      cache.New[trackKey, Track](100, time.Hour),
+		untracked:   cache.New[trackKey, error](2000, failureTTL),
+		trackReads:  make(chan struct{}, maxTrackReads),
+		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
+		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
 	}, nil
 }
 

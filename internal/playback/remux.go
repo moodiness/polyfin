@@ -294,11 +294,21 @@ func (s *Service) RemuxSegment(ctx context.Context, remux Remux, n int) (*os.Fil
 }
 
 // RemuxSubtitle returns segment n of an embedded text subtitle track of a
-// remux, stream being its FFmpeg index, once FFmpeg has extracted it.
+// remux, stream being its FFmpeg index: cut from the track when it was read
+// whole through the version's index, else once FFmpeg has extracted it. A
+// track the index locates is read whole meanwhile, for the segments after,
+// unless remuxes have extracted the version's tracks whole already.
 func (s *Service) RemuxSubtitle(ctx context.Context, remux Remux, stream, n int) ([]byte, error) {
 	plan, err := s.Plan(ctx, remux.Version)
 	if err != nil {
 		return nil, err
+	}
+	if cues, ok := s.keptCues(ctx, trackKey{remux.Version.ID, stream}); ok {
+		return hls.SubtitleSegment(cues, plan, n), nil
+	}
+	if analysis, err := s.Analyze(ctx, remux.Version); err == nil && !s.SubtitlesExtracted(ctx, remux.Version.ID, analysis.Duration) &&
+		s.SubtitlesLocated(ctx, remux.Version, analysis)[stream] {
+		s.PrefetchSubtitle(remux.Version, analysis, stream)
 	}
 	if err := s.segments.Subtitles(ctx, remux.key(), s.remuxOpener(remux), n); err != nil {
 		return nil, err

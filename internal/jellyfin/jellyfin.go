@@ -16,7 +16,6 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
-	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -66,7 +65,7 @@ type Handler struct {
 	// subtitleFiles remembers the subtitle files described for each item,
 	// for players that fetch them without credentials.
 	subtitleFiles *cache.Cache[accounts.ID, []library.ExternalSubtitle]
-	subtitleCache *cache.Cache[accounts.ID, []subtitles.Cue]
+	subtitleCache *cache.Cache[accounts.ID, subtitleText]
 	// runtimes remembers the runtime of the version each report names.
 	runtimes *cache.Cache[string, time.Duration]
 	// configurations remembers each user's configuration, which item
@@ -82,7 +81,7 @@ func New(options Options) *Handler {
 		Options:        options,
 		sessions:       playback.NewSessions(),
 		subtitleFiles:  cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
-		subtitleCache:  cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
+		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour),
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
@@ -95,6 +94,7 @@ func New(options Options) *Handler {
 
 	anonymous(http.MethodGet, "/System/Info/Public", h.publicSystemInfo)
 	signedIn(http.MethodGet, "/System/Info", h.systemInfo)
+	signedIn(http.MethodGet, "/System/Configuration/{key}", h.namedConfiguration)
 	anonymous(http.MethodGet, "/System/Ping", h.ping)
 	anonymous(http.MethodPost, "/System/Ping", h.ping)
 

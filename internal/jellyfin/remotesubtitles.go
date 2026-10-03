@@ -154,7 +154,7 @@ func (h *Handler) remoteSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	cues, err := h.subtitleCues(r.Context(), file)
+	text, err := h.subtitleFile(r.Context(), file)
 	if err != nil {
 		if r.Context().Err() == nil {
 			h.Logger.Warn("A subtitle could not be read", "addon", file.Addon, "error", err)
@@ -163,7 +163,7 @@ func (h *Handler) remoteSubtitleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-subrip")
-	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(subtitles.SubRip(cues)))
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(subtitles.SubRip(text.cues)))
 }
 
 // remoteSubtitle finds a subtitle among those the user's addons offer for a
