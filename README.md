@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, remuxed into HLS, or transcoded when the app cannot take the video or audio, on an NVIDIA, AMD or Intel GPU when there is one, with the addons' subtitles and the text subtitles inside the files, image subtitles burned in when the app cannot show them, and keep each user's watched state, resume points and favorites. HDR video converted to SDR is tone mapped on an NVIDIA GPU up to 1080p, Dolby Vision profile 5 included; elsewhere tone mapping runs on the processor, stops at 720p, and leaves profile 5 out. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, remuxed into HLS, or transcoded when the app cannot take the video or audio, on an NVIDIA, AMD or Intel GPU when there is one, with the addons' subtitles and the text subtitles inside the files, image subtitles burned in when the app cannot show them, and keep each user's watched state, resume points and favorites. HDR video converted to SDR is tone mapped on an NVIDIA GPU up to 1080p, Dolby Vision profile 5 included; elsewhere tone mapping runs on the processor, stops at 720p, and leaves profile 5 out.
 
 ## Features
 
@@ -41,14 +41,16 @@ Polyfin targets the clients that connect to a Jellyfin server, including:
 
 ## Quick start (Docker)
 
-Until the first release, build the image from source. Requirements: Docker with Compose v2.
+Requirements: Docker with Compose v2. The image, `ghcr.io/moodiness/polyfin`, is published for linux/amd64 and linux/arm64.
 
 ```sh
 git clone https://github.com/moodiness/polyfin.git
 cd polyfin
 cp .env.example .env    # then set POSTGRES_PASSWORD, e.g. openssl rand -hex 24
-docker compose -f compose.yaml -f compose.build.yaml up -d --build
+docker compose up -d
 ```
+
+`POLYFIN_VERSION` in `.env` pins a release, such as `0.1.0`; `latest` follows stable releases. To build the image from source instead, run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its tables on startup.
 
@@ -66,7 +68,7 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 
 **GPU:** at startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. Give the container an NVIDIA GPU with `--runtime=nvidia` (Compose: `runtime: nvidia`), which needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin; give it an AMD or Intel GPU with `--device /dev/dri` (Compose: `devices`). On an NVIDIA GPU, HDR is also tone mapped there, through Vulkan, which needs `graphics` among `NVIDIA_DRIVER_CAPABILITIES`, as the image sets them. The container runs as user 65532: when the render nodes in `/dev/dri` are not open to every user, add the group that owns them with `--group-add`.
 
-**Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
+**Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml) and needs a PostgreSQL 18 container. To add it, run in Unraid's terminal `wget -O /boot/config/plugins/dockerMan/templates-user/my-Polyfin.xml https://raw.githubusercontent.com/moodiness/polyfin/main/templates/unraid/polyfin.xml`, then choose **Polyfin** under **Docker › Add Container › Template**.
 
 ## Configuration
 
