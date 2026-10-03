@@ -10,6 +10,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
@@ -47,6 +48,9 @@ type Options struct {
 	Preferences *preferences.Store
 	// UserData stores what each user did with each item.
 	UserData *userdata.Store
+	// Segments finds the parts of titles apps offer to skip; nil finds
+	// none.
+	Segments *mediasegments.Service
 	Logger   *slog.Logger
 }
 
@@ -121,6 +125,7 @@ func New(options Options) *Handler {
 	h.remoteRoutes(rt)
 	h.configurationRoutes(rt)
 	h.localizationRoutes(rt)
+	signedIn(http.MethodGet, "/MediaSegments/{itemId}", h.mediaSegments)
 
 	h.routes = cors(rt)
 	return h

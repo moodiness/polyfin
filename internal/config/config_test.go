@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -36,14 +37,33 @@ func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 		"POLYFIN_LOG_LEVEL":  "verbose",
 		"POLYFIN_CACHE_SIZE": "lots",
 		"POLYFIN_HWACCEL":    "qsv",
+		"POLYFIN_SEGMENTS":   "theintrodb,other",
 	}))
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, want := range []string{"POLYFIN_DATABASE_URL", "POLYFIN_LISTEN", "POLYFIN_LOG_LEVEL", "POLYFIN_CACHE_SIZE", "POLYFIN_HWACCEL"} {
+	for _, want := range []string{"POLYFIN_DATABASE_URL", "POLYFIN_LISTEN", "POLYFIN_LOG_LEVEL", "POLYFIN_CACHE_SIZE", "POLYFIN_HWACCEL", "POLYFIN_SEGMENTS"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %s", err, want)
 		}
+	}
+}
+
+func TestSegmentDatabasesKeepTheOrderOfPreference(t *testing.T) {
+	for text, want := range map[string][]string{
+		"":                       {"theintrodb", "introdb"},
+		" IntroDB , theintrodb ": {"introdb", "theintrodb"},
+		"introdb,introdb":        {"introdb"},
+		"none":                   nil,
+	} {
+		cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin", "POLYFIN_SEGMENTS": text}))
+		if err != nil || !slices.Equal(cfg.Segments, want) {
+			t.Errorf("%q: %v, %v; want %v", text, cfg.Segments, err, want)
+		}
+	}
+	// Turning the databases off cannot be mixed with naming one.
+	if _, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin", "POLYFIN_SEGMENTS": "none,introdb"})); err == nil {
+		t.Error("none with a database was accepted")
 	}
 }
 

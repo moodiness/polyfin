@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -38,6 +39,9 @@ type Config struct {
 	// VAAPIDevice is the render node VAAPI opens, such as
 	// /dev/dri/renderD128; empty tries each in turn.
 	VAAPIDevice string
+	// Segments are the databases asked where titles' intros and credits
+	// are, theintrodb and introdb, the preferred first; empty asks none.
+	Segments []string
 }
 
 // defaultCacheSize is 10 GB: a few films, read again for seeks and
@@ -101,7 +105,35 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		errs = append(errs, fmt.Errorf("POLYFIN_HWACCEL: %q is not one of auto, nvenc, vaapi, none", cfg.Acceleration))
 	}
+	segments, err := parseSegments(getenv("POLYFIN_SEGMENTS"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("POLYFIN_SEGMENTS: %w", err))
+	}
+	cfg.Segments = segments
 	return cfg, errors.Join(errs...)
+}
+
+// parseSegments reads the segment databases, in order of preference: by
+// default both, TheIntroDB first; none for neither.
+func parseSegments(text string) ([]string, error) {
+	text = strings.ToLower(strings.TrimSpace(text))
+	switch text {
+	case "":
+		return []string{"theintrodb", "introdb"}, nil
+	case "none":
+		return nil, nil
+	}
+	var names []string
+	for name := range strings.SplitSeq(text, ",") {
+		name = strings.TrimSpace(name)
+		if name != "theintrodb" && name != "introdb" {
+			return nil, fmt.Errorf("%q is not a list of theintrodb and introdb, or none", text)
+		}
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // units are the size suffixes POLYFIN_CACHE_SIZE accepts, decimal and
