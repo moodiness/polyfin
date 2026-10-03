@@ -1,5 +1,6 @@
-# Both build stages run natively on the builder and cross-compile, so the final
-# image needs no emulation for linux/amd64 or linux/arm64.
+# The web and Go stages run natively on the builder and cross-compile; only
+# the final stage installs packages for the target platform, under emulation
+# when it differs.
 FROM --platform=$BUILDPLATFORM node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS web
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
@@ -18,23 +19,75 @@ COPY --from=web /build/web/dist/ ./web/dist/
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
-# The final stage has no shell to create the cache directory: it is copied.
+# The final stage runs nothing, so as to need no emulation on arm64: the
+# cache directory is copied.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin \
 	&& mkdir /cache
 
-# Upstream FFmpeg, statically built, to analyze and remux remote sources.
-FROM mwader/static-ffmpeg:9.0.2@sha256:7d9bdaaf887f7e6ce6151f67325c344074b5ff1fb75316011c3376503e449a7b AS ffmpeg
+# FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
+# time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
+# the last build of a month, kept for two years. The shared build keeps
+# ffmpeg and ffprobe from carrying a copy of every library each.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-amd64
+ADD --checksum=sha256:01a9764d0b5364b66cfeb4617557c64321b0e232e172ec73f0a701c5f7694326 \
+	https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-shared-9.0.tar.xz /ffmpeg.tar.xz
 
-# Static binaries only: no shell, no package manager, no RUN in this stage.
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
-COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
-COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS ffmpeg-arm64
+ADD --checksum=sha256:706ccdbc8b0537646345532713a9b6750c0a6258cc001ec1c0379754f0ae730a \
+	https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-linuxarm64-gpl-shared-9.0.tar.xz /ffmpeg.tar.xz
+
+# A stage of this file, chosen by platform: no tag to give.
+# hadolint ignore=DL3006
+FROM ffmpeg-${TARGETARCH} AS ffmpeg-unpack
+# hadolint ignore=DL3008
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends xz-utils \
+	&& mkdir /ffmpeg \
+	&& tar -xJf /ffmpeg.tar.xz -C /ffmpeg --strip-components=1
+
+# ffmpeg and ffprobe find their libraries in ../lib. CI tests with this stage.
+FROM scratch AS ffmpeg
+COPY --from=ffmpeg-unpack /ffmpeg/bin/ffmpeg /ffmpeg/bin/ffprobe /bin/
+COPY --from=ffmpeg-unpack /ffmpeg/lib/ /lib/
+
+# Debian's slim image has no certificate authorities, which Polyfin needs
+# to reach addons and their streams over HTTPS. The bundle is the same on
+# every platform, so it is made natively.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS certificates
+# hadolint ignore=DL3008
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates
+
+# The same Debian on both platforms. amd64 adds libva and the VA drivers of
+# AMD and Intel GPUs, Intel's from non-free; arm64 boards have none of
+# these GPUs, and so their image runs nothing under emulation. NVIDIA's
+# libraries come from the NVIDIA container runtime on either platform.
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime-arm64
+
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime-amd64
+# Packages are left unpinned so that each build gets Debian's security fixes.
+# hadolint ignore=DL3008
+RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends libva2 libva-drm2 mesa-va-drivers intel-media-va-driver-non-free \
+	&& rm -rf /var/lib/apt/lists/*
+
+# A stage of this file, chosen by platform: no tag to give.
+# hadolint ignore=DL3006
+FROM runtime-${TARGETARCH}
+COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
+COPY --from=ffmpeg /lib/ /usr/local/lib/
+COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /polyfin /polyfin
 # Parts of the files being read. A volume, so that it stays writable in a
 # read-only container; Polyfin empties it when it starts.
 COPY --from=build --chown=65532:65532 /cache /cache
 VOLUME /cache
-ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache
+# NVIDIA's runtime exposes the GPUs and the video libraries to containers
+# that ask for it; other runtimes ignore these. Mesa would keep a shader
+# cache in a home directory the read-only image does not have.
+ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
+	MESA_SHADER_CACHE_DISABLE=true
 EXPOSE 8096
 USER 65532:65532
 ENTRYPOINT ["/polyfin"]
