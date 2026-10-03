@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,65 +66,84 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-i", video, "-i", sup, "-map", "0", "-map", "1", "-c", "copy", input).CombinedOutput(); err != nil {
 		t.Fatalf("add the subtitles: %v: %s", err, out)
 	}
-	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m.Close()
-	if !slices.Contains(m.Encoders(), "libx264") {
-		t.Skip("FFmpeg has no libx264")
-	}
-	plan := NewPlan(keyframes, 30*time.Second)
-	open := func(context.Context) (Remux, func(), error) {
-		return Remux{Input: input, Video: 0, Audio: 1, Format: FMP4, Plan: plan,
-			Encode: &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 160, Height: 90, Bitrate: 1_000_000, FrameRate: 24, Burn: new(2)}}, func() {}, nil
-	}
-	key := Key{Session: "session", Audio: 1, Format: FMP4}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-	defer cancel()
-	// A run started at segment 2, then one from the start.
-	if f, err := m.Segment(ctx, key, open, 2); err != nil {
-		t.Fatal(err)
-	} else {
-		f.Close()
-	}
-	init, err := m.Init(ctx, key, open)
-	if err != nil {
-		t.Fatal(err)
-	}
-	joined, _ := os.ReadFile(init.Name())
-	init.Close()
-	for n := range plan.Len() {
-		f, err := m.Segment(ctx, key, open, n)
-		if err != nil {
-			t.Fatal(err)
+	// In software, then on each GPU found, which takes larger pictures.
+	for _, gpu := range []string{"", "nvenc", "vaapi"} {
+		name := gpu
+		if name == "" {
+			name = "software"
 		}
-		data, _ := os.ReadFile(f.Name())
-		f.Close()
-		joined = append(joined, data...)
-	}
-	all := filepath.Join(dir, "joined.mp4")
-	if err := os.WriteFile(all, joined, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// The color of a pixel inside the rectangle, at a time of the source.
-	pixel := func(at float64) []byte {
-		t.Helper()
-		out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-i", all,
-			"-vf", "select=gte(t\\,"+strconv.FormatFloat(at+timestampOffset.Seconds(), 'f', 3, 64)+"),format=rgb24,crop=1:1:80:70",
-			"-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-").Output()
-		if err != nil || len(out) != 3 {
-			t.Fatalf("pixel at %.1f s: %v", at, err)
-		}
-		return out
-	}
-	red := func(rgb []byte) bool { return rgb[0] > 160 && rgb[1] < 90 && rgb[2] < 90 }
-	for _, c := range []struct {
-		at  float64
-		red bool
-	}{{3, true}, {10, false}, {17, true}, {21, false}} {
-		if got := pixel(c.at); red(got) != c.red {
-			t.Errorf("at %.0f s: color %v, subtitle shown %v", c.at, got, c.red)
-		}
+		t.Run(name, func(t *testing.T) {
+			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.Close()
+			encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 160, Height: 90, Bitrate: 1_000_000, FrameRate: 24, Burn: new(2)}
+			switch {
+			case gpu != "":
+				hw, ok := m.DetectHardware(gpu, "")
+				i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "h264_") })
+				if !ok || i < 0 {
+					t.Skip("no GPU encodes H.264 with " + gpu)
+				}
+				encoding = &VideoEncoding{Encoder: hw.Encoders[i], Level: "4.1", Width: 320, Height: 180, Bitrate: 2_000_000, FrameRate: 24, Burn: new(2), Hardware: &hw}
+			case !slices.Contains(m.Encoders(), "libx264"):
+				t.Skip("FFmpeg has no libx264")
+			}
+			plan := NewPlan(keyframes, 30*time.Second)
+			open := func(context.Context) (Remux, func(), error) {
+				return Remux{Input: input, Video: 0, Audio: 1, Format: FMP4, Plan: plan, Encode: encoding}, func() {}, nil
+			}
+			key := Key{Session: "session", Audio: 1, Format: FMP4}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			defer cancel()
+			// A run started at segment 2, then one from the start.
+			if f, err := m.Segment(ctx, key, open, 2); err != nil {
+				t.Fatal(err)
+			} else {
+				f.Close()
+			}
+			init, err := m.Init(ctx, key, open)
+			if err != nil {
+				t.Fatal(err)
+			}
+			joined, _ := os.ReadFile(init.Name())
+			init.Close()
+			for n := range plan.Len() {
+				f, err := m.Segment(ctx, key, open, n)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, _ := os.ReadFile(f.Name())
+				f.Close()
+				joined = append(joined, data...)
+			}
+			all := filepath.Join(t.TempDir(), "joined.mp4")
+			if err := os.WriteFile(all, joined, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// The color of a pixel inside the rectangle, at a time of the
+			// source: at 80, 70 of a 160×90 picture.
+			crop := "crop=1:1:" + strconv.Itoa(80*encoding.Width/160) + ":" + strconv.Itoa(70*encoding.Height/90)
+			pixel := func(at float64) []byte {
+				t.Helper()
+				out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-i", all,
+					"-vf", "select=gte(t\\,"+strconv.FormatFloat(at+timestampOffset.Seconds(), 'f', 3, 64)+"),format=rgb24,"+crop,
+					"-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-").Output()
+				if err != nil || len(out) != 3 {
+					t.Fatalf("pixel at %.1f s: %v", at, err)
+				}
+				return out
+			}
+			red := func(rgb []byte) bool { return rgb[0] > 160 && rgb[1] < 90 && rgb[2] < 90 }
+			for _, c := range []struct {
+				at  float64
+				red bool
+			}{{3, true}, {10, false}, {17, true}, {21, false}} {
+				if got := pixel(c.at); red(got) != c.red {
+					t.Errorf("at %.0f s: color %v, subtitle shown %v", c.at, got, c.red)
+				}
+			}
+		})
 	}
 }

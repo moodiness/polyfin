@@ -83,7 +83,8 @@ type Remux struct {
 // with a keyframe at the start of every segment, so that the segments of
 // a conversion follow those of a remux of the same version.
 type VideoEncoding struct {
-	// Encoder is libx264 or libx265; Level, the codec level it declares.
+	// Encoder is libx264, libx265 or one of Hardware's; Level, the codec
+	// level it declares.
 	Encoder, Level string
 	Width, Height  int
 	// Bitrate is the average the encoder aims for, in bits per second.
@@ -96,11 +97,19 @@ type VideoEncoding struct {
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
 	// video, nil for none.
 	Burn *int
+	// Hardware is the GPU decoding and encoding the video, nil for none.
+	Hardware *Hardware
 }
 
 // filters is the filter chain of the video: 8-bit, at the size asked, in
-// SDR.
+// SDR, as the encoder takes it.
 func (v *VideoEncoding) filters() string {
+	return v.convert() + "," + v.Hardware.output()
+}
+
+// convert is the filter chain bringing the video to the size asked, in
+// SDR, before the pixel format the encoder takes.
+func (v *VideoEncoding) convert() string {
 	var filters []string
 	if v.Deinterlace {
 		filters = append(filters, "yadif")
@@ -112,7 +121,7 @@ func (v *VideoEncoding) filters() string {
 		filters = append(filters, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
 			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv")
 	}
-	return strings.Join(append(filters, "format=yuv420p"), ",")
+	return strings.Join(filters, ",")
 }
 
 // burnGraph is the filter graph burning subtitle stream burn into video
@@ -120,16 +129,17 @@ func (v *VideoEncoding) filters() string {
 // video it was made for, is scaled to the width of the converted video
 // keeping its shape, and laid at the bottom: a video cropped since keeps
 // the subtitles near its bottom edge. It is laid after the conversion to
-// SDR, which would dim its colors.
+// SDR, which would dim its colors, and in memory, before a GPU encoder
+// takes the frames.
 //
 // FFmpeg repeats the canvas for every packet read from the source, which
 // is over a thousand a second with TrueHD audio: the canvas is first
 // brought to the video's frame rate, or scaling the repeats makes the
 // conversion several times slower.
 func (v *VideoEncoding) burnGraph(video, burn int) string {
-	return "[0:" + strconv.Itoa(video) + "]" + v.filters() + "[converted];" +
+	return "[0:" + strconv.Itoa(video) + "]" + v.convert() + ",format=yuv420p[converted];" +
 		"[0:" + strconv.Itoa(burn) + "]fps=" + strconv.FormatFloat(v.FrameRate, 'f', -1, 64) + ",scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
-		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass,format=yuv420p[video]"
+		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + "[video]"
 }
 
 // args are FFmpeg's encoder options for a job starting at segment n.
@@ -146,16 +156,26 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
 	}
-	args := []string{"-c:v", v.Encoder, "-preset", "veryfast",
+	args := []string{"-c:v", v.Encoder,
 		"-b:v", strconv.FormatInt(v.Bitrate, 10), "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
-		"-force_key_frames", strings.Join(times, ","), "-sc_threshold", "0"}
+		"-force_key_frames", strings.Join(times, ",")}
 	if v.Burn == nil {
 		args = append(args, "-vf", v.filters())
 	}
-	if v.Encoder == "libx264" {
-		args = append(args, "-profile:v", "high", "-level:v", v.Level)
-	} else {
-		args = append(args, "-profile:v", "main", "-x265-params", "log-level=error:level-idc="+v.Level)
+	profile := "main"
+	if strings.HasPrefix(v.Encoder, "h264") {
+		profile = "high"
+	}
+	switch v.Encoder {
+	case "libx264":
+		args = append(args, "-preset", "veryfast", "-sc_threshold", "0", "-profile:v", profile, "-level:v", v.Level)
+	case "libx265":
+		args = append(args, "-preset", "veryfast", "-sc_threshold", "0", "-profile:v", profile, "-x265-params", "log-level=error:level-idc="+v.Level)
+	case "h264_nvenc", "hevc_nvenc":
+		// A forced keyframe is an IDR frame, as a segment's first must be.
+		args = append(args, "-preset", "p4", "-rc", "vbr", "-forced-idr", "1", "-profile:v", profile, "-level:v", v.Level)
+	default:
+		args = append(args, "-rc_mode", "VBR", "-profile:v", profile, "-level:v", v.Level)
 	}
 	return args
 }
@@ -183,6 +203,8 @@ type Manager struct {
 	logger *slog.Logger
 	done   chan struct{}
 	can    capabilities
+	// hardware is the GPU DetectHardware chose, set before encoding starts.
+	hardware *Hardware
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -751,6 +773,9 @@ func (r Remux) args(n int) []string {
 		// Converted audio starts where the demuxer does, on the keyframe,
 		// as copied streams do, instead of at the time asked.
 		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
+	}
+	if r.Encode != nil && r.Encode.Hardware != nil {
+		args = append(args, r.Encode.Hardware.inputs()...)
 	}
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)

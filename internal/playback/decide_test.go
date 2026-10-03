@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/hls"
 )
 
 const playbackFixtures = "../jellyfin/testdata/jellyfin-12.1/playback/"
@@ -406,6 +408,23 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	} {
 		if c.got != c.want {
 			t.Errorf("codec string %s, want %s", c.got, c.want)
+		}
+	}
+}
+
+func TestVideoIsConvertedOnTheGPUThatEncodesTheCodec(t *testing.T) {
+	// This GPU encodes H.264 only.
+	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}}
+	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true, Hardware: gpu}
+	video := MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(1920), Height: new(1080)}
+	for codecs, want := range map[string]*VideoConversion{
+		"h264,hevc": {Codec: "h264", Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 10_000_000, Hardware: gpu},
+		// HEVC the app needs is encoded in software rather than H.264 on
+		// the GPU.
+		"hevc": {Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000},
+	} {
+		if got := ConvertVideo(codecs, 0, video, can); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %+v, want %+v", codecs, got, want)
 		}
 	}
 }

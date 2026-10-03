@@ -10,11 +10,13 @@
   <Project>https://github.com/moodiness/polyfin</Project>
   <Overview>Polyfin is a self-hosted, Jellyfin-compatible media server for Stremio addons. It is designed to let Jellyfin apps on TVs, phones and computers browse and play what your own addons provide, with multiple users and transcoding.&#xD;
 &#xD;
-EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet. Jellyfin apps can sign in, but there is nothing to browse or play yet.&#xD;
+EARLY DEVELOPMENT: Polyfin is not ready for everyday use yet.&#xD;
 &#xD;
 REQUIRED: A PostgreSQL 18 container must already be running, for example the official postgres:18 image with a dedicated database and user named polyfin. Enter its address in PostgreSQL URL as postgresql://USER:PASSWORD@HOST:5432/DATABASE, where HOST is the PostgreSQL container name on a shared custom Docker network or the Unraid server IP. Use a URL-safe password such as the output of openssl rand -hex 24. Polyfin waits for the database and creates its tables automatically.&#xD;
 &#xD;
 FIRST RUN: open the container log and copy the one-time setup code, then open the WebUI and create the administrator with it.&#xD;
+&#xD;
+GPU (optional): Polyfin converts video on the first GPU that works and logs which one. NVIDIA: install the Nvidia Driver plugin, add --runtime=nvidia to Extra Parameters, and set NVIDIA_VISIBLE_DEVICES to the GPU's UUID or all. AMD or Intel: set the GPU device to /dev/dri.&#xD;
 &#xD;
 Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
   <Category>MediaServer:Video</Category>
@@ -31,4 +33,8 @@ Polyfin hosts no content and ships with no addons or catalogues: you choose and 
   <Config Name="PostgreSQL URL" Target="POLYFIN_DATABASE_URL" Default="" Mode="" Description="Connection URL of your PostgreSQL 18 database, for example postgresql://polyfin:YOUR_PASSWORD@postgres:5432/polyfin. Keep the password URL-safe." Type="Variable" Display="always" Required="true" Mask="true"/>
   <Config Name="Log level" Target="POLYFIN_LOG_LEVEL" Default="info|debug|warn|error" Mode="" Description="Amount of detail in the container log. Use debug only while troubleshooting." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
   <Config Name="Cache size" Target="POLYFIN_CACHE_SIZE" Default="10GB" Mode="" Description="Disk space for parts of the files being read, for example 10GB or 512MiB. They are kept in Docker's storage and emptied when Polyfin starts: keep this below the free space of your Docker vDisk or directory." Type="Variable" Display="advanced" Required="false" Mask="false">10GB</Config>
+  <Config Name="GPU" Target="POLYFIN_HWACCEL" Default="auto|nvenc|vaapi|none" Mode="" Description="GPU video is converted on: auto uses the first that works, NVIDIA then AMD or Intel; none converts on the processor." Type="Variable" Display="advanced" Required="false" Mask="false">auto</Config>
+  <Config Name="GPU device (AMD or Intel)" Target="" Default="" Mode="" Description="Set to /dev/dri to give Polyfin an AMD or Intel GPU. Leave empty otherwise: the container does not start with a device the server lacks." Type="Device" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="NVIDIA GPUs" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="NVIDIA GPUs Polyfin may use, with --runtime=nvidia in Extra Parameters: all, or a GPU's UUID from the Nvidia Driver plugin." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,video,utility" Mode="" Description="NVIDIA driver libraries the container gets. Video decoding and encoding need video." Type="Variable" Display="advanced" Required="false" Mask="false">compute,video,utility</Config>
 </Container>

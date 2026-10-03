@@ -359,7 +359,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 				rate = video.FrameRate
 			}
 			r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn}
+				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware}
 		}
 		if c := remux.ConvertAudio; c != nil && audio >= 0 {
 			r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate

@@ -32,6 +32,12 @@ type Config struct {
 	// bounds the space they take, in bytes.
 	CacheDir  string
 	CacheSize int64
+	// Acceleration is the GPU video is converted on: auto, the first of
+	// NVIDIA and VAAPI that works, nvenc, vaapi, or none.
+	Acceleration string
+	// VAAPIDevice is the render node VAAPI opens, such as
+	// /dev/dri/renderD128; empty tries each in turn.
+	VAAPIDevice string
 }
 
 // defaultCacheSize is 10 GB: a few films, read again for seeks and
@@ -44,13 +50,15 @@ const minCacheSize = 256 << 20
 // Load reads the configuration through getenv, normally os.Getenv.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL: strings.TrimSpace(getenv("POLYFIN_DATABASE_URL")),
-		Listen:      strings.TrimSpace(getenv("POLYFIN_LISTEN")),
-		LogLevel:    slog.LevelInfo,
-		FFprobe:     strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
-		FFmpeg:      strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
-		CacheDir:    strings.TrimSpace(getenv("POLYFIN_CACHE_DIR")),
-		CacheSize:   defaultCacheSize,
+		DatabaseURL:  strings.TrimSpace(getenv("POLYFIN_DATABASE_URL")),
+		Listen:       strings.TrimSpace(getenv("POLYFIN_LISTEN")),
+		LogLevel:     slog.LevelInfo,
+		FFprobe:      strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
+		FFmpeg:       strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
+		CacheDir:     strings.TrimSpace(getenv("POLYFIN_CACHE_DIR")),
+		CacheSize:    defaultCacheSize,
+		Acceleration: strings.ToLower(strings.TrimSpace(getenv("POLYFIN_HWACCEL"))),
+		VAAPIDevice:  strings.TrimSpace(getenv("POLYFIN_VAAPI_DEVICE")),
 	}
 	if cfg.FFprobe == "" {
 		cfg.FFprobe = "ffprobe"
@@ -85,6 +93,13 @@ func Load(getenv func(string) string) (Config, error) {
 		default:
 			cfg.CacheSize = size
 		}
+	}
+	switch cfg.Acceleration {
+	case "":
+		cfg.Acceleration = "auto"
+	case "auto", "nvenc", "vaapi", "none":
+	default:
+		errs = append(errs, fmt.Errorf("POLYFIN_HWACCEL: %q is not one of auto, nvenc, vaapi, none", cfg.Acceleration))
 	}
 	return cfg, errors.Join(errs...)
 }

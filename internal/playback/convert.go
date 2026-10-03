@@ -4,11 +4,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/hls"
 )
 
 // Capabilities returns what the installed FFmpeg converts with.
 func (s *Service) Capabilities() Capabilities {
-	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap")}
+	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: s.segments.Hardware()}
 }
 
 // Capabilities are what the installed FFmpeg converts with.
@@ -18,6 +20,8 @@ type Capabilities struct {
 	// ToneMapping is set when FFmpeg has the filters converting HDR to SDR:
 	// zscale and tonemap.
 	ToneMapping bool
+	// Hardware is the GPU video is converted on, nil for none.
+	Hardware *hls.Hardware
 }
 
 // AudioConversion is what the audio that plays is converted to when the
@@ -82,10 +86,13 @@ type VideoConversion struct {
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
+	// Hardware is the GPU Encoder belongs to, nil for software.
+	Hardware *hls.Hardware
 }
 
 // videoEncoders are the software encoders Polyfin converts video with, by
-// preference: H.264 encodes several times faster than HEVC.
+// preference: H.264 encodes several times faster than HEVC, and more apps
+// take it. A GPU's encoder of the same codec comes first.
 var videoEncoders = []struct{ codec, encoder string }{{"h264", "libx264"}, {"hevc", "libx265"}}
 
 // rungs are the heights video is converted to by software encoders, with
@@ -110,14 +117,24 @@ const toneMappedHeight = 720
 // ConvertVideo is the conversion of video for a transcoding profile taking
 // codecs, as a comma-separated list, within limit bits per second when it
 // is positive: the first of H.264 and HEVC the profile takes and FFmpeg
-// encodes, at the height the limit allows, never larger than the source,
-// converted to SDR and deinterlaced as needed. It is nil when the profile
-// takes neither, and for HDR the installed FFmpeg cannot convert: without
-// its filters, or Dolby Vision with no base layer other players read.
+// encodes, on the GPU when it encodes that codec, at the height the limit
+// allows, never larger than the source, converted to SDR and deinterlaced
+// as needed. It is nil when the profile takes neither, and for HDR the
+// installed FFmpeg cannot convert: without its filters, or Dolby Vision
+// with no base layer other players read.
 func ConvertVideo(codecs string, limit int64, video MediaStream, can Capabilities) *VideoConversion {
 	conversion := &VideoConversion{}
 	for _, candidate := range videoEncoders {
-		if listHas(codecs, candidate.codec) && slices.Contains(can.Encoders, candidate.encoder) {
+		if !listHas(codecs, candidate.codec) {
+			continue
+		}
+		if hw := can.Hardware; hw != nil {
+			if i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, candidate.codec+"_") }); i >= 0 {
+				conversion.Codec, conversion.Encoder, conversion.Hardware = candidate.codec, hw.Encoders[i], hw
+				break
+			}
+		}
+		if slices.Contains(can.Encoders, candidate.encoder) {
 			conversion.Codec, conversion.Encoder = candidate.codec, candidate.encoder
 			break
 		}

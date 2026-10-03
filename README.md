@@ -3,7 +3,7 @@
 Polyfin is a self-hosted, Jellyfin-compatible server that sources its content from Stremio addons: catalogs, metadata, streams, and subtitles. It provides real user accounts and transcoding, so any Jellyfin client can connect to it like a regular Jellyfin server, without Jellyfin installed.
 
 > [!NOTE]
-> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, remuxed into HLS, or transcoded in software when the app cannot take the video or audio, with the addons' subtitles and the text subtitles inside the files, image subtitles burned in when the app cannot show them, and keep each user's watched state, resume points and favorites. Without hardware acceleration yet, HDR video converted to SDR stops at 720p, and Dolby Vision profile 5 is not converted. No image is published before the first release.
+> Polyfin is in early development: Jellyfin apps can sign in with a password or Quick Connect, browse the libraries, collections, titles, seasons, and episodes the addons provide, with their artwork and search, play the versions their device supports as they are, remuxed into HLS, or transcoded when the app cannot take the video or audio, on an NVIDIA, AMD or Intel GPU when there is one, with the addons' subtitles and the text subtitles inside the files, image subtitles burned in when the app cannot show them, and keep each user's watched state, resume points and favorites. HDR video converted to SDR stops at 720p, as tone mapping runs on the processor, and Dolby Vision profile 5 is not converted. No image is published before the first release.
 
 ## Features
 
@@ -12,7 +12,7 @@ Polyfin is a self-hosted, Jellyfin-compatible server that sources its content fr
   - Stremio catalogs become Jellyfin libraries. An addon's collection catalogs (such as AIOMetadata's) become collection libraries, where each collection gathers the catalogs it groups, movies and series together.
   - Stremio streams become versions (media sources) of the same item, and addon subtitles become external subtitle tracks.
 - **Multiple users**: separate accounts with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points, and Next Up are tracked per user.
-- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS, built on FFmpeg for remote sources: a remux when the app can play the video but not the container, converting the audio when the app cannot take it, and converting the video, HDR to SDR included, when it cannot take that or must have image subtitles (PGS, VobSub, DVB) burned in. See the [transcoding design](docs/transcoding.md).
+- **Transcoding**: direct play when the client supports the file, with Polyfin redirecting the client to the stream and staying out of the video path; otherwise Polyfin's own on-demand HLS, built on FFmpeg for remote sources: a remux when the app can play the video but not the container, converting the audio when the app cannot take it, and converting the video, HDR to SDR included, when it cannot take that or must have image subtitles (PGS, VobSub, DVB) burned in. Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available, else on the processor. See the [transcoding design](docs/transcoding.md).
 
 ## How it works
 
@@ -64,6 +64,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 
 **Watch state:** each user's played titles, resume points, favorites and ratings are kept by Polyfin, so they follow the user from one Jellyfin app to another. Playback moves the resume point and marks a title played near its end, with Jellyfin's thresholds. Continue Watching lists what is under way, and Next Up the next episode of each series being watched. Marking a series or a season played marks its released episodes.
 
+**GPU:** at startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. Give the container an NVIDIA GPU with `--runtime=nvidia` (Compose: `runtime: nvidia`), which needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin; give it an AMD or Intel GPU with `--device /dev/dri` (Compose: `devices`). The container runs as user 65532: when the render nodes in `/dev/dri` are not open to every user, add the group that owns them with `--group-add`.
+
 **Unraid:** the template lives in [`templates/unraid/polyfin.xml`](templates/unraid/polyfin.xml). It needs a PostgreSQL 18 container and becomes usable once an image is published.
 
 ## Configuration
@@ -77,6 +79,8 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 | `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
 | `POLYFIN_CACHE_DIR` | system temporary directory, `/cache` in the Docker image | Where parts of the files being read, and the HLS segments being played, are kept. Emptied when Polyfin starts. |
 | `POLYFIN_CACHE_SIZE` | `10GB` | Disk space the parts of files being read may use, e.g. `10GB` or `512MiB`; at least 256 MiB. Parts read in the last 30 seconds are kept even above it. HLS segments come on top: about a minute ahead of each player, up to 1 GB for a 4K remux. |
+| `POLYFIN_HWACCEL` | `auto` | GPU video is converted on: `auto` for the first that works, `nvenc` (NVIDIA), `vaapi` (AMD, Intel), or `none` for the processor. |
+| `POLYFIN_VAAPI_DEVICE` | each render node in turn | Render node VAAPI opens, e.g. `/dev/dri/renderD128`, when several GPUs could. |
 
 The Compose files read their own settings (passwords, ports, image version) from `.env`; see [`.env.example`](.env.example).
 

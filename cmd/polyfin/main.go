@@ -60,6 +60,8 @@ Environment:
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
   POLYFIN_CACHE_DIR     where sources being played and their remuxes are kept (default: a polyfin directory in the system's temporary directory)
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
+  POLYFIN_HWACCEL       GPU video is converted on: auto, nvenc, vaapi or none (default auto)
+  POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
 `
 
 func main() {
@@ -151,6 +153,14 @@ func serve(ctx context.Context) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
+	switch hw, ok := segments.DetectHardware(cfg.Acceleration, cfg.VAAPIDevice); {
+	case ok:
+		logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders)
+	case cfg.Acceleration == "auto":
+		logger.Info("Video is converted in software: no GPU encodes")
+	case cfg.Acceleration != "none":
+		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
+	}
 	lib := library.New(pool, addonStore, addonClient, logger, func() string { return store.Settings().Language })
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger)
 	if err != nil {
