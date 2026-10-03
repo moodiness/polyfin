@@ -31,6 +31,9 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Items/Filters", h.filters)
 	signedIn(http.MethodGet, "/Items/Filters2", h.filters2)
 	signedIn(http.MethodGet, "/Genres", h.genres)
+	signedIn(http.MethodGet, "/Genres/{genreName}", h.genrePage)
+	signedIn(http.MethodGet, "/Studios/{name}", h.studioPage)
+	signedIn(http.MethodGet, "/Years/{year}", h.yearPage)
 	// Jellyfin apps load images without credentials.
 	rt.handle(http.MethodGet, "/Items/{itemId}/Images/{imageType}", http.HandlerFunc(h.image))
 	rt.handle(http.MethodGet, "/Items/{itemId}/Images/{imageType}/{imageIndex}", http.HandlerFunc(h.image))
@@ -221,14 +224,19 @@ func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, folders)
 }
 
-// items lists a folder's children, the results of a search, or items by
-// identifier.
+// items lists a folder's children, the titles of a genre, studio or year,
+// the results of a search, or items by identifier.
 func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, defaultPageSize)
 	parent, hasParent := b.guid(r, "parentId")
 	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok {
+		return
+	}
+	names, valid := nameFilterOf(r)
+	if !valid {
+		processingError(w, http.StatusBadRequest)
 		return
 	}
 	fields := requestedFields(r)
@@ -276,6 +284,10 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !hasParent {
+		if names.requested() {
+			h.narrowedListing(w, r, user, names, start, limit)
+			return
+		}
 		// Without a folder, Jellyfin apps ask for whole-server listings,
 		// which remote catalogs cannot answer.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
@@ -283,7 +295,8 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	genre, ok := h.genreFilter(r, user, parent)
 	if !ok {
-		// The library cannot be narrowed to the requested genre.
+		// The library cannot be narrowed to the requested genre, studio or
+		// year.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
@@ -305,32 +318,26 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: page.Total, StartIndex: start})
 }
 
-// genreFilter returns the genre a listing is narrowed to, given by name
-// (genres, pipe-separated as Jellyfin apps send it) or identifier
-// (genreIds). ok is false when a genre is requested that the library's
-// catalog does not offer.
+// genreFilter returns the genre option of a library's catalog a listing is
+// narrowed to, given by genre, studio or year (see nameFilter). ok is false
+// when the listing asks for one the catalog does not offer.
 func (h *Handler) genreFilter(r *http.Request, user accounts.User, parent accounts.ID) (string, bool) {
-	var names []string
-	for name := range strings.SplitSeq(query(r, "genres"), "|") {
-		if name = strings.TrimSpace(name); name != "" {
-			names = append(names, name)
-		}
+	names, valid := nameFilterOf(r)
+	if !valid {
+		return "", false
 	}
-	ids := listQuery(r, "genreIds")
-	if len(names) == 0 && len(ids) == 0 {
+	if !names.requested() {
 		return "", true
 	}
-	genres, err := h.Library.Genres(r.Context(), user, parent)
+	options, err := h.Library.Genres(r.Context(), user, parent)
 	if err != nil {
 		return "", false
 	}
-	for _, genre := range genres {
-		if slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, genre) }) ||
-			slices.Contains(ids, nameID("genre", genre)) {
-			return genre, true
-		}
+	i := slices.IndexFunc(options, names.matches)
+	if i < 0 {
+		return "", false
 	}
-	return "", false
+	return options[i], true
 }
 
 func pageOf(items []BaseItemDto, start, limit, total int) QueryResult {
