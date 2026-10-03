@@ -147,6 +147,11 @@ func (s *Store) Devices(ctx context.Context, user ID) ([]Device, error) {
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Device, error) { return scanDevice(row) })
 }
 
+// Device returns a signed-in device by its identifier.
+func (s *Store) Device(ctx context.Context, id ID) (Device, error) {
+	return scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+" FROM devices d WHERE d.id = $1", id))
+}
+
 // SetCapabilities records what a signed-in app reported it supports.
 func (s *Store) SetCapabilities(ctx context.Context, device ID, capabilities Capabilities) error {
 	if capabilities.PlayableMediaTypes == nil {

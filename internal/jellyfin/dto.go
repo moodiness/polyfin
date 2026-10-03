@@ -296,7 +296,10 @@ type SessionInfo struct {
 	SupportedCommands     []string
 }
 
-func newSessionInfo(device accounts.Device, user accounts.User, serverID string) SessionInfo {
+// newSessionInfo describes a device's session. Like Jellyfin, it reports
+// media and remote control only when the device is controllable, as its
+// declared capabilities alone do not say whether commands can reach it.
+func newSessionInfo(device accounts.Device, user accounts.User, serverID string, controllable bool) SessionInfo {
 	capabilities := device.Capabilities
 	return SessionInfo{
 		PlayState:       PlayerStateInfo{RepeatMode: "RepeatNone", PlaybackOrder: "Default"},
@@ -318,8 +321,8 @@ func newSessionInfo(device accounts.Device, user accounts.User, serverID string)
 		DeviceId:              device.DeviceID,
 		ApplicationVersion:    device.ClientVersion,
 		IsActive:              true,
-		SupportsMediaControl:  capabilities.SupportsMediaControl,
-		SupportsRemoteControl: capabilities.SupportsMediaControl,
+		SupportsMediaControl:  controllable,
+		SupportsRemoteControl: controllable,
 		NowPlayingQueue:       []struct{}{},
 		ServerId:              serverID,
 		SupportedCommands:     capabilities.SupportedCommands,

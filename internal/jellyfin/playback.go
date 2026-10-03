@@ -78,10 +78,13 @@ func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {
 const sessionWindow = 10 * time.Minute
 
 // listSessions lists the signed-in devices active lately, with what they
-// play: the caller's own, or everyone's for an administrator.
+// play: the caller's own, or everyone's for an administrator. A device
+// holding a socket is active. With controllableByUserId, only the sessions
+// that user may send commands to are listed.
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	seconds, limited := b.int32(r, "activeWithinSeconds")
+	controllerID, controlled := b.guid(r, "controllableByUserId")
 	if len(b) > 0 {
 		validationProblem(w, b)
 		return
@@ -92,6 +95,13 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	deviceID := query(r, "deviceId")
 	caller := callerFrom(r.Context())
+	var controller accounts.User
+	if controlled {
+		var ok bool
+		if controller, ok = h.targetUser(w, r, controllerID, true, unknownListingUser); !ok {
+			return
+		}
+	}
 	users := []accounts.User{caller.User}
 	if caller.User.IsAdministrator {
 		all, err := h.Accounts.Users(r.Context())
@@ -103,6 +113,9 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	sessions := []SessionInfo{}
 	for _, user := range users {
+		if controlled && !mayControl(controller, user.ID) {
+			continue
+		}
 		devices, err := h.Accounts.Devices(r.Context(), user.ID)
 		if err != nil {
 			h.internalError(w, r, err)
@@ -110,10 +123,15 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, device := range devices {
 			playing, isPlaying := h.sessions.Playing(device.ID)
-			if deviceID != "" && device.DeviceID != deviceID || !isPlaying && time.Since(device.LastActivityAt) > window {
+			connected := h.sockets.latest(device.ID) != nil
+			if deviceID != "" && device.DeviceID != deviceID || !isPlaying && !connected && time.Since(device.LastActivityAt) > window {
 				continue
 			}
-			info := newSessionInfo(device, user, h.ServerID)
+			controllable := h.controllable(device)
+			if controlled && !controllable {
+				continue
+			}
+			info := newSessionInfo(device, user, h.ServerID, controllable)
 			if isPlaying {
 				h.describePlaying(r, user, &info, playing)
 			}

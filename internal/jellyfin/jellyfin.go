@@ -113,6 +113,7 @@ func New(options Options) *Handler {
 	h.playbackRoutes(rt)
 	h.userDataRoutes(rt)
 	h.remoteSubtitleRoutes(rt)
+	h.remoteRoutes(rt)
 
 	h.routes = cors(rt)
 	return h
