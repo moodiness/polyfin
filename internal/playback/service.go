@@ -163,6 +163,10 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		return media.Analysis{}, err
 	}
 	result, err, _ := s.flight.Do("analyze "+version.ID.String(), func() (any, error) {
+		// Requests for the version share this analysis, and it is kept: it
+		// runs to the end, and is saved, even once the request that started
+		// it is canceled, as when an app stops waiting.
+		ctx := context.WithoutCancel(ctx)
 		// ffprobe reads through the source cache, so that confined sources
 		// stay confined, required headers are sent, and what it reads is
 		// kept for playback.
@@ -171,7 +175,7 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		target, release := s.loopback.register(src)
 		defer release()
 		started := time.Now()
-		analysis, err := s.prober.Probe(context.WithoutCancel(ctx), target)
+		analysis, err := s.prober.Probe(ctx, target)
 		if err == nil && standIn(analysis, version.Runtime) {
 			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
 		}

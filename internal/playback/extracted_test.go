@@ -1,10 +1,12 @@
 package playback
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -59,5 +61,28 @@ func TestExtractedSubtitlesAccumulateAcrossRemuxes(t *testing.T) {
 		return a.Start == b.Start && a.End == b.End && slices.Equal(a.Lines, b.Lines)
 	}) {
 		t.Errorf("read back: %v %+v", read.covered, read.cues(3, 0, 0))
+	}
+}
+
+func TestStoredSubtitlesAreNotHiddenByARequestTheAppGaveUp(t *testing.T) {
+	path, _ := fakeProbe(t, "", false)
+	s := newService(t, &fakeSource{}, path, nil)
+	version := accounts.ID{9}
+	stored := newExtracted()
+	stored.Cover(0, time.Hour)
+	stored.Add(3, subtitles.Cue{Start: time.Minute, End: time.Minute + 2*time.Second, Lines: []string{"Hello"}})
+	s.saveExtracted(t.Context(), version, stored)
+	// After a restart, an app asks, then stops waiting; a later request
+	// still finds the subtitles extracted before.
+	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	restarted.SubtitlesExtracted(ctx, version, time.Hour)
+	if !restarted.SubtitlesExtracted(t.Context(), version, time.Hour) {
+		t.Error("the stored subtitles were hidden")
 	}
 }
