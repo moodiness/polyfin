@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -38,10 +40,9 @@ const (
 	// locateTime bounds reading a version's head and Cues: a few large
 	// reads.
 	locateTime = 30 * time.Second
-	// trackReadTime bounds reading a track's blocks. A few batched
-	// requests take seconds; a host that answers one range at a time takes
-	// one request per block or so, paced, which for a film can take minutes.
-	// The track is kept once read, for later playbacks.
+	// trackReadTime bounds reading a track's blocks: a few requests, at
+	// most trackRequests, take seconds; a slow host, or one that asks to
+	// wait, minutes. The track is kept once read, for later playbacks.
 	trackReadTime = 15 * time.Minute
 	// hostTrackReads bounds the tracks read at once from one host, to stay
 	// gentle with it, and maxTrackReads those read at once from every host:
@@ -320,8 +321,9 @@ func (s *Service) keptTrack(ctx context.Context, key trackKey) (Track, bool) {
 }
 
 // readTrack reads a track's blocks through the version's index and keeps
-// the file they make. A track whose file cannot be read so is not offered
-// anymore; one its host failed to serve is not offered for a while.
+// the file they make. A track that cannot be read so, for what its file
+// holds or for the requests its host would take, is not offered anymore;
+// one its host failed to serve is not offered for a while.
 func (s *Service) readTrack(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	// The host's slot first: a read waiting for a slot over every host
 	// holds up only its own host's reads.
@@ -342,7 +344,7 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 	if err != nil {
 		s.logger.Info("A subtitle track could not be read through its index", "addon", version.Addon, "error", err)
 		s.untracked.Put(key, err)
-		if describesFile(err) {
+		if lasting(err) {
 			s.unlocate(ctx, version.ID, stream)
 		}
 		return Track{}, err
@@ -373,7 +375,7 @@ func (s *Service) readBlocks(ctx context.Context, version library.Version, analy
 	if _, indexed := indexedCodecs[track.CodecID]; !ok || !indexed || !track.Decodable {
 		return Track{}, ErrNotLocated
 	}
-	blocks, err := m.SubtitleBlocks(ctx, src, track.Number)
+	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(trackRequests)}, track.Number)
 	if err != nil {
 		return Track{}, err
 	}
@@ -391,11 +393,51 @@ func (s *Service) readBlocks(ctx context.Context, version library.Version, analy
 // serves.
 var errTrackFile = errors.New("the blocks of the subtitle track do not make a file")
 
-// describesFile reports whether reading a track failed for what its file
-// holds, which reading it again from any host would meet again.
-func describesFile(err error) bool {
+// errTrackRequests reports a track that would take its host more requests
+// than trackRequests.
+var errTrackRequests = errors.New("reading the subtitle track would take its host too many requests")
+
+// trackRequests bounds the requests of a track read. A host that serves
+// several ranges at once is asked by batches: a film's track, a few
+// thousand blocks, takes a few dozen. One that serves a range at a time
+// would take a request for nearly every block, hundreds for a film, which
+// providers answer with 429 and which slows the video they serve too:
+// such a track is left to remuxes, unless it has few blocks.
+var trackRequests = 64
+
+// boundedFetcher fails the requests of a read past its share.
+type boundedFetcher struct {
+	src  *source.Source
+	left int64
+}
+
+func (f *boundedFetcher) take() error {
+	if atomic.AddInt64(&f.left, -1) < 0 {
+		return errTrackRequests
+	}
+	return nil
+}
+
+func (f *boundedFetcher) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	if err := f.take(); err != nil {
+		return nil, err
+	}
+	return f.src.Fetch(ctx, off, n)
+}
+
+func (f *boundedFetcher) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	if err := f.take(); err != nil {
+		return nil, err
+	}
+	return f.src.FetchRanges(ctx, ranges)
+}
+
+// lasting reports whether reading a track failed for a reason reading it
+// again would meet again: what its file holds, from any host, or the
+// requests its version's host would take.
+func lasting(err error) bool {
 	return errors.Is(err, container.ErrUnreadable) || errors.Is(err, container.ErrNoIndex) ||
-		errors.Is(err, ErrNotLocated) || errors.Is(err, errTrackFile)
+		errors.Is(err, ErrNotLocated) || errors.Is(err, errTrackFile) || errors.Is(err, errTrackRequests)
 }
 
 // unlocate stops offering a stream whose track cannot be read whole, for

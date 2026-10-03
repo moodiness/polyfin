@@ -233,6 +233,34 @@ func TestTrackReadsWaitForTheirOwnHostOnly(t *testing.T) {
 	}
 }
 
+// A track read stops at its share of requests, and the track is not
+// offered again: a host that serves one range at a time would take a
+// request for nearly every block, hundreds for a film. Here the share
+// leaves only the check of a Cluster.
+func TestTrackReadsStopAtTheirShareOfRequests(t *testing.T) {
+	share := trackRequests
+	trackRequests = 1
+	t.Cleanup(func() { trackRequests = share })
+	s, opener, version, analysis := subtitled(t)
+	ctx := t.Context()
+	const srtStream = 1
+	if !s.SubtitlesLocated(ctx, version, analysis)[srtStream] {
+		t.Fatal("the track is not located")
+	}
+	before := opener.requests.Load()
+	if _, err := s.SubtitleTrack(ctx, version, analysis, srtStream); !errors.Is(err, errTrackRequests) {
+		t.Fatalf("read past its share: %v", err)
+	}
+	if made := opener.requests.Load() - before; made > 4 {
+		t.Errorf("%d requests for a read of one", made)
+	}
+	s.locations.Delete(version.ID)
+	s.untracked.Delete(trackKey{version.ID, srtStream})
+	if s.SubtitlesLocated(ctx, version, analysis)[srtStream] {
+		t.Error("the track is offered again")
+	}
+}
+
 func sameCue(a, b subtitles.Cue) bool {
 	return a.Start == b.Start && a.End == b.End && slices.Equal(a.Lines, b.Lines)
 }
