@@ -3,11 +3,16 @@ package jellyfin
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // tracking browses the catalog addon as a member and finds its first movie
@@ -214,6 +219,146 @@ func TestNextUpFollowsTheFurthestPlayedEpisode(t *testing.T) {
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.episodes[2])
 	if got := nextUp(""); len(got) != 0 {
 		t.Errorf("after the last episode: %v", got)
+	}
+}
+
+// airingAddon serves a movie catalog and a catalog of three series whose
+// episodes air around now: Bravo, Alpha and Charlie.
+func airingAddon(t *testing.T) string {
+	t.Helper()
+	now := time.Now().UTC()
+	at := func(offset time.Duration) string { return now.Add(offset).Format(time.RFC3339) }
+	day := 24 * time.Hour
+	shows := []stremio.Meta{
+		{ID: "tt0200", Type: "series", Name: "Bravo", Videos: []stremio.Video{
+			{ID: "tt0200:1:1", Title: "Bravo long ago", Season: 1, Episode: 1, Released: at(-10 * day)},
+			{ID: "tt0200:1:2", Title: "Bravo two days ago", Season: 1, Episode: 2, Released: at(-50 * time.Hour)},
+			{ID: "tt0200:1:3", Title: "Bravo hours ago", Season: 1, Episode: 3, Released: at(-12 * time.Hour)},
+			{ID: "tt0200:1:4", Title: "Bravo tomorrow", Season: 1, Episode: 4, Released: at(day)},
+			{ID: "tt0200:1:5", Title: "Bravo next week", Season: 1, Episode: 5, Released: at(7 * day)},
+			{ID: "tt0200:0:1", Title: "Bravo special", Season: 0, Episode: 1, Released: at(day)},
+		}},
+		{ID: "tt0201", Type: "series", Name: "Alpha", Videos: []stremio.Video{
+			{ID: "tt0201:1:1", Title: "Alpha next week", Season: 1, Episode: 1, Released: at(7 * day)},
+			{ID: "tt0201:1:2", Title: "Alpha undated", Season: 1, Episode: 2},
+		}},
+		{ID: "tt0202", Type: "series", Name: "Charlie", Videos: []stremio.Video{
+			{ID: "tt0202:1:1", Title: "Charlie tomorrow", Season: 1, Episode: 1, Released: at(day)},
+		}},
+	}
+	film := stremio.Meta{ID: "tt0300", Type: "movie", Name: "Film", Released: "2020-04-10T00:00:00.000Z"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "airing", Name: "Airing", Version: "1", Types: []string{"movie", "series"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "films", Name: "Films"}, {Type: "series", ID: "tonight", Name: "Tonight"}}})
+		case strings.HasPrefix(path, "/catalog/movie/films"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{film}})
+		case strings.HasPrefix(path, "/catalog/series/tonight"):
+			previews := make([]stremio.Meta, 0, len(shows))
+			for _, show := range shows {
+				show.Videos = nil
+				previews = append(previews, show)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": previews})
+		case path == "/meta/movie/tt0300.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": film})
+		case strings.HasPrefix(path, "/meta/series/"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/series/"), ".json")
+			for _, show := range shows {
+				if show.ID == id {
+					_ = json.NewEncoder(w).Encode(map[string]any{"meta": show})
+					return
+				}
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
+	s := newTestServer(t, 10)
+	s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), airingAddon(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "movie", CatalogID: "films"},
+		{AddonID: addon.ID, CatalogType: "series", CatalogID: "tonight"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	tr := tracking{testServer: s, token: token, views: map[string]string{}}
+	var page QueryResult
+	s.get(t, "/UserViews", token, &page)
+	for _, view := range page.Items {
+		tr.views[view.Name] = view.Id
+	}
+	series := map[string]string{}
+	s.get(t, "/Items?ParentId="+tr.views["Tonight"], token, &page)
+	for _, show := range page.Items {
+		series[show.Name] = show.Id
+	}
+	episodes := map[string]string{}
+	for _, id := range series {
+		s.get(t, "/Shows/"+id+"/Episodes", token, &page)
+		for _, episode := range page.Items {
+			episodes[episode.Name] = episode.Id
+		}
+	}
+	named := func(names ...string) []string {
+		ids := make([]string, 0, len(names))
+		for _, name := range names {
+			ids = append(ids, episodes[name])
+		}
+		return ids
+	}
+	upcoming := func(query string) []string { return tr.list(t, "/Shows/Upcoming?"+query) }
+	if got := upcoming(""); len(got) != 0 {
+		t.Errorf("before watching: %v", got)
+	}
+	// A played episode makes its series watched: its episodes aired from
+	// yesterday on come, specials included, by date and then season.
+	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+episodes["Bravo long ago"])
+	if got, want := upcoming(""), named("Bravo hours ago", "Bravo special", "Bravo tomorrow", "Bravo next week"); !slices.Equal(got, want) {
+		t.Errorf("watching Bravo: %v, want %v", got, want)
+	}
+	// A favorite series counts without being watched; a favorite movie is
+	// no series. Episodes of the same date come in series order.
+	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+series["Alpha"])
+	s.get(t, "/Items?ParentId="+tr.views["Films"], token, &page)
+	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+page.Items[0].Id)
+	all := named("Bravo hours ago", "Bravo special", "Bravo tomorrow", "Alpha next week", "Bravo next week")
+	if got := upcoming(""); !slices.Equal(got, all) {
+		t.Errorf("with Alpha a favorite: %v, want %v", got, all)
+	}
+	// Only libraries narrow the list down: a series does not.
+	if got := upcoming("parentId=" + tr.views["Tonight"]); !slices.Equal(got, all) {
+		t.Errorf("in the series library: %v", got)
+	}
+	for _, parent := range []string{tr.views["Films"], series["Bravo"]} {
+		if got := upcoming("parentId=" + parent); len(got) != 0 {
+			t.Errorf("under %s: %v", parent, got)
+		}
+	}
+	// The total is what the page holds, as Jellyfin counts it.
+	tr.get(t, "/Shows/Upcoming?startIndex=1&limit=2", token, &page)
+	if got := itemIDs(page.Items); !slices.Equal(got, all[1:3]) || page.TotalRecordCount != 2 || page.StartIndex != 1 {
+		t.Errorf("second page: %v, total %d, start %d", got, page.TotalRecordCount, page.StartIndex)
+	}
+	// An unknown user is answered as Next Up answers it.
+	unknown := "?userId=00000000000000000000000000000001"
+	nextUp, _ := tr.call(http.MethodGet, "/Shows/NextUp"+unknown, app("tv", token), nil)
+	if status, body := tr.call(http.MethodGet, "/Shows/Upcoming"+unknown, app("tv", token), nil); status != nextUp || status == http.StatusOK {
+		t.Errorf("unknown user: %d %s, Next Up %d", status, body, nextUp)
 	}
 }
 

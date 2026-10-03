@@ -264,6 +264,82 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	h.writeItems(w, r, user, page, start, total)
 }
 
+// upcoming lists the episodes airing from yesterday on, UTC, of the series
+// the user watches or marked favorite, soonest first.
+func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
+	b := bindErrors{}
+	start, limit := b.paging(r, -1)
+	parent, hasParent := b.guid(r, "parentId")
+	user, ok := h.viewer(w, r, b, notFoundProblem)
+	if !ok {
+		return
+	}
+	watched, err := h.UserData.Episodes(r.Context(), user.ID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	favorites, err := h.UserData.Favorites(r.Context(), user.ID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	var candidates []accounts.ID
+	seen := map[accounts.ID]bool{}
+	for _, e := range watched {
+		if e.Played && !seen[e.Series] {
+			seen[e.Series] = true
+			candidates = append(candidates, e.Series)
+		}
+	}
+	// Favorites are items of every kind. Favorite episodes, which name
+	// their series, are left out; the other kinds are told apart below,
+	// where only series have episodes.
+	for _, e := range favorites {
+		if e.Series == (accounts.ID{}) && !seen[e.Item] {
+			seen[e.Item] = true
+			candidates = append(candidates, e.Item)
+		}
+	}
+	now := time.Now().UTC()
+	from := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.UTC)
+	found := make([][]library.Item, len(candidates))
+	var wg sync.WaitGroup
+	limiter := make(chan struct{}, 6)
+	for i, candidate := range candidates {
+		wg.Go(func() {
+			limiter <- struct{}{}
+			defer func() { <-limiter }()
+			// Episodes are listed first: it turns down a favorite that is
+			// not a series without asking its addon for it.
+			episodes, err := h.Library.Episodes(r.Context(), user, candidate, nil)
+			if err != nil {
+				return
+			}
+			if hasParent {
+				series, err := h.Library.Item(r.Context(), user, candidate)
+				if err != nil || !h.within(r.Context(), user, series, parent) {
+					return
+				}
+			}
+			found[i] = slices.DeleteFunc(episodes, func(e library.Item) bool {
+				return e.PremiereDate == nil || e.PremiereDate.Before(from)
+			})
+		})
+	}
+	wg.Wait()
+	items := slices.Concat(found...)
+	slices.SortStableFunc(items, func(a, b library.Item) int {
+		return cmp.Or(a.PremiereDate.Compare(*b.PremiereDate),
+			cmp.Compare(strings.ToLower(a.SeriesName), strings.ToLower(b.SeriesName)),
+			cmp.Compare(a.ParentIndexNumber, b.ParentIndexNumber),
+			cmp.Compare(a.IndexNumber, b.IndexNumber))
+	})
+	page := window(items, start, limit)
+	// Jellyfin counts the episodes of the page, not all of them.
+	h.writeItems(w, r, user, page, start, len(page))
+}
+
 // nextEpisode picks the episode to watch next among a series' episodes, in
 // order: the first released, unplayed episode after the furthest one
 // played, or the first episode when none was played. Specials are left
