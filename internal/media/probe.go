@@ -54,6 +54,11 @@ type Stream struct {
 	AttachedPicture bool `json:"attachedPicture,omitempty"`
 	// TimeBase is the unit of the track's timestamps, such as "1/1000".
 	TimeBase string `json:"timeBase,omitempty"`
+	// FileName, MimeType and Comment describe an attached file, such as a
+	// font an ASS track uses, or cover art.
+	FileName string `json:"fileName,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+	Comment  string `json:"comment,omitempty"`
 
 	// Video.
 	Level          int     `json:"level,omitempty"`
@@ -168,6 +173,9 @@ func Parse(data []byte) (Analysis, error) {
 			Original:        s.Disposition["original"] == 1,
 			AttachedPicture: s.Disposition["attached_pic"] == 1,
 			TimeBase:        s.TimeBase,
+			FileName:        tag(s.Tags, "filename"),
+			MimeType:        tag(s.Tags, "mimetype"),
+			Comment:         tag(s.Tags, "comment"),
 			Level:           s.Level,
 			Width:           s.Width,
 			Height:          s.Height,
