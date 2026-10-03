@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/source"
@@ -95,6 +96,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 		Playback:      player,
 		Preferences:   preferences.New(pool),
 		UserData:      userdata.New(pool),
+		Playlists:     playlists.New(pool),
 		Logger:        logger,
 	})
 	server := httptest.NewServer(handler)

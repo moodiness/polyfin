@@ -159,6 +159,9 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := h.libraryViews(r, user)
+	if err == nil {
+		items, err = h.addPlaylistsView(r, user, items)
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -263,6 +266,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
+		return
+	}
+	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
 	if filter, ok := stateFilterOf(r); ok {
@@ -406,6 +412,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps open a version as an item by its media source id.
 		item, err = h.title(r.Context(), user, id)
+	}
+	if errors.Is(err, library.ErrNotFound) && h.describePlaylist(w, r, user, id) {
+		return
 	}
 	if err != nil {
 		h.browseError(w, r, err)
