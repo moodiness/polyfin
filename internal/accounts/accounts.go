@@ -247,6 +247,18 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 // session whose token hash is keepSession (the caller changing their own
 // password stays signed in).
 func (s *Store) UpdateUser(ctx context.Context, id ID, changes UserChanges, keepSession []byte) (User, error) {
+	return s.updateUser(ctx, id, changes, signIn{adminSession: keepSession})
+}
+
+// signIn names the admin session or Jellyfin device that made a change to
+// an account, which stays signed in when the change signs the account out
+// everywhere else. The zero value keeps nothing.
+type signIn struct {
+	adminSession []byte
+	device       *ID
+}
+
+func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep signIn) (User, error) {
 	var name, hash *string
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
@@ -293,7 +305,7 @@ func (s *Store) UpdateUser(ctx context.Context, id ID, changes UserChanges, keep
 			return err
 		}
 		if hash != nil || (updated.IsDisabled && !current.IsDisabled) {
-			return signOutEverywhere(ctx, tx, id, keepSession)
+			return signOutEverywhere(ctx, tx, id, keep)
 		}
 		return nil
 	})
@@ -303,6 +315,17 @@ func (s *Store) UpdateUser(ctx context.Context, id ID, changes UserChanges, keep
 // ChangePassword replaces the caller's own password after checking the
 // current one.
 func (s *Store) ChangePassword(ctx context.Context, id ID, current, next string, keepSession []byte) error {
+	return s.changePassword(ctx, id, current, next, signIn{adminSession: keepSession})
+}
+
+// ChangePasswordFromDevice replaces the password of the user signed in on a
+// Jellyfin app after checking the current one. The app's device stays
+// signed in; the account's other devices and admin sessions are signed out.
+func (s *Store) ChangePasswordFromDevice(ctx context.Context, id ID, current, next string, device ID) error {
+	return s.changePassword(ctx, id, current, next, signIn{device: &device})
+}
+
+func (s *Store) changePassword(ctx context.Context, id ID, current, next string, keep signIn) error {
 	var hash string
 	if err := s.db.QueryRow(ctx, "SELECT password_hash FROM users WHERE id = $1", id).Scan(&hash); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -317,7 +340,7 @@ func (s *Store) ChangePassword(ctx context.Context, id ID, current, next string,
 	if !ok {
 		return ErrWrongPassword
 	}
-	_, err = s.UpdateUser(ctx, id, UserChanges{Password: &next}, keepSession)
+	_, err = s.updateUser(ctx, id, UserChanges{Password: &next}, keep)
 	return err
 }
 
@@ -355,11 +378,11 @@ func requireAnotherAdministrator(ctx context.Context, tx pgx.Tx, except ID) erro
 	return nil
 }
 
-func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keepSession []byte) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM devices WHERE user_id = $1", user); err != nil {
+func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) error {
+	if _, err := tx.Exec(ctx, "DELETE FROM devices WHERE user_id = $1 AND id IS DISTINCT FROM $2", user, keep.device); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		"DELETE FROM admin_sessions WHERE user_id = $1 AND token_hash IS DISTINCT FROM $2", user, keepSession)
+		"DELETE FROM admin_sessions WHERE user_id = $1 AND token_hash IS DISTINCT FROM $2", user, keep.adminSession)
 	return err
 }

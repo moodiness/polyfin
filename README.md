@@ -54,7 +54,7 @@ docker compose up -d
 
 Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its tables on startup.
 
-**First run:** until an administrator exists, Polyfin prints a one-time setup code in its log (`docker compose logs polyfin`). Enter it on the setup page to create the administrator, then create the other accounts under **Users**. Jellyfin apps sign in with these accounts, by password or with **Quick Connect**: the app shows a 6-digit code that a signed-in user approves on the Quick Connect page.
+**First run:** until an administrator exists, Polyfin prints a one-time setup code in its log (`docker compose logs polyfin`). Enter it on the setup page to create the administrator, then create the other accounts under **Users**. Jellyfin apps sign in with these accounts, by password or with **Quick Connect**: the app shows a 6-digit code that a signed-in user approves on the Quick Connect page. Users can change their password from Jellyfin apps, which signs their other devices out.
 
 **Language:** the names Polyfin generates for Jellyfin apps (seasons, untitled episodes, and the type that tells apart libraries with the same name, such as "Popular (Movies)") are in English or French, set under **Settings** and defaulting to the language the setup page was in.
 
