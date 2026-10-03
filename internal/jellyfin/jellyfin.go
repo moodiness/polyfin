@@ -61,6 +61,8 @@ type Handler struct {
 	subtitleCache *cache.Cache[accounts.ID, []subtitles.Cue]
 	// runtimes remembers the runtime of the version each report names.
 	runtimes *cache.Cache[string, time.Duration]
+	// sockets are the WebSockets apps keep open.
+	sockets *sockets
 }
 
 // New returns the Jellyfin API handler.
@@ -71,6 +73,7 @@ func New(options Options) *Handler {
 		subtitleFiles: cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
 		subtitleCache: cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
 		runtimes:      cache.New[string, time.Duration](2000, 12*time.Hour),
+		sockets:       newSockets(),
 	}
 	rt := &router{}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
@@ -113,6 +116,10 @@ func New(options Options) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isSocket(r) {
+		h.socket(w, r)
+		return
+	}
 	h.routes.ServeHTTP(w, r)
 }
 
