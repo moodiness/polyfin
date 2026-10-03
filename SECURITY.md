@@ -2,7 +2,7 @@
 
 ## Supported code
 
-Polyfin has no release yet. Security fixes target the current `main` branch; older commits and forks are not maintained. Include the commit or image digest you tested when reporting a problem.
+Security fixes go to the `main` branch and ship in the next release; only the latest release is supported, and older releases, commits and forks are not maintained. Include the version, commit or image digest you tested when reporting a problem.
 
 ## Report a vulnerability privately
 
@@ -12,7 +12,7 @@ Use [GitHub's private vulnerability reporting](https://github.com/moodiness/poly
 
 A useful private report includes:
 
-- Affected commit or image digest, deployment method and relevant configuration with secrets removed.
+- Affected version, commit or image digest, deployment method and relevant configuration with secrets removed.
 - The Jellyfin client and version involved, if any.
 - The crossed security boundary and realistic impact.
 - Minimal reproduction steps against systems and accounts you control.
