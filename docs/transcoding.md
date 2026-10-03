@@ -48,8 +48,8 @@ Every decision that is not direct play reports Jellyfin's `TranscodeReasons`.
 
 ### HLS on demand
 
-- **Segments follow the source's keyframes.** Remuxed renditions are cut exactly there: each segment ends on the first keyframe 6 seconds or more after its start. Transcoded renditions force their keyframes at the same timestamps, a fraction of a frame early as the encoder rounds times to its frame rate. All renditions share one timeline, so a player can switch quality mid-playback, including between remux and transcode, without a gap. Segments keep the source's timestamps, shifted by 10 seconds so that frames decoded before zero keep positive ones, so the segments of FFmpeg runs started at different places follow each other.
-- **Several variants** in the master playlist: the negotiated one first, lower qualities after. HLS master playlists with several variants are standard (RFC 8216) and Jellyfin servers already return them.
+- **Segments follow the source's keyframes.** Remuxed renditions are cut exactly there: each segment ends on the first keyframe 6 seconds or more after its start. Transcoded renditions force their keyframes at the same timestamps, a fraction of a frame early as the encoder rounds times to its frame rate. All renditions share one timeline: segments keep the source's timestamps, shifted by 10 seconds so that frames decoded before zero keep positive ones, so the segments of FFmpeg runs started at different places follow each other.
+- **One variant** in the master playlist, as Jellyfin 12.1 returns: the quality PlaybackInfo chose for the app's bitrate limit. To change it, apps ask PlaybackInfo again, as Jellyfin apps do from their quality menu. Lower qualities, each converted by an FFmpeg of its own, were tried and dropped. A player measures how fast segments arrive, and a segment being converted arrives no faster than FFmpeg makes it, so hls.js in jellyfin-web read a slow connection on the local network. It switched quality several times while starting a 4K HDR conversion, each switch starting another FFmpeg: three ran at once, the CPU was saturated, and playback froze for about 40 seconds before settling where a single variant starts at once. Encoding every quality in one FFmpeg would avoid the switches, at a constant cost: about a third more on a 4K HDR source, about double on a 1080p one. That may be worth it with hardware encoding, where several sizes cost little.
 - **Audio tracks as separate renditions**, so changing language does not restart video encoding. Client support must be verified client by client.
 - **Encoders start at the requested segment**, run a bounded window ahead of the player (10 segments), pause when far ahead, and stop on `Sessions/Playing/Stopped`, on `DELETE /Videos/ActiveEncodings` or after 3 idle minutes. A request more than 3 segments past the one being made, or before it, starts FFmpeg again from there; the source cache makes that cheap. Two viewers of the same source and quality will share one encoder.
 - Segments are fragmented MP4 or MPEG-TS, as the client's transcoding profile asks.
@@ -88,9 +88,8 @@ Subtitles an app could only get burned in are left out of what it can play, rath
 
 1. Direct play and ffprobe analysis.
 2. Remux, with the extraction of embedded text subtitles and fonts.
-3. Software transcoding, with burned-in image subtitles.
+3. Software transcoding, with burned-in image subtitles and separate audio renditions.
 4. Hardware acceleration.
-5. Multiple variants and separate audio renditions.
 
 ## Verification
 
