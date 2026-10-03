@@ -138,7 +138,8 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		for i, entry := range serving {
 			wg.Go(func() {
 				streams, err := s.streams(ctx, entry, t.metaType, t.id)
-				if err != nil {
+				// An app that stops waiting cancels ctx: nothing failed.
+				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
 				}
 				lists[i] = streams
@@ -315,7 +316,9 @@ func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts
 			}
 			subtitles, err := s.client.Subtitles(ctx, entry.addon.ManifestURL, t.metaType, t.id, nil, entry.confined)
 			if err != nil {
-				s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
+				if ctx.Err() == nil {
+					s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
+				}
 				return
 			}
 			s.subtitleLists.Put(key, subtitles)
