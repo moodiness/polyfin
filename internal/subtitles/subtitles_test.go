@@ -54,7 +54,7 @@ func TestBrokenCuesAreSkipped(t *testing.T) {
 }
 
 func TestOtherFilesAreRefused(t *testing.T) {
-	for _, data := range []string{"<!DOCTYPE html><html></html>", "", "[Script Info]\nTitle: ASS"} {
+	for _, data := range []string{"<!DOCTYPE html><html></html>", "", "[V4+ Styles]\nStyle: Default"} {
 		if _, err := Parse([]byte(data)); !errors.Is(err, ErrUnsupported) {
 			t.Errorf("%q: got %v", data, err)
 		}

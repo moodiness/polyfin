@@ -1,6 +1,7 @@
-// Package subtitles reads text subtitles in the SubRip (SRT) and WebVTT
-// formats addons serve, and writes them in the formats Jellyfin apps ask
-// for: SubRip, WebVTT, Advanced SubStation Alpha and jellyfin-web's JSON.
+// Package subtitles reads text subtitles in the SubRip (SRT), WebVTT and
+// (Advanced) SubStation Alpha formats addons serve and files embed, and
+// writes them in the formats Jellyfin apps ask for: SubRip, WebVTT,
+// Advanced SubStation Alpha and jellyfin-web's JSON.
 package subtitles
 
 import (
@@ -16,7 +17,8 @@ import (
 	"unicode/utf8"
 )
 
-// ErrUnsupported reports a file that is neither SubRip nor WebVTT.
+// ErrUnsupported reports a file that is neither SubRip, WebVTT nor an
+// ASS/SSA script.
 var ErrUnsupported = errors.New("unsupported subtitle format")
 
 // Cue is a text shown between two instants.
@@ -27,14 +29,15 @@ type Cue struct {
 	Lines []string
 }
 
-// Parse reads a SubRip or WebVTT file. Text that is not valid UTF-8 is read
-// as Windows-1252, the usual encoding of subtitles that are not UTF-8.
+// Parse reads a SubRip or WebVTT file, or the text an ASS or SSA script
+// shows (see Script.Cues). Text that is not valid UTF-8 is read as
+// Windows-1252, the usual encoding of subtitles that are not UTF-8.
 func Parse(data []byte) ([]Cue, error) {
-	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
-	if !utf8.Valid(data) {
-		data = fromWindows1252(data)
+	text := decode(data)
+	if isScript(text) {
+		script, _ := parseScript(text)
+		return script.Cues(), nil
 	}
-	text := strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\r", "\n")
 	var cues []Cue
 	for block := range strings.SplitSeq(text, "\n\n") {
 		if cue, ok := parseBlock(strings.Split(strings.Trim(block, "\n"), "\n")); ok {
