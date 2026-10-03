@@ -106,6 +106,7 @@ type SystemInfo struct {
 var castReceivers = []CastReceiverApplication{{Id: "F007D354", Name: "Stable"}, {Id: "6F511C87", Name: "Unstable"}}
 
 type UserConfiguration struct {
+	AudioLanguagePreference    *string `json:",omitempty"`
 	PlayDefaultAudioTrack      bool
 	SubtitleLanguagePreference string
 	DisplayMissingEpisodes     bool
@@ -191,21 +192,8 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 		HasConfiguredPassword: true,
 		LastLoginDate:         optionalTime(user.LastLoginAt),
 		LastActivityDate:      optionalTime(user.LastActivityAt),
-		// Preferences are not stored yet: every user has a new Jellyfin
-		// user's defaults.
-		Configuration: UserConfiguration{
-			PlayDefaultAudioTrack:      true,
-			GroupedFolders:             []string{},
-			SubtitleMode:               "Default",
-			OrderedViews:               []string{},
-			LatestItemsExcludes:        []string{},
-			MyMediaExcludes:            []string{},
-			HidePlayedInLatest:         true,
-			RememberAudioSelections:    true,
-			RememberSubtitleSelections: true,
-			EnableNextEpisodeAutoPlay:  true,
-			CastReceiverId:             castReceivers[0].Id,
-		},
+		// The configuration the user saved is filled in by userDto.
+		Configuration: defaultUserConfiguration(),
 		// Capabilities Polyfin does not offer (deleting content, managing
 		// collections, lyrics or live TV) are reported as denied. Every user
 		// may manage subtitles, as apps offer their subtitle search, which

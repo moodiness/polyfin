@@ -152,7 +152,9 @@ func (b bindErrors) paging(r *http.Request, fallback int) (start, limit int) {
 }
 
 func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
-	user, ok := h.viewer(w, r, bindErrors{}, unknownListingUser)
+	b := bindErrors{}
+	includeHidden, _ := b.bool(r, "includeHidden")
+	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok {
 		return
 	}
@@ -161,6 +163,12 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	configuration, err := h.userConfiguration(r.Context(), user.ID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	items = arrangeViews(items, configuration, includeHidden)
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 }
 
@@ -370,10 +378,20 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	// Like a new Jellyfin user's (HidePlayedInLatest), Polyfin users do not
-	// see what they played among the latest titles, unless isPlayed asks.
+	configuration, err := h.userConfiguration(r.Context(), user.ID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	// Like Jellyfin, a user who hides played titles among the latest (a new
+	// user does) only sees the unplayed ones, unless isPlayed asks.
 	played, explicit := boolQuery(r, "isPlayed")
-	items = slices.DeleteFunc(items, func(item library.Item) bool { return state.of(item).Played != (explicit && played) })
+	if !explicit && configuration.HidePlayedInLatest {
+		played, explicit = false, true
+	}
+	if explicit {
+		items = slices.DeleteFunc(items, func(item library.Item) bool { return state.of(item).Played != played })
+	}
 	writeJSON(w, http.StatusOK, h.listDtos(r, user, items, requestedFields(r), state))
 }
 

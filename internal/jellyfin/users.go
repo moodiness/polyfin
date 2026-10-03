@@ -19,6 +19,8 @@ func decode(r *http.Request, into any) error {
 }
 
 // publicUsers lists the users shown on the sign-in screen of Jellyfin apps.
+// Anyone may read it: users' saved configurations are left out, each
+// showing a new user's.
 func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.Accounts.Users(r.Context())
 	if err != nil {
@@ -86,8 +88,13 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 		h.internalError(w, r, err)
 		return
 	}
+	dto, err := h.userDto(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, AuthenticationResult{
-		User:        newUserDto(user, h.ServerID),
+		User:        dto,
 		SessionInfo: newSessionInfo(device, user, h.ServerID, h.controllable(device)),
 		AccessToken: token,
 		ServerId:    h.ServerID,
@@ -95,7 +102,7 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 }
 
 func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, newUserDto(callerFrom(r.Context()).User, h.ServerID))
+	h.writeUser(w, r, callerFrom(r.Context()).User)
 }
 
 // users lists every user, optionally filtered by the isHidden and
@@ -113,7 +120,12 @@ func (h *Handler) users(w http.ResponseWriter, r *http.Request) {
 		if (hiddenSet && user.IsHidden != hidden) || (disabledSet && user.IsDisabled != disabled) {
 			continue
 		}
-		result = append(result, newUserDto(user, h.ServerID))
+		dto, err := h.userDto(r.Context(), user)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		result = append(result, dto)
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -133,7 +145,17 @@ func (h *Handler) user(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newUserDto(user, h.ServerID))
+	h.writeUser(w, r, user)
+}
+
+// writeUser answers with user's DTO.
+func (h *Handler) writeUser(w http.ResponseWriter, r *http.Request, user accounts.User) {
+	dto, err := h.userDto(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func boolQuery(r *http.Request, name string) (value, set bool) {

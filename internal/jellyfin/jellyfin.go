@@ -42,7 +42,8 @@ type Options struct {
 	Stremio *stremio.Client
 	// Playback analyzes, decides on and serves the versions of titles.
 	Playback *playback.Service
-	// Preferences stores the display preferences of Jellyfin apps.
+	// Preferences stores the display preferences of Jellyfin apps and the
+	// configuration of each user.
 	Preferences *preferences.Store
 	// UserData stores what each user did with each item.
 	UserData *userdata.Store
@@ -61,6 +62,9 @@ type Handler struct {
 	subtitleCache *cache.Cache[accounts.ID, []subtitles.Cue]
 	// runtimes remembers the runtime of the version each report names.
 	runtimes *cache.Cache[string, time.Duration]
+	// configurations remembers each user's configuration, which item
+	// listings read for every title.
+	configurations *cache.Cache[accounts.ID, UserConfiguration]
 	// sockets are the WebSockets apps keep open.
 	sockets *sockets
 }
@@ -68,12 +72,13 @@ type Handler struct {
 // New returns the Jellyfin API handler.
 func New(options Options) *Handler {
 	h := &Handler{
-		Options:       options,
-		sessions:      playback.NewSessions(),
-		subtitleFiles: cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
-		subtitleCache: cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
-		runtimes:      cache.New[string, time.Duration](2000, 12*time.Hour),
-		sockets:       newSockets(),
+		Options:        options,
+		sessions:       playback.NewSessions(),
+		subtitleFiles:  cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
+		subtitleCache:  cache.New[accounts.ID, []subtitles.Cue](200, time.Hour),
+		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
+		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
+		sockets:        newSockets(),
 	}
 	rt := &router{}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
@@ -114,6 +119,8 @@ func New(options Options) *Handler {
 	h.userDataRoutes(rt)
 	h.remoteSubtitleRoutes(rt)
 	h.remoteRoutes(rt)
+	h.configurationRoutes(rt)
+	h.localizationRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

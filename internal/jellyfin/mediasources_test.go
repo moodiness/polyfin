@@ -23,7 +23,7 @@ func TestTheDefaultSubtitleAvoidsBurningIn(t *testing.T) {
 		"a forced text track in another tongue": {[]playback.MediaStream{video, subtitle(2, "fre", false, true, false), subtitle(3, "eng", true, true, false)}, new(2)},
 		"a text track not forced":               {[]playback.MediaStream{video, subtitle(2, "fre", false, true, false), subtitle(3, "fre", true, false, false)}, new(2)},
 	} {
-		got := defaultSubtitle(test.streams)
+		got := newTrackPreferences(defaultUserConfiguration()).subtitle(test.streams, nil)
 		if (got == nil) != (test.want == nil) || got != nil && *got != *test.want {
 			t.Errorf("%s: %v, want %v", name, deref(got), deref(test.want))
 		}
