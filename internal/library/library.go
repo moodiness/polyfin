@@ -350,7 +350,8 @@ func (s *Service) merged(ctx context.Context, sources []source, start, count int
 		for i, src := range sources {
 			wg.Go(func() {
 				metas, total, err := s.window(ctx, src, 0, per)
-				if err != nil {
+				// An app that stops waiting cancels ctx: nothing failed.
+				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("A catalog of a collection could not be listed", "catalog", src.catalog.ID, "error", err)
 				}
 				lists[i], mores[i] = metas, total > len(metas)

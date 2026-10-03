@@ -74,14 +74,16 @@ func (b bindErrors) userID(r *http.Request) (accounts.ID, bool) {
 }
 
 // browseError answers a library failure: a missing item, or an addon that
-// could not answer.
+// could not answer. A request the app abandoned failed for no one.
 func (h *Handler) browseError(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, library.ErrNotFound) {
+	switch {
+	case errors.Is(err, library.ErrNotFound):
 		notFoundProblem(w)
-		return
+	case r.Context().Err() != nil:
+	default:
+		h.Logger.Warn("Browsing failed", "method", r.Method, "path", r.URL.Path, "error", err)
+		processingError(w, http.StatusBadGateway)
 	}
-	h.Logger.Warn("Browsing failed", "method", r.Method, "path", r.URL.Path, "error", err)
-	processingError(w, http.StatusBadGateway)
 }
 
 // dtos describes listed items, with what the user did with them. When the

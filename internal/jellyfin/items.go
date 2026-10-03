@@ -144,7 +144,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	var sources []MediaSourceInfo
 	if detail {
 		p, err := h.playable(r.Context(), user, item)
-		if err != nil {
+		if err != nil && r.Context().Err() == nil {
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)

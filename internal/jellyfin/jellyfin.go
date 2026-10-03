@@ -137,6 +137,12 @@ func processingError(w http.ResponseWriter, status int) {
 }
 
 func (h *Handler) internalError(w http.ResponseWriter, r *http.Request, err error) {
+	// An app that stops waiting cancels its request: nothing failed, and
+	// nobody reads the answer.
+	if r.Context().Err() != nil {
+		h.Logger.Debug("An app abandoned a Jellyfin API request", "method", r.Method, "path", r.URL.Path)
+		return
+	}
 	h.Logger.Error("Jellyfin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 	processingError(w, http.StatusInternalServerError)
 }

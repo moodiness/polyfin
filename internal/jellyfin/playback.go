@@ -652,7 +652,9 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	default:
 		var err error
 		if cues, err = h.subtitleCues(r.Context(), files[index]); err != nil {
-			h.Logger.Warn("A subtitle could not be read", "addon", files[index].Addon, "error", err)
+			if r.Context().Err() == nil {
+				h.Logger.Warn("A subtitle could not be read", "addon", files[index].Addon, "error", err)
+			}
 			processingError(w, http.StatusInternalServerError)
 			return
 		}
