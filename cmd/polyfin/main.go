@@ -64,6 +64,7 @@ Environment:
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
   POLYFIN_HWACCEL       GPU video is converted on: auto, nvenc, vaapi or none (default auto)
   POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
+  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb or none (default theintrodb,introdb)
 `
 
 func main() {
