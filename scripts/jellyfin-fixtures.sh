@@ -209,6 +209,7 @@ episode=$(get "/Shows/$series/Episodes?seasonId=$season&userId=$user" |
 library="/Items?userId=$user&startIndex=0&limit=100&recursive=true&sortOrder=Ascending&fields=MediaSourceCount&fields=PrimaryImageAspectRatio&sortBy=SortName&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop"
 counts='Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount'
 get "/UserViews?userId=$user" | save views
+get /Library/VirtualFolders | save virtual-folders
 get "$library&parentId=$movies&includeItemTypes=Movie" | save library-movies
 get "$library&parentId=$shows&includeItemTypes=Series" | save library-series
 get "/Items/Latest?userId=$user&parentId=$movies&fields=PrimaryImageAspectRatio&fields=Path&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&limit=16" | save latest

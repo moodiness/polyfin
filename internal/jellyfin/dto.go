@@ -344,3 +344,83 @@ type QuickConnectResult struct {
 type BrandingOptions struct {
 	SplashscreenEnabled bool
 }
+
+// VirtualFolderInfo describes a library as Jellyfin's library settings do.
+// Jellyfin leaves RefreshProgress out while a library is idle, which
+// Polyfin's libraries always are.
+type VirtualFolderInfo struct {
+	Name               string
+	Locations          []string
+	CollectionType     string `json:",omitempty"`
+	LibraryOptions     LibraryOptions
+	ItemId             string
+	PrimaryImageItemId string `json:",omitempty"`
+	RefreshStatus      string
+}
+
+type LibraryOptions struct {
+	Enabled                                 bool
+	EnablePhotos                            bool
+	EnableRealtimeMonitor                   bool
+	EnableLUFSScan                          bool
+	EnableChapterImageExtraction            bool
+	ExtractChapterImagesDuringLibraryScan   bool
+	EnableTrickplayImageExtraction          bool
+	ExtractTrickplayImagesDuringLibraryScan bool
+	PathInfos                               []struct{}
+	SaveLocalMetadata                       bool
+	EnableInternetProviders                 bool
+	EnableAutomaticSeriesGrouping           bool
+	EnableEmbeddedTitles                    bool
+	EnableEmbeddedExtrasTitles              bool
+	EnableEmbeddedEpisodeInfos              bool
+	AutomaticRefreshIntervalDays            int
+	SeasonZeroDisplayName                   string
+	DisabledLocalMetadataReaders            []string
+	DisabledSubtitleFetchers                []string
+	SubtitleFetcherOrder                    []string
+	DisabledMediaSegmentProviders           []string
+	MediaSegmentProviderOrder               []string
+	SkipSubtitlesIfEmbeddedSubtitlesPresent bool
+	SkipSubtitlesIfAudioTrackMatches        bool
+	RequirePerfectSubtitleMatch             bool
+	SaveSubtitlesWithMedia                  bool
+	SaveLyricsWithMedia                     bool
+	SaveTrickplayWithMedia                  bool
+	DisabledLyricFetchers                   []string
+	LyricFetcherOrder                       []string
+	PreferNonstandardArtistsTag             bool
+	UseCustomTagDelimiters                  bool
+	CustomTagDelimiters                     []string
+	DelimiterWhitelist                      []string
+	AutomaticallyAddToCollection            bool
+	AllowEmbeddedSubtitles                  string
+	TypeOptions                             []struct{}
+}
+
+// newLibraryOptions returns the options Jellyfin gives a library created
+// without any. Polyfin's libraries are addon catalogs: they have no paths,
+// and none of these options changes what they list.
+func newLibraryOptions() LibraryOptions {
+	return LibraryOptions{
+		Enabled:                          true,
+		EnablePhotos:                     true,
+		PathInfos:                        []struct{}{},
+		EnableAutomaticSeriesGrouping:    true,
+		SeasonZeroDisplayName:            "Specials",
+		DisabledLocalMetadataReaders:     []string{},
+		DisabledSubtitleFetchers:         []string{},
+		SubtitleFetcherOrder:             []string{},
+		DisabledMediaSegmentProviders:    []string{},
+		MediaSegmentProviderOrder:        []string{},
+		SkipSubtitlesIfAudioTrackMatches: true,
+		RequirePerfectSubtitleMatch:      true,
+		SaveSubtitlesWithMedia:           true,
+		DisabledLyricFetchers:            []string{},
+		LyricFetcherOrder:                []string{},
+		CustomTagDelimiters:              []string{"/", "|", ";", `\`},
+		DelimiterWhitelist:               []string{},
+		AllowEmbeddedSubtitles:           "AllowAll",
+		TypeOptions:                      []struct{}{},
+	}
+}
