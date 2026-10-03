@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/testdb"
@@ -42,7 +43,7 @@ func newAuxiliaryServer(t *testing.T) auxiliaryServer {
 		SignIns:     throttle.New(10, time.Minute),
 		Preferences: preferences.New(pool),
 		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
-	}}
+	}, configurations: cache.New[accounts.ID, UserConfiguration](10, time.Hour)}
 	rt := &router{}
 	rt.handle(http.MethodPost, "/Users/AuthenticateByName", http.HandlerFunc(h.authenticateByName))
 	h.auxiliaryRoutes(rt)

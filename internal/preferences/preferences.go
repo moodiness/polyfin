@@ -1,5 +1,6 @@
 // Package preferences stores the display preferences Jellyfin apps save for
-// each user, preference id and client app.
+// each user, preference id and client app, and the configuration each user
+// saves.
 package preferences
 
 import (
@@ -47,5 +48,29 @@ func (s *Store) Put(ctx context.Context, user accounts.ID, id, client string, va
 		INSERT INTO display_preferences (user_id, preference_id, client, value) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id, preference_id, client) DO UPDATE SET value = excluded.value`,
 		user, id, client, string(value))
+	return err
+}
+
+// Configuration returns the configuration user saved, and whether one was
+// saved.
+func (s *Store) Configuration(ctx context.Context, user accounts.ID) (json.RawMessage, bool, error) {
+	var value json.RawMessage
+	err := s.db.QueryRow(ctx, "SELECT value FROM user_configurations WHERE user_id = $1", user).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
+}
+
+// PutConfiguration replaces the configuration user saved. value must be a
+// JSON object.
+func (s *Store) PutConfiguration(ctx context.Context, user accounts.ID, value json.RawMessage) error {
+	_, err := s.db.Exec(ctx, `
+		INSERT INTO user_configurations (user_id, value) VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET value = excluded.value`,
+		user, string(value))
 	return err
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -385,14 +386,20 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		Can:                 h.Playback.Capabilities(),
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
-	// to.
+	// to. The user's preferences choose the others. A decision plays the
+	// audio track flagged default, else the first, by itself: another
+	// preferred one is passed as if asked, so that the decision checks it.
+	audio := p.tracks.audio(streams)
 	if request.MediaSourceId != "" && request.AudioStreamIndex.set {
-		options.AudioStreamIndex = new(int(request.AudioStreamIndex.value))
+		audio = new(int(request.AudioStreamIndex.value))
+		options.AudioStreamIndex = audio
+	} else if audio != nil && *audio != *defaultAudio(streams) {
+		options.AudioStreamIndex = audio
 	}
 	if request.MediaSourceId != "" && request.SubtitleStreamIndex.set {
 		options.SubtitleStreamIndex = new(int(request.SubtitleStreamIndex.value))
 	} else {
-		options.SubtitleStreamIndex = defaultSubtitle(streams)
+		options.SubtitleStreamIndex = p.tracks.subtitle(streams, audio)
 	}
 	container := playback.Container(analysis)
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
@@ -422,11 +429,8 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 			}
 		}
 	} else {
-		if index := defaultAudio(streams); index != nil {
-			decision.AudioStreamIndex = *index
-		}
-		if options.AudioStreamIndex != nil {
-			decision.AudioStreamIndex = *options.AudioStreamIndex
+		if audio != nil {
+			decision.AudioStreamIndex = *audio
 		}
 		if options.SubtitleStreamIndex != nil {
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
@@ -458,7 +462,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
 	}
-	if subtitle := defaultSubtitle(streams); subtitle != nil {
+	if slices.ContainsFunc(streams, func(stream playback.MediaStream) bool { return stream.Type == "Subtitle" }) {
 		source.DefaultSubtitleStreamIndex = new(decision.SubtitleStreamIndex)
 	}
 	for i := range source.MediaStreams {
