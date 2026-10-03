@@ -231,6 +231,31 @@ func TestAnalysesAreKept(t *testing.T) {
 	}
 }
 
+func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := fakeProbe(t, string(probe), false)
+	s := newService(t, &fakeSource{}, path, nil)
+	version := library.Version{ID: accounts.ID{8}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
+	// The app stopped waiting before the analysis ended.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := s.Analyze(ctx, version); err != nil {
+		t.Fatal(err)
+	}
+	// Polyfin, once restarted, finds it in the database.
+	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	if _, ok := restarted.Analyzed(t.Context(), version.ID); !ok {
+		t.Error("the analysis was not saved")
+	}
+}
+
 func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 	clip := `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "30.000000"},
 		"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 3840, "height": 2160}]}`

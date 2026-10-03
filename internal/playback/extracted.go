@@ -249,7 +249,10 @@ func (s *Service) extractedOf(ctx context.Context, version accounts.ID) *extract
 	}
 	x := newExtracted()
 	var data []byte
-	err := s.db.QueryRow(ctx, "SELECT extracted FROM media_subtitles WHERE version_id = $1", version).Scan(&data)
+	// Not canceled with the request: what is read here is kept for later
+	// ones, and an empty set in its place would hide what is stored, then
+	// overwrite it.
+	err := s.db.QueryRow(context.WithoutCancel(ctx), "SELECT extracted FROM media_subtitles WHERE version_id = $1", version).Scan(&data)
 	switch {
 	case err == nil:
 		if loaded, err := unmarshalExtracted(data); err == nil {

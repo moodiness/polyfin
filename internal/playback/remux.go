@@ -68,6 +68,9 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		return nil, err
 	}
 	result, err, _ := s.flight.Do("keyframes "+version.ID.String(), func() (any, error) {
+		// Shared and kept like an analysis: read to the end, and saved, even
+		// once the request that started it is canceled.
+		ctx := context.WithoutCancel(ctx)
 		var data []byte
 		err := s.db.QueryRow(ctx, "SELECT keyframes FROM media_keyframes WHERE version_id = $1", version.ID).Scan(&data)
 		if err == nil {
@@ -87,7 +90,7 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 			}
 		}
 		started := time.Now()
-		times, err := keyframes.Read(context.WithoutCancel(ctx), src, size)
+		times, err := keyframes.Read(ctx, src, size)
 		if errors.Is(err, keyframes.ErrNoIndex) {
 			err = fmt.Errorf("%w: %w", ErrNotRemuxable, err)
 		}
