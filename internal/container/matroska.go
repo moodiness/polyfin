@@ -1,12 +1,15 @@
-package keyframes
+package container
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math"
 	"math/bits"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,35 +18,58 @@ var ebmlMagic = []byte{0x1A, 0x45, 0xDF, 0xA3}
 
 // The IDs of the elements read, from RFC 9559.
 const (
-	idEBML              = 0x1A45DFA3
-	idDocType           = 0x4282
-	idSegment           = 0x18538067
-	idSeekHead          = 0x114D9B74
-	idSeek              = 0x4DBB
-	idSeekID            = 0x53AB
-	idSeekPosition      = 0x53AC
-	idInfo              = 0x1549A966
-	idTimestampScale    = 0x2AD7B1
-	idTracks            = 0x1654AE6B
-	idTrackEntry        = 0xAE
-	idTrackNumber       = 0xD7
-	idTrackType         = 0x83
-	idCues              = 0x1C53BB6B
-	idCuePoint          = 0xBB
-	idCueTime           = 0xB3
-	idCueTrackPositions = 0xB7
-	idCueTrack          = 0xF7
-	idCluster           = 0x1F43B675
-	idChapters          = 0x1043A770
-	idTags              = 0x1254C367
-	idAttachments       = 0x1941A469
-	idVoid              = 0xEC
-	idCRC32             = 0xBF
+	idEBML                = 0x1A45DFA3
+	idDocType             = 0x4282
+	idSegment             = 0x18538067
+	idSeekHead            = 0x114D9B74
+	idSeek                = 0x4DBB
+	idSeekID              = 0x53AB
+	idSeekPosition        = 0x53AC
+	idInfo                = 0x1549A966
+	idTimestampScale      = 0x2AD7B1
+	idTracks              = 0x1654AE6B
+	idTrackEntry          = 0xAE
+	idTrackNumber         = 0xD7
+	idTrackType           = 0x83
+	idCodecID             = 0x86
+	idCodecPrivate        = 0x63A2
+	idContentEncodings    = 0x6D80
+	idContentEncoding     = 0x6240
+	idContentOrder        = 0x5031
+	idContentScope        = 0x5032
+	idContentType         = 0x5033
+	idContentCompression  = 0x5034
+	idContentCompAlgo     = 0x4254
+	idContentCompSettings = 0x4255
+	idCues                = 0x1C53BB6B
+	idCuePoint            = 0xBB
+	idCueTime             = 0xB3
+	idCueTrackPositions   = 0xB7
+	idCueTrack            = 0xF7
+	idCueClusterPosition  = 0xF1
+	idCueRelativePosition = 0xF0
+	idCueDuration         = 0xB2
+	idCluster             = 0x1F43B675
+	idBlockGroup          = 0xA0
+	idBlock               = 0xA1
+	idBlockDuration       = 0x9B
+	idSimpleBlock         = 0xA3
+	idChapters            = 0x1043A770
+	idTags                = 0x1254C367
+	idAttachments         = 0x1941A469
+	idAttachedFile        = 0x61A7
+	idFileName            = 0x466E
+	idFileMediaType       = 0x4660
+	idFileData            = 0x465C
+	idVoid                = 0xEC
+	idCRC32               = 0xBF
 )
 
 const (
-	// trackTypeVideo is the TrackType of video tracks.
-	trackTypeVideo = 1
+	// trackTypeVideo is the TrackType of video tracks, trackTypeSubtitle
+	// that of subtitle tracks.
+	trackTypeVideo    = 1
+	trackTypeSubtitle = 0x11
 	// defaultTimestampScale is the nanoseconds a tick lasts when Info
 	// does not say.
 	defaultTimestampScale = 1_000_000
@@ -56,8 +82,76 @@ const (
 	tailWindows = 4
 )
 
+// Matroska is a Matroska or WebM file whose head was read: where its
+// top-level elements are, its TimestampScale and its tracks. The Cues are
+// read when first needed, and kept. Its methods may be called concurrently.
+type Matroska struct {
+	r            Reader
+	size, window int64
+	segment      element
+	// firstCluster is where the first Cluster starts, -1 when the walk of
+	// the head did not reach one.
+	firstCluster int64
+	// positions holds where the Info, Tracks, Cues and Attachments are,
+	// when known.
+	positions map[uint32]int64
+	scale     uint64
+	// trackList holds the tracks, the errors of their TrackEntries, and
+	// the content encodings to undo on the frames of each Decodable track.
+	trackList
+	// head holds the spans the head was read from: a small file's, or one
+	// whose Cues come first, also hold its Cues and Attachments.
+	head [2]held
+
+	mu   sync.Mutex
+	cues *cueIndex
+}
+
+// OpenMatroska reads a Matroska or WebM file's head through r: the EBML
+// header, SeekHeads, Info and Tracks. ErrNoIndex when r is not one. size is
+// the file size.
+func OpenMatroska(ctx context.Context, r Reader, size int64) (*Matroska, error) {
+	f := &file{ctx: ctx, r: r, size: size, window: window}
+	head, err := f.span(0, min(size, int64(len(ebmlMagic))))
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(head, ebmlMagic) {
+		return nil, ErrNoIndex
+	}
+	return openMatroska(f)
+}
+
+// file returns a file reading m's Reader on behalf of ctx, starting with
+// the spans of the head.
+func (m *Matroska) file(ctx context.Context) *file {
+	return &file{ctx: ctx, r: m.r, size: m.size, window: m.window, spans: m.head}
+}
+
+// Tracks returns m's tracks, in TrackEntry order.
+func (m *Matroska) Tracks() []Track {
+	return slices.Clone(m.tracks)
+}
+
 // readMatroska returns the times of the CuePoints of the first video track.
 func readMatroska(f *file) ([]time.Duration, error) {
+	m, err := openMatroska(f)
+	if err != nil {
+		return nil, err
+	}
+	track, err := m.videoTrack()
+	if err != nil {
+		return nil, err
+	}
+	cues, err := m.cuesData(f, track)
+	if err != nil {
+		return nil, err
+	}
+	return cueTimes(cues, track, m.scale)
+}
+
+// openMatroska reads the head of f, a file starting with an EBML header.
+func openMatroska(f *file) (*Matroska, error) {
 	ebml, err := f.element(0, f.size)
 	if err != nil {
 		return nil, err
@@ -84,20 +178,20 @@ func readMatroska(f *file) ([]time.Duration, error) {
 	if err != nil {
 		return nil, err
 	}
+	m := &Matroska{r: f.r, size: f.size, window: f.window, segment: segment, firstCluster: -1,
+		positions: map[uint32]int64{}, scale: defaultTimestampScale}
 
 	// The elements before the first Cluster are walked: they usually are
 	// the SeekHead, Info and Tracks, within the first read, and
-	// sometimes the Cues.
-	positions := map[uint32]int64{}
+	// sometimes the Cues and Attachments.
 	var seekHeads []int64
-	firstCluster := int64(-1)
 	for pos, walked := segment.data, 0; pos < segment.end && walked < maxTopLevel; walked++ {
 		e, err := f.element(pos, segment.end)
 		if err != nil {
 			return nil, err
 		}
 		if e.id == idCluster {
-			firstCluster = pos
+			m.firstCluster = pos
 			break
 		}
 		if e.unknown {
@@ -106,9 +200,9 @@ func readMatroska(f *file) ([]time.Duration, error) {
 		switch e.id {
 		case idSeekHead:
 			seekHeads = append(seekHeads, pos)
-		case idInfo, idTracks, idCues:
-			if _, ok := positions[e.id]; !ok {
-				positions[e.id] = pos
+		case idInfo, idTracks, idCues, idAttachments:
+			if _, ok := m.positions[e.id]; !ok {
+				m.positions[e.id] = pos
 			}
 		}
 		pos = e.end
@@ -138,35 +232,34 @@ func readMatroska(f *file) ([]time.Duration, error) {
 			switch entry.id {
 			case idSeekHead:
 				seekHeads = append(seekHeads, at)
-			case idInfo, idTracks, idCues:
-				if _, ok := positions[entry.id]; !ok {
-					positions[entry.id] = at
+			case idInfo, idTracks, idCues, idAttachments:
+				if _, ok := m.positions[entry.id]; !ok {
+					m.positions[entry.id] = at
 				}
 			}
 		}
 	}
 
-	scale := uint64(defaultTimestampScale)
-	if at, ok := positions[idInfo]; ok {
+	if at, ok := m.positions[idInfo]; ok {
 		data, err := f.master(at, idInfo, segment.end, maxInfo)
 		if err != nil {
 			return nil, err
 		}
 		err = children(data, func(id uint32, data []byte) error {
 			if id == idTimestampScale {
-				scale, err = unsigned(data)
+				m.scale, err = unsigned(data)
 			}
 			return err
 		})
 		if err != nil {
 			return nil, err
 		}
-		if scale == 0 {
+		if m.scale == 0 {
 			return nil, fmt.Errorf("zero TimestampScale: %w", errInvalid)
 		}
 	}
 
-	at, ok := positions[idTracks]
+	at, ok := m.positions[idTracks]
 	if !ok {
 		return nil, ErrNoIndex
 	}
@@ -174,21 +267,40 @@ func readMatroska(f *file) ([]time.Duration, error) {
 	if err != nil {
 		return nil, err
 	}
-	track, err := videoTrack(data)
+	m.trackList, err = parseTracks(data)
 	if err != nil {
 		return nil, err
 	}
+	m.head = f.spans
+	return m, nil
+}
 
-	var cues []byte
-	if at, ok := positions[idCues]; ok {
-		cues, err = f.master(at, idCues, segment.end, maxIndex)
-	} else {
-		cues, err = findCues(f, segment, firstCluster, track)
+// videoTrack returns the TrackNumber of the first video track. A
+// TrackEntry before it that does not read fails it.
+func (m *Matroska) videoTrack() (uint64, error) {
+	for i, track := range m.tracks {
+		if m.errs[i] != nil {
+			return 0, m.errs[i]
+		}
+		if track.Type != trackTypeVideo {
+			continue
+		}
+		if track.Number == 0 {
+			return 0, fmt.Errorf("video track without a number: %w", errInvalid)
+		}
+		return track.Number, nil
 	}
-	if err != nil {
-		return nil, err
+	return 0, ErrNoIndex
+}
+
+// cuesData returns the data of m's Cues: those the head or a SeekHead
+// lists, else those found after the last Cluster holding CuePoints for
+// track.
+func (m *Matroska) cuesData(f *file, track uint64) ([]byte, error) {
+	if at, ok := m.positions[idCues]; ok {
+		return f.master(at, idCues, m.segment.end, maxIndex)
 	}
-	return cueTimes(cues, track, scale)
+	return findCues(f, m.segment, m.firstCluster, track)
 }
 
 // findSegment returns the Segment following the EBML header. Its size may
@@ -302,46 +414,6 @@ func seekEntries(seekHead []byte) ([]seekEntry, error) {
 		return nil
 	})
 	return entries, err
-}
-
-// videoTrack returns the TrackNumber of the first video track.
-func videoTrack(tracks []byte) (uint64, error) {
-	var track uint64
-	found := false
-	err := children(tracks, func(id uint32, entry []byte) error {
-		if id != idTrackEntry || found {
-			return nil
-		}
-		var number, kind uint64
-		err := children(entry, func(id uint32, data []byte) error {
-			var err error
-			switch id {
-			case idTrackNumber:
-				number, err = unsigned(data)
-			case idTrackType:
-				kind, err = unsigned(data)
-			}
-			return err
-		})
-		if err != nil {
-			return err
-		}
-		if kind != trackTypeVideo {
-			return nil
-		}
-		if number == 0 {
-			return fmt.Errorf("video track without a number: %w", errInvalid)
-		}
-		track, found = number, true
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	if !found {
-		return 0, ErrNoIndex
-	}
-	return track, nil
 }
 
 // cueTimes returns the times of the CuePoints that have a position for

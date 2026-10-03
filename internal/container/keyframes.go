@@ -1,8 +1,8 @@
-// Package keyframes finds where a file's video keyframes are from the index
-// its container keeps: the Cues of a Matroska file, the sample tables of an
-// MP4 one. Files are remote and large, so the index is reached with a few
-// large reads, never by reading the media itself.
-package keyframes
+// Package container reads what remote media files' containers index, with
+// a few large reads and never the media itself: the keyframes of Matroska
+// and MP4 files, and the tracks, subtitle blocks and attachments of
+// Matroska files.
+package container
 
 import (
 	"bytes"
@@ -21,10 +21,16 @@ type Reader interface {
 }
 
 // ErrNoIndex reports a file without a usable index.
-var ErrNoIndex = errors.New("no keyframe index")
+var ErrNoIndex = errors.New("no usable container index")
+
+// ErrUnreadable reports a file that cannot be read as its container says,
+// whatever host serves it: an index or structure that contradicts itself,
+// content that does not decode, or sizes past the bounds kept against
+// hostile files. Errors of the host or the network never are.
+var ErrUnreadable = errors.New("unreadable container")
 
 // errInvalid reports an index that contradicts itself or its file.
-var errInvalid = errors.New("invalid keyframe index")
+var errInvalid = fmt.Errorf("invalid container index: %w", ErrUnreadable)
 
 const (
 	// window is how much is read at once when a few bytes are needed:
@@ -42,16 +48,16 @@ const (
 	maxTopLevel = 64
 )
 
-// Read returns the presentation times of the first video track's keyframes
-// a decoder can start from, ascending and without duplicates, as FFmpeg
-// reports them. size is the file size.
-func Read(ctx context.Context, r Reader, size int64) ([]time.Duration, error) {
-	return read(ctx, r, size, window)
+// Keyframes returns the presentation times of the first video track's
+// keyframes a decoder can start from, ascending and without duplicates, as
+// FFmpeg reports them. size is the file size.
+func Keyframes(ctx context.Context, r Reader, size int64) ([]time.Duration, error) {
+	return keyframes(ctx, r, size, window)
 }
 
-// read is Read with the size of the reads made for small spans, which
-// tests lower to count the reads a large file would take.
-func read(ctx context.Context, r Reader, size, window int64) ([]time.Duration, error) {
+// keyframes is Keyframes with the size of the reads made for small spans,
+// which tests lower to count the reads a large file would take.
+func keyframes(ctx context.Context, r Reader, size, window int64) ([]time.Duration, error) {
 	f := &file{ctx: ctx, r: r, size: size, window: window}
 	head, err := f.span(0, min(size, 8))
 	if err != nil {
