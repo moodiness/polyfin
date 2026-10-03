@@ -204,7 +204,8 @@ func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErr
 }
 
 // change applies change to the data of items and answers what the user did
-// with item afterwards.
+// with item afterwards. The user's apps that keep a socket open get the new
+// data of item and items.
 func (h *Handler) change(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item, change func(*userdata.Data)) {
 	refs := make([]userdata.Item, 0, len(items))
 	for _, target := range items {
@@ -214,6 +215,7 @@ func (h *Handler) change(w http.ResponseWriter, r *http.Request, user accounts.U
 		h.internalError(w, r, err)
 		return
 	}
+	h.userDataChanged(user, append([]library.Item{item}, items...))
 	data, err := h.itemData(r.Context(), user, item)
 	if err != nil {
 		h.internalError(w, r, err)
@@ -437,6 +439,12 @@ func (h *Handler) track(ctx context.Context, user accounts.User, event playbackE
 	})
 	if err != nil {
 		h.Logger.Warn("A playback report could not be recorded", "error", err)
+		return
+	}
+	// Like Jellyfin, apps are not told of every position a player reports:
+	// starts and stops are enough for what they show.
+	if event != playbackProgressed {
+		h.userDataChanged(user, []library.Item{item})
 	}
 }
 

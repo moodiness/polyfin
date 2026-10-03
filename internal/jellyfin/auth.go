@@ -121,26 +121,36 @@ func callerFrom(ctx context.Context) caller {
 	return value
 }
 
+// signedInCaller is the user and device of the access token r carries. ok
+// is false when r carries none, or none of an enabled user.
+func (h *Handler) signedInCaller(r *http.Request) (c caller, ok bool, err error) {
+	credentials := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
+	if credentials.Token == "" {
+		return caller{}, false, nil
+	}
+	device, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, remoteAddress(r))
+	if errors.Is(err, accounts.ErrNotFound) {
+		return caller{}, false, nil
+	}
+	if err != nil {
+		return caller{}, false, err
+	}
+	return caller{User: user, Device: device, Token: credentials.Token}, true, nil
+}
+
 // authenticated serves next only for a valid access token of an enabled
 // user. Like Jellyfin, a refused request gets an empty 401.
 func (h *Handler) authenticated(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
-		if c.Token == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		device, user, err := h.Accounts.DeviceByToken(r.Context(), c.Token, remoteAddress(r))
-		if errors.Is(err, accounts.ErrNotFound) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if err != nil {
+		c, ok, err := h.signedInCaller(r)
+		switch {
+		case err != nil:
 			h.internalError(w, r, err)
-			return
+		case !ok:
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			next(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, c)))
 		}
-		ctx := context.WithValue(r.Context(), callerKey{}, caller{User: user, Device: device, Token: c.Token})
-		next(w, r.WithContext(ctx))
 	})
 }
 
