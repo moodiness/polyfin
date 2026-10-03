@@ -181,17 +181,21 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	// AAC starts before zero, with its priming; the MP4 header of E-AC-3
 	// needs its first packet; converted audio is decoded from where FFmpeg
-	// starts; converted video gets keyframes where the source has them.
+	// starts; converted video gets keyframes where the source has them, on
+	// a GPU too when there is one.
 	for _, c := range []struct {
 		codec, convert string
 		encode         bool
-	}{{"aac", "", false}, {"eac3", "", false}, {"eac3", "aac", false}, {"aac", "", true}} {
+		gpu            string
+	}{{"aac", "", false, ""}, {"eac3", "", false, ""}, {"eac3", "aac", false, ""}, {"aac", "", true, ""}, {"aac", "", true, "nvenc"}, {"aac", "", true, "vaapi"}} {
 		input, keyframes := source(t, ffmpeg, ffprobe, c.codec)
 		for _, format := range []Format{FMP4, TS} {
 			name := c.codec + " in " + format.Extension()
 			switch {
 			case c.convert != "":
 				name = c.codec + " converted to " + c.convert + " in " + format.Extension()
+			case c.gpu != "":
+				name = "video converted to H.264 with " + c.gpu + " in " + format.Extension()
 			case c.encode:
 				name = "video converted to H.264 in " + format.Extension()
 			}
@@ -201,7 +205,17 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer m.Close()
-				if c.encode && !slices.Contains(m.Encoders(), "libx264") {
+				encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 128, Height: 72, Bitrate: 300_000, FrameRate: 24}
+				switch {
+				case c.gpu != "":
+					hw, ok := m.DetectHardware(c.gpu, "")
+					i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "h264_") })
+					if !ok || i < 0 {
+						t.Skip("no GPU encodes H.264 with " + c.gpu)
+					}
+					// GPU encoders take larger pictures.
+					encoding = &VideoEncoding{Encoder: hw.Encoders[i], Level: "4.1", Width: 320, Height: 180, Bitrate: 500_000, FrameRate: 24, Hardware: &hw}
+				case c.encode && !slices.Contains(m.Encoders(), "libx264"):
 					t.Skip("FFmpeg has no libx264")
 				}
 				plan := NewPlan(keyframes, 30*time.Second)
@@ -212,7 +226,7 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 						remux.AudioCodec, remux.AudioChannels, remux.AudioBitrate = c.convert, 2, 128_000
 					}
 					if c.encode {
-						remux.Encode = &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 128, Height: 72, Bitrate: 300_000, FrameRate: 24}
+						remux.Encode = encoding
 					}
 					return remux, func() { close(released) }, nil
 				}
@@ -299,8 +313,9 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				}
 				if c.encode {
 					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "csv=p=0", all).Output()
-					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != "h264,128,72,yuv420p" {
-						t.Errorf("converted video: %q", got)
+					want := "h264," + strconv.Itoa(encoding.Width) + "," + strconv.Itoa(encoding.Height) + ",yuv420p"
+					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != want {
+						t.Errorf("converted video: %q, want %q", got, want)
 					}
 				}
 				if _, err := m.Segment(ctx, key, open, plan.Len()); err != ErrNotFound {

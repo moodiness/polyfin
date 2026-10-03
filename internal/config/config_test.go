@@ -15,12 +15,18 @@ func TestLoadAcceptsExplicitSettings(t *testing.T) {
 		"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin",
 		"POLYFIN_LISTEN":       "[::1]:9000",
 		"POLYFIN_LOG_LEVEL":    "DEBUG",
+		"POLYFIN_HWACCEL":      " VAAPI ",
+		"POLYFIN_VAAPI_DEVICE": "/dev/dri/renderD129",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "[::1]:9000" || cfg.LogLevel != slog.LevelDebug {
+	if cfg.Listen != "[::1]:9000" || cfg.LogLevel != slog.LevelDebug || cfg.Acceleration != "vaapi" || cfg.VAAPIDevice != "/dev/dri/renderD129" {
 		t.Fatalf("unexpected config: %+v", cfg)
+	}
+	// Without a choice, the first GPU that works converts video.
+	if cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin"})); err != nil || cfg.Acceleration != "auto" {
+		t.Errorf("default acceleration %q, %v", cfg.Acceleration, err)
 	}
 }
 
@@ -29,11 +35,12 @@ func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 		"POLYFIN_LISTEN":     "8096",
 		"POLYFIN_LOG_LEVEL":  "verbose",
 		"POLYFIN_CACHE_SIZE": "lots",
+		"POLYFIN_HWACCEL":    "qsv",
 	}))
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, want := range []string{"POLYFIN_DATABASE_URL", "POLYFIN_LISTEN", "POLYFIN_LOG_LEVEL", "POLYFIN_CACHE_SIZE"} {
+	for _, want := range []string{"POLYFIN_DATABASE_URL", "POLYFIN_LISTEN", "POLYFIN_LOG_LEVEL", "POLYFIN_CACHE_SIZE", "POLYFIN_HWACCEL"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %s", err, want)
 		}

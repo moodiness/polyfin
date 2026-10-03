@@ -28,6 +28,13 @@ services:
       POLYFIN_DATABASE_URL: postgresql://${POSTGRES_USER:-polyfin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-polyfin}
       POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
       POLYFIN_CACHE_SIZE: ${POLYFIN_CACHE_SIZE:-10GB}
+      POLYFIN_HWACCEL: ${POLYFIN_HWACCEL:-auto}
+    # A GPU to convert video on, optional. NVIDIA, with the NVIDIA Container
+    # Toolkit installed:
+    # runtime: nvidia
+    # AMD or Intel, through VAAPI:
+    # devices:
+    #   - /dev/dri:/dev/dri
     # Parts of the files being read, emptied when Polyfin starts.
     volumes:
       - polyfin_cache:/cache
