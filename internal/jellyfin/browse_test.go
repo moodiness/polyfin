@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -323,6 +324,9 @@ var browseShapes = shapeRules{
 		"DateLastMediaAdded": {"boxset"}, "UnplayedItemCount": {"library-series", "boxsets", "boxset"},
 		// Jellyfin's root folder holds the libraries; Polyfin has none.
 		"ParentId": {"views"},
+		// Jellyfin drew artwork for the recorded libraries from their
+		// titles; Polyfin's libraries have none.
+		"PrimaryImageItemId": {"virtual-folders"},
 	},
 	returned: map[string][]string{
 		// The recorded items lacked the rating and cast photo the fake addon
@@ -402,5 +406,54 @@ func TestBrowseResponsesMatchJellyfin(t *testing.T) {
 		for _, difference := range compareShapes(fixture, want, got, browseShapes) {
 			t.Error(difference)
 		}
+	}
+}
+
+func TestVirtualFoldersDescribeTheLibraries(t *testing.T) {
+	s, memberToken, _ := browsing(t)
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	token := s.signIn("admin", "phone")
+
+	status, body := s.call(http.MethodGet, "/Library/VirtualFolders", app("phone", token), nil)
+	if status != http.StatusOK {
+		t.Fatalf("administrator: %d %s", status, body)
+	}
+	var folders []VirtualFolderInfo
+	if err := json.Unmarshal(body, &folders); err != nil {
+		t.Fatal(err)
+	}
+	var views QueryResult
+	s.get(t, "/UserViews", token, &views)
+	if len(folders) != len(views.Items) || len(folders) == 0 {
+		t.Fatalf("got %d folders for %d views", len(folders), len(views.Items))
+	}
+	for i, view := range views.Items {
+		folder := folders[i]
+		if folder.Name != view.Name || folder.ItemId != view.Id || folder.CollectionType != view.CollectionType {
+			t.Errorf("folder %d: %+v, view %s %s %s", i, folder, view.Name, view.Id, view.CollectionType)
+		}
+		if folder.Locations == nil || len(folder.Locations) != 0 || folder.RefreshStatus != "Idle" {
+			t.Errorf("folder %s: locations %v, status %s", folder.Name, folder.Locations, folder.RefreshStatus)
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "virtual-folders.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want, got any
+	if err := json.Unmarshal(raw, &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, difference := range compareShapes("virtual-folders", want, got, browseShapes) {
+		t.Error(difference)
+	}
+
+	// Like Jellyfin, a member is refused with an empty 403.
+	if status, body := s.call(http.MethodGet, "/Library/VirtualFolders", app("tv", memberToken), nil); status != http.StatusForbidden || len(body) != 0 {
+		t.Errorf("member: %d %q", status, body)
 	}
 }

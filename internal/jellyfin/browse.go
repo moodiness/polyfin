@@ -18,6 +18,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	}
 	signedIn(http.MethodGet, "/UserViews", h.views)
 	signedIn(http.MethodGet, "/Users/{userId}/Views", h.views)
+	signedIn(http.MethodGet, "/Library/VirtualFolders", h.virtualFolders)
 	signedIn(http.MethodGet, "/Items", h.items)
 	signedIn(http.MethodGet, "/Users/{userId}/Items", h.items)
 	signedIn(http.MethodGet, "/Items/Latest", h.latest)
@@ -153,17 +154,58 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	libraries, err := h.Library.Libraries(r.Context(), user)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
-	items, err := h.folderDtos(r, user, libraries)
+	items, err := h.libraryViews(r, user)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
+}
+
+// libraryViews describes the libraries user sees, in the order apps list
+// them.
+func (h *Handler) libraryViews(r *http.Request, user accounts.User) ([]BaseItemDto, error) {
+	libraries, err := h.Library.Libraries(r.Context(), user)
+	if err != nil {
+		return nil, err
+	}
+	return h.folderDtos(r, user, libraries)
+}
+
+// virtualFolders describes the caller's libraries as Jellyfin's library
+// settings do. Jellyfin keeps them to administrators and refuses anyone
+// else with an empty 403, as it does for every endpoint it restricts by
+// policy. Libraries are addon catalogs: they have no paths, and nothing
+// scans them, so they are always idle.
+func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
+	user := callerFrom(r.Context()).User
+	if !user.IsAdministrator {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	views, err := h.libraryViews(r, user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	folders := make([]VirtualFolderInfo, 0, len(views))
+	for _, view := range views {
+		folder := VirtualFolderInfo{
+			Name:           view.Name,
+			Locations:      []string{},
+			CollectionType: view.CollectionType,
+			LibraryOptions: newLibraryOptions(),
+			ItemId:         view.Id,
+			RefreshStatus:  "Idle",
+		}
+		// Jellyfin names the library itself as the holder of its image,
+		// and nothing when it has none.
+		if view.ImageTags["Primary"] != "" {
+			folder.PrimaryImageItemId = view.Id
+		}
+		folders = append(folders, folder)
+	}
+	writeJSON(w, http.StatusOK, folders)
 }
 
 // items lists a folder's children, the results of a search, or items by

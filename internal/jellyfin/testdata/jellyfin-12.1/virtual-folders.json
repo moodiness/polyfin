@@ -1,0 +1,57 @@
+[
+  {
+    "CollectionType": "",
+    "ItemId": "",
+    "LibraryOptions": {
+      "AllowEmbeddedSubtitles": "",
+      "AutomaticRefreshIntervalDays": 0,
+      "AutomaticallyAddToCollection": false,
+      "CustomTagDelimiters": [
+        ""
+      ],
+      "DelimiterWhitelist": [],
+      "DisabledLocalMetadataReaders": [],
+      "DisabledLyricFetchers": [],
+      "DisabledMediaSegmentProviders": [],
+      "DisabledSubtitleFetchers": [],
+      "EnableAutomaticSeriesGrouping": false,
+      "EnableChapterImageExtraction": false,
+      "EnableEmbeddedEpisodeInfos": false,
+      "EnableEmbeddedExtrasTitles": false,
+      "EnableEmbeddedTitles": false,
+      "EnableInternetProviders": false,
+      "EnableLUFSScan": false,
+      "EnablePhotos": false,
+      "EnableRealtimeMonitor": false,
+      "EnableTrickplayImageExtraction": false,
+      "Enabled": false,
+      "ExtractChapterImagesDuringLibraryScan": false,
+      "ExtractTrickplayImagesDuringLibraryScan": false,
+      "LyricFetcherOrder": [],
+      "MediaSegmentProviderOrder": [],
+      "PathInfos": [
+        {
+          "Path": ""
+        }
+      ],
+      "PreferNonstandardArtistsTag": false,
+      "RequirePerfectSubtitleMatch": false,
+      "SaveLocalMetadata": false,
+      "SaveLyricsWithMedia": false,
+      "SaveSubtitlesWithMedia": false,
+      "SaveTrickplayWithMedia": false,
+      "SeasonZeroDisplayName": "",
+      "SkipSubtitlesIfAudioTrackMatches": false,
+      "SkipSubtitlesIfEmbeddedSubtitlesPresent": false,
+      "SubtitleFetcherOrder": [],
+      "TypeOptions": [],
+      "UseCustomTagDelimiters": false
+    },
+    "Locations": [
+      ""
+    ],
+    "Name": "",
+    "PrimaryImageItemId": "",
+    "RefreshStatus": ""
+  }
+]
