@@ -1,0 +1,1 @@
+{"TrackEvents":[{"Id":"1","Text":"First line\nsecond line","StartPositionTicks":10000000,"EndPositionTicks":40000000},{"Id":"2","Text":"{\\pos(320,40)}A SIGN","StartPositionTicks":20000000,"EndPositionTicks":50000000},{"Id":"3","Text":"{\\i1}Italic{\\i0} words\\hwith a hard space","StartPositionTicks":50000000,"EndPositionTicks":80000000}]}
