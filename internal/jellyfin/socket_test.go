@@ -18,11 +18,11 @@ type appSocket struct {
 	messages chan socketMessage
 }
 
-func (tr tracking) openSocket(t *testing.T, token string) (*appSocket, *http.Response, error) {
+func (srv testServer) openSocket(t *testing.T, token string) (*appSocket, *http.Response, error) {
 	t.Helper()
 	header := http.Header{}
 	header.Set("Authorization", app("phone", token))
-	conn, response, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(tr.url, "http")+"/socket", &websocket.DialOptions{HTTPHeader: header})
+	conn, response, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(srv.url, "http")+"/socket", &websocket.DialOptions{HTTPHeader: header})
 	if err != nil {
 		return nil, response, err
 	}

@@ -88,7 +88,7 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 	}
 	writeJSON(w, http.StatusOK, AuthenticationResult{
 		User:        newUserDto(user, h.ServerID),
-		SessionInfo: newSessionInfo(device, user, h.ServerID),
+		SessionInfo: newSessionInfo(device, user, h.ServerID, h.controllable(device)),
 		AccessToken: token,
 		ServerId:    h.ServerID,
 	})

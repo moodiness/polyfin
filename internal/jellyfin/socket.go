@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -53,33 +54,59 @@ func socketPayload(kind string, data any) []byte {
 }
 
 // sockets are the sockets users' apps keep open, and the changes to users'
-// data waiting to be pushed to them.
+// data waiting to be pushed to them. The same sockets are also known by the
+// device that opened them, in the order they opened, for the commands one
+// app sends another.
 type sockets struct {
 	mu      sync.Mutex
 	open    map[accounts.ID]map[*websocket.Conn]bool
+	devices map[accounts.ID][]*websocket.Conn
 	pending map[accounts.ID]*changedData
 }
 
 func newSockets() *sockets {
-	return &sockets{open: map[accounts.ID]map[*websocket.Conn]bool{}, pending: map[accounts.ID]*changedData{}}
+	return &sockets{
+		open:    map[accounts.ID]map[*websocket.Conn]bool{},
+		devices: map[accounts.ID][]*websocket.Conn{},
+		pending: map[accounts.ID]*changedData{},
+	}
 }
 
-func (s *sockets) add(user accounts.ID, conn *websocket.Conn) {
+func (s *sockets) add(user, device accounts.ID, conn *websocket.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.open[user] == nil {
 		s.open[user] = map[*websocket.Conn]bool{}
 	}
 	s.open[user][conn] = true
+	s.devices[device] = append(s.devices[device], conn)
 }
 
-func (s *sockets) remove(user accounts.ID, conn *websocket.Conn) {
+func (s *sockets) remove(user, device accounts.ID, conn *websocket.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.open[user], conn)
 	if len(s.open[user]) == 0 {
 		delete(s.open, user)
 	}
+	s.devices[device] = slices.DeleteFunc(s.devices[device], func(open *websocket.Conn) bool { return open == conn })
+	if len(s.devices[device]) == 0 {
+		delete(s.devices, device)
+	}
+}
+
+// latest is the socket a device opened last, or nil when it holds none.
+// An app reconnecting, or open in two browser tabs sharing a device, holds
+// several: like Jellyfin, a command goes to one of them only, so that it is
+// not carried out twice.
+func (s *sockets) latest(device accounts.ID) *websocket.Conn {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	open := s.devices[device]
+	if len(open) == 0 {
+		return nil
+	}
+	return open[len(open)-1]
 }
 
 // changedData is what changed in a user's data since the last push: the
@@ -123,9 +150,11 @@ func isSocket(r *http.Request) bool {
 
 // socket serves an app's WebSocket as Jellyfin does. The app learns how
 // long a silent socket lasts, its keep-alives are answered, a socket left
-// silent that long is dropped, and the user's data is pushed to it as it
-// changes. Other messages, which ask for what Polyfin does not offer, such
-// as the sessions of the server for its dashboard, are left unanswered.
+// silent that long is dropped, the user's data is pushed to it as it
+// changes, and the commands other apps send its device reach it (see
+// remote.go). Other messages, which ask for what Polyfin does not offer,
+// such as the sessions of the server for its dashboard, are left
+// unanswered.
 func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	c, ok, err := h.signedInCaller(r)
 	switch {
@@ -149,8 +178,8 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.CloseNow()
-	h.sockets.add(c.User.ID, conn)
-	defer h.sockets.remove(c.User.ID, conn)
+	h.sockets.add(c.User.ID, c.Device.ID, conn)
+	defer h.sockets.remove(c.User.ID, c.Device.ID, conn)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
