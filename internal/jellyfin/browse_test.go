@@ -133,6 +133,64 @@ func browsing(t *testing.T) (testServer, string, map[string]string) {
 	return s, token, ids
 }
 
+// episodeStreams serves two streams of every episode.
+func episodeStreams(t *testing.T) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "episodes", Name: "Episodes", Version: "1", Types: []string{"series"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
+		case strings.HasPrefix(path, "/stream/series/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{
+				{Name: "1080p", URL: "https://example.com/1080p.mkv"}, {Name: "720p", URL: "https://example.com/720p.mkv"}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// jellyfin-web plays an episode with its series' episodes from it on,
+// asked from startItemId: the episode, or the version the user picked.
+func TestEpisodeListsStartAtTheItemAsked(t *testing.T) {
+	tr := newTracking(t)
+	if _, err := tr.addons.Install(t.Context(), addons.Shared(), episodeStreams(t), false); err != nil {
+		t.Fatal(err)
+	}
+	list := func(start string) QueryResult {
+		t.Helper()
+		var page QueryResult
+		if status := tr.get(t, "/Shows/"+tr.series+"/Episodes?limit=100&startItemId="+start, tr.token, &page); status != http.StatusOK {
+			t.Fatalf("from %s: %d", start, status)
+		}
+		return page
+	}
+	ids := func(page QueryResult) []string {
+		result := []string{}
+		for _, item := range page.Items {
+			result = append(result, item.Id)
+		}
+		return result
+	}
+	if page := list(tr.episodes[1]); !slices.Equal(ids(page), tr.episodes[1:]) || page.TotalRecordCount != 2 {
+		t.Errorf("from the second episode: %v, %d in all", ids(page), page.TotalRecordCount)
+	}
+	member, _ := tr.store.Authenticate(t.Context(), "member", "correct horse")
+	second, _ := accounts.ParseID(tr.episodes[1])
+	versions, err := tr.library.Versions(t.Context(), member, second)
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("versions: %v %v", versions, err)
+	}
+	if page := list(versions[1].ID.String()); !slices.Equal(ids(page), tr.episodes[1:]) {
+		t.Errorf("from the second episode's other version: %v", ids(page))
+	}
+	if page := list(strings.Repeat("ab", 16)); len(page.Items) != 0 {
+		t.Errorf("from an item the list does not have: %v", ids(page))
+	}
+}
+
 func (s testServer) get(t *testing.T, path, token string, into any) int {
 	t.Helper()
 	status, body := s.call(http.MethodGet, path, app("tv", token), nil)

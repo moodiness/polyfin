@@ -486,6 +486,7 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 	id := b.pathID(r, "seriesId")
 	seasonID, hasSeasonID := b.guid(r, "seasonId")
 	number, hasNumber := b.int32(r, "season")
+	startItem, hasStartItem := b.guid(r, "startItemId")
 	start, limit := b.paging(r, -1)
 	user, ok := h.viewer(w, r, b, notFoundProblem)
 	if !ok {
@@ -509,6 +510,20 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasNumber && !hasSeasonID {
 		episodes = slices.DeleteFunc(episodes, func(item library.Item) bool { return item.ParentIndexNumber != number })
+	}
+	// jellyfin-web plays an episode with the episodes from it on, which it
+	// asks starting at the episode, or at the version the user picked: a
+	// version stands for its episode, as in Jellyfin. The list is empty
+	// when the start item is not in it.
+	if hasStartItem {
+		if owner, ok := h.Library.VersionOwner(startItem); ok {
+			startItem = owner
+		}
+		at := slices.IndexFunc(episodes, func(item library.Item) bool { return item.ID == startItem })
+		if at < 0 {
+			at = len(episodes)
+		}
+		episodes = episodes[at:]
 	}
 	items, err := h.dtos(r, user, episodes, requestedFields(r), nil)
 	if err != nil {
