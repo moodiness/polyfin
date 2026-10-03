@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -51,7 +52,9 @@ type Options struct {
 	// Segments finds the parts of titles apps offer to skip; nil finds
 	// none.
 	Segments *mediasegments.Service
-	Logger   *slog.Logger
+	// Playlists stores the playlists users make.
+	Playlists *playlists.Store
+	Logger    *slog.Logger
 }
 
 // Handler serves the Jellyfin API.
@@ -126,6 +129,7 @@ func New(options Options) *Handler {
 	h.configurationRoutes(rt)
 	h.localizationRoutes(rt)
 	signedIn(http.MethodGet, "/MediaSegments/{itemId}", h.mediaSegments)
+	h.playlistRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

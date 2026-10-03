@@ -25,6 +25,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/server"
@@ -195,6 +196,7 @@ func serve(ctx context.Context) error {
 				Preferences:   preferences.New(pool),
 				UserData:      userdata.New(pool),
 				Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
+				Playlists:     playlists.New(pool),
 				Logger:        logger,
 			}),
 			Logger: logger,

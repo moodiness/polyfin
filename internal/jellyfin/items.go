@@ -61,6 +61,7 @@ type BaseItemDto struct {
 	ServerId                 string
 	Id                       string
 	Etag                     string             `json:",omitempty"`
+	PlaylistItemId           string             `json:",omitempty"` // the entry a playlist lists the item as
 	DateCreated              *Time              `json:",omitempty"`
 	CanDelete                *bool              `json:",omitempty"`
 	CanDownload              *bool              `json:",omitempty"`
