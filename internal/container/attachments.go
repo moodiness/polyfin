@@ -8,9 +8,8 @@ import (
 // Attachment is a file attached to a Matroska file, such as a font its
 // ASS subtitles use.
 type Attachment struct {
-	FileName, MimeType, Description string
-	UID                             uint64
-	Data                            []byte
+	FileName, MimeType string
+	Data               []byte
 }
 
 const (
@@ -22,13 +21,27 @@ const (
 )
 
 // Attachments reads the files attached to m, through its Reader, with one
-// read; none when it has none.
+// read; none when it has none. Attachments of more than maxAttachments
+// bytes fail from their header, without being read.
 func (m *Matroska) Attachments(ctx context.Context) ([]Attachment, error) {
 	at, ok := m.positions[idAttachments]
 	if !ok {
 		return nil, nil
 	}
-	data, err := m.file(ctx).master(at, idAttachments, m.segment.end, maxAttachments)
+	f := m.file(ctx)
+	e, err := f.element(at, m.segment.end)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case e.id != idAttachments:
+		return nil, fmt.Errorf("element %X at %d instead of Attachments: %w", e.id, at, errInvalid)
+	case e.unknown:
+		return nil, fmt.Errorf("Attachments of unknown size: %w", errInvalid)
+	case e.end-e.data > maxAttachments:
+		return nil, fmt.Errorf("Attachments of %d bytes: %w", e.end-e.data, errInvalid)
+	}
+	data, err := f.span(e.data, e.end-e.data)
 	if err != nil {
 		return nil, err
 	}
@@ -42,20 +55,15 @@ func (m *Matroska) Attachments(ctx context.Context) ([]Attachment, error) {
 		}
 		var attachment Attachment
 		err := children(data, func(id uint32, data []byte) error {
-			var err error
 			switch id {
 			case idFileName:
 				attachment.FileName = text(data)
 			case idFileMediaType:
 				attachment.MimeType = text(data)
-			case idFileDescription:
-				attachment.Description = text(data)
-			case idFileUID:
-				attachment.UID, err = unsigned(data)
 			case idFileData:
 				attachment.Data = data
 			}
-			return err
+			return nil
 		})
 		if err != nil {
 			return err

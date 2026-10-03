@@ -44,17 +44,17 @@ type RangeFetcher interface {
 var ErrMultiRangeUnsupported = errors.New("the source does not serve several ranges at once")
 
 // ErrIncompleteIndex reports Cues that do not list every block of a
-// subtitle track.
-var ErrIncompleteIndex = errors.New("the Cues do not list every block of the track")
+// subtitle track. It is an ErrUnreadable.
+var ErrIncompleteIndex = fmt.Errorf("the Cues do not list every block of the track: %w", ErrUnreadable)
 
 // errLaced reports a laced subtitle block: lacing packs several frames in a
 // block, which muxers do for audio, never for subtitles.
-var errLaced = errors.New("laced subtitle blocks are not supported")
+var errLaced = fmt.Errorf("laced subtitle blocks are not supported: %w", ErrUnreadable)
 
 // errMisplaced reports bytes that are not a block of the track read where
 // one was expected: the position was worked out from a wrong Cluster header
 // length, or the Cues are wrong.
-var errMisplaced = errors.New("no block of the track where the Cues point")
+var errMisplaced = fmt.Errorf("no block of the track where the Cues point: %w", ErrUnreadable)
 
 // Block is a block of a subtitle track: a subtitle.
 type Block struct {
@@ -87,11 +87,14 @@ const (
 	maxBatches       = 2
 	maxSingleFetches = 2
 	// maxBlocks bounds the blocks of a track read, maxFetched the bytes
-	// fetched for them, and maxBlock the size of one, encoded or decoded,
-	// so that a hostile file cannot exhaust memory or the source.
+	// fetched for them, maxBlock the size of one, encoded or decoded, and
+	// maxDecoded the size of them all decoded, so that a hostile file
+	// cannot exhaust memory or the source: frames of a few bytes may
+	// inflate to a MiB each.
 	maxBlocks  = 200_000
 	maxFetched = 256 << 20
 	maxBlock   = 1 << 20
+	maxDecoded = 32 << 20
 	// maxCueBlocks bounds the CueTrackPositions kept from the Cues.
 	maxCueBlocks = 1 << 21
 	// A Cluster is read whole to check that the Cues list every block of
@@ -300,7 +303,7 @@ func (m *Matroska) subtitleBlocks(ctx context.Context, f Fetcher, number uint64,
 		return nil, fmt.Errorf("no subtitle track %d", number)
 	}
 	if !m.tracks[i].Decodable {
-		return nil, fmt.Errorf("the blocks of track %d are encrypted or compressed in an unsupported way", number)
+		return nil, fmt.Errorf("the blocks of track %d are encrypted or compressed in an unsupported way: %w", number, ErrUnreadable)
 	}
 	index, err := m.cueIndex(ctx)
 	if err != nil {
@@ -313,10 +316,10 @@ func (m *Matroska) subtitleBlocks(ctx context.Context, f Fetcher, number uint64,
 	if len(cues) > maxBlocks {
 		return nil, fmt.Errorf("track %d of more than %d blocks: %w", number, maxBlocks, errInvalid)
 	}
-	segment := min(m.segment.end, m.size) - m.segment.data
+	file := uint64(m.size - m.segment.data)
 	for _, cue := range cues {
-		if cue.cluster >= uint64(segment) || cue.relative >= uint64(segment) {
-			return nil, fmt.Errorf("Cues of track %d past the segment: %w", number, errInvalid)
+		if position := max(cue.cluster, cue.relative); position >= file {
+			return nil, m.outside(position, fmt.Sprintf("Cues of track %d", number))
 		}
 	}
 	r := &blockReader{m: m, f: f, number: number, encodings: m.frames[number], layout: layout, headers: map[uint64]int64{}}
@@ -334,7 +337,9 @@ type blockReader struct {
 	number    uint64
 	encodings []contentEncoding
 	layout    layout
-	fetched   atomic.Int64
+	// fetched counts the bytes fetched, decoded those of the frames
+	// decoded, kept within maxFetched and maxDecoded.
+	fetched, decoded atomic.Int64
 
 	mu sync.Mutex
 	// headers holds the length of the headers of the Clusters read, by
@@ -392,8 +397,10 @@ func (r *blockReader) check(ctx context.Context, cues []cueBlock, clusters []uin
 		size = min(int64(best.bound)-int64(h.length), maxCluster)
 	}
 	switch {
-	case size < 0, size > r.m.size-at-int64(h.length):
-		return 0, fmt.Errorf("Cluster at %d past the end of the file: %w", at, errInvalid)
+	case size < 0:
+		return 0, fmt.Errorf("Cluster at %d of a negative size: %w", at, errInvalid)
+	case size > r.m.size-at-int64(h.length):
+		return 0, r.m.outside(uint64(at-r.m.segment.data+int64(h.length)+size-1), fmt.Sprintf("Cluster at %d", at))
 	case size > maxCluster:
 		return 0, fmt.Errorf("Cluster of %d bytes to check: %w", size, errInvalid)
 	}
@@ -527,10 +534,10 @@ func (r *blockReader) read(ctx context.Context, cues []cueBlock, header int64) (
 		groups = append(groups, group{start: blocks[i].at, end: blocks[i].at + r.layout.window, blocks: []located{blocks[i]}})
 	}
 	for i := range groups {
-		groups[i].end = min(groups[i].end, r.m.size)
-		if groups[i].start >= groups[i].end {
-			return nil, fmt.Errorf("block of track %d past the end of the file: %w", r.number, errInvalid)
+		if groups[i].start >= r.m.size {
+			return nil, r.m.outside(uint64(groups[i].start-r.m.segment.data), fmt.Sprintf("block of track %d", r.number))
 		}
+		groups[i].end = min(groups[i].end, r.m.size)
 	}
 
 	result := make([]Block, len(blocks))
@@ -651,6 +658,9 @@ func (r *blockReader) block(ctx context.Context, block located, data []byte, sta
 		length = int64(h.length)
 	}
 	at := r.m.segment.data + int64(block.cue.cluster) + length + int64(block.cue.relative)
+	if at >= r.m.size {
+		return Block{}, r.m.outside(uint64(at-r.m.segment.data), fmt.Sprintf("block of track %d", r.number))
+	}
 	if at == block.at {
 		return Block{}, fmt.Errorf("track %d at %d: %w: %w", r.number, at, errMisplaced, errInvalid)
 	}
@@ -682,7 +692,7 @@ func (r *blockReader) parse(ctx context.Context, cue cueBlock, at int64, data []
 	case err != nil, h.id != idSimpleBlock && h.id != idBlockGroup, h.unknown, h.size > maxBlock:
 		return Block{}, errMisplaced
 	case h.size > r.m.size-at-int64(h.length):
-		return Block{}, errMisplaced
+		return Block{}, r.m.outside(uint64(at-r.m.segment.data+int64(h.length)+h.size-1), fmt.Sprintf("block of track %d", r.number))
 	}
 	from, to := at+int64(h.length), at+int64(h.length)+h.size
 	var payload []byte
@@ -724,10 +734,24 @@ func (r *blockReader) parse(ctx context.Context, cue cueBlock, at int64, data []
 	frame := block[length+3:]
 	result := Block{}
 	if len(r.encodings) == 0 {
+		if r.decoded.Add(int64(len(frame))) > maxDecoded {
+			return Block{}, r.tooLarge()
+		}
 		// The frame is copied out of the read, which may be MBs.
 		result.Data = slices.Clone(frame)
-	} else if result.Data, err = decode(frame, r.encodings, maxBlock); err != nil {
-		return Block{}, fmt.Errorf("track %d: %w", r.number, err)
+	} else {
+		remaining := maxDecoded - r.decoded.Load()
+		if remaining <= 0 {
+			return Block{}, r.tooLarge()
+		}
+		if result.Data, err = decode(frame, r.encodings, min(maxBlock, remaining)); err != nil {
+			return Block{}, fmt.Errorf("track %d: %w", r.number, err)
+		}
+		// Blocks decoded at once may each take what remains: the total is
+		// checked again.
+		if r.decoded.Add(int64(len(result.Data))) > maxDecoded {
+			return Block{}, r.tooLarge()
+		}
 	}
 	if result.Start, err = scaled(cue.time, r.m.scale); err != nil {
 		return Block{}, err
@@ -757,6 +781,23 @@ func (r *blockReader) fetch(ctx context.Context, off, n int64) ([]byte, error) {
 		return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, io.ErrUnexpectedEOF)
 	}
 	return data[:n], nil
+}
+
+// tooLarge reports a track whose frames decode to more than maxDecoded
+// bytes.
+func (r *blockReader) tooLarge() error {
+	return fmt.Errorf("track %d decodes to more than %d bytes: %w", r.number, maxDecoded, errInvalid)
+}
+
+// outside reports a position, relative to the Segment's data, at or past
+// the end of the file. Past a Segment of known size, the file contradicts
+// itself; else it was cut short, by its host perhaps, which another read
+// may not repeat.
+func (m *Matroska) outside(position uint64, what string) error {
+	if !m.segment.unknown && position >= uint64(m.segment.end-m.segment.data) {
+		return fmt.Errorf("%s past the segment: %w", what, errInvalid)
+	}
+	return fmt.Errorf("%s past the end of the file: %w", what, io.ErrUnexpectedEOF)
 }
 
 // blockTrack reads the track number starting a Block, stored without its

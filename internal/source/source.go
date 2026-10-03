@@ -45,6 +45,11 @@ const (
 	// source: hosts answer 429 to bursts of them, then refuse every file
 	// of the account for minutes.
 	fetchInterval = time.Second / 8
+	// An attempt of Fetch or FetchRanges may take attemptTime, plus the
+	// time the bytes asked take at attemptRate bytes a second: the client
+	// sending them waits for headers without a deadline.
+	attemptTime = 30 * time.Second
+	attemptRate = 256 << 10
 )
 
 // ErrUnavailable reports a source that did not answer with its content.
@@ -83,11 +88,13 @@ type Cache struct {
 	// chunkBlocks is how many blocks one file on disk holds, readahead how
 	// many blocks past the last one asked a file keeps being read, so that
 	// a sequential reader rarely waits, now the clock chunks are dated by,
-	// and fetchInterval the time between two requests of Fetch and
-	// FetchRanges to a source.
+	// fetchInterval the time between two requests of Fetch and FetchRanges
+	// to a source, and attemptTime the time one of them may take before
+	// the bytes asked.
 	chunkBlocks, readahead int64
 	now                    func() time.Time
 	fetchInterval          time.Duration
+	attemptTime            time.Duration
 
 	mu      sync.Mutex
 	sources map[accounts.ID]*Source
@@ -124,7 +131,7 @@ func New(dir string, limit int64, opener Opener, logger *slog.Logger) (*Cache, e
 		}
 	}
 	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32, now: time.Now,
-		fetchInterval: fetchInterval, sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{}}, nil
+		fetchInterval: fetchInterval, attemptTime: attemptTime, sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{}}, nil
 }
 
 // Open returns the source identified by id, read from location, and
@@ -758,8 +765,9 @@ func (s *Source) connect(block int64) (*connection, error) {
 // subtitle blocks, which the cache's 1 MiB blocks would multiply. It uses
 // the source's location and renews it when it expired, as reads do, spaces
 // its requests with those of others to the source, and waits out a server
-// asking it to slow down or failing (429, 502, 503 or 504), a bounded
-// number of times. Fewer than n bytes only at the end of the file.
+// asking it to slow down, failing (429, 502, 503 or 504) or too slow to
+// answer, a bounded number of times. Fewer than n bytes only at the end of
+// the file.
 func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 	if off < 0 || n < 0 {
 		return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", n, off)
@@ -771,29 +779,26 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 		return nil, nil
 	}
 	ranges := "bytes=" + strconv.FormatInt(off, 10) + "-" + strconv.FormatInt(off+int64(n)-1, 10)
-	for attempt := 1; ; attempt++ {
-		response, err := s.request(ctx, ranges)
-		if err != nil {
-			return nil, err
-		}
+	var data []byte
+	err := s.exchange(ctx, ranges, int64(n), func(response *http.Response) error {
+		var err error
 		switch response.StatusCode {
 		case http.StatusPartialContent:
-			data, err := s.fetched(response, off, n)
-			response.Body.Close()
-			if !errors.Is(err, errBroken) || ctx.Err() != nil || attempt >= attempts {
-				return data, err
-			}
-			s.holdOff(backoff(attempt, ""))
+			data, err = s.fetched(response, off, n)
+			return err
 		case http.StatusOK:
 			// The body starts at the first byte, and may hold the whole
 			// file: it is not read.
-			response.Body.Close()
-			return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, ErrRangesIgnored)
+			return fmt.Errorf("fetching %d bytes at %d: %w", n, off, ErrRangesIgnored)
 		default:
 			s.unsatisfiable(response)
-			return nil, io.EOF
+			return io.EOF
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
+	return data, nil
 }
 
 // errBroken reports a connection that broke while a body was read: the
@@ -860,32 +865,23 @@ func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][
 		r := ranges[i]
 		header.WriteString(strconv.FormatInt(r.Off, 10) + "-" + strconv.FormatInt(r.Off+int64(r.N)-1, 10))
 	}
-	for attempt := 1; ; attempt++ {
-		response, err := s.request(ctx, header.String())
-		if err != nil {
-			return nil, err
-		}
+	err := s.exchange(ctx, header.String(), length, func(response *http.Response) error {
 		// Merged parts may hold the bytes between the ranges too: a part
 		// much larger than the ranges asked is not read.
+		clear(result)
 		parts := &multiRange{source: s, ranges: ranges, asked: asked, result: result, budget: 2*length + 1<<20}
-		err = parts.read(response)
-		response.Body.Close()
-		switch {
-		case err == nil:
-			return result, nil
-		case errors.Is(err, errBroken) && ctx.Err() == nil && attempt < attempts:
-			clear(result)
-			s.holdOff(backoff(attempt, ""))
-		case errors.Is(err, container.ErrMultiRangeUnsupported):
-			s.mu.Lock()
-			s.singleRanges = true
-			s.mu.Unlock()
-			s.cache.logger.Debug("A source does not serve several ranges at once", "source", s.id)
-			return nil, err
-		default:
-			return nil, err
-		}
+		return parts.read(response)
+	})
+	switch {
+	case err == nil:
+		return result, nil
+	case errors.Is(err, container.ErrMultiRangeUnsupported):
+		s.mu.Lock()
+		s.singleRanges = true
+		s.mu.Unlock()
+		s.cache.logger.Debug("A source does not serve several ranges at once", "source", s.id)
 	}
+	return nil, err
 }
 
 func (s *Source) multiRangeUnsupported() bool {
@@ -1001,16 +997,19 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 	return nil
 }
 
-// request sends the request of Fetch or FetchRanges, for ranges, the value
-// of a Range header: through the source's location, renewed once when it
-// expired; spaced from the others; and again, a bounded number of times,
-// when the source asks to slow down or fails. The response is a 200, a 206
-// or a 416.
-func (s *Source) request(ctx context.Context, ranges string) (*http.Response, error) {
+// exchange sends the request of Fetch or FetchRanges for ranges, the value
+// of a Range header asking length bytes, and has read read its answer: a
+// 200, a 206 or a 416, closed once read. The request goes through the
+// source's location, renewed once when it expired, spaced from the others.
+// It is sent again, a bounded number of times, when the source asks to
+// slow down or fails, when it breaks, or when it takes longer than an
+// attempt may: a host that stalls must not hold a read for minutes.
+func (s *Source) exchange(ctx context.Context, ranges string, length int64, read func(*http.Response) error) error {
+	timeout := s.cache.attemptTime + time.Duration(float64(length)/attemptRate*float64(time.Second))
 	renewed := false
 	for attempt := 1; ; attempt++ {
 		if err := s.pace(ctx); err != nil {
-			return nil, err
+			return err
 		}
 		s.mu.Lock()
 		location, renew := s.location, s.renew
@@ -1020,38 +1019,59 @@ func (s *Source) request(ctx context.Context, ranges string) (*http.Response, er
 			header.Set(name, value)
 		}
 		header.Set("Range", ranges)
-		response, err := s.cache.opener.Open(ctx, http.MethodGet, location.URL, header, location.Confined)
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+		response, err := s.cache.opener.Open(attemptCtx, http.MethodGet, location.URL, header, location.Confined)
 		if err != nil {
-			if ctx.Err() != nil || attempt >= attempts {
-				return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+			cancel()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if attempt >= attempts {
+				return fmt.Errorf("%w: %v", ErrUnavailable, err)
 			}
 			s.holdOff(backoff(attempt, ""))
 			continue
 		}
+		retryAfter := ""
 		switch status := response.StatusCode; {
 		case status == http.StatusOK || status == http.StatusPartialContent || status == http.StatusRequestedRangeNotSatisfiable:
-			return response, nil
+			err := read(response)
+			response.Body.Close()
+			cancel()
+			switch {
+			case !errors.Is(err, errBroken):
+				return err
+			case ctx.Err() != nil:
+				return ctx.Err()
+			case attempt >= attempts:
+				return err
+			}
 		case (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone) &&
 			renew != nil && !renewed:
 			response.Body.Close()
+			cancel()
 			renewed = true
 			fresh, err := renew(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrUnavailable, status, err)
+				return fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrUnavailable, status, err)
 			}
 			s.mu.Lock()
 			s.location = fresh
 			s.mu.Unlock()
 			s.cache.logger.Debug("A source link was renewed", "source", s.id)
 			attempt = 0
+			continue
 		case (status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable ||
 			status == http.StatusGatewayTimeout) && attempt < attempts:
 			response.Body.Close()
-			s.holdOff(backoff(attempt, response.Header.Get("Retry-After")))
+			cancel()
+			retryAfter = response.Header.Get("Retry-After")
 		default:
 			response.Body.Close()
-			return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
+			cancel()
+			return fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
 		}
+		s.holdOff(backoff(attempt, retryAfter))
 	}
 }
 

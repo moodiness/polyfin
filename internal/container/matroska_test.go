@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"maps"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -74,10 +75,9 @@ func TestMatroskaSubtitles(t *testing.T) {
 		t.Fatalf("%d tracks", len(tracks))
 	}
 	want := []Track{
-		{Number: 1, Type: 1, CodecID: "V_MPEG4/ISO/AVC", Language: "und", Decodable: true},
-		{Number: 2, Type: 0x11, CodecID: "S_TEXT/UTF8", Language: "fre", Name: "Français", Decodable: true},
-		{Number: 3, Type: 0x11, CodecID: "S_TEXT/ASS", Language: "eng", Default: true, Forced: true, Decodable: true,
-			CodecPrivate: header},
+		{Number: 1, Type: 1, CodecID: "V_MPEG4/ISO/AVC", Decodable: true},
+		{Number: 2, Type: 0x11, CodecID: "S_TEXT/UTF8", Decodable: true},
+		{Number: 3, Type: 0x11, CodecID: "S_TEXT/ASS", Decodable: true, CodecPrivate: header},
 	}
 	for i, track := range tracks {
 		w := want[i]
@@ -87,11 +87,7 @@ func TestMatroskaSubtitles(t *testing.T) {
 		// FFmpeg writes the ASS header with its own line breaks.
 		track.CodecPrivate = bytes.TrimRight(track.CodecPrivate, "\n")
 		w.CodecPrivate = bytes.TrimRight(w.CodecPrivate, "\n")
-		if track.Number != w.Number || track.Type != w.Type || track.CodecID != w.CodecID || track.Language != w.Language ||
-			track.Name != w.Name || track.Default != w.Default || track.Forced != w.Forced || track.Decodable != w.Decodable ||
-			!bytes.Equal(track.CodecPrivate, w.CodecPrivate) {
-			t.Errorf("track %d:\n got %+v\nwant %+v", i, track, w)
-		}
+		checkTrack(t, track, w)
 	}
 
 	locations, err := m.SubtitleLocations(context.Background())
@@ -142,7 +138,7 @@ func TestMatroskaSubtitles(t *testing.T) {
 		t.Fatalf("%d attachments", len(attachments))
 	}
 	a := attachments[0]
-	if a.FileName != "Dummy.ttf" || a.MimeType != "application/x-truetype-font" || a.Description != "" || a.UID == 0 ||
+	if a.FileName != "Dummy.ttf" || a.MimeType != "application/x-truetype-font" ||
 		!bytes.Equal(a.Data, fixture(t, "Dummy.ttf")) {
 		t.Errorf("attachment %+v", a)
 	}
@@ -155,6 +151,14 @@ func TestMatroskaSubtitles(t *testing.T) {
 		if _, err := m.SubtitleBlocks(context.Background(), &fetcher{data: data}, number); err == nil {
 			t.Errorf("track %d read as subtitles", number)
 		}
+	}
+}
+
+func checkTrack(t *testing.T, got, want Track) {
+	t.Helper()
+	if got.Number != want.Number || got.Type != want.Type || got.CodecID != want.CodecID || got.Decodable != want.Decodable ||
+		!bytes.Equal(got.CodecPrivate, want.CodecPrivate) {
+		t.Errorf("track %d:\n got %+v\nwant %+v", want.Number, got, want)
 	}
 }
 
@@ -349,12 +353,13 @@ func groupBlock(track uint64, time, duration uint64, data string) testBlock {
 
 func TestMatroskaTrackDescriptions(t *testing.T) {
 	private := []byte("[Script Info]\nScriptType: v4.00+\n")
+	// An integer of 9 bytes, which no integer element may be.
+	tooLong := make([]byte, 9)
 	data := testFile{tracks: [][]byte{
 		subtitleTrack(1, "S_TEXT/ASS", deflate(private),
-			ebmlElement(idLanguage, []byte("fre\x00")), ebmlElement(idLanguageBCP47, []byte("fr-CA")),
-			ebmlElement(idName, []byte("Signs")), ebmlUint(idFlagDefault, 0), ebmlUint(idFlagForced, 1),
 			contentEncodings(contentEncodingElement(0, scopeFrames|scopePrivate, 0, ebmlUint(idContentCompAlgo, 0)))),
-		subtitleTrack(2, "S_TEXT/UTF8", nil, ebmlElement(idLanguage, []byte("jpn"))),
+		// Elements not read, malformed, are ignored.
+		subtitleTrack(2, "S_TEXT/UTF8", nil, ebmlElement(0x55AA, tooLong), ebmlElement(0x22B59C, []byte("jpn"))),
 		// Encrypted blocks are not decodable.
 		subtitleTrack(3, "S_TEXT/UTF8", nil, contentEncodings(contentEncodingElement(0, scopeFrames, 1))),
 		// Nor are blocks compressed with bzlib.
@@ -366,15 +371,23 @@ func TestMatroskaTrackDescriptions(t *testing.T) {
 		// Header stripping applies to the CodecPrivate in its scope.
 		subtitleTrack(6, "S_TEXT/ASS", []byte("Info]\n"),
 			contentEncodings(contentEncodingElement(0, scopePrivate, 0, ebmlUint(idContentCompAlgo, 3), ebmlElement(idContentCompSettings, []byte("[Script "))))),
+		// Malformed content encodings make the track, not the file,
+		// unreadable; and so does a malformed TrackType.
+		subtitleTrack(7, "S_TEXT/UTF8", nil, contentEncodings(ebmlElement(idContentEncoding, ebmlElement(idContentType, tooLong)))),
+		ebmlElement(idTrackEntry, ebmlUint(idTrackNumber, 8), ebmlElement(idTrackType, tooLong), ebmlElement(idCodecID, []byte("S_TEXT/UTF8"))),
+		subtitleTrack(9, "S_TEXT/UTF8", nil),
 	}}.build()
 	tracks := openMemory(t, data).Tracks()
 	want := []Track{
-		{Number: 1, Type: 0x11, CodecID: "S_TEXT/ASS", CodecPrivate: private, Language: "fr-CA", Name: "Signs", Forced: true, Decodable: true},
-		{Number: 2, Type: 0x11, CodecID: "S_TEXT/UTF8", Language: "jpn", Default: true, Decodable: true},
-		{Number: 3, Type: 0x11, CodecID: "S_TEXT/UTF8", Language: "eng", Default: true},
-		{Number: 4, Type: 0x11, CodecID: "S_TEXT/UTF8", Language: "eng", Default: true},
-		{Number: 5, Type: 0x11, CodecID: "S_TEXT/ASS", Language: "eng", Default: true},
-		{Number: 6, Type: 0x11, CodecID: "S_TEXT/ASS", CodecPrivate: []byte("[Script Info]\n"), Language: "eng", Default: true, Decodable: true},
+		{Number: 1, Type: 0x11, CodecID: "S_TEXT/ASS", CodecPrivate: private, Decodable: true},
+		{Number: 2, Type: 0x11, CodecID: "S_TEXT/UTF8", Decodable: true},
+		{Number: 3, Type: 0x11, CodecID: "S_TEXT/UTF8"},
+		{Number: 4, Type: 0x11, CodecID: "S_TEXT/UTF8"},
+		{Number: 5, Type: 0x11, CodecID: "S_TEXT/ASS"},
+		{Number: 6, Type: 0x11, CodecID: "S_TEXT/ASS", CodecPrivate: []byte("[Script Info]\n"), Decodable: true},
+		{Number: 7, Type: 0x11, CodecID: "S_TEXT/UTF8"},
+		{Number: 8},
+		{Number: 9, Type: 0x11, CodecID: "S_TEXT/UTF8", Decodable: true},
 	}
 	if len(tracks) != len(want) {
 		t.Fatalf("%d tracks", len(tracks))
@@ -383,12 +396,23 @@ func TestMatroskaTrackDescriptions(t *testing.T) {
 		if i == 4 {
 			track.CodecPrivate = nil
 		}
-		w := want[i]
-		if track.Number != w.Number || track.Type != w.Type || track.CodecID != w.CodecID || track.Language != w.Language ||
-			track.Name != w.Name || track.Default != w.Default || track.Forced != w.Forced || track.Decodable != w.Decodable ||
-			!bytes.Equal(track.CodecPrivate, w.CodecPrivate) {
-			t.Errorf("track %d:\n got %+v\nwant %+v", i+1, track, w)
-		}
+		checkTrack(t, track, want[i])
+	}
+}
+
+func TestKeyframesSkipTheTrackEntriesAfterTheVideo(t *testing.T) {
+	cues := ebmlElement(idCues, cuePoint(0, 1), cuePoint(2000, 1))
+	broken := ebmlElement(idTrackEntry, ebmlUint(idTrackNumber, 2), ebmlElement(idTrackType, make([]byte, 9)))
+	// Remuxes need the video's keyframes only: a TrackEntry after it that
+	// does not read does not fail them, one before does, as it always did.
+	after := matroskaFile(ebmlElement(idTracks, trackEntry(1, 1), broken), cues)
+	times, err := Keyframes(context.Background(), &memory{data: after}, int64(len(after)))
+	if err != nil || !slices.Equal(times, []time.Duration{0, 2 * time.Second}) {
+		t.Errorf("got %v, %v", times, err)
+	}
+	before := matroskaFile(ebmlElement(idTracks, broken, trackEntry(1, 1)), cues)
+	if _, err := Keyframes(context.Background(), &memory{data: before}, int64(len(before))); !errors.Is(err, errInvalid) {
+		t.Errorf("got %v, want errInvalid", err)
 	}
 }
 
@@ -625,11 +649,12 @@ func TestMatroskaSubtitleBlocksFail(t *testing.T) {
 			ebmlUint(idCueTrack, 1), ebmlUint(idCueClusterPosition, cluster), ebmlUint(idCueRelativePosition, relative)))}
 	}
 
+	// Every case is the file's: ErrUnreadable, and err more precisely,
+	// when given.
 	tests := []struct {
 		name string
 		file testFile
-		// err is the error expected, nil for any but ErrIncompleteIndex.
-		err error
+		err  error
 	}{
 		{"a block the Cues do not list", testFile{tracks: [][]byte{plain}, clusters: []testCluster{{blocks: []testBlock{
 			groupBlock(1, 1000, 100, "Listed."), {track: 1, time: 1500, data: []byte("Unlisted."), unlisted: true}, groupBlock(1, 2000, 100, "Listed."),
@@ -662,14 +687,107 @@ func TestMatroskaSubtitleBlocksFail(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			data := test.file.build()
 			blocks, err := openMemory(t, data).SubtitleBlocks(context.Background(), &fetcher{data: data}, 1)
-			t.Log(err)
-			if err == nil || test.err != nil && !errors.Is(err, test.err) {
+			if !errors.Is(err, ErrUnreadable) || test.err != nil && !errors.Is(err, test.err) {
 				t.Errorf("got %v, %v, want %v", blocks, err, test.err)
 			}
 			if test.err != ErrIncompleteIndex && errors.Is(err, ErrIncompleteIndex) {
 				t.Errorf("got %v", err)
 			}
 		})
+	}
+}
+
+// TestMatroskaDecompressionBombs reads tracks of hundreds of blocks of a
+// few bytes, each decoding to a MiB: the read fails once the frames
+// decoded exceed the bound, without holding them all.
+func TestMatroskaDecompressionBombs(t *testing.T) {
+	inflating := deflate(make([]byte, maxBlock))
+	settings := make([]byte, maxBlock-100)
+	for _, test := range []struct {
+		name  string
+		track []byte
+		frame []byte
+	}{
+		{"zlib", subtitleTrack(1, "S_TEXT/UTF8", nil,
+			contentEncodings(contentEncodingElement(0, scopeFrames, 0, ebmlUint(idContentCompAlgo, 0)))), inflating},
+		{"header stripping", subtitleTrack(1, "S_TEXT/UTF8", nil,
+			contentEncodings(contentEncodingElement(0, scopeFrames, 0, ebmlUint(idContentCompAlgo, 3), ebmlElement(idContentCompSettings, settings)))),
+			[]byte("x")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// 400 blocks would decode to 400 MiB.
+			var clusters []testCluster
+			for i := range 4 {
+				var blocks []testBlock
+				for j := range 100 {
+					blocks = append(blocks, testBlock{track: 1, time: uint64(i*100 + j), data: test.frame})
+				}
+				clusters = append(clusters, testCluster{blocks: blocks})
+			}
+			data := testFile{tracks: [][]byte{test.track}, clusters: clusters}.build()
+			m := openMemory(t, data)
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			_, err := m.SubtitleBlocks(context.Background(), &fetcher{data: data}, 1)
+			runtime.ReadMemStats(&after)
+			if !errors.Is(err, ErrUnreadable) {
+				t.Errorf("got %v, want ErrUnreadable", err)
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 256<<20 {
+				t.Errorf("%d MiB allocated", allocated>>20)
+			}
+		})
+	}
+}
+
+// failing serves a file whose reads fail, or come short, from a point:
+// what the host does, never what the file says.
+type failing struct {
+	fetcher
+	from  int
+	short bool
+}
+
+func (f *failing) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	f.mu.Lock()
+	f.calls++
+	calls := f.calls
+	f.mu.Unlock()
+	if calls < f.from {
+		return slices.Clone(f.data[off:min(off+int64(n), int64(len(f.data)))]), nil
+	}
+	if f.short {
+		return slices.Clone(f.data[off : off+int64(n/2)]), nil
+	}
+	return nil, errors.New("HTTP 502")
+}
+
+func TestMatroskaHostErrorsAreNotUnreadable(t *testing.T) {
+	data := testFile{tracks: [][]byte{subtitleTrack(1, "S_TEXT/UTF8", nil)}, clusters: []testCluster{
+		{blocks: []testBlock{groupBlock(1, 1000, 100, "One."), groupBlock(1, 2000, 100, "Two.")}},
+		{padding: 100 << 10, blocks: []testBlock{groupBlock(1, 3000, 100, "Three.")}},
+	}}.build()
+	// The reads fail at the Cluster's header, at the Cluster checked, and at
+	// the blocks.
+	for from := 1; from <= 3; from++ {
+		for _, short := range []bool{false, true} {
+			f := &failing{fetcher: fetcher{data: data}, from: from, short: short}
+			_, err := openMemory(t, data).SubtitleBlocks(context.Background(), f, 1)
+			if err == nil || errors.Is(err, ErrUnreadable) {
+				t.Errorf("failing from request %d, short %v: got %v", from, short, err)
+			}
+		}
+	}
+	// A file cut short, of a Segment of unknown size, may be the host's.
+	cut := slices.Clone(data)
+	copy(cut[bytes.Index(cut, idBytes(idSegment))+4:], []byte{0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	m := openMemory(t, cut)
+	if _, err := m.cueIndex(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	m.size -= 100 << 10
+	if _, err := m.SubtitleBlocks(context.Background(), &fetcher{data: cut[:m.size]}, 1); err == nil || errors.Is(err, ErrUnreadable) {
+		t.Errorf("cut short: got %v", err)
 	}
 }
 
@@ -706,23 +824,23 @@ func TestMatroskaSubtitleLocations(t *testing.T) {
 
 func TestMatroskaAttachments(t *testing.T) {
 	track := subtitleTrack(1, "S_TEXT/ASS", nil)
-	file := func(name, mime, description string, uid uint64, data []byte) []byte {
-		return ebmlElement(idAttachedFile, ebmlElement(idFileName, []byte(name)), ebmlElement(idFileMediaType, []byte(mime)),
-			ebmlElement(idFileDescription, []byte(description)), ebmlUint(idFileUID, uid), ebmlElement(idFileData, data))
+	// A description and a UID, which are not read, come with the first.
+	file := func(name, mime string, data []byte, more ...[]byte) []byte {
+		return ebmlElement(idAttachedFile, slices.Concat([][]byte{ebmlElement(idFileName, []byte(name)),
+			ebmlElement(idFileMediaType, []byte(mime)), ebmlElement(idFileData, data)}, more)...)
 	}
 	two := testFile{tracks: [][]byte{track}, attachments: ebmlElement(idAttachments,
-		file("A.ttf", "font/ttf", "", 1, []byte("first font")),
+		file("A.ttf", "font/ttf", []byte("first font"), ebmlElement(0x467E, []byte("Regular")), ebmlUint(0x46AE, 1)),
 		ebmlElement(idVoid, []byte{0}),
-		file("B.otf", "font/otf", "Bold", 2, []byte("second font")),
+		file("B.otf", "font/otf", []byte("second font")),
 	)}.build()
 	attachments, err := openMemory(t, two).Attachments(context.Background())
 	want := []Attachment{
-		{FileName: "A.ttf", MimeType: "font/ttf", UID: 1, Data: []byte("first font")},
-		{FileName: "B.otf", MimeType: "font/otf", Description: "Bold", UID: 2, Data: []byte("second font")},
+		{FileName: "A.ttf", MimeType: "font/ttf", Data: []byte("first font")},
+		{FileName: "B.otf", MimeType: "font/otf", Data: []byte("second font")},
 	}
 	if err != nil || !slices.EqualFunc(attachments, want, func(a, b Attachment) bool {
-		return a.FileName == b.FileName && a.MimeType == b.MimeType && a.Description == b.Description && a.UID == b.UID &&
-			bytes.Equal(a.Data, b.Data)
+		return a.FileName == b.FileName && a.MimeType == b.MimeType && bytes.Equal(a.Data, b.Data)
 	}) {
 		t.Errorf("got %+v, %v", attachments, err)
 	}
@@ -741,13 +859,13 @@ func TestMatroskaAttachments(t *testing.T) {
 	} {
 		data := testFile{tracks: [][]byte{track}, clusters: []testCluster{{}}, attachments: attachments, attachmentsLast: true}.build()
 		m := openMemory(t, data)
-		if _, err := m.Attachments(context.Background()); !errors.Is(err, errInvalid) {
-			t.Errorf("got %v, want errInvalid", err)
+		if _, err := m.Attachments(context.Background()); !errors.Is(err, ErrUnreadable) {
+			t.Errorf("got %v, want ErrUnreadable", err)
 		}
 	}
 
 	// The Attachments claim 200 MiB, which a Segment of unknown size may
-	// hold: they are not read.
+	// hold: more than the bound, they fail from their header, unread.
 	head := testFile{tracks: [][]byte{track}, clusters: []testCluster{{}},
 		attachments: slices.Concat(idBytes(idAttachments), sizeBytes(200<<20)), attachmentsLast: true}.build()
 	copy(head[bytes.Index(head, idBytes(idSegment))+4:], []byte{0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
@@ -756,8 +874,8 @@ func TestMatroskaAttachments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Attachments(context.Background()); !errors.Is(err, errInvalid) || large.read > 2*window {
-		t.Errorf("got %v after reading %d bytes, want errInvalid", err, large.read)
+	if _, err := m.Attachments(context.Background()); !errors.Is(err, ErrUnreadable) || large.read > 2*window {
+		t.Errorf("got %v after reading %d bytes, want ErrUnreadable", err, large.read)
 	}
 }
 

@@ -21,16 +21,9 @@ type Track struct {
 	// track's content encodings cover it. It is as stored when the track
 	// is not Decodable.
 	CodecPrivate []byte
-	// Language is the LanguageBCP47 when present, else the Language, else
-	// "eng", the default the specification gives.
-	Language string
-	Name     string
-	// Default is FlagDefault, set unless the file says otherwise, and
-	// Forced FlagForced.
-	Default, Forced bool
-	// Decodable tells whether the track's blocks can be decoded: they are
-	// not encrypted, and stored as they are, compressed with zlib or with
-	// their common header stripped.
+	// Decodable tells whether the track's blocks can be decoded: its
+	// TrackEntry reads, and they are not encrypted, and stored as they are,
+	// compressed with zlib or with their common header stripped.
 	Decodable bool
 }
 
@@ -54,51 +47,60 @@ const (
 )
 
 const (
-	// maxTracks bounds the TrackEntries kept, maxPrivate the size of a
-	// CodecPrivate once decoded, and maxPrivates the size of them all,
-	// so that compressed ones cannot exhaust memory.
-	maxTracks   = 1024
+	// maxTracks bounds the TrackEntries kept, far above what files hold;
+	// maxPrivate bounds the size of a CodecPrivate once decoded, and
+	// maxPrivates the size of them all, so that compressed ones cannot
+	// exhaust memory.
+	maxTracks   = 1 << 16
 	maxPrivate  = 16 << 20
 	maxPrivates = 64 << 20
 )
 
-// parseTracks reads the TrackEntries of a Tracks element, and the content
+// trackList is what the Tracks element tells: the tracks, why each
+// TrackEntry could not be read, when it could not, and the content
 // encodings to undo on the frames of each Decodable track.
-func parseTracks(data []byte) ([]Track, map[uint64][]contentEncoding, error) {
-	var tracks []Track
-	frames := map[uint64][]contentEncoding{}
+type trackList struct {
+	tracks []Track
+	// errs holds, in TrackEntry order, the error the TrackEntry's
+	// structure, TrackNumber or TrackType gave. Its track is kept, as not
+	// Decodable: the file's other tracks remain usable.
+	errs   []error
+	frames map[uint64][]contentEncoding
+}
+
+// parseTracks reads the TrackEntries of a Tracks element.
+func parseTracks(data []byte) (trackList, error) {
+	list := trackList{frames: map[uint64][]contentEncoding{}}
 	budget := int64(maxPrivates)
 	err := children(data, func(id uint32, entry []byte) error {
 		if id != idTrackEntry {
 			return nil
 		}
-		if len(tracks) == maxTracks {
+		if len(list.tracks) == maxTracks {
 			return fmt.Errorf("more than %d tracks: %w", maxTracks, errInvalid)
 		}
 		track, encodings, err := parseTrack(entry, &budget)
-		if err != nil {
-			return err
-		}
-		tracks = append(tracks, track)
-		if _, seen := frames[track.Number]; !seen && track.Decodable {
-			frames[track.Number] = encodings
+		list.tracks = append(list.tracks, track)
+		list.errs = append(list.errs, err)
+		if _, seen := list.frames[track.Number]; !seen && track.Decodable {
+			list.frames[track.Number] = encodings
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return trackList{}, err
 	}
-	return tracks, frames, nil
+	return list, nil
 }
 
 // parseTrack reads a TrackEntry, and the content encodings to undo on its
-// frames. Decoding its CodecPrivate takes from budget.
+// frames. Decoding its CodecPrivate takes from budget. The error tells
+// that the TrackEntry's structure, TrackNumber or TrackType does not read:
+// the track is then returned as far as it was read, not Decodable.
 func parseTrack(entry []byte, budget *int64) (Track, []contentEncoding, error) {
-	track := Track{Default: true, Decodable: true}
-	var language, bcp47 string
+	track := Track{Decodable: true}
 	var private, encodings []byte
 	err := children(entry, func(id uint32, data []byte) error {
-		var value uint64
 		var err error
 		switch id {
 		case idTrackNumber:
@@ -109,38 +111,19 @@ func parseTrack(entry []byte, budget *int64) (Track, []contentEncoding, error) {
 			track.CodecID = text(data)
 		case idCodecPrivate:
 			private = data
-		case idLanguage:
-			language = text(data)
-		case idLanguageBCP47:
-			bcp47 = text(data)
-		case idName:
-			track.Name = text(data)
-		case idFlagDefault:
-			value, err = unsigned(data)
-			track.Default = value != 0
-		case idFlagForced:
-			value, err = unsigned(data)
-			track.Forced = value != 0
 		case idContentEncodings:
 			encodings = data
 		}
 		return err
 	})
-	if err != nil {
-		return Track{}, nil, err
-	}
-	switch {
-	case bcp47 != "":
-		track.Language = bcp47
-	case language != "":
-		track.Language = language
-	default:
-		track.Language = "eng"
-	}
 	track.CodecPrivate = private
+	if err != nil {
+		track.Decodable = false
+		return track, nil, err
+	}
 
-	// A track whose encodings cannot be read or undone is described all
-	// the same, as not Decodable: the file's other tracks remain usable.
+	// Encodings that cannot be read or undone leave the track described,
+	// not Decodable.
 	list, err := parseEncodings(encodings)
 	if err != nil {
 		track.Decodable = false

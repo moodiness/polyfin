@@ -31,11 +31,6 @@ const (
 	idTrackEntry          = 0xAE
 	idTrackNumber         = 0xD7
 	idTrackType           = 0x83
-	idFlagDefault         = 0x88
-	idFlagForced          = 0x55AA
-	idName                = 0x536E
-	idLanguage            = 0x22B59C
-	idLanguageBCP47       = 0x22B59D
 	idCodecID             = 0x86
 	idCodecPrivate        = 0x63A2
 	idContentEncodings    = 0x6D80
@@ -63,11 +58,9 @@ const (
 	idTags                = 0x1254C367
 	idAttachments         = 0x1941A469
 	idAttachedFile        = 0x61A7
-	idFileDescription     = 0x467E
 	idFileName            = 0x466E
 	idFileMediaType       = 0x4660
 	idFileData            = 0x465C
-	idFileUID             = 0x46AE
 	idVoid                = 0xEC
 	idCRC32               = 0xBF
 )
@@ -103,10 +96,9 @@ type Matroska struct {
 	// when known.
 	positions map[uint32]int64
 	scale     uint64
-	tracks    []Track
-	// frames holds, by track number, the content encodings to undo on the
-	// frames of a Decodable track, in the order they are undone.
-	frames map[uint64][]contentEncoding
+	// trackList holds the tracks, the errors of their TrackEntries, and
+	// the content encodings to undo on the frames of each Decodable track.
+	trackList
 	// head holds the spans the head was read from: a small file's, or one
 	// whose Cues come first, also hold its Cues and Attachments.
 	head [2]held
@@ -275,7 +267,7 @@ func openMatroska(f *file) (*Matroska, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.tracks, m.frames, err = parseTracks(data)
+	m.trackList, err = parseTracks(data)
 	if err != nil {
 		return nil, err
 	}
@@ -283,9 +275,13 @@ func openMatroska(f *file) (*Matroska, error) {
 	return m, nil
 }
 
-// videoTrack returns the TrackNumber of the first video track.
+// videoTrack returns the TrackNumber of the first video track. A
+// TrackEntry before it that does not read fails it.
 func (m *Matroska) videoTrack() (uint64, error) {
-	for _, track := range m.tracks {
+	for i, track := range m.tracks {
+		if m.errs[i] != nil {
+			return 0, m.errs[i]
+		}
 		if track.Type != trackTypeVideo {
 			continue
 		}

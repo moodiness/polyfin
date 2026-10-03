@@ -23,8 +23,14 @@ type Reader interface {
 // ErrNoIndex reports a file without a usable index.
 var ErrNoIndex = errors.New("no usable container index")
 
+// ErrUnreadable reports a file that cannot be read as its container says,
+// whatever host serves it: an index or structure that contradicts itself,
+// content that does not decode, or sizes past the bounds kept against
+// hostile files. Errors of the host or the network never are.
+var ErrUnreadable = errors.New("unreadable container")
+
 // errInvalid reports an index that contradicts itself or its file.
-var errInvalid = errors.New("invalid container index")
+var errInvalid = fmt.Errorf("invalid container index: %w", ErrUnreadable)
 
 const (
 	// window is how much is read at once when a few bytes are needed:

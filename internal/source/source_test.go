@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"io"
 	"log/slog"
@@ -619,6 +620,174 @@ func TestFetchRangesUnsupported(t *testing.T) {
 				if got, err := s.Fetch(t.Context(), r.Off, r.N); err != nil || !bytes.Equal(got, data[r.Off:r.Off+int64(r.N)]) {
 					t.Errorf("at %d: %v", r.Off, err)
 				}
+			}
+		})
+	}
+}
+
+func TestFetchStalledAttemptsAreRetried(t *testing.T) {
+	data := make([]byte, blockSize)
+	_, _ = rand.Read(data)
+	for name, stall := range map[string]func(w http.ResponseWriter){
+		"before the headers": func(http.ResponseWriter) {},
+		"within the body": func(w http.ResponseWriter) {
+			w.Header().Set("Content-Range", "bytes 10-29/"+strconv.Itoa(len(data)))
+			w.Header().Set("Content-Length", "20")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(data[10:20])
+			w.(http.Flusher).Flush()
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) == 1 {
+					stall(w)
+					// Until the client gives up.
+					select {
+					case <-r.Context().Done():
+					case <-time.After(10 * time.Second):
+					}
+					return
+				}
+				http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+			}))
+			defer server.Close()
+			cache := newCache(t, 1<<30)
+			cache.attemptTime = 100 * time.Millisecond
+			s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+			defer s.Release()
+			started := time.Now()
+			got, err := s.Fetch(t.Context(), 10, 20)
+			if err != nil || !bytes.Equal(got, data[10:30]) {
+				t.Fatalf("%d bytes: %v", len(got), err)
+			}
+			// The attempt, then a wait of 0.5 s.
+			if waited := time.Since(started); requests.Load() != 2 || waited > 3*time.Second {
+				t.Errorf("%d requests in %v", requests.Load(), waited)
+			}
+		})
+	}
+}
+
+// memoryReader reads a file in memory for the container package.
+type memoryReader []byte
+
+func (m memoryReader) ReadAt(_ context.Context, p []byte, off int64) (int, error) {
+	return bytes.NewReader(m).ReadAt(p, off)
+}
+
+// spreadMatroska is a Matroska file of a SubRip track whose blocks, one a
+// second, each in a Cluster of its own, are farther apart than the
+// container package reads with one range.
+func spreadMatroska(texts ...string) []byte {
+	idBytes := func(id uint32) []byte {
+		b := binary.BigEndian.AppendUint32(nil, id)
+		return bytes.TrimLeft(b, "\x00")
+	}
+	// Sizes of 8 bytes keep lengths fixed while positions are worked out.
+	element := func(id uint32, children ...[]byte) []byte {
+		payload := slices.Concat(children...)
+		return slices.Concat(idBytes(id), binary.BigEndian.AppendUint64(nil, 1<<56|uint64(len(payload))), payload)
+	}
+	integer := func(id uint32, value uint64) []byte {
+		return element(id, binary.BigEndian.AppendUint64(nil, value))
+	}
+	seekHead := func(info, tracks, cues uint64) []byte {
+		seek := func(id uint32, position uint64) []byte {
+			return element(0x4DBB, element(0x53AB, idBytes(id)), integer(0x53AC, position))
+		}
+		return element(0x114D9B74, seek(0x1549A966, info), seek(0x1654AE6B, tracks), seek(0x1C53BB6B, cues))
+	}
+	info := element(0x1549A966, integer(0x2AD7B1, 1_000_000))
+	tracks := element(0x1654AE6B, element(0xAE, integer(0xD7, 1), integer(0x83, 0x11), element(0x86, []byte("S_TEXT/UTF8"))))
+	position := uint64(len(seekHead(0, 0, 0)) + len(info) + len(tracks))
+	var clusters, points []byte
+	for i, text := range texts {
+		ms := uint64(i) * 1000
+		head := slices.Concat(integer(0xE7, ms), element(0xEC, make([]byte, 100<<10)))
+		block := element(0xA0, element(0xA1, []byte{0x81, 0, 0, 0}, []byte(text)), integer(0x9B, 500))
+		points = append(points, element(0xBB, integer(0xB3, ms),
+			element(0xB7, integer(0xF7, 1), integer(0xF1, position), integer(0xF0, uint64(len(head)))))...)
+		cluster := element(0x1F43B675, head, block)
+		clusters = append(clusters, cluster...)
+		position += uint64(len(cluster))
+	}
+	first := uint64(len(seekHead(0, 0, 0)))
+	return slices.Concat(
+		element(0x1A45DFA3, element(0x4282, []byte("matroska"))),
+		element(0x18538067, seekHead(first, first+uint64(len(info)), position), info, tracks, clusters, element(0x1C53BB6B, points)),
+	)
+}
+
+// TestSubtitleBlocksThroughSources reads a track's blocks from hosts that
+// serve several ranges at once, merge them, or ignore them.
+func TestSubtitleBlocksThroughSources(t *testing.T) {
+	texts := []string{"One.", "Two.", "Three.", "Four.", "Five."}
+	data := spreadMatroska(texts...)
+	merged := func(w http.ResponseWriter, ranges string) {
+		first, last := int64(len(data)), int64(0)
+		for span := range strings.SplitSeq(strings.TrimPrefix(ranges, "bytes="), ",") {
+			from, to, _ := strings.Cut(span, "-")
+			start, _ := strconv.ParseInt(from, 10, 64)
+			end, _ := strconv.ParseInt(to, 10, 64)
+			first, last = min(first, start), max(last, min(end, int64(len(data))-1))
+		}
+		w.Header().Set("Content-Range", "bytes "+strconv.FormatInt(first, 10)+"-"+strconv.FormatInt(last, 10)+"/"+strconv.Itoa(len(data)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(data[first : last+1])
+	}
+	whole := func(w http.ResponseWriter, _ string) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+	}
+	for _, test := range []struct {
+		name string
+		// several answers requests for several ranges, nil for multipart
+		// byte ranges.
+		several  func(w http.ResponseWriter, ranges string)
+		requests int32
+	}{
+		// The check reads a Cluster's header and data, then the blocks
+		// come with one request; or one each, once the host ignored
+		// several ranges.
+		{"multipart", nil, 3},
+		{"merged", merged, 3},
+		{"ignored", whole, 3 + int32(len(texts))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if ranges := r.Header.Get("Range"); strings.Contains(ranges, ",") && test.several != nil {
+					test.several(w, ranges)
+					return
+				}
+				http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+			}))
+			defer server.Close()
+			cache := newCache(t, 1<<30)
+			cache.fetchInterval = time.Millisecond
+			s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+			defer s.Release()
+			m, err := container.OpenMatroska(t.Context(), memoryReader(data), int64(len(data)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			blocks, err := m.SubtitleBlocks(t.Context(), s, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(blocks) != len(texts) {
+				t.Fatalf("%d blocks", len(blocks))
+			}
+			for i, block := range blocks {
+				if string(block.Data) != texts[i] || block.Start != time.Duration(i)*time.Second || block.Duration != 500*time.Millisecond {
+					t.Errorf("block %d: %v %v %q", i, block.Start, block.Duration, block.Data)
+				}
+			}
+			if requests.Load() != test.requests {
+				t.Errorf("%d requests, want %d", requests.Load(), test.requests)
 			}
 		})
 	}
