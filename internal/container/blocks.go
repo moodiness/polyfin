@@ -23,6 +23,26 @@ type Fetcher interface {
 	Fetch(ctx context.Context, off int64, n int) ([]byte, error)
 }
 
+// Range is a span of a file: the N bytes at Off.
+type Range struct {
+	Off int64
+	N   int
+}
+
+// RangeFetcher reads several ranges of a file with one request, as a
+// source serving multipart byte ranges does: result[i] holds ranges[i],
+// shorter only at the end of the file. ErrMultiRangeUnsupported when the
+// source does not serve several ranges at once. Hosts refuse requests
+// past a rate; subtitle blocks are read with a few such requests rather
+// than one each.
+type RangeFetcher interface {
+	FetchRanges(ctx context.Context, ranges []Range) ([][]byte, error)
+}
+
+// ErrMultiRangeUnsupported reports a source that does not serve several
+// ranges with one request.
+var ErrMultiRangeUnsupported = errors.New("the source does not serve several ranges at once")
+
 // ErrIncompleteIndex reports Cues that do not list every block of a
 // subtitle track.
 var ErrIncompleteIndex = errors.New("the Cues do not list every block of the track")
@@ -50,14 +70,22 @@ const (
 	// blocks are smaller, but for long typeset ones, which are read again
 	// whole.
 	blockWindow = 4 << 10
-	// Blocks closer than maxGap are read with one request, spanning at
-	// most maxSpan: anime tracks pack thousands of blocks in a few
-	// Clusters, film tracks have one every few MB.
+	// Blocks closer than maxGap are read with one range, spanning at most
+	// maxSpan: anime tracks pack thousands of blocks in a few Clusters,
+	// film tracks have one every few MB.
 	maxGap  = 64 << 10
 	maxSpan = 4 << 20
-	// maxFetches bounds the requests running at once: debrid hosts answer
-	// 429 when hammered.
-	maxFetches = 6
+	// maxFetches bounds the requests of a range each running at once:
+	// debrid hosts answer 429 when hammered. A source serving several
+	// ranges with one request is asked at most maxRanges at once, by at
+	// most maxBatches requests at once: with offsets of at most 19 digits,
+	// the Range header stays within 2.6 KB, which servers accept. One that
+	// does not, which a track's every block costs a request, is asked by
+	// at most maxSingleFetches requests at once.
+	maxFetches       = 6
+	maxRanges        = 64
+	maxBatches       = 2
+	maxSingleFetches = 2
 	// maxBlocks bounds the blocks of a track read, maxFetched the bytes
 	// fetched for them, and maxBlock the size of one, encoded or decoded,
 	// so that a hostile file cannot exhaust memory or the source.
@@ -250,8 +278,23 @@ func parseCues(cues []byte, subtitles map[uint64]bool) (*cueIndex, error) {
 // sorted by Start (ties: file order). It first checks one Cluster holding
 // blocks of the track: when the Cues do not list every block of the track
 // there, ErrIncompleteIndex. Blocks close together are read with one
-// request; at most a few requests run at once.
+// range; at most a few requests run at once. When f is also a
+// RangeFetcher, the ranges are read by batches, a request each.
 func (m *Matroska) SubtitleBlocks(ctx context.Context, f Fetcher, number uint64) ([]Block, error) {
+	return m.subtitleBlocks(ctx, f, number, defaultLayout)
+}
+
+// layout is how blocks are read: the window read at the position of each,
+// and how close blocks are read with one range.
+type layout struct {
+	window, gap, span int64
+}
+
+var defaultLayout = layout{window: blockWindow, gap: maxGap, span: maxSpan}
+
+// subtitleBlocks is SubtitleBlocks with the layout of the reads, which
+// tests shrink to stand for large files.
+func (m *Matroska) subtitleBlocks(ctx context.Context, f Fetcher, number uint64, layout layout) ([]Block, error) {
 	i := slices.IndexFunc(m.tracks, func(track Track) bool { return track.Number == number })
 	if i < 0 || m.tracks[i].Type != trackTypeSubtitle || number == 0 {
 		return nil, fmt.Errorf("no subtitle track %d", number)
@@ -276,7 +319,7 @@ func (m *Matroska) SubtitleBlocks(ctx context.Context, f Fetcher, number uint64)
 			return nil, fmt.Errorf("Cues of track %d past the segment: %w", number, errInvalid)
 		}
 	}
-	r := &blockReader{m: m, f: f, number: number, encodings: m.frames[number], headers: map[uint64]int64{}}
+	r := &blockReader{m: m, f: f, number: number, encodings: m.frames[number], layout: layout, headers: map[uint64]int64{}}
 	header, err := r.check(ctx, cues, index.clusters)
 	if err != nil {
 		return nil, err
@@ -290,6 +333,7 @@ type blockReader struct {
 	f         Fetcher
 	number    uint64
 	encodings []contentEncoding
+	layout    layout
 	fetched   atomic.Int64
 
 	mu sync.Mutex
@@ -450,6 +494,13 @@ type located struct {
 	rank int
 }
 
+// group is blocks close together, read with one range: the bytes from
+// start to end.
+type group struct {
+	start, end int64
+	blocks     []located
+}
+
 // read reads the blocks the Cues list, assuming the Clusters not read yet
 // have headers of length header, by groups of blocks close together.
 func (r *blockReader) read(ctx context.Context, cues []cueBlock, header int64) ([]Block, error) {
@@ -462,47 +513,125 @@ func (r *blockReader) read(ctx context.Context, cues []cueBlock, header int64) (
 		blocks[i] = located{cue: cue, at: r.m.segment.data + int64(cue.cluster) + length + int64(cue.relative)}
 	}
 	slices.SortStableFunc(blocks, func(a, b located) int { return cmp.Compare(a.at, b.at) })
-	var groups [][]located
+	var groups []group
 	for i := range blocks {
 		blocks[i].rank = i
 		if n := len(groups); n > 0 {
-			group := groups[n-1]
-			start, end := group[0].at, group[len(group)-1].at+blockWindow
-			if blocks[i].at-end <= maxGap && blocks[i].at+blockWindow-start <= maxSpan {
-				groups[n-1] = append(group, blocks[i])
+			last := &groups[n-1]
+			if blocks[i].at-last.end <= r.layout.gap && blocks[i].at+r.layout.window-last.start <= r.layout.span {
+				last.blocks = append(last.blocks, blocks[i])
+				last.end = blocks[i].at + r.layout.window
 				continue
 			}
 		}
-		groups = append(groups, []located{blocks[i]})
+		groups = append(groups, group{start: blocks[i].at, end: blocks[i].at + r.layout.window, blocks: []located{blocks[i]}})
+	}
+	for i := range groups {
+		groups[i].end = min(groups[i].end, r.m.size)
+		if groups[i].start >= groups[i].end {
+			return nil, fmt.Errorf("block of track %d past the end of the file: %w", r.number, errInvalid)
+		}
 	}
 
 	result := make([]Block, len(blocks))
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(maxFetches)
-	for _, group := range groups {
-		g.Go(func() error {
-			start := group[0].at
-			end := min(group[len(group)-1].at+blockWindow, r.m.size)
-			if start >= end {
-				return fmt.Errorf("block of track %d past the end of the file: %w", r.number, errInvalid)
-			}
-			data, err := r.fetch(ctx, start, end-start)
-			if err != nil {
-				return err
-			}
-			for _, block := range group {
-				if result[block.rank], err = r.block(ctx, block, data, start); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
+	var err error
+	if f, ok := r.f.(RangeFetcher); ok {
+		err = r.readBatches(ctx, f, groups, result)
+	} else {
+		err = r.readGroups(ctx, groups, maxFetches, result)
 	}
-	if err := g.Wait(); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	slices.SortStableFunc(result, func(a, b Block) int { return cmp.Compare(a.Start, b.Start) })
 	return result, nil
+}
+
+// readGroups reads groups with a request each, at most limit at once, into
+// result.
+func (r *blockReader) readGroups(ctx context.Context, groups []group, limit int, result []Block) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(limit)
+	for _, group := range groups {
+		g.Go(func() error {
+			data, err := r.fetch(ctx, group.start, group.end-group.start)
+			if err != nil {
+				return err
+			}
+			return r.parseGroup(ctx, group, data, result)
+		})
+	}
+	return g.Wait()
+}
+
+// readBatches reads groups by batches of ranges, a request each. The first
+// batch tells whether the source serves several ranges at once: when it
+// does not, the groups are read with a request each, fewer at once than
+// otherwise, as these are the many requests a host may refuse.
+func (r *blockReader) readBatches(ctx context.Context, f RangeFetcher, groups []group, result []Block) error {
+	batches := slices.Collect(slices.Chunk(groups, maxRanges))
+	err := r.readBatch(ctx, f, batches[0], result)
+	if errors.Is(err, ErrMultiRangeUnsupported) {
+		return r.readGroups(ctx, groups, maxSingleFetches, result)
+	}
+	if err != nil {
+		return err
+	}
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxBatches)
+	for _, batch := range batches[1:] {
+		g.Go(func() error {
+			err := r.readBatch(ctx, f, batch, result)
+			if errors.Is(err, ErrMultiRangeUnsupported) {
+				// One at a time: the other batches still run.
+				return r.readGroups(ctx, batch, 1, result)
+			}
+			return err
+		})
+	}
+	return g.Wait()
+}
+
+// readBatch reads the groups of a batch with one request, into result.
+func (r *blockReader) readBatch(ctx context.Context, f RangeFetcher, groups []group, result []Block) error {
+	ranges := make([]Range, len(groups))
+	var total int64
+	for i, group := range groups {
+		ranges[i] = Range{Off: group.start, N: int(group.end - group.start)}
+		total += group.end - group.start
+	}
+	if r.fetched.Add(total) > maxFetched {
+		return fmt.Errorf("track %d needs more than %d bytes read: %w", r.number, maxFetched, errInvalid)
+	}
+	data, err := f.FetchRanges(ctx, ranges)
+	if err != nil {
+		// The bytes were not fetched: a fallback may fetch them.
+		r.fetched.Add(-total)
+		return err
+	}
+	if len(data) != len(ranges) {
+		return fmt.Errorf("fetching %d ranges: %d answered: %w", len(ranges), len(data), io.ErrUnexpectedEOF)
+	}
+	for i, group := range groups {
+		if len(data[i]) < ranges[i].N {
+			return fmt.Errorf("fetching %d bytes at %d: %w", ranges[i].N, ranges[i].Off, io.ErrUnexpectedEOF)
+		}
+		if err := r.parseGroup(ctx, group, data[i][:ranges[i].N], result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// parseGroup reads the blocks of group from data, its bytes, into result.
+func (r *blockReader) parseGroup(ctx context.Context, group group, data []byte, result []Block) error {
+	for _, block := range group.blocks {
+		var err error
+		if result[block.rank], err = r.block(ctx, block, data, group.start); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // block reads a block from data, read at start, or from the file when
@@ -543,7 +672,7 @@ func (r *blockReader) parse(ctx context.Context, cue cueBlock, at int64, data []
 		// A block whose Cluster header is longer than assumed may begin
 		// past the window read.
 		var err error
-		if data, err = r.fetch(ctx, at, min(blockWindow, r.m.size-at)); err != nil {
+		if data, err = r.fetch(ctx, at, min(r.layout.window, r.m.size-at)); err != nil {
 			return Block{}, err
 		}
 		start = at

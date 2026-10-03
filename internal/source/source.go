@@ -10,6 +10,8 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +21,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/container"
 )
 
 const (
@@ -38,6 +41,10 @@ const (
 	// lingerDelay is how long an idle connection stays open for the
 	// reader's next request.
 	lingerDelay = 5 * time.Second
+	// fetchInterval spaces the requests of Fetch and FetchRanges to a
+	// source: hosts answer 429 to bursts of them, then refuse every file
+	// of the account for minutes.
+	fetchInterval = time.Second / 8
 )
 
 // ErrUnavailable reports a source that did not answer with its content.
@@ -75,10 +82,12 @@ type Cache struct {
 	logger *slog.Logger
 	// chunkBlocks is how many blocks one file on disk holds, readahead how
 	// many blocks past the last one asked a file keeps being read, so that
-	// a sequential reader rarely waits, and now the clock chunks are dated
-	// by.
+	// a sequential reader rarely waits, now the clock chunks are dated by,
+	// and fetchInterval the time between two requests of Fetch and
+	// FetchRanges to a source.
 	chunkBlocks, readahead int64
 	now                    func() time.Time
+	fetchInterval          time.Duration
 
 	mu      sync.Mutex
 	sources map[accounts.ID]*Source
@@ -115,7 +124,7 @@ func New(dir string, limit int64, opener Opener, logger *slog.Logger) (*Cache, e
 		}
 	}
 	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32, now: time.Now,
-		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{}}, nil
+		fetchInterval: fetchInterval, sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{}}, nil
 }
 
 // Open returns the source identified by id, read from location, and
@@ -242,6 +251,11 @@ type Source struct {
 	// rangeless marks a source that ignores ranges: it is read from its
 	// start, whatever block is wanted.
 	rangeless bool
+	// singleRanges marks a source that does not serve several ranges with
+	// one request: FetchRanges no longer asks it to.
+	singleRanges bool
+	// nextFetch is when Fetch and FetchRanges may send their next request.
+	nextFetch time.Time
 	running   bool
 	// wake tells a lingering fetch that a reader wants more.
 	wake     chan struct{}
@@ -690,7 +704,7 @@ func (s *Source) connect(block int64) (*connection, error) {
 		}
 		switch status := response.StatusCode; {
 		case status == http.StatusPartialContent:
-			start, total, ok := contentRange(response.Header.Get("Content-Range"))
+			start, _, total, ok := contentRange(response.Header.Get("Content-Range"))
 			if !ok || start != offset {
 				response.Body.Close()
 				return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
@@ -710,7 +724,7 @@ func (s *Source) connect(block int64) (*connection, error) {
 			return &connection{body: response.Body, next: 0}, nil
 		case status == http.StatusRequestedRangeNotSatisfiable:
 			response.Body.Close()
-			if _, total, ok := contentRange(response.Header.Get("Content-Range")); ok {
+			if _, _, total, ok := contentRange(response.Header.Get("Content-Range")); ok {
 				s.end(total)
 			} else {
 				s.end(offset)
@@ -742,9 +756,10 @@ func (s *Source) connect(block int64) (*connection, error) {
 // Fetch reads the n bytes at off with one request for that range alone,
 // past the block cache: for small reads scattered over a file, such as its
 // subtitle blocks, which the cache's 1 MiB blocks would multiply. It uses
-// the source's location and renews it when it expired, as reads do, and
-// waits out a server asking it to slow down (429, or 503 with Retry-After),
-// a bounded number of times. Fewer than n bytes only at the end of the file.
+// the source's location and renews it when it expired, as reads do, spaces
+// its requests with those of others to the source, and waits out a server
+// asking it to slow down or failing (429, 502, 503 or 504), a bounded
+// number of times. Fewer than n bytes only at the end of the file.
 func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 	if off < 0 || n < 0 {
 		return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", n, off)
@@ -755,8 +770,248 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 	if n == 0 {
 		return nil, nil
 	}
+	ranges := "bytes=" + strconv.FormatInt(off, 10) + "-" + strconv.FormatInt(off+int64(n)-1, 10)
+	for attempt := 1; ; attempt++ {
+		response, err := s.request(ctx, ranges)
+		if err != nil {
+			return nil, err
+		}
+		switch response.StatusCode {
+		case http.StatusPartialContent:
+			data, err := s.fetched(response, off, n)
+			response.Body.Close()
+			if !errors.Is(err, errBroken) || ctx.Err() != nil || attempt >= attempts {
+				return data, err
+			}
+			s.holdOff(backoff(attempt, ""))
+		case http.StatusOK:
+			// The body starts at the first byte, and may hold the whole
+			// file: it is not read.
+			response.Body.Close()
+			return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, ErrRangesIgnored)
+		default:
+			s.unsatisfiable(response)
+			return nil, io.EOF
+		}
+	}
+}
+
+// errBroken reports a connection that broke while a body was read: the
+// request may be tried again.
+var errBroken = errors.New("the connection broke")
+
+// fetched reads the body of a response to Fetch's request for the n bytes
+// at off: those of them the file holds.
+func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, error) {
+	start, _, total, ok := contentRange(response.Header.Get("Content-Range"))
+	if !ok || start != off {
+		return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
+	}
+	s.learn(total, response.Header.Get("Content-Type"))
+	if total >= 0 && off+int64(n) > total {
+		n = int(max(0, total-off))
+	}
+	data := make([]byte, n)
+	if _, err := io.ReadFull(response.Body, data); err != nil {
+		return nil, fmt.Errorf("%w: %w: %v", ErrUnavailable, errBroken, err)
+	}
+	return data, nil
+}
+
+// FetchRanges reads several ranges of the source with one request, past
+// the block cache, as Fetch reads one: result[i] holds ranges[i], shorter
+// only at the end of the file. Servers answer with a multipart/byteranges
+// body, whose parts they may merge and reorder, or with one part covering
+// every range. A source answering otherwise, as with the whole file, is
+// not read, and is remembered: then and since, ErrMultiRangeUnsupported.
+func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	result := make([][]byte, len(ranges))
+	size, known := s.knownSize()
+	var asked []int
+	var length int64
+	for i, r := range ranges {
+		if r.Off < 0 || r.N < 0 {
+			return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", r.N, r.Off)
+		}
+		if r.N > 0 && (!known || r.Off < size) {
+			asked = append(asked, i)
+			length += int64(r.N)
+		}
+	}
+	switch {
+	case len(asked) == 0:
+		return result, nil
+	case len(asked) == 1:
+		data, err := s.Fetch(ctx, ranges[asked[0]].Off, ranges[asked[0]].N)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		result[asked[0]] = data
+		return result, nil
+	case s.multiRangeUnsupported():
+		return nil, container.ErrMultiRangeUnsupported
+	}
+	var header strings.Builder
+	header.WriteString("bytes=")
+	for j, i := range asked {
+		if j > 0 {
+			header.WriteByte(',')
+		}
+		r := ranges[i]
+		header.WriteString(strconv.FormatInt(r.Off, 10) + "-" + strconv.FormatInt(r.Off+int64(r.N)-1, 10))
+	}
+	for attempt := 1; ; attempt++ {
+		response, err := s.request(ctx, header.String())
+		if err != nil {
+			return nil, err
+		}
+		// Merged parts may hold the bytes between the ranges too: a part
+		// much larger than the ranges asked is not read.
+		parts := &multiRange{source: s, ranges: ranges, asked: asked, result: result, budget: 2*length + 1<<20}
+		err = parts.read(response)
+		response.Body.Close()
+		switch {
+		case err == nil:
+			return result, nil
+		case errors.Is(err, errBroken) && ctx.Err() == nil && attempt < attempts:
+			clear(result)
+			s.holdOff(backoff(attempt, ""))
+		case errors.Is(err, container.ErrMultiRangeUnsupported):
+			s.mu.Lock()
+			s.singleRanges = true
+			s.mu.Unlock()
+			s.cache.logger.Debug("A source does not serve several ranges at once", "source", s.id)
+			return nil, err
+		default:
+			return nil, err
+		}
+	}
+}
+
+func (s *Source) multiRangeUnsupported() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.singleRanges
+}
+
+// multiRange is the answer to a request for several ranges being read.
+type multiRange struct {
+	source *Source
+	ranges []container.Range
+	// asked are the indexes of the ranges asked, and result where each
+	// range read goes.
+	asked  []int
+	result [][]byte
+	// budget is the bytes parts may still take.
+	budget int64
+}
+
+// read reads the response to a request for several ranges into the
+// results, the body only when it is made of them.
+func (m *multiRange) read(response *http.Response) error {
+	switch response.StatusCode {
+	case http.StatusOK:
+		m.source.learn(response.ContentLength, response.Header.Get("Content-Type"))
+		return fmt.Errorf("%w: HTTP 200", container.ErrMultiRangeUnsupported)
+	case http.StatusRequestedRangeNotSatisfiable:
+		m.source.unsatisfiable(response)
+		return io.EOF
+	}
+	mediaType, params, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	switch {
+	case err == nil && mediaType == "multipart/byteranges" && params["boundary"] != "":
+		parts := multipart.NewReader(response.Body, params["boundary"])
+		for {
+			part, err := parts.NextRawPart()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("%w: %w: %v", ErrUnavailable, errBroken, err)
+			}
+			if err := m.part(part.Header.Get("Content-Range"), part, false); err != nil {
+				return err
+			}
+		}
+	case err == nil && strings.HasPrefix(mediaType, "multipart/"):
+		return fmt.Errorf("%w: a body of type %s", container.ErrMultiRangeUnsupported, mediaType)
+	default:
+		// One part: the server merged the ranges asked.
+		if err := m.part(response.Header.Get("Content-Range"), response.Body, true); err != nil {
+			return err
+		}
+	}
+	size, known := m.source.knownSize()
+	for _, i := range m.asked {
+		switch {
+		case m.result[i] != nil:
+		case known && m.ranges[i].Off >= size:
+			// The range starts past the end, which the source told.
+			m.result[i] = []byte{}
+		default:
+			return fmt.Errorf("%w: the range %d-%d is missing", container.ErrMultiRangeUnsupported,
+				m.ranges[i].Off, m.ranges[i].Off+int64(m.ranges[i].N)-1)
+		}
+	}
+	return nil
+}
+
+// part reads a part of the answer, the bytes value, its Content-Range,
+// tells, into the results of the ranges it covers whole. A part larger
+// than the budget, or alone not covering them all, is not read; one of a
+// multipart body covering none is skipped.
+func (m *multiRange) part(value string, body io.Reader, alone bool) error {
+	start, end, total, ok := contentRange(value)
+	if !ok || end < start {
+		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
+	}
+	m.source.learn(total, "")
+	// Ranges past the end of the file, which the part tells, have no part.
+	var covered []int
+	past := 0
+	for _, i := range m.asked {
+		r := m.ranges[i]
+		n := int64(r.N)
+		if total >= 0 {
+			n = min(n, total-r.Off)
+		}
+		switch {
+		case n <= 0:
+			past++
+		case r.Off >= start && r.Off+n-1 <= end:
+			covered = append(covered, i)
+		}
+	}
+	length := end - start + 1
+	if alone && len(covered)+past != len(m.asked) || length > m.budget {
+		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
+	}
+	m.budget -= length
+	if len(covered) == 0 {
+		return nil
+	}
+	data := make([]byte, length)
+	if _, err := io.ReadFull(body, data); err != nil {
+		return fmt.Errorf("%w: %w: %v", ErrUnavailable, errBroken, err)
+	}
+	for _, i := range covered {
+		r := m.ranges[i]
+		m.result[i] = data[r.Off-start:][:min(int64(r.N), end+1-r.Off)]
+	}
+	return nil
+}
+
+// request sends the request of Fetch or FetchRanges, for ranges, the value
+// of a Range header: through the source's location, renewed once when it
+// expired; spaced from the others; and again, a bounded number of times,
+// when the source asks to slow down or fails. The response is a 200, a 206
+// or a 416.
+func (s *Source) request(ctx context.Context, ranges string) (*http.Response, error) {
 	renewed := false
 	for attempt := 1; ; attempt++ {
+		if err := s.pace(ctx); err != nil {
+			return nil, err
+		}
 		s.mu.Lock()
 		location, renew := s.location, s.renew
 		s.mu.Unlock()
@@ -764,39 +1019,18 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 		for name, value := range location.Headers {
 			header.Set(name, value)
 		}
-		header.Set("Range", "bytes="+strconv.FormatInt(off, 10)+"-"+strconv.FormatInt(off+int64(n)-1, 10))
+		header.Set("Range", ranges)
 		response, err := s.cache.opener.Open(ctx, http.MethodGet, location.URL, header, location.Confined)
 		if err != nil {
 			if ctx.Err() != nil || attempt >= attempts {
 				return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 			}
-			if err := pause(ctx, backoff(attempt, "")); err != nil {
-				return nil, err
-			}
+			s.holdOff(backoff(attempt, ""))
 			continue
 		}
 		switch status := response.StatusCode; {
-		case status == http.StatusPartialContent:
-			data, err := s.fetched(response, off, n)
-			response.Body.Close()
-			if err == nil || ctx.Err() != nil || attempt >= attempts {
-				return data, err
-			}
-			// The connection broke while the body was read: try again.
-			if err := pause(ctx, backoff(attempt, "")); err != nil {
-				return nil, err
-			}
-		case status == http.StatusOK:
-			// The body starts at the first byte, and may hold the whole
-			// file: it is not read.
-			response.Body.Close()
-			return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, ErrRangesIgnored)
-		case status == http.StatusRequestedRangeNotSatisfiable:
-			response.Body.Close()
-			if _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
-				s.end(total)
-			}
-			return nil, io.EOF
+		case status == http.StatusOK || status == http.StatusPartialContent || status == http.StatusRequestedRangeNotSatisfiable:
+			return response, nil
 		case (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone) &&
 			renew != nil && !renewed:
 			response.Body.Close()
@@ -810,12 +1044,10 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 			s.mu.Unlock()
 			s.cache.logger.Debug("A source link was renewed", "source", s.id)
 			attempt = 0
-		case (status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable && response.Header.Get("Retry-After") != "") &&
-			attempt < attempts:
+		case (status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable ||
+			status == http.StatusGatewayTimeout) && attempt < attempts:
 			response.Body.Close()
-			if err := pause(ctx, backoff(attempt, response.Header.Get("Retry-After"))); err != nil {
-				return nil, err
-			}
+			s.holdOff(backoff(attempt, response.Header.Get("Retry-After")))
 		default:
 			response.Body.Close()
 			return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
@@ -823,26 +1055,43 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 	}
 }
 
-// fetched reads the body of a response to Fetch's request for the n bytes
-// at off: those of them the file holds.
-func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, error) {
-	start, total, ok := contentRange(response.Header.Get("Content-Range"))
-	if !ok || start != off {
-		return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
+// unsatisfiable records the size a 416 answer tells, and closes it.
+func (s *Source) unsatisfiable(response *http.Response) {
+	response.Body.Close()
+	if _, _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
+		s.end(total)
 	}
-	s.learn(total, response.Header.Get("Content-Type"))
-	if total >= 0 && off+int64(n) > total {
-		n = int(max(0, total-off))
+}
+
+// pace waits for the next time the source may be sent a request of Fetch
+// or FetchRanges, and takes it.
+func (s *Source) pace(ctx context.Context) error {
+	s.mu.Lock()
+	now := time.Now()
+	at := s.nextFetch
+	if at.Before(now) {
+		at = now
 	}
-	data := make([]byte, n)
-	if _, err := io.ReadFull(response.Body, data); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+	s.nextFetch = at.Add(s.cache.fetchInterval)
+	s.mu.Unlock()
+	return pause(ctx, at.Sub(now))
+}
+
+// holdOff sends the source no request of Fetch or FetchRanges for d: a
+// host asking to slow down is asked nothing meanwhile, by any of them.
+func (s *Source) holdOff(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at := time.Now().Add(d); at.After(s.nextFetch) {
+		s.nextFetch = at
 	}
-	return data, nil
 }
 
 // pause waits for d, or until ctx is done.
 func pause(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
@@ -882,33 +1131,38 @@ func backoff(attempt int, retryAfter string) time.Duration {
 	return min(time.Duration(1<<attempt)*250*time.Millisecond, maxWait)
 }
 
-// contentRange reads "bytes start-end/total"; total is -1 when unknown.
-func contentRange(value string) (start, total int64, ok bool) {
+// contentRange reads "bytes start-end/total"; end is -1 for "*", total -1
+// when unknown.
+func contentRange(value string) (start, end, total int64, ok bool) {
 	spec, found := strings.CutPrefix(strings.TrimSpace(value), "bytes ")
 	if !found {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	span, size, found := strings.Cut(spec, "/")
 	if !found {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	total = -1
 	if size != "*" {
 		parsed, err := strconv.ParseInt(size, 10, 64)
 		if err != nil {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
 		total = parsed
 	}
 	if span == "*" {
-		return 0, total, true
+		return 0, -1, total, true
 	}
-	first, _, found := strings.Cut(span, "-")
+	first, last, found := strings.Cut(span, "-")
 	if !found {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	start, err := strconv.ParseInt(first, 10, 64)
-	return start, total, err == nil
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	end, err = strconv.ParseInt(last, 10, 64)
+	return start, end, total, err == nil
 }
 
 // ServeHTTP serves the source with byte ranges, for FFmpeg and ffprobe,

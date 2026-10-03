@@ -538,6 +538,81 @@ func TestMatroskaSubtitleBlocksAreGrouped(t *testing.T) {
 	}
 }
 
+// rangeFetcher is a fetcher that also serves several ranges with one
+// request, or refuses to when unsupported, counting the batches asked and
+// how many run at once.
+type rangeFetcher struct {
+	fetcher
+	unsupported bool
+
+	batchMu                 sync.Mutex
+	batches, ranges         int
+	batchRunning, batchMost int
+}
+
+func (f *rangeFetcher) FetchRanges(ctx context.Context, ranges []Range) ([][]byte, error) {
+	f.batchMu.Lock()
+	f.batches++
+	f.ranges = max(f.ranges, len(ranges))
+	f.batchRunning++
+	f.batchMost = max(f.batchMost, f.batchRunning)
+	f.batchMu.Unlock()
+	defer func() {
+		f.batchMu.Lock()
+		f.batchRunning--
+		f.batchMu.Unlock()
+	}()
+	if f.unsupported {
+		return nil, ErrMultiRangeUnsupported
+	}
+	time.Sleep(f.delay)
+	result := make([][]byte, len(ranges))
+	for i, r := range ranges {
+		if r.Off < 0 || r.N <= 0 || r.Off > int64(len(f.data)) {
+			return nil, errors.New("range out of the file")
+		}
+		result[i] = slices.Clone(f.data[r.Off:min(r.Off+int64(r.N), int64(len(f.data)))])
+	}
+	return result, nil
+}
+
+func TestMatroskaSubtitleBlocksAreBatched(t *testing.T) {
+	// 1300 blocks a Cluster each, too far apart to share a range: with
+	// reads of 4 KiB sharing a range within 1 KiB, blocks 8 KiB apart
+	// stand for a film's, MBs apart.
+	var clusters []testCluster
+	for i := range 1300 {
+		clusters = append(clusters, testCluster{padding: 8 << 10, blocks: []testBlock{groupBlock(1, uint64(i)*1000, 500, "Spread.")}})
+	}
+	data := testFile{tracks: [][]byte{subtitleTrack(1, "S_TEXT/UTF8", nil)}, clusters: clusters}.build()
+	small := layout{window: 4 << 10, gap: 1 << 10, span: 4 << 20}
+	check := func(blocks []Block, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(blocks) != 1300 || blocks[1299].Start != 1299*time.Second || string(blocks[1299].Data) != "Spread." {
+			t.Fatalf("%d blocks", len(blocks))
+		}
+	}
+
+	// The check reads a Cluster's header and data with a request each,
+	// then the blocks come by batches of 64 ranges, two at once.
+	f := &rangeFetcher{fetcher: fetcher{data: data, delay: 2 * time.Millisecond}}
+	check(openMemory(t, data).subtitleBlocks(context.Background(), f, 1, small))
+	if f.calls != 2 || f.batches != 21 || f.ranges != maxRanges || f.batchMost != maxBatches {
+		t.Errorf("%d requests, %d batches of at most %d ranges, at most %d at once", f.calls, f.batches, f.ranges, f.batchMost)
+	}
+
+	// A source that does not serve several ranges is asked once, then
+	// for each range alone, two at once.
+	f = &rangeFetcher{fetcher: fetcher{data: data, delay: 200 * time.Microsecond}, unsupported: true}
+	check(openMemory(t, data).subtitleBlocks(context.Background(), f, 1, small))
+	if f.batches != 1 || f.calls != 2+1300 || f.most != maxSingleFetches {
+		t.Errorf("%d batches, %d requests, at most %d at once", f.batches, f.calls, f.most)
+	}
+}
+
 func TestMatroskaSubtitleBlocksFail(t *testing.T) {
 	plain := subtitleTrack(1, "S_TEXT/UTF8", nil)
 	zlibTrack := subtitleTrack(1, "S_TEXT/UTF8", nil,

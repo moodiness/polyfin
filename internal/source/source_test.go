@@ -7,19 +7,26 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/container"
 )
+
+// A Source reads subtitle blocks for the container package.
+var _ container.RangeFetcher = (*Source)(nil)
 
 // origin serves a file the way debrid servers do, counting the requests
 // (each one a connection) and misbehaving as asked.
@@ -27,14 +34,17 @@ type origin struct {
 	data     []byte
 	requests atomic.Int32
 	// expired paths answer 403; busy makes the next requests answer 429,
-	// asking to retry after retryAfter seconds; rangeless ignores ranges
-	// and hides the size. ranges holds the ranges asked.
+	// asking to retry after retryAfter seconds, and failing the next ones
+	// 502; rangeless ignores ranges and hides the size. ranges holds the
+	// ranges asked, and times when.
 	mu         sync.Mutex
 	expired    map[string]bool
 	busy       int
+	failing    int
 	retryAfter string
 	rangeless  bool
 	ranges     []string
+	times      []time.Time
 }
 
 func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
@@ -44,10 +54,13 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		o.requests.Add(1)
 		o.mu.Lock()
-		expired, busy, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.rangeless, o.retryAfter
+		expired, busy, failing, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
+		o.times = append(o.times, time.Now())
 		if busy {
 			o.busy--
+		} else if failing {
+			o.failing--
 		}
 		o.mu.Unlock()
 		switch {
@@ -56,6 +69,8 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		case busy:
 			w.Header().Set("Retry-After", retryAfter)
 			http.Error(w, "slow down", http.StatusTooManyRequests)
+		case failing:
+			http.Error(w, "bad gateway", http.StatusBadGateway)
 		case rangeless:
 			// Chunked, without a length: the size is learned at the end.
 			for chunk := range slices.Chunk(o.data, 64<<10) {
@@ -398,5 +413,213 @@ func TestFetchRenewsExpiredLinks(t *testing.T) {
 	// The fresh link is kept for the next requests.
 	if _, err := s.Fetch(t.Context(), 0, 10); err != nil || renewals.Load() != 1 || o.requests.Load() != 3 {
 		t.Errorf("%v: %d renewals, %d requests", err, renewals.Load(), o.requests.Load())
+	}
+}
+
+func TestFetchRetriesFailingSources(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	o.failing = 2
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	started := time.Now()
+	got, err := s.Fetch(t.Context(), 10, 20)
+	if err != nil || !bytes.Equal(got, o.data[10:30]) {
+		t.Fatalf("%d bytes: %v", len(got), err)
+	}
+	// Without Retry-After, waits of 0.5 then 1 s.
+	if waited := time.Since(started); o.requests.Load() != 3 || waited < 1400*time.Millisecond {
+		t.Errorf("%d requests in %v", o.requests.Load(), waited)
+	}
+}
+
+func TestFetchesArePaced(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	cache := newCache(t, 1<<30)
+	cache.fetchInterval = 40 * time.Millisecond
+	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	var wg sync.WaitGroup
+	for i := range 10 {
+		wg.Go(func() {
+			if i%2 == 0 {
+				if _, err := s.Fetch(t.Context(), int64(i)*100, 10); err != nil {
+					t.Error(err)
+				}
+			} else if _, err := s.FetchRanges(t.Context(), []container.Range{{Off: int64(i) * 100, N: 10}, {Off: int64(i)*100 + 50, N: 10}}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	o.mu.Lock()
+	times := slices.Clone(o.times)
+	o.mu.Unlock()
+	slices.SortFunc(times, func(a, b time.Time) int { return a.Compare(b) })
+	if len(times) != 10 || times[9].Sub(times[0]) < 9*cache.fetchInterval*8/10 {
+		t.Fatalf("%d requests in %v", len(times), times[len(times)-1].Sub(times[0]))
+	}
+	for i := 1; i < len(times); i++ {
+		if gap := times[i].Sub(times[i-1]); gap < cache.fetchInterval/2 {
+			t.Errorf("requests %v apart", gap)
+		}
+	}
+}
+
+func TestFetchRangesReadsParts(t *testing.T) {
+	o, server := newOrigin(t, 3*blockSize)
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	// Out of order, and the last one past the end of the file.
+	end := int64(len(o.data))
+	ranges := []container.Range{{Off: 100, N: 50}, {Off: 2 * blockSize, N: 4096}, {Off: 10, N: 20}, {Off: end - 10, N: 100}}
+	got, err := s.FetchRanges(t.Context(), ranges)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]byte{o.data[100:150], o.data[2*blockSize : 2*blockSize+4096], o.data[10:30], o.data[end-10:]}
+	if !slices.EqualFunc(got, want, bytes.Equal) {
+		t.Errorf("got %d ranges", len(got))
+	}
+	if !slices.Equal(o.ranges, []string{"bytes=100-149,2097152-2101247,10-29,3145718-3145817"}) {
+		t.Errorf("ranges asked: %q", o.ranges)
+	}
+	// Ranges past the known end are empty, and not asked.
+	got, err = s.FetchRanges(t.Context(), []container.Range{{Off: 0, N: 10}, {Off: end, N: 10}, {Off: 20, N: 10}})
+	if err != nil || !slices.EqualFunc(got, [][]byte{o.data[:10], {}, o.data[20:30]}, bytes.Equal) {
+		t.Errorf("past the end: %v", err)
+	}
+	if o.ranges[len(o.ranges)-1] != "bytes=0-9,20-29" {
+		t.Errorf("ranges asked: %q", o.ranges)
+	}
+}
+
+// partsServer answers every request with the parts given, as a multipart
+// body of byte ranges of data, or a single part without a multipart body.
+func partsServer(t *testing.T, data []byte, parts ...[2]int) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentRange := func(part [2]int) string {
+			return "bytes " + strconv.Itoa(part[0]) + "-" + strconv.Itoa(part[1]) + "/" + strconv.Itoa(len(data))
+		}
+		if len(parts) == 1 {
+			w.Header().Set("Content-Range", contentRange(parts[0]))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(data[parts[0][0] : parts[0][1]+1])
+			return
+		}
+		body := multipart.NewWriter(w)
+		w.Header().Set("Content-Type", "multipart/byteranges; boundary="+body.Boundary())
+		w.WriteHeader(http.StatusPartialContent)
+		for _, part := range parts {
+			writer, err := body.CreatePart(textproto.MIMEHeader{
+				"Content-Type": {"video/x-matroska"}, "Content-Range": {contentRange(part)}})
+			if err != nil {
+				return
+			}
+			_, _ = writer.Write(data[part[0] : part[1]+1])
+		}
+		_ = body.Close()
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestFetchRangesReadsMergedParts(t *testing.T) {
+	data := make([]byte, 64<<10)
+	_, _ = rand.Read(data)
+	ranges := []container.Range{{Off: 0, N: 100}, {Off: 1000, N: 500}, {Off: 1500, N: 500}, {Off: 5000, N: 10}}
+	want := [][]byte{data[:100], data[1000:1500], data[1500:2000], data[5000:5010]}
+	for name, parts := range map[string][][2]int{
+		// Adjacent ranges merged into one part, overlapping parts, out of
+		// order.
+		"multipart": {{4990, 5020}, {1000, 1999}, {0, 99}, {50, 1200}},
+		// Every range in one part.
+		"single part": {{0, 5009}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := partsServer(t, data, parts...)
+			s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+			defer s.Release()
+			got, err := s.FetchRanges(t.Context(), ranges)
+			if err != nil || !slices.EqualFunc(got, want, bytes.Equal) {
+				t.Errorf("got %d ranges: %v", len(got), err)
+			}
+		})
+	}
+}
+
+func TestFetchRangesUnsupported(t *testing.T) {
+	data := make([]byte, 64<<10)
+	_, _ = rand.Read(data)
+	ranges := []container.Range{{Off: 0, N: 100}, {Off: 1000, N: 500}, {Off: 5000, N: 10}}
+	for name, answer := range map[string]func(w http.ResponseWriter) int64{
+		// The whole file, of 1 GiB.
+		"whole file": func(w http.ResponseWriter) int64 {
+			w.Header().Set("Content-Length", strconv.Itoa(1<<30))
+			w.WriteHeader(http.StatusOK)
+			return 1 << 30
+		},
+		// One part, of the first range only, of a body that goes on.
+		"first range": func(w http.ResponseWriter) int64 {
+			w.Header().Set("Content-Range", "bytes 0-99/65536")
+			w.WriteHeader(http.StatusPartialContent)
+			return 1 << 30
+		},
+		// One part covering every range, and the rest of the file.
+		"one part of the whole file": func(w http.ResponseWriter) int64 {
+			w.Header().Set("Content-Range", "bytes 0-1073741823/1073741824")
+			w.WriteHeader(http.StatusPartialContent)
+			return 1 << 30
+		},
+		"another multipart type": func(w http.ResponseWriter) int64 {
+			w.Header().Set("Content-Type", "multipart/mixed; boundary=x")
+			w.WriteHeader(http.StatusPartialContent)
+			return 1 << 30
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var requests atomic.Int32
+			written := make(chan int64, 4)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if !strings.Contains(r.Header.Get("Range"), ",") {
+					http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+					return
+				}
+				// The body is written until the client goes away: it does
+				// when the body is closed unread.
+				var n int64
+				for length := answer(w); n < length; n += int64(len(data)) {
+					if _, err := w.Write(data); err != nil {
+						break
+					}
+				}
+				written <- n
+			}))
+			defer server.Close()
+			s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+			defer s.Release()
+			if _, err := s.FetchRanges(t.Context(), ranges); !errors.Is(err, container.ErrMultiRangeUnsupported) {
+				t.Fatalf("got %v, want ErrMultiRangeUnsupported", err)
+			}
+			select {
+			case n := <-written:
+				if n >= 32<<20 {
+					t.Errorf("%d bytes of the body sent", n)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("the body is still being read")
+			}
+			// Remembered: the source is not asked again for several ranges,
+			// and serves them one by one.
+			if _, err := s.FetchRanges(t.Context(), ranges); !errors.Is(err, container.ErrMultiRangeUnsupported) || requests.Load() != 1 {
+				t.Errorf("got %v after %d requests", err, requests.Load())
+			}
+			for _, r := range ranges {
+				if got, err := s.Fetch(t.Context(), r.Off, r.N); err != nil || !bytes.Equal(got, data[r.Off:r.Off+int64(r.N)]) {
+					t.Errorf("at %d: %v", r.Off, err)
+				}
+			}
+		})
 	}
 }
