@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
@@ -193,6 +194,7 @@ func serve(ctx context.Context) error {
 				Playback:      player,
 				Preferences:   preferences.New(pool),
 				UserData:      userdata.New(pool),
+				Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
 				Logger:        logger,
 			}),
 			Logger: logger,
