@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -88,5 +89,54 @@ func TestConfinedRequestsStayOffLocalNetworks(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret-token") {
 		t.Errorf("the error exposes the manifest URL: %v", err)
+	}
+}
+
+// Addons type some fields loosely, AIOMetadata sending a title's directors
+// as one string for one: such a field must not cost the title, or the
+// catalog page it is on.
+func TestLooselyTypedTitles(t *testing.T) {
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/catalog/movie/top.json":
+			_, _ = w.Write([]byte(`{"metas": [
+				{"id": "tt1", "type": "movie", "director": "Joe Russo, Anthony Russo", "genres": "Action", "writer": ["Writer", 7, {"name": "Object"}], "name": "One"},
+				{"id": "tt2", "type": "movie", "videos": "none", "name": "Two"},
+				{"id": "tt3", "type": "movie", "director": ["Director"], "name": "Three"}]}`))
+		case "/catalog/movie/broken.json":
+			_, _ = w.Write([]byte(`{"metas": "none"}`))
+		case "/meta/movie/tt1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt1", "type": "movie", "cast": "Actor", "trailers": {"source": "x"}, "name": "One"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer addon.Close()
+	client := NewClient("test")
+	manifestURL := addon.URL + "/manifest.json"
+
+	metas, err := client.Catalog(t.Context(), manifestURL, "movie", "top", nil, false)
+	if err != nil || len(metas) != 3 {
+		t.Fatalf("catalog: %v %+v", err, metas)
+	}
+	if one := metas[0]; one.Name != "One" || !slices.Equal(one.Director, Names{"Joe Russo", "Anthony Russo"}) ||
+		!slices.Equal(one.Genres, Names{"Action"}) || !slices.Equal(one.Writer, Names{"Writer"}) {
+		t.Errorf("names: %+v", one)
+	}
+	// The field Polyfin cannot read is left empty, and the fields after it
+	// read.
+	if two := metas[1]; two.ID != "tt2" || two.Videos != nil || two.Name != "Two" {
+		t.Errorf("mistyped field: %+v", two)
+	}
+	if three := metas[2]; !slices.Equal(three.Director, Names{"Director"}) {
+		t.Errorf("list: %+v", three)
+	}
+	if _, err := client.Catalog(t.Context(), manifestURL, "movie", "broken", nil, false); !errors.Is(err, ErrInvalidResponse) {
+		t.Errorf("a page that is not a list: %v", err)
+	}
+
+	meta, err := client.Meta(t.Context(), manifestURL, "movie", "tt1", false)
+	if err != nil || meta.Name != "One" || !slices.Equal(meta.Cast, Names{"Actor"}) || meta.Trailers != nil {
+		t.Errorf("meta: %v %+v", err, meta)
 	}
 }

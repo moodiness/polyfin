@@ -3,6 +3,7 @@ package stremio
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -40,6 +41,35 @@ func (n *Number) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Names decodes a list of names, such as genres or directors: a JSON
+// array, or a string some addons send instead, its names separated by
+// commas. Elements that are not strings, and any other value, are left
+// out rather than failing the title.
+type Names []string
+
+func (n *Names) UnmarshalJSON(data []byte) error {
+	*n = nil
+	var elements []json.RawMessage
+	if json.Unmarshal(data, &elements) == nil {
+		for _, element := range elements {
+			var name string
+			if json.Unmarshal(element, &name) == nil {
+				*n = append(*n, name)
+			}
+		}
+		return nil
+	}
+	var text string
+	if json.Unmarshal(data, &text) == nil {
+		for name := range strings.SplitSeq(text, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				*n = append(*n, name)
+			}
+		}
+	}
+	return nil
+}
+
 // Meta describes a title, as returned by catalogs (a preview) and by the
 // meta resource (complete).
 type Meta struct {
@@ -55,10 +85,10 @@ type Meta struct {
 	Year            Text          `json:"year,omitempty"`
 	Released        string        `json:"released,omitempty"`
 	Runtime         Text          `json:"runtime,omitempty"`
-	Genres          []string      `json:"genres,omitempty"`
-	Director        []string      `json:"director,omitempty"`
-	Writer          []string      `json:"writer,omitempty"`
-	Cast            []string      `json:"cast,omitempty"`
+	Genres          Names         `json:"genres,omitempty"`
+	Director        Names         `json:"director,omitempty"`
+	Writer          Names         `json:"writer,omitempty"`
+	Cast            Names         `json:"cast,omitempty"`
 	ImdbRating      Text          `json:"imdbRating,omitempty"`
 	Status          string        `json:"status,omitempty"`
 	Language        string        `json:"language,omitempty"`
@@ -186,12 +216,32 @@ func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogI
 		return nil, err
 	}
 	var response struct {
-		Metas []Meta `json:"metas"`
+		Metas []json.RawMessage `json:"metas"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
 	}
-	return response.Metas, nil
+	// Every title keeps its place in the page, whose length tells where the
+	// next page starts.
+	metas := make([]Meta, len(response.Metas))
+	for i, raw := range response.Metas {
+		if err := unmarshal(raw, &metas[i]); err != nil {
+			return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
+		}
+	}
+	return metas, nil
+}
+
+// unmarshal decodes what an addon describes. A field of another type than
+// Polyfin reads, such as an object where it reads a list, is left empty
+// and the rest decoded, as encoding/json goes on past such a field: one
+// odd field must not lose a title, or a catalog page.
+func unmarshal(data []byte, v any) error {
+	err := json.Unmarshal(data, v)
+	if _, mismatched := errors.AsType[*json.UnmarshalTypeError](err); mismatched {
+		return nil
+	}
+	return err
 }
 
 // Meta returns the complete description of a title.
@@ -203,7 +253,7 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 	var response struct {
 		Meta *Meta `json:"meta"`
 	}
-	if err := json.Unmarshal(body, &response); err != nil {
+	if err := unmarshal(body, &response); err != nil {
 		return Meta{}, fmt.Errorf("%w: meta: %v", ErrInvalidResponse, err)
 	}
 	if response.Meta == nil || response.Meta.ID == "" {
