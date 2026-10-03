@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,6 +24,8 @@ const (
 	metaTTL     = 6 * time.Hour
 	maxCrawl    = 2000 // items fetched from one catalog to answer a request
 	pageFetches = 4    // catalog pages of one catalog fetched at once
+	// catalogFetches bounds the catalogs merged reads at once.
+	catalogFetches = 8
 )
 
 // ErrNotFound reports an item that does not exist or that the user cannot
@@ -346,18 +347,22 @@ func (s *Service) merged(ctx context.Context, sources []source, start, count int
 	for {
 		lists := make([][]stremio.Meta, len(sources))
 		mores := make([]bool, len(sources))
-		var wg sync.WaitGroup
+		// A genre's titles may come from dozens of catalogs of one addon:
+		// they are read a few at a time.
+		var group errgroup.Group
+		group.SetLimit(catalogFetches)
 		for i, src := range sources {
-			wg.Go(func() {
+			group.Go(func() error {
 				metas, total, err := s.window(ctx, src, 0, per)
 				// An app that stops waiting cancels ctx: nothing failed.
 				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("A catalog of a collection could not be listed", "catalog", src.catalog.ID, "error", err)
 				}
 				lists[i], mores[i] = metas, total > len(metas)
+				return nil
 			})
 		}
-		wg.Wait()
+		_ = group.Wait()
 		var result []stremio.Meta
 		seen := map[string]bool{}
 		for rank := 0; ; rank++ {
