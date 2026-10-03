@@ -41,6 +41,8 @@ type testServer struct {
 	library *library.Service
 	pool    *pgxpool.Pool
 	url     string
+	// handler serves url, for tests that call it as a request would.
+	handler *Handler
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -82,7 +84,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = player.Close() })
-	server := httptest.NewServer(New(Options{
+	handler := New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,
 		QuickConnect:  quickconnect.New(),
@@ -94,9 +96,10 @@ func newTestServer(t *testing.T, failures int) testServer {
 		Preferences:   preferences.New(pool),
 		UserData:      userdata.New(pool),
 		Logger:        logger,
-	}))
+	})
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL}
+	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler}
 }
 
 func (s testServer) user(name string, change func(*accounts.UserChanges)) accounts.User {

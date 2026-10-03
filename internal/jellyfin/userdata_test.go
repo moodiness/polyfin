@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -124,6 +126,23 @@ func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
 	}
 	// What one user did is theirs only.
 	tr.user2(t)
+}
+
+func TestPlaybackReportsAreRecordedWhenTheAppHangsUp(t *testing.T) {
+	tr := newTracking(t)
+	device, user, err := tr.store.DeviceByToken(t.Context(), tr.token, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The app closed as soon as it sent its stop: its request is canceled.
+	ctx, cancel := context.WithCancel(context.WithValue(t.Context(), callerKey{}, caller{User: user, Device: device, Token: tr.token}))
+	cancel()
+	r := httptest.NewRequestWithContext(ctx, http.MethodPost, "/Sessions/Playing/Stopped", nil)
+	// The movie runs 1h30: the stop at 45 minutes leaves a resume point.
+	tr.handler.record(r, playbackStopped, playback.PlayState{Item: mustID(t, tr.movie), Position: 45 * time.Minute}, true)
+	if data := tr.userData(t, tr.movie); data.PlaybackPositionTicks != 27_000_000_000 || data.Played {
+		t.Errorf("after a stop the app hung up on: %+v", data)
+	}
 }
 
 // user2 checks that another user of the server sees none of the member's
