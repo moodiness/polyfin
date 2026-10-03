@@ -1,0 +1,41 @@
+[
+  {
+    "AdditionalUsers": [],
+    "ApplicationVersion": "",
+    "Capabilities": {
+      "PlayableMediaTypes": [
+        ""
+      ],
+      "SupportedCommands": [],
+      "SupportsMediaControl": false,
+      "SupportsPersistentIdentifier": false
+    },
+    "Client": "",
+    "DeviceId": "",
+    "DeviceName": "",
+    "HasCustomDeviceName": false,
+    "Id": "",
+    "IsActive": false,
+    "LastActivityDate": "",
+    "LastPausedDate": "",
+    "LastPlaybackCheckIn": "",
+    "NowPlayingQueue": [],
+    "PlayState": {
+      "CanSeek": false,
+      "IsMuted": false,
+      "IsPaused": false,
+      "PlaybackOrder": "",
+      "RepeatMode": ""
+    },
+    "PlayableMediaTypes": [
+      ""
+    ],
+    "RemoteEndPoint": "",
+    "ServerId": "",
+    "SupportedCommands": [],
+    "SupportsMediaControl": false,
+    "SupportsRemoteControl": false,
+    "UserId": "",
+    "UserName": ""
+  }
+]

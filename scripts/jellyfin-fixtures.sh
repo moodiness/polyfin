@@ -33,12 +33,15 @@ container="polyfin-jellyfin-fixtures-$$"
 # The .strm movie's file server, reachable from Jellyfin by name on a network
 # of their own.
 files="$container-files"
+# Holds a WebSocket open for the fixtures' session, so that it can be
+# remotely controlled.
+socket="$container-socket"
 network="$container"
 media=$(mktemp -d)
 remote=$(mktemp -d)
 
 cleanup() {
-	docker stop "$container" "$files" >/dev/null 2>&1 || true
+	docker stop "$container" "$files" "$socket" >/dev/null 2>&1 || true
 	docker network rm "$network" >/dev/null 2>&1 || true
 	rm -rf "$media" "$remote"
 }
@@ -376,5 +379,130 @@ report '' "{\"ItemId\":\"$strm\",\"MediaSourceId\":\"$strm\",\"PlayMethod\":\"Di
 report /Progress "{\"ItemId\":\"$strm\",\"MediaSourceId\":\"$strm\",\"PositionTicks\":20000000,\"IsPaused\":true}"
 get /Sessions | jq '[.[] | select(.DeviceId == "polyfin-fixtures")]' | save sessions-now-playing
 report /Stopped "{\"ItemId\":\"$strm\",\"MediaSourceId\":\"$strm\",\"PositionTicks\":20000000}"
+
+# Localization lists, which any signed-in user can read.
+get /Localization/Cultures | save localization-cultures
+get /Localization/Countries | save localization-countries
+get /Localization/ParentalRatings | save localization-parental-ratings
+get /Localization/Options | save localization-options
+
+# Requests from here on are also recorded by HTTP status, under a readable
+# key, in next-statuses.json; non-empty error bodies go to
+# next-error-bodies.json. request leaves the status in $code and the answer
+# in $body, which kept saves as a fixture when the request succeeded.
+statuses='{}'
+error_bodies='{}'
+request() {
+	local key=$1 method=$2 path=$3 authorization=$4 response
+	response=$(curl --silent --show-error --request "$method" --header "Authorization: $authorization" \
+		--header 'Content-Type: application/json' --write-out '\n%{http_code}' "${@:5}" "$base$path")
+	code=${response##*$'\n'}
+	body=${response%$'\n'*}
+	statuses=$(jq --compact-output --arg key "$key" --argjson code "$code" '.[$key] = $code' <<<"$statuses")
+	if ((code >= 400)) && [[ -n $body ]]; then
+		error_bodies=$(jq --compact-output --arg key "$key" --arg body "$body" \
+			'.[$key] = ($body | fromjson? // $body)' <<<"$error_bodies")
+	fi
+}
+kept() {
+	if [[ $code == 2* ]]; then
+		save "$1" <<<"$body"
+	else
+		echo "$1 not recorded: HTTP $code" >&2
+	fi
+}
+
+# The viewer's playback settings: the configuration GET /Users/Me returns,
+# with the languages and subtitle behavior changed.
+configuration=$(vget /Users/Me | jq --compact-output '.Configuration
+	| .AudioLanguagePreference = "fre" | .SubtitleLanguagePreference = "eng" | .SubtitleMode = "Always"
+	| .PlayDefaultAudioTrack = false | .RememberSubtitleSelections = false')
+request UserConfigurationUpdate POST "/Users/Configuration?userId=$viewer" "$viewer_signed" --data "$configuration"
+request UserConfigured GET /Users/Me "$viewer_signed"
+kept user-configured
+
+# A password change keeps the token that made it; a wrong current password
+# is refused.
+request PasswordChange POST "/Users/Password?userId=$viewer" "$viewer_signed" \
+	--data '{"CurrentPw":"viewer-password","NewPw":"viewer-password-2"}'
+request PasswordWrongCurrent POST "/Users/Password?userId=$viewer" "$viewer_signed" \
+	--data '{"CurrentPw":"wrong-password","NewPw":"viewer-password-3"}'
+
+# No segment or subtitle provider is installed: these give the envelopes.
+request MediaSegments GET "/MediaSegments/$episode" "$signed"
+kept media-segments
+request RemoteSubtitleSearch GET "/Items/$movie/RemoteSearch/Subtitles/eng" "$signed"
+kept remote-subtitles
+
+# The pages of the test movie's first genre, first studio and production
+# year, and the lists apps show on them.
+details=$(get "/Users/$user/Items/$movie")
+uri() { jq --raw-input --raw-output @uri <<<"$1"; }
+genre=$(get "/Genres/$(uri "$(jq --exit-status --raw-output '.Genres[0]' <<<"$details")")?userId=$user")
+studio=$(get "/Studios/$(uri "$(jq --exit-status --raw-output '.Studios[0].Name' <<<"$details")")?userId=$user")
+year=$(jq --exit-status --raw-output .ProductionYear <<<"$details")
+save genre <<<"$genre"
+save studio <<<"$studio"
+get "/Years/$year?userId=$user" | save year
+listing="/Items?userId=$user&recursive=true&includeItemTypes=Movie,Series&fields=PrimaryImageAspectRatio&sortBy=SortName&sortOrder=Ascending"
+get "$listing&genreIds=$(jq --exit-status --raw-output .Id <<<"$genre")" | save_led_by items-by-genre "$movie"
+get "$listing&studioIds=$(jq --exit-status --raw-output .Id <<<"$studio")" | save_led_by items-by-studio "$movie"
+get "$listing&years=$year" | save_led_by items-by-year "$movie"
+
+# Remote control of the fixtures' own session.
+session=$(get /Sessions | jq --exit-status --raw-output 'first(.[] | select(.DeviceId == "polyfin-fixtures")) | .Id')
+request SessionPlay POST "/Sessions/$session/Playing?playCommand=PlayNow&itemIds=$movie" "$signed"
+request SessionPause POST "/Sessions/$session/Playing/Pause" "$signed"
+request SessionDisplayMessage POST "/Sessions/$session/Command/DisplayMessage" "$signed"
+request SessionMessage POST "/Sessions/$session/Message" "$signed" --data '{"Header":"h","Text":"t"}'
+request SessionViewing POST "/Sessions/$session/Viewing?itemType=Movie&itemId=$movie&itemName=x" "$signed"
+request SessionGoHome POST "/Sessions/$session/System/GoHome" "$signed"
+# A session is controllable once it declares media control and holds a
+# WebSocket; a bare handshake kept open is enough.
+request SessionCapabilities POST '/Sessions/Capabilities?playableMediaTypes=Video&supportsMediaControl=true' "$signed"
+docker run --detach --rm --init --name "$socket" --network "$network" python:3.13-alpine python3 -c '
+import base64, os, socket, sys, time
+connection = socket.create_connection((sys.argv[1], 8096))
+connection.sendall((
+	"GET /socket HTTP/1.1\r\nHost: %s:8096\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+	"Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nAuthorization: %s\r\n\r\n"
+	% (sys.argv[1], base64.b64encode(os.urandom(16)).decode(), sys.argv[2])).encode())
+time.sleep(3600)' "$container" "$signed" >/dev/null
+controllable() { get "/Sessions?controllableByUserId=$user" | jq --exit-status 'length > 0'; }
+await 'a controllable session' controllable
+request SessionsControllable GET "/Sessions?controllableByUserId=$user" "$signed"
+kept sessions-controllable
+
+# Playlists last, since they add a view to the user's.
+request PlaylistCreate POST /Playlists "$signed" \
+	--data "$(jq --null-input --compact-output --arg user "$user" --arg movie "$movie" --arg episode "$episode" \
+		'{Name: "Fixture playlist", Ids: [$movie, $episode], UserId: $user, MediaType: "Video"}')"
+kept playlist-created
+playlist=$(jq --exit-status --raw-output .Id <<<"$body")
+request PlaylistGet GET "/Playlists/$playlist" "$signed"
+kept playlist
+request PlaylistItems GET "/Playlists/$playlist/Items?userId=$user" "$signed"
+kept playlist-items
+entry=$(jq --exit-status --raw-output '.Items[0].PlaylistItemId' <<<"$body")
+request PlaylistItem GET "/Users/$user/Items/$playlist" "$signed"
+kept playlist-item
+await 'the Playlists view' view playlists
+request ViewsWithPlaylists GET "/UserViews?userId=$user" "$signed"
+kept views-with-playlists
+request Playlists GET "/Items?userId=$user&includeItemTypes=Playlist&recursive=true" "$signed"
+kept playlists
+request PlaylistAddItem POST "/Playlists/$playlist/Items?ids=$sintel&userId=$user" "$signed"
+request PlaylistMoveItem POST "/Playlists/$playlist/Items/$entry/Move/1" "$signed"
+request PlaylistRemoveItem DELETE "/Playlists/$playlist/Items?entryIds=$entry" "$signed"
+request PlaylistRename POST "/Playlists/$playlist" "$signed" --data '{"Name":"Renamed"}'
+# Shared with the viewer, so that the playlist's users list has an entry.
+request PlaylistShare POST "/Playlists/$playlist/Users/$viewer" "$signed" --data '{"CanEdit":true}'
+request PlaylistUsers GET "/Playlists/$playlist/Users" "$signed"
+kept playlist-users
+request PlaylistUser GET "/Playlists/$playlist/Users/$user" "$signed"
+kept playlist-user
+
+jq --sort-keys . <<<"$statuses" >"$out/next-statuses.json"
+save next-error-bodies <<<"$error_bodies"
 
 echo "Fixtures written to $out"
