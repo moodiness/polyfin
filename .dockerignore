@@ -9,6 +9,5 @@ web/node_modules/
 web/dist/
 **/*.tsbuildinfo
 **/.DS_Store
-docs/
 templates/
 assets/
