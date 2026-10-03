@@ -88,19 +88,21 @@ func (t trackPreferences) audio(streams []playback.MediaStream) *int {
 }
 
 // subtitle is the subtitle shown unless the app asks for another, -1 for
-// none, following the subtitle mode as Jellyfin does:
+// none, following the subtitle mode as Jellyfin 12.1 does, with tracks
+// ranked as subtitleRank ranks them:
 //
-//   - Default shows a track flagged forced or default, a forced one in the
-//     language of the audio first.
-//   - Always shows a full (not forced) track in the preferred language, else
-//     what Default shows.
-//   - OnlyForced shows a forced track in the preferred language or of no
-//     stated language; Polyfin also takes any forced track when no
-//     language is preferred, where Jellyfin would take none.
-//   - Smart shows a track in the preferred language when the audio is in
-//     another one, else what Default shows; when the audio is in the
-//     preferred language, only a forced track.
+//   - Default shows the first track flagged default or forced.
+//   - Always shows the first full (not forced) track in the preferred
+//     language, else what OnlyForced shows.
+//   - OnlyForced shows a forced track in the preferred language, else one
+//     of no stated language.
+//   - Smart shows the first track in the preferred language when the audio
+//     is in another one, and none when no track is; when the audio is in
+//     the preferred language, what OnlyForced shows.
 //   - None shows none.
+//
+// When no language is preferred, every track counts as in the preferred
+// language, as in Jellyfin.
 //
 // Polyfin differs from Jellyfin with subtitle files: Jellyfin shows the
 // files next to a video before any embedded track, as somebody put them
@@ -125,31 +127,53 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 	if len(subtitles) == 0 {
 		return nil
 	}
-	preferred := func(s playback.MediaStream) bool { return localization.SameLanguage(s.Language, t.subtitleLanguage) }
-	flagged := func(s playback.MediaStream) bool { return !s.IsExternal && (s.IsForced || s.IsDefault) }
-	forced := func(s playback.MediaStream) bool { return !s.IsExternal && s.IsForced }
-	best := func(keep func(playback.MediaStream) bool) *playback.MediaStream {
-		return t.bestSubtitle(subtitles, audioLanguage, keep)
+	ranked := func(keep func(playback.MediaStream) bool) *playback.MediaStream {
+		return bestSubtitle(subtitles, func(s playback.MediaStream) int {
+			if !keep(s) {
+				return -1
+			}
+			return t.subtitleRank(s, audioLanguage)
+		})
+	}
+	// onlyForced ranks forced tracks in the preferred language first, then
+	// those of no stated language.
+	onlyForced := func() *playback.MediaStream {
+		return bestSubtitle(subtitles, func(s playback.MediaStream) int {
+			matches, undetermined := t.matches(s), undeterminedLanguage(s.Language)
+			if s.IsExternal || !s.IsForced || !matches && !undetermined {
+				return -1
+			}
+			r := t.subtitleRank(s, audioLanguage)
+			if undetermined {
+				r |= 1 << 7
+			}
+			if matches {
+				r |= 1 << 8
+			}
+			return r
+		})
+	}
+	// shown leaves out the files in another language than the preferred one.
+	shown := func(s playback.MediaStream) bool {
+		return !s.IsExternal || localization.SameLanguage(s.Language, t.subtitleLanguage)
 	}
 	var choice *playback.MediaStream
 	switch t.subtitleMode {
 	case "None":
 	case "Always":
-		if choice = best(func(s playback.MediaStream) bool { return !s.IsForced && preferred(s) }); choice == nil {
-			choice = best(flagged)
+		if choice = ranked(func(s playback.MediaStream) bool { return !s.IsForced && t.matches(s) && shown(s) }); choice == nil {
+			choice = onlyForced()
 		}
 	case "OnlyForced":
-		choice = best(func(s playback.MediaStream) bool {
-			return forced(s) && (t.subtitleLanguage == "" || preferred(s) || undeterminedLanguage(s.Language))
-		})
+		choice = onlyForced()
 	case "Smart":
 		if localization.SameLanguage(audioLanguage, t.subtitleLanguage) {
-			choice = best(forced)
-		} else if choice = best(preferred); choice == nil {
-			choice = best(flagged)
+			choice = onlyForced()
+		} else {
+			choice = ranked(func(s playback.MediaStream) bool { return t.matches(s) && shown(s) })
 		}
 	default:
-		choice = best(flagged)
+		choice = ranked(func(s playback.MediaStream) bool { return !s.IsExternal && (s.IsForced || s.IsDefault) })
 	}
 	if choice == nil {
 		return new(-1)
@@ -157,43 +181,54 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 	return new(choice.Index)
 }
 
-// bestSubtitle returns the first of the subtitles keep accepts, ranked:
-// embedded before files, then forced in the audio's language, forced,
-// flagged default, and in the preferred language; nil when keep accepts
-// none. An image track gives way to a text track in the same language,
-// equally forced, that keep accepts too.
-func (t trackPreferences) bestSubtitle(subtitles []playback.MediaStream, audioLanguage string, keep func(playback.MediaStream) bool) *playback.MediaStream {
-	rank := func(s playback.MediaStream) int {
-		r := 0
-		for _, criterion := range [...]bool{
-			!s.IsExternal,
-			s.IsForced && localization.SameLanguage(s.Language, audioLanguage),
-			s.IsForced,
-			s.IsDefault,
-			localization.SameLanguage(s.Language, t.subtitleLanguage),
-		} {
-			r <<= 1
-			if criterion {
-				r |= 1
-			}
+// matches reports whether a subtitle counts as in the preferred language:
+// every one does when no language is preferred.
+func (t trackPreferences) matches(s playback.MediaStream) bool {
+	return t.subtitleLanguage == "" || localization.SameLanguage(s.Language, t.subtitleLanguage)
+}
+
+// subtitleRank places a subtitle in Jellyfin 12.1's order, higher first:
+// embedded before files (Polyfin's, see subtitle), flagged default, full
+// in the preferred language, forced in the preferred language, forced of
+// no stated language, forced. Last comes a forced track in the audio's
+// language, where Jellyfin keeps the tracks' order. It fits in 7 bits.
+func (t trackPreferences) subtitleRank(s playback.MediaStream, audioLanguage string) int {
+	matches := t.matches(s)
+	r := 0
+	for _, criterion := range [...]bool{
+		!s.IsExternal,
+		s.IsDefault,
+		!s.IsForced && matches,
+		s.IsForced && matches,
+		s.IsForced && undeterminedLanguage(s.Language),
+		s.IsForced,
+		s.IsForced && localization.SameLanguage(s.Language, audioLanguage),
+	} {
+		r <<= 1
+		if criterion {
+			r |= 1
 		}
-		return r
 	}
+	return r
+}
+
+// bestSubtitle returns the subtitle score places highest, the first of
+// equals; a negative score leaves a track out. nil when every track is
+// left out. An image track gives way to a text track in the same
+// language, equally forced, that is not left out.
+func bestSubtitle(subtitles []playback.MediaStream, score func(playback.MediaStream) int) *playback.MediaStream {
 	var best *playback.MediaStream
-	bestRank := -1
+	bestScore := -1
 	for i, s := range subtitles {
-		if !keep(s) {
-			continue
-		}
-		if r := rank(s); r > bestRank {
-			best, bestRank = &subtitles[i], r
+		if r := score(s); r > bestScore {
+			best, bestScore = &subtitles[i], r
 		}
 	}
 	if best == nil || best.IsTextSubtitleStream {
 		return best
 	}
 	for i, s := range subtitles {
-		if s.IsTextSubtitleStream && s.IsForced == best.IsForced && keep(s) &&
+		if s.IsTextSubtitleStream && s.IsForced == best.IsForced && score(s) >= 0 &&
 			(s.Language == best.Language || localization.SameLanguage(s.Language, best.Language)) {
 			return &subtitles[i]
 		}
@@ -201,7 +236,13 @@ func (t trackPreferences) bestSubtitle(subtitles []playback.MediaStream, audioLa
 	return best
 }
 
-// undeterminedLanguage reports whether a track states no language.
+// undeterminedLanguage reports whether a track states no language, as
+// Jellyfin 12.1 counts them: none, undetermined, multiple languages, or no
+// linguistic content.
 func undeterminedLanguage(language string) bool {
-	return language == "" || localization.LanguageCode(language) == "und"
+	switch localization.LanguageCode(language) {
+	case "", "und", "undetermined", "unknown", "mul", "zxx":
+		return true
+	}
+	return false
 }
