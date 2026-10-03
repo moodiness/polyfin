@@ -290,16 +290,31 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			candidates = append(candidates, i)
 		}
 	}
+	unreadable := map[int]bool{}
 	for _, i := range candidates {
 		version := versions[i]
 		analysis, err := h.Playback.Analyze(r.Context(), version)
 		if err != nil {
 			h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
+			unreadable[i] = true
 			continue
 		}
 		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
-		source := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session)
-		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{source}, PlaySessionId: session})
+		sources := []MediaSourceInfo{h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session)}
+		// An app that asks for no version gets every version, as from
+		// Jellyfin: some, such as Strand, list them for the user to pick.
+		// The one decided comes first, which apps play unless the user picks
+		// another; the others are described as item details describe them,
+		// and decided when an app asks for one. Those found unreadable just
+		// now are left out.
+		if request.MediaSourceId == "" {
+			for j, other := range versions {
+				if j != i && !unreadable[j] {
+					sources = append(sources, h.describedSource(r, p, other, sourceID(opened, other, j == 0)))
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: sources, PlaySessionId: session})
 		return
 	}
 	writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
@@ -578,15 +593,19 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	// The version: the grant's, else the one the app names by its ETag or
-	// media source id.
+	// The version: the one the app names by its ETag or media source id,
+	// else the grant's, else the item's first. The app's choice wins over
+	// the play session's: PlaybackInfo lists every version under one
+	// session, and apps play the one the user picks with it, as Jellyfin
+	// lets them. The grant only stands for the user, who may play any
+	// version of the title.
 	wanted := grant.Version
 	if wanted == (accounts.ID{}) {
 		wanted = opened
-		for _, name := range []string{"mediaSourceId", "tag"} {
-			if id, ok := parseGUID(query(r, name)); ok {
-				wanted = id
-			}
+	}
+	for _, name := range []string{"mediaSourceId", "tag"} {
+		if id, ok := parseGUID(query(r, name)); ok {
+			wanted = id
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)

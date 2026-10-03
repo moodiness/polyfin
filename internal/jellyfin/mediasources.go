@@ -135,22 +135,25 @@ func sourceID(opened accounts.ID, version library.Version, first bool) accounts.
 // opened is the identifier the item was asked by.
 func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) []MediaSourceInfo {
 	versions := p.ordered(opened)
-	if len(versions) == 0 {
-		return []MediaSourceInfo{}
-	}
 	sources := make([]MediaSourceInfo, len(versions))
 	for i, version := range versions {
-		analysis, analyzed := h.Playback.Analyzed(r.Context(), version.ID)
-		source := h.baseSource(r, p, version, sourceID(opened, version, i == 0), analysis, analyzed)
-		source.SupportsDirectPlay, source.SupportsDirectStream = true, true
-		if analyzed {
-			source.Container = playback.DisplayContainer(analysis, version.Filename)
-			source.DefaultAudioStreamIndex = p.tracks.audio(source.MediaStreams)
-		}
-		source.DefaultSubtitleStreamIndex = p.tracks.subtitle(source.MediaStreams, source.DefaultAudioStreamIndex)
-		sources[i] = source
+		sources[i] = h.describedSource(r, p, version, sourceID(opened, version, i == 0))
 	}
 	return sources
+}
+
+// describedSource describes a version as item details do, without a
+// device profile: playable as it is, its tracks as far as it was analyzed.
+func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID) MediaSourceInfo {
+	analysis, analyzed := h.Playback.Analyzed(r.Context(), version.ID)
+	source := h.baseSource(r, p, version, id, analysis, analyzed)
+	source.SupportsDirectPlay, source.SupportsDirectStream = true, true
+	if analyzed {
+		source.Container = playback.DisplayContainer(analysis, version.Filename)
+		source.DefaultAudioStreamIndex = p.tracks.audio(source.MediaStreams)
+	}
+	source.DefaultSubtitleStreamIndex = p.tracks.subtitle(source.MediaStreams, source.DefaultAudioStreamIndex)
+	return source
 }
 
 // placeholderSource stands for a title's versions in a listing when they are
