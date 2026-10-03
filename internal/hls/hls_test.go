@@ -334,14 +334,6 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 
 func TestHDRIsConvertedToSDR(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
-	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m.Close()
-	if !m.HasFilters("zscale", "tonemap") || !slices.Contains(m.Encoders(), "libx264") {
-		t.Skip("FFmpeg cannot convert HDR to SDR")
-	}
 	// Video tagged as HDR10: BT.2020 primaries and the PQ transfer.
 	input := filepath.Join(t.TempDir(), "hdr.mkv")
 	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24", "-t", "8",
@@ -350,21 +342,44 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 		t.Fatalf("make the source: %v: %s", err, out)
 	}
 	plan := NewPlan(seconds(0, 6), 8*time.Second)
-	open := func(context.Context) (Remux, func(), error) {
-		return Remux{Input: input, Video: 0, Audio: -1, Format: TS, Plan: plan,
-			Encode: &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 320, Height: 180, Bitrate: 500_000, FrameRate: 24, ToneMap: true}}, func() {}, nil
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-	defer cancel()
-	f, err := m.Segment(ctx, Key{Session: "session", Audio: -1, Format: TS}, open, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,pix_fmt,color_transfer,color_primaries",
-		"-of", "csv=p=0", f.Name()).Output()
-	if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != "h264,yuv420p,bt709,bt709" {
-		t.Errorf("converted video: %q", got)
+	// On the processor, then on an NVIDIA GPU that tone maps, if there is
+	// one.
+	for _, gpu := range []string{"", "nvenc"} {
+		name := gpu
+		if name == "" {
+			name = "processor"
+		}
+		t.Run(name, func(t *testing.T) {
+			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.Close()
+			encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 320, Height: 180, Bitrate: 500_000, FrameRate: 24, ToneMap: true}
+			switch hw, ok := m.DetectHardware(gpu, ""); {
+			case gpu == "" && (!m.HasFilters("zscale", "tonemap") || !slices.Contains(m.Encoders(), "libx264")):
+				t.Skip("FFmpeg cannot convert HDR to SDR")
+			case gpu != "" && (!ok || !hw.ToneMapping):
+				t.Skip("no GPU tone maps with " + gpu)
+			case gpu != "":
+				encoding.Encoder, encoding.Hardware = hw.Encoders[0], &hw
+			}
+			open := func(context.Context) (Remux, func(), error) {
+				return Remux{Input: input, Video: 0, Audio: -1, Format: TS, Plan: plan, Encode: encoding}, func() {}, nil
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			defer cancel()
+			f, err := m.Segment(ctx, Key{Session: "session", Audio: -1, Format: TS}, open, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,pix_fmt,color_transfer,color_primaries",
+				"-of", "csv=p=0", f.Name()).Output()
+			if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); !strings.HasSuffix(got, ",yuv420p,bt709,bt709") {
+				t.Errorf("converted video: %q", got)
+			}
+		})
 	}
 }
 

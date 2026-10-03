@@ -109,9 +109,9 @@ var rungs = []struct {
 	{360, 0, 1_000_000},
 }
 
-// toneMappedHeight caps video converted from HDR to SDR in software: the
-// conversion costs about four times the encoding at 1080p, and keeps up
-// with playback at 720p.
+// toneMappedHeight caps video converted from HDR to SDR on the processor:
+// the conversion costs about four times the encoding at 1080p, and keeps up
+// with playback at 720p. A GPU that tone maps has no such cap.
 const toneMappedHeight = 720
 
 // ConvertVideo is the conversion of video for a transcoding profile taking
@@ -119,9 +119,11 @@ const toneMappedHeight = 720
 // is positive: the first of H.264 and HEVC the profile takes and FFmpeg
 // encodes, on the GPU when it encodes that codec, at the height the limit
 // allows, never larger than the source, converted to SDR and deinterlaced
-// as needed. It is nil when the profile takes neither, and for HDR the
-// installed FFmpeg cannot convert: without its filters, or Dolby Vision
-// with no base layer other players read.
+// as needed. HDR is tone mapped on that GPU when it can, Dolby Vision with
+// no base layer other players read (profile 5) included, else on the
+// processor. It is nil when the profile takes neither codec, and for HDR
+// that cannot be converted: on the processor, without FFmpeg's filters, or
+// Dolby Vision with no base layer other players read.
 func ConvertVideo(codecs string, limit int64, video MediaStream, can Capabilities) *VideoConversion {
 	conversion := &VideoConversion{}
 	for _, candidate := range videoEncoders {
@@ -144,11 +146,13 @@ func ConvertVideo(codecs string, limit int64, video MediaStream, can Capabilitie
 	}
 	tallest := rungs[0].height
 	if video.VideoRange == "HDR" {
-		if video.VideoRangeType == "DOVI" || !can.ToneMapping {
-			return nil
+		if gpu := conversion.Hardware; gpu == nil || !gpu.ToneMapping {
+			if video.VideoRangeType == "DOVI" || !can.ToneMapping {
+				return nil
+			}
+			tallest = toneMappedHeight
 		}
 		conversion.ToneMap = true
-		tallest = toneMappedHeight
 	}
 	conversion.Deinterlace = video.IsInterlaced
 	rung := rungs[len(rungs)-1]
