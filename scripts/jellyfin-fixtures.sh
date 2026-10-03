@@ -631,3 +631,61 @@ jq --sort-keys . <<<"$statuses" >"$out/next-statuses.json"
 save next-error-bodies <<<"$error_bodies"
 
 echo "Fixtures written to $out"
+
+# Chapters, on a library of their own: an MKV whose chapters are titled,
+# untitled, titled with a time and titled with a number (the last two are
+# names Jellyfin replaces), one starting off the millisecond. chapters/
+# holds upstream ffprobe's view of the clip with its chapters, which is what
+# Polyfin analyzes with, and the chapters Jellyfin returns in item details,
+# in a listing that asks for them, and in the session playing the clip.
+chapters_media="$media/chapters/chapters-mkv"
+chapters_out="$out/chapters"
+mkdir -p "$chapters_media" "$chapters_out"
+cat >"$sources/chapters.txt" <<'EOF'
+;FFMETADATA1
+[CHAPTER]
+TIMEBASE=1/1000000
+START=0
+END=2500400
+title=Opening
+[CHAPTER]
+TIMEBASE=1/1000000
+START=2500400
+END=5000000
+[CHAPTER]
+TIMEBASE=1/1000000
+START=5000000
+END=7500000
+title=00:05:00.000
+[CHAPTER]
+TIMEBASE=1/1000000
+START=7500000
+END=10000000
+title=7
+EOF
+encode -f lavfi -i "$pattern" -f lavfi -i "$(tone 660)" -i "$sources/chapters.txt" -map 0:v -map 1:a -map_chapters 2 \
+	-c:v libx264 -b:v 1M -pix_fmt yuv420p -c:a aac -b:a 128k "$chapters_media/chapters-mkv.mkv"
+ffprobe -v error -print_format json -show_format -show_streams -show_chapters "$chapters_media/chapters-mkv.mkv" |
+	jq --sort-keys '.format.filename = "chapters-mkv.mkv"' >"$chapters_out/probe.json"
+post "$base/Library/VirtualFolders?name=Chapters&collectionType=movies&paths=%2Fmedia%2Fchapters&refreshLibrary=true" \
+	--header "Authorization: $signed" --data '{"LibraryOptions":{}}'
+chapters_scanned() {
+	indexed Movie 11 && return 0
+	idle && post "$base/Library/Refresh" --header "Authorization: $signed" && sleep 10
+	return 1
+}
+await 'the chapters clip' chapters_scanned
+await 'the library scan' idle
+chaptered=$(get "/Items?userId=$user&recursive=true&includeItemTypes=Movie&fields=Path" |
+	jq --exit-status --raw-output '.Items[] | select(.Path | endswith("/chapters-mkv.mkv")) | .Id')
+chapters_detail=$(get "/Users/$user/Items/$chaptered")
+chapters_listed=$(get "/Items?userId=$user&ids=$chaptered&fields=Chapters")
+chapters_unasked=$(get "/Items?userId=$user&ids=$chaptered")
+report '' "{\"ItemId\":\"$chaptered\",\"MediaSourceId\":\"$chaptered\",\"PlayMethod\":\"DirectPlay\",\"PositionTicks\":0}"
+chapters_playing=$(get /Sessions | jq 'first(.[] | select(.DeviceId == "polyfin-fixtures")) | .NowPlayingItem')
+report /Stopped "{\"ItemId\":\"$chaptered\",\"MediaSourceId\":\"$chaptered\",\"PositionTicks\":0}"
+jq --null-input --sort-keys --argjson detail "$chapters_detail" --argjson listed "$chapters_listed" \
+	--argjson unasked "$chapters_unasked" --argjson playing "$chapters_playing" \
+	'{detail: $detail.Chapters, listing: $listed.Items[0].Chapters,
+		listingWithoutTheField: ($unasked.Items[0] | has("Chapters")), nowPlaying: $playing.Chapters}' \
+	>"$chapters_out/chapters.json"

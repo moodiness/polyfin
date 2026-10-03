@@ -12,15 +12,16 @@ type words struct {
 	season      string // followed by the season number
 	specials    string // season 0
 	episode     string // followed by the episode number, for untitled episodes
+	chapter     string // followed by the chapter number, for untitled chapters
 	movies      string
 	shows       string
 	collections string
 }
 
 var vocabulary = map[string]words{
-	"en": {season: "Season", specials: "Specials", episode: "Episode",
+	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", collections: "Collections"},
-	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode",
+	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", collections: "Collections"},
 }
 
@@ -44,6 +45,12 @@ func (w words) seasonName(number int) string {
 // episodeName names an episode without a title.
 func (w words) episodeName(number int) string {
 	return w.episode + " " + strconv.Itoa(number)
+}
+
+// ChapterName names the chapter at a position, counted from 1, in a server
+// language, as Jellyfin names chapters a file leaves untitled.
+func ChapterName(language string, number int) string {
+	return vocabularyOf(language).chapter + " " + strconv.Itoa(number)
 }
 
 // contentType names the content of a catalog type for a library name, as
