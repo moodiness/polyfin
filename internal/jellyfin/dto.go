@@ -207,7 +207,9 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			CastReceiverId:             castReceivers[0].Id,
 		},
 		// Capabilities Polyfin does not offer (deleting content, managing
-		// collections, subtitles, lyrics or live TV) are reported as denied.
+		// collections, lyrics or live TV) are reported as denied. Every user
+		// may manage subtitles, as apps offer their subtitle search, which
+		// lists the addons' subtitles, only to users allowed to.
 		Policy: UserPolicy{
 			IsAdministrator:                  user.IsAdministrator,
 			IsHidden:                         user.IsHidden,
@@ -227,6 +229,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			EnablePlaybackRemuxing:           true,
 			EnableContentDeletionFromFolders: []string{},
 			EnableContentDownloading:         true,
+			EnableSubtitleManagement:         true,
 			EnableSyncTranscoding:            true,
 			EnableMediaConversion:            true,
 			EnabledDevices:                   []string{},

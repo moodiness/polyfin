@@ -107,6 +107,14 @@ func addonLanguage(language string) string {
 	return languages[i].code
 }
 
+// SameLanguage reports whether two languages, as apps and addons give them,
+// are the same: ISO 639-2/B and /T codes, ISO 639-1 codes and names of one
+// language are ("fre", "fra", "fr" and "French" are). Languages the list
+// lacks are the same only when spelled alike, in any letter case.
+func SameLanguage(a, b string) bool {
+	return strings.EqualFold(addonLanguage(a), addonLanguage(b))
+}
+
 // languageName is the LocalizedLanguage Jellyfin reports for a track's
 // language: the English name of the first entry of its list matching the
 // language by code or full name in any letter case, up to the first
