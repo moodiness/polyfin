@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -232,6 +233,47 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 		map[string]any{"MediaSourceId": strings.Repeat("ab", 16)})
 	if status != http.StatusOK || !strings.Contains(string(data), `"ErrorCode":"NoCompatibleStream"`) {
 		t.Errorf("unknown version: %d %s", status, data)
+	}
+}
+
+// Apps that ask for no version, such as Strand, list the versions
+// PlaybackInfo gives for the user to pick: every one, as from Jellyfin.
+func TestPlaybackInfoListsEveryVersionUnlessOneIsAsked(t *testing.T) {
+	p := playing(t)
+	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")
+	ask := func(mediaSourceID string) playbackInfoResponse {
+		t.Helper()
+		body := map[string]any{"UserId": p.user.ID.String(), "DeviceProfile": p.profile(t, "jellyfin-web-chrome")}
+		if mediaSourceID != "" {
+			body["MediaSourceId"] = mediaSourceID
+		}
+		status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), body)
+		var response playbackInfoResponse
+		if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil {
+			t.Fatalf("%s: %d %s", mediaSourceID, status, data)
+		}
+		return response
+	}
+	all := ask("")
+	if len(all.MediaSources) != 2 || all.MediaSources[0].Id != p.movie || all.MediaSources[1].Id != p.versions[1].ID.String() {
+		t.Fatalf("versions: %+v", all.MediaSources)
+	}
+	// The first is decided for the app: AC3 is not direct played by
+	// Chrome. The other is described as item details describe it.
+	if decided := all.MediaSources[0]; decided.Container != "mkv" || decided.SupportsDirectPlay {
+		t.Errorf("decided version: %s direct play %v", decided.Container, decided.SupportsDirectPlay)
+	}
+	var movie BaseItemDto
+	p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &movie)
+	described, listed := (*movie.MediaSources)[1], all.MediaSources[1]
+	// Each answer signs its own media URLs.
+	described.Path, listed.Path = "", ""
+	if !reflect.DeepEqual(listed, described) {
+		t.Errorf("other version:\n got %+v\nwant %+v", listed, described)
+	}
+
+	if one := ask(p.versions[1].ID.String()); len(one.MediaSources) != 1 || one.MediaSources[0].Id != p.versions[1].ID.String() {
+		t.Errorf("a version asked: %+v", one.MediaSources)
 	}
 }
 
@@ -586,6 +628,12 @@ func TestStreamsNeedAGrant(t *testing.T) {
 		if response, _ := fetch(target); response.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s: %d", name, response.StatusCode)
 		}
+	}
+	// The session was given for the second version; the app plays the
+	// first, which PlaybackInfo listed too, under the same session.
+	picked := p.url + "/Videos/" + p.movie + "/stream?static=true&mediaSourceId=" + p.movie + "&playSessionId=" + info.PlaySessionId
+	if response, _ := fetch(picked); response.StatusCode != http.StatusPartialContent || response.Header.Get("Content-Type") != "video/x-matroska" {
+		t.Errorf("a version picked under the session: %d %s", response.StatusCode, response.Header.Get("Content-Type"))
 	}
 }
 

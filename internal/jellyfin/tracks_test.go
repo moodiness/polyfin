@@ -130,7 +130,7 @@ func TestDefaultTracksFollowTheUsersPreferences(t *testing.T) {
 		status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token),
 			map[string]any{"UserId": p.user.ID.String(), "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
 		var response playbackInfoResponse
-		if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) == 0 {
 			t.Fatalf("PlaybackInfo: %d %s", status, data)
 		}
 		return response.MediaSources[0]
