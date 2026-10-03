@@ -1,4 +1,4 @@
-package keyframes
+package container
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ func (m *memory) ReadAt(_ context.Context, p []byte, off int64) (int, error) {
 }
 
 // sparse is a large file of which only parts are written, the rest
-// reading as zeros: the media Read must not need.
+// reading as zeros: the media the index readers must not need.
 type sparse struct {
 	parts []part
 	size  int64
@@ -112,7 +112,7 @@ func checkTimes(t *testing.T, got, want []time.Duration) {
 // frame at 24 fps, and every 48 frames since the last one.
 var keyframesForced = []string{"0.000000", "1.333333", "2.916667", "3.125000", "5.125000", "6.000000", "7.708333", "9.708333", "11.000000", "12.500000", "14.500000"}
 
-func TestRead(t *testing.T) {
+func TestKeyframes(t *testing.T) {
 	tests := []struct {
 		name string
 		want []string
@@ -140,7 +140,7 @@ func TestRead(t *testing.T) {
 
 			// A fixture is smaller than a window: the first read holds it.
 			r := &memory{data: data}
-			times, err := Read(context.Background(), r, int64(len(data)))
+			times, err := Keyframes(context.Background(), r, int64(len(data)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -152,7 +152,7 @@ func TestRead(t *testing.T) {
 			// With windows of 4 KiB, a fixture stands for a large file:
 			// the index is still reached in a few reads.
 			r = &memory{data: data}
-			times, err = read(context.Background(), r, int64(len(data)), 4<<10)
+			times, err = keyframes(context.Background(), r, int64(len(data)), 4<<10)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -165,7 +165,7 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestReadNoIndex(t *testing.T) {
+func TestKeyframesNoIndex(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -182,7 +182,7 @@ func TestReadNoIndex(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			r := &memory{data: test.data}
-			_, err := Read(context.Background(), r, int64(len(test.data)))
+			_, err := Keyframes(context.Background(), r, int64(len(test.data)))
 			if !errors.Is(err, ErrNoIndex) {
 				t.Errorf("got %v, want ErrNoIndex", err)
 			}
@@ -193,13 +193,13 @@ func TestReadNoIndex(t *testing.T) {
 	}
 }
 
-func TestReadTruncated(t *testing.T) {
+func TestKeyframesTruncated(t *testing.T) {
 	// Both files keep their index after the media.
 	for _, name := range []string{"forced.mkv", "tail.mp4"} {
 		data := fixture(t, name)
 		for _, size := range []int{len(data) / 8, len(data) / 2, len(data) - 100, len(data) - 1} {
 			t.Run(name+"/"+strconv.Itoa(size), func(t *testing.T) {
-				_, err := Read(context.Background(), &memory{data: data[:size]}, int64(size))
+				_, err := Keyframes(context.Background(), &memory{data: data[:size]}, int64(size))
 				if err == nil || errors.Is(err, ErrNoIndex) {
 					t.Errorf("got %v, want an error about the file", err)
 				}
@@ -208,9 +208,10 @@ func TestReadTruncated(t *testing.T) {
 	}
 }
 
-// TestReadCorrupted alters the fixtures, a byte at a time every few: Read
-// may fail, but must not panic, and what it returns must be ascending.
-func TestReadCorrupted(t *testing.T) {
+// TestKeyframesCorrupted alters the fixtures, a byte at a time every few:
+// Keyframes may fail, but must not panic, and what it returns must be
+// ascending.
+func TestKeyframesCorrupted(t *testing.T) {
 	names := []string{"forced.mkv", "front.webm", "faststart.mp4", "tail.mp4", "delayed.mp4", "trimmed.mp4"}
 	for _, name := range names {
 		original := fixture(t, name)
@@ -218,7 +219,7 @@ func TestReadCorrupted(t *testing.T) {
 		for i := 0; i < len(data); i += 23 {
 			for _, value := range []byte{0x00, 0xFF, original[i] ^ 0x80} {
 				data[i] = value
-				times, err := Read(context.Background(), &memory{data: data}, int64(len(data)))
+				times, err := Keyframes(context.Background(), &memory{data: data}, int64(len(data)))
 				if err == nil && !slices.IsSorted(times) {
 					t.Fatalf("%s with byte %d set to %#x: times not ascending: %v", name, i, value, times)
 				}
@@ -228,7 +229,7 @@ func TestReadCorrupted(t *testing.T) {
 	}
 }
 
-func TestReadCuesNotInSeekHead(t *testing.T) {
+func TestKeyframesCuesNotInSeekHead(t *testing.T) {
 	// The SeekHead's entry for the Cues becomes a Void element, as when a
 	// muxer could not come back to write it: the Cues are found right
 	// after the last Cluster.
@@ -242,14 +243,14 @@ func TestReadCuesNotInSeekHead(t *testing.T) {
 	size := int(data[at+2] & 0x7F)
 	copy(data[at:], append([]byte{0xEC, 0x80 | byte(size+1)}, make([]byte, size+1)...))
 
-	times, err := Read(context.Background(), &memory{data: data}, int64(len(data)))
+	times, err := Keyframes(context.Background(), &memory{data: data}, int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkTimes(t, times, seconds(t, "0.000000", "1.333000", "2.917000", "3.125000", "5.125000", "6.000000", "7.708000", "9.708000", "11.000000", "12.500000", "14.500000"))
 }
 
-func TestReadSignedCompositionOffsets(t *testing.T) {
+func TestKeyframesSignedCompositionOffsets(t *testing.T) {
 	// The first ctts version is meant for unsigned offsets, yet ffmpeg
 	// reads them as signed: the first keyframe's becomes -512 in one.
 	data := fixture(t, "negative.mp4")
@@ -263,7 +264,7 @@ func TestReadSignedCompositionOffsets(t *testing.T) {
 	}
 	binary.BigEndian.PutUint32(data[at+16:], uint32(0xFFFFFE00))
 
-	times, err := Read(context.Background(), &memory{data: data}, int64(len(data)))
+	times, err := Keyframes(context.Background(), &memory{data: data}, int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +272,7 @@ func TestReadSignedCompositionOffsets(t *testing.T) {
 	checkTimes(t, times, seconds(t, "-0.083333", "1.291667", "2.875000", "3.083333", "5.083333", "5.958333", "7.666667", "9.666667", "10.958333", "12.458333", "14.458333"))
 }
 
-func TestReadLargeFiles(t *testing.T) {
+func TestKeyframesLargeFiles(t *testing.T) {
 	const gap = 40 << 30
 	tests := []struct {
 		name string
@@ -283,7 +284,7 @@ func TestReadLargeFiles(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			times, err := Read(context.Background(), test.file, test.file.size)
+			times, err := Keyframes(context.Background(), test.file, test.file.size)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -295,7 +296,7 @@ func TestReadLargeFiles(t *testing.T) {
 	}
 }
 
-func TestReadHostile(t *testing.T) {
+func TestKeyframesHostile(t *testing.T) {
 	everySample := mp4File(nil, fullBox("stts", 0, u32(1, 3, 30)))
 	edited := mp4File(
 		mp4Box("edts", fullBox("elst", 0, u32(2, 500, 0xFFFFFFFF, 1<<16, 1000, 30, 1<<16))),
@@ -327,7 +328,7 @@ func TestReadHostile(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			times, err := Read(context.Background(), test.file, test.size)
+			times, err := Keyframes(context.Background(), test.file, test.size)
 			if !errors.Is(err, test.err) {
 				t.Fatalf("got %v, want %v", err, test.err)
 			}

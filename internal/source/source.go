@@ -43,6 +43,10 @@ const (
 // ErrUnavailable reports a source that did not answer with its content.
 var ErrUnavailable = errors.New("source unavailable")
 
+// ErrRangesIgnored reports a source that answered without honoring the
+// range asked.
+var ErrRangesIgnored = errors.New("the source ignores ranges")
+
 // Location is where a source's bytes are fetched.
 type Location struct {
 	URL string
@@ -732,6 +736,120 @@ func (s *Source) connect(block int64) (*connection, error) {
 			response.Body.Close()
 			return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
 		}
+	}
+}
+
+// Fetch reads the n bytes at off with one request for that range alone,
+// past the block cache: for small reads scattered over a file, such as its
+// subtitle blocks, which the cache's 1 MiB blocks would multiply. It uses
+// the source's location and renews it when it expired, as reads do, and
+// waits out a server asking it to slow down (429, or 503 with Retry-After),
+// a bounded number of times. Fewer than n bytes only at the end of the file.
+func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	if off < 0 || n < 0 {
+		return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", n, off)
+	}
+	if size, known := s.knownSize(); known && off >= size {
+		return nil, io.EOF
+	}
+	if n == 0 {
+		return nil, nil
+	}
+	renewed := false
+	for attempt := 1; ; attempt++ {
+		s.mu.Lock()
+		location, renew := s.location, s.renew
+		s.mu.Unlock()
+		header := http.Header{}
+		for name, value := range location.Headers {
+			header.Set(name, value)
+		}
+		header.Set("Range", "bytes="+strconv.FormatInt(off, 10)+"-"+strconv.FormatInt(off+int64(n)-1, 10))
+		response, err := s.cache.opener.Open(ctx, http.MethodGet, location.URL, header, location.Confined)
+		if err != nil {
+			if ctx.Err() != nil || attempt >= attempts {
+				return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+			}
+			if err := pause(ctx, backoff(attempt, "")); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		switch status := response.StatusCode; {
+		case status == http.StatusPartialContent:
+			data, err := s.fetched(response, off, n)
+			response.Body.Close()
+			if err == nil || ctx.Err() != nil || attempt >= attempts {
+				return data, err
+			}
+			// The connection broke while the body was read: try again.
+			if err := pause(ctx, backoff(attempt, "")); err != nil {
+				return nil, err
+			}
+		case status == http.StatusOK:
+			// The body starts at the first byte, and may hold the whole
+			// file: it is not read.
+			response.Body.Close()
+			return nil, fmt.Errorf("fetching %d bytes at %d: %w", n, off, ErrRangesIgnored)
+		case status == http.StatusRequestedRangeNotSatisfiable:
+			response.Body.Close()
+			if _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
+				s.end(total)
+			}
+			return nil, io.EOF
+		case (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone) &&
+			renew != nil && !renewed:
+			response.Body.Close()
+			renewed = true
+			fresh, err := renew(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrUnavailable, status, err)
+			}
+			s.mu.Lock()
+			s.location = fresh
+			s.mu.Unlock()
+			s.cache.logger.Debug("A source link was renewed", "source", s.id)
+			attempt = 0
+		case (status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable && response.Header.Get("Retry-After") != "") &&
+			attempt < attempts:
+			response.Body.Close()
+			if err := pause(ctx, backoff(attempt, response.Header.Get("Retry-After"))); err != nil {
+				return nil, err
+			}
+		default:
+			response.Body.Close()
+			return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
+		}
+	}
+}
+
+// fetched reads the body of a response to Fetch's request for the n bytes
+// at off: those of them the file holds.
+func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, error) {
+	start, total, ok := contentRange(response.Header.Get("Content-Range"))
+	if !ok || start != off {
+		return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
+	}
+	s.learn(total, response.Header.Get("Content-Type"))
+	if total >= 0 && off+int64(n) > total {
+		n = int(max(0, total-off))
+	}
+	data := make([]byte, n)
+	if _, err := io.ReadFull(response.Body, data); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+	}
+	return data, nil
+}
+
+// pause waits for d, or until ctx is done.
+func pause(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

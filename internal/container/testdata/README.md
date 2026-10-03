@@ -25,7 +25,29 @@ The expected times in the tests are the keyframe packets of:
 ffprobe -v error -select_streams v:0 -show_entries packet=pts_time,flags -of csv=p=0 FILE
 ```
 
-`TestReadSignedCompositionOffsets` alters `negative.mp4` in memory (its
+`TestKeyframesSignedCompositionOffsets` alters `negative.mp4` in memory (its
 `ctts` box set to version 0, the first entry's offset to -512); its
 expected times are what the same ffprobe command prints for the file so
 altered.
+
+`subtitles.mkv` holds a video track, the SubRip track `subtitles.srt`
+(French, titled), the ASS track `subtitles.ass` (default and forced) and
+`Dummy.ttf`, a font attachment of dummy bytes, all committed here:
+
+```sh
+ffmpeg $Q -f lavfi -i testsrc2=size=64x64:rate=24:duration=12 -i subtitles.srt -i subtitles.ass \
+  -map 0:v -map 1 -map 2 -c:v libx264 -preset veryfast -crf 40 -g 48 -pix_fmt yuv420p -c:s:0 srt -c:s:1 ass \
+  -metadata:s:s:0 language=fre -metadata:s:s:0 title=Français -metadata:s:s:1 language=eng \
+  -disposition:s:0 0 -disposition:s:1 default+forced \
+  -attach Dummy.ttf -metadata:s:t mimetype=application/x-truetype-font subtitles.mkv
+```
+
+FFmpeg lists every subtitle block in the Cues, with its relative position
+and duration. The expected blocks in the tests are the subtitle packets of:
+
+```sh
+ffprobe -v error -show_entries packet=stream_index,pts_time,duration_time -of csv=p=0 subtitles.mkv
+```
+
+with the text of the SubRip cues, and the ASS events as Matroska stores
+them: `ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text`.

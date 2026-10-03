@@ -67,7 +67,7 @@ func streamingAddon(t *testing.T) string {
 			_, _ = io.WriteString(w, "1\r\n00:00:01,000 --> 00:00:04,000\r\nBonjour\r\n")
 		case path == "/files/remux.mkv":
 			// A real Matroska file, whose index remuxing reads.
-			http.ServeFile(w, r, filepath.Join("..", "keyframes", "testdata", "forced.mkv"))
+			http.ServeFile(w, r, filepath.Join("..", "container", "testdata", "forced.mkv"))
 		case strings.HasPrefix(path, "/files/"):
 			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
@@ -281,7 +281,7 @@ func TestPlaybackInfoListsEveryVersionUnlessOneIsAsked(t *testing.T) {
 // first version, Opus then H.264 for 15 s, with more streams if given.
 func (p playbackSetup) remuxable(t *testing.T, more ...media.Stream) media.Analysis {
 	t.Helper()
-	info, err := os.Stat(filepath.Join("..", "keyframes", "testdata", "forced.mkv"))
+	info, err := os.Stat(filepath.Join("..", "container", "testdata", "forced.mkv"))
 	if err != nil {
 		t.Fatal(err)
 	}

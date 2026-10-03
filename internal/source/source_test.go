@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,22 +26,26 @@ import (
 type origin struct {
 	data     []byte
 	requests atomic.Int32
-	// expired paths answer 403; busy makes the next requests answer 429;
-	// rangeless ignores ranges and hides the size.
-	mu        sync.Mutex
-	expired   map[string]bool
-	busy      int
-	rangeless bool
+	// expired paths answer 403; busy makes the next requests answer 429,
+	// asking to retry after retryAfter seconds; rangeless ignores ranges
+	// and hides the size. ranges holds the ranges asked.
+	mu         sync.Mutex
+	expired    map[string]bool
+	busy       int
+	retryAfter string
+	rangeless  bool
+	ranges     []string
 }
 
 func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 	t.Helper()
-	o := &origin{data: make([]byte, size), expired: map[string]bool{}}
+	o := &origin{data: make([]byte, size), expired: map[string]bool{}, retryAfter: "0"}
 	_, _ = rand.Read(o.data)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		o.requests.Add(1)
 		o.mu.Lock()
-		expired, busy, rangeless := o.expired[r.URL.Path], o.busy > 0, o.rangeless
+		expired, busy, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.rangeless, o.retryAfter
+		o.ranges = append(o.ranges, r.Header.Get("Range"))
 		if busy {
 			o.busy--
 		}
@@ -49,7 +54,7 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		case expired:
 			http.Error(w, "link expired", http.StatusForbidden)
 		case busy:
-			w.Header().Set("Retry-After", "0")
+			w.Header().Set("Retry-After", retryAfter)
 			http.Error(w, "slow down", http.StatusTooManyRequests)
 		case rangeless:
 			// Chunked, without a length: the size is learned at the end.
@@ -314,5 +319,84 @@ func TestStaleBlocksAreRemovedAtStart(t *testing.T) {
 	}
 	if _, err := os.Stat(kept); err != nil {
 		t.Error("a file Polyfin did not write was removed")
+	}
+}
+
+func TestFetchReadsTheRangeAsked(t *testing.T) {
+	o, server := newOrigin(t, 3*blockSize)
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	got, err := s.Fetch(t.Context(), 1000, 5000)
+	if err != nil || !bytes.Equal(got, o.data[1000:6000]) {
+		t.Fatalf("%d bytes: %v", len(got), err)
+	}
+	// At the end of the file, what it holds.
+	end := int64(len(o.data))
+	got, err = s.Fetch(t.Context(), end-10, 100)
+	if err != nil || !bytes.Equal(got, o.data[end-10:]) {
+		t.Fatalf("at the end: %d bytes: %v", len(got), err)
+	}
+	if !slices.Equal(o.ranges, []string{"bytes=1000-5999", "bytes=3145718-3145817"}) {
+		t.Errorf("ranges asked: %q", o.ranges)
+	}
+	// The size was learned: past the end needs no request.
+	if _, err := s.Fetch(t.Context(), end, 10); err != io.EOF || o.requests.Load() != 2 {
+		t.Errorf("past the end: %v after %d requests", err, o.requests.Load())
+	}
+	// Nothing was cached: the reads still fetch.
+	if _, err := s.ReadAt(t.Context(), make([]byte, 10), 1000); err != nil || o.requests.Load() != 3 {
+		t.Errorf("read: %v after %d requests", err, o.requests.Load())
+	}
+}
+
+func TestFetchReportsIgnoredRanges(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	o.rangeless = true
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	if _, err := s.Fetch(t.Context(), 1000, 10); !errors.Is(err, ErrRangesIgnored) {
+		t.Errorf("got %v, want ErrRangesIgnored", err)
+	}
+}
+
+func TestFetchWaitsForBusySources(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	o.busy, o.retryAfter = 1, "1"
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	started := time.Now()
+	got, err := s.Fetch(t.Context(), 10, 20)
+	if err != nil || !bytes.Equal(got, o.data[10:30]) {
+		t.Fatalf("%d bytes: %v", len(got), err)
+	}
+	if waited := time.Since(started); waited < time.Second || o.requests.Load() != 2 {
+		t.Errorf("%d requests in %v, want 2 a second apart", o.requests.Load(), waited)
+	}
+	// A source still refusing is given up on, after a bounded number of
+	// tries.
+	o.busy, o.retryAfter = 100, "0"
+	before := o.requests.Load()
+	if _, err := s.Fetch(t.Context(), 10, 20); !errors.Is(err, ErrUnavailable) || o.requests.Load()-before != attempts {
+		t.Errorf("got %v after %d requests", err, o.requests.Load()-before)
+	}
+}
+
+func TestFetchRenewsExpiredLinks(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	o.expired["/old"] = true
+	var renewals atomic.Int32
+	renew := func(context.Context) (Location, error) {
+		renewals.Add(1)
+		return Location{URL: server.URL + "/new"}, nil
+	}
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/old"}, renew)
+	defer s.Release()
+	got, err := s.Fetch(t.Context(), 100, 200)
+	if err != nil || !bytes.Equal(got, o.data[100:300]) {
+		t.Fatalf("%d bytes: %v", len(got), err)
+	}
+	// The fresh link is kept for the next requests.
+	if _, err := s.Fetch(t.Context(), 0, 10); err != nil || renewals.Load() != 1 || o.requests.Load() != 3 {
+		t.Errorf("%v: %d renewals, %d requests", err, renewals.Load(), o.requests.Load())
 	}
 }

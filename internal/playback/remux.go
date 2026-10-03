@@ -13,8 +13,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
-	"github.com/moodiness/polyfin/internal/keyframes"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 )
@@ -90,8 +90,8 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 			}
 		}
 		started := time.Now()
-		times, err := keyframes.Read(ctx, src, size)
-		if errors.Is(err, keyframes.ErrNoIndex) {
+		times, err := container.Keyframes(ctx, src, size)
+		if errors.Is(err, container.ErrNoIndex) {
 			err = fmt.Errorf("%w: %w", ErrNotRemuxable, err)
 		}
 		if err != nil || len(times) == 0 {
