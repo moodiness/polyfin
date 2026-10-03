@@ -93,6 +93,8 @@ func TestTheDefaultSubtitleFollowsTheMode(t *testing.T) {
 			[]playback.MediaStream{video, english, subtitle(4, "eng", flags{text: true, forced: true}), subtitle(5, "spa", flags{text: true, flagged: true})}, 2, 5},
 		"Always: text rather than image": {trackPreferences{subtitleMode: "Always", subtitleLanguage: "fre"},
 			[]playback.MediaStream{streams[0], video, english, subtitle(3, "fra", flags{})}, 2, 0},
+		"Smart: an image track gives way to embedded text before a file": {trackPreferences{subtitleMode: "Smart", subtitleLanguage: "fre"},
+			[]playback.MediaStream{streams[0], video, english, subtitle(3, "fra", flags{flagged: true}), subtitle(4, "fra", flags{text: true})}, 2, 4},
 	} {
 		got := test.preferences.subtitle(test.streams, new(test.audio))
 		if got == nil || *got != test.want {

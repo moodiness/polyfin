@@ -214,8 +214,9 @@ func (t trackPreferences) subtitleRank(s playback.MediaStream, audioLanguage str
 
 // bestSubtitle returns the subtitle score places highest, the first of
 // equals; a negative score leaves a track out. nil when every track is
-// left out. An image track gives way to a text track in the same
-// language, equally forced, that is not left out.
+// left out. An image track gives way to the text track score places
+// highest among those in the same language, equally forced, that are not
+// left out: an embedded one before a file.
 func bestSubtitle(subtitles []playback.MediaStream, score func(playback.MediaStream) int) *playback.MediaStream {
 	var best *playback.MediaStream
 	bestScore := -1
@@ -227,13 +228,21 @@ func bestSubtitle(subtitles []playback.MediaStream, score func(playback.MediaStr
 	if best == nil || best.IsTextSubtitleStream {
 		return best
 	}
+	var text *playback.MediaStream
+	textScore := -1
 	for i, s := range subtitles {
-		if s.IsTextSubtitleStream && s.IsForced == best.IsForced && score(s) >= 0 &&
-			(s.Language == best.Language || localization.SameLanguage(s.Language, best.Language)) {
-			return &subtitles[i]
+		if !s.IsTextSubtitleStream || s.IsForced != best.IsForced ||
+			s.Language != best.Language && !localization.SameLanguage(s.Language, best.Language) {
+			continue
+		}
+		if r := score(s); r > textScore {
+			text, textScore = &subtitles[i], r
 		}
 	}
-	return best
+	if text == nil {
+		return best
+	}
+	return text
 }
 
 // undeterminedLanguage reports whether a track states no language, as
