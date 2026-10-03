@@ -16,7 +16,7 @@ REQUIRED: A PostgreSQL 18 container must already be running, for example the off
 &#xD;
 FIRST RUN: open the container log and copy the one-time setup code, then open the WebUI and create the administrator with it.&#xD;
 &#xD;
-GPU (optional): Polyfin converts video on the first GPU that works and logs which one. NVIDIA: install the Nvidia Driver plugin, add --runtime=nvidia to Extra Parameters, and set NVIDIA_VISIBLE_DEVICES to the GPU's UUID or all. AMD or Intel: set the GPU device to /dev/dri.&#xD;
+GPU (optional): Polyfin converts video on the first GPU that works and logs which one. NVIDIA: install the Nvidia Driver plugin, add --runtime=nvidia to Extra Parameters, and set NVIDIA_VISIBLE_DEVICES to the GPU's UUID or all. AMD or Intel: add --device=/dev/dri to Extra Parameters.&#xD;
 &#xD;
 Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
   <Category>MediaServer:Video</Category>
@@ -34,7 +34,6 @@ Polyfin hosts no content and ships with no addons or catalogues: you choose and 
   <Config Name="Log level" Target="POLYFIN_LOG_LEVEL" Default="info|debug|warn|error" Mode="" Description="Amount of detail in the container log. Use debug only while troubleshooting." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
   <Config Name="Cache size" Target="POLYFIN_CACHE_SIZE" Default="10GB" Mode="" Description="Disk space for parts of the files being read, for example 10GB or 512MiB. They are kept in Docker's storage and emptied when Polyfin starts: keep this below the free space of your Docker vDisk or directory." Type="Variable" Display="advanced" Required="false" Mask="false">10GB</Config>
   <Config Name="GPU" Target="POLYFIN_HWACCEL" Default="auto|nvenc|vaapi|none" Mode="" Description="GPU video is converted on: auto uses the first that works, NVIDIA then AMD or Intel; none converts on the processor." Type="Variable" Display="advanced" Required="false" Mask="false">auto</Config>
-  <Config Name="GPU device (AMD or Intel)" Target="" Default="" Mode="" Description="Set to /dev/dri to give Polyfin an AMD or Intel GPU. Leave empty otherwise: the container does not start with a device the server lacks." Type="Device" Display="advanced" Required="false" Mask="false"/>
   <Config Name="NVIDIA GPUs" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="NVIDIA GPUs Polyfin may use, with --runtime=nvidia in Extra Parameters: all, or a GPU's UUID from the Nvidia Driver plugin." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
   <Config Name="NVIDIA capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,video,utility,graphics" Mode="" Description="NVIDIA driver libraries the container gets. Video decoding and encoding need video; tone mapping HDR on the GPU needs graphics." Type="Variable" Display="advanced" Required="false" Mask="false">compute,video,utility,graphics</Config>
 </Container>
