@@ -38,6 +38,7 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/UserItems/Resume", h.resume)
 	signedIn(http.MethodGet, "/Users/{userId}/Items/Resume", h.resume)
 	signedIn(http.MethodGet, "/Shows/NextUp", h.nextUp)
+	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
 	signedIn(http.MethodGet, "/Persons", h.persons)
 }
 
