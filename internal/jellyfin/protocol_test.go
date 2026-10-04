@@ -1,9 +1,15 @@
 package jellyfin
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestReadCredentials(t *testing.T) {
@@ -107,6 +113,155 @@ func TestRouterMatchesLikeJellyfin(t *testing.T) {
 		rt.ServeHTTP(recorder, httptest.NewRequest(tc.method, tc.target, nil))
 		if recorder.Code != tc.status || recorder.Body.String() != tc.body {
 			t.Errorf("%s %s: got %d %q, want %d %q", tc.method, tc.target, recorder.Code, recorder.Body, tc.status, tc.body)
+		}
+	}
+}
+
+func TestRouterLogsWhatItDoesNotServe(t *testing.T) {
+	var output bytes.Buffer
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	unmatched := newUnmatchedRequests(slog.New(slog.NewJSONHandler(&output, nil)))
+	unmatched.now = func() time.Time { return now }
+	rt := &router{unmatched: unmatched}
+	rt.handle(http.MethodGet, "/Users/Me", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	const secret = "0123456789abcdef0123456789abcdef"
+	request := func(method, target, authorization string) {
+		t.Helper()
+		r := httptest.NewRequest(method, target, nil)
+		if authorization != "" {
+			r.Header.Set("Authorization", authorization)
+		}
+		rt.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	type line struct {
+		Level, Msg, Method, Path, Client, Version string
+		Status                                    int
+	}
+	logged := func() []line {
+		t.Helper()
+		if strings.Contains(output.String(), secret) || strings.Contains(output.String(), "Shrek") {
+			t.Fatalf("the log shows a token or a query: %s", output.String())
+		}
+		var lines []line
+		for _, raw := range strings.Split(strings.TrimSpace(output.String()), "\n") {
+			if raw == "" {
+				continue
+			}
+			var l line
+			if err := json.Unmarshal([]byte(raw), &l); err != nil {
+				t.Fatal(err)
+			}
+			lines = append(lines, l)
+		}
+		output.Reset()
+		return lines
+	}
+
+	swiftfin := `MediaBrowser Client="Swiftfin iOS", Device="iPhone", DeviceId="abc", Version="1.3.0", Token="` + secret + `"`
+	request(http.MethodGet, "/Items/c0ffee00c0ffee00c0ffee00c0ffee00/Download?api_key="+secret+"&searchTerm=Shrek", swiftfin)
+	request(http.MethodGet, "/Users/Me", swiftfin)
+	request(http.MethodGet, "/Videos/c0ffee00-c0ff-ee00-c0ff-ee00c0ffee00/hls1/main/12.ts?ApiKey="+secret, "")
+	request(http.MethodDelete, "/Users/Me", swiftfin)
+	want := []line{
+		{Level: "INFO", Msg: "An app asked for something Polyfin does not serve", Method: "GET", Path: "/Items/{id}/Download", Status: 404, Client: "Swiftfin iOS", Version: "1.3.0"},
+		{Level: "INFO", Msg: "An app asked for something Polyfin does not serve", Method: "GET", Path: "/Videos/{id}/hls1/main/{id}.ts", Status: 404},
+		{Level: "INFO", Msg: "An app asked for something Polyfin does not serve", Method: "DELETE", Path: "/Users/Me", Status: 405, Client: "Swiftfin iOS", Version: "1.3.0"},
+	}
+	if got := logged(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("logged %+v, want %+v", got, want)
+	}
+
+	// The same endpoint for another item, spelled in another case, is not
+	// logged again within the hour; another method is.
+	request(http.MethodGet, "/items/0000000000000000000000000000abcd/download", swiftfin)
+	now = now.Add(59 * time.Minute)
+	request(http.MethodGet, "/Items/c0ffee00c0ffee00c0ffee00c0ffee00/Download", swiftfin)
+	request(http.MethodPost, "/Items/c0ffee00c0ffee00c0ffee00c0ffee00/Download", swiftfin)
+	if got := logged(); len(got) != 1 || got[0].Method != "POST" {
+		t.Fatalf("within the hour, logged %+v", got)
+	}
+	now = now.Add(2 * time.Minute)
+	request(http.MethodGet, "/Items/c0ffee00c0ffee00c0ffee00c0ffee00/Download", swiftfin)
+	if got := logged(); len(got) != 1 || got[0].Path != "/Items/{id}/Download" {
+		t.Fatalf("an hour later, logged %+v", got)
+	}
+
+	// A scanner's distinct paths fill the bounded set, then go unlogged
+	// until the hour passes.
+	for i := range maxUnmatched {
+		request(http.MethodGet, fmt.Sprintf("/probe/x%d", i), "")
+	}
+	if got := logged(); len(got) != maxUnmatched-2 {
+		t.Fatalf("logged %d distinct paths, want %d", len(got), maxUnmatched-2)
+	}
+	request(http.MethodGet, "/Missing", "")
+	if got := logged(); len(got) != 0 {
+		t.Fatalf("beyond the bound, logged %+v", got)
+	}
+	now = now.Add(time.Hour)
+	request(http.MethodGet, "/Missing", "")
+	if got := logged(); len(got) != 1 {
+		t.Fatalf("once the set expired, logged %+v", got)
+	}
+	if len(unmatched.logged) > maxUnmatched {
+		t.Fatalf("remembers %d shapes", len(unmatched.logged))
+	}
+}
+
+// Go accepts request lines and headers of about a megabyte: what an
+// unmatched request keeps and logs stays short whatever it sends.
+func TestRouterLogsLongRequestsShort(t *testing.T) {
+	var output bytes.Buffer
+	unmatched := newUnmatchedRequests(slog.New(slog.NewJSONHandler(&output, nil)))
+	rt := &router{unmatched: unmatched}
+	long := strings.Repeat("a", maxLogged-1) + "é" + strings.Repeat("b", 1<<20)
+	for i := range 3 {
+		r := httptest.NewRequest(http.MethodGet, "/"+long+fmt.Sprint(i), nil)
+		r.Method = "M" + long
+		r.Header.Set("Authorization", `MediaBrowser Client="`+long+`", Version="`+long+`"`)
+		rt.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if output.Len() > 4*maxLogged+1000 {
+		t.Fatalf("logged %d bytes", output.Len())
+	}
+	var line struct{ Method, Path, Client, Version string }
+	if err := json.Unmarshal(bytes.SplitN(output.Bytes(), []byte("\n"), 2)[0], &line); err != nil {
+		t.Fatal(err)
+	}
+	if want := "/" + strings.Repeat("a", maxLogged-1) + "…"; line.Path != want {
+		t.Errorf("path %q, want %q", line.Path, want)
+	}
+	// The client's and version's cut falls inside "é", which is dropped
+	// whole.
+	if line.Client != strings.Repeat("a", maxLogged-1)+"…" || line.Version != line.Client || len(line.Method) > maxLogged+len("…") {
+		t.Errorf("logged %+v", line)
+	}
+	// Paths that differ only past the cut are one shape.
+	if len(unmatched.logged) != 1 {
+		t.Errorf("remembers %d shapes", len(unmatched.logged))
+	}
+	for key := range unmatched.logged {
+		if len(key) > 2*(maxLogged+len("…"))+1 {
+			t.Errorf("remembers a key of %d bytes", len(key))
+		}
+	}
+}
+
+func TestPathShape(t *testing.T) {
+	for path, want := range map[string]string{
+		"/Items/0123456789ABCDEF0123456789abcdef/Images/Primary/0": "/Items/{id}/Images/Primary/{id}",
+		"/Users/01234567-89ab-cdef-0123-456789abcdef/Items":        "/Users/{id}/Items",
+		"/Videos/0123456789abcdef0123456789abcdef/stream.mkv":      "/Videos/{id}/stream.mkv",
+		"/Audio/0123456789abcdef0123456789abcdef.mp3":              "/Audio/{id}.mp3",
+		"/Videos/abc/hls1/main/0.ts":                               "/Videos/abc/hls1/main/{id}.ts",
+		"/web/index.html":                                          "/web/index.html",
+		// Almost identifiers stay: they are endpoint names.
+		"/Items/0123456789abcdef0123456789abcdeg":       "/Items/0123456789abcdef0123456789abcdeg",
+		"/Items/0123-4567-89ab-cdef-0123456789abcdef-0": "/Items/0123-4567-89ab-cdef-0123456789abcdef-0",
+	} {
+		if got := pathShape(path); got != want {
+			t.Errorf("pathShape(%q) = %q, want %q", path, got, want)
 		}
 	}
 }

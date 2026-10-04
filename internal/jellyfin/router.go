@@ -1,8 +1,12 @@
 package jellyfin
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
 )
 
 // router matches Jellyfin routes the way Jellyfin does: path segments
@@ -10,6 +14,8 @@ import (
 // captured with their original case as request path values.
 type router struct {
 	routes []route
+	// unmatched logs the requests no route serves; nil logs none.
+	unmatched *unmatchedRequests
 }
 
 type route struct {
@@ -54,11 +60,12 @@ func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if best < 0 {
+		status := http.StatusNotFound
 		if pathMatched {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		} else {
-			w.WriteHeader(http.StatusNotFound)
+			status = http.StatusMethodNotAllowed
 		}
+		rt.unmatched.report(r, status)
+		w.WriteHeader(status)
 		return
 	}
 	for name, value := range bestValues {
@@ -87,6 +94,122 @@ func (candidate route) match(segments []string) (map[string]string, int, bool) {
 		literals++
 	}
 	return values, literals, true
+}
+
+// unmatchedRequests tells which endpoints apps call that Polyfin does not
+// serve. Each method and path shape is logged at most once an hour, so an
+// app polling a missing endpoint does not flood the log.
+type unmatchedRequests struct {
+	logger *slog.Logger
+	now    func() time.Time
+
+	mu     sync.Mutex
+	logged map[string]time.Time
+}
+
+const (
+	unmatchedInterval = time.Hour
+	// maxUnmatched bounds the shapes remembered. Once that many were logged
+	// within the hour, others go unlogged until some expire: past that
+	// many, the requests come from a scanner, not from apps.
+	maxUnmatched = 1000
+	// maxLogged bounds each value kept and logged. Go accepts request lines
+	// and headers of about a megabyte; no endpoint, method or app name is
+	// that long, and a thousand such paths would hold a gigabyte.
+	maxLogged = 256
+)
+
+func newUnmatchedRequests(logger *slog.Logger) *unmatchedRequests {
+	return &unmatchedRequests{logger: logger, now: time.Now, logged: map[string]time.Time{}}
+}
+
+func (u *unmatchedRequests) report(r *http.Request, status int) {
+	if u == nil {
+		return
+	}
+	// The path alone: query strings carry tokens and search terms.
+	path := truncate(pathShape(r.URL.Path))
+	method := truncate(r.Method)
+	// Jellyfin matches paths without regard to case, so apps spelling the
+	// same endpoint differently are one shape.
+	key := method + " " + strings.ToLower(path)
+	now := u.now()
+	u.mu.Lock()
+	if at, ok := u.logged[key]; ok && now.Sub(at) < unmatchedInterval {
+		u.mu.Unlock()
+		return
+	}
+	if len(u.logged) >= maxUnmatched {
+		for shape, at := range u.logged {
+			if now.Sub(at) >= unmatchedInterval {
+				delete(u.logged, shape)
+			}
+		}
+	}
+	if len(u.logged) >= maxUnmatched {
+		u.mu.Unlock()
+		return
+	}
+	u.logged[key] = now
+	u.mu.Unlock()
+	app := readCredentials(r, true)
+	u.logger.Info("An app asked for something Polyfin does not serve",
+		"method", method, "path", path, "status", status, "client", truncate(app.Client), "version", truncate(app.Version))
+}
+
+// truncate keeps the first maxLogged bytes of s, without splitting a
+// character, marking what it cut.
+func truncate(s string) string {
+	if len(s) <= maxLogged {
+		return s
+	}
+	end := maxLogged
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return s[:end] + "…"
+}
+
+// pathShape replaces the identifiers in a path with {id}, so that requests
+// for different items are one endpoint, and no item or user shows in the
+// log. Identifiers are 32-digit hexadecimal ids, dashed GUIDs and numbers,
+// alone or before an extension, as in segment 12.ts.
+func pathShape(path string) string {
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		name, extension := segment, ""
+		if dot := strings.IndexByte(segment, '.'); dot > 0 {
+			name, extension = segment[:dot], segment[dot:]
+		}
+		if isIdentifier(name) {
+			segments[i] = "{id}" + extension
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
+func isIdentifier(segment string) bool {
+	switch {
+	case segment == "":
+		return false
+	case strings.Trim(segment, "0123456789") == "":
+		return true
+	case len(segment) == 32:
+		return isHex(segment)
+	case len(segment) == 36:
+		for _, dash := range []int{8, 13, 18, 23} {
+			if segment[dash] != '-' {
+				return false
+			}
+		}
+		digits := strings.ReplaceAll(segment, "-", "")
+		return len(digits) == 32 && isHex(digits)
+	}
+	return false
+}
+
+func isHex(s string) bool {
+	return strings.Trim(s, "0123456789abcdefABCDEF") == ""
 }
 
 // cors lets browser-based Jellyfin apps served from another origin call the

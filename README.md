@@ -80,7 +80,7 @@ Open `http://<server>:8096/admin/`. Polyfin waits for PostgreSQL and creates its
 | --- | --- | --- |
 | `POLYFIN_DATABASE_URL` | (required) | PostgreSQL URL, e.g. `postgresql://polyfin:password@postgres:5432/polyfin` |
 | `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
-| `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. From `info`, Polyfin logs each Jellyfin endpoint an app calls that it does not serve, with the app's name and version, at most once an hour per endpoint, without the identifiers, query or token of the request. |
 | `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
 | `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0 or later), a path or a name looked up in `PATH`. The Docker image includes one. |
 | `POLYFIN_CACHE_DIR` | system temporary directory, `/cache` in the Docker image | Where parts of the files being read, and the HLS segments being played, are kept. Emptied when Polyfin starts. |
