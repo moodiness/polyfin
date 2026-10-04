@@ -244,6 +244,9 @@ type playbackInfoRequest struct {
 	AllowVideoStreamCopy *bool
 	// userLimit is the user's MaxBitrate, 0 for none (see limitBitrate).
 	userLimit int64
+	// group is the user's quality group, 0 for none, and conversionHeight
+	// the height converted video is scaled down to (see limitHeight).
+	group, conversionHeight int
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -289,6 +292,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limitBitrate(&request, user)
+	h.limitHeight(&request, user)
 	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
 		h.browseError(w, r, err)
@@ -358,7 +362,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
 			} else {
-				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
+				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit or quality group", "addon", version.Addon)
 			}
 			continue
 		}
@@ -389,9 +393,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		for j, other := range versions {
 			if j != chosen.index && !unreadable[j] {
 				described := h.describedSource(r, p, other, sourceID(opened, other, j == 0))
-				// A version known to be above the user's limit is not
-				// offered as it is.
-				if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) {
+				// A version known to be above the user's limit, or taller
+				// than their quality group, is not offered as it is.
+				if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) || !user.FitsGroup(h.versionHeight(r.Context(), other)) {
 					described.SupportsDirectPlay, described.SupportsDirectStream = false, false
 				}
 				sources = append(sources, described)
@@ -509,6 +513,8 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
+		MaxHeight:           request.group,
+		ConversionHeight:    request.conversionHeight,
 		Can:                 h.Playback.Capabilities(),
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
@@ -567,8 +573,9 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	}
 	// Above the user's bitrate limit, a version plays only converted down to
 	// it; else the next version is tried. PreferDirectPlay thus never takes
-	// such a version for one that plays without conversion.
-	if beyondUserLimit(request, analysis.Bitrate, decision) {
+	// such a version for one that plays without conversion. So does one
+	// taller than their quality group.
+	if beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision) {
 		return decided{}, false
 	}
 	return decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}, true
@@ -603,6 +610,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
 		source.TranscodingSubProtocol = "hls"
 		source.TranscodingContainer = decision.Transcoding.Container
+		describeConverted(request, analysis, source.MediaStreams, decision.Video)
 	}
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
@@ -790,6 +798,12 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 			wanted = id
 		}
 	}
+	// With a quality group, the title's own identifier stands for the
+	// version PlaybackInfo offers first under it, which leaves out those
+	// taller than the group.
+	if wanted == item.ID && user.QualityGroup > 0 && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+		wanted = h.firstWorkingVersion(r.Context(), user, item)
+	}
 	version, err := h.version(r.Context(), user, item, wanted)
 	if err != nil {
 		processingError(w, http.StatusBadRequest)
@@ -802,10 +816,16 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		h.serveChannel(w, r, user, item, version, relay)
 		return
 	}
-	// PlaybackInfo never offers a version above the user's bitrate limit as
-	// it is: this guards URLs kept from before the limit was set, or made up.
+	// PlaybackInfo never offers a version above the user's bitrate limit,
+	// or taller than their quality group, as it is: this guards URLs kept
+	// from before the limit was set, or made up.
 	if analysis, known := h.Playback.Analyzed(r.Context(), version.ID); known && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
 		h.Logger.Info("A version above the user's bitrate limit was refused", "addon", version.Addon)
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
+		h.Logger.Info("A version taller than the user's quality group was refused", "addon", version.Addon)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}

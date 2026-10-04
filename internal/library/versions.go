@@ -41,6 +41,10 @@ type Version struct {
 	Confined bool
 	// Runtime is the item's runtime, used until the stream is analyzed.
 	Runtime time.Duration
+	// Height is the video height the addon's labels give the stream (see
+	// LabelHeight), 0 when they give none; its analysis, once there, is
+	// what counts.
+	Height int
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
@@ -259,6 +263,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Origin:   Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
 		Confined: entry.confined,
 		Runtime:  t.runtime,
+		Height:   LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 	}
 	version.ID = versionID(t.item, version)
 	return version

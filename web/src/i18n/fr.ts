@@ -133,6 +133,7 @@ const fr: Messages = {
       'Les minutes avant et après un enregistrement doivent être un nombre entier de 0 à 60.',
     invalid_recording_retention_days:
       'Les jours de conservation des enregistrements doivent être un nombre entier de 0 à 3 650.',
+    invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
   },
   status: {
     title: 'État du serveur',
@@ -359,6 +360,10 @@ const fr: Messages = {
     canManageSubtitles: 'Peut gérer les sous-titres',
     canManageSubtitlesHelp:
       'Permet à cet utilisateur d’ajouter des fichiers de sous-titres aux titres depuis ses applications Jellyfin, et d’y chercher les sous-titres des addons.',
+    qualityGroup: 'Groupe de qualité',
+    qualityGroupHelp:
+      'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie, et seules les versions qui conviennent peuvent être téléchargées.',
+    qualityGroupOriginal: 'D’origine (sans limite)',
   },
   settings: {
     title: 'Paramètres',

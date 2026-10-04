@@ -216,6 +216,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},
 		{accounts.ErrInvalidSyncPlay, http.StatusBadRequest, "invalid_sync_play"},
+		{accounts.ErrInvalidQualityGroup, http.StatusBadRequest, "invalid_quality_group"},
 		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},

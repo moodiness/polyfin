@@ -23,6 +23,8 @@ import {
   type PasswordResetPin,
   type UserPatch,
   type SyncPlayAccess,
+  qualityGroups,
+  type QualityGroup,
 } from '@/api'
 import DeviceList from '@/components/DeviceList'
 import { useSessionUser } from '@/components/session'
@@ -123,6 +125,9 @@ function UserRow({
               {!user.transcoding && <Badge tone="muted">{t.users.noTranscoding}</Badge>}
               {!user.downloads && <Badge tone="muted">{t.users.noDownloads}</Badge>}
               {!user.personalAddons && <Badge tone="muted">{t.users.noPersonalAddons}</Badge>}
+              {user.qualityGroup !== 0 && (
+                <Badge tone="muted">{qualityGroupName(user.qualityGroup)}</Badge>
+              )}
               {user.blockedUntil !== null && <BlockedBadge until={user.blockedUntil} />}
             </p>
             <p className="mt-1 text-sm text-muted">
@@ -638,9 +643,15 @@ const bitrateChoices = [
   { value: 2_000_000, label: 'bitrate480' },
 ] as const
 
+/** A quality group as people name video of that height: 4K, else its lines, 1080p. */
+function qualityGroupName(group: Exclude<QualityGroup, 0>) {
+  return group === 2160 ? '4K' : `${group}p`
+}
+
 function PlaybackAccessForm({ user }: { user: User }) {
   const { t, language } = useI18n()
   const bitrateId = useId()
+  const qualityGroupId = useId()
   const syncPlayId = useId()
   const save = useUserPatch(user)
   const [form, setForm] = useState({
@@ -650,6 +661,7 @@ function PlaybackAccessForm({ user }: { user: User }) {
     syncPlay: user.syncPlay,
     remoteControl: user.remoteControl,
     liveTvManagement: user.liveTvManagement,
+    qualityGroup: user.qualityGroup,
   })
 
   function update(change: Partial<typeof form>) {
@@ -706,6 +718,27 @@ function PlaybackAccessForm({ user }: { user: User }) {
         </select>
         <p id={`${bitrateId}-hint`} className="mt-1 text-xs text-muted">
           {t.users.maxBitrateHelp}
+        </p>
+      </div>
+      <div>
+        <label htmlFor={qualityGroupId} className="block text-sm font-medium text-zinc-200">
+          {t.users.qualityGroup}
+        </label>
+        <select
+          id={qualityGroupId}
+          value={form.qualityGroup}
+          onChange={(event) => update({ qualityGroup: Number(event.target.value) as QualityGroup })}
+          aria-describedby={`${qualityGroupId}-hint`}
+          className={selectClass}
+        >
+          {qualityGroups.map((group) => (
+            <option key={group} value={group}>
+              {group === 0 ? t.users.qualityGroupOriginal : qualityGroupName(group)}
+            </option>
+          ))}
+        </select>
+        <p id={`${qualityGroupId}-hint`} className="mt-1 text-xs text-muted">
+          {t.users.qualityGroupHelp}
         </p>
       </div>
       <Checkbox

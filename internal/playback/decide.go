@@ -28,6 +28,12 @@ type Options struct {
 	// take it as it is, as apps ask with AllowAudioStreamCopy false;
 	// ConvertVideo, the video, as with AllowVideoStreamCopy false.
 	ConvertAudio, ConvertVideo bool
+	// MaxHeight is the tallest video the app is sent as it is, 0 for no
+	// limit: taller video only plays converted, refused direct play with
+	// VideoResolutionNotSupported, as a profile's height limit refuses it.
+	// Converted video is no taller than either height that is positive:
+	// ConversionHeight caps it whatever the source.
+	MaxHeight, ConversionHeight int
 	// Can is what the installed FFmpeg converts with.
 	Can Capabilities
 }
@@ -200,13 +206,17 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 		matched, why = d.directPlay()
 		reasons |= why
 	}
+	tall := d.taller(options.MaxHeight)
+	if tall {
+		matched, reasons = nil, reasons|videoResolutionNotSupported
+	}
 	decision.DirectPlay = matched != nil
 	if decision.DirectPlay {
 		decision.Container = singleContainer(source.Container, matched, nil)
 	} else {
 		decision.Container = singleContainer(source.Container, nil, profile.DirectPlayProfiles)
 		if t := decision.Transcoding; t != nil {
-			decision.HLS, decision.Video, decision.Audio = d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0)
+			decision.HLS, decision.Video, decision.Audio = d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall)
 			reasons |= d.transcodeReasons(t)
 			if reasons == 0 {
 				reasons = directPlayError
@@ -286,6 +296,20 @@ func (d *decider) locate(options Options) {
 	if d.played == nil {
 		d.played = first
 	}
+}
+
+// taller reports whether any of the source's video is taller than height,
+// when it is positive: live sources list each variant they offer.
+func (d *decider) taller(height int) bool {
+	if height <= 0 {
+		return false
+	}
+	for _, stream := range d.source.Streams {
+		if stream.Type == "Video" && stream.Height != nil && *stream.Height > height {
+			return true
+		}
+	}
+	return false
 }
 
 // directPlay returns the direct-play profile the source plays with, or the
@@ -426,16 +450,20 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 // its codec and channels and the codec profiles accept it, as the only
 // audio, so never a secondary track; else it is converted to a codec t
 // takes.
-func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, overLimit bool) (bool, *VideoConversion, *AudioConversion) {
+func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool) (bool, *VideoConversion, *AudioConversion) {
 	if !strings.EqualFold(t.Protocol, "hls") || d.video == nil {
 		return false, nil, nil
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
 	var video *VideoConversion
-	if options.ConvertVideo || overLimit || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
-		// The height converted video is capped at only scales it down,
-		// which never prevents a conversion: the remux applies it.
-		if video = ConvertVideo(t.VideoCodec, VideoLimit(limit, d.played), 0, *d.video, options.Can); video == nil {
+	if options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
+		// Converted video is scaled down to the lower of the heights it is
+		// capped at, which never prevents a conversion.
+		height := options.ConversionHeight
+		if options.MaxHeight > 0 && (height == 0 || options.MaxHeight < height) {
+			height = options.MaxHeight
+		}
+		if video = ConvertVideo(t.VideoCodec, VideoLimit(limit, d.played), height, *d.video, options.Can); video == nil {
 			return false, nil, nil
 		}
 	}
