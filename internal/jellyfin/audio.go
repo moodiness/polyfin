@@ -698,7 +698,10 @@ func (h *Handler) addAudioSources(r *http.Request, user accounts.User, dto *Base
 			}
 			source := h.audioSource(r, item, version, d)
 			sources, streams = []MediaSourceInfo{source}, source.MediaStreams
-			dto.Container = source.Container
+			// Jellyfin gives a song's container, not an audiobook's.
+			if item.Kind == library.KindTrack {
+				dto.Container = source.Container
+			}
 		}
 		if a := version.Audio; detail && a != nil && item.Kind == library.KindAudiobook && len(a.Chapters) > 0 {
 			chapters := make([]ChapterInfo, 0, len(a.Chapters))

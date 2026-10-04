@@ -72,7 +72,7 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail 
 	switch item.Kind {
 	case library.KindTrack, library.KindAudiobook:
 		dto.HasLyrics = new(false)
-		if dto.Container == "" {
+		if dto.Container == "" && item.Kind == library.KindTrack {
 			// Until its stream is described: the format its addon labels it with.
 			dto.Container = audioContainer(item.Container, "")
 		}

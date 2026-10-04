@@ -135,6 +135,19 @@ func TestMusicResponsesMatchJellyfin(t *testing.T) {
 	}
 	matchesFixture(t, "music/views", body, musicShapes)
 
+	// A song keeps its number on its album once a search, which gives
+	// none, lists it again.
+	var children, found QueryResult
+	s.get(t, "/Items?ParentId="+album, token, &children)
+	s.get(t, "/Items?searchTerm=wind&IncludeItemTypes=Audio&Recursive=true", token, &found)
+	var details BaseItemDto
+	if len(found.Items) == 1 {
+		s.get(t, "/Items/"+found.Items[0].Id, token, &details)
+	}
+	if details.IndexNumber == nil || *details.IndexNumber != 2 || details.ProductionYear == nil {
+		t.Errorf("a song found by a search lost its number or year: %+v", details)
+	}
+
 	// A song without lyrics.
 	status, body = s.call(http.MethodGet, "/Audio/"+song+"/Lyrics", app("web", token), nil)
 	if status != http.StatusNotFound || !jsonHas(body, "title", "Not Found") {

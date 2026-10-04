@@ -123,7 +123,9 @@ func DecideAudio(profile *DeviceProfile, source AudioSource, options AudioOption
 		if container && codec && matched == nil {
 			matched = p
 		}
-		if codec && codecOnly == nil {
+		// As in Jellyfin, a profile takes the codec copied into another
+		// container only when it names it, as its codec or its container.
+		if !container && codecOnly == nil && (strings.EqualFold(p.AudioCodec, source.Codec) || strings.EqualFold(p.Container, source.Codec)) {
 			codecOnly = p
 		}
 	}
