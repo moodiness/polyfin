@@ -214,7 +214,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	_, err = h.Accounts.UpdateUserFromDevice(r.Context(), id, accounts.UserChanges{
+	updated, err := h.Accounts.UpdateUserFromDevice(r.Context(), id, accounts.UserChanges{
 		IsAdministrator: &policy.IsAdministrator,
 		IsHidden:        &policy.IsHidden,
 		IsDisabled:      &policy.IsDisabled,
@@ -244,6 +244,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		h.internalError(w, r, err)
 	default:
+		h.Activity.UserChanged(r.Context(), updated)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

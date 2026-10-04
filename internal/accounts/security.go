@@ -10,8 +10,8 @@ import (
 // Settings.LoginAttempts wrong passwords in a row.
 const LoginBlock = 15 * time.Minute
 
-// deviceSweepInterval is how often devices left unused are signed out.
-const deviceSweepInterval = time.Hour
+// DeviceSweepInterval is how often devices left unused are signed out.
+const DeviceSweepInterval = time.Hour
 
 // Blocked reports whether the account refuses every sign-in at now, for
 // wrong passwords (see Store.Authenticate).
@@ -61,23 +61,14 @@ func (s *Store) SignOutInactiveDevices(ctx context.Context) (int, error) {
 }
 
 // SweepInactiveDevices signs out the devices left unused (see
-// SignOutInactiveDevices) at once, then every hour until ctx ends.
-func (s *Store) SweepInactiveDevices(ctx context.Context, logger *slog.Logger) {
-	ticker := time.NewTicker(deviceSweepInterval)
-	defer ticker.Stop()
-	for {
-		switch signedOut, err := s.SignOutInactiveDevices(ctx); {
-		case err != nil && ctx.Err() == nil:
-			logger.Warn("Could not sign out the devices left unused", "error", err)
-		case signedOut > 0:
-			logger.Info("Signed out devices left unused", "devices", signedOut, "days", s.Settings().InactiveDeviceDays)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
+// SignOutInactiveDevices) and logs how many; the task scheduler runs it at
+// start, then every DeviceSweepInterval.
+func (s *Store) SweepInactiveDevices(ctx context.Context, logger *slog.Logger) error {
+	signedOut, err := s.SignOutInactiveDevices(ctx)
+	if signedOut > 0 {
+		logger.Info("Signed out devices left unused", "devices", signedOut, "days", s.Settings().InactiveDeviceDays)
 	}
+	return err
 }
 
 // followedLevel is a log level that follows the settings' DetailedLog.

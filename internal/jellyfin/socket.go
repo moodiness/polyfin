@@ -174,9 +174,10 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		h.internalError(w, r, err)
 		return
-	case !ok:
+	case !ok || c.APIKey != nil:
 		// Jellyfin refuses a socket without a valid token with a 403,
-		// where other requests get a 401.
+		// where other requests get a 401. Polyfin's sockets are those of
+		// signed-in devices: an API key, which has none, is refused too.
 		processingError(w, http.StatusForbidden)
 		return
 	}

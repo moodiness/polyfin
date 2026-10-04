@@ -260,8 +260,8 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			EnablePublicSharing:              true,
 			BlockedMediaFolders:              []string{},
 			BlockedChannels:                  []string{},
-			AuthenticationProviderId:         "Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider",
-			PasswordResetProviderId:          "Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",
+			AuthenticationProviderId:         defaultAuthenticationProvider,
+			PasswordResetProviderId:          defaultPasswordResetProvider,
 			SyncPlayAccess:                   string(user.SyncPlay),
 			// Jellyfin counts signed-in sessions against MaxActiveSessions and
 			// limits remote clients only to RemoteClientBitrateLimit; Polyfin

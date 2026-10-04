@@ -72,9 +72,11 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	// account instead, answers 403 to its right password.
 	case errors.Is(err, accounts.ErrInvalidCredentials):
 		h.SignIns.Fail(key)
+		h.Activity.SignInFailed(r.Context(), body.Username, remoteAddress(r))
 		processingError(w, http.StatusUnauthorized)
 		return
 	case errors.Is(err, accounts.ErrDisabled):
+		h.Activity.SignInFailed(r.Context(), body.Username, remoteAddress(r))
 		processingError(w, http.StatusForbidden)
 		return
 	case err != nil:
@@ -116,6 +118,7 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 		h.internalError(w, r, err)
 		return
 	}
+	h.Activity.SignedIn(r.Context(), user, remoteAddress(r))
 	writeJSON(w, http.StatusOK, AuthenticationResult{
 		User:        dto,
 		SessionInfo: newSessionInfo(device, user, h.ServerID, h.controllable(device)),
@@ -124,8 +127,15 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 	})
 }
 
+// currentUser answers the caller. Like Jellyfin, an API key, which has no
+// user, is a bad request.
 func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) {
-	h.writeUser(w, r, callerFrom(r.Context()).User)
+	c := callerFrom(r.Context())
+	if c.APIKey != nil {
+		badRequestProblem(w)
+		return
+	}
+	h.writeUser(w, r, c.User)
 }
 
 // users lists every user, optionally filtered by the isHidden and

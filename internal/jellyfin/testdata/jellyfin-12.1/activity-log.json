@@ -1,0 +1,48 @@
+{
+  "Items": [
+    {
+      "Date": "2026-10-04T10:12:27.311082Z",
+      "Id": 20,
+      "Name": "User 5 has been created",
+      "Severity": "Information",
+      "Type": "UserCreated",
+      "UserId": "6b44ce0a949e4828a7d53c15a13dee74"
+    },
+    {
+      "Date": "2026-10-04T10:12:27.2617603Z",
+      "Id": 19,
+      "Name": "Password has been changed for user dave",
+      "Severity": "Information",
+      "Type": "UserPasswordChanged",
+      "UserId": "620f435faddd4c899ea919743b4954ca"
+    },
+    {
+      "Date": "2026-10-04T10:12:27.1529058Z",
+      "Id": 18,
+      "Name": "User dave has been created",
+      "Severity": "Information",
+      "Type": "UserCreated",
+      "UserId": "620f435faddd4c899ea919743b4954ca"
+    },
+    {
+      "Date": "2026-10-04T10:02:05.4395532Z",
+      "Id": 17,
+      "Name": "bob successfully authenticated",
+      "Severity": "Information",
+      "ShortOverview": "IP address: 172.17.0.1",
+      "Type": "AuthenticationSucceeded",
+      "UserId": "5cfda5de3e944ca9907be9e6a8c94fcf"
+    },
+    {
+      "Date": "2026-10-04T10:02:05.439319Z",
+      "Id": 16,
+      "Name": "bob is online from d2",
+      "Severity": "Information",
+      "ShortOverview": "IP address: 172.17.0.1",
+      "Type": "SessionStarted",
+      "UserId": "5cfda5de3e944ca9907be9e6a8c94fcf"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 20
+}

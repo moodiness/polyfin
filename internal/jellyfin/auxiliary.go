@@ -13,7 +13,6 @@ import (
 	mathrand "math/rand/v2"
 	"mime"
 	"net/http"
-	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -912,10 +911,7 @@ func (u displayUpdate) apply(sections []homeSection) (displayState, int) {
 // endpointInfo tells an app whether it reaches the server from the same
 // machine or from the local network.
 func (h *Handler) endpointInfo(w http.ResponseWriter, r *http.Request) {
-	address, err := netip.ParseAddr(remoteAddress(r))
-	address = address.Unmap()
-	local := err == nil && address.IsLoopback()
-	inNetwork := local || err == nil && (address.IsPrivate() || address.IsLinkLocalUnicast())
+	local, inNetwork := inLocalNetwork(r)
 	writeJSON(w, http.StatusOK, struct {
 		IsLocal     bool
 		IsInNetwork bool

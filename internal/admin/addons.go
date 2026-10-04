@@ -259,6 +259,9 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addon, err := h.Addons.Install(r.Context(), scope, body.ManifestURL, confined(r))
+	if err == nil {
+		h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+	}
 	h.answerAddon(w, r, http.StatusCreated, addon, err)
 }
 
@@ -318,13 +321,24 @@ func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := h.Addons.Remove(r.Context(), scope, id)
+	// The addon is named in the activity log, which needs its name first.
+	installed, err := h.Addons.Addons(r.Context(), scope)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	err = h.Addons.Remove(r.Context(), scope, id)
 	if addonError(w, err) {
 		return
 	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	for _, addon := range installed {
+		if addon.ID == id {
+			h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, scope.Owner == nil)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

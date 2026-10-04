@@ -20,9 +20,10 @@ import (
 
 const (
 	// GuideRefresh is how often an XMLTV guide is fetched again, and
-	// guideCheck how often KeepGuidesFresh looks for guides due.
+	// GuideCheck how often the guides due are looked for (see
+	// RefreshGuides).
 	GuideRefresh = 12 * time.Hour
-	guideCheck   = 30 * time.Minute
+	GuideCheck   = 30 * time.Minute
 	// A guide download must answer within guideAnswer, send something at
 	// least every guideStall and end within guideTimeout.
 	guideAnswer  = 30 * time.Second
@@ -49,32 +50,17 @@ const (
 
 var errTooManyProgrammes = errors.New("too many programmes")
 
-// KeepGuidesFresh fetches the XMLTV guides due (see RefreshGuides) now and
-// every guideCheck, until ctx is done.
-func (s *Service) KeepGuidesFresh(ctx context.Context) {
-	ticker := time.NewTicker(guideCheck)
-	defer ticker.Stop()
-	for {
-		if err := s.RefreshGuides(ctx); err != nil && ctx.Err() == nil {
-			s.logger.Warn("The Live TV guides could not be refreshed", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
-// RefreshGuides fetches the XMLTV guides not fetched for GuideRefresh, one
-// after the other: each costs its source a download.
-func (s *Service) RefreshGuides(ctx context.Context) error {
+// RefreshGuides fetches the XMLTV guides not fetched for GuideRefresh, or
+// every guide when all is set, one after the other: each costs its source
+// a download. The task scheduler runs it every GuideCheck, and an
+// administrator runs it with all.
+func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 	sources, err := s.addons.GuideSources(ctx)
 	if err != nil {
 		return err
 	}
 	for _, src := range sources {
-		if src.CheckedAt != nil && s.now().Sub(*src.CheckedAt) < GuideRefresh {
+		if !all && src.CheckedAt != nil && s.now().Sub(*src.CheckedAt) < GuideRefresh {
 			continue
 		}
 		if err := s.refreshGuide(ctx, src); err != nil {

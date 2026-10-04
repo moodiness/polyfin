@@ -190,7 +190,7 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 		}
 		return programTitles(programs)
 	}
-	if err := e.service.RefreshGuides(t.Context()); err != nil {
+	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 	if got := airing(); !slices.Equal(got, []string{"One: First"}) || guide.downloads.Load() != 1 {
@@ -199,19 +199,23 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 
 	guide.set(strings.Replace(first, "First", "Second", 1), 0)
 	now = now.Add(11 * time.Hour)
-	if err := e.service.RefreshGuides(t.Context()); err != nil {
+	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 	if guide.downloads.Load() != 1 {
 		t.Errorf("a guide fetched 11 hours ago was fetched again")
 	}
 	now = now.Add(time.Hour)
-	if err := e.service.RefreshGuides(t.Context()); err != nil {
+	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(-12 * time.Hour)
 	if got := airing(); !slices.Equal(got, []string{"One: Second"}) || guide.downloads.Load() != 2 {
 		t.Errorf("after 12 hours: %q after %d downloads", got, guide.downloads.Load())
+	}
+	// Run by hand, every guide is fetched, due or not.
+	if err := e.service.RefreshGuides(t.Context(), true); err != nil || guide.downloads.Load() != 3 {
+		t.Errorf("by hand: %v after %d downloads", err, guide.downloads.Load())
 	}
 	fetched := e.guideOf(addons.Shared(), key).FetchedAt
 

@@ -51,6 +51,40 @@ type userJSON struct {
 	// CollectionManagement lets the user create, change and delete the
 	// collections every user sees.
 	CollectionManagement bool `json:"collectionManagement"`
+	// PasswordResetPin is the PIN the user asked for from a Jellyfin app's
+	// forgotten password screen, while it is valid, null otherwise: their
+	// password becomes the PIN once they enter it.
+	PasswordResetPin *passwordResetPinJSON `json:"passwordResetPin"`
+}
+
+type passwordResetPinJSON struct {
+	Pin       string    `json:"pin"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// withPins adds to users the password reset PINs still valid.
+func (h *handler) withPins(r *http.Request, users ...userJSON) ([]userJSON, error) {
+	pins, err := h.Accounts.PasswordResetPINs(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	for i, user := range users {
+		id, _ := accounts.ParseID(user.ID)
+		if pin, ok := pins[id]; ok {
+			users[i].PasswordResetPin = &passwordResetPinJSON{Pin: pin.PIN, ExpiresAt: pin.ExpiresAt}
+		}
+	}
+	return users, nil
+}
+
+// writeUser answers with user and their password reset PIN.
+func (h *handler) writeUser(w http.ResponseWriter, r *http.Request, status int, user accounts.User) {
+	result, err := h.withPins(r, newUserJSON(user))
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, status, result[0])
 }
 
 // accessScheduleJSON is a span of hours on a day, one of Jellyfin's
@@ -292,6 +326,7 @@ func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	h.Activity.PasswordChanged(r.Context(), session.User)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -386,6 +421,10 @@ func (h *handler) users(w http.ResponseWriter, r *http.Request) {
 	for _, user := range users {
 		result = append(result, newUserJSON(user))
 	}
+	if result, err = h.withPins(r, result...); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -409,6 +448,7 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	h.Activity.UserCreated(r.Context(), user)
 	writeJSON(w, http.StatusCreated, newUserJSON(user))
 }
 
@@ -499,7 +539,13 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newUserJSON(user))
+	if changes.Password != nil {
+		h.Activity.PasswordChanged(r.Context(), user)
+	}
+	if changes != (accounts.UserChanges{Password: changes.Password}) {
+		h.Activity.UserChanged(r.Context(), user)
+	}
+	h.writeUser(w, r, http.StatusOK, user)
 }
 
 func (h *handler) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -507,7 +553,10 @@ func (h *handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := h.Accounts.DeleteUser(r.Context(), id)
+	user, err := h.Accounts.User(r.Context(), id)
+	if err == nil {
+		err = h.Accounts.DeleteUser(r.Context(), id)
+	}
 	if accountError(w, err) {
 		return
 	}
@@ -515,6 +564,7 @@ func (h *handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	h.Activity.UserDeleted(r.Context(), user.Name)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -554,7 +604,7 @@ func (h *handler) unblockUser(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newUserJSON(user))
+	h.writeUser(w, r, http.StatusOK, user)
 }
 
 func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
@@ -602,6 +652,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	h.Activity.SettingsSaved(r.Context(), sessionFrom(r.Context()).User.Name)
 	if !settings.QuickConnectEnabled {
 		h.QuickConnect.Clear()
 	}

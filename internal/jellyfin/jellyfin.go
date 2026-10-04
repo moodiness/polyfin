@@ -8,15 +8,18 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -57,6 +60,19 @@ type Options struct {
 	// Collections stores the collections users make.
 	Collections *collections.Store
 	Logger      *slog.Logger
+	// Activity records what happens for the activity log; nil records
+	// nothing.
+	Activity *activity.Store
+	// Tasks are the server's periodic jobs, shown as Jellyfin's scheduled
+	// tasks; nil shows none.
+	Tasks *tasks.Registry
+	// Logs keeps the recent log lines administrators read; nil keeps none.
+	Logs *logs.Ring
+	// CacheDir is where sources and their remuxes are kept, and
+	// RecordingsDir where recordings are, empty when none are made: the
+	// folders storage information describes.
+	CacheDir      string
+	RecordingsDir string
 }
 
 // Handler serves the Jellyfin API.
@@ -82,6 +98,9 @@ type Handler struct {
 	preparations *preparations
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
+	// newKeys remembers the API keys made from Jellyfin apps until a
+	// listing shows them.
+	newKeys newKeys
 }
 
 // New returns the Jellyfin API handler.
@@ -152,6 +171,7 @@ func New(options Options) *Handler {
 	h.playlistRoutes(rt)
 	h.syncPlayRoutes(rt)
 	h.collectionRoutes(rt)
+	h.administrationRoutes(rt)
 
 	h.routes = cors(rt)
 	return h
