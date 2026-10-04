@@ -250,6 +250,31 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 	}
 }
 
+// Guides are due again after the hours the settings give.
+func TestGuidesFollowTheRefreshSetting(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now().UTC().Truncate(time.Minute)
+	e.service.now = func() time.Time { return now }
+	e.setting(func(s *accounts.Settings) { s.LiveTvRefreshHours = 2 })
+	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
+	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel></tv>`)
+	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		after     time.Duration
+		downloads int32
+	}{{0, 1}, {119 * time.Minute, 1}, {time.Minute, 2}} {
+		now = now.Add(step.after)
+		if err := e.service.RefreshGuides(t.Context(), false); err != nil {
+			t.Fatal(err)
+		}
+		if got := guide.downloads.Load(); got != step.downloads {
+			t.Errorf("after %v more: %d downloads, want %d", step.after, got, step.downloads)
+		}
+	}
+}
+
 // A guide published as a ZIP archive is spooled in the cache folder while
 // it is read, then removed, after a success as after a failure.
 func TestXMLTVGuidesInZIPArchives(t *testing.T) {
