@@ -1,11 +1,18 @@
 package jellyfin
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	cryptorand "crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
+	"math"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -84,8 +91,7 @@ func (a syncPlayApp) next(t *testing.T) socketMessage {
 	}
 }
 
-// quiet checks that no SyncPlay message comes. Messages leave before the
-// request that caused them is answered.
+// quiet checks that no SyncPlay message comes for a while.
 func (a syncPlayApp) quiet(t *testing.T) {
 	t.Helper()
 	deadline := time.After(200 * time.Millisecond)
@@ -99,6 +105,41 @@ func (a syncPlayApp) quiet(t *testing.T) {
 			return
 		}
 	}
+}
+
+// ended checks that the server closed the app's socket, without telling
+// it anything of SyncPlay first.
+func (a syncPlayApp) ended(t *testing.T) {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case message := <-a.socket.messages:
+			if strings.HasPrefix(message.MessageType, "SyncPlay") {
+				t.Errorf("unexpected message to %s: %s %+v", a.device, message.MessageType, message.Data)
+			}
+		case <-a.socket.closed:
+			return
+		case <-deadline:
+			t.Fatalf("the socket of %s stays open", a.device)
+		}
+	}
+}
+
+// drain reads the app's messages until the test ends, for an app whose
+// messages a test does not look at.
+func (a syncPlayApp) drain(t *testing.T) {
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	go func() {
+		for {
+			select {
+			case <-a.socket.messages:
+			case <-done:
+				return
+			}
+		}
+	}()
 }
 
 // syncPlayEvent is what a SyncPlay message says, in short: the command,
@@ -499,6 +540,226 @@ func TestSyncPlaySchedulesPlaybackOnTheServersClock(t *testing.T) {
 	p.ready(t, p.bob, entry, 600_000_000)
 	p.alice.expect(t, "Pause", "StateUpdate Paused Ready")
 	p.bob.expect(t, "Pause", "StateUpdate Paused Ready")
+
+	// Positions stay within bounds, however far a member asks.
+	for _, tc := range []struct{ asked, want int64 }{{math.MaxInt64, maxPositionTicks}, {-5, 0}} {
+		p.alice.post(t, p.testServer, "Seek", map[string]any{"PositionTicks": tc.asked})
+		for _, a := range []syncPlayApp{p.alice, p.bob} {
+			if seek := decodeData[SendCommand](t, a.expect(t, "Seek", "StateUpdate Waiting Seek")[0]); seek.PositionTicks != tc.want {
+				t.Errorf("seeking to %d: %s seeks to %d, want %d", tc.asked, a.device, seek.PositionTicks, tc.want)
+			}
+		}
+	}
+}
+
+// A queue holds maxQueueEntries entries at most: a queue or an addition
+// that would make it longer is refused.
+func TestSyncPlayQueuesAreBounded(t *testing.T) {
+	p := newSyncPlayers(t)
+	long := slices.Repeat([]string{p.episodes[0]}, maxQueueEntries+1)
+	p.alice.post(t, p.testServer, "SetNewQueue", map[string]any{"PlayingQueue": long})
+	p.alice.quiet(t)
+	p.bob.quiet(t)
+	p.alice.post(t, p.testServer, "SetNewQueue", map[string]any{"PlayingQueue": long[:maxQueueEntries-1]})
+	if update := playQueueOf(t, p.alice.expect(t, "PlayQueue")[0]); len(update.Playlist) != maxQueueEntries-1 {
+		t.Fatalf("queue of %d entries", len(update.Playlist))
+	}
+	p.bob.expect(t, "PlayQueue")
+	p.alice.post(t, p.testServer, "Queue", map[string]any{"ItemIds": p.episodes[:2]})
+	p.alice.quiet(t)
+	p.bob.quiet(t)
+	p.alice.post(t, p.testServer, "Queue", map[string]any{"ItemIds": p.episodes[:1], "Mode": "QueueNext"})
+	if update := playQueueOf(t, p.alice.expect(t, "PlayQueue")[0]); len(update.Playlist) != maxQueueEntries || update.Reason != "QueueNext" {
+		t.Fatalf("queue of %d entries after %s", len(update.Playlist), update.Reason)
+	}
+	p.bob.expect(t, "PlayQueue")
+}
+
+// stuckSocket opens a socket on which the app never reads what it is
+// sent, as an app that stopped responding.
+func (s testServer) stuckSocket(t *testing.T, device, token string) {
+	t.Helper()
+	address := strings.TrimPrefix(s.url, "http://")
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	// The little the system buffers for the app soon fills.
+	_ = conn.(*net.TCPConn).SetReadBuffer(4096)
+	var key [16]byte
+	_, _ = cryptorand.Read(key[:])
+	_, _ = fmt.Fprintf(conn, "GET /socket HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"+
+		"Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nAuthorization: %s\r\n\r\n",
+		address, base64.StdEncoding.EncodeToString(key[:]), app(device, token))
+	response, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil || response.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("stuck socket: %v %v", response, err)
+	}
+}
+
+// An app that stops reading its socket holds back its own messages only:
+// the requests of its group, and everyone else's, are answered at once.
+func TestSyncPlayAppsThatDoNotReadHoldNothingBack(t *testing.T) {
+	tr := newTracking(t)
+	for _, name := range []string{"alice", "bob", "carol", "dave"} {
+		tr.testServer.user(name, nil)
+	}
+	alice := tr.syncPlayApp(t, "alice", "alice-tv")
+	alice.drain(t)
+	bob := syncPlayApp{device: "bob-tv", token: tr.signIn("bob", "bob-tv")}
+	tr.stuckSocket(t, bob.device, bob.token)
+	carol := tr.syncPlayApp(t, "carol", "carol-tv")
+	dave := tr.syncPlayApp(t, "dave", "dave-tv")
+	quick := func(what string, call func()) {
+		t.Helper()
+		start := time.Now()
+		call()
+		// Writing to an app is given ten seconds.
+		if took := time.Since(start); took > 2*time.Second {
+			t.Errorf("%s took %v", what, took)
+		}
+	}
+	status, answer := alice.send(t, tr.testServer, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": "Stuck"})
+	var stuck GroupInfoDto
+	if status != http.StatusOK || json.Unmarshal(answer, &stuck) != nil {
+		t.Fatalf("new group: %d %s", status, answer)
+	}
+	bob.post(t, tr.testServer, "Join", map[string]any{"GroupId": stuck.GroupId})
+	// Every change sends the whole queue to every member: with a long one,
+	// a few fill what the system buffers for bob.
+	queue := slices.Repeat([]string{tr.episodes[0]}, maxQueueEntries)
+	quick("setting the queue", func() { alice.post(t, tr.testServer, "SetNewQueue", map[string]any{"PlayingQueue": queue}) })
+	for i := range 40 {
+		quick("changing the repeat mode", func() {
+			alice.post(t, tr.testServer, "SetRepeatMode", map[string]any{"Mode": repeatModes[i%len(repeatModes)]})
+		})
+	}
+	quick("leaving the group", func() { alice.post(t, tr.testServer, "Leave", nil) })
+	var other GroupInfoDto
+	quick("creating a group", func() {
+		status, answer := carol.send(t, tr.testServer, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": "Other"})
+		if status != http.StatusOK || json.Unmarshal(answer, &other) != nil {
+			t.Fatalf("other group: %d %s", status, answer)
+		}
+	})
+	quick("joining it", func() { dave.post(t, tr.testServer, "Join", map[string]any{"GroupId": other.GroupId}) })
+	quick("listing groups", func() {
+		var groups []GroupInfoDto
+		if status := tr.get(t, "/SyncPlay/List", carol.token, &groups); status != http.StatusOK || len(groups) != 2 {
+			t.Errorf("groups: %d %+v", status, groups)
+		}
+	})
+	carol.expect(t, "GroupJoined", "Stop", "UserJoined")
+	dave.expect(t, "GroupJoined", "Stop")
+}
+
+// Access is checked without holding the groups: a slow library holds back
+// the request that waits on it only. A check that a change made stale
+// meanwhile is made again.
+func TestSyncPlayChecksAccessWithoutHoldingGroups(t *testing.T) {
+	alice, bob, carol, dave := randomID(), randomID(), randomID(), randomID()
+	item1, item2, item3 := randomID(), randomID(), randomID()
+	var mu sync.Mutex
+	// Lookups for a user in gates wait until it closes; hidden are the
+	// items each user may not see.
+	gates := map[accounts.ID]chan struct{}{}
+	hidden := map[accounts.ID][]accounts.ID{bob: {item2}, dave: {item3}}
+	looking := make(chan accounts.ID, 10)
+	canPlay := func(_ context.Context, user accounts.ID, items []accounts.ID) bool {
+		mu.Lock()
+		gate := gates[user]
+		mu.Unlock()
+		if gate != nil {
+			looking <- user
+			<-gate
+		}
+		return !slices.ContainsFunc(items, func(item accounts.ID) bool { return slices.Contains(hidden[user], item) })
+	}
+	block := func(user accounts.ID) {
+		mu.Lock()
+		defer mu.Unlock()
+		gates[user] = make(chan struct{})
+	}
+	// release lets the lookup waiting go on; later ones do not wait.
+	release := func(user accounts.ID) {
+		mu.Lock()
+		defer mu.Unlock()
+		close(gates[user])
+		delete(gates, user)
+	}
+	messages := make(chan syncMessage, 100)
+	sp := newSyncPlay(canPlay, func(m syncMessage) { messages <- m }, slog.New(slog.DiscardHandler))
+	member := func(user accounts.ID) *groupMember {
+		return &groupMember{device: user, user: user, name: user.String(), ping: defaultPing}
+	}
+	quickly := func(what string, call func()) {
+		t.Helper()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			call()
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s waits on another's library lookup", what)
+		}
+	}
+	queued := func(g *syncGroup) []accounts.ID {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return g.queue.items()
+	}
+	ctx := t.Context()
+	info := sp.create(member(alice), "group", nil)
+	id, _ := accounts.ParseID(info.GroupId)
+	sp.handle(ctx, alice, syncRequest{kind: "Play", items: []accounts.ID{item1}})
+	g := sp.groupOf(alice)
+
+	// Bob's lookups wait: meanwhile, groups are created, played and
+	// listed, and an item bob may not see is queued.
+	block(bob)
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		sp.join(ctx, member(bob), id)
+	}()
+	<-looking
+	quickly("creating a group", func() { sp.create(member(carol), "other", nil) })
+	quickly("pausing", func() { sp.handle(ctx, alice, syncRequest{kind: "Pause"}) })
+	quickly("listing groups", func() { sp.visible(ctx, alice, nil) })
+	quickly("queueing", func() { sp.handle(ctx, alice, syncRequest{kind: "Queue", items: []accounts.ID{item2}}) })
+	release(bob)
+	<-joined
+	// Bob was found to see the queue as it was, not as it is.
+	if sp.groupOf(bob) != nil {
+		t.Errorf("bob joined a group whose queue he may not see")
+	}
+	for denied := false; !denied; {
+		select {
+		case m := <-messages:
+			update, _ := m.data.(SyncPlayGroupUpdate)
+			denied = m.device == bob && update.Type == "LibraryAccessDenied"
+		case <-time.After(3 * time.Second):
+			t.Fatal("bob was not told he may not join")
+		}
+	}
+
+	// Alice's lookups wait: meanwhile dave, who may not see item3, joins.
+	block(alice)
+	added := make(chan struct{})
+	go func() {
+		defer close(added)
+		sp.handle(ctx, alice, syncRequest{kind: "Queue", items: []accounts.ID{item3}})
+	}()
+	<-looking
+	quickly("joining", func() { sp.join(ctx, member(dave), id) })
+	release(alice)
+	<-added
+	if got := queued(g); !slices.Equal(got, []accounts.ID{item1, item2}) {
+		t.Errorf("queue %v: an item a member who joined meanwhile may not see was queued", got)
+	}
 }
 
 // A member that buffers holds the group back, but not for ever: after a
@@ -531,8 +792,8 @@ func TestSyncPlayWaitsForBufferingMembersForAWhile(t *testing.T) {
 	p.bob.expect(t, "Pause", "StateUpdate Paused Pause")
 }
 
-// A session leaves its group when its app disconnects or signs out; the
-// group goes once empty.
+// A session leaves its group when its app disconnects, or when it is
+// signed out, however it is; the group goes once empty.
 func TestSyncPlayMembersLeaveWithTheirSession(t *testing.T) {
 	p := newSyncPlayers(t)
 	entry := p.play(t)
@@ -552,11 +813,61 @@ func TestSyncPlayMembersLeaveWithTheirSession(t *testing.T) {
 		!slices.Equal(groups[0].Participants, []string{"alice"}) || groups[0].State != "Playing" {
 		t.Fatalf("groups once bob left: %d %+v", status, groups)
 	}
+	p.alice.post(t, p.testServer, "Stop", nil)
+	p.alice.expect(t, "Stop")
 
+	join := func(user string) syncPlayApp {
+		t.Helper()
+		p.testServer.user(user, nil)
+		a := p.syncPlayApp(t, user, user+"-tv")
+		a.post(t, p.testServer, "Join", map[string]any{"GroupId": p.group})
+		a.expect(t, "GroupJoined", "Stop")
+		p.alice.expect(t, "UserJoined")
+		return a
+	}
+	device := func(user accounts.User) accounts.ID {
+		t.Helper()
+		devices, err := p.store.Devices(t.Context(), user.ID)
+		if err != nil || len(devices) != 1 {
+			t.Fatalf("devices of %s: %v %v", user.Name, devices, err)
+		}
+		return devices[0].ID
+	}
+	// A password changed on another of the user's devices.
+	carol := join("carol")
+	phone := p.signIn("carol", "carol-phone")
+	if status, answer := p.call(http.MethodPost, "/Users/Password", app("carol-phone", phone),
+		map[string]string{"CurrentPw": "correct horse", "NewPw": "battery staple"}); status/100 != 2 {
+		t.Fatalf("password change: %d %s", status, answer)
+	}
+	carol.ended(t)
+	p.alice.expect(t, "UserLeft")
+	// A device an administrator revokes.
+	dave := join("dave")
+	daveUser, _ := p.store.Authenticate(t.Context(), "dave", "correct horse")
+	if err := p.store.RevokeDevice(t.Context(), daveUser.ID, device(daveUser)); err != nil {
+		t.Fatal(err)
+	}
+	dave.ended(t)
+	p.alice.expect(t, "UserLeft")
+	// An account deleted.
+	erin := join("erin")
+	erinUser, _ := p.store.Authenticate(t.Context(), "erin", "correct horse")
+	if err := p.store.DeleteUser(t.Context(), erinUser.ID); err != nil {
+		t.Fatal(err)
+	}
+	erin.ended(t)
+	p.alice.expect(t, "UserLeft")
+	if status := p.get(t, "/SyncPlay/List", p.alice.token, &groups); status != http.StatusOK || len(groups) != 1 ||
+		!slices.Equal(groups[0].Participants, []string{"alice"}) {
+		t.Fatalf("groups once the others were signed out: %d %+v", status, groups)
+	}
+
+	// The app signs out itself.
 	if status, _ := p.alice.send(t, p.testServer, http.MethodPost, "/Sessions/Logout", nil); status != http.StatusNoContent {
 		t.Fatalf("sign-out: %d", status)
 	}
-	p.alice.expect(t, "GroupLeft")
+	p.alice.ended(t)
 	if status := p.get(t, "/SyncPlay/List", p.token, &groups); status != http.StatusOK || len(groups) != 0 {
 		t.Errorf("groups once empty: %d %+v", status, groups)
 	}

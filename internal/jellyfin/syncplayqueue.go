@@ -32,6 +32,9 @@ type playQueue struct {
 	shuffle bool
 	repeat  string
 	changed time.Time
+	// additions counts the times items were queued, which tells whether
+	// the items checked while the group was not held are all there are.
+	additions int
 }
 
 func newPlayQueue() playQueue {
@@ -86,7 +89,9 @@ func (q *playQueue) items() []accounts.ID {
 	return items
 }
 
-func newEntries(items []accounts.ID) []queueEntry {
+// newEntries makes entries of items about to be queued.
+func (q *playQueue) newEntries(items []accounts.ID) []queueEntry {
+	q.additions++
 	entries := make([]queueEntry, 0, len(items))
 	for _, item := range items {
 		entries = append(entries, queueEntry{item: item, entry: randomGUID()})
@@ -102,7 +107,7 @@ func shuffled(entries []queueEntry) []queueEntry {
 
 // set replaces the items, none of them playing.
 func (q *playQueue) set(items []accounts.ID) {
-	q.sorted = newEntries(items)
+	q.sorted = q.newEntries(items)
 	q.shuffled = nil
 	if q.shuffle {
 		q.shuffled = shuffled(q.sorted)
@@ -113,7 +118,7 @@ func (q *playQueue) set(items []accounts.ID) {
 
 // add queues items at the end.
 func (q *playQueue) add(items []accounts.ID) {
-	entries := newEntries(items)
+	entries := q.newEntries(items)
 	q.sorted = append(q.sorted, entries...)
 	if q.shuffle {
 		q.shuffled = append(q.shuffled, entries...)
@@ -123,7 +128,7 @@ func (q *playQueue) add(items []accounts.ID) {
 
 // addNext queues items right after the one playing, or first when none is.
 func (q *playQueue) addNext(items []accounts.ID) {
-	entries := newEntries(items)
+	entries := q.newEntries(items)
 	if q.shuffle {
 		current, _ := q.current()
 		at := slices.Index(q.sorted, current)
@@ -207,7 +212,11 @@ func (q *playQueue) playIndex(index int) {
 // remove takes entries out, and reports whether the one playing was. The
 // entry before it plays then, or the first one.
 func (q *playQueue) remove(entries []accounts.ID) bool {
-	removed := func(e queueEntry) bool { return slices.Contains(entries, e.entry) }
+	listed := make(map[accounts.ID]bool, len(entries))
+	for _, entry := range entries {
+		listed[entry] = true
+	}
+	removed := func(e queueEntry) bool { return listed[e.entry] }
 	current, playing := q.current()
 	before := 0
 	if playing {

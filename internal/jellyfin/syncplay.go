@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
@@ -85,7 +86,8 @@ type UtcTimeResponse struct {
 // in memory, as long as they have members.
 type syncPlay struct {
 	// joining serializes creating, joining and leaving groups, which may
-	// change two groups at once. It is taken before any group's lock.
+	// change two groups at once. It is taken before any group's lock, and
+	// never held while the library is looked up or apps are written to.
 	joining sync.Mutex
 	// mu guards the maps, and is held only briefly.
 	mu sync.Mutex
@@ -97,13 +99,61 @@ type syncPlay struct {
 	waitTimeout time.Duration
 	// canPlay reports whether a user may play every one of items.
 	canPlay func(ctx context.Context, user accounts.ID, items []accounts.ID) bool
-	// deliver sends messages to sessions.
-	deliver func([]syncMessage)
+	// write sends a message to its session.
+	write  func(syncMessage)
+	logger *slog.Logger
+	// outboxMu guards outbox: the messages waiting for each session. A
+	// session is listed while a goroutine sends it its messages.
+	outboxMu sync.Mutex
+	outbox   map[accounts.ID][]syncMessage
 }
 
-func newSyncPlay(canPlay func(context.Context, accounts.ID, []accounts.ID) bool, deliver func([]syncMessage)) *syncPlay {
+// maxWaiting bounds the messages waiting for a session: past it, an app
+// that stopped reading misses the next ones.
+const maxWaiting = 64
+
+func newSyncPlay(canPlay func(context.Context, accounts.ID, []accounts.ID) bool, write func(syncMessage), logger *slog.Logger) *syncPlay {
 	return &syncPlay{groups: map[accounts.ID]*syncGroup{}, members: map[accounts.ID]*syncGroup{},
-		active: map[accounts.ID]int{}, waitTimeout: groupWaitTimeout, canPlay: canPlay, deliver: deliver}
+		active: map[accounts.ID]int{}, waitTimeout: groupWaitTimeout, canPlay: canPlay, write: write, logger: logger,
+		outbox: map[accounts.ID][]syncMessage{}}
+}
+
+// deliver queues messages for their sessions, which receive them in the
+// order they are queued. Writing to an app may take long: each session's
+// messages go out from a goroutine of its own, so that a slow app holds
+// back its own messages only, and never a group or the server's locks.
+func (sp *syncPlay) deliver(messages []syncMessage) {
+	sp.outboxMu.Lock()
+	defer sp.outboxMu.Unlock()
+	for _, m := range messages {
+		waiting, sending := sp.outbox[m.device]
+		if len(waiting) >= maxWaiting {
+			sp.logger.Debug("A SyncPlay message was dropped for an app that does not read", "kind", m.kind)
+			continue
+		}
+		sp.outbox[m.device] = append(waiting, m)
+		if !sending {
+			go sp.send(m.device)
+		}
+	}
+}
+
+// send writes the messages waiting for a session until none is left.
+func (sp *syncPlay) send(device accounts.ID) {
+	for {
+		sp.outboxMu.Lock()
+		waiting := sp.outbox[device]
+		if len(waiting) == 0 {
+			delete(sp.outbox, device)
+			sp.outboxMu.Unlock()
+			return
+		}
+		sp.outbox[device] = []syncMessage{}
+		sp.outboxMu.Unlock()
+		for _, m := range waiting {
+			sp.write(m)
+		}
+	}
 }
 
 func (sp *syncPlay) groupOf(device accounts.ID) *syncGroup {
@@ -120,14 +170,8 @@ func (sp *syncPlay) isActive(user accounts.ID) bool {
 	return sp.active[user] > 0
 }
 
-// allCanPlay reports whether every member of g may play items.
-func (sp *syncPlay) allCanPlay(ctx context.Context, g *syncGroup, items []accounts.ID) bool {
-	var users []accounts.ID
-	for _, m := range g.members {
-		if !slices.Contains(users, m.user) {
-			users = append(users, m.user)
-		}
-	}
+// allCanPlay reports whether all users may play items.
+func (sp *syncPlay) allCanPlay(ctx context.Context, users, items []accounts.ID) bool {
 	for _, user := range users {
 		if !sp.canPlay(ctx, user, items) {
 			return false
@@ -158,33 +202,54 @@ func (sp *syncPlay) create(member *groupMember, groupName string, playing *nowPl
 	}
 	g := &syncGroup{sp: sp, id: randomGUID(), name: groupName, created: time.Now(), queue: newPlayQueue()}
 	g.mu.Lock()
+	defer g.unlock()
 	sp.mu.Lock()
 	sp.groups[g.id] = g
 	sp.members[member.device] = g
 	sp.active[member.user]++
 	sp.mu.Unlock()
 	g.create(member, playing)
-	info := g.info()
-	g.unlock()
-	return info
+	return g.info()
 }
 
-// join adds a session to a group whose queue its user may play.
+// join adds a session to a group whose queue its user may play. Library
+// lookups may be slow: they are made without holding any lock, and made
+// again if items were queued meanwhile.
 func (sp *syncPlay) join(ctx context.Context, member *groupMember, id accounts.ID) {
+	for {
+		sp.mu.Lock()
+		g := sp.groups[id]
+		sp.mu.Unlock()
+		if g == nil {
+			sp.failed(member.device, accounts.ID{}, "GroupDoesNotExist")
+			return
+		}
+		g.mu.Lock()
+		items, additions := g.queue.items(), g.queue.additions
+		g.mu.Unlock()
+		if sp.joinChecked(member, g, additions, sp.canPlay(ctx, member.user, items)) {
+			return
+		}
+	}
+}
+
+// joinChecked adds a session to g, or tells it it may not play its queue,
+// as allowed says. It reports false, doing nothing, when g ended or items
+// were queued since the check, at the queue's additions given.
+func (sp *syncPlay) joinChecked(member *groupMember, g *syncGroup, additions int, allowed bool) bool {
 	sp.joining.Lock()
 	defer sp.joining.Unlock()
-	sp.mu.Lock()
-	g := sp.groups[id]
-	sp.mu.Unlock()
-	if g == nil {
-		sp.failed(member.device, accounts.ID{}, "GroupDoesNotExist")
-		return
-	}
 	g.mu.Lock()
-	if !sp.canPlay(ctx, member.user, g.queue.items()) {
-		g.unlock()
+	defer g.unlock()
+	sp.mu.Lock()
+	ended := sp.groups[g.id] != g
+	sp.mu.Unlock()
+	switch {
+	case ended || g.queue.additions != additions:
+		return false
+	case !allowed:
 		sp.failed(member.device, g.id, "LibraryAccessDenied")
-		return
+		return true
 	}
 	if current := sp.groupOf(member.device); current != g {
 		if current != nil {
@@ -196,7 +261,7 @@ func (sp *syncPlay) join(ctx context.Context, member *groupMember, id accounts.I
 		sp.mu.Unlock()
 	}
 	g.join(member)
-	g.unlock()
+	return true
 }
 
 // sessionLeft takes a session out of its group, and reports whether it
@@ -216,6 +281,7 @@ func (sp *syncPlay) sessionLeft(device accounts.ID) bool {
 // joining.
 func (sp *syncPlay) leave(g *syncGroup, device accounts.ID) {
 	g.mu.Lock()
+	defer g.unlock()
 	member := g.member(device)
 	sp.mu.Lock()
 	delete(sp.members, device)
@@ -229,7 +295,6 @@ func (sp *syncPlay) leave(g *syncGroup, device accounts.ID) {
 		delete(sp.groups, g.id)
 		sp.mu.Unlock()
 	}
-	g.unlock()
 }
 
 // handle applies a playback request of a session to its group.
@@ -240,11 +305,26 @@ func (sp *syncPlay) handle(ctx context.Context, device accounts.ID, r syncReques
 		return
 	}
 	g.mu.Lock()
+	defer g.unlock()
+	if (r.kind == "Play" || r.kind == "Queue") && len(r.items) > 0 && len(r.items) <= maxQueueEntries {
+		// Every member must be able to play the items. Library lookups may
+		// be slow: they are made without holding the group, and made again
+		// if its members changed meanwhile.
+		for {
+			users := g.users()
+			g.mu.Unlock()
+			allowed := sp.allCanPlay(ctx, users, r.items)
+			g.mu.Lock()
+			if slices.Equal(users, g.users()) {
+				r.allowed = allowed
+				break
+			}
+		}
+	}
 	// The session may have left while the request waited.
 	if g.member(device) != nil {
-		g.handle(ctx, device, r)
+		g.handle(device, r)
 	}
-	g.unlock()
 }
 
 // visible lists the groups whose queue user may play, the oldest first,
@@ -367,7 +447,7 @@ func (h *Handler) syncPlayNew(w http.ResponseWriter, r *http.Request) {
 	var playing *nowPlayingTitle
 	if now, ok := h.sessions.Playing(member.device); ok {
 		if title, err := h.title(r.Context(), callerFrom(r.Context()).User, now.Item); err == nil {
-			playing = &nowPlayingTitle{item: title.ID, position: ticks(now.Position), paused: now.Paused}
+			playing = &nowPlayingTitle{item: title.ID, position: boundedPosition(ticks(now.Position)), paused: now.Paused}
 		}
 	}
 	writeJSON(w, http.StatusOK, h.syncPlay.create(member, strings.TrimSpace(name), playing))
@@ -413,7 +493,7 @@ func (h *Handler) syncPlayGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, groups[0])
 }
 
-// syncPlayRequest serves a playback request, read by read from the
+// syncPlayRequest serves a playback request, which read decodes from the
 // request's body.
 func (h *Handler) syncPlayRequest(read func(http.ResponseWriter, *http.Request) (syncRequest, bool)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -440,7 +520,7 @@ func syncPlaySetNewQueue(w http.ResponseWriter, r *http.Request) (syncRequest, b
 	}
 	ok := requiredBody(w, r, "requestData", &body)
 	return syncRequest{kind: "Play", items: syncPlayIDs(body.PlayingQueue), index: int(body.PlayingItemPosition.value),
-		position: body.StartPositionTicks.value}, ok
+		position: boundedPosition(body.StartPositionTicks.value)}, ok
 }
 
 // syncPlayEntry reads a request naming an entry of the queue.
@@ -488,7 +568,7 @@ func syncPlaySeek(w http.ResponseWriter, r *http.Request) (syncRequest, bool) {
 		PositionTicks looseInt
 	}
 	ok := requiredBody(w, r, "requestData", &body)
-	return syncRequest{kind: "Seek", position: body.PositionTicks.value}, ok
+	return syncRequest{kind: "Seek", position: boundedPosition(body.PositionTicks.value)}, ok
 }
 
 // syncPlayReport reads what a member reports when it buffers or is ready.
@@ -501,7 +581,7 @@ func syncPlayReport(kind string) func(http.ResponseWriter, *http.Request) (syncR
 			PlaylistItemId syncPlayID
 		}
 		ok := requiredBody(w, r, "requestData", &body)
-		return syncRequest{kind: kind, when: time.Time(body.When), position: body.PositionTicks.value, playing: body.IsPlaying,
+		return syncRequest{kind: kind, when: time.Time(body.When), position: boundedPosition(body.PositionTicks.value), playing: body.IsPlaying,
 			entry: accounts.ID(body.PlaylistItemId)}, ok
 	}
 }
@@ -632,38 +712,19 @@ func (h *Handler) canPlay(ctx context.Context, userID accounts.ID, items []accou
 	return true
 }
 
-// deliverSyncPlay sends SyncPlay messages, each session's in order, on the
-// socket its device opened last, as Jellyfin sends them to one socket of a
-// session. Sessions without a socket miss them, as with Jellyfin.
-func (h *Handler) deliverSyncPlay(messages []syncMessage) {
-	if len(messages) == 0 {
+// writeSyncPlay sends a SyncPlay message on the socket its session's
+// device opened last, as Jellyfin sends it to one socket of a session. A
+// session without a socket misses it, as with Jellyfin. An app that does
+// not read gets its socket closed once the write times out, which ends
+// its session.
+func (h *Handler) writeSyncPlay(m syncMessage) {
+	conn := h.sockets.latest(m.device)
+	if conn == nil {
 		return
-	}
-	var devices []accounts.ID
-	byDevice := map[accounts.ID][]syncMessage{}
-	for _, m := range messages {
-		if byDevice[m.device] == nil {
-			devices = append(devices, m.device)
-		}
-		byDevice[m.device] = append(byDevice[m.device], m)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), socketWrite)
 	defer cancel()
-	var wg sync.WaitGroup
-	for _, device := range devices {
-		conn := h.sockets.latest(device)
-		if conn == nil {
-			continue
-		}
-		// A slow app holds back its own messages only.
-		wg.Go(func() {
-			for _, m := range byDevice[device] {
-				if err := conn.Write(ctx, websocket.MessageText, socketPayload(m.kind, m.data)); err != nil {
-					h.Logger.Debug("A SyncPlay message could not reach an app", "kind", m.kind, "error", err)
-					return
-				}
-			}
-		})
+	if err := conn.Write(ctx, websocket.MessageText, socketPayload(m.kind, m.data)); err != nil {
+		h.Logger.Debug("A SyncPlay message could not reach an app", "kind", m.kind, "error", err)
 	}
-	wg.Wait()
 }

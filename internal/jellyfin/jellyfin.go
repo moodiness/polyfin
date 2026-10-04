@@ -88,7 +88,8 @@ func New(options Options) *Handler {
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
 	}
-	h.syncPlay = newSyncPlay(h.canPlay, h.deliverSyncPlay)
+	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
+	options.Accounts.OnSignOut(h.signedOut)
 	rt := &router{unmatched: newUnmatchedRequests(options.Logger)}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {

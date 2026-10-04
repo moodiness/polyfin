@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"context"
 	"slices"
 	"sync"
 	"time"
@@ -50,6 +49,22 @@ const ticksPerMillisecond = 10_000
 
 func ticks(d time.Duration) int64 { return int64(d / 100) }
 
+// Bounds of what members ask, which Jellyfin does not have.
+const (
+	// maxQueueEntries bounds a group's queue, which every change sends
+	// whole to every member. It holds the longest series.
+	maxQueueEntries = 5000
+	// maxPositionTicks bounds positions, 30 days, far past any title, so
+	// that the time played added to them stays within int64.
+	maxPositionTicks = int64(30 * 24 * time.Hour / 100)
+)
+
+// boundedPosition keeps a position members ask within 0 and
+// maxPositionTicks.
+func boundedPosition(position int64) int64 {
+	return min(max(position, 0), maxPositionTicks)
+}
+
 // broadcast chooses the members a message goes to, relative to the
 // session a change comes from.
 type broadcast int
@@ -83,8 +98,11 @@ type syncMessage struct {
 // PlaybackRequestType, with what the request carries.
 type syncRequest struct {
 	kind string
-	// items are the items a Play or Queue request plays or queues.
-	items []accounts.ID
+	// items are the items a Play or Queue request plays or queues, and
+	// allowed whether every member may play them, checked beforehand:
+	// false for no items or more than maxQueueEntries.
+	items   []accounts.ID
+	allowed bool
 	// index is the item to play first, or where to move an entry.
 	index int
 	// position is the position of Play, Seek, Buffer and Ready requests.
@@ -115,10 +133,9 @@ type syncGroup struct {
 	created time.Time
 
 	// mu guards what follows. Messages that changes produce gather in
-	// outbox and go out once mu is released, in order: sending is taken
-	// before mu is released, so that the next change's messages follow.
+	// outbox, and are queued for their sessions before mu is released,
+	// which keeps them in order.
 	mu      sync.Mutex
-	sending sync.Mutex
 	outbox  []syncMessage
 	members []*groupMember
 	state   groupState
@@ -141,15 +158,12 @@ type syncGroup struct {
 	waitTimer    *time.Timer
 }
 
-// unlock releases the group and delivers the messages its changes
-// produced.
+// unlock queues the messages the group's changes produced, and releases
+// the group.
 func (g *syncGroup) unlock() {
-	messages := g.outbox
+	g.sp.deliver(g.outbox)
 	g.outbox = nil
-	g.sending.Lock()
 	g.mu.Unlock()
-	g.sp.deliver(messages)
-	g.sending.Unlock()
 }
 
 func (g *syncGroup) member(device accounts.ID) *groupMember {
@@ -159,6 +173,17 @@ func (g *syncGroup) member(device accounts.ID) *groupMember {
 		}
 	}
 	return nil
+}
+
+// users lists the members' users, each once.
+func (g *syncGroup) users() []accounts.ID {
+	var users []accounts.ID
+	for _, m := range g.members {
+		if !slices.Contains(users, m.user) {
+			users = append(users, m.user)
+		}
+	}
+	return users
 }
 
 func (g *syncGroup) recipients(from accounts.ID, to broadcast) []accounts.ID {
@@ -442,12 +467,12 @@ func (g *syncGroup) sessionLeaving(from accounts.ID) {
 }
 
 // handle applies a member's request, as the group's state calls for.
-func (g *syncGroup) handle(ctx context.Context, from accounts.ID, r syncRequest) {
+func (g *syncGroup) handle(from accounts.ID, r syncRequest) {
 	prev := g.state
 	switch r.kind {
 	case "Play":
 		g.wait(prev)
-		g.waitingPlay(ctx, from, prev, r)
+		g.waitingPlay(from, prev, r)
 	case "SetPlaylistItem":
 		g.wait(prev)
 		g.waitingSetPlaylistItem(from, prev, r)
@@ -458,7 +483,7 @@ func (g *syncGroup) handle(ctx context.Context, from accounts.ID, r syncRequest)
 			g.update(from, toAll, "PlayQueue", g.queueUpdate("MoveItem"))
 		}
 	case "Queue":
-		g.addToQueue(ctx, from, r)
+		g.addToQueue(from, r)
 	case "Unpause":
 		switch prev {
 		case stateIdle:
@@ -604,10 +629,12 @@ func (g *syncGroup) playingReady(from accounts.ID, prev groupState) {
 	}
 }
 
-func (g *syncGroup) waitingPlay(ctx context.Context, from accounts.ID, prev groupState, r syncRequest) {
+// waitingPlay replaces the queue. Jellyfin takes queues of any length;
+// Polyfin refuses those longer than maxQueueEntries.
+func (g *syncGroup) waitingPlay(from accounts.ID, prev groupState, r syncRequest) {
 	g.waitingSince(prev)
 	g.resumePlaying = true
-	ok := len(r.items) > 0 && r.index >= 0 && r.index < len(r.items) && g.sp.allCanPlay(ctx, g, r.items)
+	ok := r.allowed && r.index >= 0 && r.index < len(r.items)
 	g.positionJumped = ok
 	if !ok {
 		g.fallBack(prev)
@@ -656,8 +683,10 @@ func (g *syncGroup) removeFromPlaylist(from accounts.ID, r syncRequest) {
 	}
 }
 
-func (g *syncGroup) addToQueue(ctx context.Context, from accounts.ID, r syncRequest) {
-	if len(r.items) == 0 || !g.sp.allCanPlay(ctx, g, r.items) {
+// addToQueue queues items, unless the queue would grow longer than
+// maxQueueEntries.
+func (g *syncGroup) addToQueue(from accounts.ID, r syncRequest) {
+	if !r.allowed || len(g.queue.sorted)+len(r.items) > maxQueueEntries {
 		return
 	}
 	reason := "Queue"
@@ -696,8 +725,9 @@ func (g *syncGroup) waitingUnpause(from accounts.ID, prev groupState) {
 // waitingSeek moves the group's position: every member seeks, and the
 // group waits for them. Jellyfin also caps positions at the item's
 // runtime. Polyfin knows a title's runtime from its metadata only, which
-// rounds it and may not be the version's: positions are not capped, so
-// that a seek into the last minutes of a longer version holds.
+// rounds it and may not be the version's: positions are only kept within
+// maxPositionTicks, so that a seek into the last minutes of a longer
+// version holds.
 func (g *syncGroup) waitingSeek(from accounts.ID, prev groupState, r syncRequest) {
 	g.waitingSince(prev)
 	switch prev {
@@ -706,7 +736,7 @@ func (g *syncGroup) waitingSeek(from accounts.ID, prev groupState, r syncRequest
 	case statePaused:
 		g.resumePlaying = false
 	}
-	g.position = max(r.position, 0)
+	g.position = r.position
 	g.lastActivity = time.Now()
 	g.positionJumped = true
 	g.command(from, toAll, g.newCommand("Seek"))
@@ -760,7 +790,7 @@ func (g *syncGroup) waitingReady(from accounts.ID, r syncRequest) {
 	if elapsed.Abs() > timeSyncOffset*time.Millisecond || !r.playing {
 		elapsed = 0
 	}
-	reported := max(r.position, 0)
+	reported := r.position
 	delay := g.position - (reported + ticks(elapsed))
 	if !g.resumePlaying {
 		if abs(g.position-reported) > maxPlaybackOffset*ticksPerMillisecond {

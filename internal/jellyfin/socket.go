@@ -112,6 +112,16 @@ func (s *sockets) latest(device accounts.ID) *websocket.Conn {
 	return open[len(open)-1]
 }
 
+// close closes the sockets of a device, whose serving then ends.
+func (s *sockets) close(device accounts.ID) {
+	s.mu.Lock()
+	open := slices.Clone(s.devices[device])
+	s.mu.Unlock()
+	for _, conn := range open {
+		_ = conn.CloseNow()
+	}
+}
+
 // changedData is what changed in a user's data since the last push: the
 // items, in the order they changed, each followed by the season or series
 // above it, whose counts of played episodes changed with it. Parents are
@@ -180,11 +190,12 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.CloseNow()
 	h.sockets.add(c.User.ID, c.Device.ID, conn)
 	defer func() {
-		// Like Jellyfin, a session whose last socket closes has ended: it
-		// leaves its SyncPlay group.
+		// The socket closes first, so that no message still on its way to
+		// it waits on it. Like Jellyfin, a session whose last socket
+		// closes has ended: it leaves its SyncPlay group.
+		_ = conn.CloseNow()
 		if h.sockets.remove(c.User.ID, c.Device.ID, conn) {
 			h.syncPlay.sessionLeft(c.Device.ID)
 		}
