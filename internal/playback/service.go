@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -243,23 +245,71 @@ func (s *Service) Failed(version accounts.ID) bool {
 	return failed
 }
 
+// Delivery is how a version's bytes reach a player.
+type Delivery struct {
+	// Relay sends the bytes through Polyfin even when the player could
+	// fetch the source itself.
+	Relay bool
+	// ContentType, when set, replaces the source's.
+	ContentType string
+	// Attachment, when set, is the name of the file the bytes are saved
+	// as: the player downloads them. A player sent to the source gets the
+	// name too, though the source's answer decides there.
+	Attachment string
+}
+
 // Serve answers a player's request for a version's bytes. The player is
 // redirected to the source when it can fetch it itself: the source needs
 // no headers, is on a public address, and answers now. Otherwise, or when
-// relay is set, Polyfin relays the bytes, as contentType when set. An
-// expired link is renewed once.
-func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, relay bool, contentType string) error {
-	if !relay && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
+// the delivery says so, Polyfin relays the bytes. An expired link is
+// renewed once.
+func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	if !delivery.Relay && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)
 			return err
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		setAttachment(w, delivery.Attachment)
 		http.Redirect(w, r, current.URL, http.StatusFound)
 		return nil
 	}
-	return s.relay(w, r, version, contentType)
+	return s.relay(w, r, version, delivery)
+}
+
+// setAttachment names the file an answer saves as, the way Jellyfin
+// (ASP.NET) does: an ASCII name, quoted unless it is a token, for old
+// clients, with other characters as underscores, and the exact name
+// encoded as RFC 8187 asks.
+func setAttachment(w http.ResponseWriter, name string) {
+	if name == "" {
+		return
+	}
+	ascii := []byte(strings.Map(func(c rune) rune {
+		if c > 0x7e || c < ' ' {
+			return '_'
+		}
+		return c
+	}, name))
+	plain := string(ascii)
+	if slices.ContainsFunc(ascii, func(c byte) bool { return !tokenByte(c) }) {
+		plain = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(plain) + `"`
+	}
+	var encoded strings.Builder
+	for _, c := range []byte(name) {
+		if tokenByte(c) && c != '%' && c != '\'' && c != '*' {
+			encoded.WriteByte(c)
+		} else {
+			fmt.Fprintf(&encoded, "%%%02X", c)
+		}
+	}
+	w.Header().Set("Content-Disposition", "attachment; filename="+plain+"; filename*=UTF-8''"+encoded.String())
+}
+
+// tokenByte reports whether c may appear in an HTTP token.
+func tokenByte(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0
 }
 
 // check makes sure a source answers before a player is sent to it, as some

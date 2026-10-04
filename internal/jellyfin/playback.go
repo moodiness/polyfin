@@ -35,6 +35,7 @@ func (h *Handler) playbackRoutes(rt *router) {
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{file}", http.HandlerFunc(h.subtitle))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startTicks}/{file}", http.HandlerFunc(h.subtitle))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Attachments/{index}", http.HandlerFunc(h.attachment))
+	rt.handle(http.MethodGet, "/Items/{itemId}/Download", http.HandlerFunc(h.download))
 	signedIn(http.MethodDelete, "/Videos/ActiveEncodings", h.stopEncodings)
 
 	signedIn(http.MethodPost, "/Sessions/Playing", h.reportPlayback("playbackStartInfo", playbackStarted))
@@ -658,7 +659,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if contentType == "" {
 		contentType = mimeTypes[containerOfName(version.Filename)]
 	}
-	if err := h.Playback.Serve(w, r, version, relay, contentType); err != nil && r.Context().Err() == nil {
+	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType}); err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("A stream could not be served", "addon", version.Addon, "error", err)
 	}
 }

@@ -129,6 +129,12 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		// Only what is known: a listing never asks addons for streams.
 		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions)
 	}
+	if path := fields.has("Path"); (path || fields.has("CanDownload")) &&
+		(item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+		// Only what is known, as MediaSources in the same listing: a listing
+		// never asks addons for streams.
+		h.setDownload(r, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, path)
+	}
 	return dto
 }
 

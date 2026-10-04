@@ -1,0 +1,128 @@
+{
+  "Anonymous": {
+    "acceptRanges": "",
+    "body": "",
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "",
+    "length": 0,
+    "status": 401
+  },
+  "Episode": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=\"Pioneer One S01E01.mkv\"; filename*=UTF-8''Pioneer%20One%20S01E01.mkv",
+    "contentRange": "",
+    "contentType": "video/x-matroska",
+    "length": 133681,
+    "status": 200
+  },
+  "Movie with the token in ApiKey": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=\"Big Buck Bunny (2008).mkv\"; filename*=UTF-8''Big%20Buck%20Bunny%20%282008%29.mkv",
+    "contentRange": "",
+    "contentType": "video/x-matroska",
+    "length": 133681,
+    "status": 200
+  },
+  "Movie with the token in the header": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=\"Big Buck Bunny (2008).mkv\"; filename*=UTF-8''Big%20Buck%20Bunny%20%282008%29.mkv",
+    "contentRange": "",
+    "contentType": "video/x-matroska",
+    "length": 133681,
+    "status": 200
+  },
+  "Movie, HEAD": {
+    "acceptRanges": "",
+    "body": "HTTP/1.1 405 Method Not Allowed\r\nDate: Sat, 03 Oct 2026 23:53:04 GMT\r\nServer: Kestrel\r\nAllow: GET\r\nContent-Language: en-US\r\nX-Response-Time-ms: 2.8848\r\n\r\n",
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "",
+    "length": 154,
+    "status": 405
+  },
+  "Movie, a byte range": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=\"Big Buck Bunny (2008).mkv\"; filename*=UTF-8''Big%20Buck%20Bunny%20%282008%29.mkv",
+    "contentRange": "bytes 0-99/133681",
+    "contentType": "video/x-matroska",
+    "length": 100,
+    "status": 206
+  },
+  "Not an id": {
+    "acceptRanges": "",
+    "body": {
+      "errors": {
+        "itemId": [
+          "The value 'nothing' is not valid."
+        ]
+      },
+      "status": 400,
+      "title": "One or more validation errors occurred.",
+      "traceId": "00-f94c41176c0697006495809987a614af-db092f0e4df0523e-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+    },
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "application/json; charset=utf-8",
+    "length": 260,
+    "status": 400
+  },
+  "Remote movie (.strm)": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=remote-h264-aac-mkv.strm; filename*=UTF-8''remote-h264-aac-mkv.strm",
+    "contentRange": "",
+    "contentType": "application/octet-stream",
+    "length": 74,
+    "status": 200
+  },
+  "Series": {
+    "acceptRanges": "",
+    "body": "Error processing request.",
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "text/plain",
+    "length": 25,
+    "status": 400
+  },
+  "Unknown item": {
+    "acceptRanges": "",
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-7d745dd6be2a519fdfd66369f28b4f5d-08f8953d5aeac0a2-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "application/json; charset=utf-8",
+    "length": 162,
+    "status": 404
+  },
+  "Viewer allowed to download": {
+    "acceptRanges": "bytes",
+    "contentDisposition": "attachment; filename=\"Big Buck Bunny (2008).mkv\"; filename*=UTF-8''Big%20Buck%20Bunny%20%282008%29.mkv",
+    "contentRange": "",
+    "contentType": "video/x-matroska",
+    "length": 133681,
+    "status": 200
+  },
+  "Viewer not allowed to download": {
+    "acceptRanges": "",
+    "body": "",
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "",
+    "length": 0,
+    "status": 403
+  },
+  "Wrong token": {
+    "acceptRanges": "",
+    "body": "",
+    "contentDisposition": "",
+    "contentRange": "",
+    "contentType": "",
+    "length": 0,
+    "status": 401
+  }
+}

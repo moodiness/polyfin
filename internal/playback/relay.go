@@ -30,12 +30,12 @@ var (
 var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 
 // relay serves a version to a player, byte ranges included, renewing its
-// link once when it expired. contentType, when set, replaces the source's:
-// players recognize media by it, and sources often answer
-// application/octet-stream. When the source cannot be reached or does not
-// answer with content, the player receives a 502 and the error is returned
-// for logging.
-func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, contentType string) error {
+// link once when it expired. The delivery's content type, when set,
+// replaces the source's: players recognize media by it, and sources often
+// answer application/octet-stream. When the source cannot be reached or
+// does not answer with content, the player receives a 502 and the error is
+// returned for logging.
+func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
 	response, err := s.openForPlayer(r, version)
 	if err == nil && expired(response.StatusCode) && s.renew != nil {
 		response.Body.Close()
@@ -61,9 +61,10 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 			w.Header().Set(name, value)
 		}
 	}
-	if contentType != "" {
-		w.Header().Set("Content-Type", contentType)
+	if delivery.ContentType != "" {
+		w.Header().Set("Content-Type", delivery.ContentType)
 	}
+	setAttachment(w, delivery.Attachment)
 	w.WriteHeader(response.StatusCode)
 	if r.Method == http.MethodHead {
 		return nil
