@@ -198,6 +198,7 @@ func New(options Options) *Handler {
 	h.userImageRoutes(rt)
 	h.appRoutes(rt)
 	h.subtitleUploadRoutes(rt)
+	h.absentRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 
 	h.routes = cors(rt)

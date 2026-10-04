@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Example",
+    "description": "An example plugin.",
+    "overview": "An example",
+    "owner": "example",
+    "category": "General",
+    "guid": "9c4e63f1031b4f25988b4f7d78a8b53e",
+    "versions": [
+      {
+        "version": "13.0.0.0",
+        "VersionNumber": "13.0.0.0",
+        "changelog": "First release.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://example.org/example_1.0.0.0.zip",
+        "checksum": "6e29bb9bdc18e571c41964c6fdb07a49",
+        "timestamp": "2025-10-20T01:25:49Z",
+        "repositoryName": "Jellyfin Stable",
+        "repositoryUrl": "https://repo.jellyfin.org/files/plugin/manifest.json"
+      }
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "EnabledTuners": [],
+  "EnableAllTuners": true,
+  "NewsCategories": [
+    "news",
+    "journalism",
+    "documentary",
+    "current affairs"
+  ],
+  "SportsCategories": [
+    "sports",
+    "basketball",
+    "baseball",
+    "football"
+  ],
+  "KidsCategories": [
+    "kids",
+    "family",
+    "children",
+    "childrens"
+  ],
+  "MovieCategories": [
+    "movie"
+  ],
+  "ChannelMappings": []
+}

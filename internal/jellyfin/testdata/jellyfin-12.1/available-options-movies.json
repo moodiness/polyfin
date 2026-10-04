@@ -1,0 +1,103 @@
+{
+  "MetadataSavers": [
+    {
+      "Name": "Example",
+      "DefaultEnabled": true
+    }
+  ],
+  "MetadataReaders": [
+    {
+      "Name": "Example",
+      "DefaultEnabled": true
+    }
+  ],
+  "SubtitleFetchers": [],
+  "LyricFetchers": [],
+  "MediaSegmentProviders": [],
+  "TypeOptions": [
+    {
+      "Type": "Movie",
+      "MetadataFetchers": [
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        },
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        }
+      ],
+      "ImageFetchers": [
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        },
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        },
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        },
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        }
+      ],
+      "SimilarItemProviders": [
+        {
+          "Name": "Example",
+          "DefaultEnabled": false
+        },
+        {
+          "Name": "Example",
+          "DefaultEnabled": true
+        }
+      ],
+      "SupportedImageTypes": [
+        "Primary",
+        "Backdrop",
+        "Logo",
+        "Thumb"
+      ],
+      "DefaultImageOptions": [
+        {
+          "Type": "Backdrop",
+          "Limit": 1,
+          "MinWidth": 1280
+        },
+        {
+          "Type": "Art",
+          "Limit": 0,
+          "MinWidth": 0
+        },
+        {
+          "Type": "Disc",
+          "Limit": 0,
+          "MinWidth": 0
+        },
+        {
+          "Type": "Primary",
+          "Limit": 1,
+          "MinWidth": 0
+        },
+        {
+          "Type": "Banner",
+          "Limit": 0,
+          "MinWidth": 0
+        },
+        {
+          "Type": "Thumb",
+          "Limit": 1,
+          "MinWidth": 0
+        },
+        {
+          "Type": "Logo",
+          "Limit": 1,
+          "MinWidth": 0
+        }
+      ]
+    }
+  ]
+}
