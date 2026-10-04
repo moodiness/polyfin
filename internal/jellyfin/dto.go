@@ -380,10 +380,6 @@ type QuickConnectResult struct {
 	DateAdded     Time
 }
 
-type BrandingOptions struct {
-	SplashscreenEnabled bool
-}
-
 // VirtualFolderInfo describes a library as Jellyfin's library settings do.
 // Jellyfin leaves RefreshProgress out while a library is idle, which
 // Polyfin's libraries always are.

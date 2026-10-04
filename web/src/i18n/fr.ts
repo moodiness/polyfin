@@ -149,6 +149,9 @@ const fr: Messages = {
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
     invalid_live_tv_refresh_hours:
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
+    invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 256 Ko.',
+    invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 256 Ko.',
+    invalid_login_disclaimer: 'Le message de connexion ne doit pas dépasser 8 Ko.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
@@ -542,6 +545,23 @@ const fr: Messages = {
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp:
       'À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. De 1 à 168 ; 12 par défaut.',
+    webPlayerHelp:
+      'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
+    openWebPlayer: 'Ouvrir le lecteur web',
+    customCss: 'CSS personnalisé',
+    customCssHelp:
+      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage.',
+    customJs: 'JavaScript personnalisé',
+    customJsHelp:
+      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé.',
+    customJsWarningTitle: 'Ne collez que du code de confiance',
+    customJsWarning:
+      'Ce script s’exécute dans le navigateur de chaque utilisateur qui ouvre le lecteur web de ce serveur, avec son compte. Il peut lire ce qu’il voit et agir à sa place.',
+    loginDisclaimer: 'Message de connexion',
+    loginDisclaimerHelp:
+      'Affiché sous le formulaire de connexion du lecteur web. Texte, Markdown ou HTML ; le lecteur web retire le HTML dangereux.',
+    codeSize: (used: number, max: number) => `${used} Ko sur ${max} Ko`,
+    codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',
   },
   stremioTypes: {
     movie: 'Films',
@@ -1081,6 +1101,7 @@ const fr: Messages = {
         liveTv: 'TV en direct',
         recordings: 'Enregistrements',
         diagnostics: 'Diagnostic',
+        webPlayer: 'Lecteur web',
         variables: 'Variables d’environnement',
       },
       variablesHelp:

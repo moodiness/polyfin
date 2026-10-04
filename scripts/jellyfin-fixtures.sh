@@ -158,6 +158,9 @@ curl --silent --fail --header "Authorization: $signed" "$base/System/Info" | sav
 curl --silent --fail --header "Authorization: $signed" "$base/Users/Me" | save user
 post "$base/QuickConnect/Initiate" --header "Authorization: $client" | save quick-connect-result
 curl --silent --fail "$base/Branding/Configuration" | save branding-configuration
+post "$base/System/Configuration/branding" --header "Authorization: $signed" \
+	--data '{"LoginDisclaimer":"Fixtures","CustomCss":"body {}"}'
+curl --silent --fail "$base/Branding/Configuration" | save branding-configuration-set
 
 # Browsing: libraries, then a BoxSet once the movies are indexed.
 get() { curl --silent --show-error --fail --header "Authorization: $signed" "$base$1"; }

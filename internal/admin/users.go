@@ -309,6 +309,11 @@ type settingsJSON struct {
 	RecordingsFolder       string `json:"recordingsFolder"`
 	// LiveTvRefreshHours keeps its current value when a PUT leaves it out.
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
+	// CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web, keep their
+	// current values when a PUT leaves them out; empty clears them.
+	CustomCss       *string `json:"customCss"`
+	CustomJs        *string `json:"customJs"`
+	LoginDisclaimer *string `json:"loginDisclaimer"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -349,6 +354,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingPostPadding:   &settings.RecordingPostPadding,
 		RecordingRetentionDays: &settings.RecordingRetentionDays,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
+
+		CustomCss:       &settings.CustomCss,
+		CustomJs:        &settings.CustomJs,
+		LoginDisclaimer: &settings.LoginDisclaimer,
 	}
 }
 
@@ -682,7 +691,8 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	var body settingsJSON
-	if !decode(w, r, &body) {
+	// The custom CSS and script make the largest bodies of the admin API.
+	if !decodeUpTo(w, r, &body, maxSettingsBody) {
 		return
 	}
 	current := h.Accounts.Settings()
@@ -723,6 +733,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingPostPadding:   valueOr(body.RecordingPostPadding, current.RecordingPostPadding),
 		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
+
+		CustomCss:       valueOr(body.CustomCss, current.CustomCss),
+		CustomJs:        valueOr(body.CustomJs, current.CustomJs),
+		LoginDisclaimer: valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
 	})
 	if accountError(w, err) {
 		return

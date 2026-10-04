@@ -136,6 +136,9 @@ const en = {
     invalid_quality_group: 'Choose the quality group from the list.',
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',
+    invalid_custom_css: 'The custom CSS must take at most 256 KB.',
+    invalid_custom_js: 'The custom JavaScript must take at most 256 KB.',
+    invalid_login_disclaimer: 'The sign-in message must take at most 8 KB.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
@@ -516,6 +519,23 @@ const en = {
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp:
       'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. From 1 to 168; 12 by default.',
+    webPlayerHelp:
+      'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
+    openWebPlayer: 'Open the web player',
+    customCss: 'Custom CSS',
+    customCssHelp:
+      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display.',
+    customJs: 'Custom JavaScript',
+    customJsHelp:
+      'Loaded by every page of the web player, after its own scripts. Empty loads nothing.',
+    customJsWarningTitle: 'Only paste code you trust',
+    customJsWarning:
+      'This script runs in the browser of every user who opens the web player on this server, with their account. It can read what they see and act for them.',
+    loginDisclaimer: 'Sign-in message',
+    loginDisclaimerHelp:
+      'Shown under the sign-in form of the web player. Plain text, Markdown or HTML; the web player removes unsafe HTML.',
+    codeSize: (used: number, max: number) => `${used} KB of ${max} KB`,
+    codeKeys: 'Tab inserts spaces; press Escape, then Tab, to leave the field.',
   },
   stremioTypes: {
     movie: 'Movies',
@@ -1046,6 +1066,7 @@ const en = {
         liveTv: 'Live TV',
         recordings: 'Recordings',
         diagnostics: 'Diagnostics',
+        webPlayer: 'Web player',
         variables: 'Environment variables',
       },
       variablesHelp:

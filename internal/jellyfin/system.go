@@ -42,17 +42,14 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 // any signed-in user, as Jellyfin does: encoding, which jellyfin-web reads
 // before rendering ASS subtitles, and skips them when this fails, and
 // which loads the fallback fonts when they are enabled (see
-// encodingConfiguration); branding, the same as /Branding/Configuration.
-// Any other key is unknown.
+// encodingConfiguration). Branding has its own routes (see
+// brandingConfiguration). Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
-	switch key := r.PathValue("key"); {
-	case strings.EqualFold(key, "encoding"):
+	if strings.EqualFold(r.PathValue("key"), "encoding") {
 		writeJSON(w, http.StatusOK, h.encodingConfiguration())
-	case strings.EqualFold(key, "branding"):
-		writeJSON(w, http.StatusOK, BrandingOptions{})
-	default:
-		processingError(w, http.StatusNotFound)
+		return
 	}
+	processingError(w, http.StatusNotFound)
 }
 
 // encodingConfiguration is the encoding configuration Polyfin answers:

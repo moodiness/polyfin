@@ -31,7 +31,10 @@ const (
 	cookieName = "polyfin_session"
 	cookiePath = "/admin"
 	maxBody    = 64 << 10
-	readyWait  = 2 * time.Second
+	// maxSettingsBody fits the settings with their custom CSS and script at
+	// their largest, written as JSON escapes them.
+	maxSettingsBody = 4 << 20
+	readyWait       = 2 * time.Second
 )
 
 // Pinger reports whether the database answers.
@@ -243,7 +246,11 @@ func writeError(w http.ResponseWriter, status int, code string) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, into any) bool {
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody)).Decode(into); err != nil {
+	return decodeUpTo(w, r, into, maxBody)
+}
+
+func decodeUpTo(w http.ResponseWriter, r *http.Request, into any, limit int64) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(into); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return false
 	}
@@ -292,6 +299,9 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidRecordingPadding, http.StatusBadRequest, "invalid_recording_padding"},
 		{accounts.ErrInvalidRecordingRetentionDays, http.StatusBadRequest, "invalid_recording_retention_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
+		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
+		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
+		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},

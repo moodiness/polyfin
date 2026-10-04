@@ -280,6 +280,7 @@ func serve(ctx context.Context) error {
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
+			CustomJs:      func() string { return store.Settings().CustomJs },
 			Logger:        logger,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

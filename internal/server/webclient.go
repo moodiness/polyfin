@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,6 +24,9 @@ const (
 	// webScript is the name Polyfin's own script is served under, in /web/,
 	// beside the files of jellyfin-web.
 	webScript = "polyfin.js"
+	// customScript is the name the administrator's own script, set in the
+	// admin app, is served under, in /web/.
+	customScript = "custom.js"
 )
 
 var (
@@ -66,13 +70,42 @@ func WebClientFiles(dir string) fs.FS {
 	return files
 }
 
+// customScripts hashes the administrator's script, again only when it
+// changed, for the address index.html loads it from.
+type customScripts struct {
+	get  func() string
+	last atomic.Pointer[hashedScript]
+}
+
+// hashedScript is a script and the hash of its content, which index.html
+// puts in its address so that browsers keep it until it changes.
+type hashedScript struct {
+	body, hash string
+}
+
+func (c *customScripts) current() hashedScript {
+	if c.get == nil {
+		return hashedScript{}
+	}
+	body := c.get()
+	if last := c.last.Load(); last != nil && last.body == body {
+		return *last
+	}
+	sum := sha256.Sum256([]byte(body))
+	script := &hashedScript{body: body, hash: hex.EncodeToString(sum[:8])}
+	c.last.Store(script)
+	return *script
+}
+
 // webClient serves jellyfin-web at /web/ as Jellyfin does: its files, and
 // the requests no file answers to the Jellyfin API, which has routes under
-// /web/ too. index.html is never cached and gets Polyfin's script; files
-// whose name or query carries a build hash are cached for good. Other files
-// are revalidated (Jellyfin sends no Cache-Control for them, which leaves
-// browsers guessing a lifetime for config.json and the like).
-func webClient(files fs.FS, setUp func(context.Context) bool, api http.Handler, logger *slog.Logger) http.Handler {
+// /web/ too. index.html is never cached and gets Polyfin's script, and the
+// administrator's when there is one; files whose name or query carries a
+// build or content hash are cached for good. Other files are revalidated
+// (Jellyfin sends no Cache-Control for them, which leaves browsers guessing
+// a lifetime for config.json and the like).
+func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, api http.Handler, logger *slog.Logger) http.Handler {
+	custom := &customScripts{get: customJs}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			api.ServeHTTP(w, r)
@@ -87,7 +120,7 @@ func webClient(files fs.FS, setUp func(context.Context) bool, api http.Handler, 
 				http.Redirect(w, r, adminPrefix, http.StatusFound)
 				return
 			}
-			serveWebIndex(w, r, files, logger)
+			serveWebIndex(w, r, files, custom.current(), logger)
 			return
 		case webScript:
 			header := w.Header()
@@ -95,6 +128,24 @@ func webClient(files fs.FS, setUp func(context.Context) bool, api http.Handler, 
 			header.Set("Cache-Control", "no-cache")
 			header.Set("ETag", webScriptETag)
 			http.ServeContent(w, r, webScript, time.Time{}, bytes.NewReader(webScriptBody))
+			return
+		case customScript:
+			script := custom.current()
+			if script.body == "" {
+				api.ServeHTTP(w, r)
+				return
+			}
+			header := w.Header()
+			header.Set("Content-Type", "application/javascript; charset=utf-8")
+			// The address index.html gives names this very content; any
+			// other is revalidated, so an old address gets today's script.
+			if r.URL.Query().Get("v") == script.hash {
+				header.Set("Cache-Control", immutableCache)
+			} else {
+				header.Set("Cache-Control", "no-cache")
+			}
+			header.Set("ETag", `"`+script.hash+`"`)
+			http.ServeContent(w, r, customScript, time.Time{}, strings.NewReader(script.body))
 			return
 		}
 		info, err := fs.Stat(files, name)
@@ -131,17 +182,18 @@ func webClient(files fs.FS, setUp func(context.Context) bool, api http.Handler, 
 	})
 }
 
-// serveWebIndex serves jellyfin-web's index.html with Polyfin's script.
-// The file is read at each request, as Jellyfin does, so that a new
-// jellyfin-web needs no restart.
-func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, logger *slog.Logger) {
+// serveWebIndex serves jellyfin-web's index.html with Polyfin's script,
+// and the administrator's custom script when there is one. The file is read
+// at each request, as Jellyfin does, so that a new jellyfin-web needs no
+// restart.
+func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, custom hashedScript, logger *slog.Logger) {
 	page, err := fs.ReadFile(files, "index.html")
 	if err != nil {
 		logger.Error("The index.html of jellyfin-web cannot be read", "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	page = withWebScript(page)
+	page = withWebScripts(page, custom)
 	header := w.Header()
 	header.Set("Content-Type", "text/html; charset=utf-8")
 	header.Set("Cache-Control", "no-cache")
@@ -149,15 +201,21 @@ func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, logger *
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
 }
 
-// withWebScript adds Polyfin's script to the end of the page's head, where
+// withWebScripts adds Polyfin's script to the end of the page's head, where
 // it runs before the page's own scripts, which are deferred; a page without
-// a head gets it at its end.
-func withWebScript(page []byte) []byte {
+// a head gets it at its end. The custom script, when there is one, comes
+// right after, deferred: it runs once the page is parsed, after
+// jellyfin-web's own scripts.
+func withWebScripts(page []byte, custom hashedScript) []byte {
 	at := bytes.Index(bytes.ToLower(page), []byte("</head>"))
 	if at < 0 {
 		at = len(page)
 	}
-	return slices.Concat(page[:at], webScriptTag, page[at:])
+	var customTag []byte
+	if custom.body != "" {
+		customTag = []byte(`<script src="` + customScript + `?v=` + custom.hash + `" defer></script>`)
+	}
+	return slices.Concat(page[:at], webScriptTag, customTag, page[at:])
 }
 
 func etag(content []byte) string {

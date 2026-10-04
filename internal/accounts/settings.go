@@ -185,6 +185,22 @@ const (
 	DefaultLiveTvRefreshHours = 12
 )
 
+// ErrInvalidCustomCss, ErrInvalidCustomJs and ErrInvalidLoginDisclaimer
+// report a Settings.CustomCss, CustomJs or LoginDisclaimer longer than its
+// maximum, or holding a NUL character, which no web page has.
+var (
+	ErrInvalidCustomCss       = errors.New("invalid custom CSS")
+	ErrInvalidCustomJs        = errors.New("invalid custom JavaScript")
+	ErrInvalidLoginDisclaimer = errors.New("invalid login disclaimer")
+)
+
+// The largest Settings.CustomCss and CustomJs, and LoginDisclaimer, in
+// bytes.
+const (
+	MaxCustomCodeBytes      = 256 << 10
+	MaxLoginDisclaimerBytes = 8 << 10
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -296,18 +312,33 @@ type Settings struct {
 	// LiveTvRefreshHours is how many hours after it was fetched an XMLTV
 	// guide or an IPTV source's channel list is fetched again.
 	LiveTvRefreshHours int
+	// CustomCss and LoginDisclaimer are Jellyfin's branding: the CSS
+	// jellyfin-web applies to every page, unless a user turns it off in
+	// their display settings, and the text, Markdown or HTML it shows
+	// under its sign-in form. CustomJs is a script Polyfin adds to
+	// jellyfin-web's page, which Jellyfin has no setting for. All three
+	// are empty by default, which shows nothing.
+	CustomCss       string
+	CustomJs        string
+	LoginDisclaimer string
+}
+
+// validWebText reports whether text fits in max bytes and holds no NUL.
+func validWebText(text string, max int) bool {
+	return len(text) <= max && !strings.ContainsRune(text, 0)
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, custom_css, custom_js, login_disclaimer FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 			&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
-			&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours)
+			&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
+			&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer)
 	return settings, err
 }
 
@@ -384,6 +415,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.LiveTvRefreshHours < MinLiveTvRefreshHours || settings.LiveTvRefreshHours > MaxLiveTvRefreshHours {
 		return Settings{}, ErrInvalidLiveTvRefreshHours
 	}
+	if !validWebText(settings.CustomCss, MaxCustomCodeBytes) {
+		return Settings{}, ErrInvalidCustomCss
+	}
+	if !validWebText(settings.CustomJs, MaxCustomCodeBytes) {
+		return Settings{}, ErrInvalidCustomJs
+	}
+	if !validWebText(settings.LoginDisclaimer, MaxLoginDisclaimerBytes) {
+		return Settings{}, ErrInvalidLoginDisclaimer
+	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
 		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
@@ -392,14 +432,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30, recording_pre_padding = $31, recording_post_padding = $32, recording_retention_days = $33, live_tv_refresh_hours = $34",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30, recording_pre_padding = $31, recording_post_padding = $32, recording_retention_days = $33, live_tv_refresh_hours = $34, custom_css = $35, custom_js = $36, login_disclaimer = $37",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
 		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
 		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
 		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog,
 		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight,
 		settings.Trickplay, settings.TrickplayInterval, settings.TrickplayWidth, settings.ChapterImages, settings.ThumbnailStorageGB,
-		settings.RecordingPrePadding, settings.RecordingPostPadding, settings.RecordingRetentionDays, settings.LiveTvRefreshHours)
+		settings.RecordingPrePadding, settings.RecordingPostPadding, settings.RecordingRetentionDays, settings.LiveTvRefreshHours,
+		settings.CustomCss, settings.CustomJs, settings.LoginDisclaimer)
 	if err != nil {
 		return Settings{}, err
 	}
