@@ -52,6 +52,14 @@ type User struct {
 	LastActivityAt *time.Time
 	// Parental limits the titles the user reaches by their rating.
 	Parental ParentalControl
+	// VideoTranscoding and AudioTranscoding let the user's apps have the
+	// video (burning subtitles in included) or the audio converted, when the
+	// server converts; ContentDownloading lets them download titles, when
+	// the server allows downloads. See Store.Conversions and
+	// Store.MayDownload.
+	VideoTranscoding   bool
+	AudioTranscoding   bool
+	ContentDownloading bool
 }
 
 // NewUser describes an account to create.
@@ -70,6 +78,10 @@ type UserChanges struct {
 	IsHidden        *bool
 	IsDisabled      *bool
 	Parental        *ParentalControl
+	// The user's permissions, see User.
+	VideoTranscoding   *bool
+	AudioTranscoding   *bool
+	ContentDownloading *bool
 }
 
 // Store is the accounts repository.
@@ -111,13 +123,14 @@ func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
 }
 
 const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
-	"max_parental_rating, max_parental_sub_rating, block_unrated_items"
+	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
 	return []any{&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
 		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
-		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated}
+		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
+		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -188,8 +201,9 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 		}
 		settings = &Settings{}
 		return tx.QueryRow(ctx, `UPDATE settings SET language = $1
-			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead`, language).
-			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language, &settings.Chapters, &settings.PrepareAhead)
+			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads`, language).
+			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
+				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads)
 	})
 	if err == nil && settings != nil {
 		s.settings.Store(settings)
@@ -339,10 +353,14 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				is_disabled = coalesce($6, is_disabled),
 				max_parental_rating = CASE WHEN $7 THEN $8 ELSE max_parental_rating END,
 				max_parental_sub_rating = CASE WHEN $7 THEN $9 ELSE max_parental_sub_rating END,
-				block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END
+				block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END,
+				video_transcoding = coalesce($11, video_transcoding),
+				audio_transcoding = coalesce($12, audio_transcoding),
+				content_downloading = coalesce($13, content_downloading)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
-			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated))
+			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
+			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

@@ -20,6 +20,10 @@ type userJSON struct {
 	LastLoginAt     *time.Time          `json:"lastLoginAt"`
 	LastActivityAt  *time.Time          `json:"lastActivityAt"`
 	ParentalControl parentalControlJSON `json:"parentalControl"`
+	// Transcoding is set when the user may have both video and audio
+	// converted; Downloads, when they may download.
+	Transcoding bool `json:"transcoding"`
+	Downloads   bool `json:"downloads"`
 }
 
 // parentalControlJSON is a user's parental control: the highest rating
@@ -47,6 +51,8 @@ func newUserJSON(user accounts.User) userJSON {
 			MaxSubRating: user.Parental.MaxSubRating,
 			BlockUnrated: append([]string{}, user.Parental.BlockUnrated...),
 		},
+		Transcoding: user.VideoTranscoding && user.AudioTranscoding,
+		Downloads:   user.ContentDownloading,
 	}
 }
 
@@ -91,6 +97,10 @@ type settingsJSON struct {
 	Language            string `json:"language"`
 	Chapters            *bool  `json:"chapters"`
 	PrepareAhead        *bool  `json:"prepareAhead"`
+	// Transcoding and Downloads keep their current values when a PUT
+	// leaves them out.
+	Transcoding *bool `json:"transcoding"`
+	Downloads   *bool `json:"downloads"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -101,6 +111,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		Language:            settings.Language,
 		Chapters:            &settings.Chapters,
 		PrepareAhead:        &settings.PrepareAhead,
+		Transcoding:         &settings.Transcoding,
+		Downloads:           &settings.Downloads,
 	}
 }
 
@@ -263,6 +275,9 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		IsHidden        *bool                `json:"isHidden"`
 		IsDisabled      *bool                `json:"isDisabled"`
 		ParentalControl *parentalControlJSON `json:"parentalControl"`
+		// Transcoding sets both video and audio conversion.
+		Transcoding *bool `json:"transcoding"`
+		Downloads   *bool `json:"downloads"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -273,11 +288,14 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		keep = session.TokenHash
 	}
 	changes := accounts.UserChanges{
-		Name:            body.Name,
-		Password:        body.Password,
-		IsAdministrator: body.IsAdministrator,
-		IsHidden:        body.IsHidden,
-		IsDisabled:      body.IsDisabled,
+		Name:               body.Name,
+		Password:           body.Password,
+		IsAdministrator:    body.IsAdministrator,
+		IsHidden:           body.IsHidden,
+		IsDisabled:         body.IsDisabled,
+		VideoTranscoding:   body.Transcoding,
+		AudioTranscoding:   body.Transcoding,
+		ContentDownloading: body.Downloads,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -348,6 +366,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		Language:            body.Language,
 		Chapters:            valueOr(body.Chapters, current.Chapters),
 		PrepareAhead:        valueOr(body.PrepareAhead, current.PrepareAhead),
+		Transcoding:         valueOr(body.Transcoding, current.Transcoding),
+		Downloads:           valueOr(body.Downloads, current.Downloads),
 	})
 	if accountError(w, err) {
 		return

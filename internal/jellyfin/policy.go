@@ -30,12 +30,18 @@ type policyUpdate struct {
 	MaxParentalRating    *int
 	MaxParentalSubRating *int
 	BlockUnratedItems    []string
+	// The user's permissions to have video or audio converted, and to
+	// download. Like Jellyfin's, a policy that leaves them out grants them.
+	EnableVideoPlaybackTranscoding bool
+	EnableAudioPlaybackTranscoding bool
+	EnableContentDownloading       bool
 }
 
 // updatePolicy sets a user's policy from an administrator's app: whether
-// the user is an administrator, hidden or disabled, and their parental
-// control. Like Jellyfin, the policy replaces the stored one whole, and
-// disabling a user signs out their devices but the one that asked.
+// the user is an administrator, hidden or disabled, their parental control,
+// and whether they may have video or audio converted and download. Like
+// Jellyfin, the policy replaces the stored one whole, and disabling a user
+// signs out their devices but the one that asked.
 func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	caller := callerFrom(r.Context())
 	// Jellyfin checks the caller's rights before reading the request.
@@ -54,7 +60,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	errs := bindErrors{}
 	id := errs.pathID(r, "userId")
-	var policy policyUpdate
+	policy := policyUpdate{EnableVideoPlaybackTranscoding: true, EnableAudioPlaybackTranscoding: true, EnableContentDownloading: true}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		errs.add("", "A non-empty request body is required.")
 		errs.add("newPolicy", "The newPolicy field is required.")
@@ -94,6 +100,9 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 			MaxSubRating: policy.MaxParentalSubRating,
 			BlockUnrated: policy.BlockUnratedItems,
 		},
+		VideoTranscoding:   &policy.EnableVideoPlaybackTranscoding,
+		AudioTranscoding:   &policy.EnableAudioPlaybackTranscoding,
+		ContentDownloading: &policy.EnableContentDownloading,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):

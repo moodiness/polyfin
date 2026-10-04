@@ -186,6 +186,13 @@ const en = {
     accessTitle: 'Access',
     isDisabled: 'Disabled',
     isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
+    canTranscode: 'Can use conversion (transcoding)',
+    canTranscodeHelp:
+      'Lets the server re-encode video and audio when this user’s app cannot play a file as it is. Without it, files play as they are or simply repackaged.',
+    canDownload: 'Can download',
+    canDownloadHelp: 'Lets this user save titles in Jellyfin apps to watch offline.',
+    noTranscoding: 'No conversion',
+    noDownloads: 'No downloads',
     lastAdminHelp: 'The last enabled administrator cannot be deleted, demoted or disabled.',
     updated: 'Changes saved.',
     parentalTitle: 'Parental control',
@@ -219,7 +226,6 @@ const en = {
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
-    saved: 'Settings saved.',
     playbackTitle: 'Playback',
     chapters: 'Show chapters',
     chaptersHelp:
@@ -227,6 +233,13 @@ const en = {
     prepareAhead: 'Prepare playback in advance',
     prepareAheadHelp:
       'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. This sends a few more requests to your sources, also for titles that are opened but not played.',
+    transcoding: 'Conversion (transcoding)',
+    transcodingHelp:
+      'Re-encodes video and audio for apps that cannot play a file as it is. When off, apps play files as they are or simply repackaged without re-encoding, and a title an app cannot play that way will not start on that app.',
+    downloads: 'Downloads',
+    downloadsHelp:
+      'Lets users save titles in Jellyfin apps to watch offline. When off, nobody can download, whatever their own permission.',
+    saved: 'Settings saved.',
   },
   stremioTypes: {
     movie: 'Movies',

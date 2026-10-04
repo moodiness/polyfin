@@ -568,6 +568,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 	}
 	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
 	requested, asked := parseGUID(request.MediaSourceId)
+	allowed := h.Accounts.Conversions(user)
 	attempts := 0
 	for i, version := range versions {
 		id := sourceID(opened, version, i == 0)
@@ -583,7 +584,11 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		manifest := playback.Manifest(analysis)
 		relay := mustRelay(r, version) || manifest && (webApp(r) || !h.Playback.Redirectable(r.Context(), version))
 		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
-		source := h.liveSource(r, channel, version, id, analysis, request, session, relay)
+		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, allowed)
+		if !ok {
+			h.Logger.Info("A channel's stream would need a conversion the user may not have", "addon", version.Addon)
+			continue
+		}
 		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{source}, PlaySessionId: session})
 		return
 	}
@@ -591,9 +596,11 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 }
 
 // liveSource describes a channel's stream with the decision for the app's
-// device profile. Subtitles in live streams are not offered.
+// device profile. Subtitles in live streams are not offered. Only the
+// conversions allowed are planned: it reports false when the stream would
+// need another to play on the app.
 func (h *Handler) liveSource(r *http.Request, channel library.Item, version library.Version, id accounts.ID, analysis media.Analysis,
-	request playbackInfoRequest, session string, relay bool) MediaSourceInfo {
+	request playbackInfoRequest, session string, relay bool, allowed accounts.Conversions) (MediaSourceInfo, bool) {
 	streams := slices.DeleteFunc(playback.MediaStreams(analysis, nil, h.Accounts.Settings().Language),
 		func(s playback.MediaStream) bool { return s.Type == "Subtitle" })
 	container := playback.Container(analysis)
@@ -620,6 +627,9 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	if request.DeviceProfile != nil {
 		decision = playback.Decide(request.DeviceProfile, playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}, options)
 	}
+	if decision.HLS && !permitted(allowed, decision) {
+		return MediaSourceInfo{}, false
+	}
 	source.Container = cmp.Or(decision.Container, container)
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
 	if _, video := playback.LiveVideo(analysis); decision.HLS && video {
@@ -635,7 +645,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
 	}
-	return source
+	return source, true
 }
 
 // serveChannel serves a channel's stream to a player that plays it as it

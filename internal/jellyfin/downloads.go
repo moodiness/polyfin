@@ -35,6 +35,12 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	// Like Jellyfin's download policy, refused before anything is looked
+	// up, whatever the credentials.
+	if !h.Accounts.MayDownload(user) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	item, err := h.Library.Item(r.Context(), user, opened)
 	if errors.Is(err, library.ErrNotFound) {
 		if owner, isVersion := h.Library.VersionOwner(opened); isVersion {
@@ -91,13 +97,14 @@ func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, i
 }
 
 // setDownload tells apps that a movie or an episode with versions can be
-// downloaded, when they asked, and with withPath names in Path the file its
-// first version, the one it was opened as, downloads as.
-func (h *Handler) setDownload(r *http.Request, dto *BaseItemDto, item library.Item, versions []library.Version, withPath bool) {
+// downloaded, when they asked and the user may download, and with withPath
+// names in Path the file its first version, the one it was opened as,
+// downloads as.
+func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, withPath bool) {
 	if len(versions) == 0 {
 		return
 	}
-	if dto.CanDownload != nil {
+	if dto.CanDownload != nil && h.Accounts.MayDownload(user) {
 		dto.CanDownload = new(true)
 	}
 	if withPath {

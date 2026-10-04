@@ -133,7 +133,7 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		(item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
 		// Only what is known, as MediaSources in the same listing: a listing
 		// never asks addons for streams.
-		h.setDownload(r, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, path)
+		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, path)
 	}
 	return dto
 }

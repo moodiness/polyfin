@@ -43,12 +43,19 @@ type Settings struct {
 	// details open, and readies the next episode near the end of the one
 	// playing, so that playback starts at once.
 	PrepareAhead bool
+	// Transcoding lets the server convert (re-encode) video and audio, for
+	// the users allowed to have them converted; files still play as they
+	// are or repackaged without it.
+	Transcoding bool
+	// Downloads lets the users allowed to download titles do so.
+	Downloads bool
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead FROM settings").
-		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language, &settings.Chapters, &settings.PrepareAhead)
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads FROM settings").
+		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
+			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads)
 	return settings, err
 }
 
@@ -68,8 +75,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, ErrInvalidLanguage
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6",
-		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language, settings.Chapters, settings.PrepareAhead)
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8",
+		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
+		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads)
 	if err != nil {
 		return Settings{}, err
 	}

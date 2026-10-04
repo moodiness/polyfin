@@ -110,6 +110,8 @@ function UserRow({
             {user.isHidden && <Badge tone="muted">{t.users.hidden}</Badge>}
             {user.isDisabled && <Badge tone="danger">{t.users.disabled}</Badge>}
             <RatingLimitBadge parentalControl={user.parentalControl} />
+            {!user.transcoding && <Badge tone="muted">{t.users.noTranscoding}</Badge>}
+            {!user.downloads && <Badge tone="muted">{t.users.noDownloads}</Badge>}
           </p>
           <p className="mt-1 text-sm text-muted">
             {t.users.lastSignIn} —{' '}
@@ -256,6 +258,18 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
           help={t.users.isDisabledHelp}
           checked={user.isDisabled}
           onChange={(isDisabled) => access.mutate({ isDisabled })}
+        />
+        <Checkbox
+          label={t.users.canTranscode}
+          help={t.users.canTranscodeHelp}
+          checked={user.transcoding}
+          onChange={(transcoding) => access.mutate({ transcoding })}
+        />
+        <Checkbox
+          label={t.users.canDownload}
+          help={t.users.canDownloadHelp}
+          checked={user.downloads}
+          onChange={(downloads) => access.mutate({ downloads })}
         />
         {access.isError && <Notice kind="error">{errorMessage(t, access.error)}</Notice>}
         {access.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
