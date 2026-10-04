@@ -204,6 +204,55 @@ func TestSettingsPlaybackSwitches(t *testing.T) {
 	}
 }
 
+func TestSettingsCatalogLimits(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["catalogLimit"] != float64(accounts.DefaultCatalogLimit) ||
+		body["channelLimit"] != float64(accounts.DefaultChannelLimit) {
+		t.Errorf("default settings: %v", body)
+	}
+	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en",
+		"catalogLimit": 5000, "channelLimit": 30000}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["catalogLimit"] != float64(5000) || body["channelLimit"] != float64(30000) {
+		t.Fatalf("saving the limits: %d %v", status, body)
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["catalogLimit"] != float64(5000) || body["channelLimit"] != float64(30000) {
+		t.Errorf("settings after saving: %v", body)
+	}
+	// A save without a limit keeps it.
+	delete(settings, "catalogLimit")
+	settings["channelLimit"] = 40000
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["catalogLimit"] != float64(5000) || body["channelLimit"] != float64(40000) {
+		t.Errorf("saving without the catalog limit: %d %v", status, body)
+	}
+	delete(settings, "channelLimit")
+	settings["catalogLimit"] = 6000
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["catalogLimit"] != float64(6000) || body["channelLimit"] != float64(40000) {
+		t.Errorf("saving without the channel limit: %d %v", status, body)
+	}
+	for _, tc := range []struct {
+		key   string
+		value int
+		code  string
+	}{
+		{"catalogLimit", accounts.MinCatalogLimit - 1, "invalid_catalog_limit"},
+		{"catalogLimit", accounts.MaxCatalogLimit + 1, "invalid_catalog_limit"},
+		{"channelLimit", accounts.MinChannelLimit - 1, "invalid_channel_limit"},
+		{"channelLimit", accounts.MaxChannelLimit + 1, "invalid_channel_limit"},
+	} {
+		refused := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en", tc.key: tc.value}
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != tc.code {
+			t.Errorf("%s %d: %d %v", tc.key, tc.value, status, body)
+		}
+	}
+	if got := api.store.Settings(); got.CatalogLimit != 6000 || got.ChannelLimit != 40000 {
+		t.Errorf("a refused limit changed the settings: %+v", got)
+	}
+}
+
 func TestAccessRequiresTheRightRole(t *testing.T) {
 	api := newTestAPI(t, 10)
 	anonymous := api.browser()
