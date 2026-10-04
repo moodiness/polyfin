@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/container"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // Source is a version's file as thumbnails read it, with one attempt per
@@ -17,6 +18,9 @@ import (
 // several ranges with one request, as a container.RangeFetcher.
 type Source interface {
 	container.Fetcher
+	// Renew asks for a fresh link, after an answer telling the link
+	// expired (source.ErrExpired).
+	Renew(ctx context.Context) error
 	// KnownSize is the file's size, once a request told it.
 	KnownSize() (int64, bool)
 	Release()
@@ -152,8 +156,10 @@ type paced struct {
 	// busy reports whether a playback reads host.
 	busy func(host string) bool
 	left int
-	// requests counts the requests made.
+	// requests counts the requests made, and renewed is set once the
+	// link was renewed: once a generation.
 	requests int
+	renewed  bool
 }
 
 func (p *paced) take(ctx context.Context) error {
@@ -186,10 +192,13 @@ func (p *paced) ReadAt(ctx context.Context, b []byte, off int64) (int, error) {
 }
 
 func (p *paced) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
-	if err := p.take(ctx); err != nil {
-		return nil, err
-	}
-	return p.src.Fetch(ctx, off, n)
+	var data []byte
+	err := p.request(ctx, func() error {
+		var err error
+		data, err = p.src.Fetch(ctx, off, n)
+		return err
+	})
+	return data, err
 }
 
 func (p *paced) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
@@ -197,10 +206,48 @@ func (p *paced) FetchRanges(ctx context.Context, ranges []container.Range) ([][]
 	if !ok {
 		return nil, container.ErrMultiRangeUnsupported
 	}
+	var data [][]byte
+	err := p.request(ctx, func() error {
+		var err error
+		data, err = rf.FetchRanges(ctx, ranges)
+		return err
+	})
+	return data, err
+}
+
+// request sends a request in the host's turn. A source answering oddly,
+// as some do now and then, is asked once more after a pause, a request
+// counted like the others: an answer ignoring the range, for another
+// range, cut short, or none. One telling the link expired has it renewed
+// first, once a generation. One asking to slow down or overloaded is
+// never asked again.
+func (p *paced) request(ctx context.Context, send func() error) error {
 	if err := p.take(ctx); err != nil {
-		return nil, err
+		return err
 	}
-	return rf.FetchRanges(ctx, ranges)
+	err := send()
+	if !odd(err) || ctx.Err() != nil {
+		return err
+	}
+	if errors.Is(err, source.ErrExpired) && !p.renewed {
+		p.renewed = true
+		if renewErr := p.src.Renew(ctx); renewErr != nil {
+			return err
+		}
+	}
+	if pauseErr := sleep(ctx, p.gate.interval); pauseErr != nil {
+		return pauseErr
+	}
+	if takeErr := p.take(ctx); takeErr != nil {
+		return err
+	}
+	return send()
+}
+
+// odd reports whether a request failed for an odd answer of the source,
+// or none: not one asking to slow down, which is never asked again.
+func odd(err error) bool {
+	return (errors.Is(err, source.ErrUnavailable) || errors.Is(err, source.ErrRangesIgnored)) && !errors.Is(err, source.ErrSlowDown)
 }
 
 // hostOf is the host a version's URL names.

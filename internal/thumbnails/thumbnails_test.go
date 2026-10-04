@@ -35,10 +35,15 @@ type countingSource struct {
 	// slowDownAt is the request, counted from 1, that the host answers
 	// with 429, and every one after it; 0 for none.
 	slowDownAt int
+	// odd answers request n, counted from 1, with its error, when not nil;
+	// expired answers every request with an expired link until Renew.
+	odd     func(n int) error
+	expired bool
 
 	mu       sync.Mutex
 	requests []request
 	released bool
+	renewals int
 }
 
 type request struct {
@@ -58,13 +63,33 @@ func (c *countingSource) record(r request) {
 
 func (c *countingSource) Fetch(_ context.Context, off int64, n int) ([]byte, error) {
 	c.record(request{kind: "fetch", off: off, n: int64(n)})
-	if c.slowDownAt > 0 && len(c.count()) >= c.slowDownAt {
-		return nil, fmt.Errorf("%w: HTTP 429", source.ErrSlowDown)
+	count := len(c.count())
+	if c.slowDownAt > 0 && count >= c.slowDownAt {
+		return nil, &source.StatusError{Status: 429, Kind: source.ErrSlowDown}
+	}
+	c.mu.Lock()
+	expired := c.expired
+	c.mu.Unlock()
+	if expired {
+		return nil, &source.StatusError{Status: 403, Kind: source.ErrExpired}
+	}
+	if c.odd != nil {
+		if err := c.odd(count); err != nil {
+			return nil, err
+		}
 	}
 	if off < 0 || off > int64(len(c.data)) {
 		return nil, errors.New("out of the file")
 	}
 	return slices.Clone(c.data[off:min(off+int64(n), int64(len(c.data)))]), nil
+}
+
+func (c *countingSource) Renew(context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.renewals++
+	c.expired = false
+	return nil
 }
 
 func (c *countingSource) KnownSize() (int64, bool) {
@@ -605,5 +630,104 @@ func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Answers some hosts give now and then, which a second request does not
+// get: a whole file for a range, another range, an answer cut short.
+var oddAnswers = map[string]error{
+	"ranges ignored": fmt.Errorf("fetching 262144 bytes at 0: %w", source.ErrRangesIgnored),
+	"HTTP 500":       &source.StatusError{Status: 500, Kind: source.ErrUnavailable},
+	"no answer":      fmt.Errorf("%w: connection reset", source.ErrUnavailable),
+}
+
+// An odd answer is asked once more, after a pause, within the budget: the
+// images are made. Two in a row fail the version, which is left alone for a
+// while, its host not paused.
+func TestOddAnswersAreAskedOnceMore(t *testing.T) {
+	ffmpeg := testFFmpeg(t)
+	for name, answer := range oddAnswers {
+		t.Run(name, func(t *testing.T) {
+			ts := newTestService(t, ffmpeg)
+			ts.analysis = forcedAnalysis
+			ctx := t.Context()
+			ts.source = &countingSource{data: fixture(t, "forced.mkv"), odd: func(n int) error {
+				if n == 1 {
+					return answer
+				}
+				return nil
+			}}
+			ts.generate(ctx, testJob)
+			requests := ts.source.count()
+			if manifest, err := ts.Manifest(ctx, testVersion.Item); err != nil || manifest[testVersion.ID][240].ThumbnailCount != 4 {
+				t.Fatalf("after one odd answer: %v %v", manifest, err)
+			}
+			// One more request than without the odd answer, after a pause of the
+			// host's pace (20 ms in tests, 3 s otherwise).
+			if len(requests) < 14 || len(requests) > 15 || requests[1].at.Sub(requests[0].at) < 19*time.Millisecond {
+				t.Errorf("%d requests, the second %v after the first", len(requests), requests[1].at.Sub(requests[0].at))
+			}
+
+			ts = newTestService(t, ffmpeg)
+			ts.analysis = forcedAnalysis
+			ts.source = &countingSource{data: fixture(t, "forced.mkv"), odd: func(n int) error {
+				if n <= 2 {
+					return answer
+				}
+				return nil
+			}}
+			ts.generate(ctx, testJob)
+			if n := len(ts.source.count()); n != 2 {
+				t.Errorf("two odd answers in a row: %d requests", n)
+			}
+			if manifest, _ := ts.Manifest(ctx, testVersion.Item); len(manifest) != 0 {
+				t.Errorf("images kept: %v", manifest)
+			}
+			if _, failed := ts.failed.Get(testVersion.ID); !failed {
+				t.Error("the version is not left alone")
+			}
+			if ts.gate.paused("host.example") {
+				t.Error("the host is paused")
+			}
+		})
+	}
+}
+
+// A link the source says expired is renewed, once a generation, and asked
+// again.
+func TestExpiredLinksAreRenewedOnce(t *testing.T) {
+	ffmpeg := testFFmpeg(t)
+	ts := newTestService(t, ffmpeg)
+	ts.analysis = forcedAnalysis
+	ctx := t.Context()
+	ts.source = &countingSource{data: fixture(t, "forced.mkv"), expired: true}
+	ts.generate(ctx, testJob)
+	if manifest, err := ts.Manifest(ctx, testVersion.Item); err != nil || manifest[testVersion.ID][240].ThumbnailCount != 4 {
+		t.Fatalf("after renewing the link: %v %v", manifest, err)
+	}
+	if ts.source.renewals != 1 {
+		t.Errorf("%d renewals", ts.source.renewals)
+	}
+	// A link expiring again in the same generation is not renewed again:
+	// the request is asked once more, and the version fails.
+	ts = newTestService(t, ffmpeg)
+	ts.analysis = forcedAnalysis
+	counting := &countingSource{data: fixture(t, "forced.mkv"), expired: true}
+	counting.odd = func(n int) error {
+		if n >= 3 {
+			counting.mu.Lock()
+			counting.expired = true
+			counting.mu.Unlock()
+			return &source.StatusError{Status: 403, Kind: source.ErrExpired}
+		}
+		return nil
+	}
+	ts.source = counting
+	ts.generate(ctx, testJob)
+	if counting.renewals != 1 || len(counting.count()) != 4 {
+		t.Errorf("%d renewals, %d requests", counting.renewals, len(counting.count()))
+	}
+	if manifest, _ := ts.Manifest(ctx, testVersion.Item); len(manifest) != 0 {
+		t.Errorf("images kept: %v", manifest)
 	}
 }

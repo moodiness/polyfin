@@ -846,3 +846,46 @@ func TestOnceNeverRetries(t *testing.T) {
 		t.Errorf("expired: %v, renewed %v, %d requests", err, renewed, o.requests.Load()-before)
 	}
 }
+
+// What a source answered is told for logs, never its URL, which may hold
+// credentials; an expired link read once is renewed on demand.
+func TestOnceTellsTheAnswer(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	o.expired["/old"] = true
+	renewals := 0
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/old?token=secret"}, func(context.Context) (Location, error) {
+		renewals++
+		return Location{URL: server.URL + "/file"}, nil
+	})
+	defer s.Release()
+	once := s.Once()
+	_, err := once.Fetch(t.Context(), 0, 10)
+	if !errors.Is(err, ErrExpired) || Answer(err) != "HTTP 403" || renewals != 0 {
+		t.Fatalf("expired: %v, %q, %d renewals", err, Answer(err), renewals)
+	}
+	if err := once.Renew(t.Context()); err != nil || renewals != 1 {
+		t.Fatalf("renewing: %v, %d renewals", err, renewals)
+	}
+	if got, err := once.Fetch(t.Context(), 10, 20); err != nil || !bytes.Equal(got, o.data[10:30]) {
+		t.Errorf("after renewing: %v", err)
+	}
+	o.rangeless = true
+	if _, err := once.Fetch(t.Context(), 100, 10); !errors.Is(err, ErrRangesIgnored) || Answer(err) != "HTTP 200, the range asked ignored" {
+		t.Errorf("ranges ignored: %v, %q", err, Answer(err))
+	}
+	o.rangeless = false
+	o.busy, o.retryAfter = 1, "0"
+	if _, err := once.Fetch(t.Context(), 0, 10); Answer(err) != "HTTP 429" {
+		t.Errorf("429: %q", Answer(err))
+	}
+	// A host that does not answer: no URL in the error.
+	gone := newCache(t, 1<<30).Open(accounts.ID{2}, Location{URL: "http://127.0.0.1:1/file?token=secret"}, nil)
+	defer gone.Release()
+	_, err = gone.Once().Fetch(t.Context(), 0, 10)
+	if !errors.Is(err, ErrUnavailable) || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "127.0.0.1:1/file") || Answer(err) != "no answer" {
+		t.Errorf("no answer: %v, %q", err, Answer(err))
+	}
+	if err := gone.Once().Renew(t.Context()); !errors.Is(err, ErrExpired) {
+		t.Errorf("renewing without a renewer: %v", err)
+	}
+}

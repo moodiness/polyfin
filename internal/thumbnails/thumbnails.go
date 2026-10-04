@@ -294,17 +294,27 @@ func (s *Service) generate(ctx context.Context, j job) {
 	case ctx.Err() != nil && errors.Is(err, context.Canceled):
 	case errors.Is(err, source.ErrSlowDown):
 		s.Logger.Warn("A source asked to slow down: images of its host are paused", "addon", version.Addon,
-			"requests", read.requests, "pause", slowDownPause, "error", err)
+			"requests", read.requests, "pause", slowDownPause, "answer", source.Answer(err))
 		s.gate.pause(j.host, slowDownPause)
 		s.refused.Put(version.ID, err)
 		s.dropHost(j.host)
 	case lasting(err):
-		s.Logger.Info("The images of a version cannot be made", "addon", version.Addon, "requests", read.requests, "error", err)
+		s.Logger.Info("The images of a version cannot be made", append([]any{"addon", version.Addon, "requests", read.requests}, failure(err)...)...)
 		s.refused.Put(version.ID, err)
 	default:
-		s.Logger.Info("The images of a version could not be made", "addon", version.Addon, "requests", read.requests, "error", err)
+		s.Logger.Info("The images of a version could not be made", append([]any{"addon", version.Addon, "requests", read.requests}, failure(err)...)...)
 		s.failed.Put(version.ID, err)
 	}
+}
+
+// failure describes why making images failed, for the log: what the source
+// answered when it answered oddly, since its errors may carry what its
+// addon says, links included; the error otherwise.
+func failure(err error) []any {
+	if answer := source.Answer(err); answer != "" {
+		return []any{"answer", answer}
+	}
+	return []any{"error", err}
 }
 
 // dropHost drops the waiting versions of a paused host: their next play
