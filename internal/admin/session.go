@@ -112,6 +112,7 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		"serverId":      h.ServerID,
 		"database":      database,
 		"setupRequired": setupRequired,
+		"webClient":     h.WebClient,
 	})
 }
 
