@@ -201,9 +201,9 @@ func newSyncPlayers(t *testing.T) syncPlayers {
 	tr.testServer.user("alice", nil)
 	tr.testServer.user("bob", nil)
 	p := syncPlayers{tracking: tr, alice: tr.syncPlayApp(t, "alice", "alice-tv"), bob: tr.syncPlayApp(t, "bob", "bob-tv")}
-	status, answer := p.alice.send(t, tr.testServer, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": " Film night "})
+	status, answer := p.alice.send(t, tr.testServer, http.MethodPost, "/SyncPlay/New", map[string]any{"GroupName": " Movie night "})
 	var info GroupInfoDto
-	if status != http.StatusOK || json.Unmarshal(answer, &info) != nil || info.GroupName != "Film night" {
+	if status != http.StatusOK || json.Unmarshal(answer, &info) != nil || info.GroupName != "Movie night" {
 		t.Fatalf("new group: %d %s", status, answer)
 	}
 	p.group = info.GroupId

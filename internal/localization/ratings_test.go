@@ -8,7 +8,7 @@ func TestRatingsOfEverySystemAddonsSend(t *testing.T) {
 		score  int
 		sub    int // -1 for none
 	}{
-		// United States, films and television, as AIOMetadata sends them.
+		// United States, movies and television, as AIOMetadata sends them.
 		{"G", 0, 0}, {"PG", 10, 0}, {"PG-13", 13, 0}, {"R", 17, 0}, {"NC-17", 17, 1},
 		{"TV-Y", 0, 0}, {"TV-Y7", 7, 0}, {"TV-Y7-FV", 7, 1}, {"TV-PG", 10, 0}, {"TV-14", 14, 0},
 		{"TV-14-LV", 14, 1}, {"TV-MA", 17, 1},

@@ -201,7 +201,7 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 	}
 	_, body = s.call(http.MethodGet, "/LiveTv/Programs?IsMovie=true", app("tv", token), nil)
 	if json.Unmarshal(body, &programs) != nil || len(programs.Items) != 1 || programs.Items[0].Name != "Next" {
-		t.Errorf("films: %s", body)
+		t.Errorf("movies: %s", body)
 	}
 	_, body = s.call(http.MethodGet, "/LiveTv/Programs/Recommended?IsAiring=true&Fields=ChannelInfo", app("tv", token), nil)
 	if json.Unmarshal(body, &programs) != nil || len(programs.Items) != 1 || programs.Items[0].ChannelName != "One" {

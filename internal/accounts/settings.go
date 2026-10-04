@@ -67,7 +67,7 @@ type Settings struct {
 	Transcoding bool
 	// Downloads lets the users allowed to download titles do so.
 	Downloads bool
-	// CatalogLimit is how many items one read of a film or series catalog
+	// CatalogLimit is how many items one read of a movie or series catalog
 	// (any catalog but a live TV one) fetches at most: some catalogs are
 	// nearly endless.
 	CatalogLimit int

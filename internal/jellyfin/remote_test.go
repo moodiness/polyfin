@@ -217,10 +217,10 @@ func TestCommandsReachTheControlledApp(t *testing.T) {
 		{"/Command/GoHome", nil, "GeneralCommand", &GeneralCommand{Name: "GoHome", ControllingUserId: controller, Arguments: map[string]string{}}},
 		{"/Command", map[string]any{"Name": "SetVolume", "Arguments": map[string]string{"Volume": "40"}, "ControllingUserId": "someone else"}, "GeneralCommand",
 			&GeneralCommand{Name: "SetVolume", ControllingUserId: controller, Arguments: map[string]string{"Volume": "40"}}},
-		{"/Message", map[string]any{"Header": "Dinner", "Text": "Pause the film", "TimeoutMs": 5000}, "GeneralCommand",
-			&GeneralCommand{Name: "DisplayMessage", ControllingUserId: controller, Arguments: map[string]string{"Header": "Dinner", "Text": "Pause the film", "TimeoutMs": "5000"}}},
-		{"/Viewing?itemType=Movie&itemId=" + movie.String() + "&itemName=The%20Film", nil, "GeneralCommand",
-			&GeneralCommand{Name: "DisplayContent", ControllingUserId: controller, Arguments: map[string]string{"ItemType": "Movie", "ItemId": movie.String(), "ItemName": "The Film"}}},
+		{"/Message", map[string]any{"Header": "Dinner", "Text": "Pause the movie", "TimeoutMs": 5000}, "GeneralCommand",
+			&GeneralCommand{Name: "DisplayMessage", ControllingUserId: controller, Arguments: map[string]string{"Header": "Dinner", "Text": "Pause the movie", "TimeoutMs": "5000"}}},
+		{"/Viewing?itemType=Movie&itemId=" + movie.String() + "&itemName=The%20Movie", nil, "GeneralCommand",
+			&GeneralCommand{Name: "DisplayContent", ControllingUserId: controller, Arguments: map[string]string{"ItemType": "Movie", "ItemId": movie.String(), "ItemName": "The Movie"}}},
 		{"/System/GoToSettings", nil, "GeneralCommand", &GeneralCommand{Name: "GoToSettings", ControllingUserId: controller, Arguments: map[string]string{}}},
 	} {
 		if status := send(tc.path, tc.body); status != http.StatusNoContent {

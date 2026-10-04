@@ -8,9 +8,9 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// limitsAddon serves a paged film catalog of films titles and a paged live
-// TV catalog of channels channels.
-func limitsAddon(films, channels int) *fakeAddon {
+// limitsAddon serves a paged movie catalog of movies titles and a paged
+// live TV catalog of channels channels.
+func limitsAddon(movies, channels int) *fakeAddon {
 	paged := []stremio.Extra{{Name: "skip"}}
 	return &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -18,12 +18,12 @@ func limitsAddon(films, channels int) *fakeAddon {
 				{Type: "movie", ID: "top", Name: "Top", Extra: paged},
 				{Type: "tv", ID: "channels", Name: "Channels", Extra: paged},
 			}},
-		catalogs: map[string][]stremio.Meta{"movie/top": titles("movie", films), "tv/channels": titles("tv", channels)},
+		catalogs: map[string][]stremio.Meta{"movie/top": titles("movie", movies), "tv/channels": titles("tv", channels)},
 		pageSize: 20,
 	}
 }
 
-func TestCatalogLimitStopsFilmCatalogs(t *testing.T) {
+func TestCatalogLimitStopsMovieCatalogs(t *testing.T) {
 	e := newEnv(t)
 	e.install(addons.Shared(), limitsAddon(250, 0))
 	e.setting(func(settings *accounts.Settings) { settings.CatalogLimit = accounts.MinCatalogLimit })
@@ -87,7 +87,7 @@ func TestCatalogAndChannelLimitsAreIndependent(t *testing.T) {
 	e := newEnv(t)
 	e.install(addons.Shared(), limitsAddon(250, 250))
 	top := e.library(e.member, "Top")
-	listings := func() (films, channels int) {
+	listings := func() (movies, channels int) {
 		t.Helper()
 		page, err := e.service.Children(t.Context(), e.member, top.ID, 0, 300, "")
 		if err != nil {
@@ -100,18 +100,18 @@ func TestCatalogAndChannelLimitsAreIndependent(t *testing.T) {
 		return len(page.Items), len(items)
 	}
 
-	// A low channel limit leaves film catalogs whole.
+	// A low channel limit leaves movie catalogs whole.
 	e.setting(func(settings *accounts.Settings) {
 		settings.CatalogLimit, settings.ChannelLimit = accounts.MaxCatalogLimit, accounts.MinChannelLimit
 	})
-	if films, channels := listings(); films != 250 || channels != 100 {
-		t.Errorf("low channel limit: %d films, %d channels", films, channels)
+	if movies, channels := listings(); movies != 250 || channels != 100 {
+		t.Errorf("low channel limit: %d movies, %d channels", movies, channels)
 	}
 	// And a low catalog limit leaves live TV catalogs whole.
 	e.setting(func(settings *accounts.Settings) {
 		settings.CatalogLimit, settings.ChannelLimit = accounts.MinCatalogLimit, accounts.MaxChannelLimit
 	})
-	if films, channels := listings(); films != 100 || channels != 250 {
-		t.Errorf("low catalog limit: %d films, %d channels", films, channels)
+	if movies, channels := listings(); movies != 100 || channels != 250 {
+		t.Errorf("low catalog limit: %d movies, %d channels", movies, channels)
 	}
 }

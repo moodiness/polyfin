@@ -72,7 +72,7 @@ const (
 	blockWindow = 4 << 10
 	// Blocks closer than maxGap are read with one range, spanning at most
 	// maxSpan: anime tracks pack thousands of blocks in a few Clusters,
-	// film tracks have one every few MB.
+	// movie tracks have one every few MB.
 	maxGap  = 64 << 10
 	maxSpan = 4 << 20
 	// maxFetches bounds the requests of a range each running at once:

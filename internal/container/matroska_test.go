@@ -518,7 +518,7 @@ func TestMatroskaClusterHeadersAreLearned(t *testing.T) {
 func TestMatroskaSubtitleBlocksAreGrouped(t *testing.T) {
 	track := subtitleTrack(1, "S_TEXT/UTF8", nil)
 	var spread, packed []testCluster
-	// A block every 150 KiB, as a film's, one per Cluster.
+	// A block every 150 KiB, as a movie's, one per Cluster.
 	for i := range 30 {
 		spread = append(spread, testCluster{padding: 150 << 10, blocks: []testBlock{groupBlock(1, uint64(i)*1000, 500, "Spread.")}})
 	}
@@ -603,7 +603,7 @@ func (f *rangeFetcher) FetchRanges(ctx context.Context, ranges []Range) ([][]byt
 func TestMatroskaSubtitleBlocksAreBatched(t *testing.T) {
 	// 1300 blocks a Cluster each, too far apart to share a range: with
 	// reads of 4 KiB sharing a range within 1 KiB, blocks 8 KiB apart
-	// stand for a film's, MBs apart.
+	// stand for a movie's, MBs apart.
 	var clusters []testCluster
 	for i := range 1300 {
 		clusters = append(clusters, testCluster{padding: 8 << 10, blocks: []testBlock{groupBlock(1, uint64(i)*1000, 500, "Spread.")}})

@@ -738,7 +738,7 @@ post "$base/LiveStreams/Close?liveStreamId=$(jq --exit-status --raw-output '.Med
 	--header "Authorization: $signed"
 
 # The same channel with a guide: an XMLTV listing whose programme airs now,
-# then a film, as the answers apps read programmes from.
+# then a movie, as the answers apps read programmes from.
 programme() {
 	printf '<programme start="%s +0000" stop="%s +0000" channel="fixture.one"><title>%s</title><desc>%s</desc><category>%s</category></programme>\n' \
 		"$(jq --null-input --raw-output "now + $1 | strftime(\"%Y%m%d%H%M%S\")")" \
@@ -747,7 +747,7 @@ programme() {
 {
 	printf '<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n<channel id="fixture.one"><display-name>Fixture One</display-name></channel>\n'
 	programme -3600 3600 'Fixture News' 'The news of the fixtures.' News
-	programme 3600 10800 'Fixture Film' 'A film after the news.' Movie
+	programme 3600 10800 'Fixture Movie' 'A movie after the news.' Movie
 	printf '</tv>\n'
 } >"$live_files/guide.xml"
 post "$base/LiveTv/ListingProviders?validateListings=false&validateLogin=false" --header "Authorization: $signed" \
