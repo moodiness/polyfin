@@ -20,6 +20,7 @@ import {
   type AccessSchedule,
   type ScheduleDay,
   scheduleDays,
+  type PasswordResetPin,
   type UserPatch,
   type SyncPlayAccess,
 } from '@/api'
@@ -126,6 +127,7 @@ function UserRow({
             {t.users.lastSignIn} —{' '}
             {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
           </p>
+          {user.passwordResetPin !== null && <ResetPinNotice pin={user.passwordResetPin} />}
         </div>
         <button
           type="button"
@@ -410,6 +412,26 @@ function BlockedBadge({ until }: { until: string }) {
     new Date(until),
   )
   return <Badge tone="danger">{t.users.blockedUntil(time)}</Badge>
+}
+
+/** The PIN a user asked for from a Jellyfin app's "Forgot password" screen, to give to them. */
+function ResetPinNotice({ pin }: { pin: PasswordResetPin }) {
+  const { t, language } = useI18n()
+  const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(pin.expiresAt),
+  )
+  return (
+    <div className="mt-2 rounded-lg border border-fin-4/50 bg-ink/40 p-3 text-sm">
+      <p className="text-white">
+        {t.users.resetPinRequested}{' '}
+        <code className="font-mono text-base font-semibold tracking-widest select-all">
+          {pin.pin}
+        </code>
+        {t.users.resetPinValidUntil(time)}
+      </p>
+      <p className="mt-1 text-muted">{t.users.resetPinHelp}</p>
+    </div>
+  )
 }
 
 const unratedMovie = 'Movie'

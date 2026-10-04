@@ -77,6 +77,7 @@ function SignedInBar({ user }: { user: SessionUser }) {
           { to: '/addons', label: t.nav.addons, end: false },
           { to: '/libraries', label: t.nav.libraries, end: false },
           { to: '/settings', label: t.nav.settings, end: false },
+          { to: '/api-keys', label: t.nav.apiKeys, end: false },
         ]
       : []),
   ]

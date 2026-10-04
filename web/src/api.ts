@@ -47,6 +47,8 @@ export type User = {
   accessSchedules: AccessSchedule[]
   /** Whether the user may create, change and delete the collections every user sees. */
   collectionManagement: boolean
+  /** The PIN asked for from a Jellyfin app's "Forgot password" screen; null when none is active. */
+  passwordResetPin: PasswordResetPin | null
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
@@ -269,6 +271,29 @@ export type AddonPreferences = {
   personalAddons: boolean
 }
 
+/** Signing in with `pin` as the password, before `expiresAt`, makes it the user's new password. */
+export type PasswordResetPin = { pin: string; expiresAt: string }
+
+/** A key tools and apps use to call the Jellyfin API with administrator rights. */
+export type ApiKey = { id: string; app: string; createdAt: string; lastUsedAt: string | null }
+
+/** A key just created: `key` is the secret, returned this one time only. */
+export type NewApiKey = ApiKey & { key: string }
+
+export type ActivityEntry = {
+  id: number
+  date: string
+  /** A readable sentence in the server language, such as "alice signed in". */
+  name: string
+  type: string
+  overview: string | null
+  shortOverview: string | null
+  severity: 'Information' | 'Warning' | 'Error'
+  userId: string | null
+}
+
+export type ActivityPage = { items: ActivityEntry[]; total: number }
+
 /** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
 export class ApiError extends Error {
   readonly status: number
@@ -429,6 +454,17 @@ export const fetchAddonPreferences = (signal?: AbortSignal) =>
 export const saveAddonPreferences = (preferences: Pick<AddonPreferences, 'useSharedAddons'>) =>
   request<AddonPreferences>('PUT', '/account/addon-preferences', preferences)
 
+export const fetchApiKeys = (signal?: AbortSignal) =>
+  request<ApiKey[]>('GET', '/api-keys', undefined, signal)
+
+export const createApiKey = (app: string) => request<NewApiKey>('POST', '/api-keys', { app })
+
+export const deleteApiKey = (id: string) => request<void>('DELETE', `/api-keys/${seg(id)}`)
+
+/** The latest `limit` (1 to 100) entries of the server's activity, newest first. */
+export const fetchActivity = (limit: number, signal?: AbortSignal) =>
+  request<ActivityPage>('GET', `/activity?limit=${limit}`, undefined, signal)
+
 export const queryKeys = {
   status: ['status'] as const,
   session: ['session'] as const,
@@ -445,6 +481,8 @@ export const queryKeys = {
   libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
+  apiKeys: ['api-keys'] as const,
+  activity: (limit: number) => ['activity', limit] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */
