@@ -72,11 +72,29 @@ export type Settings = {
   catalogLimit: number
   /** Items read at most from one Live TV catalog: its channels, or one day of its guide. */
   channelLimit: number
+  /** Whether apps get skip intro, recap and credits buttons, from the segment databases. */
+  skipButtons: boolean
+  /** Whether apps get similar titles, from the addons' catalogs. */
+  similarTitles: boolean
+  /** Percent of a title's runtime past which a reported position marks it played. */
+  playedPercent: number
+  /** Percent of a title's runtime past which a reported position is kept to resume; below playedPercent. */
+  resumePercent: number
+  /** Minutes a title's version and subtitle lists from the addons are kept. */
+  versionListMinutes: number
+  /** Minutes catalog pages are kept. */
+  catalogRefreshMinutes: number
 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
 export const catalogLimitRange = { min: 100, max: 20000 }
 export const channelLimitRange = { min: 100, max: 50000 }
+
+/** The ranges the server accepts for the content settings. */
+export const playedPercentRange = { min: 50, max: 100 }
+export const resumePercentRange = { min: 0, max: 50 }
+export const versionListMinutesRange = { min: 1, max: 360 }
+export const catalogRefreshMinutesRange = { min: 1, max: 1440 }
 
 export type NewUser = {
   name: string

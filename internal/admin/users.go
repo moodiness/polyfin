@@ -103,6 +103,14 @@ type settingsJSON struct {
 	Downloads    *bool `json:"downloads"`
 	CatalogLimit *int  `json:"catalogLimit"`
 	ChannelLimit *int  `json:"channelLimit"`
+	// The content settings keep their current values too when a PUT
+	// leaves them out.
+	SkipButtons           *bool `json:"skipButtons"`
+	SimilarTitles         *bool `json:"similarTitles"`
+	PlayedPercent         *int  `json:"playedPercent"`
+	ResumePercent         *int  `json:"resumePercent"`
+	VersionListMinutes    *int  `json:"versionListMinutes"`
+	CatalogRefreshMinutes *int  `json:"catalogRefreshMinutes"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -117,6 +125,13 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		Downloads:           &settings.Downloads,
 		CatalogLimit:        &settings.CatalogLimit,
 		ChannelLimit:        &settings.ChannelLimit,
+
+		SkipButtons:           &settings.SkipButtons,
+		SimilarTitles:         &settings.SimilarTitles,
+		PlayedPercent:         &settings.PlayedPercent,
+		ResumePercent:         &settings.ResumePercent,
+		VersionListMinutes:    &settings.VersionListMinutes,
+		CatalogRefreshMinutes: &settings.CatalogRefreshMinutes,
 	}
 }
 
@@ -374,6 +389,13 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		Downloads:           valueOr(body.Downloads, current.Downloads),
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
+
+		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
+		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
+		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
+		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
+		VersionListMinutes:    valueOr(body.VersionListMinutes, current.VersionListMinutes),
+		CatalogRefreshMinutes: valueOr(body.CatalogRefreshMinutes, current.CatalogRefreshMinutes),
 	})
 	if accountError(w, err) {
 		return

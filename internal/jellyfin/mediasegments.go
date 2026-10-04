@@ -38,7 +38,9 @@ var segmentTypes = map[string]string{
 // mediaSegments answers the segments of a movie or an episode, opened by
 // its own identifier or by one of its versions'. Other items have none.
 // The segments come from community databases; one that fails only leaves
-// its segments out.
+// its segments out. With the skip buttons turned off in the settings, no
+// database is asked and every item has none, as on a Jellyfin server
+// without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -63,7 +65,7 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	if h.Segments == nil {
+	if h.Segments == nil || !h.Accounts.Settings().SkipButtons {
 		writeJSON(w, http.StatusOK, result)
 		return
 	}

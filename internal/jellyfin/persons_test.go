@@ -21,6 +21,8 @@ import (
 // among them the people searches.
 type addonRequests struct {
 	catalogs, searches atomic.Int32
+	// all counts every request, whatever it asks for.
+	all atomic.Int32
 }
 
 // peopleAddon serves a movie catalog narrowed by genre and one of crime
@@ -54,6 +56,7 @@ func peopleAddon(t *testing.T, peopleSearch bool, requests *addonRequests) strin
 	debut := stremio.Meta{ID: "tt0000009", Type: "movie", Name: "Debut", ReleaseInfo: "2005", Poster: "https://example.com/debut.jpg"}
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.EscapedPath()
+		requests.all.Add(1)
 		extra := func(name string) string {
 			_, value, _ := strings.Cut(strings.TrimSuffix(path, ".json"), name+"=")
 			value, _, _ = strings.Cut(value, "&")
@@ -398,6 +401,42 @@ func TestSimilarTitlesRankBySharedGenres(t *testing.T) {
 	}
 	if status := p.get(t, "/Items/0123456789abcdef0123456789abcdef/Similar", p.token, nil); status != http.StatusNotFound {
 		t.Errorf("unknown item: %d", status)
+	}
+}
+
+func TestSimilarTitlesCanBeTurnedOff(t *testing.T) {
+	p := newPeopleSetup(t, false)
+	if !p.store.Settings().SimilarTitles {
+		t.Fatal("similar titles are off by default")
+	}
+	p.setting(t, func(s *accounts.Settings) { s.SimilarTitles = false })
+	// Apps ask for similar titles on a title's page, once its details are
+	// open: those describe the title, which the similar routes check
+	// exists, as every item route does.
+	if status := p.get(t, "/Users/"+p.user+"/Items/"+p.titles["Heist"], p.token, nil); status != http.StatusOK {
+		t.Fatalf("details: %d", status)
+	}
+	before := p.requests.all.Load()
+	for _, route := range []string{"/Items/", "/Movies/", "/Shows/", "/Trailers/"} {
+		path := route + p.titles["Heist"] + "/Similar?userId=" + p.user
+		var page QueryResult
+		if status := p.get(t, path, p.token, &page); status != http.StatusOK || len(page.Items) != 0 || page.TotalRecordCount != 0 {
+			t.Errorf("switched off, %s: %d %+v", path, status, page)
+		}
+	}
+	if requests := p.requests.all.Load() - before; requests != 0 {
+		t.Errorf("switched off, %d addon requests for similar titles", requests)
+	}
+	// Statuses stay those of Jellyfin.
+	if status := p.get(t, "/Items/0123456789abcdef0123456789abcdef/Similar", p.token, nil); status != http.StatusNotFound {
+		t.Errorf("unknown item: %d", status)
+	}
+	// Turned back on, similar titles come back at once.
+	p.setting(t, func(s *accounts.Settings) { s.SimilarTitles = true })
+	var page QueryResult
+	p.get(t, "/Items/"+p.titles["Heist"]+"/Similar", p.token, &page)
+	if got := itemNames(page.Items); !slices.Equal(got, []string{"Chase", "Brawl", "Caper"}) {
+		t.Errorf("switched on again: %v", got)
 	}
 }
 

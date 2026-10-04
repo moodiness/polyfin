@@ -64,6 +64,13 @@ const en = {
     invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',
     invalid_channel_limit:
       'Channels read per Live TV catalog must be a whole number from 100 to 50,000.',
+    invalid_played_percent: 'The played threshold must be a whole number from 50 to 100.',
+    invalid_resume_percent: 'The resume threshold must be a whole number from 0 to 50.',
+    resume_not_below_played: 'The resume threshold must be lower than the played threshold.',
+    invalid_version_list_minutes:
+      'The time version lists are kept must be a whole number of minutes from 1 to 360.',
+    invalid_catalog_refresh_minutes:
+      'The catalog refresh time must be a whole number of minutes from 1 to 1,440.',
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
@@ -249,6 +256,25 @@ const en = {
     channelLimit: 'Channels read per Live TV catalog',
     channelLimitHelp:
       'Polyfin stops reading a Live TV catalog after this many channels, and reads at most this many programmes per day for the guide. A higher number shows more, but loads more slowly and the addon gets more requests. From 100 to 50,000; 10,000 by default.',
+    contentTitle: 'Content',
+    skipButtons: 'Skip intro and credits buttons',
+    skipButtonsHelp:
+      'Apps offer to skip intros, recaps and credits, found in community databases. When off, apps show no skip buttons and the databases are not asked.',
+    similarTitles: 'Similar titles',
+    similarTitlesHelp:
+      'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',
+    playedPercent: 'Marked played after (%)',
+    playedPercentHelp:
+      'A title is marked played once playback goes past this share of its length. From 50 to 100; 90 by default, like Jellyfin.',
+    resumePercent: 'Resume point kept after (%)',
+    resumePercentHelp:
+      'Where playback stopped is kept, to resume from there, once past this share of a title’s length. It must be lower than the played threshold. From 0 to 50; 5 by default, like Jellyfin. A title shorter than 5 minutes is marked played as soon as it is past this point.',
+    versionListMinutes: 'Keep version lists for (minutes)',
+    versionListMinutesHelp:
+      'How long Polyfin keeps the versions and subtitles the addons list for a title. Keeping lists longer sends fewer requests to the stream addon, which helps with providers that refuse too many requests, but new versions show up later. From 1 to 360; 10 by default.',
+    catalogRefreshMinutes: 'Refresh catalogs every (minutes)',
+    catalogRefreshMinutesHelp:
+      'How long Polyfin keeps the catalog pages it reads from addons, the Live TV guide included, before reading them again. A longer time sends fewer requests to the addons, but new titles show up later. From 1 to 1,440 (one day); 10 by default.',
     saved: 'Settings saved.',
   },
   stremioTypes: {

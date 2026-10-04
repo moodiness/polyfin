@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -132,6 +133,37 @@ func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
 	}
 	// What one user did is theirs only.
 	tr.user2(t)
+}
+
+func TestPlayedAndResumePercentsMoveTheThresholds(t *testing.T) {
+	tr := newTracking(t)
+	if s := tr.store.Settings(); s.PlayedPercent != 90 || s.ResumePercent != 5 {
+		t.Fatalf("default thresholds: played %d, resume %d", s.PlayedPercent, s.ResumePercent)
+	}
+	tr.setting(t, func(s *accounts.Settings) { s.PlayedPercent, s.ResumePercent = 98, 20 })
+	// The movie runs 1h30, 54 000 000 000 ticks.
+	at := func(percent float64) map[string]any {
+		return map[string]any{"ItemId": tr.movie, "PositionTicks": int64(54_000_000_000 * percent / 100)}
+	}
+	tr.report(t, "/Sessions/Playing/Progress", at(15))
+	if data := tr.userData(t, tr.movie); data.PlaybackPositionTicks != 0 || data.Played {
+		t.Errorf("15%%, below the resume threshold: %+v", data)
+	}
+	tr.report(t, "/Sessions/Playing/Progress", at(25))
+	if data := tr.userData(t, tr.movie); data.PlaybackPositionTicks != 13_500_000_000 || data.Played {
+		t.Errorf("25%%, past the resume threshold: %+v", data)
+	}
+	tr.report(t, "/Sessions/Playing/Progress", at(96))
+	if data := tr.userData(t, tr.movie); data.PlaybackPositionTicks != 51_840_000_000 || data.Played {
+		t.Errorf("96%%, below the played threshold: %+v", data)
+	}
+	if resume := tr.list(t, "/UserItems/Resume"); !slices.Equal(resume, []string{tr.movie}) {
+		t.Errorf("resume at 96%%: %v", resume)
+	}
+	tr.report(t, "/Sessions/Playing/Stopped", at(99))
+	if data := tr.userData(t, tr.movie); data.PlaybackPositionTicks != 0 || !data.Played {
+		t.Errorf("99%%, past the played threshold: %+v", data)
+	}
 }
 
 func TestPlaybackReportsAreRecordedWhenTheAppHangsUp(t *testing.T) {

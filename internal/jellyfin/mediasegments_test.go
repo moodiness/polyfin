@@ -274,6 +274,34 @@ func TestMediaSegmentsCanBeTurnedOff(t *testing.T) {
 	}
 }
 
+func TestSkipButtonsSettingTurnsSegmentsOff(t *testing.T) {
+	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
+	if !p.store.Settings().SkipButtons {
+		t.Fatal("skip buttons are off by default")
+	}
+	p.setting(t, func(s *accounts.Settings) { s.SkipButtons = false })
+	for _, id := range []string{p.movie, p.episode} {
+		if result := p.segments(t, "/MediaSegments/"+id); len(result.Items) != 0 {
+			t.Errorf("switched off, %s has segments %+v", id, result)
+		}
+	}
+	if asked := p.databases.requests(); len(asked) != 0 {
+		t.Errorf("switched off, the databases were asked %v", asked)
+	}
+	// Statuses stay those of Jellyfin.
+	if status := p.get(t, "/MediaSegments/0123456789abcdef0123456789abcdef", p.token, nil); status != http.StatusNotFound {
+		t.Errorf("unknown item: %d", status)
+	}
+	// Turned back on, the buttons come back at once.
+	p.setting(t, func(s *accounts.Settings) { s.SkipButtons = true })
+	if got := spans(p.segments(t, "/MediaSegments/"+p.movie)); len(got) != 3 {
+		t.Errorf("switched on again: %v", got)
+	}
+	if asked := p.databases.requests(); len(asked) == 0 {
+		t.Error("switched on again, no database was asked")
+	}
+}
+
 // TestMediaSegmentsMatchJellyfin compares the answers with the one
 // recorded from Jellyfin 12.1, which had no segments, and the segments
 // with the fields of Jellyfin's MediaSegmentDto.
