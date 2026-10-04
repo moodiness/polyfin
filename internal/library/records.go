@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -38,9 +39,11 @@ type record struct {
 	// Confined is true when the addon may only reach public addresses, which
 	// also applies to its artwork.
 	Confined bool `json:"confined,omitempty"`
-	// Rating is the rating a title's complete description gave, empty when
-	// it gave none; nil until one was read (see learnRating).
-	Rating *string `json:"rating,omitempty"`
+	// Rating is the rating a description by one of the server's addons
+	// gave, empty when it gave none, at RatedAt; nil until one was read
+	// (see learnRating).
+	Rating  *string    `json:"rating,omitempty"`
+	RatedAt *time.Time `json:"ratedAt,omitempty"`
 }
 
 func (s *Service) save(ctx context.Context, records []record) error {
@@ -80,7 +83,7 @@ func (s *Service) save(ctx context.Context, records []record) error {
 // keptData is the record an upsert stores: the new one, with the stored
 // folder and rating when the new one has none.
 const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
-	WHERE key IN ('parent', 'rating')), '{}'::jsonb) || excluded.data`
+	WHERE key IN ('parent', 'rating', 'ratedAt')), '{}'::jsonb) || excluded.data`
 
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	var r record

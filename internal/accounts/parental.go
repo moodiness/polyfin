@@ -32,9 +32,18 @@ type ParentalControl struct {
 	BlockUnrated []string
 }
 
-// Restricted reports whether the control hides anything.
+// Restricted reports whether the control hides any of Polyfin's titles,
+// movies and series; the other kinds have no items in Polyfin.
 func (p ParentalControl) Restricted() bool {
-	return p.MaxRating != nil || len(p.BlockUnrated) > 0
+	return p.Judges("Movie") || p.Judges("Series")
+}
+
+// Judges reports whether an item of kind, one of UnratedKinds, may be
+// hidden depending on its rating: when there is a highest rating, or when
+// the kind is hidden unrated. Other items are allowed whatever their
+// rating.
+func (p ParentalControl) Judges(kind string) bool {
+	return p.MaxRating != nil || slices.Contains(p.BlockUnrated, kind)
 }
 
 // Allows reports whether the user may reach an item of kind, one of

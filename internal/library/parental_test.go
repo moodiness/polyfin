@@ -236,3 +236,143 @@ func TestSlowRatingsAreHiddenUntilKnown(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// fakeRatings is an addon a user could install to describe a title without
+// its certification.
+func fakeRatings() *fakeAddon {
+	crime := stremio.Meta{ID: "tt2", Type: "movie", Name: "Crime"}
+	return &fakeAddon{
+		manifest: stremio.Manifest{ID: "p", Name: "Mine", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "mine", Name: "Mine"}}},
+		catalogs: map[string][]stremio.Meta{"movie/mine": {crime}},
+		metas:    map[string]stremio.Meta{"movie/tt2": crime},
+	}
+}
+
+func TestOnlyTheServersAddonsRateTitles(t *testing.T) {
+	e := newEnv(t)
+	e.install(addons.Shared(), ratedAddon())
+	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
+	crime := itemID(titleKey(KindMovie, "tt2"))
+
+	// Another user's own addon describes Crime without its R first: it is
+	// not kept as Crime's rating. (Users' addons on the local network, as
+	// the test's, are an administrator's.)
+	e.install(addons.Personal(e.admin.ID), fakeRatings())
+	if page := e.children(e.admin, "Mine", 0, 10); !slices.Equal(names(page.Items), []string{"Crime"}) {
+		t.Fatalf("own library: %v", names(page.Items))
+	}
+	if _, err := e.service.Item(t.Context(), e.admin, crime); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := e.service.load(t.Context(), crime); r.Rating != nil {
+		t.Errorf("a user's own addon set the rating: %q", *r.Rating)
+	}
+	if _, err := e.service.Item(t.Context(), child, crime); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Crime opened by the child after another user's addon described it: %v", err)
+	}
+	if r, _ := e.service.load(t.Context(), crime); r.Rating == nil || *r.Rating != "R" {
+		t.Errorf("rating from the server's addon: %v", r.Rating)
+	}
+
+	// The child's own addon is left out of their libraries and of the
+	// descriptions they get, and they keep the server's addons.
+	e.install(addons.Personal(child.ID), fakeRatings())
+	if err := e.addons.SetUsesSharedAddons(t.Context(), child.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	libraries, _ := e.service.Libraries(t.Context(), child)
+	if got := names(libraries); slices.Contains(got, "Mine") || !slices.Contains(got, "Top") {
+		t.Errorf("child's libraries: %v", got)
+	}
+	if _, err := e.service.Item(t.Context(), child, crime); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Crime opened through the child's own addon: %v", err)
+	}
+	if _, err := e.service.Versions(t.Context(), child, crime); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Crime played through the child's own addon: %v", err)
+	}
+	if r, _ := e.service.load(t.Context(), crime); r.Rating == nil || *r.Rating != "R" {
+		t.Errorf("rating after the child's addon: %v", r.Rating)
+	}
+}
+
+func TestRestrictedListingsDoNotCrawlCatalogs(t *testing.T) {
+	e := newEnv(t)
+	unrated, rated := titles("movie", 200), titles("movie", 200)
+	for i := range rated {
+		rated[i].ID = "r" + rated[i].ID
+		rated[i].Extras = &stremio.Extras{Certification: "R"}
+	}
+	addon := &fakeAddon{
+		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+			Catalogs: []stremio.Catalog{
+				{Type: "movie", ID: "new", Name: "New", Extra: []stremio.Extra{{Name: "skip"}}},
+				{Type: "movie", ID: "adult", Name: "Adult", Extra: []stremio.Extra{{Name: "skip"}}},
+			}},
+		catalogs: map[string][]stremio.Meta{"movie/new": unrated, "movie/adult": rated},
+		metas:    map[string]stremio.Meta{},
+		pageSize: 20,
+		metaGate: make(chan struct{}),
+	}
+	for _, meta := range unrated {
+		addon.metas["movie/"+meta.ID] = meta
+	}
+	e.install(addons.Shared(), addon)
+	t.Cleanup(func() { close(addon.metaGate) })
+	e.service.ratingWait = 50 * time.Millisecond
+	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
+
+	// Ratings that do not come in time stop the listing at the first page,
+	// which says more may follow.
+	page := e.children(child, "New", 0, 20)
+	if len(page.Items) != 0 || !page.More || len(addon.catalogRequests()) != 1 {
+		t.Errorf("listing of unknown ratings: %v more=%v, catalog requests %v", names(page.Items), page.More, addon.catalogRequests())
+	}
+	// A catalog whose titles are all hidden is read a few pages deep, not
+	// whole.
+	before := len(addon.catalogRequests())
+	page = e.children(child, "Adult", 0, 20)
+	if requests := len(addon.catalogRequests()) - before; len(page.Items) != 0 || !page.More || requests > hiddenReach {
+		t.Errorf("listing of hidden titles: %v more=%v, %d catalog requests", names(page.Items), page.More, requests)
+	}
+}
+
+func TestRatingsAreOnlyLookedUpWhenTheyMatter(t *testing.T) {
+	e := newEnv(t)
+	addon := ratedAddon()
+	e.install(addons.Shared(), addon)
+	// Books are hidden unrated, which no title of Polyfin is.
+	books := e.restrict("books", accounts.ParentalControl{BlockUnrated: []string{"Book"}})
+	if got := names(e.children(books, "Top", 0, 100).Items); len(got) != 6 || addon.metaRequests() != 0 {
+		t.Errorf("listing for a user hiding unrated books: %v, %d meta requests", got, addon.metaRequests())
+	}
+	movies := e.restrict("movies", accounts.ParentalControl{BlockUnrated: []string{"Movie"}})
+	if got := names(e.children(movies, "Shows", 0, 100).Items); len(got) != 2 || addon.metaRequests() != 0 {
+		t.Errorf("shows for a user hiding unrated movies: %v, %d meta requests", got, addon.metaRequests())
+	}
+}
+
+func TestOldRatingsAreAskedAgain(t *testing.T) {
+	e := newEnv(t)
+	addon := ratedAddon()
+	e.install(addons.Shared(), addon)
+	child := e.restrict("child", accounts.ParentalControl{BlockUnrated: []string{"Movie"}})
+	if got := names(e.children(child, "Top", 0, 100).Items); slices.Contains(got, "Homemade") {
+		t.Fatalf("unrated movie listed: %v", got)
+	}
+	// The movie gets a rating; a day later, the listing asks again.
+	addon.mu.Lock()
+	addon.metas["movie/tt3"] = stremio.Meta{ID: "tt3", Type: "movie", Name: "Homemade", Extras: &stremio.Extras{Certification: "PG"}}
+	addon.mu.Unlock()
+	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return "en" })
+	e.service.now = func() time.Time { return time.Now().Add(24 * time.Hour) }
+	deadline := time.Now().Add(5 * time.Second)
+	for !slices.Contains(names(e.children(child, "Top", 0, 100).Items), "Homemade") {
+		if time.Now().After(deadline) {
+			t.Fatal("the new rating never reached the listing")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

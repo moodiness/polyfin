@@ -99,10 +99,12 @@ func (s *Service) words() words {
 	return vocabularyOf(s.language())
 }
 
-// installed is an addon a user can use, with how to reach it.
+// installed is an addon a user can use, with how to reach it. shared is
+// true for the server's addons, installed by an administrator.
 type installed struct {
 	addon    addons.Addon
 	confined bool
+	shared   bool
 }
 
 // library is a library of a user with its catalog.
@@ -119,20 +121,27 @@ type view struct {
 	libraries []library
 	// parental is the user's parental control, which hides titles (see
 	// visible). The ratings of the titles a request lists are looked up
-	// until deadline, lookups counting how many it started.
+	// until deadline, lookups counting how many it started; held is set
+	// once a listing of the request stopped short for parental control.
 	parental accounts.ParentalControl
 	deadline time.Time
 	lookups  *atomic.Int32
+	held     *atomic.Bool
 }
 
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
-	scopes := []addons.Scope{addons.Personal(user.ID)}
-	if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
-		return view{}, err
-	} else if shared {
-		scopes = append([]addons.Scope{addons.Shared()}, scopes...)
+	// A user under parental control browses the server's addons only: their
+	// own addons could describe titles without the ratings that hide them.
+	scopes := []addons.Scope{addons.Shared()}
+	if !user.Parental.Restricted() {
+		scopes = []addons.Scope{addons.Personal(user.ID)}
+		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
+			return view{}, err
+		} else if shared {
+			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
+		}
 	}
-	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32)}
+	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool)}
 	var visible []addons.Library
 	var entries []installed
 	for _, scope := range scopes {
@@ -146,7 +155,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 		byID := map[accounts.ID]installed{}
 		for _, addon := range list {
 			if addon.Enabled {
-				entry := installed{addon: addon, confined: confined}
+				entry := installed{addon: addon, confined: confined, shared: scope.Owner == nil}
 				v.addons = append(v.addons, entry)
 				byID[addon.ID] = entry
 			}
@@ -279,15 +288,25 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // pages fetched ahead together, on the guess that they are as long as the
 // first, only count while the guess holds; reading then goes on from the
 // actual position. Titles the user's parental control hides are left out
-// before positions are counted.
+// before positions are counted. A restricted listing reads at most
+// hiddenReach times as far as an unrestricted one, and stops where titles
+// wait for their rating: it reports that more may follow, which apps ask
+// for later, once the ratings are known.
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	var collected []stremio.Meta
 	seen := map[string]bool{}
 	received, size := 0, 0
 	more := true
+	reach := maxCrawl
+	if v.parental.Restricted() {
+		reach = min(maxCrawl, hiddenReach*(start+count))
+	}
 	for len(collected) < start+count {
-		if received >= maxCrawl {
-			more = false
+		if received >= reach {
+			more = received < maxCrawl
+			if more {
+				v.held.Store(true)
+			}
 			break
 		}
 		offsets := []int{received}
@@ -320,7 +339,12 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			received += len(metas)
 			size = max(size, len(metas))
 		}
-		collected = append(collected, s.visibleMetas(ctx, v, src, fresh)...)
+		visible, held := s.visibleMetas(ctx, v, src, fresh)
+		collected = append(collected, visible...)
+		if held {
+			v.held.Store(true)
+			break
+		}
 		if repeated {
 			more = false
 			break
@@ -419,7 +443,9 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 			}
 		}
 		anyMore := slices.Contains(mores, true)
-		if len(result) >= need || !anyMore || per >= maxCrawl {
+		// Reading further would not show the titles a restricted listing
+		// stopped at (see window).
+		if len(result) >= need || !anyMore || per >= maxCrawl || v.held.Load() {
 			total := len(result)
 			if anyMore {
 				total++
@@ -608,8 +634,16 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 }
 
 // titleMeta finds the complete description of a title among the user's
-// addons, starting with the one that listed it, and keeps its rating.
+// addons, starting with the one that listed it (see describe).
 func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta, bool) {
+	return s.describe(ctx, v, r, false)
+}
+
+// describe finds the complete description of a title among the user's
+// addons, the server's only when shared is set, starting with the one that
+// listed it. A description from one of the server's addons gives the
+// rating kept for the title.
+func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (stremio.Meta, bool) {
 	if r.Meta == nil {
 		return stremio.Meta{}, false
 	}
@@ -626,12 +660,14 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 		})
 	}
 	for _, candidate := range candidates {
-		if !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
+		if shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			continue
 		}
 		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
-			s.learnRating(ctx, r, meta)
+			if candidate.shared {
+				s.learnRating(ctx, r, meta)
+			}
 			return meta, true
 		}
 		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
@@ -708,9 +744,11 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		if described {
 			meta = full
 		}
+		// A restricted user's addons are the server's (see view): the
+		// description gives the rating.
 		rating, known := certification(meta), described
 		if !described {
-			rating, known = s.knownRating(r)
+			rating, known, _ = s.knownRating(v, r)
 		}
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.

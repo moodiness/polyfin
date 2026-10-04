@@ -87,7 +87,9 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		id, _ := url.PathUnescape(parts[2])
+		a.mu.Lock()
 		meta, ok := a.metas[parts[1]+"/"+id]
+		a.mu.Unlock()
 		if !ok {
 			http.NotFound(w, r)
 			return

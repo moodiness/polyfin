@@ -88,7 +88,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 	if err != nil {
 		return target{}, view{}, err
 	}
-	if len(s.visible(ctx, v, []record{r})) == 0 {
+	if kept, _ := s.visible(ctx, v, []record{r}); len(kept) == 0 {
 		return target{}, view{}, ErrNotFound
 	}
 	switch {

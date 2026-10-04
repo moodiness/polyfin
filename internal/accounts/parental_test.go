@@ -37,6 +37,11 @@ func TestParentalControlAllowsAsJellyfinDoes(t *testing.T) {
 			t.Errorf("%s (%s %q): allowed=%v", tc.justification, tc.kind, tc.rating, got)
 		}
 	}
+	// Kinds Polyfin has no items of restrict nothing.
+	books := ParentalControl{BlockUnrated: []string{"Book", "LiveTvChannel"}}
+	if books.Restricted() || books.Judges("Movie") || !(ParentalControl{BlockUnrated: []string{"Series"}}).Restricted() {
+		t.Error("restricted by kinds Polyfin has no items of, or not by series")
+	}
 }
 
 func TestParentalControlIsStoredNormalized(t *testing.T) {
