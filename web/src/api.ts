@@ -231,7 +231,26 @@ export type Library = {
   appName: string | null
   enabled: boolean
   browsable: boolean
+  /** XMLTV guide of an enabled TV catalog; null for any other library. */
+  guide: Guide | null
 }
+
+/** The XMLTV guide of a TV catalog and how its last fetch went. */
+export type Guide = {
+  /** Redacted address: the credentials it may embed are never returned. Empty: no guide. */
+  url: string
+  checkedAt: string | null
+  /** Last successful fetch. */
+  fetchedAt: string | null
+  /** Channels of the catalog at the last fetch, and those the guide covers. */
+  channels: number
+  matched: number
+  /** Code of the last failure; empty after a success. */
+  error: string
+}
+
+/** Which TV catalog a guide request is for. */
+export type GuideTarget = Pick<Library, 'addonId' | 'catalogType' | 'catalogId'>
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
@@ -392,6 +411,14 @@ export const fetchLibraries = (scope: Scope, signal?: AbortSignal) =>
 /** Replaces the scope's enabled libraries with `libraries`, in this order. */
 export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
   request<Library[]>('PUT', `${scopePath(scope)}/libraries`, { libraries })
+
+/** Sets the XMLTV guide address of a TV catalog (empty removes it) and fetches it at once. */
+export const saveGuide = (scope: Scope, target: GuideTarget, url: string) =>
+  request<Library[]>('PUT', `${scopePath(scope)}/guides`, { ...target, url })
+
+/** Fetches the XMLTV guide of a TV catalog now. */
+export const refreshGuide = (scope: Scope, target: GuideTarget) =>
+  request<Library[]>('POST', `${scopePath(scope)}/guides/refresh`, target)
 
 export const fetchAddonPreferences = (signal?: AbortSignal) =>
   request<AddonPreferences>('GET', '/account/addon-preferences', undefined, signal)

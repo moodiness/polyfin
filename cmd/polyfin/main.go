@@ -188,6 +188,7 @@ func serve(ctx context.Context) error {
 				SignIns:      signIns,
 				SetupCode:    setupCode,
 				Logger:       logger,
+				Guides:       lib,
 			}),
 			Jellyfin: jellyfin.New(jellyfin.Options{
 				ServerID:      serverID,
@@ -212,6 +213,7 @@ func serve(ctx context.Context) error {
 	// Jellyfin's handler, created above, closes the sockets of the devices
 	// the sweep signs out.
 	go store.SweepInactiveDevices(ctx, logger)
+	go lib.KeepGuidesFresh(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)

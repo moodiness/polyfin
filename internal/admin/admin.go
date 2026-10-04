@@ -49,6 +49,8 @@ type Options struct {
 	// Now tells the time users' allowed hours are checked against; nil
 	// means the system clock.
 	Now func() time.Time
+	// Guides fetches the XMLTV guides of live TV catalogs.
+	Guides GuideRefresher
 }
 
 type handler struct {
@@ -97,6 +99,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
 	mux.Handle("GET /admin/api/account/addon-preferences", h.signedIn(h.addonPreferences))
 	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
+	mux.Handle("PUT /admin/api/scopes/{scope}/guides", h.signedIn(h.saveGuide))
+	mux.Handle("POST /admin/api/scopes/{scope}/guides/refresh", h.signedIn(h.refreshGuide))
 
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")

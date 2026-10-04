@@ -50,6 +50,8 @@ type record struct {
 	Rating  *string    `json:"rating,omitempty"`
 	RatedAt *time.Time `json:"ratedAt,omitempty"`
 	Genres  *[]string  `json:"genres,omitempty"`
+	// EpisodeTitle is the episode title of a programme from an XMLTV guide.
+	EpisodeTitle string `json:"episodeTitle,omitempty"`
 }
 
 func (s *Service) save(ctx context.Context, records []record) error {

@@ -119,6 +119,8 @@ const fr: Messages = {
       'Les horaires vont de 00:00 à 24:00, et chaque fin doit venir après son début (50 lignes au plus).',
     outside_allowed_hours:
       'Ce compte ne peut pas être utilisé à cette heure-ci. Réessayez pendant ses horaires autorisés.',
+    invalid_guide_url:
+      'Saisissez une adresse de guide commençant par https:// ou http://, de 4 096 caractères au plus.',
   },
   status: {
     title: 'État du serveur',
@@ -525,6 +527,37 @@ const fr: Messages = {
     upToDate: 'Aucune modification en attente',
     reset: 'Réinitialiser',
     saved: 'Bibliothèques enregistrées.',
+    guideTitle: 'Guide des programmes (XMLTV)',
+    guideHelp:
+      'Certains fournisseurs publient leur guide des programmes dans un fichier XMLTV. Ses programmes complètent les chaînes pour lesquelles l’addon ne donne pas de guide. Le guide est récupéré à nouveau toutes les 12 heures.',
+    guideAfterSave:
+      'Enregistrez les bibliothèques pour ajouter un guide des programmes à ce catalogue.',
+    guideNone: 'Pas de guide des programmes.',
+    guideAddress: 'Adresse du guide',
+    guideAddressHint: 'Fichier XMLTV, compressé (.gz) ou non, jusqu’à 300 Mo.',
+    guidePlaceholder: 'https://…/guide.xml.gz',
+    guideAdd: 'Ajouter un guide',
+    guideChange: 'Changer d’adresse',
+    guideRemove: 'Retirer le guide',
+    guideSave: 'Enregistrer et récupérer',
+    guideFetching: 'Récupération du guide…',
+    guideRefresh: 'Actualiser le guide',
+    guideRefreshLabel: (name: string) => `Actualiser le guide des programmes de ${name}`,
+    guideFetched: 'Dernière récupération',
+    guideNever: 'Pas encore récupéré.',
+    guideMatched: (matched: number, channels: number) =>
+      `${matched} ${matched <= 1 ? 'chaîne' : 'chaînes'} sur ${channels} ${matched <= 1 ? 'a' : 'ont'} un guide.`,
+    guideRemoved: 'Guide des programmes retiré.',
+    guideErrors: {
+      unreachable:
+        'La dernière récupération a échoué : impossible de télécharger le guide. Vérifiez l’adresse et réessayez.',
+      private_network:
+        'La dernière récupération a échoué : ce guide se trouve à une adresse du réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
+      too_large: 'La dernière récupération a échoué : le guide dépasse 300 Mo.',
+      malformed: 'La dernière récupération a échoué : ce fichier n’est pas un guide XMLTV.',
+      channels_unreachable:
+        'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
+    },
   },
   myAddons: {
     title: 'Mes addons',

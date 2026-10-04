@@ -89,6 +89,9 @@ type Item struct {
 	StartDate *time.Time
 	// Channel is the channel a programme is on.
 	Channel *Item
+	// EpisodeTitle is the title of the episode a programme airs, when its
+	// guide gives one.
+	EpisodeTitle string
 }
 
 // Contents describes the episodes under a series or season.

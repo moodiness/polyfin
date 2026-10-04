@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
@@ -50,22 +51,26 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 	}
 	quickConnect := quickconnect.New()
 	clock := new(atomic.Pointer[time.Time])
+	client := stremio.NewClient("test")
+	addonStore := addons.New(pool, client)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := httptest.NewServer(New(Options{
 		Version:      "1.2.3",
 		ServerID:     "0123456789abcdef0123456789abcdef",
 		Database:     pinger{},
 		Accounts:     store,
-		Addons:       addons.New(pool, stremio.NewClient("test")),
+		Addons:       addonStore,
 		QuickConnect: quickConnect,
 		SignIns:      throttle.New(failures, time.Minute),
 		SetupCode:    setupCode,
-		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:       logger,
 		Now: func() time.Time {
 			if at := clock.Load(); at != nil {
 				return *at
 			}
 			return time.Now()
 		},
+		Guides: library.New(pool, addonStore, client, logger, store.Settings),
 	}))
 	t.Cleanup(server.Close)
 	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect, clock: clock}

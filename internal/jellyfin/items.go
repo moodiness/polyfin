@@ -141,6 +141,8 @@ type BaseItemDto struct {
 	IsKids                 *bool        `json:",omitempty"`
 	IsSports               *bool        `json:",omitempty"`
 	ChannelType            string       `json:",omitempty"`
+	// EpisodeTitle is the title of the episode a programme airs.
+	EpisodeTitle string `json:",omitempty"`
 	// Container, MediaSources, MediaStreams, HasSubtitles, Width, Height
 	// and Trickplay describe a movie's or episode's versions.
 	Container    string                  `json:",omitempty"`

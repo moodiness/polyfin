@@ -208,7 +208,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 				// A user without Live TV has no channels, so none of them,
 				// nor their programmes, can be reached.
 				if user.LiveTv {
-					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog})
+					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog, guide: l.Guide != nil && l.Guide.URL != ""})
 				}
 			// The server's libraries the user does not see; their titles stay
 			// reachable through the addon.
@@ -332,6 +332,8 @@ type source struct {
 	// date asks a guide catalog for the programmes of a UTC day,
 	// YYYY-MM-DD.
 	date string
+	// guide is set for a live TV catalog with an XMLTV guide.
+	guide bool
 }
 
 // paged reports whether the catalog can be read past its first page.

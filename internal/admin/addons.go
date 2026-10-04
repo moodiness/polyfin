@@ -1,8 +1,10 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"slices"
 	"time"
 
@@ -62,6 +64,44 @@ type libraryJSON struct {
 	AppName   *string `json:"appName"`
 	Enabled   bool    `json:"enabled"`
 	Browsable bool    `json:"browsable"`
+	// Guide is the XMLTV guide of an enabled live TV catalog, null for any
+	// other library.
+	Guide *guideJSON `json:"guide"`
+}
+
+// guideJSON describes a live TV catalog's XMLTV guide. Its address is
+// redacted, as it may embed credentials: empty when it has none.
+type guideJSON struct {
+	URL       string     `json:"url"`
+	CheckedAt *time.Time `json:"checkedAt"`
+	FetchedAt *time.Time `json:"fetchedAt"`
+	Channels  int        `json:"channels"`
+	Matched   int        `json:"matched"`
+	Error     string     `json:"error"`
+}
+
+func newGuideJSON(guide *addons.Guide) *guideJSON {
+	if guide == nil {
+		return nil
+	}
+	return &guideJSON{URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt, FetchedAt: guide.FetchedAt,
+		Channels: guide.Channels, Matched: guide.Matched, Error: guide.Error}
+}
+
+// redactGuideURL keeps a guide address's scheme and host: its path, query
+// and credentials may hold the user's.
+func redactGuideURL(guideURL string) string {
+	if guideURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(guideURL)
+	if err != nil {
+		return "…"
+	}
+	if (parsed.Path == "" || parsed.Path == "/") && parsed.RawQuery == "" && parsed.User == nil {
+		return parsed.Scheme + "://" + parsed.Host + "/"
+	}
+	return parsed.Scheme + "://" + parsed.Host + "/…"
 }
 
 // writeLibraries answers a scope's libraries with the names apps show
@@ -109,6 +149,7 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			AppName:     appNames[i],
 			Enabled:     l.Enabled,
 			Browsable:   l.Catalog.Browsable(),
+			Guide:       newGuideJSON(l.Guide),
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -168,6 +209,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidOrder, http.StatusBadRequest, "invalid_order"},
 		{addons.ErrInvalidLibrary, http.StatusBadRequest, "invalid_library"},
 		{addons.ErrInvalidLibraryName, http.StatusBadRequest, "invalid_library_name"},
+		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)
@@ -361,6 +403,99 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 	if addonError(w, err) {
 		return
 	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	h.writeLibraries(w, r, scope, libraries)
+}
+
+// GuideRefresher fetches the XMLTV guide of a live TV catalog now (see
+// library.Service.RefreshGuide).
+type GuideRefresher interface {
+	RefreshGuide(ctx context.Context, scope addons.Scope, key addons.LibraryKey) error
+}
+
+type guideRequest struct {
+	AddonID     string `json:"addonId"`
+	CatalogType string `json:"catalogType"`
+	CatalogID   string `json:"catalogId"`
+	URL         string `json:"url"`
+}
+
+// guideTarget reads the catalog a guide request is for.
+func guideTarget(w http.ResponseWriter, body guideRequest) (addons.LibraryKey, bool) {
+	id, err := accounts.ParseID(body.AddonID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_library")
+		return addons.LibraryKey{}, false
+	}
+	return addons.LibraryKey{AddonID: id, CatalogType: body.CatalogType, CatalogID: body.CatalogID}, true
+}
+
+// saveGuide sets the XMLTV guide address of one of the scope's enabled live
+// TV catalogs, an empty one removing it, and fetches the guide at once. It
+// answers the scope's libraries, which tell how the fetch went.
+func (h *handler) saveGuide(w http.ResponseWriter, r *http.Request) {
+	scope, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	var body guideRequest
+	if !decode(w, r, &body) {
+		return
+	}
+	key, ok := guideTarget(w, body)
+	if !ok || (body.URL != "" && h.personalAddonsRefused(w, r, scope)) {
+		return
+	}
+	err := h.Addons.SetGuide(r.Context(), scope, key, body.URL)
+	if err == nil && body.URL != "" {
+		// A turned-off addon's guide is kept, and fetched once it is on.
+		if err = h.fetchGuide(r, scope, key); errors.Is(err, addons.ErrInvalidLibrary) {
+			err = nil
+		}
+	}
+	h.answerGuide(w, r, scope, err)
+}
+
+// refreshGuide fetches the XMLTV guide of one of the scope's live TV
+// catalogs now, answering the scope's libraries.
+func (h *handler) refreshGuide(w http.ResponseWriter, r *http.Request) {
+	scope, ok := h.scope(w, r)
+	if !ok || h.personalAddonsRefused(w, r, scope) {
+		return
+	}
+	var body guideRequest
+	if !decode(w, r, &body) {
+		return
+	}
+	key, ok := guideTarget(w, body)
+	if !ok {
+		return
+	}
+	h.answerGuide(w, r, scope, h.fetchGuide(r, scope, key))
+}
+
+// fetchGuide fetches a guide for a request, to its end even when the admin
+// app leaves: the download is worth keeping.
+func (h *handler) fetchGuide(r *http.Request, scope addons.Scope, key addons.LibraryKey) error {
+	if h.Guides == nil {
+		return errors.New("no guide refresher")
+	}
+	return h.Guides.RefreshGuide(context.WithoutCancel(r.Context()), scope, key)
+}
+
+// answerGuide answers a guide request with the scope's libraries.
+func (h *handler) answerGuide(w http.ResponseWriter, r *http.Request, scope addons.Scope, err error) {
+	if addonError(w, err) {
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	libraries, err := h.Addons.Libraries(r.Context(), scope)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
