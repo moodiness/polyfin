@@ -171,7 +171,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               <option value="">{text.allCategories}</option>
               {(categories.data?.items ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name || t.lineup.exclusions.noGroup}
                 </option>
               ))}
             </select>
@@ -481,7 +481,7 @@ function ChannelRow({
           </span>
         </p>
         <p className="truncate text-xs text-muted" title={channel.providerName}>
-          {channel.category.name}
+          {channel.category.name || t.lineup.exclusions.noGroup}
           {channel.renamed && ` · ${channel.providerName}`}
         </p>
       </div>
