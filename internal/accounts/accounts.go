@@ -97,6 +97,9 @@ type User struct {
 	// ImageTag identifies the user's profile picture, empty without one
 	// (see Store.SetImage).
 	ImageTag string
+	// LiveTvManagement lets the user schedule and delete Live TV
+	// recordings, Jellyfin's EnableLiveTvManagement.
+	LiveTvManagement bool
 }
 
 // NewUser describes an account to create.
@@ -134,6 +137,8 @@ type UserChanges struct {
 	CollectionManagement *bool
 	// SubtitleManagement, see User.
 	SubtitleManagement *bool
+	// LiveTvManagement, see User.
+	LiveTvManagement *bool
 }
 
 // Store is the accounts repository.
@@ -183,7 +188,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag"
+	"subtitle_management, image_tag, live_tv_management"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -194,7 +199,7 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag}
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -269,13 +274,15 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 				skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes,
 				personal_addons, login_attempts, inactive_device_days, detailed_log,
 				analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height,
-				trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb`, language).
+				trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb,
+				recording_pre_padding, recording_post_padding, recording_retention_days`, language).
 			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 				&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 				&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 				&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
-				&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB)
+				&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
+				&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays)
 	})
 	if err == nil && settings != nil {
 		s.settings.Store(settings)
@@ -299,10 +306,11 @@ func createUser(ctx context.Context, db interface {
 	if err := checkPassword(user.Password); err != nil {
 		return User{}, err
 	}
-	// An administrator may control other users' apps and manage collections
-	// and subtitles unless that is taken away, a user may not unless given it.
+	// An administrator may control other users' apps and manage collections,
+	// subtitles and Live TV recordings unless that is taken away, a user may
+	// not unless given it.
 	created, err := scanUser(db.QueryRow(ctx,
-		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, remote_control, collection_management, subtitle_management) VALUES ($1, $2, $3, $4, $3, $3, $3) RETURNING "+userColumns,
+		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, remote_control, collection_management, subtitle_management, live_tv_management) VALUES ($1, $2, $3, $4, $3, $3, $3, $3) RETURNING "+userColumns,
 		name, hashPassword(user.Password), user.IsAdministrator, user.IsHidden))
 	if uniqueViolation(err) {
 		return User{}, ErrNameTaken
@@ -492,7 +500,8 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				blocked_genres = coalesce($21, blocked_genres),
 				access_schedules = coalesce($22::jsonb, access_schedules),
 				collection_management = coalesce($23, collection_management),
-				subtitle_management = coalesce($24, subtitle_management)
+				subtitle_management = coalesce($24, subtitle_management),
+				live_tv_management = coalesce($25, live_tv_management)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
@@ -500,7 +509,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement))
+			changes.SubtitleManagement, changes.LiveTvManagement))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

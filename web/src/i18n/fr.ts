@@ -129,6 +129,10 @@ const fr: Messages = {
     invalid_trickplay_width: 'Choisissez la largeur des miniatures dans la liste.',
     invalid_thumbnail_storage_gb:
       'La place pour les images doit être un nombre entier de Go de 1 à 50.',
+    invalid_recording_padding:
+      'Les minutes avant et après un enregistrement doivent être un nombre entier de 0 à 60.',
+    invalid_recording_retention_days:
+      'Les jours de conservation des enregistrements doivent être un nombre entier de 0 à 3 650.',
   },
   status: {
     title: 'État du serveur',
@@ -305,6 +309,8 @@ const fr: Messages = {
     remoteControl: 'Peut contrôler les applis des autres utilisateurs',
     remoteControlHelp:
       'Permet à cet utilisateur de lancer, mettre en pause ou envoyer des messages aux applications Jellyfin des autres utilisateurs. Chacun peut contrôler ses propres applications.',
+    liveTvManagement: 'Peut enregistrer la TV en direct',
+    liveTvManagementHelp: 'Programmer et supprimer des enregistrements.',
     savePlaybackAccess: 'Enregistrer la lecture et l’accès',
     visibleLibrariesTitle: 'Bibliothèques visibles',
     visibleLibrariesHelp:
@@ -460,6 +466,19 @@ const fr: Messages = {
     thumbnailStorage: 'Place pour les images (Go)',
     thumbnailStorageHelp:
       'Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De 1 à 50 ; 2 par défaut.',
+    recordingsTitle: 'Enregistrements',
+    recordingsFolder: (folder: string) => `Les enregistrements sont gardés dans ${folder}.`,
+    recordingsOff:
+      'L’enregistrement est désactivé. Indiquez un dossier dans POLYFIN_RECORDINGS_DIR pour l’activer.',
+    recordingPrePadding: 'Commencer les enregistrements avant (minutes)',
+    recordingPrePaddingHelp:
+      'Combien de minutes avant l’émission un enregistrement commence. De 0 à 60 ; 0 par défaut.',
+    recordingPostPadding: 'Continuer les enregistrements après (minutes)',
+    recordingPostPaddingHelp:
+      'Combien de minutes après l’émission un enregistrement continue. De 0 à 60 ; 0 par défaut.',
+    recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
+    recordingRetentionDaysHelp:
+      'Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De 0 à 3 650.',
   },
   stremioTypes: {
     movie: 'Films',

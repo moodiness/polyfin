@@ -96,7 +96,7 @@ func (s userState) of(item library.Item) UserItemData {
 	data := s.data[item.ID]
 	result.IsFavorite, result.Rating, result.Likes = data.Favorite, data.Rating, data.Likes()
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode:
+	case library.KindMovie, library.KindEpisode, library.KindRecording:
 		result.PlaybackPositionTicks = int64(data.Position / 100)
 		result.PlayCount = data.PlayCount
 		result.Played = data.Played
@@ -231,7 +231,7 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 	var episodes []library.Item
 	var err error
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode:
+	case library.KindMovie, library.KindEpisode, library.KindRecording:
 		return []library.Item{item}, nil
 	case library.KindSeries:
 		episodes, err = h.Library.Episodes(ctx, user, item.ID, nil)
@@ -435,7 +435,7 @@ func (h *Handler) playedRuntime(ctx context.Context, user accounts.User, item li
 	}
 	runtime := item.Runtime
 	if id, ok := parseGUID(mediaSource); ok {
-		if version, err := h.Library.Version(ctx, user, item.ID, id); err == nil {
+		if version, err := h.version(ctx, user, item, id); err == nil {
 			if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok && analysis.Duration > 0 {
 				runtime = analysis.Duration
 			}

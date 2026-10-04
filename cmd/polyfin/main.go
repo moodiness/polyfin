@@ -32,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -197,22 +198,28 @@ func serve(ctx context.Context) error {
 		Logger:      logger,
 	})
 	defer images.Close()
+	recorder := recordings.New(recordings.Config{DB: pool, Dir: cfg.RecordingsDir, Guide: lib, Recorder: player, Users: store, Logger: logger})
+	if recorder.Available() {
+		logger.Info("Live TV recording is on", "folder", cfg.RecordingsDir)
+		registerRecordingTasks(registry, recorder)
+	}
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
 			Admin:    adminApp,
 			AdminAPI: admin.New(admin.Options{
-				Version:      version,
-				ServerID:     serverID,
-				Database:     pool,
-				Accounts:     store,
-				Addons:       addonStore,
-				QuickConnect: quickConnect,
-				SignIns:      signIns,
-				SetupCode:    setupCode,
-				Logger:       logger,
-				Guides:       lib,
-				Activity:     activityLog,
+				Version:       version,
+				ServerID:      serverID,
+				Database:      pool,
+				Accounts:      store,
+				Addons:        addonStore,
+				QuickConnect:  quickConnect,
+				SignIns:       signIns,
+				SetupCode:     setupCode,
+				Logger:        logger,
+				Guides:        lib,
+				Activity:      activityLog,
+				RecordingsDir: cfg.RecordingsDir,
 			}),
 			Jellyfin: jellyfin.New(jellyfin.Options{
 				ServerID:      serverID,
@@ -234,10 +241,9 @@ func serve(ctx context.Context) error {
 				Tasks:         registry,
 				Logs:          recent,
 				CacheDir:      cfg.CacheDir,
-				// Recordings are configured by POLYFIN_RECORDINGS_DIR, read
-				// here until the configuration knows it.
-				RecordingsDir: os.Getenv("POLYFIN_RECORDINGS_DIR"),
+				RecordingsDir: cfg.RecordingsDir,
 				FontsDir:      cfg.FontsDir,
+				Recordings:    recorder,
 			}),
 			Logger: logger,
 		}),
@@ -247,6 +253,9 @@ func serve(ctx context.Context) error {
 	// Jellyfin's handler, created above, closes the sockets of the devices
 	// the device sweep signs out. The guides due are fetched at start too.
 	registry.Start(ctx)
+	// Recordings in progress when ctx ends are finished, as partial, when
+	// Polyfin starts again.
+	go recorder.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
@@ -322,5 +331,33 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			logger.Info("Ratings refreshed", "titles", asked)
 			return err
 		},
+	})
+}
+
+// registerRecordingTasks registers the periodic jobs of Live TV recording,
+// when it is on: the scheduler itself runs on its own (see
+// recordings.Service.Run).
+func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Service) {
+	registry.Register(tasks.Task{
+		Key:      "DeleteOldRecordings",
+		Category: tasks.CategoryLiveTV,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Delete old recordings", Description: "Deletes the Live TV recordings older than the number of days the settings keep them."},
+			"fr": {Name: "Supprimer les anciens enregistrements", Description: "Supprime les enregistrements de TV en direct plus anciens que le nombre de jours choisi dans les paramètres."},
+		},
+		Interval: recordings.SweepInterval,
+		AtStart:  true,
+		Run:      recorder.SweepRecordings,
+	})
+	registry.Register(tasks.Task{
+		Key:      "ScheduleSeriesRecordings",
+		Category: tasks.CategoryLiveTV,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Schedule series recordings", Description: "Looks in the guide for the new programmes of each series recording and schedules them."},
+			"fr": {Name: "Programmer les enregistrements de séries", Description: "Cherche dans le guide les nouvelles émissions de chaque série enregistrée et les programme."},
+		},
+		Interval: recordings.SeriesRefreshInterval,
+		AtStart:  true,
+		Run:      recorder.RefreshSeriesTimers,
 	})
 }

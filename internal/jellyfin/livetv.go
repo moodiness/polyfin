@@ -42,12 +42,8 @@ func (h *Handler) liveTvRoutes(rt *router) {
 	signedIn(http.MethodPost, "/LiveTv/Programs", h.programs(false))
 	signedIn(http.MethodGet, "/LiveTv/Programs/Recommended", h.programs(true))
 	signedIn(http.MethodGet, "/LiveTv/Programs/{programId}", h.program)
-	// Polyfin records nothing: it has no recordings, timers or series
-	// timers, which apps list on their Live TV pages.
-	signedIn(http.MethodGet, "/LiveTv/Recordings", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/LiveTv/Recordings/Folders", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/LiveTv/Timers", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/LiveTv/SeriesTimers", h.emptyQueryResult)
+	// The DVR: timers, series timers and recordings.
+	h.recordingRoutes(rt, signedIn)
 	// Players fetch these without credentials: see liveFile and
 	// liveSegment.
 	rt.handle(http.MethodGet, "/Videos/{itemId}/live/{file}", http.HandlerFunc(h.liveFile))
@@ -497,6 +493,7 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 			}
 			dtos = append(dtos, dto)
 		}
+		h.addTimers(r.Context(), dtos)
 		writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(programs), StartIndex: start})
 	}
 }
@@ -555,7 +552,9 @@ func (h *Handler) program(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.newItemDto(item, requestedFields(r), true, state))
+	dtos := []BaseItemDto{h.newItemDto(item, requestedFields(r), true, state)}
+	h.addTimers(r.Context(), dtos)
+	writeJSON(w, http.StatusOK, dtos[0])
 }
 
 // webApp reports whether the app is jellyfin-web, which plays HLS in the

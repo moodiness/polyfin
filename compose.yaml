@@ -29,6 +29,9 @@ services:
       POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
       POLYFIN_CACHE_SIZE: ${POLYFIN_CACHE_SIZE:-10GB}
       POLYFIN_HWACCEL: ${POLYFIN_HWACCEL:-auto}
+      # Live TV recording, optional: the folder recordings are written to,
+      # mounted below.
+      # POLYFIN_RECORDINGS_DIR: /recordings
     # A GPU to convert video on, optional. NVIDIA, with the NVIDIA Container
     # Toolkit installed:
     # runtime: nvidia
@@ -38,6 +41,7 @@ services:
     # Parts of the files being read, emptied when Polyfin starts.
     volumes:
       - polyfin_cache:/cache
+      # - ./recordings:/recordings
     # Reachable on the LAN by default: TVs and phones connect to it directly.
     ports:
       - "${POLYFIN_BIND_IP:-0.0.0.0}:${POLYFIN_PORT:-8096}:8096"

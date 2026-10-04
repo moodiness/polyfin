@@ -115,6 +115,10 @@ const en = {
       'The time between two thumbnails must be a whole number of seconds from 5 to 60.',
     invalid_trickplay_width: 'Choose the thumbnail width from the list.',
     invalid_thumbnail_storage_gb: 'The space for images must be a whole number of GB from 1 to 50.',
+    invalid_recording_padding:
+      'Minutes before and after a recording must be whole numbers from 0 to 60.',
+    invalid_recording_retention_days:
+      'Days to keep recordings must be a whole number from 0 to 3,650.',
   },
   status: {
     title: 'Server status',
@@ -282,6 +286,8 @@ const en = {
     remoteControl: 'Can control other users’ apps',
     remoteControlHelp:
       'Lets this user play, pause or send messages to the Jellyfin apps of other users. Everyone can control their own apps.',
+    liveTvManagement: 'Can record Live TV',
+    liveTvManagementHelp: 'Schedule and delete recordings.',
     savePlaybackAccess: 'Save playback and access',
     visibleLibrariesTitle: 'Visible libraries',
     visibleLibrariesHelp:
@@ -436,6 +442,18 @@ const en = {
     thumbnailStorage: 'Space for images (GB)',
     thumbnailStorageHelp:
       'Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From 1 to 50; 2 by default.',
+    recordingsTitle: 'Recordings',
+    recordingsFolder: (folder: string) => `Recordings are saved in ${folder}.`,
+    recordingsOff: 'Recording is off. Set POLYFIN_RECORDINGS_DIR to a folder to turn it on.',
+    recordingPrePadding: 'Start recordings early (minutes)',
+    recordingPrePaddingHelp:
+      'How many minutes before the programme a recording starts. From 0 to 60; 0 by default.',
+    recordingPostPadding: 'Keep recording after the end (minutes)',
+    recordingPostPaddingHelp:
+      'How many minutes after the programme a recording goes on. From 0 to 60; 0 by default.',
+    recordingRetentionDays: 'Keep recordings for (days, 0 = forever)',
+    recordingRetentionDaysHelp:
+      'Recordings older than this are deleted. This is checked every day. From 0 to 3,650.',
   },
   stremioTypes: {
     movie: 'Movies',

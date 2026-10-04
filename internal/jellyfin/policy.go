@@ -64,6 +64,9 @@ type policyUpdate struct {
 	// Whether the user may add subtitle files to titles; like Jellyfin's,
 	// a policy that leaves it out denies it.
 	EnableSubtitleManagement bool
+	// Whether the user may schedule and delete Live TV recordings; like
+	// Jellyfin's, a policy that leaves it out grants it.
+	EnableLiveTvManagement bool
 }
 
 // scheduleUpdate is an AccessSchedule as apps post it. jellyfin-web sends
@@ -166,7 +169,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	id := errs.pathID(r, "userId")
 	policy := policyUpdate{EnableVideoPlaybackTranscoding: true, EnableAudioPlaybackTranscoding: true, EnableContentDownloading: true,
 		EnableLiveTvAccess: true, SyncPlayAccess: syncPlayAccessValue{access: accounts.SyncPlayCreateAndJoin, known: true},
-		EnableAllFolders: true}
+		EnableAllFolders: true, EnableLiveTvManagement: true}
 	var enabled []accounts.ID
 	var schedules []accounts.AccessSchedule
 	if len(bytes.TrimSpace(raw)) == 0 {
@@ -242,6 +245,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		CollectionManagement: &policy.EnableCollectionManagement,
 		// Subtitles.
 		SubtitleManagement: &policy.EnableSubtitleManagement,
+		// Whether they may schedule and delete recordings.
+		LiveTvManagement: &policy.EnableLiveTvManagement,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):

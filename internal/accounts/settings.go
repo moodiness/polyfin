@@ -153,6 +153,26 @@ const (
 // TrickplayWidths are the widths Settings.TrickplayWidth takes.
 var TrickplayWidths = []int{240, 320, 480}
 
+// ErrInvalidRecordingPadding reports a RecordingPrePadding or
+// RecordingPostPadding outside [0, MaxRecordingPadding].
+var ErrInvalidRecordingPadding = errors.New("invalid recording padding")
+
+// ErrInvalidRecordingRetentionDays reports a RecordingRetentionDays outside
+// [0, MaxRecordingRetentionDays].
+var ErrInvalidRecordingRetentionDays = errors.New("invalid recording retention days")
+
+// The bounds and defaults of Settings.RecordingPrePadding and
+// RecordingPostPadding, in seconds, and RecordingRetentionDays. The
+// paddings default to Jellyfin's, none; 0 days keeps recordings until they
+// are deleted.
+const (
+	MaxRecordingPadding           = 3600
+	DefaultRecordingPrePadding    = 0
+	DefaultRecordingPostPadding   = 0
+	MaxRecordingRetentionDays     = 3650
+	DefaultRecordingRetentionDays = 0
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -253,17 +273,26 @@ type Settings struct {
 	// images of every version take: past it, the versions used longest ago
 	// lose theirs.
 	ThumbnailStorageGB int
+	// RecordingPrePadding and RecordingPostPadding are how many seconds
+	// new Live TV recordings start before their programme and go on after
+	// it, Jellyfin's PrePaddingSeconds and PostPaddingSeconds.
+	RecordingPrePadding  int
+	RecordingPostPadding int
+	// RecordingRetentionDays is after how many days a Live TV recording is
+	// deleted, 0 for never.
+	RecordingRetentionDays int
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, recording_pre_padding, recording_post_padding, recording_retention_days FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
-			&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB)
+			&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
+			&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays)
 	return settings, err
 }
 
@@ -330,6 +359,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.ThumbnailStorageGB < MinThumbnailStorageGB || settings.ThumbnailStorageGB > MaxThumbnailStorageGB {
 		return Settings{}, ErrInvalidThumbnailStorage
 	}
+	if settings.RecordingPrePadding < 0 || settings.RecordingPrePadding > MaxRecordingPadding ||
+		settings.RecordingPostPadding < 0 || settings.RecordingPostPadding > MaxRecordingPadding {
+		return Settings{}, ErrInvalidRecordingPadding
+	}
+	if settings.RecordingRetentionDays < 0 || settings.RecordingRetentionDays > MaxRecordingRetentionDays {
+		return Settings{}, ErrInvalidRecordingRetentionDays
+	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
 		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
@@ -338,13 +374,14 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30, recording_pre_padding = $31, recording_post_padding = $32, recording_retention_days = $33",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
 		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
 		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
 		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog,
 		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight,
-		settings.Trickplay, settings.TrickplayInterval, settings.TrickplayWidth, settings.ChapterImages, settings.ThumbnailStorageGB)
+		settings.Trickplay, settings.TrickplayInterval, settings.TrickplayWidth, settings.ChapterImages, settings.ThumbnailStorageGB,
+		settings.RecordingPrePadding, settings.RecordingPostPadding, settings.RecordingRetentionDays)
 	if err != nil {
 		return Settings{}, err
 	}

@@ -51,6 +51,9 @@ type userJSON struct {
 	// CollectionManagement lets the user create, change and delete the
 	// collections every user sees.
 	CollectionManagement bool `json:"collectionManagement"`
+	// LiveTvManagement lets the user schedule and delete Live TV
+	// recordings.
+	LiveTvManagement bool `json:"liveTvManagement"`
 	// PasswordResetPin is the PIN the user asked for from a Jellyfin app's
 	// forgotten password screen, while it is valid, null otherwise: their
 	// password becomes the PIN once they enter it.
@@ -145,6 +148,8 @@ func newUserJSON(user accounts.User) userJSON {
 		// Subtitles and the profile picture.
 		SubtitleManagement: user.SubtitleManagement,
 		ImageTag:           imageTag(user),
+		// Whether the user may schedule and delete recordings.
+		LiveTvManagement: user.LiveTvManagement,
 	}
 }
 
@@ -289,6 +294,14 @@ type settingsJSON struct {
 	TrickplayWidth     *int  `json:"trickplayWidth"`
 	ChapterImages      *bool `json:"chapterImages"`
 	ThumbnailStorageGB *int  `json:"thumbnailStorageGB"`
+	// RecordingPrePadding and RecordingPostPadding, in seconds, and
+	// RecordingRetentionDays keep their current values when a PUT leaves
+	// them out. RecordingsFolder is the folder recordings are written to,
+	// empty when recording is off; a PUT cannot change it.
+	RecordingPrePadding    *int   `json:"recordingPrePadding"`
+	RecordingPostPadding   *int   `json:"recordingPostPadding"`
+	RecordingRetentionDays *int   `json:"recordingRetentionDays"`
+	RecordingsFolder       string `json:"recordingsFolder"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -324,6 +337,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TrickplayWidth:        &settings.TrickplayWidth,
 		ChapterImages:         &settings.ChapterImages,
 		ThumbnailStorageGB:    &settings.ThumbnailStorageGB,
+
+		RecordingPrePadding:    &settings.RecordingPrePadding,
+		RecordingPostPadding:   &settings.RecordingPostPadding,
+		RecordingRetentionDays: &settings.RecordingRetentionDays,
 	}
 }
 
@@ -511,6 +528,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		CollectionManagement *bool `json:"collectionManagement"`
 		// SubtitleManagement, see userJSON.
 		SubtitleManagement *bool `json:"subtitleManagement"`
+		// LiveTvManagement, see userJSON.
+		LiveTvManagement *bool `json:"liveTvManagement"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -539,6 +558,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		// The user's permission to manage collections.
 		CollectionManagement: body.CollectionManagement,
 		SubtitleManagement:   body.SubtitleManagement,
+		LiveTvManagement:     body.LiveTvManagement,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -639,7 +659,14 @@ func (h *handler) unblockUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, newSettingsJSON(h.Accounts.Settings()))
+	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
+}
+
+// settingsJSON describes settings with what the configuration sets.
+func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
+	body := newSettingsJSON(settings)
+	body.RecordingsFolder = h.RecordingsDir
+	return body
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -680,6 +707,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TrickplayWidth:        valueOr(body.TrickplayWidth, current.TrickplayWidth),
 		ChapterImages:         valueOr(body.ChapterImages, current.ChapterImages),
 		ThumbnailStorageGB:    valueOr(body.ThumbnailStorageGB, current.ThumbnailStorageGB),
+
+		RecordingPrePadding:    valueOr(body.RecordingPrePadding, current.RecordingPrePadding),
+		RecordingPostPadding:   valueOr(body.RecordingPostPadding, current.RecordingPostPadding),
+		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
 	})
 	if accountError(w, err) {
 		return
@@ -692,7 +723,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !settings.QuickConnectEnabled {
 		h.QuickConnect.Clear()
 	}
-	writeJSON(w, http.StatusOK, newSettingsJSON(settings))
+	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }
 
 // valueOr is the value value points to, else fallback.

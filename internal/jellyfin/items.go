@@ -154,6 +154,12 @@ type BaseItemDto struct {
 	// Trickplay holds the scrubbing thumbnails of its versions, by media
 	// source and width.
 	Trickplay *map[string]map[int]TrickplayInfo `json:",omitempty"`
+	// TimerId and SeriesTimerId are the timers recording a programme, or
+	// a recording; CompletionPercentage is how far a recording under way
+	// is.
+	TimerId              string   `json:",omitempty"`
+	SeriesTimerId        string   `json:",omitempty"`
+	CompletionPercentage *float64 `json:",omitempty"`
 }
 
 // addMediaSources describes a movie's or episode's versions in its DTO, as
@@ -168,7 +174,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		dto.MediaStreams = &[]playback.MediaStream{}
 		return
 	}
-	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
+	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindRecording {
 		return
 	}
 	var sources []MediaSourceInfo
@@ -180,7 +186,9 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)
-		h.setDownload(r, user, dto, item, p.ordered(opened), true)
+		if item.Kind != library.KindRecording {
+			h.setDownload(r, user, dto, item, p.ordered(opened), true)
+		}
 		h.prepareOpened(r.Context(), user, item, p.ordered(opened))
 	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)
@@ -190,7 +198,8 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	h.setChapters(r.Context(), dto, p.ordered(opened))
 	dto.Id = opened.String()
 	dto.MediaSources = &sources
-	if detail {
+	// Recordings get no thumbnails (see queueImages): no Trickplay field.
+	if detail && item.Kind != library.KindRecording {
 		dto.Trickplay = h.trickplayManifest(r.Context(), item.ID)
 	}
 	if len(sources) == 0 {
@@ -254,6 +263,8 @@ var itemTypes = map[library.Kind]string{
 	library.KindPerson:     "Person",
 	library.KindChannel:    "TvChannel",
 	library.KindProgram:    "Program",
+	// Jellyfin's recordings are videos of its recordings folders.
+	library.KindRecording: "Video",
 }
 
 // isFolder reports whether items of a kind hold other items.
@@ -269,7 +280,7 @@ func isFolder(kind library.Kind) bool {
 // detail is true for an item's own description, which carries every field;
 // listings carry the base fields plus those in fields.
 func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, state userState) BaseItemDto {
-	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode
+	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode || item.Kind == library.KindRecording
 	folder := isFolder(item.Kind)
 	dto := BaseItemDto{
 		Name:              item.Name,
@@ -428,7 +439,7 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		ratio := 2.0 / 3.0
 		switch item.Kind {
-		case library.KindEpisode, library.KindProgram:
+		case library.KindEpisode, library.KindProgram, library.KindRecording:
 			ratio = 16.0 / 9.0
 		case library.KindChannel:
 			// Channel logos are square, as Jellyfin's tuners give them.
@@ -531,7 +542,7 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 // have none.
 func mediaType(kind library.Kind) string {
 	switch kind {
-	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram:
+	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording:
 		return "Video"
 	}
 	return "Unknown"
