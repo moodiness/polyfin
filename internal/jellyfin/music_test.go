@@ -20,10 +20,13 @@ import (
 )
 
 // fakeEclipse is an Eclipse addon serving two albums, one explicit track,
-// a search, and streams of a generated FLAC tone that expire once
-// expiring is set. queries records the settings every request carried.
+// an artist page, a search, and streams of a generated FLAC tone that
+// expire once expiring is set. content, set before it is installed, is its
+// manifest's contentType: an audiobook addon's streams come with
+// chapters. queries records the settings every request carried.
 type fakeEclipse struct {
 	url      string
+	content  string
 	streams  atomic.Int32
 	expiring atomic.Bool
 	mu       sync.Mutex
@@ -36,13 +39,13 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 	var server *httptest.Server
 	track := func(id, title, album, albumID string, explicit bool) map[string]any {
 		return map[string]any{"id": id, "title": title, "artist": "Tone Quartet", "album": album, "albumId": albumID,
-			"duration": 10, "artworkURL": server.URL + "/cover.jpg", "explicit": explicit}
+			"duration": 10, "artworkURL": server.URL + "/cover.jpg", "explicit": explicit, "format": "flac"}
 	}
 	albums := func() map[string]map[string]any {
 		return map[string]map[string]any{
 			"sine": {"id": "sine", "title": "Sine Studies", "artist": "Tone Quartet", "year": "2021", "artworkURL": server.URL + "/cover.jpg",
 				"tracks": []any{track("t1", "First Light", "", "", false), track("t2", "Second Wind", "", "", false)}},
-			"loud": {"id": "loud", "title": "Loud Songs", "artist": "Tone Quartet", "year": 2022,
+			"loud": {"id": "loud", "title": "Loud Songs", "artist": "Tone Quartet", "year": 2022, "artworkURL": server.URL + "/cover.jpg",
 				"tracks": []any{track("t3", "Rude Words", "", "", true)}},
 		}
 	}
@@ -57,12 +60,16 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 		answer := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		switch path := strings.TrimPrefix(r.URL.Path, "/token"); {
 		case path == "/manifest.json":
-			answer(map[string]any{"id": "com.example.tones", "name": "Tones", "version": "1.0.0",
+			manifest := map[string]any{"id": "com.example.tones", "name": "Tones", "version": "1.0.0",
 				"resources": []string{"search", "stream", "catalog", "settings"}, "types": []string{"track", "album", "artist"},
 				"settings": []any{map[string]any{"key": "quality", "type": "select", "label": "Quality", "default": "high", "perNetwork": true,
 					"options": []any{map[string]string{"value": "high", "label": "High"}, map[string]string{"value": "low", "label": "Low"}}}},
 				"catalogs": []any{map[string]string{"id": "new", "type": "album", "name": "New Releases"},
-					map[string]string{"id": "top", "type": "track", "name": "Top Songs"}}})
+					map[string]string{"id": "top", "type": "track", "name": "Top Songs"}}}
+			if f.content != "" {
+				manifest["contentType"] = f.content
+			}
+			answer(manifest)
 		case path == "/catalog/new":
 			answer(map[string]any{"items": []any{albums()["sine"], albums()["loud"]}})
 		case path == "/catalog/top":
@@ -73,6 +80,10 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 				return
 			}
 			http.NotFound(w, r)
+		case path == "/artist/quartet":
+			answer(map[string]any{"id": "quartet", "name": "Tone Quartet", "artworkURL": server.URL + "/cover.jpg", "bio": "Four tones.",
+				"genres": []string{"Electronic"}, "topTracks": []any{track("t1", "First Light", "Sine Studies", "sine", false)},
+				"albums": []any{albums()["sine"], albums()["loud"]}})
 		case path == "/search":
 			answer(map[string]any{"tracks": []any{track("t2", "Second Wind", "Sine Studies", "sine", false)},
 				"albums": []any{albums()["sine"]}, "artists": []any{map[string]string{"id": "quartet", "name": "Tone Quartet"}}})
@@ -80,6 +91,9 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 			n := f.streams.Add(1)
 			reply := map[string]any{"url": fmt.Sprintf("%s/tone.flac?n=%d", server.URL, n), "codec": "flac", "container": "flac",
 				"manifest": "none", "sampleRate": 44100, "bitDepth": 16}
+			if f.content == "audiobook" {
+				reply["chapters"] = []any{map[string]any{"title": "Opening", "startTime": 0}, map[string]any{"title": "Ending", "startTime": 5}}
+			}
 			if f.expiring.Load() {
 				reply["expiresAt"] = time.Now().Add(-time.Hour).Unix()
 			}
@@ -178,7 +192,8 @@ func TestEclipseAddonPlaysInJellyfinMusicApps(t *testing.T) {
 	}
 	var mix QueryResult
 	s.get(t, "/Items/"+songs.Items[0].Id+"/InstantMix", token, &mix)
-	if len(mix.Items) != 2 || mix.Items[0].Id != songs.Items[0].Id {
+	// The song, then the other songs of its album and of its artist.
+	if len(mix.Items) != 3 || mix.Items[0].Id != songs.Items[0].Id {
 		t.Errorf("instant mix: %+v", mix.Items)
 	}
 

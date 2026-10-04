@@ -115,6 +115,9 @@ type Item struct {
 	Explicit    bool
 	ChildCount  *int
 	ISRC        string
+	// Container is a track's format, as its addon labels it, until its
+	// stream is known.
+	Container string
 }
 
 // Credit names an artist and the item that stands for them.

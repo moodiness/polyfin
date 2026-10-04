@@ -250,6 +250,7 @@ func musicItem(r record) Item {
 	switch e.Type {
 	case eclipse.TypeTrack:
 		item.IndexNumber = e.Index
+		item.Container = e.Format
 		item.Album = e.Album
 		if ref := e.albumRef(addon); ref != "" {
 			item.AlbumID = itemID(ref)
@@ -430,12 +431,17 @@ func itemRecords(entry installed, items []eclipse.Item, parent *accounts.ID) []r
 	return records
 }
 
-// trackRecords makes records of the tracks of an album or a playlist,
-// numbered in its order.
-func trackRecords(entry installed, tracks []eclipse.Track, parent *accounts.ID, albumArtist string) []record {
+// trackRecords makes records of tracks listed in parent: an album's,
+// numbered in its order when numbered, as their number is their place on
+// their album; a playlist's, an artist's or a search's, unnumbered.
+func trackRecords(entry installed, tracks []eclipse.Track, parent *accounts.ID, albumArtist string, numbered bool) []record {
 	records := make([]record, 0, len(tracks))
 	for i, t := range tracks {
-		e := trackEntry(t, i+1, entry.content())
+		index := 0
+		if numbered {
+			index = i + 1
+		}
+		e := trackEntry(t, index, entry.content())
 		if albumArtist != "" && !strings.EqualFold(albumArtist, e.Artist) {
 			e.AlbumArtist = albumArtist
 		}
@@ -468,7 +474,7 @@ func (s *Service) albumTracks(ctx context.Context, v view, entry installed, r re
 			return nil, err
 		}
 		if found == "" {
-			return trackRecords(entry, tracks, &r.ID, e.Artist), nil
+			return trackRecords(entry, tracks, &r.ID, e.Artist, false), nil
 		}
 		id = found
 		resolved := *e
@@ -479,7 +485,7 @@ func (s *Service) albumTracks(ctx context.Context, v view, entry installed, r re
 	if err != nil {
 		return nil, err
 	}
-	tracks := trackRecords(entry, album.Tracks, &r.ID, album.Artist)
+	tracks := trackRecords(entry, album.Tracks, &r.ID, album.Artist, true)
 	if e.ID == "" {
 		// The tracks name the album as their tracks named it, so that they
 		// lead back to the same item.
@@ -571,10 +577,7 @@ func (s *Service) artistRecords(ctx context.Context, v view, entry installed, r 
 		}
 		return records, nil
 	}
-	records := trackRecords(entry, artist.TopTracks, &r.ID, "")
-	for i := range records {
-		records[i].Music.Index = 0
-	}
+	records := trackRecords(entry, artist.TopTracks, &r.ID, "", false)
 	albums := make([]record, 0, len(artist.Albums))
 	for _, album := range artist.Albums {
 		albums = append(albums, musicRecord(entry, albumEntry(album, content), &r.ID))
@@ -588,7 +591,7 @@ func (s *Service) playlistTracks(ctx context.Context, entry installed, r record)
 	if err != nil {
 		return nil, err
 	}
-	return trackRecords(entry, playlist.Tracks, &r.ID, ""), nil
+	return trackRecords(entry, playlist.Tracks, &r.ID, "", false), nil
 }
 
 // expand lists the tracks of albums, playlists or artists (their top
@@ -610,7 +613,7 @@ func (s *Service) expand(ctx context.Context, v view, entry installed, folders [
 			case eclipse.TypeArtist:
 				var artist eclipse.Artist
 				if artist, err = s.artistOf(ctx, entry, folder); err == nil {
-					lists[i] = trackRecords(entry, artist.TopTracks, &folder.ID, "")
+					lists[i] = trackRecords(entry, artist.TopTracks, &folder.ID, "", false)
 				}
 			}
 			if err != nil && ctx.Err() == nil {
@@ -876,6 +879,9 @@ func (s *Service) musicItems(ctx context.Context, v view, records, named []recor
 		seen[r.ID] = true
 		kept = append(kept, r)
 	}
+	if err := s.completeTracks(ctx, kept); err != nil {
+		return nil, err
+	}
 	if err := s.save(ctx, kept); err != nil {
 		return nil, err
 	}
@@ -887,6 +893,49 @@ func (s *Service) musicItems(ctx context.Context, v view, records, named []recor
 		items = append(items, musicItem(r))
 	}
 	return items, nil
+}
+
+// completeTracks completes tracks listed without some of what describes
+// them, such as the search results and top tracks addons list without
+// their number or year, with what an earlier listing told of them.
+func (s *Service) completeTracks(ctx context.Context, records []record) error {
+	var ids []accounts.ID
+	for _, r := range records {
+		if r.Music != nil && r.Music.Type == eclipse.TypeTrack {
+			ids = append(ids, r.ID)
+		}
+	}
+	stored, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return err
+	}
+	known := make(map[accounts.ID]*musicEntry, len(stored))
+	for _, r := range stored {
+		if r.Music != nil {
+			known[r.ID] = r.Music
+		}
+	}
+	for i, r := range records {
+		old := known[r.ID]
+		if old == nil {
+			continue
+		}
+		e := *r.Music
+		e.Index = cmpOr(e.Index, old.Index)
+		e.Year = cmpOr(e.Year, old.Year)
+		e.Duration = cmpOr(e.Duration, old.Duration)
+		e.Artwork = cmpOr(e.Artwork, old.Artwork)
+		e.Format = cmpOr(e.Format, old.Format)
+		e.ISRC = cmpOr(e.ISRC, old.ISRC)
+		if e.Album == "" && e.AlbumID == "" {
+			e.Album, e.AlbumID = old.Album, old.AlbumID
+		}
+		if e.AlbumArtist == "" && e.Album == old.Album {
+			e.AlbumArtist = old.AlbumArtist
+		}
+		records[i].Music = &e
+	}
+	return nil
 }
 
 // musicChildren lists a music library's or music folder's children.

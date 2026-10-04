@@ -201,6 +201,8 @@ func (h *Handler) audioPlaybackInfo(w http.ResponseWriter, r *http.Request, user
 	}
 	session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
 	source := h.audioSource(r, item, version, d)
+	// Jellyfin names the default track in a song's details, not here.
+	source.DefaultAudioStreamIndex = nil
 	decision := playback.AudioDecision{DirectPlay: true}
 	if request.DeviceProfile != nil {
 		decision = playback.DecideAudio(request.DeviceProfile, d.source, playback.AudioOptions{
