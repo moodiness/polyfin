@@ -171,7 +171,7 @@ func TestOnlyTheWebClientPageLoadsPolyfinScript(t *testing.T) {
 	if string(webFiles["index.html"].Data) != webIndex {
 		t.Error("jellyfin-web's index.html was changed")
 	}
-	if page := string(withWebScript([]byte("<p>Jellyfin</p>"))); page != "<p>Jellyfin</p>"+tag {
+	if page := string(withWebScripts([]byte("<p>Jellyfin</p>"), hashedScript{})); page != "<p>Jellyfin</p>"+tag {
 		t.Errorf("a page without a head: %q", page)
 	}
 	// The page is revalidated, not downloaded again.

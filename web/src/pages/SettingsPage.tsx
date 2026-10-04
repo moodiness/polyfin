@@ -15,11 +15,14 @@ import {
   catalogRefreshMinutesRange,
   channelLimitRange,
   conversionHeights,
+  customCodeMaxBytes,
   fetchSettings,
+  fetchStatus,
   fetchVariables,
   inactiveDeviceDaysRange,
   liveTvRefreshHoursRange,
   loginAttemptsRange,
+  loginDisclaimerMaxBytes,
   maxConversionsRange,
   recordingPaddingMinutesRange,
   recordingRetentionDaysRange,
@@ -35,6 +38,7 @@ import {
   versionListMinutesRange,
   type Settings,
 } from '@/api'
+import CodeEditor from '@/components/CodeEditor'
 import { icons } from '@/components/icons'
 import { Skeleton } from '@/components/panels'
 import {
@@ -61,6 +65,7 @@ const sectionIds = [
   'liveTv',
   'recordings',
   'diagnostics',
+  'webPlayer',
   'variables',
 ] as const
 type SectionId = (typeof sectionIds)[number]
@@ -220,6 +225,10 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const languageId = useId()
   const heightId = useId()
   const trickplayWidthId = useId()
+  const status = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  })
   const [saved, setSaved] = useState(initial)
   const [form, setForm] = useState(initial)
   const dirty = JSON.stringify(form) !== JSON.stringify(saved)
@@ -706,6 +715,61 @@ function SettingsForm({ initial }: { initial: Settings }) {
             help={s.detailedLogHelp}
             checked={form.detailedLog}
             onChange={(detailedLog) => update({ detailedLog })}
+          />
+        </Setting>
+      </Section>
+
+      <Section id="webPlayer" title={sections.webPlayer} description={s.webPlayerHelp}>
+        {status.data?.webClient === true && (
+          <Setting text={[s.openWebPlayer, sections.webPlayer]}>
+            <a
+              href="/web/"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 text-sm font-medium text-fin-5 underline-offset-4 hover:underline"
+            >
+              <icons.play className="size-4" />
+              {s.openWebPlayer}
+            </a>
+          </Setting>
+        )}
+        <Setting text={[s.customCss, s.customCssHelp, 'css']}>
+          <CodeEditor
+            label={s.customCss}
+            hint={`${s.customCssHelp} ${s.codeKeys}`}
+            value={form.customCss}
+            onValue={(customCss) => update({ customCss })}
+            maxBytes={customCodeMaxBytes}
+          />
+        </Setting>
+        <Setting text={[s.customJs, s.customJsHelp, s.customJsWarning, 'javascript js']}>
+          <CodeEditor
+            label={s.customJs}
+            hint={`${s.customJsHelp} ${s.codeKeys}`}
+            value={form.customJs}
+            onValue={(customJs) => update({ customJs })}
+            maxBytes={customCodeMaxBytes}
+          >
+            <div
+              role="note"
+              className="mt-1.5 rounded-lg border border-amber-400/40 bg-amber-400/5 p-3 text-sm"
+            >
+              <p className="flex items-center gap-2 font-semibold text-amber-200">
+                <span aria-hidden="true">⚠</span>
+                {s.customJsWarningTitle}
+              </p>
+              <p className="mt-1 text-amber-100">{s.customJsWarning}</p>
+            </div>
+          </CodeEditor>
+        </Setting>
+        <Setting text={[s.loginDisclaimer, s.loginDisclaimerHelp]}>
+          <CodeEditor
+            label={s.loginDisclaimer}
+            hint={s.loginDisclaimerHelp}
+            value={form.loginDisclaimer}
+            onValue={(loginDisclaimer) => update({ loginDisclaimer })}
+            maxBytes={loginDisclaimerMaxBytes}
+            rows={4}
           />
         </Setting>
       </Section>

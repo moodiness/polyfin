@@ -189,7 +189,17 @@ export type Settings = {
   recordingsFolder: string
   /** Hours after which the XMLTV guides and IPTV channel lists are fetched again. */
   liveTvRefreshHours: number
+  /** CSS jellyfin-web applies to every page, unless a user turns it off (Jellyfin's branding). */
+  customCss: string
+  /** Script Polyfin adds to jellyfin-web's page; it runs in every user's browser. */
+  customJs: string
+  /** Text, Markdown or HTML jellyfin-web shows under its sign-in form (Jellyfin's branding). */
+  loginDisclaimer: string
 }
+
+/** The largest custom CSS and script, and login disclaimer, the server accepts, in bytes. */
+export const customCodeMaxBytes = 256 * 1024
+export const loginDisclaimerMaxBytes = 8 * 1024
 
 /** The range the server accepts for Settings.liveTvRefreshHours. */
 export const liveTvRefreshHoursRange = { min: 1, max: 168 }

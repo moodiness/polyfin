@@ -238,12 +238,3 @@ func (h *Handler) internalError(w http.ResponseWriter, r *http.Request, err erro
 	h.Logger.Error("Jellyfin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 	processingError(w, http.StatusInternalServerError)
 }
-
-func (h *Handler) brandingConfiguration(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, BrandingOptions{})
-}
-
-func (h *Handler) brandingCSS(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-}
