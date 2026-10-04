@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,6 +56,25 @@ func (f fakeProbe) runs() int {
 func (f fakeProbe) release(t *testing.T) {
 	t.Helper()
 	if err := os.WriteFile(f.path+".released", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// sized makes ffprobe's answer give size, that of the file a test title
+// serves, so that reading the file's index finds its end.
+func (f fakeProbe) sized(t *testing.T, size int64) {
+	t.Helper()
+	data, err := os.ReadFile(f.path + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output map[string]any
+	if err := json.Unmarshal(data, &output); err != nil {
+		t.Fatal(err)
+	}
+	output["format"].(map[string]any)["size"] = strconv.FormatInt(size, 10)
+	data, _ = json.Marshal(output)
+	if err := os.WriteFile(f.path+".json", data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -111,11 +131,24 @@ func TestOpeningATitlePreparesItsFirstVersion(t *testing.T) {
 	if analyzed() {
 		t.Fatal("analyzed before ffprobe answered")
 	}
+	// The first version serves a real Matroska file, whose index the
+	// preparation reads once the analysis is in.
+	info, err := os.Stat(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe.sized(t, info.Size())
 	probe.release(t)
 	eventually(t, "the first version to be analyzed", analyzed)
 	p.settle(t)
 	if _, ok := p.handler.Playback.Analyzed(t.Context(), p.versions[1].ID); !ok || probe.runs() != 1 {
 		t.Errorf("runs %d, the other version keeps its analysis: %v", probe.runs(), ok)
+	}
+	// What an HLS play reads besides is kept too, so its first PlaybackInfo
+	// reads nothing from the source.
+	var indexed int
+	if err := p.pool.QueryRow(t.Context(), "SELECT count(*) FROM media_keyframes WHERE version_id = $1", p.versions[0].ID).Scan(&indexed); err != nil || indexed != 1 {
+		t.Errorf("the first version's keyframe index was not kept: %d %v", indexed, err)
 	}
 }
 
