@@ -201,9 +201,9 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 		}
 		settings = &Settings{}
 		return tx.QueryRow(ctx, `UPDATE settings SET language = $1
-			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads`, language).
+			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit`, language).
 			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
-				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads)
+				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit)
 	})
 	if err == nil && settings != nil {
 		s.settings.Store(settings)

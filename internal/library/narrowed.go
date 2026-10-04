@@ -133,7 +133,8 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 // mostly costs requests the first time; a collection that cannot be
 // described is left out.
 func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]stremio.Catalog, error) {
-	entries, _, err := s.window(ctx, v, source{addon: l.addon, catalog: l.catalog}, 0, maxCrawl)
+	src := source{addon: l.addon, catalog: l.catalog}
+	entries, _, err := s.window(ctx, v, src, 0, v.limit(src))
 	if err != nil {
 		return nil, err
 	}

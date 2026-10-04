@@ -197,13 +197,13 @@ func TestRatingsAreLookedUpOnce(t *testing.T) {
 	}
 	// Ratings, and the absence of one, are kept: a server started afresh,
 	// whose description cache is empty, does not ask again.
-	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return "en" })
+	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
 	if got := names(e.children(child, "Top", 0, 100).Items); !slices.Equal(got, []string{"Family", "Teen", "Local"}) || addon.metaRequests() != 6 {
 		t.Errorf("listing after a restart: %v, %d meta requests", got, addon.metaRequests())
 	}
 	// Listing the catalog again does not forget them.
 	e.children(e.member, "Top", 0, 100)
-	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return "en" })
+	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
 	if e.children(child, "Top", 0, 100); addon.metaRequests() != 6 {
 		t.Errorf("ratings lost when the catalog was listed again: %d meta requests", addon.metaRequests())
 	}
@@ -366,7 +366,7 @@ func TestOldRatingsAreAskedAgain(t *testing.T) {
 	addon.mu.Lock()
 	addon.metas["movie/tt3"] = stremio.Meta{ID: "tt3", Type: "movie", Name: "Homemade", Extras: &stremio.Extras{Certification: "PG"}}
 	addon.mu.Unlock()
-	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return "en" })
+	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
 	e.service.now = func() time.Time { return time.Now().Add(24 * time.Hour) }
 	deadline := time.Now().Add(5 * time.Second)
 	for !slices.Contains(names(e.children(child, "Top", 0, 100).Items), "Homemade") {

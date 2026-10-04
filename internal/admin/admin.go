@@ -170,6 +170,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
 		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
+		{accounts.ErrInvalidCatalogLimit, http.StatusBadRequest, "invalid_catalog_limit"},
+		{accounts.ErrInvalidChannelLimit, http.StatusBadRequest, "invalid_channel_limit"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},

@@ -61,6 +61,9 @@ const en = {
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
     invalid_language: 'Choose the server language from the list.',
+    invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',
+    invalid_channel_limit:
+      'Channels read per Live TV catalog must be a whole number from 100 to 50,000.',
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
@@ -239,6 +242,13 @@ const en = {
     downloads: 'Downloads',
     downloadsHelp:
       'Lets users save titles in Jellyfin apps to watch offline. When off, nobody can download, whatever their own permission.',
+    catalogsTitle: 'Catalogs',
+    catalogLimit: 'Titles read per film and series catalog',
+    catalogLimitHelp:
+      'Some catalogs are nearly endless, so Polyfin stops reading a catalog after this many titles. A higher number shows more titles, but lists load more slowly and the addon gets more requests. From 100 to 20,000; 2,000 by default.',
+    channelLimit: 'Channels read per Live TV catalog',
+    channelLimitHelp:
+      'Polyfin stops reading a Live TV catalog after this many channels, and reads at most this many programmes per day for the guide. A higher number shows more, but loads more slowly and the addon gets more requests. From 100 to 50,000; 10,000 by default.',
     saved: 'Settings saved.',
   },
   stremioTypes: {

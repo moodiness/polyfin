@@ -128,13 +128,12 @@ func titles(kind string, count int, genres ...string) []stremio.Meta {
 }
 
 type env struct {
-	t        *testing.T
-	service  *Service
-	addons   *addons.Store
-	users    *accounts.Store
-	admin    accounts.User
-	member   accounts.User
-	language *string // the server language the service reads
+	t       *testing.T
+	service *Service
+	addons  *addons.Store
+	users   *accounts.Store // its settings are those the service reads
+	admin   accounts.User
+	member  accounts.User
 }
 
 func newEnv(t *testing.T) env {
@@ -151,9 +150,18 @@ func newEnv(t *testing.T) env {
 	member, _ := users.CreateUser(t.Context(), accounts.NewUser{Name: "member", Password: "correct horse"})
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
-	language := new("en")
-	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), func() string { return *language })
-	return env{t: t, service: service, addons: store, users: users, admin: admin, member: member, language: language}
+	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), users.Settings)
+	return env{t: t, service: service, addons: store, users: users, admin: admin, member: member}
+}
+
+// setting changes the server's settings.
+func (e env) setting(change func(*accounts.Settings)) {
+	e.t.Helper()
+	settings := e.users.Settings()
+	change(&settings)
+	if _, err := e.users.UpdateSettings(e.t.Context(), settings); err != nil {
+		e.t.Fatal(err)
+	}
 }
 
 // install serves addon and installs it in scope as a trusted (local) addon.
@@ -606,7 +614,7 @@ func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
 	}
 
 	// The language applies at once, and identifiers stay.
-	*e.language = "fr"
+	e.setting(func(settings *accounts.Settings) { settings.Language = "fr" })
 	french, _ := e.service.Libraries(t.Context(), e.member)
 	if got := names(french); !slices.Equal(got, []string{"Top (Films)", "Top (Séries)"}) {
 		t.Errorf("libraries in French: %v", got)

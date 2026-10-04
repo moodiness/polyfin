@@ -15,6 +15,24 @@ var ErrInvalidServerName = errors.New("invalid server name")
 // ErrInvalidLanguage reports a server language Polyfin does not speak.
 var ErrInvalidLanguage = errors.New("invalid server language")
 
+// ErrInvalidCatalogLimit reports a CatalogLimit outside [MinCatalogLimit,
+// MaxCatalogLimit].
+var ErrInvalidCatalogLimit = errors.New("invalid catalog limit")
+
+// ErrInvalidChannelLimit reports a ChannelLimit outside [MinChannelLimit,
+// MaxChannelLimit].
+var ErrInvalidChannelLimit = errors.New("invalid channel limit")
+
+// The bounds and defaults of Settings.CatalogLimit and ChannelLimit.
+const (
+	MinCatalogLimit     = 100
+	MaxCatalogLimit     = 20000
+	DefaultCatalogLimit = 2000
+	MinChannelLimit     = 100
+	MaxChannelLimit     = 50000
+	DefaultChannelLimit = 10000
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -49,13 +67,20 @@ type Settings struct {
 	Transcoding bool
 	// Downloads lets the users allowed to download titles do so.
 	Downloads bool
+	// CatalogLimit is how many items one read of a film or series catalog
+	// (any catalog but a live TV one) fetches at most: some catalogs are
+	// nearly endless.
+	CatalogLimit int
+	// ChannelLimit is how many items one read of a live TV catalog fetches
+	// at most: its channels, or one day of its guide.
+	ChannelLimit int
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
-			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads)
+			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit)
 	return settings, err
 }
 
@@ -74,10 +99,16 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !ValidLanguage(settings.Language) {
 		return Settings{}, ErrInvalidLanguage
 	}
+	if settings.CatalogLimit < MinCatalogLimit || settings.CatalogLimit > MaxCatalogLimit {
+		return Settings{}, ErrInvalidCatalogLimit
+	}
+	if settings.ChannelLimit < MinChannelLimit || settings.ChannelLimit > MaxChannelLimit {
+		return Settings{}, ErrInvalidChannelLimit
+	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
-		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads)
+		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit)
 	if err != nil {
 		return Settings{}, err
 	}

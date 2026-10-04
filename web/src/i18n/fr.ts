@@ -65,6 +65,10 @@ const fr: Messages = {
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
     invalid_language: 'Choisissez la langue du serveur dans la liste.',
+    invalid_catalog_limit:
+      'Le nombre de titres lus par catalogue doit être un nombre entier de 100 à 20 000.',
+    invalid_channel_limit:
+      'Le nombre de chaînes lues par catalogue de TV en direct doit être un nombre entier de 100 à 50 000.',
     parental_control:
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
@@ -253,6 +257,13 @@ const fr: Messages = {
     downloads: 'Téléchargements',
     downloadsHelp:
       'Permet aux utilisateurs d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion. Si cette option est désactivée, personne ne peut télécharger, quelle que soit son autorisation personnelle.',
+    catalogsTitle: 'Catalogues',
+    catalogLimit: 'Titres lus par catalogue de films et séries',
+    catalogLimitHelp:
+      'Certains catalogues sont presque sans fin : Polyfin arrête donc de lire un catalogue après ce nombre de titres. Un nombre plus élevé affiche plus de titres, mais les listes se chargent plus lentement et l’addon reçoit plus de demandes. De 100 à 20 000 ; 2 000 par défaut.',
+    channelLimit: 'Chaînes lues par catalogue de TV en direct',
+    channelLimitHelp:
+      'Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De 100 à 50 000 ; 10 000 par défaut.',
     saved: 'Paramètres enregistrés.',
   },
   stremioTypes: {

@@ -97,10 +97,12 @@ type settingsJSON struct {
 	Language            string `json:"language"`
 	Chapters            *bool  `json:"chapters"`
 	PrepareAhead        *bool  `json:"prepareAhead"`
-	// Transcoding and Downloads keep their current values when a PUT
-	// leaves them out.
-	Transcoding *bool `json:"transcoding"`
-	Downloads   *bool `json:"downloads"`
+	// Transcoding, Downloads, CatalogLimit and ChannelLimit keep their
+	// current values when a PUT leaves them out.
+	Transcoding  *bool `json:"transcoding"`
+	Downloads    *bool `json:"downloads"`
+	CatalogLimit *int  `json:"catalogLimit"`
+	ChannelLimit *int  `json:"channelLimit"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -113,6 +115,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		PrepareAhead:        &settings.PrepareAhead,
 		Transcoding:         &settings.Transcoding,
 		Downloads:           &settings.Downloads,
+		CatalogLimit:        &settings.CatalogLimit,
+		ChannelLimit:        &settings.ChannelLimit,
 	}
 }
 
@@ -368,6 +372,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PrepareAhead:        valueOr(body.PrepareAhead, current.PrepareAhead),
 		Transcoding:         valueOr(body.Transcoding, current.Transcoding),
 		Downloads:           valueOr(body.Downloads, current.Downloads),
+		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
+		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 	})
 	if accountError(w, err) {
 		return
@@ -383,7 +389,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // valueOr is the value value points to, else fallback.
-func valueOr(value *bool, fallback bool) bool {
+func valueOr[T any](value *T, fallback T) T {
 	if value == nil {
 		return fallback
 	}

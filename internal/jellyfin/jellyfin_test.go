@@ -76,7 +76,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sources.Close() })
-	lib := library.New(pool, addonStore, client, logger, func() string { return "en" })
+	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	// Remuxes run FFmpeg when tests are given one.
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
@@ -275,9 +275,7 @@ func TestQuickConnect(t *testing.T) {
 		t.Errorf("signed in as %s on %s, want alice on tv", result.User.Name, result.SessionInfo.DeviceName)
 	}
 
-	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin", Language: "en"}); err != nil {
-		t.Fatal(err)
-	}
+	s.setting(t, func(settings *accounts.Settings) { settings.QuickConnectEnabled = false })
 	if _, body := s.call(http.MethodGet, "/QuickConnect/Enabled", "", nil); strings.TrimSpace(string(body)) != "false" {
 		t.Errorf("Enabled after turning Quick Connect off: %s", body)
 	}
@@ -293,9 +291,7 @@ func TestLegacyAuthorizationFollowsTheSetting(t *testing.T) {
 	if status, _ := s.call(http.MethodGet, "/Users/Me?api_key="+token, "", nil); status != http.StatusUnauthorized {
 		t.Errorf("api_key by default: got %d, want 401", status)
 	}
-	if _, err := s.store.UpdateSettings(t.Context(), accounts.Settings{ServerName: "Polyfin", LegacyAuthorization: true, Language: "en"}); err != nil {
-		t.Fatal(err)
-	}
+	s.setting(t, func(settings *accounts.Settings) { settings.LegacyAuthorization = true })
 	if status, _ := s.call(http.MethodGet, "/Users/Me?api_key="+token, "", nil); status != http.StatusOK {
 		t.Errorf("api_key with legacy authorization on: got %d, want 200", status)
 	}

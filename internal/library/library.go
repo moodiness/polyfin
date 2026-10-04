@@ -23,8 +23,7 @@ import (
 const (
 	pageTTL     = 10 * time.Minute
 	metaTTL     = 6 * time.Hour
-	maxCrawl    = 2000 // items fetched from one catalog to answer a request
-	pageFetches = 4    // catalog pages of one catalog fetched at once
+	pageFetches = 4 // catalog pages of one catalog fetched at once
 	// catalogFetches bounds the catalogs merged reads at once.
 	catalogFetches = 8
 )
@@ -43,7 +42,7 @@ type Service struct {
 	client   *stremio.Client
 	logger   *slog.Logger
 	now      func() time.Time
-	language func() string
+	settings func() accounts.Settings
 
 	pages  *cache.Cache[pageKey, []stremio.Meta]
 	metas  *cache.Cache[metaKey, stremio.Meta]
@@ -74,17 +73,17 @@ type metaKey struct {
 	id       string
 }
 
-// New returns a library service. language returns the server language, one
-// of accounts.Languages; it is read for every request, so a change applies
-// at once.
-func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, language func() string) *Service {
+// New returns a library service. settings returns the server settings, of
+// which it uses the language and the catalog limits; they are read for
+// every request, so a change applies at once.
+func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{
 		db:            db,
 		addons:        store,
 		client:        client,
 		logger:        logger,
 		now:           time.Now,
-		language:      language,
+		settings:      settings,
 		pages:         cache.New[pageKey, []stremio.Meta](4000, pageTTL),
 		metas:         cache.New[metaKey, stremio.Meta](4000, metaTTL),
 		streamLists:   cache.New[streamKey, []stremio.Stream](2000, streamsTTL),
@@ -97,7 +96,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 
 // words returns the generated names in the current server language.
 func (s *Service) words() words {
-	return vocabularyOf(s.language())
+	return vocabularyOf(s.settings().Language)
 }
 
 // installed is an addon a user can use, with how to reach it. shared is
@@ -130,6 +129,20 @@ type view struct {
 	deadline time.Time
 	lookups  *atomic.Int32
 	held     *atomic.Bool
+	// catalogLimit and channelLimit are the settings' limits when the
+	// request came (see limit).
+	catalogLimit int
+	channelLimit int
+}
+
+// limit is how many items one read of src's catalog fetches at most: the
+// channel limit for a live TV catalog, the catalog limit for any other.
+// Some catalogs are nearly endless.
+func (v view) limit(src source) int {
+	if LiveCatalog(src.catalog.Type) {
+		return v.channelLimit
+	}
+	return v.catalogLimit
 }
 
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
@@ -144,7 +157,9 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 		}
 	}
-	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool)}
+	settings := s.settings()
+	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
+		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
 	var visible []addons.Library
 	var entries []installed
 	for _, scope := range scopes {
@@ -179,7 +194,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			}
 		}
 	}
-	for i, name := range LibraryNames(visible, s.language()) {
+	for i, name := range LibraryNames(visible, settings.Language) {
 		l := visible[i]
 		v.libraries = append(v.libraries, library{
 			item: Item{
@@ -295,7 +310,8 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 }
 
 // window returns the catalog's items [start, start+count) and whether more
-// follow. A Stremio catalog is read in order: each page is requested with
+// follow, reading no further than the catalog's limit (see view.limit). A
+// Stremio catalog is read in order: each page is requested with
 // skip set to the number of items before it, and an empty page ends it.
 // Pages may be shorter than the first when the addon filters them, so the
 // pages fetched ahead together, on the guess that they are as long as the
@@ -310,13 +326,14 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	seen := map[string]bool{}
 	received, size := 0, 0
 	more := true
-	reach := maxCrawl
+	limit := v.limit(src)
+	reach := limit
 	if v.parental.Restricted() {
-		reach = min(maxCrawl, hiddenReach*(start+count))
+		reach = min(limit, hiddenReach*(start+count))
 	}
 	for len(collected) < start+count {
 		if received >= reach {
-			more = received < maxCrawl
+			more = received < limit
 			if more {
 				v.held.Store(true)
 			}
@@ -324,7 +341,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 		}
 		offsets := []int{received}
 		needed := start + count - len(collected)
-		for next := received + size; size > 0 && next < min(received+needed, maxCrawl) && len(offsets) < pageFetches; next += size {
+		for next := received + size; size > 0 && next < min(received+needed, limit) && len(offsets) < pageFetches; next += size {
 			offsets = append(offsets, next)
 		}
 		pages, err := s.pagesAt(ctx, src, offsets)
@@ -419,6 +436,10 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 	}
 	need := start + count
 	per := need/len(sources) + 1
+	limit := 0
+	for _, src := range sources {
+		limit = max(limit, v.limit(src))
+	}
 	for {
 		lists := make([][]stremio.Meta, len(sources))
 		mores := make([]bool, len(sources))
@@ -458,7 +479,7 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 		anyMore := slices.Contains(mores, true)
 		// Reading further would not show the titles a restricted listing
 		// stopped at (see window).
-		if len(result) >= need || !anyMore || per >= maxCrawl || v.held.Load() {
+		if len(result) >= need || !anyMore || per >= limit || v.held.Load() {
 			total := len(result)
 			if anyMore {
 				total++
