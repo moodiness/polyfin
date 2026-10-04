@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -103,9 +104,11 @@ var ErrRecording = errors.New("the recording could not be finished")
 
 // Finish joins the MPEG-TS parts of a recording, in order, into one
 // Matroska file at path, its streams copied: a file with an index, which
-// players seek in and Polyfin cuts into HLS segments.
+// players seek in and Polyfin cuts into HLS segments. FFmpeg's list of the
+// parts is written next to path: the container's root, and its temporary
+// folder, may be read-only.
 func (m *Manager) Finish(ctx context.Context, parts []string, path string) error {
-	list, err := os.CreateTemp("", "polyfin-parts-*.txt")
+	list, err := os.CreateTemp(filepath.Dir(path), ".parts-*.txt")
 	if err != nil {
 		return err
 	}

@@ -1,13 +1,58 @@
 package hls
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
+
+// A recording's parts are joined into one Matroska file even when the
+// temporary folder cannot be written, as in a read-only container, and
+// nothing but the file is left in the recordings folder.
+func TestRecordingPartsJoinWithoutATemporaryFolder(t *testing.T) {
+	ffmpeg, _ := tools(t)
+	folder := t.TempDir()
+	var parts []string
+	for n := range 2 {
+		part := filepath.Join(folder, "part"+strconv.Itoa(n)+".ts")
+		out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=160x90:rate=10:duration=1",
+			"-c:v", "libx264", "-f", "mpegts", part).CombinedOutput()
+		if err != nil {
+			t.Fatalf("making a part: %v: %s", err, out)
+		}
+		parts = append(parts, part)
+	}
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	path := filepath.Join(folder, "recording.mkv")
+	if err := m.Finish(t.Context(), parts, path); err != nil {
+		t.Fatalf("joining the parts: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || !bytes.HasPrefix(data, []byte{0x1a, 0x45, 0xdf, 0xa3}) {
+		t.Fatalf("the joined file is not Matroska: %v", err)
+	}
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if name := entry.Name(); name != "recording.mkv" && name != "part0.ts" && name != "part1.ts" {
+			t.Errorf("left in the recordings folder: %s", name)
+		}
+	}
+}
 
 // Recordings take live slots: a user recording userLives channels plays
 // none live and records no more, and the server runs serverLives in all.
