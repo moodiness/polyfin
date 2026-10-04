@@ -179,6 +179,9 @@ func serve(ctx context.Context) error {
 		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
 	}
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
+	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
+		return fmt.Errorf("prepare the guide directory: %w", err)
+	}
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
 	registerTasks(registry, store, activityLog, lib, logger)

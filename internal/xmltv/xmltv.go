@@ -4,6 +4,7 @@
 package xmltv
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -11,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -56,17 +59,26 @@ type Programme struct {
 
 // Options tune Read. Limit is MaxSize when zero; Language is the language
 // titles and descriptions are preferred in, when the guide has several.
+// SpoolDir is the folder a ZIP archive is written to while it is read,
+// as reading one needs random access; without it, ZIP archives are not
+// read.
 type Options struct {
 	Limit    int64
 	Language string
+	SpoolDir string
 }
 
-// Read decodes a guide from r, plain or gzip-compressed (told by its
-// content, not its name), as a stream: each channel and programme is
-// decoded on its own and handed to channel or programme, never the whole
-// document at once. A callback's error stops reading and is returned.
-// Programmes without a channel, a title, a start or a later stop are
-// skipped.
+var (
+	gzipMagic = []byte{0x1f, 0x8b}
+	zipMagic  = []byte("PK\x03\x04")
+)
+
+// Read decodes a guide from r, plain, gzip-compressed or in a ZIP archive
+// (told by its content, not its name), as a stream: each channel and
+// programme is decoded on its own and handed to channel or programme,
+// never the whole document at once. A callback's error stops reading and
+// is returned. Programmes without a channel, a title, a start or a later
+// stop are skipped.
 func Read(r io.Reader, options Options, channel func(Channel) error, programme func(Programme) error) error {
 	limit := options.Limit
 	if limit <= 0 {
@@ -74,13 +86,33 @@ func Read(r io.Reader, options Options, channel func(Channel) error, programme f
 	}
 	input := bufio.NewReader(&capped{r: r, left: limit})
 	var document io.Reader = input
-	if magic, _ := input.Peek(2); bytes.Equal(magic, []byte{0x1f, 0x8b}) {
+	magic, _ := input.Peek(len(zipMagic))
+	switch {
+	case bytes.HasPrefix(magic, gzipMagic):
 		unzipped, err := gzip.NewReader(input)
 		if err != nil {
 			return wrapped(err)
 		}
 		defer unzipped.Close()
 		document = &capped{r: unzipped, left: limit * maxExpansion}
+	case bytes.Equal(magic, zipMagic):
+		if options.SpoolDir == "" {
+			return fmt.Errorf("%w: a ZIP archive cannot be read here", ErrMalformed)
+		}
+		spool, err := os.CreateTemp(options.SpoolDir, "guide-*.zip")
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = spool.Close()
+			_ = os.Remove(spool.Name())
+		}()
+		entry, err := zipEntry(spool, input)
+		if err != nil {
+			return wrapped(err)
+		}
+		defer entry.Close()
+		document = &capped{r: entry, left: limit * maxExpansion}
 	}
 	decoder := xml.NewDecoder(document)
 	decoder.Entity = xml.HTMLEntity
@@ -147,10 +179,37 @@ func wrapped(err error) error {
 		return ErrTooLarge
 	}
 	var syntax *xml.SyntaxError
-	if errors.As(err, &syntax) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) {
+	if errors.As(err, &syntax) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) ||
+		errors.Is(err, zip.ErrFormat) || errors.Is(err, zip.ErrAlgorithm) || errors.Is(err, zip.ErrChecksum) {
 		return fmt.Errorf("%w: %v", ErrMalformed, err)
 	}
 	return err
+}
+
+// errNoXML reports a ZIP archive without an XML file.
+var errNoXML = fmt.Errorf("%w: the archive holds no .xml file", ErrMalformed)
+
+// zipEntry writes a ZIP archive to spool and opens its largest .xml file.
+func zipEntry(spool *os.File, archive io.Reader) (io.ReadCloser, error) {
+	size, err := io.Copy(spool, archive)
+	if err != nil {
+		return nil, err
+	}
+	reader, err := zip.NewReader(spool, size)
+	if err != nil {
+		return nil, err
+	}
+	var largest *zip.File
+	for _, file := range reader.File {
+		if !file.FileInfo().IsDir() && strings.EqualFold(path.Ext(file.Name), ".xml") &&
+			(largest == nil || file.UncompressedSize64 > largest.UncompressedSize64) {
+			largest = file
+		}
+	}
+	if largest == nil {
+		return nil, errNoXML
+	}
+	return largest.Open()
 }
 
 // capped reads at most left bytes of r, then fails with ErrTooLarge.
