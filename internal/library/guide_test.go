@@ -1,10 +1,15 @@
 package library
 
 import (
+	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -243,6 +248,59 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 	if got := airing(); len(got) != 0 {
 		t.Errorf("a guide fetched empty keeps programmes: %q", got)
 	}
+}
+
+// A guide published as a ZIP archive is spooled in the cache folder while
+// it is read, then removed, after a success as after a failure.
+func TestXMLTVGuidesInZIPArchives(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now().UTC().Truncate(time.Minute)
+	e.service.now = func() time.Time { return now }
+	dir := filepath.Join(t.TempDir(), "guides")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "guide-left.zip"), []byte("left by a crash"), 0o600)
+	if err := e.service.SpoolGuidesIn(dir); err != nil {
+		t.Fatal(err)
+	}
+	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	w, _ := writer.Create("epg.xml")
+	_, _ = io.WriteString(w, `<tv><channel id="1"><display-name>One</display-name></channel>`+
+		programme("1", now.Add(-time.Hour), now.Add(time.Hour), "Zipped")+`</tv>`)
+	_ = writer.Close()
+	var body atomic.Pointer[[]byte]
+	body.Store(new(archive.Bytes()))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(*body.Load()) }))
+	t.Cleanup(server.Close)
+	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, server.URL+"/epg"); err != nil {
+		t.Fatal(err)
+	}
+	empty := func(when string) {
+		t.Helper()
+		if left, err := os.ReadDir(dir); err != nil || len(left) > 0 {
+			t.Errorf("%s: left in the cache folder: %v %v", when, left, err)
+		}
+	}
+	empty("before")
+	if err := e.service.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
+		t.Fatal(err)
+	}
+	empty("after a success")
+	programs, err := e.service.Programs(t.Context(), e.member, now, now.Add(time.Second))
+	if err != nil || !slices.Equal(programTitles(programs), []string{"One: Zipped"}) {
+		t.Errorf("programmes of a zipped guide: %q %v", programTitles(programs), err)
+	}
+	body.Store(new(archive.Bytes()[:archive.Len()/2]))
+	if err := e.service.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
+		t.Fatal(err)
+	}
+	if status := e.guideOf(addons.Shared(), key); status.Error != "malformed" {
+		t.Errorf("truncated archive: %+v", status)
+	}
+	empty("after a failure")
 }
 
 // Saving the libraries keeps the guides of those kept; a new address, or

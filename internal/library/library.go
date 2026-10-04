@@ -54,6 +54,9 @@ type Service struct {
 	// ratingWait bounds how long a request waits for them.
 	ratingLookups chan struct{}
 	ratingWait    time.Duration
+	// guideDir is where XMLTV guides in ZIP archives are spooled while they
+	// are read (see SpoolGuidesIn); empty, they are not read.
+	guideDir string
 }
 
 type pageKey struct {

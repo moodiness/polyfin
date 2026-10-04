@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -49,6 +50,21 @@ const (
 )
 
 var errTooManyProgrammes = errors.New("too many programmes")
+
+// SpoolGuidesIn sets the folder XMLTV guides in ZIP archives are written
+// to while they are read, which reading one needs: a folder of Polyfin's
+// cache, writable in a read-only container. What a previous run left there
+// is removed. It is called before guides are fetched.
+func (s *Service) SpoolGuidesIn(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	s.guideDir = dir
+	return nil
+}
 
 // RefreshGuides fetches the XMLTV guides not fetched for GuideRefresh, or
 // every guide when all is set, one after the other: each costs its source
@@ -170,7 +186,7 @@ func (s *Service) fetchGuide(ctx context.Context, src addons.GuideSource, at tim
 	from, to := at.Add(-guidePast), at.AddDate(0, 0, guideAhead)
 	programmes := map[string][]xmltv.Programme{}
 	count := 0
-	err = s.readGuide(ctx, src, xmltv.Options{Language: settings.Language},
+	err = s.readGuide(ctx, src, xmltv.Options{Language: settings.Language, SpoolDir: s.guideDir},
 		func(channel xmltv.Channel) error {
 			matcher.Declare(channel)
 			return nil
