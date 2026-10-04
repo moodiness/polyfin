@@ -34,22 +34,72 @@ func recordedDownloads(t *testing.T) map[string]struct {
 	return answers
 }
 
+// fetchURL gets target with header and returns the answer and its body.
+func fetchURL(t *testing.T, target string, header http.Header) (*http.Response, string) {
+	t.Helper()
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, target, nil)
+	for name, values := range header {
+		request.Header[name] = values
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	return response, string(body)
+}
+
+// A title's identifier stands for the version its grant names, else for its
+// first version that has not failed, as in item details and PlaybackInfo.
+func TestDownloadsSkipFailedVersions(t *testing.T) {
+	p := playing(t)
+	second := "attachment; filename=Movie.1080p.mp4; filename*=UTF-8''Movie.1080p.mp4"
+	userItem := "/Users/" + p.user.ID.String() + "/Items/"
+	var movie BaseItemDto
+	p.get(t, userItem+p.movie, p.token, &movie)
+	// The grant in the second version's Path names it.
+	streamURL, err := url.Parse((*movie.MediaSources)[1].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant := url.QueryEscape(streamURL.Query().Get(grantParameter))
+	if response, _ := fetchURL(t, p.url+"/Items/"+p.movie+"/Download?"+grantParameter+"="+grant, nil); response.Header.Get("Content-Disposition") != second {
+		t.Errorf("with the second version's grant: %d %v", response.StatusCode, response.Header)
+	}
+
+	// PlaybackInfo fails to analyze the first version, as ffprobe is not
+	// installed in tests, and plays the second.
+	if status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token),
+		map[string]any{"UserId": p.user.ID.String(), "DeviceProfile": p.profile(t, "jellyfin-web-chrome")}); status != http.StatusOK {
+		t.Fatalf("PlaybackInfo: %d %s", status, data)
+	}
+	response, body := fetchURL(t, p.url+"/Items/"+p.movie+"/Download?ApiKey="+p.token, nil)
+	if response.StatusCode != http.StatusOK || body != "\x1a\x45\xdf\xa3 media bytes" || response.Header.Get("Content-Disposition") != second {
+		t.Errorf("title after its first version failed: %d %v %q", response.StatusCode, response.Header, body)
+	}
+	// Path names the same file, in details and in listings.
+	p.get(t, userItem+p.movie, p.token, &movie)
+	if movie.Path != "Movie.1080p.mp4" {
+		t.Errorf("detail path: %q", movie.Path)
+	}
+	var views QueryResult
+	p.get(t, "/UserViews", p.token, &views)
+	var page QueryResult
+	p.get(t, "/Items?ParentId="+views.Items[0].Id+"&fields=CanDownload,Path", p.token, &page)
+	for _, item := range page.Items {
+		if item.Id == p.movie && (item.Path != "Movie.1080p.mp4" || item.CanDownload == nil || !*item.CanDownload) {
+			t.Errorf("listed path: %q, can download %v", item.Path, item.CanDownload)
+		}
+	}
+}
+
 func TestDownloadsServeAVersionAsAFile(t *testing.T) {
 	p := playing(t)
 	recorded := recordedDownloads(t)
 	fetch := func(path string, header http.Header) (*http.Response, string) {
 		t.Helper()
-		request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, p.url+path, nil)
-		for name, values := range header {
-			request.Header[name] = values
-		}
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer response.Body.Close()
-		body, _ := io.ReadAll(response.Body)
-		return response, string(body)
+		return fetchURL(t, p.url+path, header)
 	}
 	apiKey := "?ApiKey=" + p.token
 
