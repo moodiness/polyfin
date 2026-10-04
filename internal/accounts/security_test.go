@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"log/slog"
 	"slices"
@@ -250,23 +249,17 @@ func TestUnusedDevicesAreSignedOut(t *testing.T) {
 	if _, err := store.UpdateSettings(ctx, settings); err != nil {
 		t.Fatal(err)
 	}
-	sweep, stop := context.WithCancel(ctx)
-	stopped := make(chan struct{})
-	go func() {
-		store.SweepInactiveDevices(sweep, slog.New(slog.DiscardHandler))
-		close(stopped)
-	}()
-	// The sweep runs at once.
+	if err := store.SweepInactiveDevices(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case devices := <-told:
 		if !slices.Equal(devices, []ID{phone.ID}) {
 			t.Errorf("signed out %v, want the phone %v", devices, phone.ID)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("the sweep did not run at start")
+		t.Fatal("the sweep told of no device")
 	}
-	stop()
-	<-stopped
 	if signedIn(ctx, store, phoneToken) || !signedIn(ctx, store, tvToken) || !signedIn(ctx, store, tabletToken) {
 		t.Error("the sweep signed out the wrong devices")
 	}

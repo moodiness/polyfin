@@ -18,17 +18,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -45,6 +48,10 @@ type testServer struct {
 	url     string
 	// handler serves url, for tests that call it as a request would.
 	handler *Handler
+	// The activity log, tasks and recent log lines the handler serves.
+	activity *activity.Store
+	tasks    *tasks.Registry
+	logs     *logs.Ring
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -93,6 +100,9 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = player.Close() })
+	activityLog := activity.New(pool, store.Settings, logger)
+	registry := tasks.New(logger)
+	ring := logs.NewRing(logs.Capacity)
 	handler := New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,
@@ -107,10 +117,15 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
 		Logger:        logger,
+		Activity:      activityLog,
+		Tasks:         registry,
+		Logs:          ring,
+		CacheDir:      t.TempDir(),
 	})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler}
+	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler,
+		activity: activityLog, tasks: registry, logs: ring}
 }
 
 // setting changes the server's settings.

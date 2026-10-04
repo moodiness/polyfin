@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
@@ -64,6 +65,7 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 		SignIns:      throttle.New(failures, time.Minute),
 		SetupCode:    setupCode,
 		Logger:       logger,
+		Activity:     activity.New(pool, store.Settings, logger),
 		Now: func() time.Time {
 			if at := clock.Load(); at != nil {
 				return *at
