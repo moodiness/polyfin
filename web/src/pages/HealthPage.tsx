@@ -12,6 +12,7 @@ import {
 } from '@/api'
 import { icons } from '@/components/icons'
 import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/components/panels'
+import { MusicBadge } from '@/components/AddonSettings'
 import { findProblems, lowOnSpace, useHealthData } from '@/components/problems'
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
@@ -90,7 +91,7 @@ export default function HealthPage() {
             )}
           </section>
 
-          <Addons health={health.data} />
+          <Addons health={health.data} addons={addons.data} />
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Iptv addons={addons.data} />
@@ -117,13 +118,15 @@ function addonTone(
   return addon.failure === '' ? ['ok', 'ok'] : ['warning', 'failing']
 }
 
-function Addons({ health }: { health: Health }) {
+function Addons({ health, addons }: { health: Health; addons: Addon[] | undefined }) {
   const { t } = useI18n()
   const text = t.dashboard.health
   const check = useMutation({
     mutationFn: checkAddon,
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
   })
+  // The server records the answers of Stremio addons only: music addons are listed without them.
+  const musicAddons = (addons ?? []).filter((addon) => addon.kind === 'eclipse')
 
   return (
     <Panel id="addons" title={text.addonsTitle} description={text.addonsHelp}>
@@ -132,7 +135,7 @@ function Addons({ health }: { health: Health }) {
           <Notice kind="error">{errorMessage(t, check.error)}</Notice>
         </div>
       )}
-      {health.addons.length === 0 ? (
+      {health.addons.length === 0 && musicAddons.length === 0 ? (
         <Empty>{text.noAddons}</Empty>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
@@ -185,6 +188,30 @@ function Addons({ health }: { health: Health }) {
               </li>
             )
           })}
+          {musicAddons.map((addon) => (
+            <li
+              key={addon.id}
+              className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_auto] md:items-center"
+            >
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                  <span className="truncate">{addon.name}</span>
+                  {addon.music !== null && <MusicBadge music={addon.music} />}
+                </p>
+                <p className="text-xs">
+                  <StatusText tone="muted">
+                    {addon.enabled ? t.addons.enabled : text.addonStatus.off}
+                  </StatusText>
+                </p>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                <Fact label={t.addons.lastRefresh}>
+                  <RelativeTime iso={addon.refreshedAt} />
+                </Fact>
+                <p className="col-span-full text-muted">{t.music.notTracked}</p>
+              </dl>
+            </li>
+          ))}
         </ul>
       )}
     </Panel>

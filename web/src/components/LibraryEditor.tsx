@@ -11,8 +11,10 @@ import {
   saveLibraries,
   type Addon,
   type Library,
+  type MusicContent,
   type Scope,
 } from '@/api'
+import { icons } from '@/components/icons'
 import {
   Badge,
   buttonPrimary,
@@ -140,6 +142,12 @@ function LibraryForm({
   const dirty = draft !== null
   const shownKeys = new Set(entries.map((entry) => entry.key))
   const offAddons = new Set(addons.filter((addon) => !addon.enabled).map((addon) => addon.id))
+  // What each music addon's rows hold: their libraries are music or books libraries in apps.
+  const musicContent = new Map(
+    addons.flatMap((addon) =>
+      addon.music === null ? [] : [[addon.id, addon.music.contentType] as const],
+    ),
+  )
 
   const types = [...new Set(catalogs.map((library) => library.catalogType))]
   const needle = query.trim().toLocaleLowerCase()
@@ -274,6 +282,7 @@ function LibraryForm({
                         <Badge tone="fin">
                           {stremioLabel(t.stremioTypes, library.catalogType)}
                         </Badge>
+                        <MusicKind content={musicContent.get(library.addonId)} />
                         {offAddons.has(library.addonId) && (
                           <Badge tone="danger">{t.libraries.addonOff}</Badge>
                         )}
@@ -309,6 +318,11 @@ function LibraryForm({
                           {renamed && (
                             <p id={appNameId} className="mt-1 text-xs text-muted">
                               {t.libraries.appName(appName)}
+                            </p>
+                          )}
+                          {musicContent.has(library.addonId) && (
+                            <p className="mt-1 text-xs text-muted">
+                              {t.music.libraryHelp[musicContent.get(library.addonId) ?? 'music']}
                             </p>
                           )}
                         </>
@@ -402,6 +416,7 @@ function LibraryForm({
                             key={catalogKey(library)}
                             library={library}
                             addId={ids.add(catalogKey(library))}
+                            content={musicContent.get(library.addonId)}
                             onAdd={() => add(library)}
                           />
                         ))}
@@ -614,10 +629,13 @@ function GuidePanel({ scope, library, name }: { scope: Scope; library: Library; 
 function AvailableRow({
   library,
   addId,
+  content,
   onAdd,
 }: {
   library: Library
   addId: string
+  /** What the row holds when its addon is a music addon. */
+  content: MusicContent | undefined
   onAdd: () => void
 }) {
   const { t } = useI18n()
@@ -632,6 +650,7 @@ function AvailableRow({
             {library.catalogName}
           </span>
           <Badge tone="fin">{stremioLabel(t.stremioTypes, library.catalogType)}</Badge>
+          <MusicKind content={content} />
           {!library.browsable && <Badge tone="muted">{t.libraries.notBrowsable}</Badge>}
         </p>
         {!library.browsable && (
@@ -650,5 +669,17 @@ function AvailableRow({
         </button>
       )}
     </li>
+  )
+}
+
+/** The library a music addon's row becomes in apps, with a note icon; nothing for other rows. */
+function MusicKind({ content }: { content: MusicContent | undefined }) {
+  const { t } = useI18n()
+  if (content === undefined) return null
+  return (
+    <Badge tone="ok">
+      <icons.music className="size-3.5" />
+      {t.music.library[content] ?? t.music.library.music}
+    </Badge>
   )
 }

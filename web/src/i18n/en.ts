@@ -148,6 +148,10 @@ const en = {
       'Your account may not control other users’ apps. Another administrator can give it this permission on the Users page.',
     too_soon: 'This addon was checked less than a minute ago. Try again in a moment.',
     invalid_limit: 'This list cannot show that many entries.',
+    addon_kind_changed:
+      'This address now leads to another kind of addon (a music addon instead of a video one, or the reverse). Install it as a new addon instead.',
+    invalid_addon_settings:
+      'The addon refused these settings: a value is not one of its choices, too long, or out of range. Check the fields and try again.',
   },
   status: {
     title: 'Server status',
@@ -497,6 +501,10 @@ const en = {
     series: 'Series',
     channel: 'Channels',
     tv: 'TV',
+    track: 'Tracks',
+    album: 'Albums',
+    artist: 'Artists',
+    playlist: 'Playlists',
   },
   stremioResources: {
     catalog: 'Catalogs',
@@ -504,6 +512,10 @@ const en = {
     stream: 'Streams',
     subtitles: 'Subtitles',
     addon_catalog: 'Addon catalogs',
+    search: 'Search',
+    isrc: 'Track matching',
+    resolve: 'Playback links',
+    settings: 'Settings',
   },
   addons: {
     title: 'Addons',
@@ -1048,6 +1060,45 @@ const en = {
       empty: 'Empty',
       notRead: 'Not read by Polyfin',
     },
+  },
+  music: {
+    content: { music: 'Music', audiobook: 'Audiobooks', podcast: 'Podcasts' } as Record<
+      string,
+      string
+    >,
+    library: {
+      music: 'Music library',
+      audiobook: 'Books library',
+      podcast: 'Music library',
+    } as Record<string, string>,
+    libraryHelp: {
+      music: 'Its items appear in the music view of Jellyfin apps.',
+      audiobook: 'Its audiobooks appear in a books library of Jellyfin apps.',
+      podcast: 'Its episodes appear in the music view of Jellyfin apps.',
+    } as Record<string, string>,
+    settings: 'Settings',
+    settingsLabel: (name: string) => `Settings of ${name}`,
+    settingsTitle: 'Addon settings',
+    settingsHelp:
+      'Declared by the addon and sent with every request Polyfin makes to it. They may hold your account details: only you, or the administrators for the server’s addons, can see them.',
+    noSettings: 'This addon has no settings.',
+    defaultValue: (value: string) => `Default: ${value}`,
+    defaultEmpty: 'Default: empty',
+    on: 'On',
+    off: 'Off',
+    range: (min: string, max: string) => `From ${min} to ${max}.`,
+    atLeast: (min: string) => `At least ${min}.`,
+    atMost: (max: string) => `At most ${max}.`,
+    stepOf: (step: string) => `In steps of ${step}.`,
+    maxLength: (count: number) => `${count} characters at most.`,
+    tooLong: (count: number) => `Use ${count} characters at most.`,
+    notNumber: 'Enter a number.',
+    belowMin: (min: string) => `Enter ${min} or more.`,
+    aboveMax: (max: string) => `Enter ${max} or less.`,
+    offStep: (step: string) => `Use a multiple of ${step}.`,
+    resetDefaults: 'Use the defaults',
+    saved: 'Settings saved. The addon receives them from its next request.',
+    notTracked: 'Polyfin records the answers of Stremio addons only.',
   },
 }
 

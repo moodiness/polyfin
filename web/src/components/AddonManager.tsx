@@ -28,6 +28,7 @@ import {
 import { errorMessage, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
 import { IptvAddForm, IptvSourceDetails, IptvSourceEditor } from '@/components/IptvSources'
+import { AddonSettingsPanel, MusicBadge } from '@/components/AddonSettings'
 
 /**
  * Adding, changing, reordering or removing an addon can change the scope's libraries too, and a
@@ -192,6 +193,8 @@ function AddonRow({
   const [replacing, setReplacing] = useState(false)
   const [manifestUrl, setManifestUrl] = useState('')
   const [edited, setEdited] = useState(false)
+  const settingsToggle = useRef<HTMLButtonElement>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => updateAddon(scope, addon.id, { enabled }),
@@ -256,6 +259,7 @@ function AddonRow({
                 {addon.kind === 'xtream' ? t.iptv.kindXtream : t.iptv.kindM3u}
               </Badge>
             )}
+            {addon.music !== null && <MusicBadge music={addon.music} />}
             {!addon.enabled && <Badge tone="danger">{t.addons.off}</Badge>}
           </h3>
           {!iptv && addon.description !== '' && (
@@ -343,6 +347,21 @@ function AddonRow({
           >
             {iptv ? t.iptv.edit : t.addons.replace}
           </button>
+          {addon.music !== null && (
+            <button
+              ref={settingsToggle}
+              type="button"
+              className={buttonSecondary}
+              aria-label={t.music.settingsLabel(addon.name)}
+              aria-expanded={settingsOpen}
+              onClick={() => {
+                resetFeedback()
+                setSettingsOpen((open) => !open)
+              }}
+            >
+              {t.music.settings}
+            </button>
+          )}
           <ConfirmButton
             label={t.addons.remove}
             busyLabel={t.addons.removing}
@@ -371,6 +390,17 @@ function AddonRow({
             setEdited(true)
           }}
           onCancel={closeReplace}
+        />
+      )}
+      {settingsOpen && addon.music !== null && (
+        <AddonSettingsPanel
+          scope={scope}
+          addon={addon}
+          music={addon.music}
+          onClose={() => {
+            setSettingsOpen(false)
+            settingsToggle.current?.focus()
+          }}
         />
       )}
       {replacing && !iptv && (
