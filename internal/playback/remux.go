@@ -332,8 +332,16 @@ func (s *Service) StopRemux(session string) {
 	s.segments.Stop(session)
 }
 
+// MayConvert reports whether user may have the video of version converted
+// now: the server converts that of fewer playbacks than its settings
+// allow, or already converts it for this user's playback of version.
+func (s *Service) MayConvert(user, version accounts.ID) bool {
+	return s.segments.MayConvert(user.String(), version.String())
+}
+
 func (r Remux) key() hls.Key {
-	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String()}
+	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String(),
+		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil}
 }
 
 // remuxOpener reads the version through the source cache, which keeps

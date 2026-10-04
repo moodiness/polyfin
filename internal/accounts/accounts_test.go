@@ -105,6 +105,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 		CatalogLimit: 5000, ChannelLimit: 30000}
 	want.PlayedPercent, want.ResumePercent = DefaultPlayedPercent, DefaultResumePercent
 	want.VersionListMinutes, want.CatalogRefreshMinutes = DefaultVersionListMinutes, DefaultCatalogRefreshMinutes
+	want.AnalysisTimeout, want.VersionAttempts, want.PreferDirectPlay, want.MaxConversions, want.MaxConversionHeight = 30, 5, true, 4, 720
 	if _, err := store.UpdateSettings(ctx, want); err != nil {
 		t.Fatal(err)
 	}

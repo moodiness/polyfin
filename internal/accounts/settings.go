@@ -89,6 +89,42 @@ const (
 	DefaultInactiveDeviceDays = 0
 )
 
+// ErrInvalidAnalysisTimeout reports an AnalysisTimeout outside
+// [MinAnalysisTimeout, MaxAnalysisTimeout].
+var ErrInvalidAnalysisTimeout = errors.New("invalid analysis timeout")
+
+// ErrInvalidVersionAttempts reports a VersionAttempts outside
+// [MinVersionAttempts, MaxVersionAttempts].
+var ErrInvalidVersionAttempts = errors.New("invalid version attempts")
+
+// ErrInvalidMaxConversions reports a MaxConversions outside
+// [MinMaxConversions, MaxMaxConversions].
+var ErrInvalidMaxConversions = errors.New("invalid maximum of conversions")
+
+// ErrInvalidMaxConversionHeight reports a MaxConversionHeight that is not
+// one of ConversionHeights.
+var ErrInvalidMaxConversionHeight = errors.New("invalid maximum height of converted video")
+
+// The bounds and defaults of Settings.AnalysisTimeout, in seconds,
+// VersionAttempts and MaxConversions. The defaults are what Polyfin did
+// before they were settings.
+const (
+	MinAnalysisTimeout     = 5
+	MaxAnalysisTimeout     = 120
+	DefaultAnalysisTimeout = 45
+	MinVersionAttempts     = 1
+	MaxVersionAttempts     = 10
+	DefaultVersionAttempts = 3
+	MinMaxConversions      = 0
+	MaxMaxConversions      = 32
+	DefaultMaxConversions  = 0
+)
+
+// ConversionHeights are the values Settings.MaxConversionHeight takes: 0,
+// the default, keeps the height of the original, the others are the
+// heights of usual video.
+var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -158,15 +194,35 @@ type Settings struct {
 	// DetailedLog logs at the debug level, whatever the configured level
 	// (see FollowLogLevel).
 	DetailedLog bool
+	// AnalysisTimeout bounds each ffprobe analysis, of a file or of a live
+	// stream, in seconds: a source that does not answer in time is given up
+	// for a while, and PlaybackInfo moves on to the next version.
+	AnalysisTimeout int
+	// VersionAttempts is how many versions PlaybackInfo analyzes at most
+	// when the app did not choose one, files and channels alike.
+	VersionAttempts int
+	// PreferDirectPlay makes PlaybackInfo, when the app did not choose a
+	// version, pick the first version the app plays without conversion (as
+	// it is, or repackaged with its tracks copied) rather than the first
+	// that plays at all.
+	PreferDirectPlay bool
+	// MaxConversions bounds the playbacks whose video the server converts
+	// at once, files and live alike, 0 for no limit.
+	MaxConversions int
+	// MaxConversionHeight is the height converted video is scaled down to
+	// at most, keeping its shape, one of ConversionHeights; 0 keeps the
+	// original's.
+	MaxConversionHeight int
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
-			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog)
+			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
+			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight)
 	return settings, err
 }
 
@@ -212,6 +268,18 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.InactiveDeviceDays < 0 || settings.InactiveDeviceDays > MaxInactiveDeviceDays {
 		return Settings{}, ErrInvalidInactiveDeviceDays
 	}
+	if settings.AnalysisTimeout < MinAnalysisTimeout || settings.AnalysisTimeout > MaxAnalysisTimeout {
+		return Settings{}, ErrInvalidAnalysisTimeout
+	}
+	if settings.VersionAttempts < MinVersionAttempts || settings.VersionAttempts > MaxVersionAttempts {
+		return Settings{}, ErrInvalidVersionAttempts
+	}
+	if settings.MaxConversions < MinMaxConversions || settings.MaxConversions > MaxMaxConversions {
+		return Settings{}, ErrInvalidMaxConversions
+	}
+	if !slices.Contains(ConversionHeights, settings.MaxConversionHeight) {
+		return Settings{}, ErrInvalidMaxConversionHeight
+	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
 		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
@@ -220,11 +288,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
 		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
 		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
-		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog)
+		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog,
+		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight)
 	if err != nil {
 		return Settings{}, err
 	}

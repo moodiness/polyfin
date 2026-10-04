@@ -40,7 +40,6 @@ const (
 	// checking it again.
 	liveTTL      = 2 * time.Minute
 	checkTimeout = 10 * time.Second
-	probeTimeout = 45 * time.Second
 )
 
 // ErrStandIn reports a source that is a short clip standing in for the
@@ -58,6 +57,7 @@ type Service struct {
 	db       *pgxpool.Pool
 	opener   source.Opener
 	prober   media.Prober
+	settings func() accounts.Settings
 	sources  *source.Cache
 	segments *hls.Manager
 	loopback *loopback
@@ -98,16 +98,22 @@ type Service struct {
 
 // New returns a playback service running ffprobe from ffprobePath, reading
 // sources through sources, remuxing them with segments, and renewing
-// expired links with renew, which may be nil.
-func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger) (*Service, error) {
+// expired links with renew, which may be nil. settings returns the server
+// settings, read as they apply: the analysis timeout as each analysis
+// starts, and the limit of the playbacks converting video, which it sets
+// on segments, whenever one more would start.
+func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger,
+	settings func() accounts.Settings) (*Service, error) {
 	server, err := newLoopback()
 	if err != nil {
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
+	segments.LimitConversions(func() int { return settings().MaxConversions })
 	s := &Service{
 		db:          db,
 		opener:      opener,
-		prober:      media.Prober{Path: ffprobePath, Timeout: probeTimeout},
+		settings:    settings,
+		prober:      media.Prober{Path: ffprobePath},
 		sources:     sources,
 		segments:    segments,
 		loopback:    server,
@@ -204,7 +210,7 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		target, release := s.loopback.register(src)
 		defer release()
 		started := time.Now()
-		analysis, err := s.prober.Probe(ctx, target)
+		analysis, err := s.ffprobe().Probe(ctx, target)
 		if err == nil && standIn(analysis, version.Runtime) {
 			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
 		}
@@ -245,6 +251,14 @@ func standIn(analysis media.Analysis, runtime time.Duration) bool {
 func (s *Service) Failed(version accounts.ID) bool {
 	_, failed := s.failures.Get(version)
 	return failed
+}
+
+// ffprobe is the prober, an analysis bounded by the settings' timeout when
+// it starts: a change applies to the next analysis.
+func (s *Service) ffprobe() media.Prober {
+	prober := s.prober
+	prober.Timeout = time.Duration(s.settings().AnalysisTimeout) * time.Second
+	return prober
 }
 
 // Delivery is how a version's bytes reach a player.

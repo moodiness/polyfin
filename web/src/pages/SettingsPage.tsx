@@ -1,17 +1,21 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  analysisTimeoutRange,
   catalogLimitRange,
   catalogRefreshMinutesRange,
   channelLimitRange,
+  conversionHeights,
   fetchSettings,
   inactiveDeviceDaysRange,
   loginAttemptsRange,
+  maxConversionsRange,
   playedPercentRange,
   queryClient,
   queryKeys,
   resumePercentRange,
   saveSettings,
+  versionAttemptsRange,
   versionListMinutesRange,
   type Settings,
 } from '@/api'
@@ -55,6 +59,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const catalogsId = useId()
   const contentId = useId()
   const securityId = useId()
+  const heightId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -161,6 +166,71 @@ function SettingsForm({ initial }: { initial: Settings }) {
               checked={form.downloads}
               onChange={(downloads) => update({ downloads })}
             />
+            <TextField
+              label={t.settings.analysisTimeout}
+              hint={t.settings.analysisTimeoutHelp}
+              type="number"
+              inputMode="numeric"
+              min={analysisTimeoutRange.min}
+              max={analysisTimeoutRange.max}
+              step={1}
+              value={form.analysisTimeout || ''}
+              onValue={(value) => update({ analysisTimeout: Math.trunc(Number(value)) })}
+              required
+            />
+            <TextField
+              label={t.settings.versionAttempts}
+              hint={t.settings.versionAttemptsHelp}
+              type="number"
+              inputMode="numeric"
+              min={versionAttemptsRange.min}
+              max={versionAttemptsRange.max}
+              step={1}
+              value={form.versionAttempts || ''}
+              onValue={(value) => update({ versionAttempts: Math.trunc(Number(value)) })}
+              required
+            />
+            <Checkbox
+              label={t.settings.preferDirectPlay}
+              help={t.settings.preferDirectPlayHelp}
+              checked={form.preferDirectPlay}
+              onChange={(preferDirectPlay) => update({ preferDirectPlay })}
+            />
+            <TextField
+              label={t.settings.maxConversions}
+              hint={t.settings.maxConversionsHelp}
+              type="number"
+              inputMode="numeric"
+              min={maxConversionsRange.min}
+              max={maxConversionsRange.max}
+              step={1}
+              value={form.maxConversions}
+              onValue={(value) => update({ maxConversions: Math.trunc(Number(value)) })}
+              required
+            />
+            <div>
+              <label htmlFor={heightId} className="block text-sm font-medium text-zinc-200">
+                {t.settings.maxConversionHeight}
+              </label>
+              <select
+                id={heightId}
+                value={form.maxConversionHeight}
+                onChange={(event) => update({ maxConversionHeight: Number(event.target.value) })}
+                aria-describedby={`${heightId}-hint`}
+                className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+              >
+                {conversionHeights.map((height) => (
+                  <option key={height} value={height}>
+                    {height === 0
+                      ? t.settings.conversionHeightOriginal
+                      : t.settings.conversionHeight(height)}
+                  </option>
+                ))}
+              </select>
+              <p id={`${heightId}-hint`} className="mt-1 text-xs text-muted">
+                {t.settings.maxConversionHeightHelp}
+              </p>
+            </div>
           </section>
           <section className="space-y-4 border-t border-line pt-6" aria-labelledby={contentId}>
             <h2 id={contentId} className="text-sm font-semibold text-white">

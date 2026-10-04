@@ -197,7 +197,9 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	}
 	remux := playback.Remux{Session: session, User: user.ID, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
-	// would for Jellyfin, through the same functions.
+	// would for Jellyfin, through the same functions. Converted video is
+	// scaled down to the height the settings allow as the encoding starts,
+	// a setting Jellyfin does not have.
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
 		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
 		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
@@ -206,7 +208,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 			if most := int64(user.MaxBitrate); most > 0 && (limit <= 0 || limit > most) {
 				limit = most
 			}
-			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, streams[i], h.Playback.Capabilities())
+			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, h.Accounts.Settings().MaxConversionHeight, streams[i], h.Playback.Capabilities())
 		}
 	}
 	// A subtitle burned in is an image track inside the file, counted after
@@ -429,6 +431,12 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 	case errors.Is(err, hls.ErrNotFound), errors.Is(err, hls.ErrStopped), errors.Is(err, playback.ErrNotRemuxable):
 		processingError(w, http.StatusNotFound)
 	case errors.Is(err, hls.ErrBusy):
+		// The server runs as many live encodings, or converts the video of
+		// as many playbacks, as it may. Jellyfin has no such limits: its
+		// nearest, a tuner's stream limit, fails with a 500. A 503 says the
+		// same to apps, which take both as a server error, and that the
+		// refusal lasts only while the server is busy.
+		h.Logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.Addon)
 		processingError(w, http.StatusServiceUnavailable)
 	default:
 		h.Logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)

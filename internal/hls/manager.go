@@ -211,6 +211,11 @@ type Key struct {
 	Format  Format
 	// User is who plays, which bounds the live encodings each user runs.
 	User string
+	// Version is the version played, and Converts marks an encoding that
+	// converts the video: the playbacks doing so may be bounded, a playback
+	// being what a user plays of a version (see LimitConversions).
+	Version  string
+	Converts bool
 }
 
 func (k Key) name() string {
@@ -227,6 +232,9 @@ type Manager struct {
 	can    capabilities
 	// hardware is the GPU DetectHardware chose, set before encoding starts.
 	hardware *Hardware
+	// conversions returns how many playbacks may have their video
+	// converted at once, 0 or less for no limit; nil sets no limit.
+	conversions func() int
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -299,6 +307,57 @@ func (m *Manager) stopIdle() {
 	}
 }
 
+// LimitConversions bounds the playbacks whose video is converted at once to
+// what limit returns, 0 for no limit, files and live alike. It is read
+// whenever an encoding would convert the video of one more, so a change
+// applies at once; encodings already running go on.
+func (m *Manager) LimitConversions(limit func() int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.conversions = limit
+}
+
+// MayConvert reports whether an encoding converting the video of version
+// for user may start now: see admits.
+func (m *Manager) MayConvert(user, version string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.admits(Key{User: user, Version: version, Converts: true}, nil)
+}
+
+// admits reports whether an encoding of key may start: it copies the
+// video, or the playbacks whose video is converted are fewer than the
+// limit. A playback is what a user plays of a version, whatever the play
+// session: apps start a new one to switch audio track or quality, and stop
+// the old one once the new one plays. The playback key belongs to, which
+// counts already, and the live encoding leaving, about to be replaced, are
+// left out. The caller holds m.mu.
+func (m *Manager) admits(key Key, leaving *live) bool {
+	if !key.Converts || m.conversions == nil {
+		return true
+	}
+	limit := m.conversions()
+	if limit <= 0 {
+		return true
+	}
+	type playback struct{ user, version string }
+	converting := map[playback]bool{}
+	count := func(k Key) {
+		if k.Converts && (k.User != key.User || k.Version != key.Version) {
+			converting[playback{k.User, k.Version}] = true
+		}
+	}
+	for k := range m.encodings {
+		count(k)
+	}
+	for k, l := range m.lives {
+		if l != leaving {
+			count(k)
+		}
+	}
+	return len(converting) < limit
+}
+
 // Init opens the initialization segment of a fragmented MP4 encoding.
 func (m *Manager) Init(ctx context.Context, key Key, open Opener) (*os.File, error) {
 	e, err := m.encoding(ctx, key, open)
@@ -349,6 +408,10 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 	}
 	e := m.encodings[key]
 	if e == nil {
+		if !m.admits(key, nil) {
+			m.mu.Unlock()
+			return nil, ErrBusy
+		}
 		e = &encoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}),
 			changed: make(chan struct{}), used: time.Now()}
 		m.encodings[key] = e

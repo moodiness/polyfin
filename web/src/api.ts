@@ -112,6 +112,16 @@ export type Settings = {
   inactiveDeviceDays: number
   /** Logs in detail (debug level), to diagnose a problem. */
   detailedLog: boolean
+  /** Seconds one analysis of a version or a channel's stream may take before it is given up. */
+  analysisTimeout: number
+  /** Versions analyzed at most when an app plays a title without choosing a version. */
+  versionAttempts: number
+  /** Prefers the first version an app plays without conversion over the first that plays at all. */
+  preferDirectPlay: boolean
+  /** Playbacks whose video the server converts at once, 0 for no limit. */
+  maxConversions: number
+  /** Height converted video is scaled down to at most, 0 to keep the original's. */
+  maxConversionHeight: number
 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
@@ -126,6 +136,13 @@ export const playedPercentRange = { min: 50, max: 100 }
 export const resumePercentRange = { min: 0, max: 50 }
 export const versionListMinutesRange = { min: 1, max: 360 }
 export const catalogRefreshMinutesRange = { min: 1, max: 1440 }
+
+/** The ranges the server accepts for Settings.analysisTimeout, versionAttempts and maxConversions. */
+export const analysisTimeoutRange = { min: 5, max: 120 }
+export const versionAttemptsRange = { min: 1, max: 10 }
+export const maxConversionsRange = { min: 0, max: 32 }
+/** The values the server accepts for Settings.maxConversionHeight, 0 keeping the original height. */
+export const conversionHeights = [0, 480, 720, 1080, 1440, 2160]
 
 export type NewUser = {
   name: string

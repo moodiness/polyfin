@@ -74,7 +74,7 @@ func TestStoredSubtitlesAreNotHiddenByARequestTheAppGaveUp(t *testing.T) {
 	s.saveExtracted(t.Context(), version, stored)
 	// After a restart, an app asks, then stops waiting; a later request
 	// still finds the subtitles extracted before.
-	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
+	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger, s.settings)
 	if err != nil {
 		t.Fatal(err)
 	}

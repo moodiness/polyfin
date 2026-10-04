@@ -433,7 +433,9 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, ov
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
 	var video *VideoConversion
 	if options.ConvertVideo || overLimit || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
-		if video = ConvertVideo(t.VideoCodec, VideoLimit(limit, d.played), *d.video, options.Can); video == nil {
+		// The height converted video is capped at only scales it down,
+		// which never prevents a conversion: the remux applies it.
+		if video = ConvertVideo(t.VideoCodec, VideoLimit(limit, d.played), 0, *d.video, options.Can); video == nil {
 			return false, nil, nil
 		}
 	}

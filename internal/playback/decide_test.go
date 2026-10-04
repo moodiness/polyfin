@@ -397,7 +397,7 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{"H.264 first, whatever the order", "av1,hevc,h264,vp9", 0, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
 		{"no codec Polyfin encodes", "av1,vp9", 0, video(1920, 1080, 0, false), nil},
 	} {
-		if got := ConvertVideo(test.codecs, test.limit, test.video, can); !reflect.DeepEqual(got, test.want) {
+		if got := ConvertVideo(test.codecs, test.limit, 0, test.video, can); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
 		}
 	}
@@ -423,7 +423,7 @@ func TestVideoIsConvertedOnTheGPUThatEncodesTheCodec(t *testing.T) {
 		// the GPU.
 		"hevc": {Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000},
 	} {
-		if got := ConvertVideo(codecs, 0, video, can); !reflect.DeepEqual(got, want) {
+		if got := ConvertVideo(codecs, 0, 0, video, can); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: %+v, want %+v", codecs, got, want)
 		}
 	}
@@ -454,7 +454,7 @@ func TestHDRIsToneMappedOnTheGPUWithoutTheProcessorsLimits(t *testing.T) {
 		{"Dolby Vision profile 5 on a GPU that does not tone map", "h264", vaapi, profile5, nil},
 	} {
 		can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true, Hardware: test.gpu}
-		if got := ConvertVideo(test.codecs, 0, test.video, can); !reflect.DeepEqual(got, test.want) {
+		if got := ConvertVideo(test.codecs, 0, 0, test.video, can); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
 		}
 	}
