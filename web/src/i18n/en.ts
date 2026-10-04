@@ -44,6 +44,8 @@ const en = {
     confirm: 'Confirm',
     retry: 'Try again',
     never: 'Never',
+    // The colon after a label: French sets it off with a narrow no-break space.
+    colon: ':',
     passwordRule: 'At least 8 characters.',
     nameRule: "1 to 64 characters: letters, digits, spaces and - _ ' . @ +",
     passwordMismatch: 'The two passwords do not match.',

@@ -117,7 +117,8 @@ export default function RecentActivity() {
                 <p className="break-words text-white">
                   {entry.severity !== 'Information' && (
                     <span className="sr-only">
-                      {entry.severity === 'Error' ? t.activity.error : t.activity.warning}:{' '}
+                      {entry.severity === 'Error' ? t.activity.error : t.activity.warning}
+                      {t.common.colon}{' '}
                     </span>
                   )}
                   {entry.name}

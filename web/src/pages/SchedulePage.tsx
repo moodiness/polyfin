@@ -306,8 +306,8 @@ function Refreshes() {
                   <OwnerChip owner={row.owner} />
                 </p>
                 <p className="text-xs text-muted">
-                  {row.kind} · {text.lastDownload}:{' '}
-                  {row.last ? <RelativeTime iso={row.last} /> : text.notYet}
+                  {row.kind} · {text.lastDownload}
+                  {t.common.colon} {row.last ? <RelativeTime iso={row.last} /> : text.notYet}
                 </p>
               </div>
               <div className="text-right text-xs">

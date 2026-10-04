@@ -46,6 +46,7 @@ const fr: Messages = {
     confirm: 'Confirmer',
     retry: 'Réessayer',
     never: 'Jamais',
+    colon: '\u202F:',
     passwordRule: 'Au moins 8 caractères.',
     nameRule: "De 1 à 64 caractères : lettres, chiffres, espaces et - _ ' . @ +",
     passwordMismatch: 'Les deux mots de passe ne correspondent pas.',
