@@ -134,6 +134,16 @@ const fr: Messages = {
     invalid_recording_retention_days:
       'Les jours de conservation des enregistrements doivent être un nombre entier de 0 à 3 650.',
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
+    invalid_live_tv_refresh_hours:
+      'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
+    invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
+    invalid_source_address:
+      'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
+    invalid_channel_list:
+      'Cette adresse n’a pas renvoyé de liste de chaînes. Vérifiez-la, et que le compte est toujours valable.',
+    channel_list_too_large:
+      'Cette liste de chaînes est trop grande (100 Mo ou 100 000 chaînes au plus).',
+    iptv_login_refused: 'Le serveur IPTV a refusé cet identifiant ou ce mot de passe.',
   },
   status: {
     title: 'État du serveur',
@@ -484,6 +494,10 @@ const fr: Messages = {
     recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
     recordingRetentionDaysHelp:
       'Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De 0 à 3 650.',
+    liveTvTitle: 'TV en direct',
+    liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
+    liveTvRefreshHoursHelp:
+      'À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. De 1 à 168 ; 12 par défaut.',
   },
   stremioTypes: {
     movie: 'Films',
@@ -590,7 +604,7 @@ const fr: Messages = {
     saved: 'Bibliothèques enregistrées.',
     guideTitle: 'Guide des programmes (XMLTV)',
     guideHelp:
-      'Certains fournisseurs publient leur guide des programmes dans un fichier XMLTV. Ses programmes complètent les chaînes pour lesquelles l’addon ne donne pas de guide. Le guide est récupéré à nouveau toutes les 12 heures.',
+      'Certains fournisseurs publient leur guide des programmes dans un fichier XMLTV. Ses programmes complètent les chaînes pour lesquelles l’addon ne donne pas de guide. Le guide est téléchargé à nouveau selon l’intervalle choisi dans Paramètres › TV en direct.',
     guideAfterSave:
       'Enregistrez les bibliothèques pour ajouter un guide des programmes à ce catalogue.',
     guideNone: 'Pas de guide des programmes.',
@@ -619,6 +633,7 @@ const fr: Messages = {
       channels_unreachable:
         'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
     },
+    guideNext: 'Prochaine récupération',
   },
   myAddons: {
     title: 'Mes addons',
@@ -682,6 +697,61 @@ const fr: Messages = {
     error: 'Erreur',
     count: (shown: number, total: number) => `Les ${shown} derniers événements sur ${total}.`,
     autoRefresh: 'Actualisation automatique toutes les 30 secondes.',
+  },
+  iptv: {
+    addTitle: 'Ajouter une source IPTV',
+    addHelp:
+      'Importez directement les chaînes d’une playlist M3U ou d’un compte Xtream Codes. Elles apparaissent dans la TV en direct comme un catalogue TV, que vous pouvez ranger dans Bibliothèques. La liste est téléchargée à nouveau selon l’intervalle choisi dans Paramètres › TV en direct.',
+    name: 'Nom',
+    kind: 'Type',
+    kindM3u: 'Playlist M3U',
+    kindXtream: 'Compte Xtream Codes',
+    playlistUrl: 'Adresse de la playlist',
+    playlistUrlHint:
+      'L’adresse M3U donnée par votre fournisseur. Elle peut contenir vos identifiants : elle n’est jamais affichée en entier.',
+    server: 'Adresse du serveur',
+    serverHint: 'Par exemple https://serveur:8080, telle que votre fournisseur la donne.',
+    username: 'Identifiant',
+    password: 'Mot de passe',
+    keepHint: 'Laissez vide pour garder l’actuelle.',
+    passwordKeepHint: 'Laissez vide pour garder le mot de passe actuel.',
+    providerGuide: 'Utiliser le guide des programmes du fournisseur',
+    providerGuideHelp:
+      'Les serveurs Xtream Codes publient un guide pour le compte : il remplit les programmes des chaînes.',
+    guideUrl: 'Adresse du guide des programmes (XMLTV, facultatif)',
+    guideUrlHint:
+      'Fichier XMLTV, compressé ou non. Vous pouvez aussi l’ajouter ou le changer plus tard dans Bibliothèques.',
+    add: 'Ajouter la source',
+    adding: 'Téléchargement de la liste…',
+    added: (name: string, channels: number) =>
+      `${name} a été ajoutée avec ${channels <= 1 ? `${channels} chaîne` : `${channels} chaînes`}.`,
+    address: 'Adresse',
+    channels: 'Chaînes',
+    channelCount: (count: number) => (count <= 1 ? `${count} chaîne` : `${count} chaînes`),
+    groupsShown: (shown: number, total: number) => `${shown} groupes affichés sur ${total}`,
+    lastFetch: 'Dernier téléchargement',
+    nextFetch: 'Prochain téléchargement',
+    never: 'Jamais',
+    edit: 'Modifier',
+    editLabel: (name: string) => `Modifier ${name}`,
+    saved: 'Source enregistrée.',
+    groups: 'Groupes affichés',
+    allGroups: 'Tous les groupes',
+    allGroupsHelp: 'Les groupes ajoutés plus tard à la liste sont aussi affichés.',
+    filterGroups: 'Filtrer les groupes',
+    checkShown: 'Cocher les groupes listés',
+    uncheckShown: 'Décocher les groupes listés',
+    noGroup: 'Sans groupe',
+    errors: {
+      unreachable:
+        'Le dernier téléchargement a échoué : impossible de joindre le serveur. Les chaînes précédentes sont gardées.',
+      private_network:
+        'Le dernier téléchargement a échoué : cette adresse est sur un réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
+      too_large:
+        'Le dernier téléchargement a échoué : la liste est trop grande. Les chaînes précédentes sont gardées.',
+      malformed:
+        'Le dernier téléchargement a échoué : le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
+    },
   },
 }
 

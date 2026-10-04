@@ -11,9 +11,10 @@ import (
 // are those of the guide channels it Wants, and Choose decides once the
 // guide is read.
 //
-// A guide channel whose identifier is a channel's Stremio ID gives that
-// channel its programmes. Otherwise guide channels are candidates by name
-// (see ParseName), ranked by:
+// A guide channel whose identifier is a channel's Stremio ID, or the
+// channel's own guide identifier (an IPTV list's tvg-id or epg_channel_id),
+// gives that channel its programmes. Otherwise guide channels are
+// candidates by name (see ParseName), ranked by:
 //   - country: one of the guide channel's countries (that of its
 //     identifier, as in "Name.fr", and those of its display names'
 //     prefixes, as in "FR| Name") is the channel's own prefix country, else
@@ -32,9 +33,9 @@ import (
 type Matcher struct {
 	country  string
 	channels []matchChannel
-	// byStremioID, exact and loose index the channels by Stremio ID and
-	// names.
-	byStremioID  map[string]int
+	// byID, exact and loose index the channels by Stremio ID and guide
+	// identifier, and by names.
+	byID         map[string][]int
 	exact, loose map[string][]int
 	// wanted counts, for each guide channel, the channels it is a
 	// candidate of or matched by identifier.
@@ -44,9 +45,9 @@ type Matcher struct {
 type matchChannel struct {
 	// country is the country whose guides the channel prefers, if any.
 	country string
-	// byID is the guide channel matched by the channel's Stremio ID;
-	// otherwise candidates are the guide channels of the best rank, in the
-	// order they were declared.
+	// byID is the guide channel matched by the channel's Stremio ID or
+	// guide identifier; otherwise candidates are the guide channels of the
+	// best rank, in the order they were declared.
 	byID       string
 	rank       int
 	candidates []string
@@ -55,18 +56,21 @@ type matchChannel struct {
 // NewMatcher returns a matcher for a server in language (see
 // LanguageCountry).
 func NewMatcher(language string) *Matcher {
-	return &Matcher{country: LanguageCountry(language), byStremioID: map[string]int{},
+	return &Matcher{country: LanguageCountry(language), byID: map[string][]int{},
 		exact: map[string][]int{}, loose: map[string][]int{}, wanted: map[string]int{}}
 }
 
-// Add adds the next channel of the catalog; Choose answers in the order
-// channels were added.
-func (m *Matcher) Add(stremioID, name string) {
+// Add adds the next channel of the catalog, with its guide identifier if
+// it has one; Choose answers in the order channels were added. Several
+// channels may share a guide identifier.
+func (m *Matcher) Add(stremioID, guideID, name string) {
 	i := len(m.channels)
 	parsed := ParseName(name)
 	m.channels = append(m.channels, matchChannel{country: cmp.Or(parsed.Country, m.country)})
-	if _, ok := m.byStremioID[stremioID]; !ok && stremioID != "" {
-		m.byStremioID[stremioID] = i
+	for _, id := range []string{stremioID, guideID} {
+		if id != "" && !slices.Contains(m.byID[id], i) {
+			m.byID[id] = append(m.byID[id], i)
+		}
 	}
 	if parsed.Exact != "" {
 		m.exact[parsed.Exact] = append(m.exact[parsed.Exact], i)
@@ -76,8 +80,8 @@ func (m *Matcher) Add(stremioID, name string) {
 	}
 }
 
-// matchByID gives channel i the guide channel id, which is its Stremio ID,
-// in place of its candidates.
+// matchByID gives channel i the guide channel id, its Stremio ID or guide
+// identifier, in place of its candidates.
 func (m *Matcher) matchByID(i int, id string) {
 	c := &m.channels[i]
 	if c.byID != "" {
@@ -93,7 +97,7 @@ func (m *Matcher) matchByID(i int, id string) {
 // Declare ranks a guide channel against the channels whose names it
 // shares.
 func (m *Matcher) Declare(channel Channel) {
-	if i, ok := m.byStremioID[channel.ID]; ok {
+	for _, i := range m.byID[channel.ID] {
 		m.matchByID(i, channel.ID)
 	}
 	countries := []string{IDCountry(channel.ID)}
@@ -133,13 +137,16 @@ func (m *Matcher) Declare(channel Channel) {
 }
 
 // Wants reports whether the programmes of a guide channel may be chosen: it
-// is a candidate of a channel, or a channel's Stremio ID, declared or not.
+// is a candidate of a channel, or a channel's Stremio ID or guide
+// identifier, declared or not.
 func (m *Matcher) Wants(id string) bool {
 	if m.wanted[id] > 0 {
 		return true
 	}
-	if i, ok := m.byStremioID[id]; ok {
-		m.matchByID(i, id)
+	if channels, ok := m.byID[id]; ok {
+		for _, i := range channels {
+			m.matchByID(i, id)
+		}
 		return true
 	}
 	return false

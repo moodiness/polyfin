@@ -20,11 +20,9 @@ import (
 )
 
 const (
-	// GuideRefresh is how often an XMLTV guide is fetched again, and
-	// GuideCheck how often the guides due are looked for (see
-	// RefreshGuides).
-	GuideRefresh = 12 * time.Hour
-	GuideCheck   = 30 * time.Minute
+	// GuideCheck is how often the guides due are looked for (see
+	// RefreshGuides); they are due after the settings' LiveTvRefreshHours.
+	GuideCheck = 30 * time.Minute
 	// A guide download must answer within guideAnswer, send something at
 	// least every guideStall and end within guideTimeout.
 	guideAnswer  = 30 * time.Second
@@ -66,17 +64,18 @@ func (s *Service) SpoolGuidesIn(dir string) error {
 	return nil
 }
 
-// RefreshGuides fetches the XMLTV guides not fetched for GuideRefresh, or
-// every guide when all is set, one after the other: each costs its source
-// a download. The task scheduler runs it every GuideCheck, and an
-// administrator runs it with all.
+// RefreshGuides fetches the XMLTV guides not fetched for the settings'
+// LiveTvRefreshHours, or every guide when all is set, one after the other:
+// each costs its source a download. The task scheduler runs it every
+// GuideCheck, and an administrator runs it with all.
 func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 	sources, err := s.addons.GuideSources(ctx)
 	if err != nil {
 		return err
 	}
+	interval := time.Duration(s.settings().LiveTvRefreshHours) * time.Hour
 	for _, src := range sources {
-		if !all && src.CheckedAt != nil && s.now().Sub(*src.CheckedAt) < GuideRefresh {
+		if !all && src.CheckedAt != nil && s.now().Sub(*src.CheckedAt) < interval {
 			continue
 		}
 		if err := s.refreshGuide(ctx, src); err != nil {
@@ -177,7 +176,7 @@ func (s *Service) fetchGuide(ctx context.Context, src addons.GuideSource, at tim
 		}
 		seen[meta.ID] = true
 		list = append(list, itemID(channelKey(meta.ID)))
-		matcher.Add(meta.ID, meta.Name)
+		matcher.Add(meta.ID, meta.GuideID, meta.Name)
 	}
 	if len(list) == 0 {
 		return nil, 0, 0, ""

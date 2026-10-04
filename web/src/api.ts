@@ -184,7 +184,12 @@ export type Settings = {
   recordingRetentionDays: number
   /** Folder recordings are written to (read-only); empty when recording is off. */
   recordingsFolder: string
+  /** Hours after which the XMLTV guides and IPTV channel lists are fetched again. */
+  liveTvRefreshHours: number
 }
+
+/** The range the server accepts for Settings.liveTvRefreshHours. */
+export const liveTvRefreshHoursRange = { min: 1, max: 168 }
 
 /** The ranges the server accepts for the recording settings, padding in minutes here. */
 export const recordingPaddingMinutesRange = { min: 0, max: 60 }
@@ -261,7 +266,48 @@ export type Addon = {
   types: string[]
   catalogCount: number
   refreshedAt: string
+  /** 'stremio' for a Stremio addon; 'm3u' or 'xtream' for an IPTV source, which `source` describes. */
+  kind: 'stremio' | 'm3u' | 'xtream'
+  source: IptvSource | null
 }
+
+/** An IPTV source's channel list and how it was last fetched. */
+export type IptvSource = {
+  /** Redacted: the credentials it holds are never returned. */
+  address: string
+  channels: number
+  groups: { name: string; channels: number }[]
+  /** Groups shown; null shows them all, those added later included. */
+  includedGroups: string[] | null
+  checkedAt: string | null
+  fetchedAt: string | null
+  nextAt: string | null
+  /** Code of the last failure; empty after a success. */
+  error: string
+}
+
+/** An IPTV source to add. */
+export type NewIptvSource = {
+  name: string
+  kind: 'm3u' | 'xtream'
+  url?: string
+  server?: string
+  username?: string
+  password?: string
+  guideUrl?: string
+  /** Xtream only: use the guide the server publishes for the account. */
+  providerGuide?: boolean
+}
+
+/** What changes of an IPTV source; a password left empty keeps the current one. */
+export type IptvSourcePatch = Partial<{
+  name: string
+  url: string
+  server: string
+  username: string
+  password: string
+  groups: string[] | null
+}>
 
 export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string }>
 
@@ -293,6 +339,8 @@ export type Guide = {
   matched: number
   /** Code of the last failure; empty after a success. */
   error: string
+  /** When the guide is fetched again; null without a guide or before its first fetch. */
+  nextAt: string | null
 }
 
 /** Which TV catalog a guide request is for. */
@@ -466,6 +514,12 @@ export const updateAddon = (scope: Scope, id: string, patch: AddonPatch) =>
 
 export const refreshAddon = (scope: Scope, id: string) =>
   request<Addon>('POST', `${scopePath(scope)}/addons/${seg(id)}/refresh`)
+
+export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
+  request<Addon>('POST', `${scopePath(scope)}/iptv`, source)
+
+export const updateIptvSource = (scope: Scope, id: string, patch: IptvSourcePatch) =>
+  request<Addon>('PATCH', `${scopePath(scope)}/iptv/${seg(id)}`, patch)
 
 export const deleteAddon = (scope: Scope, id: string) =>
   request<void>('DELETE', `${scopePath(scope)}/addons/${seg(id)}`)

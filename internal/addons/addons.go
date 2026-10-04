@@ -34,6 +34,8 @@ var (
 	ErrInvalidLibrary     = errors.New("unknown or unbrowsable catalog")
 	ErrInvalidLibraryName = errors.New("library names are 1 to 64 printable characters")
 	ErrInvalidGuideURL    = errors.New("guide addresses are http or https URLs of at most 4096 characters")
+	// ErrNotStremio reports an IPTV source asked for a manifest.
+	ErrNotStremio = errors.New("not a Stremio addon")
 )
 
 // Scope owns addons: the server (no owner) or one user.
@@ -47,14 +49,30 @@ func Shared() Scope { return Scope{} }
 // Personal is the scope of a user's own addons.
 func Personal(user accounts.ID) Scope { return Scope{Owner: &user} }
 
-// Addon is an installed Stremio addon.
+// Kinds of addons: Stremio addons, installed from their manifest, and
+// Polyfin's own IPTV sources, an M3U playlist or an Xtream Codes account,
+// which answer as an addon with one live TV catalog (see package iptv).
+const (
+	KindStremio = "stremio"
+	KindM3U     = "m3u"
+	KindXtream  = "xtream"
+)
+
+// Addon is an installed Stremio addon or an IPTV source. For an IPTV
+// source, ManifestURL is the address of its list, which embeds its
+// credentials, and Manifest describes its live TV catalog.
 type Addon struct {
 	ID          accounts.ID
+	Kind        string
 	ManifestURL string
 	Manifest    stremio.Manifest
 	Enabled     bool
 	RefreshedAt time.Time
 }
+
+// Stremio reports whether the addon is a Stremio addon, whose resources
+// are asked for over HTTP.
+func (a Addon) Stremio() bool { return a.Kind == KindStremio }
 
 // Library is a catalog of an addon of the scope, shown as a library when
 // Enabled.
@@ -117,7 +135,7 @@ type queryer interface {
 func scanAddon(row pgx.Row) (Addon, error) {
 	var addon Addon
 	var manifest []byte
-	err := row.Scan(&addon.ID, &addon.ManifestURL, &manifest, &addon.Enabled, &addon.RefreshedAt)
+	err := row.Scan(&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Enabled, &addon.RefreshedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -127,7 +145,7 @@ func scanAddon(row pgx.Row) (Addon, error) {
 	return addon, json.Unmarshal(manifest, &addon.Manifest)
 }
 
-const addonColumns = "id, manifest_url, manifest, enabled, refreshed_at"
+const addonColumns = "id, kind, manifest_url, manifest, enabled, refreshed_at"
 
 // Addons lists the scope's addons in order.
 func (s *Store) Addons(ctx context.Context, scope Scope) ([]Addon, error) {
@@ -193,6 +211,77 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 	return addon, err
 }
 
+// Create adds an IPTV source of kind at the end of the scope, with address
+// as its manifest URL and the manifest build makes from its new
+// identifier; setup stores, in the same transaction, what the source needs.
+// Its live TV catalog is enabled whatever the number of libraries: it is
+// the source's reason to be.
+func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, build func(accounts.ID) stremio.Manifest,
+	setup func(pgx.Tx, Addon) error) (Addon, error) {
+	var addon Addon
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockScope(ctx, tx, scope); err != nil {
+			return err
+		}
+		var id accounts.ID
+		err := tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position)
+			VALUES ($1, $2, $3, '{}', (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1))
+			RETURNING id`, scope.Owner, kind, address).Scan(&id)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrExists
+		}
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(build(id))
+		if err != nil {
+			return err
+		}
+		if addon, err = scanAddon(tx.QueryRow(ctx, "UPDATE addons SET manifest = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded)); err != nil {
+			return err
+		}
+		var last int
+		if err := tx.QueryRow(ctx, `SELECT coalesce(max(l.position), 0) FROM libraries l
+			JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1`, scope.Owner).Scan(&last); err != nil {
+			return err
+		}
+		for i, catalog := range addon.Manifest.Catalogs {
+			if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4)",
+				addon.ID, catalog.Type, catalog.ID, last+i+1); err != nil {
+				return err
+			}
+		}
+		return setup(tx, addon)
+	})
+	return addon, err
+}
+
+// Update changes an IPTV source's address and manifest, keeping its
+// libraries; setup stores, in the same transaction, what changes with
+// them. It answers ErrNotFound for an addon of another kind.
+func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, address string, manifest stremio.Manifest,
+	setup func(pgx.Tx) error) (Addon, error) {
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return Addon{}, err
+	}
+	var addon Addon
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $4, manifest = $5, refreshed_at = now()
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $3 RETURNING `+addonColumns, id, scope.Owner, kind, address, encoded))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrExists
+		}
+		if err != nil {
+			return err
+		}
+		return setup(tx)
+	})
+	return addon, err
+}
+
 // enableDefaults makes libraries of a new addon's catalogs. An addon that
 // groups its catalogs into collections (such as AIOMetadata) already says how
 // to organize them: its browsable collection catalogs become the libraries.
@@ -248,8 +337,10 @@ func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, ena
 // Replace installs a new manifest URL for an addon, keeping the libraries
 // whose catalogs still exist.
 func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL string, confined bool) (Addon, error) {
-	if _, err := s.addon(ctx, s.db, scope, id); err != nil {
+	if addon, err := s.addon(ctx, s.db, scope, id); err != nil {
 		return Addon{}, err
+	} else if !addon.Stremio() {
+		return Addon{}, ErrNotStremio
 	}
 	manifestURL, manifest, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
@@ -263,6 +354,9 @@ func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confin
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
 		return Addon{}, err
+	}
+	if !addon.Stremio() {
+		return Addon{}, ErrNotStremio
 	}
 	manifest, err := s.client.Manifest(ctx, addon.ManifestURL, confined)
 	if err != nil {
@@ -556,7 +650,7 @@ func (s *Store) GuideSource(ctx context.Context, scope Scope, key LibraryKey) (G
 }
 
 func (s *Store) guideSources(ctx context.Context, filter string, args ...any) ([]GuideSource, error) {
-	rows, err := s.db.Query(ctx, `SELECT a.id, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, a.owner_id,
+	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, a.owner_id,
 		coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id, l.guide_url, l.guide_checked_at
 		FROM libraries l JOIN addons a ON a.id = l.addon_id LEFT JOIN users u ON u.id = a.owner_id
 		WHERE l.guide_url <> '' AND a.enabled`+filter, args...)
@@ -567,7 +661,7 @@ func (s *Store) guideSources(ctx context.Context, filter string, args ...any) ([
 	var source GuideSource
 	var manifest []byte
 	var administrator bool
-	if _, err := pgx.ForEachRow(rows, []any{&source.Addon.ID, &source.Addon.ManifestURL, &manifest, &source.Addon.Enabled,
+	if _, err := pgx.ForEachRow(rows, []any{&source.Addon.ID, &source.Addon.Kind, &source.Addon.ManifestURL, &manifest, &source.Addon.Enabled,
 		&source.Addon.RefreshedAt, &source.Scope.Owner, &administrator, &source.Key.CatalogType, &source.Key.CatalogID,
 		&source.URL, &source.CheckedAt}, func() error {
 		source.Addon.Manifest = stremio.Manifest{}

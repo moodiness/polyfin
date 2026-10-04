@@ -57,7 +57,21 @@ type Service struct {
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
+	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
+	iptv IPTV
 }
+
+// IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
+// stream requests addons answer over HTTP (see package iptv).
+type IPTV interface {
+	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
+	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
+	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
+}
+
+// UseIPTV sets what answers for IPTV sources; it is called before the
+// service is used. Without it, IPTV sources list nothing.
+func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 
 type pageKey struct {
 	addon       accounts.ID
@@ -371,6 +385,14 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // page fetches the catalog page starting at skip, sharing concurrent and
 // recent requests.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
+	// An IPTV source's catalog is one page, which it remembers itself
+	// until its list changes.
+	if !src.addon.addon.Stremio() {
+		if skip > 0 || src.genre != "" || src.search != "" || src.date != "" || s.iptv == nil {
+			return nil, nil
+		}
+		return s.iptv.Channels(ctx, src.addon.addon.ID)
+	}
 	key := pageKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, src.date, skip}
 	if metas, ok := s.pages.Get(key); ok {
 		return metas, nil
@@ -738,7 +760,7 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 		return meta, nil
 	}
 	result, err, _ := s.flight.Do(fmt.Sprintf("meta %v", key), func() (any, error) {
-		meta, err := s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+		meta, err := s.fetchMeta(ctx, addon, metaType, id)
 		if err != nil {
 			return nil, err
 		}
@@ -749,6 +771,18 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 		return stremio.Meta{}, err
 	}
 	return result.(stremio.Meta), nil
+}
+
+// fetchMeta asks an addon, or an IPTV source, for its description of a
+// title.
+func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
+	if addon.addon.Stremio() {
+		return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+	}
+	if s.iptv == nil {
+		return stremio.Meta{}, stremio.ErrNotFound
+	}
+	return s.iptv.Meta(ctx, addon.addon.ID, id)
 }
 
 // titleMeta finds the complete description of a title among the user's
@@ -906,7 +940,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		}
 		return Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}}, nil
 	case KindChannel:
-		return s.channel(v, r)
+		return s.channel(ctx, v, r)
 	case KindProgram:
 		return s.program(ctx, v, r)
 	default:

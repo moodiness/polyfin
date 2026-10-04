@@ -100,6 +100,11 @@ type Meta struct {
 	Collection      *Collection   `json:"collection,omitempty"`
 	Extras          *Extras       `json:"app_extras,omitempty"`
 	BehaviorHints   *MetaBehavior `json:"behaviorHints,omitempty"`
+	// ChannelNumber and GuideID describe a channel of Polyfin's own IPTV
+	// sources: the number its provider gives it, 0 for none, and its
+	// channel in XMLTV guides. Addons never send them.
+	ChannelNumber int    `json:"-"`
+	GuideID       string `json:"-"`
 }
 
 // Trailer points to a YouTube video.

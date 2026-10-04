@@ -8,6 +8,7 @@ import {
   conversionHeights,
   fetchSettings,
   inactiveDeviceDaysRange,
+  liveTvRefreshHoursRange,
   loginAttemptsRange,
   maxConversionsRange,
   recordingPaddingMinutesRange,
@@ -64,6 +65,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const catalogsId = useId()
   const contentId = useId()
   const recordingsId = useId()
+  const liveTvId = useId()
   const securityId = useId()
   const heightId = useId()
   const thumbnailsId = useId()
@@ -437,6 +439,23 @@ function SettingsForm({ initial }: { initial: Settings }) {
               help={t.settings.detailedLogHelp}
               checked={form.detailedLog}
               onChange={(detailedLog) => update({ detailedLog })}
+            />
+          </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={liveTvId}>
+            <h2 id={liveTvId} className="text-sm font-semibold text-white">
+              {t.settings.liveTvTitle}
+            </h2>
+            <TextField
+              label={t.settings.liveTvRefreshHours}
+              hint={t.settings.liveTvRefreshHoursHelp}
+              type="number"
+              inputMode="numeric"
+              min={liveTvRefreshHoursRange.min}
+              max={liveTvRefreshHoursRange.max}
+              step={1}
+              value={wholeNumberField(form.liveTvRefreshHours)}
+              onValue={(value) => update({ liveTvRefreshHours: wholeNumber(value) })}
+              required
             />
           </section>
           <section className="space-y-4 border-t border-line pt-6" aria-labelledby={recordingsId}>

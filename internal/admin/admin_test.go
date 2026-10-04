@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -55,6 +56,9 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 	client := stremio.NewClient("test")
 	addonStore := addons.New(pool, client)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
+	lib := library.New(pool, addonStore, client, logger, store.Settings)
+	lib.UseIPTV(channels)
 	server := httptest.NewServer(New(Options{
 		Version:      "1.2.3",
 		ServerID:     "0123456789abcdef0123456789abcdef",
@@ -72,7 +76,8 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 			}
 			return time.Now()
 		},
-		Guides: library.New(pool, addonStore, client, logger, store.Settings),
+		Guides: lib,
+		IPTV:   channels,
 	}))
 	t.Cleanup(server.Close)
 	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect, clock: clock}

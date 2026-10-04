@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -53,6 +54,8 @@ type testServer struct {
 	activity *activity.Store
 	tasks    *tasks.Registry
 	logs     *logs.Ring
+	// iptv stores the IPTV sources the library lists.
+	iptv *iptv.Service
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -86,6 +89,8 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	}
 	t.Cleanup(func() { _ = sources.Close() })
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
+	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
+	lib.UseIPTV(channels)
 	// Remuxes run FFmpeg when tests are given one.
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
@@ -143,7 +148,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler,
-		activity: activityLog, tasks: registry, logs: ring}
+		activity: activityLog, tasks: registry, logs: ring, iptv: channels}
 }
 
 // setting changes the server's settings.

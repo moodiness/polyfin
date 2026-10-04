@@ -20,7 +20,7 @@ func match(language string, channels []string, guide []guideChannel) []string {
 		if !ok {
 			id, name = string(rune('a'+i)), channel
 		}
-		m.Add(id, name)
+		m.Add(id, "", name)
 	}
 	titles := map[string]int{}
 	for _, g := range guide {
@@ -107,7 +107,7 @@ func TestStremioIDsMatchFirst(t *testing.T) {
 	expect(t, "declared", match("fr", []string{"zeb:max=Zeb Max", "x=Zeb Max", "y=ZEB MAX ᴿᵂ"}, guide), "zeb:max", "ZebMax.fr", "ZebMax.fr")
 
 	m := NewMatcher("fr")
-	m.Add("zeb:max", "Zeb Max")
+	m.Add("zeb:max", "", "Zeb Max")
 	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
 	if !m.Wants("zeb:max") || m.Wants("ZebMax.fr") {
 		t.Error("an undeclared guide channel named by a Stremio ID does not replace the candidates")
@@ -115,12 +115,27 @@ func TestStremioIDsMatchFirst(t *testing.T) {
 	expect(t, "undeclared", m.Choose(func(string) int { return 1 }), "zeb:max")
 }
 
+// An IPTV channel's own guide identifier matches a guide channel exactly,
+// before any name; channels sharing it share the guide channel, and those
+// without one keep the name rules.
+func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
+	m := NewMatcher("fr")
+	m.Add("polyfin-iptv:1", "Orbe.zz", "Zeb Max")
+	m.Add("polyfin-iptv:2", "Orbe.zz", "Zeb Max ᴿᵂ")
+	m.Add("polyfin-iptv:3", "", "Zeb Max")
+	m.Add("polyfin-iptv:4", "Missing.zz", "Zeb Max")
+	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
+	m.Declare(Channel{ID: "Orbe.zz", Names: []string{"Orbe"}})
+	expect(t, "guide identifiers", m.Choose(func(id string) int { return map[string]int{"ZebMax.fr": 50, "Orbe.zz": 1}[id] }),
+		"Orbe.zz", "Orbe.zz", "ZebMax.fr", "ZebMax.fr")
+}
+
 // Only the programmes of the best-ranked candidates are kept while the
 // guide is read.
 func TestOnlyTheBestCandidatesAreWanted(t *testing.T) {
 	m := NewMatcher("fr")
-	m.Add("a", "Zeb Max")
-	m.Add("b", "Orbe")
+	m.Add("a", "", "Zeb Max")
+	m.Add("b", "", "Orbe")
 	m.Declare(Channel{ID: "ZebMax.de", Names: []string{"Zeb Max"}})
 	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"FR| Zeb Max HD"}})
 	m.Declare(Channel{ID: "ZebMax.be", Names: []string{"Zeb Max"}})
