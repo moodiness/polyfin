@@ -1,0 +1,18 @@
+{
+  "ArtistItems": [
+    {
+      "Name": "Square Circle; Tone Quartet",
+      "Id": "2d532f0eb8a1a590fb63f4ef319151a0"
+    }
+  ],
+  "Artists": [
+    "Square Circle; Tone Quartet"
+  ],
+  "AlbumArtist": "Square Circle",
+  "AlbumArtists": [
+    {
+      "Name": "Square Circle",
+      "Id": "09c9da166b5094294cf0925c03e00665"
+    }
+  ]
+}

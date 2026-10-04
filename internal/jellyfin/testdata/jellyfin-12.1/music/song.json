@@ -1,0 +1,178 @@
+{
+  "Album": "",
+  "AlbumArtist": "",
+  "AlbumArtists": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "AlbumId": "",
+  "AlbumPrimaryImageTag": "",
+  "ArtistItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Artists": [
+    ""
+  ],
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "Container": "",
+  "DateCreated": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "Etag": "",
+  "ExternalUrls": [],
+  "GenreItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Genres": [
+    ""
+  ],
+  "HasLyrics": false,
+  "Id": "",
+  "ImageBlurHashes": {
+    "Primary": {
+      "26e5fd94e90e348b3365f3c68eed8dea": ""
+    }
+  },
+  "ImageTags": {},
+  "IndexNumber": 0,
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaSources": [
+    {
+      "Bitrate": 0,
+      "Container": "",
+      "DefaultAudioStreamIndex": 0,
+      "ETag": "",
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": false,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [
+        {
+          "AudioSpatialFormat": "",
+          "BitDepth": 0,
+          "BitRate": 0,
+          "ChannelLayout": "",
+          "Channels": 0,
+          "Codec": "",
+          "DisplayTitle": "",
+          "Index": 0,
+          "IsDefault": false,
+          "IsExternal": false,
+          "IsForced": false,
+          "IsHearingImpaired": false,
+          "IsInterlaced": false,
+          "IsOriginal": false,
+          "IsTextSubtitleStream": false,
+          "LocalizedDefault": "",
+          "LocalizedExternal": "",
+          "LocalizedOriginal": "",
+          "SampleRate": 0,
+          "SupportsExternalStream": false,
+          "TimeBase": "",
+          "Type": "",
+          "VideoRange": "",
+          "VideoRangeType": ""
+        }
+      ],
+      "Name": "",
+      "Path": "",
+      "Protocol": "",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "RunTimeTicks": 0,
+      "Size": 0,
+      "SupportsDirectPlay": false,
+      "SupportsDirectStream": false,
+      "SupportsProbing": false,
+      "SupportsTranscoding": false,
+      "TranscodingSubProtocol": "",
+      "Type": "",
+      "UseMostCompatibleTranscodingProfile": false
+    }
+  ],
+  "MediaStreams": [
+    {
+      "AudioSpatialFormat": "",
+      "BitDepth": 0,
+      "BitRate": 0,
+      "ChannelLayout": "",
+      "Channels": 0,
+      "Codec": "",
+      "DisplayTitle": "",
+      "Index": 0,
+      "IsDefault": false,
+      "IsExternal": false,
+      "IsForced": false,
+      "IsHearingImpaired": false,
+      "IsInterlaced": false,
+      "IsOriginal": false,
+      "IsTextSubtitleStream": false,
+      "LocalizedDefault": "",
+      "LocalizedExternal": "",
+      "LocalizedOriginal": "",
+      "SampleRate": 0,
+      "SupportsExternalStream": false,
+      "TimeBase": "",
+      "Type": "",
+      "VideoRange": "",
+      "VideoRangeType": ""
+    }
+  ],
+  "MediaType": "",
+  "Name": "",
+  "ParentId": "",
+  "Path": "",
+  "People": [
+    {
+      "Id": "",
+      "Name": "",
+      "Role": "",
+      "Type": ""
+    }
+  ],
+  "PlayAccess": "",
+  "PremiereDate": "",
+  "ProductionYear": 0,
+  "ProviderIds": {},
+  "RemoteTrailers": [],
+  "RunTimeTicks": 0,
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

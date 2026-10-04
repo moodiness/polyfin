@@ -1,0 +1,54 @@
+{
+  "Items": [
+    {
+      "AlbumArtist": "",
+      "AlbumArtists": [
+        {
+          "Id": "",
+          "Name": ""
+        }
+      ],
+      "ArtistItems": [
+        {
+          "Id": "",
+          "Name": ""
+        }
+      ],
+      "Artists": [
+        ""
+      ],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "",
+      "ImageBlurHashes": {
+        "Primary": {
+          "26e5fd94e90e348b3365f3c68eed8dea": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "IsFolder": false,
+      "LocationType": "",
+      "MediaType": "",
+      "Name": "",
+      "PremiereDate": "",
+      "PrimaryImageAspectRatio": 0,
+      "ProductionYear": 0,
+      "RunTimeTicks": 0,
+      "ServerId": "",
+      "SortName": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}
