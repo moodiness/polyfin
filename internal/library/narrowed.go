@@ -56,21 +56,14 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 	if len(sources) == 0 {
 		return Page{}, nil
 	}
-	metas, total, err := s.merged(ctx, sources, start, count)
+	titles, total, err := s.merged(ctx, sources, start, count)
 	if err != nil {
 		return Page{}, err
 	}
 	var items []Item
 	var records []record
-	for _, meta := range metas {
-		src := sources[0]
-		for _, candidate := range sources {
-			if candidate.catalog.Type == meta.Type {
-				src = candidate
-				break
-			}
-		}
-		item, r, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined)
+	for _, title := range titles {
+		item, r, err := title.title(accounts.ID{})
 		if err != nil {
 			continue
 		}

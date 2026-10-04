@@ -43,9 +43,10 @@ type personListDto struct {
 	MediaType               string
 }
 
-// persons lists the people Polyfin knows, by name, narrowed as Jellyfin
-// narrows them. Jellyfin also narrows them to a library with parentId;
-// Polyfin's people belong to no library, so parentId is ignored.
+// persons lists the people credited in the titles the user reaches, by
+// name, narrowed as Jellyfin narrows them. Jellyfin also narrows them to a
+// library with parentId; a person is not listed by library in Polyfin, so
+// parentId is ignored.
 func (h *Handler) persons(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -90,7 +91,7 @@ func (h *Handler) persons(w http.ResponseWriter, r *http.Request) {
 		}
 		q.Restricted, q.Only = true, credited
 	}
-	people, total, err := h.Library.People(r.Context(), q)
+	people, total, err := h.Library.People(r.Context(), user, q)
 	if err != nil {
 		h.internalError(w, r, err)
 		return

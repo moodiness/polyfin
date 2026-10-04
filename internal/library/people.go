@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -47,6 +48,10 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 			r.Credits[title.String()] = append(types, person.Type)
 		}
 	}
+	// Upserts lock the rows they reach in order: titles crediting the same
+	// people in another order, described together, must not wait on each
+	// other.
+	slices.SortFunc(people, func(a, b *record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
 	ids := make([]accounts.ID, 0, len(people))
 	keys := make([]string, 0, len(people))
 	kinds := make([]string, 0, len(people))
@@ -97,14 +102,96 @@ func searchesPeople(catalog stremio.Catalog) bool {
 	return false
 }
 
+// reaches reports whether a user's view reaches a title Polyfin recorded:
+// one of their addons listed it, or one of their addons describes titles
+// of its type and identifier. See also reachesTitle, which must agree.
+func (v view) reaches(r record) bool {
+	if r.Addon != nil {
+		if _, ok := v.addon(*r.Addon); ok {
+			return true
+		}
+	}
+	return r.Meta != nil && slices.ContainsFunc(v.addons, func(entry installed) bool {
+		return entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID)
+	})
+}
+
+// reach is view.reaches as query parameters (see reachesTitle): the addons
+// of the view, encoded as records store them, and the types and identifier
+// prefixes their meta resources serve, an empty prefix serving any
+// identifier.
+func (v view) reach() (addonIDs, types, prefixes []string, err error) {
+	addonIDs, types, prefixes = []string{}, []string{}, []string{}
+	for _, entry := range v.addons {
+		encoded, err := json.Marshal(entry.addon.ID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		addonIDs = append(addonIDs, string(encoded))
+		manifest := entry.addon.Manifest
+		for _, resource := range manifest.Resources {
+			if resource.Name != "meta" {
+				continue
+			}
+			served, idPrefixes := resource.Types, resource.IDPrefixes
+			if len(served) == 0 {
+				served = manifest.Types
+			}
+			if len(idPrefixes) == 0 {
+				idPrefixes = manifest.IDPrefixes
+			}
+			if len(idPrefixes) == 0 {
+				idPrefixes = []string{""}
+			}
+			for _, kind := range served {
+				for _, prefix := range idPrefixes {
+					types, prefixes = append(types, kind), append(prefixes, prefix)
+				}
+			}
+		}
+	}
+	return addonIDs, types, prefixes, nil
+}
+
+// reachesTitle is view.reaches on the row title of the items table, with
+// the parameters of view.reach at $10, $11 and $12.
+const reachesTitle = `(title.data->'addon' = ANY($10::jsonb[]) OR EXISTS (
+	SELECT 1 FROM unnest($11::text[], $12::text[]) AS rule(type, prefix)
+	WHERE title.data->'meta'->>'type' = rule.type AND starts_with(title.data->'meta'->>'id', rule.prefix)))`
+
+// credited lists the titles a person is credited in that the user's view
+// reaches. Jellyfin knows people through the items a user can access;
+// likewise, a person credited only in titles of other users' addons is not
+// found.
+func (s *Service) credited(ctx context.Context, v view, person record) ([]record, error) {
+	if person.Person == nil {
+		return nil, ErrNotFound
+	}
+	ids := make([]accounts.ID, 0, len(person.Credits))
+	for raw := range person.Credits {
+		if id, err := accounts.ParseID(raw); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	titles, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	titles = slices.DeleteFunc(titles, func(title record) bool { return title.Meta == nil || !v.reaches(title) })
+	if len(titles) == 0 {
+		return nil, ErrNotFound
+	}
+	return titles, nil
+}
+
 // PersonTitles lists titles of the given kinds a person is credited in:
 // first those the people-search catalogs of the user's addons find for the
 // person's name, at least count of them when the catalogs have that many,
-// then the other titles Polyfin knows the person in. A people search can
-// miss a title, or find someone else of the same name: the known titles
-// keep the credits the user saw. Page.More tells that the catalogs have
-// more titles. A person whose people search fails still lists their known
-// titles.
+// then the other titles of the user's addons Polyfin knows the person in.
+// A people search can miss a title, or find someone else of the same name:
+// the known titles keep the credits the user saw. Page.More tells that the
+// catalogs have more titles. A person whose people search fails still lists
+// their known titles.
 func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person accounts.ID, kinds []Kind, count int) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -114,8 +201,12 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	if err != nil {
 		return Page{}, err
 	}
-	if r.Kind != KindPerson || r.Person == nil {
+	if r.Kind != KindPerson {
 		return Page{}, ErrNotFound
+	}
+	credited, err := s.credited(ctx, v, r)
+	if err != nil {
+		return Page{}, err
 	}
 	var sources []source
 	for _, entry := range v.addons {
@@ -130,23 +221,16 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	seen := map[accounts.ID]bool{}
 	more := false
 	if len(sources) > 0 && count > 0 {
-		metas, total, err := s.merged(ctx, sources, 0, count)
+		titles, total, err := s.merged(ctx, sources, 0, count)
 		if ctx.Err() != nil {
 			return Page{}, ctx.Err()
 		}
 		if err != nil {
 			s.logger.Warn("A people search failed", "catalog", sources[0].catalog.ID, "error", err)
 		}
-		more = total > len(metas)
-		for _, meta := range metas {
-			src := sources[0]
-			for _, candidate := range sources {
-				if candidate.catalog.Type == meta.Type {
-					src = candidate
-					break
-				}
-			}
-			item, rec, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined)
+		more = total > len(titles)
+		for _, title := range titles {
+			item, rec, err := title.title(accounts.ID{})
 			if err != nil || seen[item.ID] {
 				continue
 			}
@@ -157,11 +241,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 			items, records = append(items, item), append(records, rec)
 		}
 	}
-	known, err := s.creditedTitles(ctx, r, kinds)
-	if err != nil {
-		return Page{}, err
-	}
-	for _, item := range known {
+	for _, item := range s.creditedTitles(v, credited, kinds) {
 		if !seen[item.ID] {
 			items = append(items, item)
 		}
@@ -173,36 +253,30 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	return Page{Items: items, Total: total, More: more}, s.save(ctx, records)
 }
 
-// creditedTitles describes the titles of the given kinds Polyfin knows a
-// person in, by name, from what was stored when they were listed, with the
-// complete description when it is still cached: describing each title
-// anew would cost a request per title.
-func (s *Service) creditedTitles(ctx context.Context, person record, kinds []Kind) ([]Item, error) {
-	ids := make([]accounts.ID, 0, len(person.Credits))
-	for raw := range person.Credits {
-		if id, err := accounts.ParseID(raw); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	records, err := s.loadAll(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
+// creditedTitles describes, by name, the titles of the given kinds among a
+// person's credited ones (see person), from what was stored when they were
+// listed, with the complete description when it is still cached:
+// describing each title anew would cost a request per title. A title keeps
+// its folder only when it came from one of the user's addons.
+func (s *Service) creditedTitles(v view, credited []record, kinds []Kind) []Item {
 	var items []Item
-	for _, r := range records {
-		if r.Meta == nil || !slices.Contains(kinds, r.Kind) {
+	for _, r := range credited {
+		if !slices.Contains(kinds, r.Kind) {
 			continue
 		}
 		meta := *r.Meta
 		if full, ok := s.cachedMeta(r); ok {
 			meta = full
 		}
-		item := Item{ID: r.ID, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
+		item := Item{ID: r.ID, Kind: r.Kind, Available: true}
+		if _, own := v.addon(deref(r.Addon)); own {
+			item.ParentID = deref(r.Parent)
+		}
 		fromMeta(&item, meta)
 		items = append(items, item)
 	}
 	slices.SortFunc(items, func(a, b Item) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
-	return items, nil
+	return items
 }
 
 // PeopleQuery narrows the people Polyfin knows. Names compare without
@@ -212,8 +286,9 @@ type PeopleQuery struct {
 	// with, the text; NameBefore keeps names sorting before it, NameFrom
 	// names sorting at or after it. Empty ones keep every name.
 	NameContains, NameStartsWith, NameBefore, NameFrom string
-	// A person is kept when one of their credits ("Actor", "Director",
-	// "Writer") is one of Types, if set, and none of ExcludedTypes.
+	// A person is kept when one of their credits in the titles the user
+	// reaches ("Actor", "Director", "Writer") is one of Types, if set, and
+	// not one of ExcludedTypes.
 	Types, ExcludedTypes []string
 	// Restricted keeps only the people of Only; Excluded leaves people out.
 	Restricted     bool
@@ -222,22 +297,35 @@ type PeopleQuery struct {
 	Start, Limit int
 }
 
-// peopleFilter selects the people matching $1 to $9 (see People).
-const peopleFilter = `FROM items WHERE kind = 'person'
-	AND ($1 = '' OR strpos(lower(data->'person'->>'name'), lower($1)) > 0)
-	AND ($2 = '' OR starts_with(lower(data->'person'->>'name'), lower($2)))
-	AND ($3 = '' OR lower(data->'person'->>'name') < lower($3))
-	AND ($4 = '' OR lower(data->'person'->>'name') >= lower($4))
-	AND (cardinality($5::text[]) = 0 AND cardinality($6::text[]) = 0 OR EXISTS (
-		SELECT 1 FROM jsonb_each(data->'credits') AS credit, jsonb_array_elements_text(credit.value) AS credited(kind)
-		WHERE (cardinality($5::text[]) = 0 OR lower(credited.kind) = ANY($5::text[])) AND NOT lower(credited.kind) = ANY($6::text[])))
-	AND (NOT $7 OR id = ANY($8::uuid[]))
-	AND NOT id = ANY($9::uuid[])`
+// peopleFilter selects the people matching $1 to $12 (see People): those
+// credited in a title the user reaches.
+const peopleFilter = `FROM items AS person WHERE person.kind = 'person'
+	AND ($1 = '' OR strpos(lower(person.data->'person'->>'name'), lower($1)) > 0)
+	AND ($2 = '' OR starts_with(lower(person.data->'person'->>'name'), lower($2)))
+	AND ($3 = '' OR lower(person.data->'person'->>'name') < lower($3))
+	AND ($4 = '' OR lower(person.data->'person'->>'name') >= lower($4))
+	AND EXISTS (
+		SELECT 1 FROM jsonb_each(person.data->'credits') AS credit(item, kinds)
+			JOIN items AS title ON title.id = credit.item::uuid
+			CROSS JOIN jsonb_array_elements_text(credit.kinds) AS credited(kind)
+		WHERE (cardinality($5::text[]) = 0 OR lower(credited.kind) = ANY($5::text[])) AND NOT lower(credited.kind) = ANY($6::text[])
+			AND ` + reachesTitle + `)
+	AND (NOT $7 OR person.id = ANY($8::uuid[]))
+	AND NOT person.id = ANY($9::uuid[])`
 
-// People lists the people Polyfin knows from the titles it described, by
-// name, and how many match the query. Like Jellyfin's, people belong to no
-// library: anyone credited in a title some user opened is known.
-func (s *Service) People(ctx context.Context, q PeopleQuery) ([]Item, int, error) {
+// People lists, by name, the people credited in the titles Polyfin knows
+// that the user reaches, and how many match the query. Jellyfin likewise
+// knows people through the items a user can access, whatever their
+// library.
+func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery) ([]Item, int, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, 0, err
+	}
+	addonIDs, types, prefixes, err := v.reach()
+	if err != nil {
+		return nil, 0, err
+	}
 	lower := func(values []string) []string {
 		result := make([]string, 0, len(values))
 		for _, value := range values {
@@ -252,7 +340,7 @@ func (s *Service) People(ctx context.Context, q PeopleQuery) ([]Item, int, error
 		return values
 	}
 	args := []any{q.NameContains, q.NameStartsWith, q.NameBefore, q.NameFrom, lower(q.Types), lower(q.ExcludedTypes),
-		q.Restricted, ids(q.Only), ids(q.Excluded)}
+		q.Restricted, ids(q.Only), ids(q.Excluded), addonIDs, types, prefixes}
 	var total int
 	if err := s.db.QueryRow(ctx, "SELECT count(*) "+peopleFilter, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -261,8 +349,8 @@ func (s *Service) People(ctx context.Context, q PeopleQuery) ([]Item, int, error
 	if q.Limit >= 0 {
 		limit = &q.Limit
 	}
-	rows, err := s.db.Query(ctx, "SELECT id, data "+peopleFilter+
-		" ORDER BY lower(data->'person'->>'name'), id OFFSET $10 LIMIT $11", append(args, max(q.Start, 0), limit)...)
+	rows, err := s.db.Query(ctx, "SELECT person.id, person.data "+peopleFilter+
+		" ORDER BY lower(person.data->'person'->>'name'), person.id OFFSET $13 LIMIT $14", append(args, max(q.Start, 0), limit)...)
 	if err != nil {
 		return nil, 0, err
 	}

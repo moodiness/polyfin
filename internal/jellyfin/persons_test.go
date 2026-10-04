@@ -12,15 +12,22 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// peopleAddon serves a movie catalog narrowed by genre, the metas of its
-// titles, their artwork, and, when peopleSearch is set, a people-search
-// catalog that finds Ann Lee's movies, one of them in no other catalog.
-// searches counts the people searches.
-func peopleAddon(t *testing.T, peopleSearch bool, searches *atomic.Int32) string {
+// addonRequests counts the catalog requests a test addon receives, and
+// among them the people searches.
+type addonRequests struct {
+	catalogs, searches atomic.Int32
+}
+
+// peopleAddon serves a movie catalog narrowed by genre and one of crime
+// movies, the metas of its titles, their artwork, and, when peopleSearch is
+// set, a people-search catalog that finds Ann Lee's movies, one of them in
+// no other catalog.
+func peopleAddon(t *testing.T, peopleSearch bool, requests *addonRequests) string {
 	t.Helper()
 	var server *httptest.Server
 	movies := func() []stremio.Meta {
@@ -53,16 +60,24 @@ func peopleAddon(t *testing.T, peopleSearch bool, searches *atomic.Int32) string
 			value, _ = url.PathUnescape(value)
 			return value
 		}
+		if strings.HasPrefix(path, "/catalog/") {
+			requests.catalogs.Add(1)
+		}
 		switch {
 		case path == "/manifest.json":
-			catalogs := []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top",
-				Extra: []stremio.Extra{{Name: "genre", Options: []string{"Action", "Crime", "Drama"}}}}}
+			catalogs := []stremio.Catalog{
+				{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Action", "Crime", "Drama"}}}},
+				{Type: "movie", ID: "crime", Name: "Crime", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Crime"}}}},
+			}
 			if peopleSearch {
 				catalogs = append(catalogs, stremio.Catalog{Type: "movie", ID: "people_search.people_search_movie", Name: "People Search",
 					Extra: []stremio.Extra{{Name: "search", IsRequired: true}, {Name: "skip"}}})
 			}
 			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "people", Name: "People", Version: "1", Types: []string{"movie"},
-				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}}, Catalogs: catalogs})
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}}, Catalogs: catalogs})
+		case strings.HasPrefix(path, "/catalog/movie/crime"):
+			items := slices.DeleteFunc(movies(), func(m stremio.Meta) bool { return !slices.Contains(m.Genres, "Crime") })
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": items})
 		case strings.HasPrefix(path, "/catalog/movie/top"):
 			items := movies()
 			if genre := extra("genre"); genre != "" {
@@ -70,7 +85,7 @@ func peopleAddon(t *testing.T, peopleSearch bool, searches *atomic.Int32) string
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": items})
 		case strings.HasPrefix(path, "/catalog/movie/people_search.people_search_movie/"):
-			searches.Add(1)
+			requests.searches.Add(1)
 			var found []stremio.Meta
 			if extra("search") == "Ann Lee" && extra("skip") == "" {
 				found = []stremio.Meta{debut, movies()[2]}
@@ -102,15 +117,15 @@ type peopleSetup struct {
 	testServer
 	token, user string
 	titles      map[string]string
-	searches    *atomic.Int32
+	requests    *addonRequests
 }
 
 func newPeopleSetup(t *testing.T, peopleSearch bool) peopleSetup {
 	t.Helper()
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
-	searches := &atomic.Int32{}
-	addon, err := s.addons.Install(t.Context(), addons.Shared(), peopleAddon(t, peopleSearch, searches), false)
+	requests := &addonRequests{}
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), peopleAddon(t, peopleSearch, requests), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +134,7 @@ func newPeopleSetup(t *testing.T, peopleSearch bool) peopleSetup {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	p := peopleSetup{testServer: s, token: s.signIn("member", "tv"), user: member.ID.String(), titles: map[string]string{}, searches: searches}
+	p := peopleSetup{testServer: s, token: s.signIn("member", "tv"), user: member.ID.String(), titles: map[string]string{}, requests: requests}
 	var views, page QueryResult
 	s.get(t, "/UserViews", p.token, &views)
 	s.get(t, "/Items?ParentId="+views.Items[0].Id, p.token, &page)
@@ -200,7 +215,7 @@ func TestAPersonsTitlesComeFromPeopleSearchCatalogs(t *testing.T) {
 		t.Errorf("titles: %v", got)
 	}
 	// Further pages, and the person's own page, read the search from cache.
-	searches := p.searches.Load()
+	searches := p.requests.searches.Load()
 	p.get(t, "/Items/"+ann.Id, p.token, nil)
 	if got := p.names(t, listing+"&excludeItemIds="+p.titles["Heist"]+"&limit=1"); !slices.Equal(got, []string{"Romance"}) {
 		t.Errorf("first title but Heist: %v", got)
@@ -215,7 +230,7 @@ func TestAPersonsTitlesComeFromPeopleSearchCatalogs(t *testing.T) {
 	if status := p.get(t, "/Items/"+page.Items[2].Id, p.token, &debut); status != http.StatusOK || debut.Name != "Debut" {
 		t.Errorf("found title: %d %+v", status, debut)
 	}
-	if again := p.searches.Load(); again != searches {
+	if again := p.requests.searches.Load(); again != searches {
 		t.Errorf("%d people searches again", again-searches)
 	}
 }
@@ -238,7 +253,8 @@ func TestAPersonsTitlesAreTheKnownOnesWithoutPeopleSearch(t *testing.T) {
 	if p.get(t, "/Items/"+ann.Id, p.token, &person); person.ImageTags["Primary"] != ann.PrimaryImageTag || person.MovieCount != 2 {
 		t.Errorf("person: %+v", person)
 	}
-	// The people list knows everyone credited, by name.
+	// The people list knows everyone credited in the titles the user
+	// reaches, by name.
 	if got := p.names(t, "/Persons?searchTerm=lee"); !slices.Equal(got, []string{"Ann Lee"}) {
 		t.Errorf("people named lee: %v", got)
 	}
@@ -257,6 +273,91 @@ func TestAPersonsTitlesAreTheKnownOnesWithoutPeopleSearch(t *testing.T) {
 	}
 }
 
+// privateAddon serves a catalog with one movie, Secret, crediting Ann Lee
+// and Zed Hidden, under identifiers no other test addon describes.
+func privateAddon(t *testing.T) string {
+	t.Helper()
+	secret := stremio.Meta{ID: "private:1", Type: "movie", Name: "Secret", Genres: []string{"Action"}, Poster: "https://example.com/secret.jpg",
+		Extras: &stremio.Extras{Cast: []stremio.CastMember{{Name: "Ann Lee"}, {Name: "Zed Hidden"}}}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "private", Name: "Private", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"private:"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+				Catalogs: []stremio.Catalog{{Type: "movie", ID: "mine", Name: "Mine"}}})
+		case strings.HasPrefix(path, "/catalog/movie/mine"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{secret}})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": secret})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// Like Jellyfin, which knows people through the items a user can access,
+// a user only sees the people credited, and the titles known to credit
+// them, in what their own addons reach.
+func TestPeopleStayWithinTheTitlesAUserReaches(t *testing.T) {
+	p := newPeopleSetup(t, false)
+	owner := p.testServer.user("owner", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	token := p.signIn("owner", "phone")
+	addon, err := p.addons.Install(t.Context(), addons.Personal(owner.ID), privateAddon(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.addons.SetLibraries(t.Context(), addons.Personal(owner.ID), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "movie", CatalogID: "mine"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var views, page QueryResult
+	p.get(t, "/UserViews", token, &views)
+	for _, view := range views.Items {
+		if view.Name == "Mine" {
+			p.get(t, "/Items?ParentId="+view.Id, token, &page)
+		}
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("private library: %+v", page)
+	}
+	var secret BaseItemDto
+	p.get(t, "/Items/"+page.Items[0].Id, token, &secret)
+	zed := credit(*secret.People, "Zed Hidden")
+	ann := credit(p.open(t, "Heist"), "Ann Lee")
+
+	if got := p.names(t, "/Items?personIds="+ann.Id); !slices.Equal(got, []string{"Heist"}) {
+		t.Errorf("Ann Lee's titles for the member: %v", got)
+	}
+	var person namedItemDto
+	if p.get(t, "/Items/"+ann.Id, p.token, &person); person.MovieCount != 1 {
+		t.Errorf("Ann Lee's movies for the member: %d", person.MovieCount)
+	}
+	if got := p.names(t, "/Persons"); slices.Contains(got, "Zed Hidden") {
+		t.Errorf("people for the member: %v", got)
+	}
+	for _, path := range []string{"/Items/" + zed.Id, "/Persons/Zed%20Hidden", "/Items?personIds=" + zed.Id} {
+		var page QueryResult
+		if status := p.get(t, path, p.token, &page); status != http.StatusNotFound && len(page.Items) != 0 {
+			t.Errorf("%s for the member: %d %+v", path, status, page)
+		}
+	}
+	// The owner sees both, and the shared title the member opened.
+	ownerNames := func(path string) []string {
+		var page QueryResult
+		p.get(t, path, token, &page)
+		return itemNames(page.Items)
+	}
+	if got := ownerNames("/Items?personIds=" + ann.Id); !slices.Equal(got, []string{"Heist", "Secret"}) {
+		t.Errorf("Ann Lee's titles for the owner: %v", got)
+	}
+	if got := ownerNames("/Persons?searchTerm=zed"); !slices.Equal(got, []string{"Zed Hidden"}) {
+		t.Errorf("people for the owner: %v", got)
+	}
+}
+
 func TestSimilarTitlesRankBySharedGenres(t *testing.T) {
 	p := newPeopleSetup(t, false)
 	similar := func(path string) []string {
@@ -268,12 +369,25 @@ func TestSimilarTitlesRankBySharedGenres(t *testing.T) {
 		return itemNames(page.Items)
 	}
 	// Chase shares both genres, Brawl and Caper one, Brawl's year is
-	// closer; Romance shares none.
+	// closer; Romance shares none. The library's catalog is read narrowed
+	// to Action, so Caper comes from the crime catalog, which no library
+	// lists.
+	before := p.requests.catalogs.Load()
 	if got := similar("/Items/" + p.titles["Heist"] + "/Similar?userId=" + p.user); !slices.Equal(got, []string{"Chase", "Brawl", "Caper"}) {
 		t.Errorf("similar: %v", got)
 	}
+	// Apps ask for similar titles on every title page: one first page of
+	// each catalog offering a genre of the title, then none until the
+	// pages expire.
+	if requests := p.requests.catalogs.Load() - before; requests != 2 {
+		t.Errorf("%d catalog requests for similar titles", requests)
+	}
+	before = p.requests.catalogs.Load()
 	if got := similar("/Movies/" + p.titles["Heist"] + "/Similar?limit=2"); !slices.Equal(got, []string{"Chase", "Brawl"}) {
 		t.Errorf("limited: %v", got)
+	}
+	if requests := p.requests.catalogs.Load() - before; requests != 0 {
+		t.Errorf("%d catalog requests for similar titles again", requests)
 	}
 	// Like Jellyfin, titles the user played are left out.
 	if status, _ := p.call(http.MethodPost, "/UserPlayedItems/"+p.titles["Chase"], app("tv", p.token), nil); status != http.StatusOK {
