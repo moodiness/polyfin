@@ -55,6 +55,11 @@ const (
 // ErrUnavailable reports a source that did not answer with its content.
 var ErrUnavailable = errors.New("source unavailable")
 
+// ErrSlowDown reports a source that asked to slow down or was overloaded
+// (429, 502, 503 or 504) on a request that is not tried again. It is an
+// ErrUnavailable.
+var ErrSlowDown = fmt.Errorf("%w: the source asked to slow down", ErrUnavailable)
+
 // ErrRangesIgnored reports a source that answered without honoring the
 // range asked.
 var ErrRangesIgnored = errors.New("the source ignores ranges")
@@ -769,6 +774,43 @@ func (s *Source) connect(block int64) (*connection, error) {
 // answer, a bounded number of times. Fewer than n bytes only at the end of
 // the file.
 func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	return s.fetchRange(ctx, off, n, false)
+}
+
+// Once is the source read with one attempt per request: Fetch and
+// FetchRanges as the source's, but never sent again, nor after renewing
+// an expired link. A source asking to slow down or overloaded fails them
+// with ErrSlowDown at once. It is for background reads, which must not add
+// to a burst a host refuses, nor make it refuse the playbacks it serves.
+func (s *Source) Once() Once {
+	return Once{s}
+}
+
+// Once reads a source with one attempt per request; see Source.Once.
+type Once struct{ s *Source }
+
+// Fetch is Source.Fetch with one attempt.
+func (o Once) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	return o.s.fetchRange(ctx, off, n, true)
+}
+
+// FetchRanges is Source.FetchRanges with one attempt.
+func (o Once) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	return o.s.fetchRanges(ctx, ranges, true)
+}
+
+// KnownSize is the source's size, when a request told it.
+func (o Once) KnownSize() (int64, bool) {
+	return o.s.knownSize()
+}
+
+// Release releases the source.
+func (o Once) Release() {
+	o.s.Release()
+}
+
+// fetchRange is Fetch, with one attempt when once is set.
+func (s *Source) fetchRange(ctx context.Context, off int64, n int, once bool) ([]byte, error) {
 	if off < 0 || n < 0 {
 		return nil, fmt.Errorf("fetching %d bytes at %d: invalid range", n, off)
 	}
@@ -780,7 +822,7 @@ func (s *Source) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
 	}
 	ranges := "bytes=" + strconv.FormatInt(off, 10) + "-" + strconv.FormatInt(off+int64(n)-1, 10)
 	var data []byte
-	err := s.exchange(ctx, ranges, int64(n), func(response *http.Response) error {
+	err := s.exchange(ctx, ranges, int64(n), once, func(response *http.Response) error {
 		var err error
 		switch response.StatusCode {
 		case http.StatusPartialContent:
@@ -830,6 +872,11 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 // every range. A source answering otherwise, as with the whole file, is
 // not read, and is remembered: then and since, ErrMultiRangeUnsupported.
 func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	return s.fetchRanges(ctx, ranges, false)
+}
+
+// fetchRanges is FetchRanges, with one attempt when once is set.
+func (s *Source) fetchRanges(ctx context.Context, ranges []container.Range, once bool) ([][]byte, error) {
 	result := make([][]byte, len(ranges))
 	size, known := s.knownSize()
 	var asked []int
@@ -847,7 +894,7 @@ func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][
 	case len(asked) == 0:
 		return result, nil
 	case len(asked) == 1:
-		data, err := s.Fetch(ctx, ranges[asked[0]].Off, ranges[asked[0]].N)
+		data, err := s.fetchRange(ctx, ranges[asked[0]].Off, ranges[asked[0]].N, once)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
@@ -865,7 +912,7 @@ func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][
 		r := ranges[i]
 		header.WriteString(strconv.FormatInt(r.Off, 10) + "-" + strconv.FormatInt(r.Off+int64(r.N)-1, 10))
 	}
-	err := s.exchange(ctx, header.String(), length, func(response *http.Response) error {
+	err := s.exchange(ctx, header.String(), length, once, func(response *http.Response) error {
 		// Merged parts may hold the bytes between the ranges too: a part
 		// much larger than the ranges asked is not read.
 		clear(result)
@@ -1003,10 +1050,16 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 // source's location, renewed once when it expired, spaced from the others.
 // It is sent again, a bounded number of times, when the source asks to
 // slow down or fails, when it breaks, or when it takes longer than an
-// attempt may: a host that stalls must not hold a read for minutes.
-func (s *Source) exchange(ctx context.Context, ranges string, length int64, read func(*http.Response) error) error {
+// attempt may: a host that stalls must not hold a read for minutes. With
+// once, it is sent once, and a source asking to slow down or overloaded
+// fails it with ErrSlowDown.
+func (s *Source) exchange(ctx context.Context, ranges string, length int64, once bool, read func(*http.Response) error) error {
 	timeout := s.cache.attemptTime + time.Duration(float64(length)/attemptRate*float64(time.Second))
-	renewed := false
+	renewed := once
+	tries := attempts
+	if once {
+		tries = 1
+	}
 	for attempt := 1; ; attempt++ {
 		if err := s.pace(ctx); err != nil {
 			return err
@@ -1026,7 +1079,7 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, read
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if attempt >= attempts {
+			if attempt >= tries {
 				return fmt.Errorf("%w: %v", ErrUnavailable, err)
 			}
 			s.holdOff(backoff(attempt, ""))
@@ -1043,7 +1096,7 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, read
 				return err
 			case ctx.Err() != nil:
 				return ctx.Err()
-			case attempt >= attempts:
+			case attempt >= tries:
 				return err
 			}
 		case (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone) &&
@@ -1062,10 +1115,15 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, read
 			attempt = 0
 			continue
 		case (status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable ||
-			status == http.StatusGatewayTimeout) && attempt < attempts:
+			status == http.StatusGatewayTimeout) && attempt < tries:
 			response.Body.Close()
 			cancel()
 			retryAfter = response.Header.Get("Retry-After")
+		case status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable ||
+			status == http.StatusGatewayTimeout:
+			response.Body.Close()
+			cancel()
+			return fmt.Errorf("%w: HTTP %d", ErrSlowDown, status)
 		default:
 			response.Body.Close()
 			cancel()
