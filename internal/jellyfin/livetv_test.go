@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -227,6 +228,41 @@ func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
 	}
 	if n := addon.guides.Load(); n > 2 {
 		t.Errorf("%d guide pages read for what airs now", n)
+	}
+}
+
+// jellyfin-web's guide posts its query once its page of channels makes a
+// long URL, with the channels, the sort and the fields as comma-separated
+// strings, which Jellyfin reads as lists.
+func TestGuidePostsChannelsAsOneString(t *testing.T) {
+	addon := newTVAddon(t, true, "")
+	s, token, _ := tuned(t, addon)
+	var channels QueryResult
+	s.get(t, "/LiveTv/Channels", token, &channels)
+	if len(channels.Items) != 2 {
+		t.Fatalf("channels: %+v", channels.Items)
+	}
+	now := time.Now().UTC()
+	status, body := s.call(http.MethodPost, "/LiveTv/Programs", app("web", token), map[string]any{
+		"UserId":                 "",
+		"MaxStartDate":           now.Add(24 * time.Hour).Format("2006-01-02T15:04:05.000Z"),
+		"MinEndDate":             now.Format("2006-01-02T15:04:05.000Z"),
+		"channelIds":             channels.Items[0].Id + "," + strings.Repeat("0", 32) + ",",
+		"ImageTypeLimit":         1,
+		"EnableImages":           false,
+		"SortBy":                 "StartDate",
+		"EnableTotalRecordCount": false,
+		"EnableUserData":         false,
+		"Fields":                 "IsHD",
+	})
+	var programs QueryResult
+	if status != http.StatusOK || json.Unmarshal(body, &programs) != nil || !slices.Equal(programNames(programs), []string{"Now", "Next"}) {
+		t.Fatalf("the guide's posted query: %d %s", status, body)
+	}
+	// Genres are separated by "|", as their names may hold commas.
+	status, body = s.call(http.MethodPost, "/LiveTv/Programs", app("web", token), map[string]any{"Genres": "Talk, Late|News"})
+	if status != http.StatusOK || json.Unmarshal(body, &programs) != nil || !slices.Equal(programNames(programs), []string{"Now"}) {
+		t.Errorf("posted genres: %d %s", status, body)
 	}
 }
 

@@ -353,12 +353,54 @@ func (h *Handler) liveChannel(w http.ResponseWriter, r *http.Request) {
 // parameters, or the GetProgramsDto posted.
 type programQuery struct {
 	UserId                                             string
-	ChannelIds, SortBy, SortOrder, Genres, Fields      []string
+	ChannelIds, SortBy, SortOrder, Fields              commaList
+	Genres                                             pipeList
 	MinStartDate, MaxStartDate, MinEndDate, MaxEndDate *Time
 	HasAired, IsAiring                                 *bool
 	IsMovie, IsSeries, IsNews, IsKids, IsSports        *bool
 	EnableUserData                                     *bool
 	StartIndex, Limit                                  *int
+	// channels are the ChannelIds that are identifiers, read once.
+	channels map[accounts.ID]bool
+}
+
+// commaList is a list of a posted body that, like Jellyfin's
+// JsonCommaDelimitedCollectionConverter, takes an array or a string of
+// comma-separated values: jellyfin-web's guide posts its channels so.
+type commaList []string
+
+func (l *commaList) UnmarshalJSON(data []byte) error {
+	return unmarshalDelimited(data, ",", (*[]string)(l))
+}
+
+// pipeList is a commaList separated by "|", as Jellyfin's
+// JsonPipeDelimitedCollectionConverter reads genres, whose names hold
+// commas.
+type pipeList []string
+
+func (l *pipeList) UnmarshalJSON(data []byte) error {
+	return unmarshalDelimited(data, "|", (*[]string)(l))
+}
+
+// unmarshalDelimited reads a JSON array of strings, or a string of values
+// separated by delimiter, leaving out empty values; null leaves the list
+// unchanged.
+func unmarshalDelimited(data []byte, delimiter string, into *[]string) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var joined string
+	if json.Unmarshal(data, &joined) != nil {
+		return json.Unmarshal(data, into)
+	}
+	values := []string{}
+	for value := range strings.SplitSeq(joined, delimiter) {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	*into = values
+	return nil
 }
 
 // readProgramQuery reads a programme query from the URL, or from the body
@@ -371,6 +413,7 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 			validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}})
 			return programQuery{}, false
 		}
+		q.readChannels()
 		return q, true
 	}
 	b := bindErrors{}
@@ -403,7 +446,19 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 		validationProblem(w, b)
 		return programQuery{}, false
 	}
+	q.readChannels()
 	return q, true
+}
+
+// readChannels parses the channels asked once, rather than for each
+// programme: the guide asks a page of channels at a time, hundreds.
+func (q *programQuery) readChannels() {
+	q.channels = make(map[accounts.ID]bool, len(q.ChannelIds))
+	for _, raw := range q.ChannelIds {
+		if id, ok := parseGUID(raw); ok {
+			q.channels[id] = true
+		}
+	}
 }
 
 // programs lists programmes of the user's guides that match the query,
@@ -511,10 +566,7 @@ func (q programQuery) keeps(p library.Item, now time.Time) bool {
 	if q.IsAiring != nil && *q.IsAiring != (!start.After(now) && end.After(now)) {
 		return false
 	}
-	if len(q.ChannelIds) > 0 && !slices.ContainsFunc(q.ChannelIds, func(raw string) bool {
-		id, ok := parseGUID(raw)
-		return ok && id == p.Channel.ID
-	}) {
+	if len(q.ChannelIds) > 0 && !q.channels[p.Channel.ID] {
 		return false
 	}
 	if len(q.Genres) > 0 && !slices.ContainsFunc(p.Genres, func(g string) bool {
