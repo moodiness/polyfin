@@ -226,8 +226,12 @@ func (h *Handler) writeMusic(w http.ResponseWriter, r *http.Request, user accoun
 	writeJSON(w, http.StatusOK, QueryResult{Items: h.listDtos(r, user, page, requestedFields(r), state), TotalRecordCount: total, StartIndex: start})
 }
 
-// sortName is what music sorts by name on.
+// sortName is what items sort by name on, and their SortName: the sort
+// name an administrator set, else their name, without regard to case.
 func sortName(item library.Item) string {
+	if item.SortName != "" {
+		return strings.ToLower(item.SortName)
+	}
 	return strings.ToLower(strings.TrimSpace(item.Name))
 }
 

@@ -61,7 +61,8 @@ func (c *imageCache) put(url string, image artwork) {
 
 // image relays an item's artwork. Polyfin downloads it rather than
 // redirecting: some apps (Infuse) do not follow image redirects, and apps
-// may not reach the addresses addons use.
+// may not reach the addresses addons use. Artwork an administrator
+// uploaded comes first, for any item, and is served from the database.
 func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	id, err := accounts.ParseID(r.PathValue("itemId"))
 	if err != nil {
@@ -76,9 +77,14 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	url, confined, collection, err := h.collectionArtwork(r, id, r.PathValue("imageType"))
-	if !collection {
-		url, confined, err = h.Library.Artwork(r.Context(), id, r.PathValue("imageType"))
+	imageType := r.PathValue("imageType")
+	url, uploaded := h.Library.UploadedArtwork(id, imageType)
+	var confined, collection bool
+	if !uploaded {
+		url, confined, collection, err = h.collectionArtwork(r, id, imageType)
+		if !collection {
+			url, confined, err = h.Library.Artwork(r.Context(), id, imageType)
+		}
 	}
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps show a version opened as an item with its title's artwork.
@@ -95,6 +101,10 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		h.internalError(w, r, err)
+		return
+	}
+	if owner, ownerType, ok := library.Uploaded(url); ok {
+		h.uploadedImage(w, r, owner, ownerType)
 		return
 	}
 	tag := library.ImageTag(url)

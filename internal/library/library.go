@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -72,6 +73,11 @@ type Service struct {
 	musicArtists   *cache.Cache[musicKey, eclipse.Artist]
 	musicPlaylists *cache.Cache[musicKey, eclipse.Playlist]
 	musicSearches  *cache.Cache[musicKey, eclipse.Results]
+
+	// overrides are administrators' edits of items, loaded on first use
+	// (see overridesNow); overridesMu orders their loading and changes.
+	overrides   atomic.Pointer[overrideSet]
+	overridesMu sync.Mutex
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -311,7 +317,7 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 		records = append(records, record{ID: l.item.ID, Key: libraryKey(addon, l.catalog.Type, l.catalog.ID), Kind: KindLibrary,
 			Addon: &addon, CatalogType: l.catalog.Type, CatalogID: l.catalog.ID, Confined: l.addon.confined})
 	}
-	return items, s.save(ctx, records)
+	return s.overridden(items), s.save(ctx, records)
 }
 
 func libraryID(l addons.Library) accounts.ID {
@@ -637,6 +643,12 @@ type Page struct {
 // collection's titles, a series' seasons or a season's episodes. genre
 // narrows a library to one of the genres its catalog offers (see Genres).
 func (s *Service) Children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
+	page, err := s.children(ctx, user, parent, start, count, genre)
+	page.Items = s.overridden(page.Items)
+	return page, err
+}
+
+func (s *Service) children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return Page{}, err
@@ -877,6 +889,21 @@ func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) 
 	if err != nil {
 		return Item{}, err
 	}
+	item, err := s.item(ctx, v, id)
+	if err != nil {
+		return Item{}, err
+	}
+	return s.overriddenItem(item), nil
+}
+
+// Original describes one item as its addon does, without what
+// administrators changed of it: what their edits are made against (see
+// SaveOverrides).
+func (s *Service) Original(ctx context.Context, user accounts.User, id accounts.ID) (Item, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return Item{}, err
+	}
 	return s.item(ctx, v, id)
 }
 
@@ -911,7 +938,7 @@ func (s *Service) Items(ctx context.Context, user accounts.User, ids []accounts.
 			items = append(items, *item)
 		}
 	}
-	return items, nil
+	return s.overridden(items), nil
 }
 
 func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error) {
@@ -947,7 +974,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		}
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.
-		if !v.allows(r.Kind, t) {
+		if !v.allows(r.Kind, s.overriddenTraits(id, t)) {
 			return Item{}, ErrNotFound
 		}
 		item := Item{ID: id, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
@@ -1007,7 +1034,7 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
-	if !ok || !v.allows(KindSeries, describedTraits(meta)) {
+	if !ok || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta))) {
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
@@ -1157,7 +1184,7 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason,
 			Parent: &series.ID, SeriesID: meta.ID, Season: season.IndexNumber})
 	}
-	return result, s.save(ctx, records)
+	return s.overridden(result), s.save(ctx, records)
 }
 
 // Episodes lists a series' episodes, of one season when seasonID is set.
@@ -1197,16 +1224,52 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 		records = append(records, record{ID: episode.ID, Key: episodeKey(video.ID), Kind: KindEpisode,
 			Parent: &result[i].SeasonID, SeriesID: meta.ID, Season: episode.ParentIndexNumber, Video: &video})
 	}
-	return result, s.save(ctx, records)
+	return s.overridden(result), s.save(ctx, records)
 }
 
 // Search looks a term up in the search catalogs of the user's addons, for
-// titles of the given kinds.
+// titles of the given kinds, then among the titles administrators renamed.
 func (s *Service) Search(ctx context.Context, user accounts.User, term string, kinds []Kind, limit int) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return nil, err
 	}
+	items, err := s.search(ctx, v, term, kinds, limit)
+	if err != nil {
+		return nil, err
+	}
+	items = append(items, s.renamed(ctx, v, term, kinds, items, limit)...)
+	return s.overridden(items), nil
+}
+
+// renamed returns the items of the given kinds an administrator renamed so
+// that term matches their name, which the addons' searches know by another
+// name: those of the user's addons, not already found, until there are
+// limit items.
+func (s *Service) renamed(ctx context.Context, v view, term string, kinds []Kind, found []Item, limit int) []Item {
+	var result []Item
+	for _, id := range s.renamedMatches(term) {
+		if len(found)+len(result) >= limit {
+			break
+		}
+		if slices.ContainsFunc(found, func(item Item) bool { return item.ID == id }) {
+			continue
+		}
+		r, err := s.load(ctx, id)
+		if err != nil || !slices.Contains(kinds, r.Kind) || r.Addon == nil {
+			continue
+		}
+		if _, ok := v.addon(*r.Addon); !ok {
+			continue
+		}
+		if item, err := s.item(ctx, v, id); err == nil {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind, limit int) ([]Item, error) {
 	var sources []source
 	for _, entry := range v.addons {
 		for _, catalog := range entry.addon.Manifest.Catalogs {
@@ -1275,9 +1338,13 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 }
 
 // Artwork returns the URL of an item's image and whether downloading it is
-// confined to public addresses. It needs no user: Jellyfin apps load images
+// confined to public addresses: the artwork an administrator uploaded, else
+// the addon's (see Uploaded). It needs no user: Jellyfin apps load images
 // without credentials, and artwork URLs carry no secret.
 func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
+	if url, ok := s.UploadedArtwork(id, imageType); ok {
+		return url, false, nil
+	}
 	r, err := s.load(ctx, id)
 	// An IPTV channel shows its line-up's logo at once, listed or not: the
 	// admin app shows those of hidden channels too.
@@ -1330,6 +1397,13 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			return "", false, ErrNotFound
 		}
 		images = Images{Primary: series.Meta.Poster, Backdrop: series.Meta.Background}
+		// A season shows its series' artwork, uploaded or not, unless it
+		// has its own.
+		for _, imageType := range []string{"Primary", "Backdrop"} {
+			if url, ok := s.UploadedArtwork(series.ID, imageType); ok {
+				setImage(&images, imageType, url)
+			}
+		}
 		if full, ok := s.cachedMeta(series); ok && full.Extras != nil {
 			if poster := full.Extras.SeasonPosterByNumber[strconv.Itoa(r.Season)]; poster != "" {
 				images.Primary = poster

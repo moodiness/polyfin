@@ -78,7 +78,8 @@ export default function HealthPage() {
                       className={`mt-0.5 size-4 shrink-0 ${problem.tone === 'error' ? 'text-rose-300' : 'text-amber-300'}`}
                     />
                     <span className="sr-only">
-                      {problem.tone === 'error' ? text.error : text.warning}:{' '}
+                      {problem.tone === 'error' ? text.error : text.warning}
+                      {t.common.colon}{' '}
                     </span>
                     <Link
                       to={problem.to}
@@ -264,12 +265,14 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
                     </>
                   )}
                   {' · '}
-                  {t.iptv.lastFetch}:{' '}
+                  {t.iptv.lastFetch}
+                  {t.common.colon}{' '}
                   {source.fetchedAt ? <RelativeTime iso={source.fetchedAt} /> : t.iptv.never}
                   {source.nextAt && (
                     <>
                       {' '}
-                      · {t.iptv.nextFetch}: <RelativeTime iso={source.nextAt} />
+                      · {t.iptv.nextFetch}
+                      {t.common.colon} <RelativeTime iso={source.nextAt} />
                     </>
                   )}
                 </p>
@@ -325,7 +328,8 @@ function Guides({ sources }: { sources: Sources | undefined }) {
                 </div>
                 <p className="text-xs text-muted">
                   {library.addonName} · {t.lineup.library.guides(guides.length)} ·{' '}
-                  {t.libraries.guideFetched}:{' '}
+                  {t.libraries.guideFetched}
+                  {t.common.colon}{' '}
                   {fetched ? <RelativeTime iso={fetched} /> : t.libraries.guideNever}
                   {library.guide !== null && library.guide.channels > 0 && (
                     <>
@@ -339,8 +343,8 @@ function Guides({ sources }: { sources: Sources | undefined }) {
                 </p>
                 {failing.map((guide) => (
                   <p key={guide.id || guide.url} className="text-xs text-amber-200">
-                    {t.lineup.picker.guideN(guide.position)}:{' '}
-                    {t.libraries.guideErrors[guide.error] ?? guide.error}
+                    {t.lineup.picker.guideN(guide.position)}
+                    {t.common.colon} {t.libraries.guideErrors[guide.error] ?? guide.error}
                   </p>
                 ))}
               </li>
@@ -448,7 +452,8 @@ function Storage({ health }: { health: Health }) {
                 )}
               </span>
               <span className="text-xs text-muted tabular-nums">
-                {text.sourcesOpen}: {health.cache.sources}
+                {text.sourcesOpen}
+                {t.common.colon} {health.cache.sources}
               </span>
             </div>
             <Meter value={health.cache.used} max={health.cache.limit} label={text.cacheTitle} />

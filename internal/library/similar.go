@@ -97,7 +97,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 	for _, c := range candidates {
 		items, records = append(items, c.item), append(records, c.record)
 	}
-	return items, s.save(ctx, records)
+	return s.overridden(items), s.save(ctx, records)
 }
 
 // similarSourcesOf picks the catalogs similar titles are read from: up to

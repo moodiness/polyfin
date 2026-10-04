@@ -72,7 +72,7 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 		r.Parent = nil
 		items, records = append(items, item), append(records, r)
 	}
-	return page(items, start, total), s.save(ctx, records)
+	return page(s.overridden(items), start, total), s.save(ctx, records)
 }
 
 // titleCatalog is a catalog of titles a user reaches, with its addon.

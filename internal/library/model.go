@@ -66,6 +66,18 @@ type Item struct {
 	Runtime         time.Duration
 	CommunityRating float64
 	OfficialRating  string
+	// OriginalTitle is a title's name as its addon gives it, which the
+	// metadata editor may change apart from its name; SortName, when set,
+	// is what it sorts by instead of its name. Taglines, Tags, Studios,
+	// CriticRating and CustomRating come from an administrator's edits
+	// only (see Overrides): addons give none.
+	OriginalTitle string
+	SortName      string
+	Taglines      []string
+	Tags          []string
+	Studios       []string
+	CriticRating  *float64
+	CustomRating  string
 	// Status is "Continuing" or "Ended" for series.
 	Status      string
 	ProviderIDs map[string]string
@@ -137,12 +149,14 @@ type Contents struct {
 	LastReleased *time.Time
 }
 
-// Images are artwork URLs; empty when the item has none.
+// Images are artwork URLs; empty when the item has none. Banner is only
+// ever an administrator's upload.
 type Images struct {
 	Primary  string
 	Backdrop string
 	Logo     string
 	Thumb    string
+	Banner   string
 }
 
 // URL returns the artwork of a Jellyfin image type.
@@ -156,6 +170,8 @@ func (i Images) URL(imageType string) string {
 		return i.Logo
 	case "thumb":
 		return i.Thumb
+	case "banner":
+		return i.Banner
 	default:
 		return ""
 	}
@@ -321,6 +337,9 @@ func providerIDs(meta stremio.Meta) map[string]string {
 func fromMeta(item *Item, meta stremio.Meta) {
 	// Some addons wrap names in direction marks, which would upset sorting.
 	item.Name = strings.TrimFunc(meta.Name, func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) })
+	if item.Kind == KindMovie || item.Kind == KindSeries {
+		item.OriginalTitle = item.Name
+	}
 	item.Overview = meta.Description
 	item.Genres = slices.Clip(meta.Genres)
 	first, last := parseYears(string(meta.ReleaseInfo))

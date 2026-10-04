@@ -744,7 +744,8 @@ func (s *Service) Music(ctx context.Context, user accounts.User, q MusicQuery) (
 		}
 		add(entry, list)
 	}
-	return s.musicItems(ctx, v, records, named)
+	items, err := s.musicItems(ctx, v, records, named)
+	return s.overridden(items), err
 }
 
 func kindsOr(kinds []Kind, fallback Kind) []Kind {
@@ -1026,7 +1027,7 @@ func (s *Service) ArtistByName(ctx context.Context, user accounts.User, name str
 			return Item{}, err
 		}
 		if item, err := s.musicDetails(ctx, v, r); err == nil {
-			return item, nil
+			return s.overriddenItem(item), nil
 		}
 	}
 	return Item{}, ErrNotFound
@@ -1112,7 +1113,8 @@ func (s *Service) SearchMusic(ctx context.Context, user accounts.User, term stri
 	if err != nil {
 		return nil, err
 	}
-	return items[:min(len(items), max(limit, 0))], nil
+	items = items[:min(len(items), max(limit, 0))]
+	return s.overridden(append(items, s.renamed(ctx, v, term, kinds, items, limit)...)), nil
 }
 
 // InstantMix makes a list of tracks to play from an item, as Jellyfin's
@@ -1190,7 +1192,7 @@ func (s *Service) InstantMix(ctx context.Context, user accounts.User, id account
 	if err != nil {
 		return nil, err
 	}
-	return items[:min(len(items), max(limit, 0))], nil
+	return s.overridden(items[:min(len(items), max(limit, 0))]), nil
 }
 
 // AudioSource is what an addon tells of a track's stream: its format and

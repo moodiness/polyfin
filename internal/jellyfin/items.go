@@ -60,12 +60,14 @@ type BaseItemDto struct {
 	OriginalTitle  string `json:",omitempty"`
 	ServerId       string
 	Id             string
-	Etag           string      `json:",omitempty"`
-	PlaylistItemId string      `json:",omitempty"` // the entry a playlist lists the item as
-	DateCreated    *Time       `json:",omitempty"`
-	CanDelete      *bool       `json:",omitempty"`
-	CanDownload    *bool       `json:",omitempty"`
-	SortName       string      `json:",omitempty"`
+	Etag           string `json:",omitempty"`
+	PlaylistItemId string `json:",omitempty"` // the entry a playlist lists the item as
+	DateCreated    *Time  `json:",omitempty"`
+	CanDelete      *bool  `json:",omitempty"`
+	CanDownload    *bool  `json:",omitempty"`
+	SortName       string `json:",omitempty"`
+	// ForcedSortName is the sort name an administrator set.
+	ForcedSortName string      `json:",omitempty"`
 	PremiereDate   *Time       `json:",omitempty"`
 	ExternalUrls   *[]MediaUrl `json:",omitempty"`
 	// Path is the name a movie's or an episode's version downloads as:
@@ -80,6 +82,8 @@ type BaseItemDto struct {
 	Taglines                 *[]string          `json:",omitempty"`
 	Genres                   *[]string          `json:",omitempty"`
 	CommunityRating          *float64           `json:",omitempty"`
+	CriticRating             *float64           `json:",omitempty"`
+	CustomRating             string             `json:",omitempty"`
 	RunTimeTicks             *int64             `json:",omitempty"`
 	PlayAccess               string             `json:",omitempty"`
 	ProductionYear           *int               `json:",omitempty"`
@@ -313,6 +317,9 @@ func isFolder(kind library.Kind) bool {
 // detail is true for an item's own description, which carries every field;
 // listings carry the base fields plus those in fields.
 func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, state userState) BaseItemDto {
+	// Items Polyfin makes itself, its collections, views and recordings,
+	// show administrators' edits too; the library's already do.
+	item = h.Library.Overridden(item)[0]
 	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode || item.Kind == library.KindRecording
 	folder := isFolder(item.Kind)
 	dto := BaseItemDto{
@@ -344,6 +351,9 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		} else if item.Status == "Ended" && item.Contents != nil && item.Contents.LastReleased != nil {
 			dto.EndDate = new(Time(*item.Contents.LastReleased))
 		}
+	} else if end := h.Library.Overrides(item.ID).EndDate; end != nil {
+		// Other items show an end date once an administrator sets one.
+		dto.EndDate = new(Time(*end))
 	}
 	if item.CommunityRating > 0 {
 		dto.CommunityRating = new(item.CommunityRating)
@@ -409,9 +419,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		// Until its versions are known; see setDownload.
 		dto.CanDownload = new(false)
 	}
-	if detail || fields.has("SortName") {
-		dto.SortName = strings.ToLower(item.Name)
-	}
+	describeEdited(&dto, item, fields, detail)
 	if detail || fields.has("People") {
 		dto.People = new(people(item.People))
 	}
@@ -422,21 +430,15 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.ParentId = item.ParentID.String()
 	}
 	if detail {
-		if item.Kind == library.KindMovie || item.Kind == library.KindSeries {
-			dto.OriginalTitle = item.Name
-		}
 		dto.Etag = nameID("etag", item.ID.String())
 		dto.ExternalUrls = new(externalURLs(item.ProviderIDs, item.Kind))
 		dto.EnableMediaSourceDisplay = new(true)
-		dto.Taglines = &[]string{}
 		dto.PlayAccess = "Full"
 		dto.RemoteTrailers = new(trailers(item.Trailers))
-		dto.Studios = &[]NameGuidPair{}
 		dto.GenreItems = new(genreItems(item.Genres))
 		dto.LocalTrailerCount = new(0)
 		dto.SpecialFeatureCount = new(0)
 		dto.DisplayPreferencesId = item.ID.String()
-		dto.Tags = &[]string{}
 		dto.LockedFields = &[]string{}
 		dto.LockData = new(false)
 		if item.Kind == library.KindLibrary {
@@ -468,6 +470,40 @@ func nonNil(values []string) []string {
 	return values
 }
 
+// describeEdited adds to a DTO what only administrators' edits give an
+// item (see library.Overrides): its sort name, original title, taglines,
+// tags, studios and critic and custom ratings, as Jellyfin describes them.
+func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
+	if detail || fields.has("SortName") {
+		dto.SortName = sortName(item)
+		if detail {
+			dto.ForcedSortName = item.SortName
+		}
+	}
+	if detail && item.OriginalTitle != "" {
+		dto.OriginalTitle = item.OriginalTitle
+	}
+	if item.CriticRating != nil {
+		dto.CriticRating = new(*item.CriticRating)
+	}
+	if detail || fields.has("CustomRating") {
+		dto.CustomRating = item.CustomRating
+	}
+	if detail || fields.has("Taglines") {
+		dto.Taglines = new(nonNil(item.Taglines))
+	}
+	if detail || fields.has("Tags") {
+		dto.Tags = new(nonNil(item.Tags))
+	}
+	if detail || fields.has("Studios") {
+		studios := make([]NameGuidPair, 0, len(item.Studios))
+		for _, studio := range item.Studios {
+			studios = append(studios, NameGuidPair{Name: studio, Id: nameID("studio", studio)})
+		}
+		dto.Studios = &studios
+	}
+}
+
 func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 	if item.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
@@ -486,6 +522,9 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 	}
 	if item.Images.Logo != "" {
 		dto.ImageTags["Logo"] = library.ImageTag(item.Images.Logo)
+	}
+	if item.Images.Banner != "" {
+		dto.ImageTags["Banner"] = library.ImageTag(item.Images.Banner)
 	}
 	if item.Images.Thumb != "" && item.Kind != library.KindEpisode {
 		dto.ImageTags["Thumb"] = library.ImageTag(item.Images.Thumb)

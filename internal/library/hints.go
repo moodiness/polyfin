@@ -38,7 +38,7 @@ func (s *Service) SearchEpisodes(ctx context.Context, user accounts.User, term s
 	if err != nil {
 		return nil, err
 	}
-	return items[:min(count, len(items))], nil
+	return s.overridden(items[:min(count, len(items))]), nil
 }
 
 // Years lists, in ascending order, the years the user's year pages offer

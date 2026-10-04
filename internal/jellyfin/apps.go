@@ -487,7 +487,13 @@ func (h *Handler) itemImages(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, b)
 		return
 	}
-	item, err := h.Library.Item(r.Context(), callerFrom(r.Context()).User, id)
+	user := callerFrom(r.Context()).User
+	item, err := h.Library.Item(r.Context(), user, id)
+	if errors.Is(err, library.ErrNotFound) {
+		// Polyfin's own items: collections, playlists, views, recordings.
+		item, err = h.originalItem(r, user, id)
+		item = h.Library.Overridden(item)[0]
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -496,7 +502,7 @@ func (h *Handler) itemImages(w http.ResponseWriter, r *http.Request) {
 	dto.ImageTags = map[string]string{}
 	h.setImages(&dto, item)
 	images := []ImageInfo{}
-	for _, imageType := range []string{"Primary", "Logo", "Thumb"} {
+	for _, imageType := range []string{"Primary", "Logo", "Thumb", "Banner"} {
 		if tag := dto.ImageTags[imageType]; tag != "" {
 			images = append(images, ImageInfo{ImageType: imageType, ImageTag: tag})
 		}
