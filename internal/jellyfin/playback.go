@@ -293,7 +293,11 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	versions := p.ordered(opened)
+	allowed := h.Accounts.Conversions(user)
 
+	// The candidates: the version the app asked for, else every version.
+	// Of the latter, the first maxAttempts may be analyzed now; the others
+	// are tried only when analyzed before, which costs nothing.
 	candidates := make([]int, 0, len(versions))
 	if request.MediaSourceId != "" {
 		requested, _ := parseGUID(request.MediaSourceId)
@@ -307,21 +311,34 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		for i := range min(len(versions), maxAttempts) {
+		for i := range versions {
 			candidates = append(candidates, i)
 		}
 	}
 	unreadable := map[int]bool{}
-	for _, i := range candidates {
+	for n, i := range candidates {
 		version := versions[i]
-		analysis, err := h.Playback.Analyze(r.Context(), version)
-		if err != nil {
-			h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
-			unreadable[i] = true
-			continue
+		var analysis media.Analysis
+		if request.MediaSourceId == "" && n >= maxAttempts {
+			var known bool
+			if analysis, known = h.Playback.Analyzed(r.Context(), version.ID); !known {
+				continue
+			}
+		} else {
+			var err error
+			if analysis, err = h.Playback.Analyze(r.Context(), version); err != nil {
+				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
+				unreadable[i] = true
+				continue
+			}
 		}
 		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
-		sources := []MediaSourceInfo{h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session)}
+		decided, ok := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session, allowed)
+		if !ok {
+			h.Logger.Info("A version would need a conversion the user may not have", "addon", version.Addon)
+			continue
+		}
+		sources := []MediaSourceInfo{decided}
 		// An app that asks for no version gets every version, as from
 		// Jellyfin: some, such as Strand, list them for the user to pick.
 		// The one decided comes first, which apps play unless the user picks
@@ -409,8 +426,10 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 
 // decidedSource describes the version an app is about to play, with the
 // decision for its device profile; session is the play session a remux
-// belongs to.
-func (h *Handler) decidedSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, request playbackInfoRequest, session string) MediaSourceInfo {
+// belongs to. Only the conversions allowed are planned: it reports false
+// when the version would need another to play on the app.
+func (h *Handler) decidedSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis,
+	request playbackInfoRequest, session string, allowed accounts.Conversions) (MediaSourceInfo, bool) {
 	source := h.baseSource(r, p, version, id, analysis, true)
 	streams := source.MediaStreams
 	options := playback.Options{
@@ -444,15 +463,15 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		decision = playback.Decide(request.DeviceProfile, described, options)
 		// A subtitle the app can only take burned into the video is burned
 		// in when it is an image track inside the file and the video can be
-		// converted, as burning it in requires. Any other is left out
-		// rather than preventing playback, and so is one the app would take
-		// in HLS when the version cannot be streamed so.
+		// converted, as burning it in requires, and may be. Any other is left
+		// out rather than preventing playback, and so is one the app would
+		// take in HLS when the version cannot be streamed so.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
 			method := decision.Subtitles[*selected].Method
-			if method == "Encode" && burnable(streams, analysis, *selected) {
+			if method == "Encode" && allowed.Video && burnable(streams, analysis, *selected) {
 				burn := options
 				burn.ConvertVideo = true
-				if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil {
+				if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil && permitted(allowed, burned) {
 					decision, method = burned, ""
 				}
 			}
@@ -471,6 +490,9 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		if options.SubtitleStreamIndex != nil {
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
 		}
+	}
+	if decision.HLS && !permitted(allowed, decision) {
+		return MediaSourceInfo{}, false
 	}
 	// Streaming over HLS needs the keyframe index: a version without one
 	// is not offered for it.
@@ -518,7 +540,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		attachment := &source.MediaAttachments[i]
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
 	}
-	return source
+	return source, true
 }
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
@@ -591,6 +613,12 @@ func (h *Handler) prefetchSubtitle(ctx context.Context, decision playback.Decisi
 func burnable(streams []playback.MediaStream, analysis media.Analysis, index int) bool {
 	files := subtitleFiles(streams)
 	return index >= files && playback.BurnableSubtitle(analysis, index-files)
+}
+
+// permitted reports whether the conversions a decision plans, of the video
+// and of the audio, are among those allowed. Copying needs none.
+func permitted(allowed accounts.Conversions, decision playback.Decision) bool {
+	return (decision.Video == nil || allowed.Video) && (decision.Audio == nil || allowed.Audio)
 }
 
 // streamAccess finds who a media request plays for. Players send no

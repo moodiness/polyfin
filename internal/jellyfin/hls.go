@@ -154,6 +154,16 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		w.WriteHeader(http.StatusUnauthorized)
 		return remuxRequest{}, false
 	}
+	// A conversion the user may not have is refused, as Jellyfin refuses
+	// it once FFmpeg is about to start. PlaybackInfo plans none: this
+	// guards URLs kept from before a permission was taken away, or made up.
+	allowed := h.Accounts.Conversions(user)
+	if !allowed.Video && strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") ||
+		!allowed.Audio && strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
+		h.Logger.Info("A conversion the user may not have was refused")
+		processingError(w, http.StatusBadRequest)
+		return remuxRequest{}, false
+	}
 	item, err := h.played(r.Context(), user, opened)
 	live := item.Kind == library.KindChannel
 	if err != nil {
