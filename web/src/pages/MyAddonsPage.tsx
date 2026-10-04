@@ -36,6 +36,10 @@ function SharedAddonsSwitch() {
   if (preferences.isPending) return <Loading />
   if (preferences.isError) return <Notice kind="error">{errorMessage(t, preferences.error)}</Notice>
 
+  // The server's addons give the ratings parental control hides titles by.
+  if (preferences.data.parentalControl)
+    return <p className="text-sm text-zinc-300">{t.myAddons.parentalControl}</p>
+
   return (
     <div className="space-y-3">
       <Checkbox

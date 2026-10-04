@@ -65,6 +65,8 @@ const fr: Messages = {
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
     invalid_language: 'Choisissez la langue du serveur dans la liste.',
+    parental_control:
+      'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
       'Ce réglage du contrôle parental n’est pas pris en charge. Rechargez la page.',
     invalid_manifest_url:
@@ -344,6 +346,8 @@ const fr: Messages = {
     useSharedHelp:
       'Activé : vous profitez des addons et bibliothèques du serveur, suivis des vôtres. Désactivé : vous ne voyez que vos propres addons et bibliothèques.',
     preferenceSaved: 'Préférence enregistrée.',
+    parentalControl:
+      'Le contrôle parental s’applique à votre compte : vos applications Jellyfin n’affichent que les addons et bibliothèques du serveur, qui donnent les classifications sur lesquelles il s’appuie. Vos propres addons sont conservés mais pas utilisés.',
   },
   notFound: {
     title: 'Page introuvable',

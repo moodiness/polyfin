@@ -111,7 +111,8 @@ export type Library = {
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
 
-export type AddonPreferences = { useSharedAddons: boolean }
+/** `parentalControl`: the user's parental control keeps them on the server's addons only. */
+export type AddonPreferences = { useSharedAddons: boolean; parentalControl: boolean }
 
 /** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
 export class ApiError extends Error {
@@ -256,7 +257,7 @@ export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
 export const fetchAddonPreferences = (signal?: AbortSignal) =>
   request<AddonPreferences>('GET', '/account/addon-preferences', undefined, signal)
 
-export const saveAddonPreferences = (preferences: AddonPreferences) =>
+export const saveAddonPreferences = (preferences: Pick<AddonPreferences, 'useSharedAddons'>) =>
   request<AddonPreferences>('PUT', '/account/addon-preferences', preferences)
 
 export const queryKeys = {

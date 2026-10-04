@@ -350,13 +350,23 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 	h.writeLibraries(w, r, scope, libraries)
 }
 
+// addonPreferencesJSON is whether a user sees the server's addons.
+// ParentalControl is set while the user's parental control hides titles:
+// they then see the server's addons, and only them, in their apps.
+type addonPreferencesJSON struct {
+	UseSharedAddons bool `json:"useSharedAddons"`
+	ParentalControl bool `json:"parentalControl"`
+}
+
 func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {
-	uses, err := h.Addons.UsesSharedAddons(r.Context(), sessionFrom(r.Context()).User.ID)
+	user := sessionFrom(r.Context()).User
+	uses, err := h.Addons.UsesSharedAddons(r.Context(), user.ID)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"useSharedAddons": uses})
+	restricted := user.Parental.Restricted()
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: uses || restricted, ParentalControl: restricted})
 }
 
 func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
@@ -366,9 +376,16 @@ func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.Addons.SetUsesSharedAddons(r.Context(), sessionFrom(r.Context()).User.ID, body.UseSharedAddons); err != nil {
+	user := sessionFrom(r.Context()).User
+	// The server's addons give the ratings parental control hides titles
+	// by.
+	if user.Parental.Restricted() && !body.UseSharedAddons {
+		writeError(w, http.StatusConflict, "parental_control")
+		return
+	}
+	if err := h.Addons.SetUsesSharedAddons(r.Context(), user.ID, body.UseSharedAddons); err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"useSharedAddons": body.UseSharedAddons})
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: body.UseSharedAddons, ParentalControl: user.Parental.Restricted()})
 }
