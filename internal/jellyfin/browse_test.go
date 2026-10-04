@@ -110,7 +110,12 @@ func catalogAddon(t *testing.T) string {
 // as libraries, and signs a member in.
 func browsing(t *testing.T) (testServer, string, map[string]string) {
 	t.Helper()
-	s := newTestServer(t, 10)
+	return browsingOn(t, newTestServer(t, 10))
+}
+
+// browsingOn is browsing on a given test server.
+func browsingOn(t *testing.T, s testServer) (testServer, string, map[string]string) {
+	t.Helper()
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), catalogAddon(t), false)
 	if err != nil {
