@@ -70,6 +70,11 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, item libr
 	if !ok {
 		return
 	}
+	// With a quality group, the title's own identifier stands for its
+	// first version that fits, as in PlaybackInfo: the others are not read.
+	if id == item.ID && user.QualityGroup > 0 {
+		id = h.firstWorkingVersion(ctx, user, item)
+	}
 	version, err := h.Library.Version(ctx, user, item.ID, id)
 	if err != nil {
 		return

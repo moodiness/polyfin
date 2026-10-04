@@ -18,6 +18,10 @@ var ErrInvalidMaxBitrate = errors.New("invalid maximum bitrate")
 // SyncPlayAccess values.
 var ErrInvalidSyncPlay = errors.New("invalid SyncPlay access")
 
+// ErrInvalidQualityGroup reports a User.QualityGroup that is not one of
+// ConversionHeights.
+var ErrInvalidQualityGroup = errors.New("invalid quality group")
+
 // The bounds and defaults of User.MaxPlaybacks and User.MaxBitrate; 0 sets
 // no limit. A bitrate is in bits per second, a 32-bit number as in
 // Jellyfin's user policy.
@@ -55,6 +59,23 @@ func (a SyncPlayAccess) MayCreateGroups() bool { return a == SyncPlayCreateAndJo
 // list them.
 func (a SyncPlayAccess) MayJoinGroups() bool { return a == SyncPlayCreateAndJoin || a == SyncPlayJoin }
 
+// FitsGroup reports whether video height lines tall fits the user's quality
+// group: any does under Original, and so does video of unknown height, 0.
+func (user User) FitsGroup(height int) bool {
+	return user.QualityGroup == 0 || height <= user.QualityGroup
+}
+
+// ConversionHeight is the height video converted for user is scaled down
+// to at most: the lower of their quality group and the settings'
+// MaxConversionHeight, 0 when neither limits it.
+func (s *Store) ConversionHeight(user User) int {
+	most := s.Settings().MaxConversionHeight
+	if group := user.QualityGroup; group > 0 && (most == 0 || group < most) {
+		return group
+	}
+	return most
+}
+
 // checkAccess checks the playback and access limits changes set.
 func (changes UserChanges) checkAccess() error {
 	if n := changes.MaxPlaybacks; n != nil && (*n < MinMaxPlaybacks || *n > MaxMaxPlaybacks) {
@@ -65,6 +86,9 @@ func (changes UserChanges) checkAccess() error {
 	}
 	if a := changes.SyncPlay; a != nil && !slices.Contains(SyncPlayAccesses, *a) {
 		return ErrInvalidSyncPlay
+	}
+	if group := changes.QualityGroup; group != nil && !slices.Contains(ConversionHeights, *group) {
+		return ErrInvalidQualityGroup
 	}
 	return nil
 }

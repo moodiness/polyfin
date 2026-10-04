@@ -600,7 +600,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 			if permits != allowed {
 				h.Logger.Info("A channel's stream would need its video converted while the server converts as many as it may", "addon", version.Addon)
 			} else {
-				h.Logger.Info("A channel's stream would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
+				h.Logger.Info("A channel's stream would need a conversion the user may not have, or is above their bitrate limit or quality group", "addon", version.Addon)
 			}
 			continue
 		}
@@ -636,6 +636,8 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
+		MaxHeight:           request.group,
+		ConversionHeight:    request.conversionHeight,
 		Can:                 h.Playback.Capabilities(),
 	}
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
@@ -645,9 +647,9 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	if decision.HLS && !permitted(allowed, decision) {
 		return MediaSourceInfo{}, false
 	}
-	// Above the user's bitrate limit, a stream plays only converted down to
-	// it.
-	if beyondUserLimit(request, analysis.Bitrate, decision) {
+	// Above the user's bitrate limit, or taller than their quality group, a
+	// stream plays only converted down to it.
+	if beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision) {
 		return MediaSourceInfo{}, false
 	}
 	source.Container = cmp.Or(decision.Container, container)
@@ -661,6 +663,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		source.TranscodingUrl = transcodingURL(r, channel.ID, id, version, analysis, streams, decision, limit, session)
 		source.TranscodingSubProtocol = "hls"
 		source.TranscodingContainer = decision.Transcoding.Container
+		describeConverted(request, analysis, source.MediaStreams, decision.Video)
 	}
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)
@@ -676,6 +679,13 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 	analysis, err := h.Playback.AnalyzeLive(r.Context(), version)
 	if err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
+		return
+	}
+	// PlaybackInfo never offers a stream taller than the user's quality
+	// group as it is: this guards URLs kept, or made up.
+	if !user.FitsGroup(videoHeight(analysis)) {
+		h.Logger.Info("A channel's stream taller than the user's quality group was refused", "addon", version.Addon)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if !playback.Manifest(analysis) {

@@ -66,7 +66,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		// A finished recording is a file of Polyfin's own, served as it
 		// is, under the same permissions.
 		if recording, ok := h.recordingTitle(r.Context(), user, opened); ok {
-			h.serveRecordingFile(w, r, recording, attachment)
+			h.serveRecordingFile(w, r, user, recording, attachment)
 			return
 		}
 		notFoundProblem(w)
@@ -90,6 +90,14 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		processingError(w, http.StatusBadRequest)
 		return
 	}
+	// Only versions that fit the user's quality group download: downloads
+	// are never converted. Without one, the title is refused as downloads
+	// are without the permission.
+	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
+		h.Logger.Info("A download taller than the user's quality group was refused", "addon", version.Addon)
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	name := h.downloadName(r, item, version)
 	delivery := playback.Delivery{
 		// A player that authenticates with a header might send it to the
@@ -106,28 +114,31 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 }
 
 // firstWorkingVersion is the version a title's own identifier stands for:
-// its first that has not recently failed, else the title's identifier,
-// which stands for its first.
+// its first that has not recently failed, of those that fit the user's
+// quality group while one does, else the title's identifier, which stands
+// for its first.
 func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, item library.Item) accounts.ID {
 	versions, err := h.Library.Versions(ctx, user, item.ID)
 	if err != nil {
 		return item.ID
 	}
-	if i := slices.IndexFunc(versions, func(v library.Version) bool { return !h.Playback.Failed(v.ID) }); i >= 0 {
-		return versions[i].ID
+	versions = h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
+	if len(versions) > 0 {
+		return versions[0].ID
 	}
 	return item.ID
 }
 
 // setDownload tells apps that a movie or an episode with versions can be
-// downloaded, when they asked and the user may download, and with withPath
-// names in Path the file its first version, the one it was opened as,
-// downloads as.
+// downloaded, when they asked, the user may download and one of the
+// versions fits their quality group, and with withPath names in Path the
+// file its first version, the one it was opened as, downloads as.
 func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, withPath bool) {
 	if len(versions) == 0 {
 		return
 	}
-	if dto.CanDownload != nil && h.Accounts.MayDownload(user) {
+	fits := slices.ContainsFunc(versions, func(v library.Version) bool { return user.FitsGroup(h.versionHeight(r.Context(), v)) })
+	if dto.CanDownload != nil && h.Accounts.MayDownload(user) && fits {
 		dto.CanDownload = new(true)
 	}
 	if withPath {

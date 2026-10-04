@@ -100,6 +100,9 @@ type User struct {
 	// LiveTvManagement lets the user schedule and delete Live TV
 	// recordings, Jellyfin's EnableLiveTvManagement.
 	LiveTvManagement bool
+	// QualityGroup is the tallest video the user is offered, a height of
+	// ConversionHeights, 0 for Original, no limit (see FitsGroup).
+	QualityGroup int
 }
 
 // NewUser describes an account to create.
@@ -139,6 +142,8 @@ type UserChanges struct {
 	SubtitleManagement *bool
 	// LiveTvManagement, see User.
 	LiveTvManagement *bool
+	// QualityGroup, see User.
+	QualityGroup *int
 }
 
 // Store is the accounts repository.
@@ -188,7 +193,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management"
+	"subtitle_management, image_tag, live_tv_management, quality_group"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -199,7 +204,7 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement}
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -501,7 +506,8 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				access_schedules = coalesce($22::jsonb, access_schedules),
 				collection_management = coalesce($23, collection_management),
 				subtitle_management = coalesce($24, subtitle_management),
-				live_tv_management = coalesce($25, live_tv_management)
+				live_tv_management = coalesce($25, live_tv_management),
+				quality_group = coalesce($26, quality_group)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
@@ -509,7 +515,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement, changes.LiveTvManagement))
+			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

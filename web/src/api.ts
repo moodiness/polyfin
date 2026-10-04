@@ -55,10 +55,16 @@ export type User = {
   subtitleManagement: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
+  /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
+  qualityGroup: QualityGroup
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
 export type SyncPlayAccess = 'CreateAndJoinGroups' | 'JoinGroups' | 'None'
+
+/** The quality groups the server accepts for User.qualityGroup, tallest first; 0 is Original. */
+export const qualityGroups = [0, 2160, 1440, 1080, 720, 480] as const
+export type QualityGroup = (typeof qualityGroups)[number]
 
 /** The range the server accepts for User.maxPlaybacks. */
 export const maxPlaybacksRange = { min: 0, max: 20 }
@@ -236,6 +242,7 @@ export type UserPatch = Partial<{
   accessSchedules: AccessSchedule[]
   collectionManagement: boolean
   subtitleManagement: boolean
+  qualityGroup: QualityGroup
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */

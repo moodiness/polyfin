@@ -199,8 +199,9 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	remux := playback.Remux{Session: session, User: user.ID, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions. Converted video is
-	// scaled down to the height the settings allow as the encoding starts,
-	// a setting Jellyfin does not have.
+	// scaled down to the user's quality group and to the height the
+	// settings allow, the lower winning, as the encoding starts: settings
+	// Jellyfin does not have.
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
 		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
 		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
@@ -209,7 +210,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 			if most := int64(user.MaxBitrate); most > 0 && (limit <= 0 || limit > most) {
 				limit = most
 			}
-			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, h.Accounts.Settings().MaxConversionHeight, streams[i], h.Playback.Capabilities())
+			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, h.Accounts.ConversionHeight(user), streams[i], h.Playback.Capabilities())
 		}
 	}
 	// A subtitle burned in is an image track inside the file, counted after
@@ -227,10 +228,16 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		}
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
 	}
-	// PlaybackInfo copies no video above the user's bitrate limit: this
-	// guards URLs kept from before the limit was set, or made up.
+	// PlaybackInfo copies no video above the user's bitrate limit, nor
+	// taller than their quality group: this guards URLs kept from before
+	// the limit or the group was set, or made up.
 	if remux.ConvertVideo == nil && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
 		h.Logger.Info("A remux above the user's bitrate limit was refused")
+		processingError(w, http.StatusBadRequest)
+		return remuxRequest{}, false
+	}
+	if remux.ConvertVideo == nil && !user.FitsGroup(videoHeight(analysis)) {
+		h.Logger.Info("A remux taller than the user's quality group was refused")
 		processingError(w, http.StatusBadRequest)
 		return remuxRequest{}, false
 	}

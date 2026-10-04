@@ -70,8 +70,9 @@ type playable struct {
 }
 
 // playable gathers a title's versions and subtitles, both asked of the
-// addons at once. Versions that recently failed are left out; subtitles
-// that cannot be listed are left out.
+// addons at once. Versions that recently failed are left out; so are those
+// taller than the user's quality group, while one fits (see inGroup), and
+// subtitles that cannot be listed.
 func (h *Handler) playable(ctx context.Context, user accounts.User, item library.Item) (playable, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	if item.Kind == library.KindRecording {
@@ -87,13 +88,14 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 		}
 	})
 	wg.Wait()
-	p.versions = slices.DeleteFunc(p.versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
+	p.versions = h.inGroup(ctx, user, slices.DeleteFunc(p.versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 	h.subtitleFiles.Put(item.ID, p.subtitles)
 	return p, versionsErr
 }
 
 // cachedPlayable is what listings show of a title's versions: only what is
 // already known, as asking addons for every listed title is too costly.
+// Like playable, it leaves out versions taller than the user's group.
 func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item library.Item) playable {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	if item.Kind == library.KindRecording {
@@ -101,7 +103,7 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 		return p
 	}
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
-		p.versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
+		p.versions = h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 	}
 	p.subtitles, _ = h.subtitleFiles.Get(item.ID)
 	return p

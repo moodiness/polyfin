@@ -1237,11 +1237,17 @@ func (h *Handler) recordingArtwork(ctx context.Context, id accounts.ID, imageTyp
 // serveRecordingFile serves a recording's file for /Items/{id}/File and
 // /Items/{id}/Download, as a file to save when attachment is set. One
 // still being written has no file yet: Jellyfin refuses what has none as a
-// request it cannot process.
-func (h *Handler) serveRecordingFile(w http.ResponseWriter, r *http.Request, recording library.Item, attachment bool) {
+// request it cannot process. One analyzed as taller than the user's
+// quality group is refused, as titles are.
+func (h *Handler) serveRecordingFile(w http.ResponseWriter, r *http.Request, user accounts.User, recording library.Item, attachment bool) {
 	versions := h.recordingVersions(r.Context(), recording)
 	if len(versions) == 0 {
 		processingError(w, http.StatusBadRequest)
+		return
+	}
+	if !user.FitsGroup(h.versionHeight(r.Context(), versions[0])) {
+		h.Logger.Info("A recording taller than the user's quality group was refused for download")
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if attachment {

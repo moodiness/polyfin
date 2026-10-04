@@ -119,6 +119,7 @@ const en = {
       'Minutes before and after a recording must be whole numbers from 0 to 60.',
     invalid_recording_retention_days:
       'Days to keep recordings must be a whole number from 0 to 3,650.',
+    invalid_quality_group: 'Choose the quality group from the list.',
   },
   status: {
     title: 'Server status',
@@ -336,6 +337,10 @@ const en = {
     canManageSubtitles: 'Can manage subtitles',
     canManageSubtitlesHelp:
       'Lets this user add subtitle files to titles from their Jellyfin apps, and search the addons’ subtitles there.',
+    qualityGroup: 'Quality group',
+    qualityGroupHelp:
+      'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too, and only versions that fit can be downloaded.',
+    qualityGroupOriginal: 'Original (no limit)',
   },
   settings: {
     title: 'Settings',
