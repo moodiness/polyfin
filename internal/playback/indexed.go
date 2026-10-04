@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -220,19 +221,20 @@ func (s *Service) locate(ctx context.Context, version library.Version, analysis 
 }
 
 // readLocations reads a version's head and Cues. A file without an index,
-// or with one that cannot be read, locates nothing, for good.
+// or with one that cannot be read, locates nothing, for good. Neither does
+// a track whose blocks its host would take too many requests to serve.
 func (s *Service) readLocations(ctx context.Context, version library.Version, analysis media.Analysis) ([]int, error) {
 	src := s.open(version)
 	defer src.Release()
-	size, err := s.sizeOf(ctx, src, analysis)
-	if err != nil {
-		return nil, err
-	}
-	m, err := container.OpenMatroska(ctx, src, size)
+	var m *container.Matroska
 	var counts map[uint64]int
-	if err == nil {
-		counts, err = m.SubtitleLocations(ctx)
-	}
+	err := s.readSized(ctx, version, analysis, src, func(size int64) error {
+		var err error
+		if m, err = container.OpenMatroska(ctx, src, size); err == nil {
+			counts, err = m.SubtitleLocations(ctx)
+		}
+		return err
+	})
 	switch {
 	case errors.Is(err, container.ErrNoIndex):
 		return []int{}, nil
@@ -242,24 +244,124 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 	case err != nil:
 		return nil, err
 	}
-	located := []int{}
+	// A host serving a range per request takes a request for nearly every
+	// block of a track: one taking more than its share is located only
+	// from a host serving several ranges at once.
+	located, costly := []int{}, []int{}
 	for stream, track := range streamTracks(analysis, m.Tracks()) {
-		if _, indexed := indexedCodecs[track.CodecID]; indexed && track.Type == trackSubtitle && track.Decodable && counts[track.Number] > 0 {
+		if _, indexed := indexedCodecs[track.CodecID]; !indexed || track.Type != trackSubtitle || !track.Decodable || counts[track.Number] == 0 {
+			continue
+		}
+		requests, err := m.SingleRangeRequests(ctx, track.Number)
+		if err != nil {
+			return nil, err
+		}
+		if requests > trackRequests {
+			costly = append(costly, stream)
+		} else {
 			located = append(located, stream)
+		}
+	}
+	if len(costly) > 0 {
+		served, err := s.servesRanges(ctx, version, src)
+		switch {
+		case err != nil:
+			return nil, err
+		case served:
+			located = append(located, costly...)
+		default:
+			// Offered as files, these tracks would fail the apps asking for
+			// them; once a remux has extracted them whole, they are.
+			s.logger.Info("Subtitle tracks inside a version are not offered as files: its host serves one range per request, "+
+				"and reading them whole would take it too many requests; they are once a remux has read the whole version",
+				"addon", version.Addon, "tracks", len(costly))
 		}
 	}
 	slices.Sort(located)
 	return located, nil
 }
 
-// sizeOf is a version's size: analyzed, or asked of its source.
-func (s *Service) sizeOf(ctx context.Context, src interface {
-	Size(context.Context) (int64, error)
-}, analysis media.Analysis) (int64, error) {
-	if analysis.Size > 0 {
-		return analysis.Size, nil
+// servesRanges reports whether the host of a version serves several ranges
+// with one request: as the host's sources told before, as its source
+// recorded, or as it answers one request for two small ranges, which is
+// sent once and not again for a while.
+func (s *Service) servesRanges(ctx context.Context, version library.Version, src *source.Source) (bool, error) {
+	host := hostOf(version.URL)
+	if served, ok := s.rangeHosts.Get(host); ok {
+		return served, nil
 	}
-	return src.Size(ctx)
+	served, known := src.ServesRanges()
+	if !known {
+		size, ok := src.KnownSize()
+		if !ok || size < 2 {
+			return false, nil
+		}
+		_, err := src.Once().FetchRanges(ctx, []container.Range{{Off: 0, N: 1}, {Off: size / 2, N: 1}})
+		switch {
+		case err == nil:
+			served = true
+		case errors.Is(err, container.ErrMultiRangeUnsupported):
+		default:
+			return false, err
+		}
+	}
+	s.rangeHosts.Put(host, served)
+	return served, nil
+}
+
+// noteRanges keeps what a version's source learned of its host serving
+// several ranges with one request.
+func (s *Service) noteRanges(version library.Version, src *source.Source) {
+	if served, known := src.ServesRanges(); known {
+		s.rangeHosts.Put(hostOf(version.URL), served)
+	}
+}
+
+// readSized runs read, a read of a version's file through src given its
+// size: the analyzed one, else the source's. An analysis made while the
+// host answered an error page took the page's length for the file's size
+// (see source.errOtherFile), which leaves the file unreadable: when the
+// host has since told another size, read runs again with it, and the
+// analysis keeps it.
+func (s *Service) readSized(ctx context.Context, version library.Version, analysis media.Analysis, src *source.Source, read func(size int64) error) error {
+	size := analysis.Size
+	if size <= 0 {
+		var err error
+		if size, err = src.Size(ctx); err != nil {
+			return err
+		}
+		return read(size)
+	}
+	err := read(size)
+	if !errors.Is(err, container.ErrUnreadable) {
+		return err
+	}
+	told, known := src.KnownSize()
+	if !known || told == size {
+		return err
+	}
+	s.logger.Info("The analysis of a version had a wrong size, corrected from its host", "addon", version.Addon,
+		"analyzed", size, "size", told)
+	s.correctSize(ctx, version.ID, analysis, told)
+	return read(told)
+}
+
+// correctSize replaces the size of a version's analysis, and forgets what
+// was read with the wrong one: that its subtitle index could not be read.
+func (s *Service) correctSize(ctx context.Context, version accounts.ID, analysis media.Analysis, size int64) {
+	analysis.Size = size
+	data, err := json.Marshal(analysis)
+	if err != nil {
+		return
+	}
+	if _, err := s.db.Exec(ctx, "UPDATE media_analyses SET analysis = $2 WHERE version_id = $1", version, data); err != nil {
+		s.logger.Warn("Saving a media analysis failed", "error", err)
+	}
+	s.analyses.Put(version, analysis)
+	if _, err := s.db.Exec(ctx, "DELETE FROM media_subtitle_index WHERE version_id = $1", version); err != nil {
+		s.logger.Warn("Saving a subtitle index failed", "error", err)
+	}
+	s.unindexed.Delete(version)
 }
 
 // SubtitleTrack returns a version's text subtitle stream, by FFmpeg index,
@@ -363,11 +465,12 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 func (s *Service) readBlocks(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	src := s.open(version)
 	defer src.Release()
-	size, err := s.sizeOf(ctx, src, analysis)
-	if err != nil {
-		return Track{}, err
-	}
-	m, err := container.OpenMatroska(ctx, src, size)
+	var m *container.Matroska
+	err := s.readSized(ctx, version, analysis, src, func(size int64) error {
+		var err error
+		m, err = container.OpenMatroska(ctx, src, size)
+		return err
+	})
 	if err != nil {
 		return Track{}, err
 	}
@@ -376,6 +479,7 @@ func (s *Service) readBlocks(ctx context.Context, version library.Version, analy
 		return Track{}, ErrNotLocated
 	}
 	blocks, err := m.SubtitleBlocks(ctx, &boundedFetcher{src: src, left: int64(trackRequests)}, track.Number)
+	s.noteRanges(version, src)
 	if err != nil {
 		return Track{}, err
 	}

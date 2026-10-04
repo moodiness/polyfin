@@ -323,6 +323,9 @@ type Source struct {
 	// singleRanges marks a source that does not serve several ranges with
 	// one request: FetchRanges no longer asks it to.
 	singleRanges bool
+	// multiRanges marks a source that served several ranges with one
+	// request.
+	multiRanges bool
 	// nextFetch is when Fetch and FetchRanges may send their next request.
 	nextFetch time.Time
 	running   bool
@@ -1004,6 +1007,9 @@ func (s *Source) fetchRanges(ctx context.Context, ranges []container.Range, once
 	})
 	switch {
 	case err == nil:
+		s.mu.Lock()
+		s.multiRanges = true
+		s.mu.Unlock()
 		return result, nil
 	case errors.Is(err, container.ErrMultiRangeUnsupported):
 		s.mu.Lock()
@@ -1012,6 +1018,20 @@ func (s *Source) fetchRanges(ctx context.Context, ranges []container.Range, once
 		s.cache.logger.Debug("A source does not serve several ranges at once", "source", s.id)
 	}
 	return nil, err
+}
+
+// ServesRanges reports whether the source serves several ranges with one
+// request, and whether that is known: from a request for several that it
+// answered, either way.
+func (s *Source) ServesRanges() (served, known bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.multiRanges, s.multiRanges || s.singleRanges
+}
+
+// KnownSize is the source's size, when an answer told it.
+func (s *Source) KnownSize() (int64, bool) {
+	return s.knownSize()
 }
 
 func (s *Source) multiRangeUnsupported() bool {

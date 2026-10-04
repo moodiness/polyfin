@@ -82,11 +82,12 @@ func (s *Service) attachedFiles(ctx context.Context, version library.Version, an
 		defer cancel()
 		src := s.open(version)
 		defer src.Release()
-		size, err := s.sizeOf(ctx, src, analysis)
-		if err != nil {
-			return nil, err
-		}
-		m, err := container.OpenMatroska(ctx, src, size)
+		var m *container.Matroska
+		err := s.readSized(ctx, version, analysis, src, func(size int64) error {
+			var err error
+			m, err = container.OpenMatroska(ctx, src, size)
+			return err
+		})
 		if err != nil {
 			return nil, err
 		}

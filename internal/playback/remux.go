@@ -86,14 +86,13 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		}
 		src := s.open(version)
 		defer src.Release()
-		size := analysis.Size
-		if size <= 0 {
-			if size, err = src.Size(ctx); err != nil {
-				return nil, err
-			}
-		}
 		started := time.Now()
-		times, err := container.Keyframes(ctx, src, size)
+		var times []time.Duration
+		err = s.readSized(ctx, version, analysis, src, func(size int64) error {
+			var err error
+			times, err = container.Keyframes(ctx, src, size)
+			return err
+		})
 		if errors.Is(err, container.ErrNoIndex) {
 			err = fmt.Errorf("%w: %w", ErrNotRemuxable, err)
 		}
