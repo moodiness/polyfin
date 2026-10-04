@@ -116,7 +116,7 @@ func TestSourcesListTheirChannels(t *testing.T) {
 		t.Fatalf("addon: %+v", addon)
 	}
 	libraries, err := e.addons.Libraries(t.Context(), addons.Shared())
-	if err != nil || len(libraries) != 1 || !libraries[0].Enabled || libraries[0].Guide == nil {
+	if err != nil || len(libraries) != 1 || !libraries[0].Enabled || libraries[0].Guides == nil {
 		t.Fatalf("its catalog is enabled: %+v %v", libraries, err)
 	}
 	channels, err := e.service.Channels(t.Context(), addon.ID)
@@ -134,21 +134,18 @@ func TestSourcesListTheirChannels(t *testing.T) {
 	}
 
 	source, err := e.service.Source(t.Context(), addons.Shared(), addon.ID)
-	if err != nil || source.Channels != 4 || source.Included != nil || source.Error != "" || source.FetchedAt == nil {
+	if err != nil || source.Channels != 4 || source.Error != "" || source.FetchedAt == nil || source.Options.Categories != CategoriesOriginal ||
+		source.Lineup != (LineupCounts{Categories: 3, EnabledCategories: 3, Channels: 4, EnabledChannels: 4, ShownChannels: 4, Unmapped: 4}) {
 		t.Fatalf("source: %+v %v", source, err)
 	}
-	if want := []Group{{"News", 1}, {"Kids", 2}, {"", 1}}; !slices.Equal(source.Groups, want) {
-		t.Errorf("groups: %+v", source.Groups)
-	}
-	if err := e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{Groups: []string{"Kids"}}, false); err != nil {
+	excluded := []string{"g:News", "g:"}
+	if err := e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{Options: &OptionsPatch{Excluded: &excluded}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if channels, _ := e.service.Channels(t.Context(), addon.ID); !slices.Equal(names(channels), []string{"Orbe Junior", "Quill Toons"}) {
-		t.Errorf("channels of the groups chosen: %q", names(channels))
+		t.Errorf("channels of the groups kept: %q", names(channels))
 	}
-	// A channel of a group no longer shown keeps its stream: the library
-	// checks it still lists the channel.
-	if err := e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{AllGroups: true, Name: new("Renamed")}, false); err != nil {
+	if err := e.service.Update(t.Context(), addons.Shared(), addon.ID, Changes{Options: &OptionsPatch{Excluded: &[]string{}}, Name: new("Renamed")}, false); err != nil {
 		t.Fatal(err)
 	}
 	if channels, _ := e.service.Channels(t.Context(), addon.ID); len(channels) != 4 {

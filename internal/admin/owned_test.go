@@ -50,7 +50,7 @@ func TestDashboardShowsUsersOwnAddonsAndGuides(t *testing.T) {
 	if _, err := store.SetLibraries(t.Context(), scope, []addons.LibraryChoice{{AddonID: own.ID, CatalogType: "tv", CatalogID: "channels"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetGuide(t.Context(), scope, key, "https://guides.example/sam/secret.xml"); err != nil {
+	if _, err := store.SetGuide(t.Context(), scope, key, "https://guides.example/sam/secret.xml"); err != nil {
 		t.Fatal(err)
 	}
 	// Installing it read its manifest; a request made for Sam's apps is

@@ -91,6 +91,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib.UseIPTV(channels)
+	channels.OnChange(lib.LineupChanged)
 	// Remuxes run FFmpeg when tests are given one.
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {

@@ -32,8 +32,9 @@ const (
 	errorMalformed      = "malformed"
 )
 
-// Service stores the IPTV sources of the server and of each user, and
-// answers the library's catalog, meta and stream requests for them.
+// Service stores the IPTV sources of the server and of each user, their
+// line-ups, and answers the library's catalog, meta and stream requests for
+// them.
 type Service struct {
 	db       *pgxpool.Pool
 	addons   *addons.Store
@@ -42,54 +43,153 @@ type Service struct {
 	settings func() accounts.Settings
 	now      func() time.Time
 	flight   singleflight.Group
+	// changed is told when a source's line-up changed (see OnChange).
+	changed func(ctx context.Context, source accounts.ID)
 
 	mu sync.Mutex
-	// shown holds the channels each source shows, until its list or its
-	// groups change.
+	// shown holds the channels each source shows, until its line-up
+	// changes.
 	shown map[accounts.ID][]stremio.Meta
+	// lists holds the lists previews of new accounts downloaded, for
+	// listCache, so that previewing again or adding the source does not
+	// download the list again.
+	lists map[string]cachedList
+}
+
+// listCache is how long the list a preview downloaded is kept, at most
+// maxCachedLists of them.
+const (
+	listCache      = 5 * time.Minute
+	maxCachedLists = 4
+)
+
+type cachedList struct {
+	entries []Entry
+	at      time.Time
+}
+
+// fetchCached fetches an account's list, or takes the one a preview
+// downloaded within listCache; keep caches what it downloads.
+func (s *Service) fetchCached(ctx context.Context, account Account, confined, keep bool) ([]Entry, error) {
+	key := fmt.Sprint(account.Kind, "\x00", account.URL, "\x00", account.Server, "\x00", account.Username, "\x00", account.Password, "\x00", confined)
+	s.mu.Lock()
+	for k, list := range s.lists {
+		if s.now().Sub(list.at) > listCache {
+			delete(s.lists, k)
+		}
+	}
+	list, ok := s.lists[key]
+	s.mu.Unlock()
+	if ok {
+		return list.entries, nil
+	}
+	entries, err := fetch(ctx, s.client, account, confined)
+	if err != nil || !keep {
+		return entries, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.lists) >= maxCachedLists {
+		oldest := ""
+		for k, list := range s.lists {
+			if oldest == "" || list.at.Before(s.lists[oldest].at) {
+				oldest = k
+			}
+		}
+		delete(s.lists, oldest)
+	}
+	s.lists[key] = cachedList{entries: entries, at: s.now()}
+	return entries, nil
 }
 
 // New returns the IPTV service. settings gives LiveTvRefreshHours, read
 // whenever lists due are looked for.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, addons: store, client: client, logger: logger, settings: settings, now: time.Now,
-		shown: map[accounts.ID][]stremio.Meta{}}
+		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}}
 }
 
-// NewSource is an IPTV source to add: its name, its account, and the
-// XMLTV guide of its catalog, empty for none.
+// OnChange sets what is told, after the change, that a source's line-up
+// changed its channels: a refresh, new options. The library maps the
+// line-up's channels to its guides again. It is called before the service
+// is used.
+func (s *Service) OnChange(changed func(ctx context.Context, source accounts.ID)) {
+	s.changed = changed
+}
+
+// NewSource is an IPTV source to add: its name, its account, the XMLTV
+// guide of its catalog (empty for none), and its import options (nil for
+// the defaults).
 type NewSource struct {
 	Name    string
 	Account Account
 	Guide   string
+	Options *OptionsPatch
 }
 
-// Group is a group of a source's list, with how many channels it has.
-type Group struct {
-	Name     string
-	Channels int
+// OptionsPatch changes import options: nil fields keep their values.
+type OptionsPatch struct {
+	Categories  *string   `json:"categories"`
+	Channels    *string   `json:"channels"`
+	Excluded    *[]string `json:"excluded"`
+	NewChannels *bool     `json:"newChannels"`
+	Numbering   *string   `json:"numbering"`
 }
 
-// Source describes an IPTV source: its addon, its list's groups and the
-// groups shown (nil for all of them, those added later included), and how
-// its last fetch went: FetchedAt is the last success, CheckedAt the last
-// attempt, Error the code of the last failure; NextAt is when it is
-// fetched again.
+// apply returns options with patch applied, checked.
+func (o Options) apply(patch *OptionsPatch) (Options, error) {
+	if patch != nil {
+		set := func(field *string, value *string) {
+			if value != nil {
+				*field = *value
+			}
+		}
+		set(&o.Categories, patch.Categories)
+		set(&o.Channels, patch.Channels)
+		set(&o.Numbering, patch.Numbering)
+		if patch.Excluded != nil {
+			o.Excluded = *patch.Excluded
+		}
+		if patch.NewChannels != nil {
+			o.NewChannels = *patch.NewChannels
+		}
+	}
+	if o.Excluded == nil {
+		o.Excluded = []string{}
+	}
+	return o, o.check()
+}
+
+// LineupCounts count a source's line-up: its categories, those enabled;
+// its channels, those enabled, those apps show (enabled, in an enabled
+// category, with an enabled stream); and those mapped to a guide channel
+// or not.
+type LineupCounts struct {
+	Categories, EnabledCategories            int
+	Channels, EnabledChannels, ShownChannels int
+	Mapped, Unmapped                         int
+}
+
+// Source describes an IPTV source: its addon, how many entries its list
+// has, how its last fetch went (FetchedAt is the last success, CheckedAt
+// the last attempt, Error the code of the last failure; NextAt is when it
+// is fetched again), its import options and its line-up's counts.
 type Source struct {
 	Addon     addons.Addon
-	Groups    []Group
-	Included  []string
 	Channels  int
 	CheckedAt *time.Time
 	FetchedAt *time.Time
 	NextAt    *time.Time
 	Error     string
+	Options   Options
+	Lineup    LineupCounts
 }
 
 // Add fetches an account's channel list and adds it to the scope as an
-// IPTV source, its live TV catalog enabled, with its guide. confined keeps
-// the source on public addresses, for good: a source of a user's own
-// scope is confined unless the user is an administrator.
+// IPTV source, its live TV catalog enabled, with its guide and its line-up
+// made by its options. confined keeps the source on public addresses, for
+// good: a source of a user's own scope is confined unless the user is an
+// administrator.
 func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource, confined bool) (addons.Addon, error) {
 	name, err := validName(source.Name)
 	if err != nil {
@@ -103,7 +203,11 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	if guide != "" && !webAddress(guide) {
 		return addons.Addon{}, addons.ErrInvalidGuideURL
 	}
-	entries, err := fetch(ctx, s.client, accountOf(source.Account.Kind, address), confined)
+	options, err := DefaultOptions().apply(source.Options)
+	if err != nil {
+		return addons.Addon{}, err
+	}
+	entries, err := s.fetchCached(ctx, accountOf(source.Account.Kind, address), confined, false)
 	if err != nil {
 		return addons.Addon{}, err
 	}
@@ -111,13 +215,21 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id) VALUES ($1)", addon.ID); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO iptv_sources (addon_id, category_mode, channel_mode, excluded, new_channels, numbering)
+				VALUES ($1, $2, $3, $4, $5, $6)`, addon.ID, options.Categories, options.Channels, options.Excluded, options.NewChannels,
+				options.Numbering); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, "UPDATE libraries SET guide_url = $2 WHERE addon_id = $1", addon.ID, guide); err != nil {
+			if guide != "" {
+				if _, err := tx.Exec(ctx, `INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url)
+					SELECT addon_id, catalog_type, catalog_id, 1, $2 FROM libraries WHERE addon_id = $1`, addon.ID, guide); err != nil {
+					return err
+				}
+			}
+			if err := storeList(ctx, tx, addon.ID, entries, at); err != nil {
 				return err
 			}
-			return storeList(ctx, tx, addon.ID, entries, at)
+			return reconcile(ctx, tx, addon.ID, at)
 		})
 	if err != nil {
 		return addons.Addon{}, err
@@ -126,17 +238,17 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	return addon, nil
 }
 
-// Changes are what Update changes of a source: its name, its account, and
-// the groups shown: every group with AllGroups, else Groups when set.
+// Changes are what Update changes of a source: its name, its account and
+// its import options.
 type Changes struct {
-	Name      *string
-	Account   *Account
-	Groups    []string
-	AllGroups bool
+	Name    *string
+	Account *Account
+	Options *OptionsPatch
 }
 
 // Update changes a source of the scope. A new account is fetched first,
-// and kept only if its list could be read.
+// and kept only if its list could be read. New options, or a new list,
+// reconcile the line-up at once.
 func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID, changes Changes, confined bool) error {
 	current, err := s.source(ctx, scope, id)
 	if err != nil {
@@ -148,6 +260,10 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		if name, err = validName(*changes.Name); err != nil {
 			return err
 		}
+	}
+	options, err := current.Options.apply(changes.Options)
+	if err != nil {
+		return err
 	}
 	var entries []Entry
 	if changes.Account != nil {
@@ -166,26 +282,39 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	at := s.now()
 	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, manifest(id, addon.Kind, name), func(tx pgx.Tx) error {
-		if changes.AllGroups || changes.Groups != nil {
-			var included []string
-			if !changes.AllGroups {
-				included = changes.Groups
-			}
-			if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET included_groups = $2 WHERE addon_id = $1", id, included); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE iptv_sources SET category_mode = $2, channel_mode = $3, excluded = $4, new_channels = $5,
+			numbering = $6 WHERE addon_id = $1`, id, options.Categories, options.Channels, options.Excluded, options.NewChannels,
+			options.Numbering); err != nil {
+			return err
+		}
+		if changes.Account != nil {
+			if err := storeList(ctx, tx, id, entries, at); err != nil {
 				return err
 			}
 		}
-		if changes.Account != nil {
-			return storeList(ctx, tx, id, entries, at)
+		if changes.Account != nil || changes.Options != nil {
+			return reconcile(ctx, tx, id, at)
 		}
 		return nil
 	})
+	if err == nil && (changes.Account != nil || changes.Options != nil) {
+		s.lineupChanged(ctx, id)
+	}
 	s.forget(id)
 	return err
 }
 
-// Refresh fetches a source's list again now. How it went is stored with
-// the source; the error is only for an unknown source or the database.
+// lineupChanged forgets a source's shown channels and tells OnChange.
+func (s *Service) lineupChanged(ctx context.Context, source accounts.ID) {
+	s.forget(source)
+	if s.changed != nil {
+		s.changed(ctx, source)
+	}
+}
+
+// Refresh fetches a source's list again now and reconciles its line-up.
+// How it went is stored with the source; the error is only for an
+// unknown source or the database.
 func (s *Service) Refresh(ctx context.Context, scope addons.Scope, id accounts.ID, confined bool) error {
 	current, err := s.source(ctx, scope, id)
 	if err != nil {
@@ -235,8 +364,8 @@ func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 	return nil
 }
 
-// refresh fetches a source's list and stores it, once at a time for each
-// source; a failure keeps the channels of the last success.
+// refresh fetches a source's list, stores it and reconciles the line-up,
+// once at a time for each source; a failure keeps the last list.
 func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool) error {
 	_, err, _ := s.flight.Do(addon.ID.String(), func() (any, error) {
 		at := s.now()
@@ -261,28 +390,31 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 			_, err := s.db.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, error = $3 WHERE addon_id = $1", addon.ID, at, code)
 			return nil, err
 		}
-		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error { return storeList(ctx, tx, addon.ID, entries, at) })
-		s.forget(addon.ID)
+		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+			if err := storeList(ctx, tx, addon.ID, entries, at); err != nil {
+				return err
+			}
+			return reconcile(ctx, tx, addon.ID, at)
+		})
+		if err == nil {
+			s.lineupChanged(ctx, addon.ID)
+		}
 		return nil, err
 	})
 	return err
 }
 
-// storeList replaces a source's channels with a list fetched at at.
+// storeList replaces a source's stored list with a list fetched at at.
 func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Entry, at time.Time) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM iptv_channels WHERE addon_id = $1", source); err != nil {
+	if _, err := tx.Exec(ctx, "DELETE FROM iptv_entries WHERE addon_id = $1", source); err != nil {
 		return err
 	}
-	var groups []string
 	keys := map[string]bool{}
 	rows := make([][]any, 0, len(entries))
 	for _, e := range entries {
-		if !slices.Contains(groups, e.Group) {
-			groups = append(groups, e.Group)
-		}
-		key := channelKey(e)
+		key := entryKey(e)
 		for n := 2; keys[key]; n++ {
-			key = channelKey(e) + "-" + strconv.Itoa(n)
+			key = entryKey(e) + "-" + strconv.Itoa(n)
 		}
 		keys[key] = true
 		headers := e.Headers
@@ -295,23 +427,19 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 		}
 		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers})
 	}
-	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_channels"},
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_entries"},
 		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers"},
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
-	if groups == nil {
-		groups = []string{}
-	}
-	_, err := tx.Exec(ctx, "UPDATE iptv_sources SET groups = $2, checked_at = $3, fetched_at = $3, error = '' WHERE addon_id = $1",
-		source, groups, at)
+	_, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '' WHERE addon_id = $1", source, at)
 	return err
 }
 
-// channelKey identifies a channel within its source: by the provider's own
-// identifier, else by its name, group and guide identifier, which keep a
-// channel's identity when its address, holding credentials, changes.
-func channelKey(e Entry) string {
+// entryKey identifies an entry within its source: by the provider's own
+// identifier, else by its name, group and guide identifier, which keep an
+// entry's identity when its address, holding credentials, changes.
+func entryKey(e Entry) string {
 	if e.ID != "" {
 		return e.ID
 	}
@@ -319,10 +447,34 @@ func channelKey(e Entry) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// ensureLineup reconciles a source's line-up once, for a source added
+// before line-ups existed.
+func (s *Service) ensureLineup(ctx context.Context, source accounts.ID) error {
+	var pending bool
+	err := s.db.QueryRow(ctx, "SELECT lineup_at IS NULL FROM iptv_sources WHERE addon_id = $1", source).Scan(&pending)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return addons.ErrNotFound
+	}
+	if err != nil || !pending {
+		return err
+	}
+	_, err, _ = s.flight.Do("lineup "+source.String(), func() (any, error) {
+		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error { return reconcile(ctx, tx, source, s.now()) })
+	})
+	if err == nil {
+		s.lineupChanged(ctx, source)
+	}
+	return err
+}
+
 // Source describes one of the scope's IPTV sources.
 func (s *Service) Source(ctx context.Context, scope addons.Scope, id accounts.ID) (Source, error) {
 	return s.source(ctx, scope, id)
 }
+
+// shownSQL selects, joined as l with its category as c, the channels apps
+// show: enabled, in an enabled category, with an enabled stream.
+const shownSQL = `l.enabled AND c.enabled AND EXISTS (SELECT 1 FROM iptv_streams s WHERE s.addon_id = l.addon_id AND s.channel_id = l.id AND s.enabled)`
 
 func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID) (Source, error) {
 	list, err := s.addons.Addons(ctx, scope)
@@ -333,10 +485,15 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 	if index < 0 {
 		return Source{}, addons.ErrNotFound
 	}
+	if err := s.ensureLineup(ctx, id); err != nil {
+		return Source{}, err
+	}
 	source := Source{Addon: list[index]}
-	var order []string
-	err = s.db.QueryRow(ctx, "SELECT groups, included_groups, checked_at, fetched_at, error FROM iptv_sources WHERE addon_id = $1", id).
-		Scan(&order, &source.Included, &source.CheckedAt, &source.FetchedAt, &source.Error)
+	o := &source.Options
+	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, category_mode, channel_mode, excluded, new_channels, numbering,
+		(SELECT count(*) FROM iptv_entries WHERE addon_id = $1) FROM iptv_sources WHERE addon_id = $1`, id).
+		Scan(&source.CheckedAt, &source.FetchedAt, &source.Error, &o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering,
+			&source.Channels)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Source{}, addons.ErrNotFound
 	}
@@ -347,25 +504,17 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 		next := source.CheckedAt.Add(time.Duration(s.settings().LiveTvRefreshHours) * time.Hour)
 		source.NextAt = &next
 	}
-	counts := map[string]int{}
-	rows, err := s.db.Query(ctx, "SELECT group_title, count(*) FROM iptv_channels WHERE addon_id = $1 GROUP BY group_title", id)
-	if err != nil {
-		return Source{}, err
-	}
-	var group string
-	var count int
-	if _, err := pgx.ForEachRow(rows, []any{&group, &count}, func() error {
-		counts[group] = count
-		source.Channels += count
-		return nil
-	}); err != nil {
-		return Source{}, err
-	}
-	source.Groups = make([]Group, 0, len(order))
-	for _, name := range order {
-		source.Groups = append(source.Groups, Group{Name: name, Channels: counts[name]})
-	}
-	return source, nil
+	n := &source.Lineup
+	err = s.db.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM iptv_categories WHERE addon_id = $1),
+		(SELECT count(*) FROM iptv_categories WHERE addon_id = $1 AND enabled),
+		count(*), count(*) FILTER (WHERE l.enabled), count(*) FILTER (WHERE `+shownSQL+`),
+		count(*) FILTER (WHERE m.guide_id IS NOT NULL)
+		FROM iptv_lineup l JOIN iptv_categories c ON c.id = coalesce(l.moved_to, l.category_id)
+		LEFT JOIN live_guide_maps m ON m.addon_id = l.addon_id AND m.catalog_type = 'tv' AND m.catalog_id = $2 AND m.channel_id = l.item_id
+		WHERE l.addon_id = $1`, id, catalogID).Scan(&n.Categories, &n.EnabledCategories, &n.Channels, &n.EnabledChannels, &n.ShownChannels, &n.Mapped)
+	n.Unmapped = n.Channels - n.Mapped
+	return source, err
 }
 
 // forget drops what is remembered of a source's channels.
@@ -375,8 +524,31 @@ func (s *Service) forget(source accounts.ID) {
 	delete(s.shown, source)
 }
 
-// Channels lists the channels a source shows, those of its groups shown,
-// in its list's order, as its live TV catalog's entries.
+// channelColumns are what a channel's meta is made of, from l joined with
+// its source as i and its category as c.
+const channelColumns = `l.id, coalesce(l.name, l.provider_name), coalesce(l.logo, l.provider_logo), l.description,
+	coalesce(c.name, c.provider_name), coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END, 0), l.guide_id`
+
+const channelJoins = `FROM iptv_lineup l JOIN iptv_sources i ON i.addon_id = l.addon_id
+	JOIN iptv_categories c ON c.id = coalesce(l.moved_to, l.category_id)`
+
+func scanMeta(source accounts.ID, row pgx.Row) (stremio.Meta, error) {
+	var id, name, logo, description, category, guide string
+	var number int
+	if err := row.Scan(&id, &name, &logo, &description, &category, &number, &guide); err != nil {
+		return stremio.Meta{}, err
+	}
+	meta := stremio.Meta{ID: prefix(source) + id, Type: "tv", Name: name, Logo: logo, Description: description, ChannelNumber: number, GuideID: guide}
+	if category != "" {
+		meta.Genres = stremio.Names{category}
+	}
+	return meta, nil
+}
+
+// Channels lists the channels a source shows, in its line-up's order
+// (category, then channel), as its live TV catalog's entries: their
+// category is their genre, their number the fixed one, else the
+// provider's unless the source numbers by place.
 func (s *Service) Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error) {
 	s.mu.Lock()
 	metas, ok := s.shown[source]
@@ -384,21 +556,21 @@ func (s *Service) Channels(ctx context.Context, source accounts.ID) ([]stremio.M
 	if ok {
 		return metas, nil
 	}
+	if err := s.ensureLineup(ctx, source); err != nil {
+		return nil, err
+	}
 	result, err, _ := s.flight.Do("channels "+source.String(), func() (any, error) {
-		rows, err := s.db.Query(ctx, `SELECT c.key, c.name, coalesce(c.number, 0), c.logo, c.group_title, c.guide_id
-			FROM iptv_channels c JOIN iptv_sources i ON i.addon_id = c.addon_id
-			WHERE c.addon_id = $1 AND (i.included_groups IS NULL OR c.group_title = ANY(i.included_groups)) ORDER BY c.position`, source)
+		rows, err := s.db.Query(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND "+shownSQL+
+			" ORDER BY c.position, l.sort, l.id", source)
 		if err != nil {
 			return nil, err
 		}
-		metas := []stremio.Meta{}
-		var key, name, logo, group, guide string
-		var number int
-		if _, err := pgx.ForEachRow(rows, []any{&key, &name, &number, &logo, &group, &guide}, func() error {
-			metas = append(metas, channelMeta(source, key, name, number, logo, group, guide))
-			return nil
-		}); err != nil {
+		metas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) { return scanMeta(source, row) })
+		if err != nil {
 			return nil, err
+		}
+		if metas == nil {
+			metas = []stremio.Meta{}
 		}
 		s.mu.Lock()
 		s.shown[source] = metas
@@ -411,56 +583,82 @@ func (s *Service) Channels(ctx context.Context, source accounts.ID) ([]stremio.M
 	return result.([]stremio.Meta), nil
 }
 
-func channelMeta(source accounts.ID, key, name string, number int, logo, group, guide string) stremio.Meta {
-	meta := stremio.Meta{ID: prefix(source) + key, Type: "tv", Name: name, Logo: logo, ChannelNumber: number, GuideID: guide}
-	if group != "" {
-		meta.Genres = stremio.Names{group}
+// MappingChannels lists every channel of a source's line-up, shown or not,
+// in line-up order, for mapping them to guide channels.
+func (s *Service) MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error) {
+	if err := s.ensureLineup(ctx, source); err != nil {
+		return nil, err
 	}
-	return meta
+	rows, err := s.db.Query(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 ORDER BY c.position, l.sort, l.id", source)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) { return scanMeta(source, row) })
 }
 
-// channel returns a channel of a source by its Stremio identifier, if its
-// group is shown: the others play no more than they are listed.
-func (s *Service) channel(ctx context.Context, source accounts.ID, id string) (stremio.Meta, string, map[string]string, error) {
+// Logo finds the logo a line-up channel shows, by its item identifier,
+// shown or not, so that the admin app shows every channel's: the
+// administrator's, else the provider's. confined tells a source of a
+// user's own scope, kept on public addresses unless the user is an
+// administrator. A channel no line-up has is stremio.ErrNotFound.
+func (s *Service) Logo(ctx context.Context, item accounts.ID) (string, bool, error) {
+	var logo string
+	var confined bool
+	err := s.db.QueryRow(ctx, `SELECT coalesce(l.logo, l.provider_logo), a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false)
+		FROM iptv_lineup l JOIN addons a ON a.id = l.addon_id LEFT JOIN users u ON u.id = a.owner_id WHERE l.item_id = $1`, item).Scan(&logo, &confined)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, stremio.ErrNotFound
+	}
+	return logo, confined, err
+}
+
+// Meta describes a channel of a source by its Stremio identifier, while it
+// shows: the others play no more than they are listed.
+func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {
 	key, ok := strings.CutPrefix(id, prefix(source))
 	if !ok {
-		return stremio.Meta{}, "", nil, stremio.ErrNotFound
+		return stremio.Meta{}, stremio.ErrNotFound
 	}
-	var name, logo, group, guide, address string
-	var number int
-	var headers map[string]string
-	err := s.db.QueryRow(ctx, `SELECT c.name, coalesce(c.number, 0), c.logo, c.group_title, c.guide_id, c.url, c.headers
-		FROM iptv_channels c JOIN iptv_sources i ON i.addon_id = c.addon_id
-		WHERE c.addon_id = $1 AND c.key = $2 AND (i.included_groups IS NULL OR c.group_title = ANY(i.included_groups))`, source, key).
-		Scan(&name, &number, &logo, &group, &guide, &address, &headers)
+	meta, err := scanMeta(source, s.db.QueryRow(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND l.id = $2 AND "+shownSQL,
+		source, key))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return stremio.Meta{}, "", nil, stremio.ErrNotFound
+		return stremio.Meta{}, stremio.ErrNotFound
 	}
-	if err != nil {
-		return stremio.Meta{}, "", nil, err
-	}
-	return channelMeta(source, key, name, number, logo, group, guide), address, headers, nil
-}
-
-// Meta describes a channel of a source.
-func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {
-	meta, _, _, err := s.channel(ctx, source, id)
 	return meta, err
 }
 
-// Streams lists a channel's stream: its address, requested with the
-// headers its list gives.
+// streamOrder orders a channel's streams s: the administrator's order,
+// then the provider's (best quality first).
+const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
+
+// Streams lists the enabled streams of a channel that shows, best first:
+// its entries' addresses, requested with the headers their list gives, and
+// its custom streams. Each is labelled by its quality.
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
-	meta, address, headers, err := s.channel(ctx, source, id)
+	meta, err := s.Meta(ctx, source, id)
 	if errors.Is(err, stremio.ErrNotFound) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("IPTV channel: %w", err)
 	}
-	stream := stremio.Stream{Name: meta.Name, URL: address}
-	if len(headers) > 0 {
-		stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: headers}
+	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}') FROM iptv_streams s
+		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
+		WHERE s.addon_id = $1 AND s.channel_id = $2 AND s.enabled AND (s.custom_url IS NOT NULL OR e.url IS NOT NULL)
+		ORDER BY `+streamOrder, source, strings.TrimPrefix(id, prefix(source)))
+	if err != nil {
+		return nil, err
 	}
-	return []stremio.Stream{stream}, nil
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
+		var label, address string
+		var headers map[string]string
+		if err := row.Scan(&label, &address, &headers); err != nil {
+			return stremio.Stream{}, err
+		}
+		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address}
+		if len(headers) > 0 {
+			stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: headers}
+		}
+		return stream, nil
+	})
 }

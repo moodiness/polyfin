@@ -81,19 +81,22 @@ func TestIPTVSources(t *testing.T) {
 		t.Errorf("credentials shown: %s", encoded)
 	}
 	source, _ := body["source"].(map[string]any)
+	options, _ := source["options"].(map[string]any)
 	if body["kind"] != "m3u" || body["manifestUrl"] != provider+"/…" || source == nil || source["channels"] != 2.0 ||
-		source["includedGroups"] != nil || source["error"] != "" || source["nextAt"] == nil {
+		source["error"] != "" || source["nextAt"] == nil || options["categories"] != "original" || options["newChannels"] != true {
 		t.Errorf("source: %v", body)
 	}
 	id := body["id"].(string)
 
-	if status, body, _ := administrator.call(http.MethodPatch, "/scopes/shared/iptv/"+id, map[string]any{"groups": []string{"Kids"}}); status != http.StatusOK ||
-		fmt.Sprint(body["source"].(map[string]any)["includedGroups"]) != "[Kids]" {
+	// Groups from v0.8 are refused: categories replaced them.
+	if status, body, _ := administrator.call(http.MethodPatch, "/scopes/shared/iptv/"+id, map[string]any{"groups": []string{"Kids"}}); status != http.StatusBadRequest ||
+		body["error"] != "invalid_request" {
 		t.Errorf("choosing groups: %d %v", status, body)
 	}
-	if status, body, _ := administrator.call(http.MethodPatch, "/scopes/shared/iptv/"+id, map[string]any{"groups": nil}); status != http.StatusOK ||
-		body["source"].(map[string]any)["includedGroups"] != nil {
-		t.Errorf("every group again: %d %v", status, body)
+	if status, body, _ := administrator.call(http.MethodPatch, "/scopes/shared/iptv/"+id, map[string]any{"options": map[string]any{"excluded": []string{"g:News"}}}); status != http.StatusOK ||
+		fmt.Sprint(body["source"].(map[string]any)["lineup"].(map[string]any)["shownChannels"]) != "1" ||
+		fmt.Sprint(body["source"].(map[string]any)["options"].(map[string]any)["excluded"]) != "[g:News]" {
+		t.Errorf("excluding a group: %d %v", status, body)
 	}
 	if status, body, _ := administrator.call(http.MethodPost, "/scopes/shared/addons/"+id+"/refresh", nil); status != http.StatusOK ||
 		body["source"].(map[string]any)["channels"] != 2.0 {

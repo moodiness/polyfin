@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -78,6 +80,8 @@ type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
+	MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
+	Logo(ctx context.Context, item accounts.ID) (string, bool, error)
 }
 
 // UseIPTV sets what answers for IPTV sources; it is called before the
@@ -243,7 +247,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 				// A user without Live TV has no channels, so none of them,
 				// nor their programmes, can be reached.
 				if user.LiveTv {
-					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog, guide: l.Guide != nil && l.Guide.URL != ""})
+					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog, guide: len(l.Guides) > 0})
 				}
 			// The server's libraries the user does not see; their titles stay
 			// reachable through the addon.
@@ -1275,6 +1279,20 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 // without credentials, and artwork URLs carry no secret.
 func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
 	r, err := s.load(ctx, id)
+	// An IPTV channel shows its line-up's logo at once, listed or not: the
+	// admin app shows those of hidden channels too.
+	if s.iptv != nil && strings.EqualFold(imageType, "Primary") && (errors.Is(err, ErrNotFound) || err == nil && r.Kind == KindChannel &&
+		r.Meta != nil && strings.HasPrefix(r.Meta.ID, iptv.IDPrefix)) {
+		logo, confined, lineupErr := s.iptv.Logo(ctx, id)
+		switch {
+		case lineupErr == nil && logo == "":
+			return "", false, ErrNotFound
+		case lineupErr == nil:
+			return logo, confined, nil
+		case !errors.Is(lineupErr, stremio.ErrNotFound):
+			return "", false, lineupErr
+		}
+	}
 	if err != nil {
 		return "", false, err
 	}

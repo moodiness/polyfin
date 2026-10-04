@@ -24,11 +24,24 @@ func match(language string, channels []string, guide []guideChannel) []string {
 	}
 	titles := map[string]int{}
 	for _, g := range guide {
-		m.Declare(Channel{ID: g.id, Names: g.names})
+		m.Declare(0, Channel{ID: g.id, Names: g.names})
 		titles[g.id] = g.titles
 	}
-	return m.Choose(func(id string) int { return titles[id] })
+	return ids(m.Choose(func(match Match) int { return titles[match.ID] }))
 }
+
+// ids lists the guide channel identifiers matches give, "" for none.
+func ids(matches []*Match) []string {
+	result := make([]string, len(matches))
+	for i, match := range matches {
+		if match != nil {
+			result[i] = match.ID
+		}
+	}
+	return result
+}
+
+func one(Match) int { return 1 }
 
 func cutID(channel string) (string, string, bool) {
 	for i := range channel {
@@ -106,13 +119,12 @@ func TestStremioIDsMatchFirst(t *testing.T) {
 	guide := []guideChannel{{"ZebMax.fr", []string{"Zeb Max"}, 50}, {"zeb:max", []string{"Something Else"}, 2}}
 	expect(t, "declared", match("fr", []string{"zeb:max=Zeb Max", "x=Zeb Max", "y=ZEB MAX ᴿᵂ"}, guide), "zeb:max", "ZebMax.fr", "ZebMax.fr")
 
+	// A guide channel declared after a name candidate still wins.
 	m := NewMatcher("fr")
 	m.Add("zeb:max", "", "Zeb Max")
-	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
-	if !m.Wants("zeb:max") || m.Wants("ZebMax.fr") {
-		t.Error("an undeclared guide channel named by a Stremio ID does not replace the candidates")
-	}
-	expect(t, "undeclared", m.Choose(func(string) int { return 1 }), "zeb:max")
+	m.Declare(0, Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
+	m.Declare(1, Channel{ID: "zeb:max"})
+	expect(t, "later guide", ids(m.Choose(one)), "zeb:max")
 }
 
 // An IPTV channel's own guide identifier matches a guide channel exactly,
@@ -124,9 +136,9 @@ func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
 	m.Add("polyfin-iptv:2", "Orbe.zz", "Zeb Max ᴿᵂ")
 	m.Add("polyfin-iptv:3", "", "Zeb Max")
 	m.Add("polyfin-iptv:4", "Missing.zz", "Zeb Max")
-	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
-	m.Declare(Channel{ID: "Orbe.zz", Names: []string{"Orbe"}})
-	expect(t, "guide identifiers", m.Choose(func(id string) int { return map[string]int{"ZebMax.fr": 50, "Orbe.zz": 1}[id] }),
+	m.Declare(0, Channel{ID: "ZebMax.fr", Names: []string{"Zeb Max"}})
+	m.Declare(0, Channel{ID: "Orbe.zz", Names: []string{"Orbe"}})
+	expect(t, "guide identifiers", ids(m.Choose(func(match Match) int { return map[string]int{"ZebMax.fr": 50, "Orbe.zz": 1}[match.ID] })),
 		"Orbe.zz", "Orbe.zz", "ZebMax.fr", "ZebMax.fr")
 }
 
@@ -154,34 +166,36 @@ func TestGuideIdentifiersWithFeedsAndCase(t *testing.T) {
 		{ID: "Tac.zz"},
 		{ID: "Tac.zz@SD"},
 	} {
-		m.Declare(g)
+		m.Declare(0, g)
 	}
-	expect(t, "feeds and case", m.Choose(func(string) int { return 1 }),
+	expect(t, "feeds and case", ids(m.Choose(one)),
 		"Zeb.zz", "orbe.zz", "Quill.zz", "Lumo.zz", "Pif.zz@hd", "Tac.zz@SD")
-	// A programme before its channel is declared still finds the channel
-	// by the part before the "@".
-	late := NewMatcher("fr")
-	late.Add("polyfin-iptv:1", "Zeb.zz@HD", "Zeb One")
-	if !late.Wants("zeb.zz") || late.Wants("Other.zz") {
-		t.Error("an undeclared guide channel by its identifier without the feed")
-	}
-	expect(t, "undeclared", late.Choose(func(string) int { return 1 }), "zeb.zz")
 }
 
-// Only the programmes of the best-ranked candidates are kept while the
-// guide is read.
-func TestOnlyTheBestCandidatesAreWanted(t *testing.T) {
+// Across a catalog's guides, the identifier's kind, the country and the
+// name's tier rank candidates first; among equal ones, the first guide wins
+// over a later one with more titles, then the most titles within a guide.
+func TestGuidesRankByOrderAfterKindCountryAndTier(t *testing.T) {
 	m := NewMatcher("fr")
 	m.Add("a", "", "Zeb Max")
 	m.Add("b", "", "Orbe")
-	m.Declare(Channel{ID: "ZebMax.de", Names: []string{"Zeb Max"}})
-	m.Declare(Channel{ID: "ZebMax.fr", Names: []string{"FR| Zeb Max HD"}})
-	m.Declare(Channel{ID: "ZebMax.be", Names: []string{"Zeb Max"}})
-	m.Declare(Channel{ID: "Orbe.fr", Names: []string{"Orbe"}})
-	m.Declare(Channel{ID: "Other.fr", Names: []string{"Other"}})
-	for id, want := range map[string]bool{"ZebMax.de": false, "ZebMax.fr": true, "ZebMax.be": false, "Orbe.fr": true, "Other.fr": false} {
-		if got := m.Wants(id); got != want {
-			t.Errorf("wants %s: %v", id, got)
+	m.Add("c", "Lumo.zz", "Lumo")
+	m.Add("d", "", "Quill")
+	m.Declare(0, Channel{ID: "ZebMax.de", Names: []string{"Zeb Max"}})
+	m.Declare(0, Channel{ID: "Orbe.fr", Names: []string{"Orbe"}})
+	m.Declare(0, Channel{ID: "LumoName.fr", Names: []string{"Lumo"}})
+	m.Declare(0, Channel{ID: "Quill.fr", Names: []string{"Quill"}})
+	m.Declare(0, Channel{ID: "Quill2.fr", Names: []string{"Quill"}})
+	m.Declare(1, Channel{ID: "ZebMax.fr", Names: []string{"FR| Zeb Max HD"}})
+	m.Declare(1, Channel{ID: "Orbe.fr", Names: []string{"Orbe"}})
+	m.Declare(1, Channel{ID: "lumo.zz"})
+	m.Declare(1, Channel{ID: "Quill.fr", Names: []string{"Quill"}})
+	titles := map[Match]int{{0, "Orbe.fr"}: 1, {1, "Orbe.fr"}: 90, {0, "Quill.fr"}: 2, {0, "Quill2.fr"}: 40, {1, "Quill.fr"}: 99}
+	chosen := m.Choose(func(match Match) int { return titles[match] })
+	want := []Match{{1, "ZebMax.fr"}, {0, "Orbe.fr"}, {1, "lumo.zz"}, {0, "Quill2.fr"}}
+	for i, w := range want {
+		if chosen[i] == nil || *chosen[i] != w {
+			t.Errorf("channel %d takes %v, want %v", i, chosen[i], w)
 		}
 	}
 }

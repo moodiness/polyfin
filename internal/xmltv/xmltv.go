@@ -37,10 +37,12 @@ var (
 	ErrMalformed = errors.New("not an XMLTV guide")
 )
 
-// Channel is a channel of a guide, with the names it goes by.
+// Channel is a channel of a guide, with the names it goes by and its
+// icon's http or https address, if any.
 type Channel struct {
 	ID    string
 	Names []string
+	Icon  string
 }
 
 // Programme is a programme of a guide's channel. Season and Episode count
@@ -267,6 +269,9 @@ func primary(tag string) string {
 type channelElement struct {
 	ID    string `xml:"id,attr"`
 	Names []text `xml:"display-name"`
+	Icons []struct {
+		Src string `xml:"src,attr"`
+	} `xml:"icon"`
 }
 
 func (e channelElement) channel() (Channel, bool) {
@@ -274,6 +279,12 @@ func (e channelElement) channel() (Channel, bool) {
 	for _, name := range e.Names {
 		if value := strings.TrimSpace(name.Value); value != "" {
 			c.Names = append(c.Names, value)
+		}
+	}
+	for _, icon := range e.Icons {
+		if src := strings.TrimSpace(icon.Src); strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+			c.Icon = src
+			break
 		}
 	}
 	return c, c.ID != ""

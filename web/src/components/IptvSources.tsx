@@ -1,15 +1,22 @@
 import { useId, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import {
   addIptvSource,
+  defaultIptvOptions,
+  excludedKeysLimit,
+  previewNewSource,
   queryClient,
   queryKeys,
   updateIptvSource,
   type Addon,
+  type IptvAccount,
+  type IptvOptions,
   type IptvSource,
   type IptvSourcePatch,
   type Scope,
 } from '@/api'
+import { ExclusionPicker, OptionsFields } from '@/components/lineup/ImportOptions'
 import {
   buttonPrimary,
   buttonSecondary,
@@ -20,11 +27,10 @@ import {
 } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import { lineupPath } from '@/components/lineup/common'
+import { fieldClass } from '@/components/lineup/shared'
 
 type Kind = 'm3u' | 'xtream'
-
-const fieldClass =
-  'mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white placeholder:text-zinc-500'
 
 /** The account fields of a source: a playlist address, or an Xtream server and its login. */
 function AccountFields({
@@ -94,34 +100,46 @@ function AccountFields({
 
 const emptyAccount = { url: '', server: '', username: '', password: '' }
 
-/** Adds an IPTV source to a scope: an M3U playlist or an Xtream Codes account, with its guide. */
+/**
+ * Adds an IPTV source to a scope in two steps: the account (an M3U playlist or an Xtream Codes
+ * account, with its guide), then which categories to import and how, from a preview of its list.
+ */
 export function IptvAddForm({ scope }: { scope: Scope }) {
   const { t } = useI18n()
   const kindId = useId()
+  const [step, setStep] = useState<'account' | 'categories'>('account')
   const [name, setName] = useState('')
   const [kind, setKind] = useState<Kind>('m3u')
   const [account, setAccount] = useState(emptyAccount)
   const [guideUrl, setGuideUrl] = useState('')
   const [providerGuide, setProviderGuide] = useState(true)
+  const [options, setOptions] = useState<IptvOptions>(defaultIptvOptions)
+  // Each preview is tied to the account it was read from: a change reads it again.
+  const [previewOf, setPreviewOf] = useState(0)
+  const accountJSON: IptvAccount =
+    kind === 'm3u'
+      ? { kind, url: account.url.trim() }
+      : {
+          kind,
+          server: account.server.trim(),
+          username: account.username,
+          password: account.password,
+        }
   const mutation = useMutation({
     mutationFn: () =>
       addIptvSource(scope, {
         name: name.trim(),
-        kind,
-        ...(kind === 'm3u'
-          ? { url: account.url.trim() }
-          : {
-              server: account.server.trim(),
-              username: account.username,
-              password: account.password,
-            }),
+        ...accountJSON,
         providerGuide: kind === 'xtream' && providerGuide,
         guideUrl: kind === 'xtream' && providerGuide ? '' : guideUrl.trim(),
+        options,
       }),
     onSuccess: (added) => {
       setName('')
       setAccount(emptyAccount)
       setGuideUrl('')
+      setOptions(defaultIptvOptions)
+      setStep('account')
       queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (old) =>
         old === undefined ? old : [...old, added],
       )
@@ -129,98 +147,175 @@ export function IptvAddForm({ scope }: { scope: Scope }) {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.scope(scope) }),
   })
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  function next(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    mutation.mutate()
+    mutation.reset()
+    setStep('categories')
+  }
+
+  function changeAccount(change: () => void) {
+    mutation.reset()
+    change()
+    setPreviewOf((n) => n + 1)
+    setOptions((current) => ({ ...current, excluded: [] }))
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-4">
+    <div className="space-y-4">
       <p className="text-sm text-muted">{t.iptv.addHelp}</p>
-      <TextField
-        label={t.iptv.name}
-        value={name}
-        onValue={(value) => {
-          mutation.reset()
-          setName(value)
-        }}
-        maxLength={64}
-        autoComplete="off"
-        required
-      />
-      <div>
-        <label htmlFor={kindId} className="block text-sm font-medium text-zinc-200">
-          {t.iptv.kind}
-        </label>
-        <select
-          id={kindId}
-          value={kind}
-          onChange={(event) => {
-            mutation.reset()
-            setKind(event.target.value as Kind)
-          }}
-          className={fieldClass}
-        >
-          <option value="m3u">{t.iptv.kindM3u}</option>
-          <option value="xtream">{t.iptv.kindXtream}</option>
-        </select>
-      </div>
-      <AccountFields
-        kind={kind}
-        values={account}
-        onChange={(patch) => {
-          mutation.reset()
-          setAccount((current) => ({ ...current, ...patch }))
-        }}
-        editing={false}
-      />
-      {kind === 'xtream' && (
-        <Checkbox
-          label={t.iptv.providerGuide}
-          help={t.iptv.providerGuideHelp}
-          checked={providerGuide}
-          onChange={setProviderGuide}
-        />
+      <ol aria-label={t.lineup.add.steps} className="flex flex-wrap gap-2 text-xs">
+        {(['account', 'categories'] as const).map((name, index) => (
+          <li
+            key={name}
+            aria-current={step === name ? 'step' : undefined}
+            className={`rounded-md border px-2 py-1 font-medium ${
+              step === name ? 'border-fin-3 bg-fin-2/20 text-white' : 'border-line text-muted'
+            }`}
+          >
+            {index + 1}.{' '}
+            {name === 'account' ? t.lineup.add.stepAccount : t.lineup.add.stepCategories}
+          </li>
+        ))}
+      </ol>
+      {step === 'account' ? (
+        <form onSubmit={next} noValidate className="space-y-4">
+          <TextField
+            label={t.iptv.name}
+            value={name}
+            onValue={(value) => {
+              mutation.reset()
+              setName(value)
+            }}
+            maxLength={64}
+            autoComplete="off"
+            required
+          />
+          <div>
+            <label htmlFor={kindId} className="block text-sm font-medium text-zinc-200">
+              {t.iptv.kind}
+            </label>
+            <select
+              id={kindId}
+              value={kind}
+              onChange={(event) => changeAccount(() => setKind(event.target.value as Kind))}
+              className={fieldClass}
+            >
+              <option value="m3u">{t.iptv.kindM3u}</option>
+              <option value="xtream">{t.iptv.kindXtream}</option>
+            </select>
+          </div>
+          <AccountFields
+            kind={kind}
+            values={account}
+            onChange={(patch) =>
+              changeAccount(() => setAccount((current) => ({ ...current, ...patch })))
+            }
+            editing={false}
+          />
+          {kind === 'xtream' && (
+            <Checkbox
+              label={t.iptv.providerGuide}
+              help={t.iptv.providerGuideHelp}
+              checked={providerGuide}
+              onChange={setProviderGuide}
+            />
+          )}
+          {(kind === 'm3u' || !providerGuide) && (
+            <TextField
+              label={t.iptv.guideUrl}
+              hint={t.iptv.guideUrlHint}
+              type="url"
+              inputMode="url"
+              value={guideUrl}
+              onValue={(value) => {
+                mutation.reset()
+                setGuideUrl(value)
+              }}
+              placeholder="https://…/guide.xml.gz"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
+          {mutation.isSuccess && (
+            <Notice kind="success">
+              {t.iptv.added(mutation.data.name, mutation.data.source?.lineup.channels ?? 0)}
+            </Notice>
+          )}
+          <button
+            type="submit"
+            className={buttonPrimary}
+            disabled={
+              name.trim() === '' ||
+              (kind === 'm3u' ? account.url.trim() === '' : account.server.trim() === '')
+            }
+          >
+            {t.lineup.add.next}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-5">
+          <ExclusionPicker
+            queryKey={['iptv-preview', scope, previewOf]}
+            load={(by, signal) => previewNewSource(scope, accountJSON, by, signal)}
+            excluded={options.excluded}
+            onChange={(excluded) => setOptions((current) => ({ ...current, excluded }))}
+          />
+          <OptionsFields
+            value={options}
+            onChange={(patch) => setOptions((current) => ({ ...current, ...patch }))}
+          />
+          {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={buttonPrimary}
+              disabled={mutation.isPending || options.excluded.length > excludedKeysLimit}
+              onClick={() => mutation.mutate()}
+            >
+              {mutation.isPending ? t.lineup.add.importing : t.lineup.add.import}
+            </button>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={mutation.isPending}
+              onClick={() => setStep('account')}
+            >
+              {t.lineup.add.back}
+            </button>
+          </div>
+        </div>
       )}
-      {(kind === 'm3u' || !providerGuide) && (
-        <TextField
-          label={t.iptv.guideUrl}
-          hint={t.iptv.guideUrlHint}
-          type="url"
-          inputMode="url"
-          value={guideUrl}
-          onValue={(value) => {
-            mutation.reset()
-            setGuideUrl(value)
-          }}
-          placeholder="https://…/guide.xml.gz"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      )}
-      {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
-      {mutation.isSuccess && (
-        <Notice kind="success">
-          {t.iptv.added(mutation.data.name, mutation.data.source?.channels ?? 0)}
-        </Notice>
-      )}
-      <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>
-        {mutation.isPending ? t.iptv.adding : t.iptv.add}
-      </button>
-    </form>
+    </div>
   )
 }
 
-/** How a source's list was fetched, as rows of the addon's description list. */
-export function IptvSourceDetails({ source }: { source: IptvSource }) {
-  const { t } = useI18n()
+/** How a source's list was fetched and what its line-up shows, as rows of the addon's list. */
+export function IptvSourceDetails({
+  scope,
+  id,
+  source,
+}: {
+  scope: Scope
+  id: string
+  source: IptvSource
+}) {
+  const { language, t } = useI18n()
+  const number = (n: number) => n.toLocaleString(language)
   return (
     <>
       <dt className="text-muted">{t.iptv.channels}</dt>
       <dd className="text-zinc-200">
-        {t.iptv.channelCount(source.channels)}
-        {source.includedGroups !== null &&
-          ` · ${t.iptv.groupsShown(source.includedGroups.length, source.groups.length)}`}
+        {t.lineup.summary.shownOf(
+          number(source.lineup.shownChannels),
+          number(source.lineup.channels),
+        )}
+        {' · '}
+        <Link
+          to={lineupPath(scope, id)}
+          className="font-medium text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5"
+        >
+          {t.lineup.open}
+        </Link>
       </dd>
       <dt className="text-muted">{t.iptv.lastFetch}</dt>
       <dd className="text-zinc-200">
@@ -247,7 +342,7 @@ export function IptvSourceDetails({ source }: { source: IptvSource }) {
   )
 }
 
-/** Changes a source: its name, its account, and the groups whose channels it shows. */
+/** Changes a source's name and account; its categories and channels are on its line-up page. */
 export function IptvSourceEditor({
   scope,
   addon,
@@ -262,16 +357,9 @@ export function IptvSourceEditor({
   onCancel: () => void
 }) {
   const { t } = useI18n()
-  const source = addon.source as IptvSource
   const kind = addon.kind as Kind
   const [name, setName] = useState(addon.name)
   const [account, setAccount] = useState(emptyAccount)
-  const [all, setAll] = useState(source.includedGroups === null)
-  const [chosen, setChosen] = useState(
-    () => new Set(source.includedGroups ?? source.groups.map((group) => group.name)),
-  )
-  const [filter, setFilter] = useState('')
-  const filterId = useId()
   const mutation = useMutation({
     mutationFn: (patch: IptvSourcePatch) => updateIptvSource(scope, addon.id, patch),
     onSuccess: onSaved,
@@ -280,12 +368,7 @@ export function IptvSourceEditor({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const patch: IptvSourcePatch = {
-      name: name.trim(),
-      groups: all
-        ? null
-        : source.groups.map((group) => group.name).filter((group) => chosen.has(group)),
-    }
+    const patch: IptvSourcePatch = { name: name.trim() }
     if (kind === 'm3u' && account.url.trim() !== '') patch.url = account.url.trim()
     if (
       kind === 'xtream' &&
@@ -299,11 +382,6 @@ export function IptvSourceEditor({
     }
     mutation.mutate(patch)
   }
-
-  const needle = filter.trim().toLocaleLowerCase()
-  const shown = source.groups.filter(
-    (group) => needle === '' || group.name.toLocaleLowerCase().includes(needle),
-  )
 
   return (
     <form
@@ -326,80 +404,15 @@ export function IptvSourceEditor({
         onChange={(patch) => setAccount((current) => ({ ...current, ...patch }))}
         editing
       />
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-medium text-zinc-200">{t.iptv.groups}</legend>
-        <Checkbox
-          label={t.iptv.allGroups}
-          help={t.iptv.allGroupsHelp}
-          checked={all}
-          onChange={setAll}
-        />
-        {!all && (
-          <>
-            <div>
-              <label htmlFor={filterId} className="block text-xs font-medium text-zinc-300">
-                {t.iptv.filterGroups}
-              </label>
-              <input
-                id={filterId}
-                type="search"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                autoComplete="off"
-                className={fieldClass}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={buttonSecondary}
-                onClick={() =>
-                  setChosen((current) => new Set([...current, ...shown.map((group) => group.name)]))
-                }
-              >
-                {t.iptv.checkShown}
-              </button>
-              <button
-                type="button"
-                className={buttonSecondary}
-                onClick={() =>
-                  setChosen((current) => {
-                    const next = new Set(current)
-                    for (const group of shown) next.delete(group.name)
-                    return next
-                  })
-                }
-              >
-                {t.iptv.uncheckShown}
-              </button>
-            </div>
-            <p className="text-xs text-muted">
-              {t.iptv.groupsShown(
-                source.groups.filter((group) => chosen.has(group.name)).length,
-                source.groups.length,
-              )}
-            </p>
-            <ul className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-line p-2">
-              {shown.map((group) => (
-                <li key={group.name}>
-                  <Checkbox
-                    label={`${group.name === '' ? t.iptv.noGroup : group.name} (${group.channels})`}
-                    checked={chosen.has(group.name)}
-                    onChange={(checked) =>
-                      setChosen((current) => {
-                        const next = new Set(current)
-                        if (checked) next.add(group.name)
-                        else next.delete(group.name)
-                        return next
-                      })
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </fieldset>
+      <p className="text-xs text-muted">
+        {t.lineup.editorHint}{' '}
+        <Link
+          to={lineupPath(scope, addon.id)}
+          className="text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5"
+        >
+          {t.lineup.open}
+        </Link>
+      </p>
       {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
       <div className="flex flex-wrap gap-2">
         <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>

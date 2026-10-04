@@ -86,19 +86,30 @@ func (e env) tvCatalog(scope addons.Scope, channels ...stremio.Meta) addons.Libr
 	return addons.LibraryKey{AddonID: list[len(list)-1].ID, CatalogType: "tv", CatalogID: "channels"}
 }
 
-func (e env) guideOf(scope addons.Scope, key addons.LibraryKey) addons.Guide {
+// guideStatus is a catalog's first guide, zero without one, and how many
+// of the catalog's channels are mapped.
+type guideStatus struct {
+	addons.Guide
+	Matched int
+}
+
+func (e env) guideOf(scope addons.Scope, key addons.LibraryKey) guideStatus {
 	e.t.Helper()
 	libraries, err := e.addons.Libraries(e.t.Context(), scope)
 	if err != nil {
 		e.t.Fatal(err)
 	}
 	for _, l := range libraries {
-		if l.AddonID == key.AddonID && l.Catalog.ID == key.CatalogID && l.Guide != nil {
-			return *l.Guide
+		if l.AddonID == key.AddonID && l.Catalog.ID == key.CatalogID && l.Guides != nil {
+			status := guideStatus{Matched: l.GuideMapped}
+			if len(l.Guides) > 0 {
+				status.Guide = l.Guides[0]
+			}
+			return status
 		}
 	}
-	e.t.Fatalf("no guide for %v", key)
-	return addons.Guide{}
+	e.t.Fatalf("no live TV catalog %v", key)
+	return guideStatus{}
 }
 
 func programTitles(programs []Item) []string {
@@ -130,18 +141,19 @@ func TestXMLTVGuideFeedsTheCatalogsChannels(t *testing.T) {
 		programme("une", now.Add(-50*time.Hour), now.Add(-49*time.Hour), "Too old")+
 		programme("une", now.Add(9*24*time.Hour), now.Add(9*24*time.Hour+time.Hour), "Too far")+
 		programme("deux-by-name", now.Add(-time.Hour), now.Add(time.Hour), "By name")+
-		// Declared nowhere, but the channel's Stremio ID: it wins.
+		// Declared nowhere, but the channel's Stremio ID: it wins, and
+		// counts as a channel of the guide.
 		programme("two.fr", now.Add(-time.Hour), now.Add(time.Hour), "By id")+
 		programme("other", now.Add(-time.Hour), now.Add(time.Hour), "Unmatched")+
 		`</tv>`)
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.service.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
 		t.Fatal(err)
 	}
 	status := e.guideOf(addons.Shared(), key)
-	if status.Error != "" || status.FetchedAt == nil || !status.FetchedAt.Equal(now) || status.Channels != 3 || status.Matched != 2 {
+	if status.Error != "" || status.FetchedAt == nil || !status.FetchedAt.Equal(now) || status.Channels != 4 || status.Matched != 2 {
 		t.Fatalf("guide status: %+v", status)
 	}
 
@@ -184,7 +196,7 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
 	first := `<tv><channel id="1"><display-name>One</display-name></channel>` + programme("1", now.Add(-time.Hour), now.Add(time.Hour), "First") + `</tv>`
 	guide := newGuideServer(t, first)
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
 		t.Fatal(err)
 	}
 	airing := func() []string {
@@ -258,7 +270,7 @@ func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 	e.setting(func(s *accounts.Settings) { s.LiveTvRefreshHours = 2 })
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
 	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel></tv>`)
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
 		t.Fatal(err)
 	}
 	for _, step := range []struct {
@@ -300,7 +312,7 @@ func TestXMLTVGuidesInZIPArchives(t *testing.T) {
 	body.Store(new(archive.Bytes()))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(*body.Load()) }))
 	t.Cleanup(server.Close)
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, server.URL+"/epg"); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, server.URL+"/epg"); err != nil {
 		t.Fatal(err)
 	}
 	empty := func(when string) {
@@ -337,7 +349,7 @@ func TestGuidesFollowTheirCatalog(t *testing.T) {
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
 	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel>`+
 		programme("1", now.Add(-time.Hour), now.Add(time.Hour), "News")+`</tv>`)
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.service.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
@@ -353,20 +365,20 @@ func TestGuidesFollowTheirCatalog(t *testing.T) {
 		t.Errorf("programmes after saving the libraries: %q", programTitles(programs))
 	}
 	for _, bad := range []string{"ftp://guide.example/a.xml", "guide.xml", "https://", "https://x/" + strings.Repeat("a", 4096)} {
-		if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, bad); err != addons.ErrInvalidGuideURL {
+		if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, bad); err != addons.ErrInvalidGuideURL {
 			t.Errorf("%.30q: %v", bad, err)
 		}
 	}
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), addons.LibraryKey{AddonID: key.AddonID, CatalogType: "movie", CatalogID: "channels"}, guide.url); err != addons.ErrInvalidLibrary {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), addons.LibraryKey{AddonID: key.AddonID, CatalogType: "movie", CatalogID: "channels"}, guide.url); err != addons.ErrInvalidLibrary {
 		t.Errorf("a guide for another catalog: %v", err)
 	}
-	if err := e.addons.SetGuide(t.Context(), addons.Shared(), key, ""); err != nil {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, ""); err != nil {
 		t.Fatal(err)
 	}
 	if programs, _ := e.service.Programs(t.Context(), e.member, now, now.Add(time.Second)); len(programs) != 0 {
 		t.Errorf("programmes of a removed guide: %q", programTitles(programs))
 	}
-	if status := e.guideOf(addons.Shared(), key); status != (addons.Guide{}) {
+	if status := e.guideOf(addons.Shared(), key); status != (guideStatus{}) {
 		t.Errorf("status of a removed guide: %+v", status)
 	}
 }
@@ -386,7 +398,7 @@ func TestUsersGuidesStayOnPublicAddresses(t *testing.T) {
 		// already.
 		e.service.pages.Put(pageKey{addon: key.AddonID, catalogType: "tv", catalogID: "channels"}, channels)
 		guide := newGuideServer(t, body)
-		if err := e.addons.SetGuide(t.Context(), scope, key, guide.url); err != nil {
+		if _, err := e.addons.SetGuide(t.Context(), scope, key, guide.url); err != nil {
 			t.Fatal(err)
 		}
 		if err := e.service.RefreshGuide(t.Context(), scope, key); err != nil {
@@ -402,7 +414,7 @@ func TestUsersGuidesStayOnPublicAddresses(t *testing.T) {
 	}
 	// One's own catalog is not another scope's.
 	key := e.tvCatalog(addons.Personal(e.admin.ID), stremio.Meta{ID: "tv:x", Type: "tv", Name: "X"})
-	if err := e.addons.SetGuide(t.Context(), addons.Personal(e.member.ID), key, "https://guide.example/x.xml"); err != addons.ErrInvalidLibrary {
+	if _, err := e.addons.SetGuide(t.Context(), addons.Personal(e.member.ID), key, "https://guide.example/x.xml"); err != addons.ErrInvalidLibrary {
 		t.Errorf("a guide set on another user's catalog: %v", err)
 	}
 }

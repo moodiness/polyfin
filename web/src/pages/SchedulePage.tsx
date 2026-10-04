@@ -257,16 +257,16 @@ function Refreshes() {
         last: addon.source?.fetchedAt ?? null,
         next: addon.source?.nextAt ?? null,
       })),
-    ...(sources.data?.guides ?? [])
-      .filter((library) => library.guide !== null && library.guide.url !== '')
-      .map((library) => ({
-        key: `guide-${library.addonId}-${library.catalogType}-${library.catalogId}`,
+    ...(sources.data?.guides ?? []).flatMap((library) =>
+      (library.guides ?? []).map((guide) => ({
+        key: `guide-${library.addonId}-${library.catalogType}-${library.catalogId}-${guide.position}`,
         name: library.name ?? library.catalogName,
         owner: library.owner,
-        kind: text.guide,
-        last: library.guide?.fetchedAt ?? null,
-        next: library.guide?.nextAt ?? null,
+        kind: `${text.guide} ${guide.position}`,
+        last: guide.fetchedAt,
+        next: guide.nextAt,
       })),
+    ),
   ]
     // The server's first, then each user's, in the order the server lists them; by next fetch within.
     .map((row, index) => ({ row, index }))
