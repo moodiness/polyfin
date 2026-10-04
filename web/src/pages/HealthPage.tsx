@@ -12,6 +12,7 @@ import {
 import { icons } from '@/components/icons'
 import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/components/panels'
 import { MusicBadge } from '@/components/AddonSettings'
+import { lineupPath } from '@/components/lineup/common'
 import OwnerChip from '@/components/OwnerChip'
 import { findProblems, lowOnSpace, useHealthData } from '@/components/problems'
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
@@ -213,7 +214,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Iptv({ sources: all }: { sources: Sources | undefined }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.dashboard.health
   const sources = (all?.addons ?? []).filter((addon) => addon.source !== null)
   return (
@@ -242,7 +243,28 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
                   )}
                 </div>
                 <p className="text-xs text-muted">
-                  {t.iptv.channelCount(source.channels)} · {t.iptv.lastFetch}:{' '}
+                  {t.lineup.summary.shownOf(
+                    source.lineup.shownChannels.toLocaleString(language),
+                    source.lineup.channels.toLocaleString(language),
+                  )}
+                  {' · '}
+                  {t.lineup.summary.mappedOf(
+                    source.lineup.mapped.toLocaleString(language),
+                    source.lineup.channels.toLocaleString(language),
+                  )}
+                  {addon.owner === null && (
+                    <>
+                      {' · '}
+                      <Link
+                        to={lineupPath('shared', addon.id)}
+                        className="text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5"
+                      >
+                        {t.lineup.open}
+                      </Link>
+                    </>
+                  )}
+                  {' · '}
+                  {t.iptv.lastFetch}:{' '}
                   {source.fetchedAt ? <RelativeTime iso={source.fetchedAt} /> : t.iptv.never}
                   {source.nextAt && (
                     <>
@@ -266,19 +288,23 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
 }
 
 function Guides({ sources }: { sources: Sources | undefined }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.dashboard.health
-  const guides = (sources?.guides ?? []).filter(
-    (library) => library.guide !== null && library.guide.url !== '',
-  )
+  const catalogs = (sources?.guides ?? []).filter((library) => (library.guides ?? []).length > 0)
   return (
     <Panel id="guides" title={text.guidesTitle}>
-      {guides.length === 0 ? (
+      {catalogs.length === 0 ? (
         <Empty>{t.libraries.guideNone}</Empty>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
-          {guides.map((library) => {
-            const guide = library.guide!
+          {catalogs.map((library) => {
+            const guides = library.guides ?? []
+            const failing = guides.filter((guide) => guide.error !== '')
+            const fetched = guides
+              .map((guide) => guide.fetchedAt)
+              .filter((at) => at !== null)
+              .sort()
+              .at(-1)
             return (
               <li
                 key={`${library.addonId}-${library.catalogType}-${library.catalogId}`}
@@ -289,30 +315,34 @@ function Guides({ sources }: { sources: Sources | undefined }) {
                     {library.name ?? library.catalogName}
                     <OwnerChip owner={library.owner} />
                   </p>
-                  {guide.error !== '' ? (
+                  {failing.length > 0 ? (
                     <StatusText tone="warning">{text.addonStatus.failing}</StatusText>
-                  ) : guide.fetchedAt ? (
+                  ) : fetched ? (
                     <StatusText tone="ok">{text.ok}</StatusText>
                   ) : (
                     <StatusText tone="muted">{t.dashboard.schedule.notYet}</StatusText>
                   )}
                 </div>
                 <p className="text-xs text-muted">
-                  {library.addonName} · {t.libraries.guideFetched}:{' '}
-                  {guide.fetchedAt ? (
-                    <RelativeTime iso={guide.fetchedAt} />
-                  ) : (
-                    t.libraries.guideNever
-                  )}
-                  {guide.channels > 0 && (
-                    <> · {text.channelsMatched(guide.matched, guide.channels)}</>
+                  {library.addonName} · {t.lineup.library.guides(guides.length)} ·{' '}
+                  {t.libraries.guideFetched}:{' '}
+                  {fetched ? <RelativeTime iso={fetched} /> : t.libraries.guideNever}
+                  {library.guide !== null && library.guide.channels > 0 && (
+                    <>
+                      {' · '}
+                      {t.lineup.library.mapped(
+                        library.guide.matched.toLocaleString(language),
+                        library.guide.channels.toLocaleString(language),
+                      )}
+                    </>
                   )}
                 </p>
-                {guide.error !== '' && (
-                  <p className="text-xs text-amber-200">
+                {failing.map((guide) => (
+                  <p key={guide.id || guide.url} className="text-xs text-amber-200">
+                    {t.lineup.picker.guideN(guide.position)}:{' '}
                     {t.libraries.guideErrors[guide.error] ?? guide.error}
                   </p>
-                )}
+                ))}
               </li>
             )
           })}

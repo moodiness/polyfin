@@ -10,9 +10,11 @@ import { useI18n } from '@/i18n'
 import AccountPage from '@/pages/AccountPage'
 import AddonsPage from '@/pages/AddonsPage'
 import ApiKeysPage from '@/pages/ApiKeysPage'
+import CatalogGuidesPage from '@/pages/CatalogGuidesPage'
 import HealthPage from '@/pages/HealthPage'
 import LibrariesPage from '@/pages/LibrariesPage'
 import LoginPage from '@/pages/LoginPage'
+import LineupPage from '@/pages/LineupPage'
 import LogsPage from '@/pages/LogsPage'
 import MyAddonsPage from '@/pages/MyAddonsPage'
 import OverviewPage from '@/pages/OverviewPage'
@@ -130,6 +132,9 @@ export const router = createBrowserRouter(
         { path: 'quick-connect', element: <QuickConnectPage /> },
         { path: 'account', element: <AccountPage /> },
         { path: 'my-addons', element: <MyAddonsPage /> },
+        // A source or catalog of the server's addons, or of the user's own: the API checks which.
+        { path: 'sources/:scope/:id/:section?', element: <LineupPage /> },
+        { path: 'guides/:scope/:addonId/:catalogId/:section?', element: <CatalogGuidesPage /> },
         {
           element: <AdminOnly />,
           children: [

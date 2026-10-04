@@ -304,19 +304,195 @@ export type AddonMusic = {
   values: Record<string, string>
 }
 
-/** An IPTV source's channel list and how it was last fetched. */
+/** An IPTV source's channel list, how it was last fetched, and its line-up. */
 export type IptvSource = {
   /** Redacted: the credentials it holds are never returned. */
   address: string
+  /** Entries of the provider's list, before exclusions and merging. */
   channels: number
-  groups: { name: string; channels: number }[]
-  /** Groups shown; null shows them all, those added later included. */
-  includedGroups: string[] | null
+  options: IptvOptions
+  lineup: LineupCounts
   checkedAt: string | null
   fetchedAt: string | null
   nextAt: string | null
   /** Code of the last failure; empty after a success. */
   error: string
+}
+
+/** How a source's list becomes its line-up. */
+export type IptvOptions = {
+  /** Provider groups, or one category per country. */
+  categories: 'original' | 'country'
+  /** One channel per entry, or quality variants of the same name merged into one channel. */
+  channels: 'original' | 'merged'
+  /** Preview keys (`g:<group>`, `c:<country>`) whose entries are not imported. */
+  excluded: string[]
+  /** Whether channels appearing on a refresh arrive enabled. */
+  newChannels: boolean
+  /** A channel without a fixed number takes the provider's number, or its place. */
+  numbering: 'provider' | 'sequential'
+}
+
+export const defaultIptvOptions: IptvOptions = {
+  categories: 'original',
+  channels: 'original',
+  excluded: [],
+  newChannels: true,
+  numbering: 'provider',
+}
+
+/** The limits the server accepts for IptvOptions.excluded. */
+export const excludedKeysLimit = 5000
+
+export type LineupCounts = {
+  categories: number
+  enabledCategories: number
+  channels: number
+  enabledChannels: number
+  /** Enabled, in an enabled category, with an enabled stream: what Jellyfin apps list. */
+  shownChannels: number
+  mapped: number
+  unmapped: number
+}
+
+/** A category of a source's list, before import: a group or a country. */
+export type PreviewCategory = { key: string; name: string; channels: number; excluded: boolean }
+
+export type Preview = { total: number; categories: PreviewCategory[] }
+
+/** The account a new source is previewed from. */
+export type IptvAccount = {
+  kind: 'm3u' | 'xtream'
+  url?: string
+  server?: string
+  username?: string
+  password?: string
+}
+
+/** A paged answer: `total` counts every row matching the filters. */
+export type Page<T> = { total: number; offset: number; limit: number; items: T[] }
+
+/** The most rows one page of the API returns. */
+export const pageLimit = 500
+
+export type LineupCategory = {
+  id: string
+  /** `g:`, `c:` or, for a custom category, `u:<id>`. */
+  key: string
+  /** The shown name: the admin's or the provider's. */
+  name: string
+  /** Empty for a custom category. */
+  providerName: string
+  custom: boolean
+  enabled: boolean
+  position: number
+  channels: number
+  enabledChannels: number
+}
+
+export type ChannelStream = {
+  id: string
+  label: string
+  enabled: boolean
+  custom: boolean
+  /** Redacted address of a custom stream; null for the provider's. */
+  address: string | null
+}
+
+/** The guide channel a channel takes; manual with null ids pins "no guide". */
+export type GuideMapping = {
+  guideId: string | null
+  guideChannelId: string | null
+  guideChannelName: string | null
+  manual: boolean
+}
+
+export type LineupChannel = {
+  /** The channel's Jellyfin item id; it never changes. */
+  id: string
+  name: string
+  providerName: string
+  renamed: boolean
+  logo: string | null
+  providerLogo: string | null
+  description: string
+  category: { id: string; name: string }
+  providerCategoryId: string
+  moved: boolean
+  enabled: boolean
+  shown: boolean
+  number: number | null
+  providerNumber: number | null
+  fixedNumber: number | null
+  /** The provider's tvg-id, empty without. */
+  guideId: string
+  mapping: GuideMapping | null
+  streams: ChannelStream[]
+}
+
+export type ChannelFilters = {
+  category?: string
+  enabled?: boolean
+  shown?: boolean
+  mapped?: boolean
+  q?: string
+}
+
+export type ChannelPatch = Partial<{
+  enabled: boolean
+  name: string | null
+  logo: string | null
+  description: string
+  category: string | null
+  number: number | null
+}>
+
+/** Which channels a bulk change reaches: exactly one selector. */
+export type BulkSelector =
+  { ids: string[] } | { category: string } | { q: string; inCategory?: string }
+
+/** A Live TV catalog: an IPTV source's is `{addonId, catalogType: 'tv', catalogId: 'channels'}`. */
+export type CatalogTarget = { addonId: string; catalogType: string; catalogId: string }
+
+export type CatalogGuide = {
+  id: string
+  position: number
+  /** Redacted address. */
+  url: string
+  checkedAt: string | null
+  fetchedAt: string | null
+  nextAt: string | null
+  channels: number
+  programmes: number
+  error: string
+}
+
+export type CatalogGuides = {
+  guides: CatalogGuide[]
+  channels: number
+  mapped: number
+  manual: number
+}
+
+/** A channel of one of a catalog's guides. */
+export type GuideChannel = {
+  guideId: string
+  guidePosition: number
+  id: string
+  name: string
+  names: string[]
+  icon: string | null
+  now: { title: string; start: string; end: string } | null
+}
+
+export type MappingState = 'all' | 'mapped' | 'unmapped' | 'manual'
+
+export type MappingItem = {
+  channelId: string
+  name: string
+  number: number | null
+  guideId: string
+  mapping: GuideMapping | null
 }
 
 /** An IPTV source to add. */
@@ -330,6 +506,7 @@ export type NewIptvSource = {
   guideUrl?: string
   /** Xtream only: use the guide the server publishes for the account. */
   providerGuide?: boolean
+  options?: Partial<IptvOptions>
 }
 
 /** What changes of an IPTV source; a password left empty keeps the current one. */
@@ -339,7 +516,7 @@ export type IptvSourcePatch = Partial<{
   server: string
   username: string
   password: string
-  groups: string[] | null
+  options: Partial<IptvOptions>
 }>
 
 export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string }>
@@ -356,8 +533,10 @@ export type Library = {
   appName: string | null
   enabled: boolean
   browsable: boolean
-  /** XMLTV guide of an enabled TV catalog; null for any other library. */
+  /** First XMLTV guide of an enabled TV catalog; null for any other library. */
   guide: Guide | null
+  /** Every guide of an enabled TV catalog, in order; null for any other library. */
+  guides: CatalogGuide[] | null
 }
 
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
@@ -375,9 +554,6 @@ export type Guide = {
   /** When the guide is fetched again; null without a guide or before its first fetch. */
   nextAt: string | null
 }
-
-/** Which TV catalog a guide request is for. */
-export type GuideTarget = Pick<Library, 'addonId' | 'catalogType' | 'catalogId'>
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
@@ -592,13 +768,229 @@ export const fetchLibraries = (scope: Scope, signal?: AbortSignal) =>
 export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
   request<Library[]>('PUT', `${scopePath(scope)}/libraries`, { libraries })
 
-/** Sets the XMLTV guide address of a TV catalog (empty removes it) and fetches it at once. */
-export const saveGuide = (scope: Scope, target: GuideTarget, url: string) =>
-  request<Library[]>('PUT', `${scopePath(scope)}/guides`, { ...target, url })
+/** Query parameters, without those left undefined. */
+function params(values: Record<string, string | number | boolean | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== '') search.set(key, String(value))
+  }
+  return search.toString()
+}
 
-/** Fetches the XMLTV guide of a TV catalog now. */
-export const refreshGuide = (scope: Scope, target: GuideTarget) =>
-  request<Library[]>('POST', `${scopePath(scope)}/guides/refresh`, target)
+const sourcePath = (scope: Scope, id: string) => `${scopePath(scope)}/iptv/${seg(id)}`
+
+/** Downloads a new account's list and counts its categories; nothing is stored. */
+export const previewNewSource = (
+  scope: Scope,
+  account: IptvAccount,
+  by: 'group' | 'country',
+  signal?: AbortSignal,
+) => request<Preview>('POST', `${scopePath(scope)}/iptv/preview`, { ...account, by, q: '' }, signal)
+
+/** Counts a source's categories from its stored list; `excluded` follows its options. */
+export const previewSource = (
+  scope: Scope,
+  id: string,
+  by: 'group' | 'country',
+  signal?: AbortSignal,
+) =>
+  request<Preview>('GET', `${sourcePath(scope, id)}/preview?${params({ by })}`, undefined, signal)
+
+export const fetchLineupCategories = (scope: Scope, id: string, signal?: AbortSignal) =>
+  request<{ items: LineupCategory[] }>(
+    'GET',
+    `${sourcePath(scope, id)}/categories`,
+    undefined,
+    signal,
+  )
+
+export const createLineupCategory = (scope: Scope, id: string, name: string) =>
+  request<LineupCategory>('POST', `${sourcePath(scope, id)}/categories`, { name })
+
+/** `name: null` goes back to the provider's name. */
+export const updateLineupCategory = (
+  scope: Scope,
+  id: string,
+  categoryId: string,
+  patch: Partial<{ name: string | null; enabled: boolean }>,
+) =>
+  request<LineupCategory>('PATCH', `${sourcePath(scope, id)}/categories/${seg(categoryId)}`, patch)
+
+export const deleteLineupCategory = (scope: Scope, id: string, categoryId: string) =>
+  request<void>('DELETE', `${sourcePath(scope, id)}/categories/${seg(categoryId)}`)
+
+/** Sets the order of the categories; `ids` must list every category once. */
+export const orderLineupCategories = (scope: Scope, id: string, ids: string[]) =>
+  request<void>('PUT', `${sourcePath(scope, id)}/categories/order`, { ids })
+
+/** Turns categories on or off; without `ids`, every category. */
+export const bulkLineupCategories = (scope: Scope, id: string, enabled: boolean, ids?: string[]) =>
+  request<{ changed: number }>('POST', `${sourcePath(scope, id)}/categories/bulk`, { enabled, ids })
+
+export const fetchLineupChannels = (
+  scope: Scope,
+  id: string,
+  filters: ChannelFilters,
+  offset: number,
+  limit: number,
+  signal?: AbortSignal,
+) =>
+  request<Page<LineupChannel>>(
+    'GET',
+    `${sourcePath(scope, id)}/channels?${params({ ...filters, offset, limit })}`,
+    undefined,
+    signal,
+  )
+
+export const fetchLineupChannel = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  signal?: AbortSignal,
+) =>
+  request<LineupChannel>(
+    'GET',
+    `${sourcePath(scope, id)}/channels/${seg(channelId)}`,
+    undefined,
+    signal,
+  )
+
+export const updateLineupChannel = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  patch: ChannelPatch,
+) => request<LineupChannel>('PATCH', `${sourcePath(scope, id)}/channels/${seg(channelId)}`, patch)
+
+/** Puts a channel before another of its category, or last with null. */
+export const moveLineupChannel = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  before: string | null,
+) => request<void>('POST', `${sourcePath(scope, id)}/channels/${seg(channelId)}/move`, { before })
+
+/** Turns the selected channels on or off; a dry run only counts them. */
+export const bulkLineupChannels = (
+  scope: Scope,
+  id: string,
+  selector: BulkSelector,
+  enabled: boolean,
+  dryRun: boolean,
+) =>
+  request<{ matched: number; changed: number }>('POST', `${sourcePath(scope, id)}/channels/bulk`, {
+    ...selector,
+    enabled,
+    dryRun,
+  })
+
+/** Sets the order and enabled flags of a channel's streams; every stream once. */
+export const saveChannelStreams = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  streams: { id: string; enabled: boolean }[],
+) =>
+  request<LineupChannel>('PUT', `${sourcePath(scope, id)}/channels/${seg(channelId)}/streams`, {
+    streams,
+  })
+
+export const addChannelStream = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  stream: { url: string; label: string },
+) =>
+  request<LineupChannel>(
+    'POST',
+    `${sourcePath(scope, id)}/channels/${seg(channelId)}/streams`,
+    stream,
+  )
+
+export const deleteChannelStream = (
+  scope: Scope,
+  id: string,
+  channelId: string,
+  streamId: string,
+) =>
+  request<LineupChannel>(
+    'DELETE',
+    `${sourcePath(scope, id)}/channels/${seg(channelId)}/streams/${seg(streamId)}`,
+  )
+
+const guidesPath = (scope: Scope) => `${scopePath(scope)}/catalog-guides`
+
+export const fetchCatalogGuides = (scope: Scope, target: CatalogTarget, signal?: AbortSignal) =>
+  request<CatalogGuides>('GET', `${guidesPath(scope)}?${params(target)}`, undefined, signal)
+
+/** Replaces a catalog's guides, in order; a kept guide is sent as its id, its address being redacted. */
+export const saveCatalogGuides = (
+  scope: Scope,
+  target: CatalogTarget,
+  urls: (string | { id: string })[],
+) => request<CatalogGuides>('PUT', guidesPath(scope), { ...target, urls })
+
+export const refreshCatalogGuides = (scope: Scope, target: CatalogTarget) =>
+  request<CatalogGuides>('POST', `${guidesPath(scope)}/refresh`, target)
+
+/** Maps the channels without a mapping, or with `remap` every channel, manual ones dropped. */
+export const automapCatalog = (scope: Scope, target: CatalogTarget, mode: 'unmapped' | 'remap') =>
+  request<{ channels: number; mapped: number; changed: number }>(
+    'POST',
+    `${guidesPath(scope)}/automap`,
+    { ...target, mode },
+  )
+
+export const fetchGuideChannels = (
+  scope: Scope,
+  target: CatalogTarget,
+  query: { q?: string; guide?: string },
+  offset: number,
+  limit: number,
+  signal?: AbortSignal,
+) =>
+  request<Page<GuideChannel>>(
+    'GET',
+    `${guidesPath(scope)}/channels?${params({ ...target, ...query, offset, limit })}`,
+    undefined,
+    signal,
+  )
+
+export const fetchMappings = (
+  scope: Scope,
+  target: CatalogTarget,
+  query: { state: MappingState; q?: string },
+  offset: number,
+  limit: number,
+  signal?: AbortSignal,
+) =>
+  request<Page<MappingItem>>(
+    'GET',
+    `${guidesPath(scope)}/mappings?${params({ ...target, ...query, offset, limit })}`,
+    undefined,
+    signal,
+  )
+
+/** Maps a channel by hand; both ids null pins "no guide". */
+export const setMapping = (
+  scope: Scope,
+  target: CatalogTarget,
+  channelId: string,
+  guide: { guideId: string; guideChannelId: string } | null,
+) =>
+  request<MappingItem>('PUT', `${guidesPath(scope)}/mappings`, {
+    ...target,
+    channelId,
+    guideId: guide?.guideId ?? null,
+    guideChannelId: guide?.guideChannelId ?? null,
+  })
+
+/** Drops a manual mapping: the channel is mapped automatically again. */
+export const clearMapping = (scope: Scope, target: CatalogTarget, channelId: string) =>
+  request<MappingItem>(
+    'DELETE',
+    `${guidesPath(scope)}/mappings?${params({ ...target, channelId })}`,
+  )
 
 export const fetchAddonPreferences = (signal?: AbortSignal) =>
   request<AddonPreferences>('GET', '/account/addon-preferences', undefined, signal)
@@ -855,6 +1247,11 @@ export const queryKeys = {
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,
   activity: (query: ActivityQuery) => ['activity', query] as const,
+  /** Everything a source's line-up shows: invalidated after any change to it. */
+  lineup: (scope: Scope, id: string) => ['lineup', scope, id] as const,
+  /** Everything a Live TV catalog's guides show. */
+  catalogGuides: (scope: Scope, target: CatalogTarget) =>
+    ['catalog-guides', scope, target.addonId, target.catalogType, target.catalogId] as const,
   liveSessions: ['live-sessions'] as const,
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,

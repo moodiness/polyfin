@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApiError,
@@ -6,8 +7,6 @@ import {
   fetchLibraries,
   queryClient,
   queryKeys,
-  refreshGuide,
-  saveGuide,
   saveLibraries,
   type Addon,
   type Library,
@@ -15,6 +14,7 @@ import {
   type Scope,
 } from '@/api'
 import { icons } from '@/components/icons'
+import { catalogGuidesPath, lineupPath } from '@/components/lineup/common'
 import {
   Badge,
   buttonPrimary,
@@ -23,8 +23,6 @@ import {
   Loading,
   MoveButtons,
   Notice,
-  RelativeTime,
-  TextField,
 } from '@/components/ui'
 import { errorMessage, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
@@ -142,6 +140,7 @@ function LibraryForm({
   const dirty = draft !== null
   const shownKeys = new Set(entries.map((entry) => entry.key))
   const offAddons = new Set(addons.filter((addon) => !addon.enabled).map((addon) => addon.id))
+  const iptvAddons = new Set(addons.filter((addon) => addon.source !== null).map((a) => a.id))
   // What each music addon's rows hold: their libraries are music or books libraries in apps.
   const musicContent = new Map(
     addons.flatMap((addon) =>
@@ -291,8 +290,13 @@ function LibraryForm({
                       {library.catalogType === 'tv' ? (
                         <>
                           <p className="mt-2 text-xs text-muted">{t.libraries.liveTv}</p>
-                          {library.guide !== null ? (
-                            <GuidePanel scope={scope} library={library} name={name} />
+                          {library.guides !== null ? (
+                            <GuideSummary
+                              scope={scope}
+                              library={library}
+                              name={name}
+                              iptv={iptvAddons.has(library.addonId)}
+                            />
                           ) : (
                             <p className="mt-2 text-xs text-muted">{t.libraries.guideAfterSave}</p>
                           )}
@@ -467,162 +471,53 @@ function LibraryForm({
 }
 
 /** The XMLTV guide of a saved TV catalog: its address, how its last fetch went, and actions. */
-function GuidePanel({ scope, library, name }: { scope: Scope; library: Library; name: string }) {
-  const { t } = useI18n()
-  const titleId = useId()
-  const [editing, setEditing] = useState(false)
-  const [url, setUrl] = useState('')
-  const guide = library.guide
+/** A TV catalog's guides at a glance, with a link to where they are managed and mapped. */
+function GuideSummary({
+  scope,
+  library,
+  name,
+  iptv,
+}: {
+  scope: Scope
+  library: Library
+  name: string
+  iptv: boolean
+}) {
+  const { language, t } = useI18n()
+  const guides = library.guides ?? []
+  const failing = guides.filter((guide) => guide.error !== '').length
   const target = {
     addonId: library.addonId,
     catalogType: library.catalogType,
     catalogId: library.catalogId,
   }
-  const save = useMutation({
-    mutationFn: (value: string) => saveGuide(scope, target, value),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(queryKeys.libraries(scope), saved)
-      setEditing(false)
-      setUrl('')
-    },
-  })
-  const refresh = useMutation({
-    mutationFn: () => refreshGuide(scope, target),
-    onSuccess: (saved) => queryClient.setQueryData(queryKeys.libraries(scope), saved),
-  })
-  if (guide === null) return null
-  const busy = save.isPending || refresh.isPending
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    refresh.reset()
-    save.mutate(url.trim())
-  }
-
   return (
-    <section
-      aria-labelledby={titleId}
-      className="mt-3 space-y-2 rounded-lg border border-line bg-ink/40 p-3 text-sm"
-    >
-      <h4 id={titleId} className="font-medium text-zinc-200">
-        {t.libraries.guideTitle}
-      </h4>
-      <p className="text-xs text-muted">{t.libraries.guideHelp}</p>
-      {guide.url === '' ? (
-        <p className="text-zinc-300">{t.libraries.guideNone}</p>
-      ) : (
-        <div className="space-y-1">
-          <p className="font-mono text-xs break-all text-zinc-300">{guide.url}</p>
-          <p className="text-xs text-muted">
-            {guide.fetchedAt === null ? (
-              t.libraries.guideNever
-            ) : (
-              <>
-                {t.libraries.guideFetched} <RelativeTime iso={guide.fetchedAt} />.{' '}
-                {t.libraries.guideMatched(guide.matched, guide.channels)}
-              </>
-            )}
-          </p>
-          {guide.nextAt !== null && (
-            <p className="text-xs text-muted">
-              {t.libraries.guideNext} <RelativeTime iso={guide.nextAt} />.
-            </p>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ink/40 p-3 text-sm">
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-zinc-200">
+          {guides.length === 0 ? t.libraries.guideNone : t.lineup.library.guides(guides.length)}
+          {library.guide !== null && library.guide.channels > 0 && (
+            <span className="text-muted">
+              {' · '}
+              {t.lineup.library.mapped(
+                library.guide.matched.toLocaleString(language),
+                library.guide.channels.toLocaleString(language),
+              )}
+            </span>
           )}
-          {guide.error !== '' && (
-            <Notice kind="error">
-              {Object.hasOwn(t.libraries.guideErrors, guide.error)
-                ? t.libraries.guideErrors[guide.error]
-                : t.errors.generic}
-            </Notice>
-          )}
-        </div>
-      )}
-      {editing && (
-        <form onSubmit={submit} noValidate className="space-y-2">
-          <TextField
-            label={t.libraries.guideAddress}
-            hint={t.libraries.guideAddressHint}
-            type="url"
-            inputMode="url"
-            value={url}
-            onValue={(value) => {
-              save.reset()
-              setUrl(value)
-            }}
-            placeholder={t.libraries.guidePlaceholder}
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-            required
-          />
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className={buttonPrimary} disabled={busy || url.trim() === ''}>
-              {save.isPending ? t.libraries.guideFetching : t.libraries.guideSave}
-            </button>
-            <button
-              type="button"
-              className={buttonSecondary}
-              disabled={save.isPending}
-              onClick={() => {
-                save.reset()
-                setEditing(false)
-                setUrl('')
-              }}
-            >
-              {t.common.cancel}
-            </button>
-          </div>
-        </form>
-      )}
-      {!editing && (
-        <div className="flex flex-wrap gap-2">
-          {guide.url !== '' && (
-            <button
-              type="button"
-              className={buttonSecondary}
-              disabled={busy}
-              aria-label={t.libraries.guideRefreshLabel(name)}
-              onClick={() => {
-                save.reset()
-                refresh.mutate()
-              }}
-            >
-              {refresh.isPending ? t.libraries.guideFetching : t.libraries.guideRefresh}
-            </button>
-          )}
-          <button
-            type="button"
-            className={buttonSecondary}
-            disabled={busy}
-            onClick={() => {
-              save.reset()
-              refresh.reset()
-              setEditing(true)
-            }}
-          >
-            {guide.url === '' ? t.libraries.guideAdd : t.libraries.guideChange}
-          </button>
-          {guide.url !== '' && (
-            <button
-              type="button"
-              className={buttonSecondary}
-              disabled={busy}
-              onClick={() => {
-                refresh.reset()
-                save.mutate('')
-              }}
-            >
-              {t.libraries.guideRemove}
-            </button>
-          )}
-        </div>
-      )}
-      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
-      {refresh.isError && <Notice kind="error">{errorMessage(t, refresh.error)}</Notice>}
-      {save.isSuccess && save.variables === '' && (
-        <Notice kind="success">{t.libraries.guideRemoved}</Notice>
-      )}
-    </section>
+        </p>
+        {failing > 0 && (
+          <p className="text-xs text-amber-200">{t.lineup.library.failing(failing)}</p>
+        )}
+      </div>
+      <Link
+        to={iptv ? lineupPath(scope, library.addonId, 'guides') : catalogGuidesPath(scope, target)}
+        aria-label={t.lineup.library.manageLabel(name)}
+        className={buttonSecondary}
+      >
+        {iptv ? t.lineup.library.lineup : t.lineup.library.manage}
+      </Link>
+    </div>
   )
 }
 

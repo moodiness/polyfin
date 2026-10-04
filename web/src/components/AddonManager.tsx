@@ -270,7 +270,9 @@ function AddonRow({
             <dd className="font-mono text-xs break-all text-zinc-200 sm:self-center">
               {addon.manifestUrl}
             </dd>
-            {addon.source !== null && <IptvSourceDetails source={addon.source} />}
+            {addon.source !== null && (
+              <IptvSourceDetails scope={scope} id={addon.id} source={addon.source} />
+            )}
             {!iptv && addon.resources.length > 0 && (
               <>
                 <dt className="text-muted">{t.addons.provides}</dt>

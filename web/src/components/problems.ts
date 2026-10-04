@@ -111,7 +111,7 @@ export function findProblems(
     }
   }
   for (const library of sources?.guides ?? []) {
-    if (library.guide !== null && library.guide.url !== '' && library.guide.error !== '') {
+    if ((library.guides ?? []).some((guide) => guide.error !== '')) {
       problems.push({
         tone: 'warning',
         text: text.guide(ownedName(t, library.name ?? library.catalogName, library.owner)),
