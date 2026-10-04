@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -78,23 +79,16 @@ func TestLocalizationListsHoldTheStandardsEntries(t *testing.T) {
 		t.Errorf("countries: %d, France or Bolivia missing", len(countries))
 	}
 
-	var ratings []ParentalRating
-	s.get(t, "/Localization/ParentalRatings", token, &ratings)
-	score := map[string]int{}
-	for i, rating := range ratings {
-		if rating.RatingScore == nil {
-			if rating.Value != nil || i > 0 && ratings[i-1].RatingScore != nil {
-				t.Errorf("unrated %+v is not listed first, without a value", rating)
-			}
-			continue
-		}
-		if rating.Value == nil || *rating.Value != rating.RatingScore.Score || i > 0 && ratings[i-1].RatingScore != nil && ratings[i-1].RatingScore.Score > rating.RatingScore.Score {
-			t.Errorf("rating %s out of order or with a value apart from its score", rating.Name)
-		}
-		score[rating.Name] = rating.RatingScore.Score
+	// The ratings and their scores are those of a Jellyfin 12.1 server whose
+	// metadata country is the United States, its default.
+	_, got := s.call(http.MethodGet, "/Localization/ParentalRatings", app("tv", token), nil)
+	recorded, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "parental", "parental-ratings.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if score["G"] != 0 || score["PG-13"] != 13 || score["TV-14"] != 14 || score["R"] != 17 || score["NC-17"] != 18 || ratings[0].Name != "NR" {
-		t.Errorf("ratings: %+v", score)
+	var want, have any
+	if json.Unmarshal(recorded, &want) != nil || json.Unmarshal(got, &have) != nil || !reflect.DeepEqual(want, have) {
+		t.Errorf("ratings differ from Jellyfin's:\n%s", got)
 	}
 
 	var options []LocalizationOption

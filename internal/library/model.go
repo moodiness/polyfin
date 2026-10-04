@@ -285,9 +285,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 	}
 	item.Runtime = parseRuntime(string(meta.Runtime))
 	item.CommunityRating, _ = strconv.ParseFloat(strings.TrimSpace(string(meta.ImdbRating)), 64)
-	if meta.Extras != nil {
-		item.OfficialRating = meta.Extras.Certification
-	}
+	item.OfficialRating = certification(meta)
 	switch strings.ToLower(meta.Status) {
 	case "ended", "canceled", "cancelled":
 		item.Status = "Ended"

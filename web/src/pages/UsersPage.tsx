@@ -1,15 +1,18 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApiError,
   createUser,
   deleteUser,
+  fetchParentalRatings,
   fetchUserDevices,
   fetchUsers,
   queryClient,
   queryKeys,
   signOutUserDevice,
   updateUser,
+  type ParentalControl,
+  type ParentalRating,
   type User,
   type UserPatch,
 } from '@/api'
@@ -106,6 +109,7 @@ function UserRow({
             {user.isAdministrator && <Badge tone="fin">{t.users.administrator}</Badge>}
             {user.isHidden && <Badge tone="muted">{t.users.hidden}</Badge>}
             {user.isDisabled && <Badge tone="danger">{t.users.disabled}</Badge>}
+            <RatingLimitBadge parentalControl={user.parentalControl} />
           </p>
           <p className="mt-1 text-sm text-muted">
             {t.users.lastSignIn} —{' '}
@@ -257,6 +261,8 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
         {access.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
       </fieldset>
 
+      <ParentalControlForm user={user} />
+
       <section className="lg:col-span-2">
         <h4 className="mb-2 text-sm font-semibold text-white">{t.users.devicesTitle}</h4>
         <DeviceList
@@ -277,6 +283,152 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
         />
       </div>
     </div>
+  )
+}
+
+/** Ratings sharing a score and sub-score, offered as one choice (like jellyfin-web). */
+type RatingGroup = { name: string; score: number; subScore: number | null }
+
+function groupRatings(ratings: ParentalRating[]): RatingGroup[] {
+  const groups: RatingGroup[] = []
+  for (const rating of ratings) {
+    const last = groups.at(-1)
+    if (last !== undefined && last.score === rating.score && last.subScore === rating.subScore) {
+      last.name = `${last.name} / ${rating.name}`
+    } else {
+      groups.push({ ...rating })
+    }
+  }
+  return groups
+}
+
+/** The group matching the limit exactly, else the last one whose score fits under it. */
+function selectedGroup(groups: RatingGroup[], control: ParentalControl): number {
+  const { maxRating, maxSubRating } = control
+  if (maxRating === null) return -1
+  const exact = groups.findIndex((g) => g.score === maxRating && g.subScore === maxSubRating)
+  if (exact !== -1) return exact
+  let fallback = -1
+  groups.forEach((group, index) => {
+    if (group.score <= maxRating) fallback = index
+  })
+  return fallback
+}
+
+function useParentalRatings(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.parentalRatings,
+    queryFn: ({ signal }) => fetchParentalRatings(signal),
+    staleTime: Infinity,
+    enabled,
+  })
+}
+
+function RatingLimitBadge({ parentalControl }: { parentalControl: ParentalControl }) {
+  const { t } = useI18n()
+  const limited = parentalControl.maxRating !== null
+  const ratings = useParentalRatings(limited)
+  if (!limited || ratings.data === undefined) return null
+  const groups = groupRatings(ratings.data)
+  const group = groups[selectedGroup(groups, parentalControl)]
+  if (group === undefined) return null
+  return <Badge tone="muted">{t.users.ratingLimit(group.name)}</Badge>
+}
+
+const unratedMovie = 'Movie'
+const unratedSeries = 'Series'
+
+function ParentalControlForm({ user }: { user: User }) {
+  const { t } = useI18n()
+  const selectId = useId()
+  const ratings = useParentalRatings()
+  const save = useUserPatch(user)
+  const initial = user.parentalControl
+  const [limit, setLimit] = useState<{ maxRating: number | null; maxSubRating: number | null }>({
+    maxRating: initial.maxRating,
+    maxSubRating: initial.maxSubRating,
+  })
+  const [blockMovies, setBlockMovies] = useState(initial.blockUnrated.includes(unratedMovie))
+  const [blockShows, setBlockShows] = useState(initial.blockUnrated.includes(unratedSeries))
+
+  const groups = ratings.data === undefined ? [] : groupRatings(ratings.data)
+  const selected = selectedGroup(groups, { ...limit, blockUnrated: [] })
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    // Keep values set by Jellyfin apps (live TV, books...) that this form does not show.
+    const blockUnrated = user.parentalControl.blockUnrated.filter(
+      (item) => item !== unratedMovie && item !== unratedSeries,
+    )
+    if (blockMovies) blockUnrated.push(unratedMovie)
+    if (blockShows) blockUnrated.push(unratedSeries)
+    save.mutate({ parentalControl: { ...limit, blockUnrated } })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
+      <h4 className="text-sm font-semibold text-white">{t.users.parentalTitle}</h4>
+      {ratings.isError ? (
+        <Notice kind="error">{errorMessage(t, ratings.error)}</Notice>
+      ) : (
+        <div>
+          <label htmlFor={selectId} className="block text-sm font-medium text-zinc-200">
+            {t.users.maxRating}
+          </label>
+          <select
+            id={selectId}
+            value={selected}
+            disabled={ratings.isPending}
+            onChange={(event) => {
+              save.reset()
+              const group = groups[Number(event.target.value)]
+              setLimit(
+                group === undefined
+                  ? { maxRating: null, maxSubRating: null }
+                  : { maxRating: group.score, maxSubRating: group.subScore },
+              )
+            }}
+            aria-describedby={`${selectId}-hint`}
+            className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white sm:max-w-sm"
+          >
+            <option value={-1}>{t.users.noLimit}</option>
+            {groups.map((group, index) => (
+              <option key={group.name} value={index}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          <p id={`${selectId}-hint`} className="mt-1 text-xs text-muted">
+            {t.users.maxRatingHelp}
+          </p>
+        </div>
+      )}
+      <Checkbox
+        label={t.users.blockUnratedMovies}
+        checked={blockMovies}
+        onChange={(checked) => {
+          save.reset()
+          setBlockMovies(checked)
+        }}
+      />
+      <Checkbox
+        label={t.users.blockUnratedShows}
+        checked={blockShows}
+        onChange={(checked) => {
+          save.reset()
+          setBlockShows(checked)
+        }}
+      />
+      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
+      {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+      <button
+        type="submit"
+        className={buttonSecondary}
+        disabled={save.isPending || ratings.isPending}
+      >
+        {save.isPending ? t.common.saving : t.users.saveParental}
+      </button>
+    </form>
   )
 }
 

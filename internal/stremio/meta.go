@@ -160,7 +160,11 @@ type CollectionSource struct {
 type Extras struct {
 	Cast                 []CastMember      `json:"cast,omitempty"`
 	SeasonPosterByNumber map[string]string `json:"seasonPosterByNumber,omitempty"`
-	Certification        string            `json:"certification,omitempty"`
+	// Certification is a title's age rating, the US one for AIOMetadata;
+	// CertificationLocal is that of the country of the addon's language,
+	// or the US one again when that country has none.
+	Certification      string `json:"certification,omitempty"`
+	CertificationLocal string `json:"certificationLocal,omitempty"`
 }
 
 // CastMember is an actor with their role.

@@ -107,17 +107,17 @@ var countries = sync.OnceValue(func() []CountryInfo {
 	return result
 })
 
-// parentalRatings lists the US ratings, Jellyfin's default metadata
-// country being the United States. Value is the score, the integer older
-// apps compare.
+// parentalRatings lists the ratings apps choose a user's limit from (see
+// localization.Ratings). Value is the score, the integer older apps
+// compare.
 var parentalRatings = sync.OnceValue(func() []ParentalRating {
 	ratings := localization.Ratings()
 	result := make([]ParentalRating, len(ratings))
 	for i, rating := range ratings {
 		result[i] = ParentalRating{Name: rating.Name}
 		if rating.Score != nil {
-			result[i].Value = rating.Score
-			result[i].RatingScore = &ParentalRatingScore{Score: *rating.Score}
+			result[i].Value = &rating.Score.Score
+			result[i].RatingScore = &ParentalRatingScore{Score: rating.Score.Score, SubScore: rating.Score.SubScore}
 		}
 	}
 	return result

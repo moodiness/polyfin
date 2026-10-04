@@ -77,7 +77,8 @@ type streamKey struct {
 }
 
 // target resolves the movie or episode identified by id from what Polyfin
-// remembers of it, without asking addons.
+// remembers of it, without asking addons unless the user's parental
+// control needs the title's rating.
 func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID) (target, view, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -86,6 +87,9 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 	r, err := s.load(ctx, id)
 	if err != nil {
 		return target{}, view{}, err
+	}
+	if kept, _ := s.visible(ctx, v, []record{r}); len(kept) == 0 {
+		return target{}, view{}, ErrNotFound
 	}
 	switch {
 	case r.Kind == KindMovie && r.Meta != nil:
@@ -177,6 +181,13 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // the item.
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
 	if version, ok := s.versions.Get(id); ok && version.Item == item {
+		// A version remembered from another user's listing is no way around
+		// the user's parental control.
+		if user.Parental.Restricted() {
+			if _, _, err := s.target(ctx, user, item); err != nil {
+				return Version{}, err
+			}
+		}
 		return version, nil
 	}
 	versions, err := s.Versions(ctx, user, item)

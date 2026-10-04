@@ -65,8 +65,7 @@ func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, e
 	err := s.db.QueryRow(ctx, "SELECT s.expires_at, "+qualifiedUserColumns("u")+`
 		FROM admin_sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.is_disabled`, session.TokenHash).Scan(
-		&session.ExpiresAt, &user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
-		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt)
+		append([]any{&session.ExpiresAt}, user.fields()...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AdminSession{}, ErrNotFound
 	}

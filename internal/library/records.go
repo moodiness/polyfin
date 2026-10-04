@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -38,6 +39,11 @@ type record struct {
 	// Confined is true when the addon may only reach public addresses, which
 	// also applies to its artwork.
 	Confined bool `json:"confined,omitempty"`
+	// Rating is the rating a description by one of the server's addons
+	// gave, empty when it gave none, at RatedAt; nil until one was read
+	// (see learnRating).
+	Rating  *string    `json:"rating,omitempty"`
+	RatedAt *time.Time `json:"ratedAt,omitempty"`
 }
 
 func (s *Service) save(ctx context.Context, records []record) error {
@@ -66,17 +72,18 @@ func (s *Service) save(ctx context.Context, records []record) error {
 		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
 	}
 	// A search result has no folder: it keeps the one it was last listed in.
+	// A listing carries no rating: the title keeps the one learned before.
 	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
 		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[])
-		ON CONFLICT (id) DO UPDATE SET data = `+keptParent+`, updated_at = now()
-		WHERE items.data IS DISTINCT FROM `+keptParent, ids, keys, kinds, data)
+		ON CONFLICT (id) DO UPDATE SET data = `+keptData+`, updated_at = now()
+		WHERE items.data IS DISTINCT FROM `+keptData, ids, keys, kinds, data)
 	return err
 }
 
-// keptParent is the record an upsert stores: the new one, with the stored
-// folder when the new one has none.
-const keptParent = `CASE WHEN excluded.data ? 'parent' OR NOT items.data ? 'parent' THEN excluded.data
-	ELSE excluded.data || jsonb_build_object('parent', items.data->'parent') END`
+// keptData is the record an upsert stores: the new one, with the stored
+// folder and rating when the new one has none.
+const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
+	WHERE key IN ('parent', 'rating', 'ratedAt')), '{}'::jsonb) || excluded.data`
 
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	var r record

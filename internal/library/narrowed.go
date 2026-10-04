@@ -56,7 +56,7 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 	if len(sources) == 0 {
 		return Page{}, nil
 	}
-	titles, total, err := s.merged(ctx, sources, start, count)
+	titles, total, err := s.merged(ctx, v, sources, start, count)
 	if err != nil {
 		return Page{}, err
 	}
@@ -112,7 +112,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 		}
 	}
 	for _, l := range collections {
-		grouped, err := s.groupedCatalogs(ctx, l)
+		grouped, err := s.groupedCatalogs(ctx, v, l)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -132,8 +132,8 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 // groups catalogs of its own addon. Descriptions are cached, so this
 // mostly costs requests the first time; a collection that cannot be
 // described is left out.
-func (s *Service) groupedCatalogs(ctx context.Context, l library) ([]stremio.Catalog, error) {
-	entries, _, err := s.window(ctx, source{addon: l.addon, catalog: l.catalog}, 0, maxCrawl)
+func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]stremio.Catalog, error) {
+	entries, _, err := s.window(ctx, v, source{addon: l.addon, catalog: l.catalog}, 0, maxCrawl)
 	if err != nil {
 		return nil, err
 	}

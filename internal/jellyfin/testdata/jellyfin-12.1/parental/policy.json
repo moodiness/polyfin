@@ -1,0 +1,7 @@
+{
+  "MaxParentalRating": 13,
+  "MaxParentalSubRating": 0,
+  "BlockUnratedItems": [
+    "Movie"
+  ]
+}

@@ -20,7 +20,18 @@ export type User = {
   createdAt: string
   lastLoginAt: string | null
   lastActivityAt: string | null
+  parentalControl: ParentalControl
 }
+
+/** Jellyfin parental control: `maxRating` null means no limit. */
+export type ParentalControl = {
+  maxRating: number | null
+  maxSubRating: number | null
+  /** Jellyfin UnratedItem names; Polyfin titles use 'Movie' and 'Series'. */
+  blockUnrated: string[]
+}
+
+export type ParentalRating = { name: string; score: number; subScore: number | null }
 
 export type Device = {
   id: string
@@ -60,6 +71,7 @@ export type UserPatch = Partial<{
   isAdministrator: boolean
   isHidden: boolean
   isDisabled: boolean
+  parentalControl: ParentalControl
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -99,7 +111,8 @@ export type Library = {
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
 
-export type AddonPreferences = { useSharedAddons: boolean }
+/** `parentalControl`: the user's parental control keeps them on the server's addons only. */
+export type AddonPreferences = { useSharedAddons: boolean; parentalControl: boolean }
 
 /** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
 export class ApiError extends Error {
@@ -205,6 +218,9 @@ export const fetchUserDevices = (id: string, signal?: AbortSignal) =>
 export const signOutUserDevice = (id: string, deviceId: string) =>
   request<void>('DELETE', `/users/${seg(id)}/devices/${seg(deviceId)}`)
 
+export const fetchParentalRatings = (signal?: AbortSignal) =>
+  request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
+
 export const fetchSettings = (signal?: AbortSignal) =>
   request<Settings>('GET', '/settings', undefined, signal)
 
@@ -241,7 +257,7 @@ export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
 export const fetchAddonPreferences = (signal?: AbortSignal) =>
   request<AddonPreferences>('GET', '/account/addon-preferences', undefined, signal)
 
-export const saveAddonPreferences = (preferences: AddonPreferences) =>
+export const saveAddonPreferences = (preferences: Pick<AddonPreferences, 'useSharedAddons'>) =>
   request<AddonPreferences>('PUT', '/account/addon-preferences', preferences)
 
 export const queryKeys = {
@@ -251,6 +267,7 @@ export const queryKeys = {
   users: ['users'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
+  parentalRatings: ['parental-ratings'] as const,
   /** Prefix of every scope: invalidating it refreshes all addons and libraries. */
   scopes: ['scopes'] as const,
   /** Prefix of everything a scope owns: invalidating it refreshes its addons and libraries. */

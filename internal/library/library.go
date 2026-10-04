@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,6 +52,10 @@ type Service struct {
 	streamLists   *cache.Cache[streamKey, []stremio.Stream]
 	subtitleLists *cache.Cache[streamKey, []stremio.Subtitle]
 	versions      *cache.Cache[accounts.ID, Version]
+	// ratingLookups holds a place for each rating looked up (see visible);
+	// ratingWait bounds how long a request waits for them.
+	ratingLookups chan struct{}
+	ratingWait    time.Duration
 }
 
 type pageKey struct {
@@ -84,6 +89,8 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		streamLists:   cache.New[streamKey, []stremio.Stream](2000, streamsTTL),
 		subtitleLists: cache.New[streamKey, []stremio.Subtitle](2000, streamsTTL),
 		versions:      cache.New[accounts.ID, Version](20000, versionsTTL),
+		ratingLookups: make(chan struct{}, ratingFetches),
+		ratingWait:    ratingWait,
 	}
 }
 
@@ -92,10 +99,12 @@ func (s *Service) words() words {
 	return vocabularyOf(s.language())
 }
 
-// installed is an addon a user can use, with how to reach it.
+// installed is an addon a user can use, with how to reach it. shared is
+// true for the server's addons, installed by an administrator.
 type installed struct {
 	addon    addons.Addon
 	confined bool
+	shared   bool
 }
 
 // library is a library of a user with its catalog.
@@ -110,16 +119,29 @@ type library struct {
 type view struct {
 	addons    []installed
 	libraries []library
+	// parental is the user's parental control, which hides titles (see
+	// visible). The ratings of the titles a request lists are looked up
+	// until deadline, lookups counting how many it started; held is set
+	// once a listing of the request stopped short for parental control.
+	parental accounts.ParentalControl
+	deadline time.Time
+	lookups  *atomic.Int32
+	held     *atomic.Bool
 }
 
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
-	scopes := []addons.Scope{addons.Personal(user.ID)}
-	if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
-		return view{}, err
-	} else if shared {
-		scopes = append([]addons.Scope{addons.Shared()}, scopes...)
+	// A user under parental control browses the server's addons only: their
+	// own addons could describe titles without the ratings that hide them.
+	scopes := []addons.Scope{addons.Shared()}
+	if !user.Parental.Restricted() {
+		scopes = []addons.Scope{addons.Personal(user.ID)}
+		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
+			return view{}, err
+		} else if shared {
+			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
+		}
 	}
-	var v view
+	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool)}
 	var visible []addons.Library
 	var entries []installed
 	for _, scope := range scopes {
@@ -133,7 +155,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 		byID := map[accounts.ID]installed{}
 		for _, addon := range list {
 			if addon.Enabled {
-				entry := installed{addon: addon, confined: confined}
+				entry := installed{addon: addon, confined: confined, shared: scope.Owner == nil}
 				v.addons = append(v.addons, entry)
 				byID[addon.ID] = entry
 			}
@@ -265,16 +287,26 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // Pages may be shorter than the first when the addon filters them, so the
 // pages fetched ahead together, on the guess that they are as long as the
 // first, only count while the guess holds; reading then goes on from the
-// actual position.
-func (s *Service) window(ctx context.Context, src source, start, count int) ([]stremio.Meta, int, error) {
+// actual position. Titles the user's parental control hides are left out
+// before positions are counted. A restricted listing reads at most
+// hiddenReach times as far as an unrestricted one, and stops where titles
+// wait for their rating: it reports that more may follow, which apps ask
+// for later, once the ratings are known.
+func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	var collected []stremio.Meta
 	seen := map[string]bool{}
 	received, size := 0, 0
 	more := true
-read:
+	reach := maxCrawl
+	if v.parental.Restricted() {
+		reach = min(maxCrawl, hiddenReach*(start+count))
+	}
 	for len(collected) < start+count {
-		if received >= maxCrawl {
-			more = false
+		if received >= reach {
+			more = received < maxCrawl
+			if more {
+				v.held.Store(true)
+			}
 			break
 		}
 		offsets := []int{received}
@@ -286,25 +318,36 @@ read:
 		if err != nil {
 			return nil, 0, err
 		}
+		var fresh []stremio.Meta
+		repeated := false
 		for i, metas := range pages {
 			if offsets[i] != received {
 				break
 			}
-			fresh := 0
+			before := len(fresh)
 			for _, meta := range metas {
 				if !seen[meta.ID] {
 					seen[meta.ID] = true
-					collected = append(collected, meta)
-					fresh++
+					fresh = append(fresh, meta)
 				}
 			}
 			// An addon that ignores skip sends the same items again.
-			if fresh == 0 {
-				more = false
-				break read
+			if len(fresh) == before {
+				repeated = true
+				break
 			}
 			received += len(metas)
 			size = max(size, len(metas))
+		}
+		visible, held := s.visibleMetas(ctx, v, src, fresh)
+		collected = append(collected, visible...)
+		if held {
+			v.held.Store(true)
+			break
+		}
+		if repeated {
+			more = false
+			break
 		}
 		if !src.paged() {
 			more = false
@@ -350,10 +393,11 @@ func (l listed) title(parent accounts.ID) (Item, record, error) {
 // merged interleaves several catalogs, one item of each in turn, without
 // duplicates, and returns the items [start, start+count), each with the
 // catalog that listed it first, and the number of items, plus one when
-// more may follow.
-func (s *Service) merged(ctx context.Context, sources []source, start, count int) ([]listed, int, error) {
+// more may follow. Titles the user's parental control hides are left out
+// (see window).
+func (s *Service) merged(ctx context.Context, v view, sources []source, start, count int) ([]listed, int, error) {
 	if len(sources) == 1 {
-		metas, total, err := s.window(ctx, sources[0], start, count)
+		metas, total, err := s.window(ctx, v, sources[0], start, count)
 		result := make([]listed, 0, len(metas))
 		for _, meta := range metas {
 			result = append(result, listed{meta, sources[0]})
@@ -371,7 +415,7 @@ func (s *Service) merged(ctx context.Context, sources []source, start, count int
 		group.SetLimit(catalogFetches)
 		for i, src := range sources {
 			group.Go(func() error {
-				metas, total, err := s.window(ctx, src, 0, per)
+				metas, total, err := s.window(ctx, v, src, 0, per)
 				// An app that stops waiting cancels ctx: nothing failed.
 				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("A catalog of a collection could not be listed", "catalog", src.catalog.ID, "error", err)
@@ -399,7 +443,9 @@ func (s *Service) merged(ctx context.Context, sources []source, start, count int
 			}
 		}
 		anyMore := slices.Contains(mores, true)
-		if len(result) >= need || !anyMore || per >= maxCrawl {
+		// Reading further would not show the titles a restricted listing
+		// stopped at (see window).
+		if len(result) >= need || !anyMore || per >= maxCrawl || v.held.Load() {
 			total := len(result)
 			if anyMore {
 				total++
@@ -430,7 +476,7 @@ func (s *Service) Children(ctx context.Context, user accounts.User, parent accou
 		return Page{}, err
 	}
 	if l, ok := v.library(parent); ok {
-		return s.libraryChildren(ctx, l, start, count, genre)
+		return s.libraryChildren(ctx, v, l, start, count, genre)
 	}
 	r, err := s.load(ctx, parent)
 	if err != nil {
@@ -460,8 +506,8 @@ func slicePage(items []Item, start, count int) Page {
 
 func (r record) seriesItemID() accounts.ID { return itemID(titleKey(KindSeries, r.SeriesID)) }
 
-func (s *Service) libraryChildren(ctx context.Context, l library, start, count int, genre string) (Page, error) {
-	metas, total, err := s.window(ctx, source{addon: l.addon, catalog: l.catalog, genre: genre}, start, count)
+func (s *Service) libraryChildren(ctx context.Context, v view, l library, start, count int, genre string) (Page, error) {
+	metas, total, err := s.window(ctx, v, source{addon: l.addon, catalog: l.catalog, genre: genre}, start, count)
 	if err != nil {
 		return Page{}, err
 	}
@@ -551,7 +597,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	}
 	total := len(nested)
 	if len(sources) > 0 {
-		titles, listedTotal, err := s.merged(ctx, sources, max(start-len(nested), 0), count-len(items))
+		titles, listedTotal, err := s.merged(ctx, v, sources, max(start-len(nested), 0), count-len(items))
 		if err != nil {
 			return Page{}, err
 		}
@@ -588,8 +634,16 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 }
 
 // titleMeta finds the complete description of a title among the user's
-// addons, starting with the one that listed it.
+// addons, starting with the one that listed it (see describe).
 func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta, bool) {
+	return s.describe(ctx, v, r, false)
+}
+
+// describe finds the complete description of a title among the user's
+// addons, the server's only when shared is set, starting with the one that
+// listed it. A description from one of the server's addons gives the
+// rating kept for the title.
+func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (stremio.Meta, bool) {
 	if r.Meta == nil {
 		return stremio.Meta{}, false
 	}
@@ -606,11 +660,14 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 		})
 	}
 	for _, candidate := range candidates {
-		if !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
+		if shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			continue
 		}
 		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
+			if candidate.shared {
+				s.learnRating(ctx, r, meta)
+			}
 			return meta, true
 		}
 		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
@@ -683,11 +740,24 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		return item, nil
 	case KindMovie, KindSeries:
 		meta := *r.Meta
-		if full, ok := s.titleMeta(ctx, v, r); ok {
+		full, described := s.titleMeta(ctx, v, r)
+		if described {
 			meta = full
+		}
+		// A restricted user's addons are the server's (see view): the
+		// description gives the rating.
+		rating, known := certification(meta), described
+		if !described {
+			rating, known, _ = s.knownRating(v, r)
+		}
+		// Jellyfin answers a title the user may not see as one that does not
+		// exist.
+		if !v.allows(r.Kind, rating, known) {
+			return Item{}, ErrNotFound
 		}
 		item := Item{ID: id, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
 		fromMeta(&item, meta)
+		item.OfficialRating = rating
 		if r.Kind == KindSeries && len(meta.Videos) > 0 {
 			item.Contents = contents(meta, nil, s.now())
 		}
@@ -736,7 +806,7 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
-	if !ok {
+	if !ok || !v.allows(KindSeries, certification(meta), true) {
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
@@ -947,7 +1017,7 @@ func (s *Service) Search(ctx context.Context, user accounts.User, term string, k
 	if len(sources) == 0 {
 		return nil, nil
 	}
-	titles, _, err := s.merged(ctx, sources, 0, limit)
+	titles, _, err := s.merged(ctx, v, sources, 0, limit)
 	if err != nil {
 		return nil, err
 	}
