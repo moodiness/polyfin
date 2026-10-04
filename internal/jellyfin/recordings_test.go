@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/moodiness/polyfin/internal/activity"
 	"io"
 	"log/slog"
 	"maps"
@@ -166,6 +167,11 @@ func TestTimersAsJellyfinKeepsThem(t *testing.T) {
 	}
 	if status, body := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), defaults); status != http.StatusNoContent {
 		t.Fatalf("a timer made: %d %s", status, body)
+	}
+	// The activity log tells who scheduled it.
+	if page, err := s.activity.Entries(t.Context(), activity.Query{}); err != nil ||
+		!slices.ContainsFunc(page.Entries, func(e activity.Entry) bool { return e.Type == "RecordingScheduled" && strings.Contains(e.Name, "Next") }) {
+		t.Errorf("activity after a timer was made: %+v %v", page.Entries, err)
 	}
 	// A programme has one timer.
 	if status, _ := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), defaults); status != http.StatusBadRequest {
