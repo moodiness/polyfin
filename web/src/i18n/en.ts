@@ -903,8 +903,8 @@ const en = {
       unknownChannel: 'Channel not found',
       refreshesTitle: 'Live TV refreshes',
       refreshesHelp: (hours: number) =>
-        `The server’s IPTV channel lists and programme guides are downloaded again every ${hours} h (Settings › Live TV), by the “Refresh Live TV guides” task.`,
-      noRefreshes: 'The server has no IPTV source or programme guide.',
+        `IPTV channel lists and programme guides, the server’s and users’ own, are downloaded again every ${hours} h (Settings › Live TV), by the “Refresh Live TV guides” task.`,
+      noRefreshes: 'No IPTV source or programme guide.',
       channelList: 'Channel list',
       guide: 'Programme guide',
       due: 'At the next check',
@@ -914,6 +914,8 @@ const en = {
     },
     health: {
       title: 'Health',
+      noIptv: 'No IPTV source.',
+      owner: { server: 'Server', user: (name: string) => `${name}’s addons` },
       description:
         'How the server and its sources are doing, from what Polyfin already records: this page sends no request to them.',
       problemsTitle: 'Needs attention',

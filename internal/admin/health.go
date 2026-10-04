@@ -119,10 +119,12 @@ type pausedHostJSON struct {
 	Until time.Time `json:"until"`
 }
 
-// addonHealthJSON is how the requests made to one of the server's addons
-// for apps went since the server started; Requests is 0 when none was.
+// addonHealthJSON is how the requests made to an addon for apps went since
+// the server started; Requests is 0 when none was. Owner is the user whose
+// own addon it is, nil for the server's.
 type addonHealthJSON struct {
 	ID            string     `json:"id"`
+	Owner         *ownerJSON `json:"owner"`
 	Name          string     `json:"name"`
 	Enabled       bool       `json:"enabled"`
 	RefreshedAt   time.Time  `json:"refreshedAt"`
@@ -202,23 +204,32 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		result.Thumbnails = th
 	}
 
-	list, err := h.Addons.Addons(r.Context(), addons.Shared())
+	// The server's addons come first, then each user's own, by name.
+	scopes, err := h.ownedScopes(r.Context())
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	for _, addon := range list {
-		// Eclipse addons' requests count in their health too.
-		if !addon.Stremio() && !addon.Eclipse() {
-			continue
+	for _, scope := range scopes {
+		list, err := h.Addons.Addons(r.Context(), scope.Scope)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
 		}
-		result.Addons = append(result.Addons, h.addonHealth(addon))
+		for _, addon := range list {
+			// Eclipse addons' requests count in their health too.
+			if !addon.Stremio() && !addon.Eclipse() {
+				continue
+			}
+			result.Addons = append(result.Addons, h.addonHealth(addon, scope.Owner))
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (h *handler) addonHealth(addon addons.Addon) addonHealthJSON {
-	result := addonHealthJSON{ID: addon.ID.String(), Name: addon.Manifest.Name, Enabled: addon.Enabled, RefreshedAt: addon.RefreshedAt}
+func (h *handler) addonHealth(addon addons.Addon, owner *ownerJSON) addonHealthJSON {
+	result := addonHealthJSON{ID: addon.ID.String(), Owner: owner, Name: addon.Manifest.Name, Enabled: addon.Enabled,
+		RefreshedAt: addon.RefreshedAt}
 	if h.Health.Addons == nil {
 		return result
 	}
@@ -267,21 +278,33 @@ func (c *addonChecks) allow(id string, now time.Time) (bool, time.Duration) {
 	return true, 0
 }
 
-// checkAddon asks one of the server's addons for its manifest, once, to
-// learn whether it answers, and answers its health. An addon is checked at
-// most once a minute.
+// checkAddon asks an addon, the server's or a user's own, for its
+// manifest, once, to learn whether it answers, and answers its health. An
+// addon is checked at most once a minute.
 func (h *handler) checkAddon(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	list, err := h.Addons.Addons(r.Context(), addons.Shared())
+	scopes, err := h.ownedScopes(r.Context())
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	index := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && (a.Stremio() || a.Eclipse()) })
-	if index < 0 || h.Health.Addons == nil {
+	var found *addons.Addon
+	var owner ownedScope
+	for _, scope := range scopes {
+		list, err := h.Addons.Addons(r.Context(), scope.Scope)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		if i := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && (a.Stremio() || a.Eclipse()) }); i >= 0 {
+			found, owner = &list[i], scope
+			break
+		}
+	}
+	if found == nil || h.Health.Addons == nil {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -290,8 +313,100 @@ func (h *handler) checkAddon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "too_soon")
 		return
 	}
-	// The server's addons were installed by an administrator: they may be
-	// on the local network. The answer is recorded whatever it is.
-	_, _ = h.Health.Addons.Manifest(r.Context(), list[index].ManifestURL, false)
-	writeJSON(w, http.StatusOK, h.addonHealth(list[index]))
+	// The request reaches what the addon's own requests may: a member's
+	// addon only public addresses. The answer is recorded whatever it is.
+	_, _ = h.Health.Addons.Manifest(r.Context(), found.ManifestURL, owner.Confined)
+	writeJSON(w, http.StatusOK, h.addonHealth(*found, owner.Owner))
+}
+
+// ownerJSON is the user whose own addon, source or guide a row is.
+type ownerJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ownedScope is a scope of addons with its owner: nil for the server's.
+// Confined is set for a user who is not an administrator, whose addons'
+// requests may only reach public addresses.
+type ownedScope struct {
+	Scope    addons.Scope
+	Owner    *ownerJSON
+	Confined bool
+}
+
+// ownedScopes lists the server's scope, then every user's own, by name:
+// what the dashboard describes to administrators.
+func (h *handler) ownedScopes(ctx context.Context) ([]ownedScope, error) {
+	users, err := h.Accounts.Users(ctx)
+	if err != nil {
+		return nil, err
+	}
+	scopes := make([]ownedScope, 0, len(users)+1)
+	scopes = append(scopes, ownedScope{Scope: addons.Shared()})
+	for _, user := range users {
+		scopes = append(scopes, ownedScope{Scope: addons.Personal(user.ID), Owner: &ownerJSON{ID: user.ID.String(), Name: user.Name},
+			Confined: !user.IsAdministrator})
+	}
+	return scopes, nil
+}
+
+// ownedAddonJSON is an addon as the addon routes describe it, with its
+// owner; ownedGuideJSON, a live TV catalog with an XMLTV guide.
+type ownedAddonJSON struct {
+	addonJSON
+	Owner *ownerJSON `json:"owner"`
+}
+
+type ownedGuideJSON struct {
+	libraryJSON
+	Owner *ownerJSON `json:"owner"`
+}
+
+// sources lists, for the dashboard, the addons and IPTV sources of the
+// server and of every user, as the addon routes describe them, and the
+// live TV catalogs that have an XMLTV guide, the server's first. Nothing
+// is fetched: this reads what the last fetches recorded.
+func (h *handler) sources(w http.ResponseWriter, r *http.Request) {
+	scopes, err := h.ownedScopes(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	refreshHours := h.Accounts.Settings().LiveTvRefreshHours
+	result := struct {
+		Addons []ownedAddonJSON `json:"addons"`
+		Guides []ownedGuideJSON `json:"guides"`
+	}{Addons: []ownedAddonJSON{}, Guides: []ownedGuideJSON{}}
+	for _, scope := range scopes {
+		list, err := h.Addons.Addons(r.Context(), scope.Scope)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, addon := range list {
+			described, err := h.addonJSON(r, scope.Scope, addon)
+			if err != nil {
+				h.internalError(w, r, err)
+				return
+			}
+			result.Addons = append(result.Addons, ownedAddonJSON{addonJSON: described, Owner: scope.Owner})
+		}
+		libraries, err := h.Addons.Libraries(r.Context(), scope.Scope)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, l := range libraries {
+			if l.Guide == nil || l.Guide.URL == "" {
+				continue
+			}
+			// A live TV catalog lists channels, not a library: it has no
+			// name in apps.
+			result.Guides = append(result.Guides, ownedGuideJSON{Owner: scope.Owner, libraryJSON: libraryJSON{
+				AddonID: l.AddonID.String(), AddonName: l.AddonName, CatalogType: l.Catalog.Type, CatalogID: l.Catalog.ID,
+				CatalogName: l.Catalog.Name, Name: l.Name, Enabled: l.Enabled, Browsable: l.Catalog.Browsable(),
+				Guide: newGuideJSON(l.Guide, refreshHours)}})
+		}
+	}
+	writeJSON(w, http.StatusOK, result)
 }

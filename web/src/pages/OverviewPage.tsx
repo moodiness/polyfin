@@ -52,8 +52,8 @@ function Figures() {
     queryFn: ({ signal }) => fetchLiveSessions(signal),
     refetchInterval: 3_000,
   })
-  const { health, addons, libraries, tasks } = useHealthData()
-  const problems = findProblems(t, language, health.data, addons.data, libraries.data, tasks.data)
+  const { health, sources, tasks } = useHealthData()
+  const problems = findProblems(t, language, health.data, sources.data, tasks.data)
   const transcoder = health.data?.transcoder
   const startedAt = health.data?.process.startedAt
   const errors = problems.some((problem) => problem.tone === 'error')
