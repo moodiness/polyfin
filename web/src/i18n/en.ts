@@ -314,6 +314,9 @@ const en = {
       Weekday: 'Weekdays (Monday to Friday)',
       Weekend: 'Weekends',
     },
+    canManageCollections: 'Can manage collections',
+    canManageCollectionsHelp:
+      'Lets this user create collections of titles in Jellyfin apps, add titles to them or take titles out, and delete them. Every user sees the collections, each with only the titles they may see.',
   },
   settings: {
     title: 'Settings',

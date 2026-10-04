@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
@@ -203,6 +204,7 @@ func serve(ctx context.Context) error {
 				UserData:      userdata.New(pool),
 				Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
 				Playlists:     playlists.New(pool),
+				Collections:   collections.New(pool),
 				Logger:        logger,
 			}),
 			Logger: logger,

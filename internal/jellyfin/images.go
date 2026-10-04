@@ -69,7 +69,10 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	url, confined, err := h.Library.Artwork(r.Context(), id, r.PathValue("imageType"))
+	url, confined, collection, err := h.collectionArtwork(r, id, r.PathValue("imageType"))
+	if !collection {
+		url, confined, err = h.Library.Artwork(r.Context(), id, r.PathValue("imageType"))
+	}
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps show a version opened as an item with its title's artwork.
 		if owner, ok := h.Library.VersionOwner(id); ok {

@@ -19,6 +19,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
@@ -104,6 +105,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		Preferences:   preferences.New(pool),
 		UserData:      userdata.New(pool),
 		Playlists:     playlists.New(pool),
+		Collections:   collections.New(pool),
 		Logger:        logger,
 	})
 	server := httptest.NewServer(handler)
