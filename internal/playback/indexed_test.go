@@ -46,7 +46,13 @@ func subtitled(t *testing.T) (*Service, *fileOpener, library.Version, media.Anal
 // version and analysis, ffprobe's in name.ffprobe.json.
 func served(t *testing.T, dir, name string) (*Service, *fileOpener, library.Version, media.Analysis) {
 	t.Helper()
-	server := httptest.NewServer(http.FileServer(http.Dir(dir)))
+	return servedBy(t, dir, name, http.FileServer(http.Dir(dir)))
+}
+
+// servedBy is served, the fixture served by handler.
+func servedBy(t *testing.T, dir, name string, handler http.Handler) (*Service, *fileOpener, library.Version, media.Analysis) {
+	t.Helper()
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	probe, err := os.ReadFile(filepath.Join(dir, name+".ffprobe.json"))
 	if err != nil {
@@ -61,6 +67,72 @@ func served(t *testing.T, dir, name string) (*Service, *fileOpener, library.Vers
 	version := library.Version{ID: accounts.ID{7}, URL: server.URL + "/" + name + ".mkv", Addon: "files"}
 	s.analyses.Put(version.ID, analysis)
 	return s, opener, version, analysis
+}
+
+// singleRanges serves the files of dir as hosts serving one range per
+// request do: of several ranges asked, the first only. ranges counts the
+// requests asking for several.
+func singleRanges(dir string, ranges *atomic.Int64) http.Handler {
+	files := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if first, _, several := strings.Cut(r.Header.Get("Range"), ","); several {
+			ranges.Add(1)
+			r.Header.Set("Range", first)
+		}
+		files.ServeHTTP(w, r)
+	})
+}
+
+// A track whose blocks a host serving one range per request would take
+// more requests than its share to serve is not offered as a file: the app
+// asking for it would get an error. Whether the host serves several
+// ranges is learned with one request, once per host. A host serving
+// several ranges at once is offered the track.
+func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
+	share := trackRequests
+	trackRequests = 1
+	t.Cleanup(func() { trackRequests = share })
+	dir := filepath.Join("..", "container", "testdata")
+	var ranges atomic.Int64
+	s, _, version, analysis := servedBy(t, dir, "subtitles", singleRanges(dir, &ranges))
+	ctx := t.Context()
+	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 0 {
+		t.Errorf("located from a host serving a range per request: %v", located)
+	}
+	if ranges.Load() != 1 {
+		t.Errorf("%d requests for several ranges, want 1", ranges.Load())
+	}
+	// Another version from the same host is not asked again.
+	other := version
+	other.ID = accounts.ID{8}
+	if located := s.SubtitlesLocated(ctx, other, analysis); len(located) != 0 || ranges.Load() != 1 {
+		t.Errorf("another version: %v, %d requests for several ranges", located, ranges.Load())
+	}
+
+	s, _, version, analysis = subtitled(t)
+	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 2 {
+		t.Errorf("located from a host serving several ranges: %v", located)
+	}
+}
+
+// An analysis that took a wrong size for the file, as a source did from a
+// host's error page, leaves the index unreadable: the size the host tells
+// replaces it, and the index is read.
+func TestWrongAnalyzedSizesAreCorrected(t *testing.T) {
+	s, _, version, analysis := subtitled(t)
+	ctx := t.Context()
+	size := analysis.Size
+	analysis.Size = 33
+	s.analyses.Put(version.ID, analysis)
+	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 2 {
+		t.Fatalf("located: %v", located)
+	}
+	if corrected, _ := s.Analyzed(ctx, version.ID); corrected.Size != size {
+		t.Errorf("analyzed size %d, want %d", corrected.Size, size)
+	}
+	if _, err := s.keyframes(ctx, version, analysis); err != nil {
+		t.Errorf("keyframes: %v", err)
+	}
 }
 
 func TestTracksAreReadWholeThroughTheIndex(t *testing.T) {

@@ -519,20 +519,7 @@ func (r *blockReader) read(ctx context.Context, cues []cueBlock, header int64) (
 		}
 		blocks[i] = located{cue: cue, at: r.m.segment.data + int64(cue.cluster) + length + int64(cue.relative)}
 	}
-	slices.SortStableFunc(blocks, func(a, b located) int { return cmp.Compare(a.at, b.at) })
-	var groups []group
-	for i := range blocks {
-		blocks[i].rank = i
-		if n := len(groups); n > 0 {
-			last := &groups[n-1]
-			if blocks[i].at-last.end <= r.layout.gap && blocks[i].at+r.layout.window-last.start <= r.layout.span {
-				last.blocks = append(last.blocks, blocks[i])
-				last.end = blocks[i].at + r.layout.window
-				continue
-			}
-		}
-		groups = append(groups, group{start: blocks[i].at, end: blocks[i].at + r.layout.window, blocks: []located{blocks[i]}})
-	}
+	groups := groupBlocks(blocks, r.layout)
 	for i := range groups {
 		if groups[i].start >= r.m.size {
 			return nil, r.m.outside(uint64(groups[i].start-r.m.segment.data), fmt.Sprintf("block of track %d", r.number))
@@ -552,6 +539,44 @@ func (r *blockReader) read(ctx context.Context, cues []cueBlock, header int64) (
 	}
 	slices.SortStableFunc(result, func(a, b Block) int { return cmp.Compare(a.Start, b.Start) })
 	return result, nil
+}
+
+// groupBlocks sorts blocks by position, ranks them so, and gathers those
+// close together, read with one range each group.
+func groupBlocks(blocks []located, l layout) []group {
+	slices.SortStableFunc(blocks, func(a, b located) int { return cmp.Compare(a.at, b.at) })
+	var groups []group
+	for i := range blocks {
+		blocks[i].rank = i
+		if n := len(groups); n > 0 {
+			last := &groups[n-1]
+			if blocks[i].at-last.end <= l.gap && blocks[i].at+l.window-last.start <= l.span {
+				last.blocks = append(last.blocks, blocks[i])
+				last.end = blocks[i].at + l.window
+				continue
+			}
+		}
+		groups = append(groups, group{start: blocks[i].at, end: blocks[i].at + l.window, blocks: []located{blocks[i]}})
+	}
+	return groups
+}
+
+// SingleRangeRequests returns about how many requests SubtitleBlocks takes
+// to read subtitle track number from a host that serves a range per
+// request: one per range of blocks close together, and two for the
+// Cluster checked. The Cluster headers, of a few bytes, are not counted in
+// the blocks' positions, which they barely move.
+func (m *Matroska) SingleRangeRequests(ctx context.Context, number uint64) (int, error) {
+	index, err := m.cueIndex(ctx)
+	if err != nil {
+		return 0, err
+	}
+	cues := index.blocks[number]
+	blocks := make([]located, len(cues))
+	for i, cue := range cues {
+		blocks[i] = located{cue: cue, at: m.segment.data + int64(cue.cluster) + int64(cue.relative)}
+	}
+	return len(groupBlocks(blocks, defaultLayout)) + 2, nil
 }
 
 // readGroups reads groups with a request each, at most limit at once, into

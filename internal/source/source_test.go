@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -36,12 +37,14 @@ type origin struct {
 	requests atomic.Int32
 	// expired paths answer 403; busy makes the next requests answer 429,
 	// asking to retry after retryAfter seconds, and failing the next ones
-	// 502; rangeless ignores ranges and hides the size. ranges holds the
-	// ranges asked, and times when.
+	// 502; refusing makes the next ones answer an error page with 200, as
+	// some hosts refuse requests; rangeless ignores ranges and hides the
+	// size. ranges holds the ranges asked, and times when.
 	mu         sync.Mutex
 	expired    map[string]bool
 	busy       int
 	failing    int
+	refusing   int
 	retryAfter string
 	rangeless  bool
 	ranges     []string
@@ -56,12 +59,16 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		o.requests.Add(1)
 		o.mu.Lock()
 		expired, busy, failing, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter
+		refusing := !busy && !failing && o.refusing > 0
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
 		o.times = append(o.times, time.Now())
-		if busy {
+		switch {
+		case busy:
 			o.busy--
-		} else if failing {
+		case failing:
 			o.failing--
+		case refusing:
+			o.refusing--
 		}
 		o.mu.Unlock()
 		switch {
@@ -72,6 +79,9 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 			http.Error(w, "slow down", http.StatusTooManyRequests)
 		case failing:
 			http.Error(w, "bad gateway", http.StatusBadGateway)
+		case refusing:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"error":"too many requests"}`))
 		case rangeless:
 			// Chunked, without a length: the size is learned at the end.
 			for chunk := range slices.Chunk(o.data, 64<<10) {
@@ -213,6 +223,49 @@ func TestSourcesIgnoringRangesAreReadThrough(t *testing.T) {
 	}
 	if n, err := s.ReadAt(t.Context(), make([]byte, 10), int64(len(o.data))-5); n != 5 || err != io.EOF {
 		t.Errorf("read across the end: %d %v", n, err)
+	}
+}
+
+// A host refusing a request with an error page sent with HTTP 200 does not
+// cut the file short: the page's length is not taken for the file's size,
+// nor its body for the file's bytes, and the request is sent again. A
+// version analyzed through a source that took such a page's length kept a
+// size of a few bytes, which its index was then read with.
+func TestErrorPagesDoNotCutSourcesShort(t *testing.T) {
+	o, server := newOrigin(t, 4*blockSize)
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	// A read of the head tells the size, without a connection reading on.
+	if _, err := s.Fetch(t.Context(), 0, 10); err != nil {
+		t.Fatal(err)
+	}
+	o.mu.Lock()
+	o.refusing = 1
+	o.mu.Unlock()
+	got := make([]byte, 2000)
+	off := int64(3*blockSize + 100)
+	// Bounded: a source cut short waits for blocks past its end in vain.
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	if _, err := s.ReadAt(ctx, got, off); err != nil || !bytes.Equal(got, o.data[off:off+2000]) {
+		t.Fatalf("read past the error page: %v", err)
+	}
+	if size, err := s.Size(t.Context()); err != nil || size != int64(len(o.data)) {
+		t.Errorf("size: %d %v", size, err)
+	}
+	if s.ignoresRanges() {
+		t.Error("the source is taken to ignore ranges")
+	}
+	// Asked for several ranges, a host refusing so is not taken to serve a
+	// range at a time.
+	o.mu.Lock()
+	o.refusing = 1
+	o.mu.Unlock()
+	if _, err := s.Once().FetchRanges(t.Context(), []container.Range{{Off: 0, N: 10}, {Off: blockSize, N: 10}}); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("ranges refused: %v", err)
+	}
+	if s.multiRangeUnsupported() {
+		t.Error("an error page is taken for a host serving a range at a time")
 	}
 }
 
@@ -550,6 +603,7 @@ func TestFetchRangesReadsMergedParts(t *testing.T) {
 }
 
 func TestFetchRangesUnsupported(t *testing.T) {
+	// A file of 1 GiB, of which the first 64 KiB are served.
 	data := make([]byte, 64<<10)
 	_, _ = rand.Read(data)
 	ranges := []container.Range{{Off: 0, N: 100}, {Off: 1000, N: 500}, {Off: 5000, N: 10}}
@@ -562,7 +616,7 @@ func TestFetchRangesUnsupported(t *testing.T) {
 		},
 		// One part, of the first range only, of a body that goes on.
 		"first range": func(w http.ResponseWriter) int64 {
-			w.Header().Set("Content-Range", "bytes 0-99/65536")
+			w.Header().Set("Content-Range", "bytes 0-99/1073741824")
 			w.WriteHeader(http.StatusPartialContent)
 			return 1 << 30
 		},
@@ -583,8 +637,12 @@ func TestFetchRangesUnsupported(t *testing.T) {
 			written := make(chan int64, 4)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
-				if !strings.Contains(r.Header.Get("Range"), ",") {
-					http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+				if first, last, ok := strings.Cut(strings.TrimPrefix(r.Header.Get("Range"), "bytes="), "-"); ok && !strings.Contains(last, ",") {
+					from, _ := strconv.Atoi(first)
+					to, _ := strconv.Atoi(last)
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, to, 1<<30))
+					w.WriteHeader(http.StatusPartialContent)
+					_, _ = w.Write(data[from : to+1])
 					return
 				}
 				// The body is written until the client goes away: it does

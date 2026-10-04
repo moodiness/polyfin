@@ -89,6 +89,9 @@ type Service struct {
 	untracked  *cache.Cache[trackKey, error]
 	trackReads chan struct{}
 	hostReads  hostSlots
+	// rangeHosts tells, by host, whether it serves several ranges with one
+	// request.
+	rangeHosts *cache.Cache[string, bool]
 	// trackCues are the cues of tracks read whole, for their HLS segments.
 	trackCues *cache.Cache[trackKey, []subtitles.Cue]
 	// attached are the files versions carry, read once for the fonts a
@@ -132,6 +135,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		tracks:      cache.New[trackKey, Track](100, time.Hour),
 		untracked:   cache.New[trackKey, error](2000, failureTTL),
 		trackReads:  make(chan struct{}, maxTrackReads),
+		rangeHosts:  cache.New[string, bool](500, 24*time.Hour),
 		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
 	}
