@@ -111,6 +111,10 @@ const en = {
     invalid_guide_url:
       'Enter a guide address starting with https:// or http://, of at most 4,096 characters.',
     invalid_app: 'The app name must be 1 to 64 characters long, without special characters.',
+    invalid_trickplay_interval:
+      'The time between two thumbnails must be a whole number of seconds from 5 to 60.',
+    invalid_trickplay_width: 'Choose the thumbnail width from the list.',
+    invalid_thumbnail_storage_gb: 'The space for images must be a whole number of GB from 1 to 50.',
   },
   status: {
     title: 'Server status',
@@ -413,6 +417,25 @@ const en = {
     detailedLogHelp:
       'Polyfin writes much more to its log, at once and without a restart. Turn it off once the problem is found.',
     saved: 'Settings saved.',
+    thumbnailsTitle: 'Thumbnails',
+    thumbnailsHelp:
+      'Images made from the titles themselves, after they are played. To make them, Polyfin reads small parts of the file from the source, in the background, at most 2 requests a second: one image every few seconds of video, never the whole file. Off by default.',
+    trickplay: 'Thumbnails when moving through a title',
+    trickplayHelp:
+      'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them after a title starts playing, and for the next episode when playback is prepared in advance. A 2-hour movie takes a few minutes to get its images.',
+    trickplayInterval: 'One thumbnail every (seconds)',
+    trickplayIntervalHelp:
+      'Polyfin reads one image from the source every this many seconds of video. A lower number shows more precise images, but reads more from the source and takes more space. From 5 to 60; 10 by default, like Jellyfin.',
+    trickplayWidth: 'Thumbnail width',
+    trickplayWidthHelp:
+      'Wider thumbnails look sharper on large screens, but take more space. Changing it makes new thumbnails the next time a title is played.',
+    pixels: (width: number) => `${width} pixels`,
+    chapterImages: 'Chapter images',
+    chapterImagesHelp:
+      'Apps show an image for each chapter of a title, in its list of scenes. Polyfin reads one image per chapter, after the title starts playing.',
+    thumbnailStorage: 'Space for images (GB)',
+    thumbnailStorageHelp:
+      'Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From 1 to 50; 2 by default.',
   },
   stremioTypes: {
     movie: 'Movies',
