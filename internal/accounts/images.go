@@ -26,25 +26,27 @@ const (
 	maxImagePixels = 50_000_000
 )
 
-// ErrInvalidImage is returned for a profile picture that is not a JPEG,
-// PNG or WebP image of at most MaxImageBytes.
-var ErrInvalidImage = errors.New("invalid profile picture")
+// ErrInvalidImage is returned for a picture that is not a JPEG, PNG or
+// WebP image within the size allowed: MaxImageBytes for a profile picture.
+var ErrInvalidImage = errors.New("invalid picture")
 
-// ImageTypes are the formats a profile picture may be sent in.
+// ImageTypes are the formats a picture may be sent in.
 var ImageTypes = []string{"image/jpeg", "image/png", "image/webp"}
 
-// UserImage is a user's profile picture as kept: a JPEG or PNG image.
+// UserImage is a picture as kept, a user's profile picture or an item's
+// uploaded artwork: a JPEG or PNG image, tagged by its content.
 type UserImage struct {
 	Data        []byte
 	ContentType string
 	Tag         string
 }
 
-// normalizeImage decodes a JPEG, PNG or WebP picture and encodes it again
-// within MaxImageSide: as PNG when it has transparency, which JPEG would
-// lose, else as JPEG.
-func normalizeImage(data []byte) (UserImage, error) {
-	if len(data) == 0 || len(data) > MaxImageBytes {
+// NormalizeImage decodes a JPEG, PNG or WebP picture of at most maxBytes
+// and encodes it again within maxSide: as PNG when it has transparency,
+// which JPEG would lose, else as JPEG, of at most maxBytes too. Profile
+// pictures and the artwork administrators upload for items are kept so.
+func NormalizeImage(data []byte, maxBytes, maxSide int) (UserImage, error) {
+	if len(data) == 0 || len(data) > maxBytes {
 		return UserImage{}, ErrInvalidImage
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
@@ -57,8 +59,8 @@ func normalizeImage(data []byte) (UserImage, error) {
 		return UserImage{}, ErrInvalidImage
 	}
 	bounds := picture.Bounds()
-	if width, height := bounds.Dx(), bounds.Dy(); width > MaxImageSide || height > MaxImageSide {
-		scale := float64(MaxImageSide) / float64(max(width, height))
+	if width, height := bounds.Dx(), bounds.Dy(); width > maxSide || height > maxSide {
+		scale := float64(maxSide) / float64(max(width, height))
 		target := image.Rect(0, 0, max(1, int(float64(width)*scale+0.5)), max(1, int(float64(height)*scale+0.5)))
 		scaled := image.NewRGBA(target)
 		xdraw.CatmullRom.Scale(scaled, target, picture, bounds, xdraw.Src, nil)
@@ -72,7 +74,7 @@ func normalizeImage(data []byte) (UserImage, error) {
 		result.ContentType = "image/png"
 		err = png.Encode(&out, picture)
 	}
-	if err != nil || out.Len() > MaxImageBytes {
+	if err != nil || out.Len() > maxBytes {
 		return UserImage{}, ErrInvalidImage
 	}
 	result.Data = out.Bytes()
@@ -101,7 +103,7 @@ func opaque(picture image.Image) bool {
 // WebP image, normalized (see normalizeImage). It returns the user with
 // their new ImageTag.
 func (s *Store) SetImage(ctx context.Context, id ID, data []byte) (User, error) {
-	normalized, err := normalizeImage(data)
+	normalized, err := NormalizeImage(data, MaxImageBytes, MaxImageSide)
 	if err != nil {
 		return User{}, err
 	}

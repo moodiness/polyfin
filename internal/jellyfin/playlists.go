@@ -855,8 +855,11 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 				played++
 			}
 		}
+		// A playlist shows administrators' edits as items do.
+		item := h.Library.Overridden(library.Item{ID: p.ID, Kind: library.KindMusicPlaylist, Name: p.Name, Genres: genres})[0]
+		genres = item.Genres
 		dto := BaseItemDto{
-			Name:              p.Name,
+			Name:              item.Name,
 			ServerId:          h.ServerID,
 			Id:                p.ID.String(),
 			IsFolder:          true,
@@ -879,6 +882,23 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 		if runtime > 0 {
 			dto.RunTimeTicks = new(int64(runtime / 100))
 		}
+		dto.OfficialRating = item.OfficialRating
+		if item.CommunityRating > 0 {
+			dto.CommunityRating = new(item.CommunityRating)
+		}
+		if item.PremiereDate != nil {
+			dto.PremiereDate = new(Time(*item.PremiereDate))
+		}
+		if item.EndDate != nil {
+			dto.EndDate = new(Time(*item.EndDate))
+		}
+		if item.ProductionYear > 0 {
+			dto.ProductionYear = new(item.ProductionYear)
+		}
+		if item.Overview != "" && (detail || fields.has("Overview")) {
+			dto.Overview = new(item.Overview)
+		}
+		h.setImages(&dto, item)
 		if detail || fields.has("Genres") {
 			dto.Genres = new(nonNil(genres))
 		}
@@ -891,9 +911,7 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 		if detail || fields.has("CanDelete") {
 			dto.CanDelete = new(p.Owner == user.ID || user.IsAdministrator)
 		}
-		if detail || fields.has("SortName") {
-			dto.SortName = strings.ToLower(p.Name)
-		}
+		describeEdited(&dto, item, fields, detail)
 		if detail || fields.has("ParentId") {
 			dto.ParentId = playlistsViewID.String()
 		}
@@ -902,16 +920,13 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 			dto.CanDownload = new(false)
 			dto.ExternalUrls = &[]MediaUrl{}
 			dto.EnableMediaSourceDisplay = new(true)
-			dto.Taglines = &[]string{}
 			dto.PlayAccess = "Full"
 			dto.RemoteTrailers = &[]MediaUrl{}
 			dto.People = &[]BaseItemPerson{}
-			dto.Studios = &[]NameGuidPair{}
 			dto.GenreItems = new(genreItems(genres))
 			dto.LocalTrailerCount = new(0)
 			dto.SpecialFeatureCount = new(0)
 			dto.DisplayPreferencesId = p.ID.String()
-			dto.Tags = &[]string{}
 			dto.LockedFields = &[]string{}
 			dto.LockData = new(false)
 			dto.Chapters = &[]ChapterInfo{}

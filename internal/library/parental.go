@@ -261,6 +261,7 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 			continue
 		}
 		t, old := s.knownTraits(v, r)
+		t = s.overriddenTraits(r.ID, t)
 		if ok, decided := v.verdict(r.Kind, t); decided {
 			allowed[i] = ok
 			if old {
@@ -273,7 +274,7 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 	found, pending := s.lookUpTraits(ctx, v, titles, unknown)
 	for i, t := range found {
 		if t != nil {
-			allowed[unknown[i]] = v.allows(titles[unknown[i]].Kind, *t)
+			allowed[unknown[i]] = v.allows(titles[unknown[i]].Kind, s.overriddenTraits(titles[unknown[i]].ID, *t))
 		}
 		held = held || pending[i]
 	}

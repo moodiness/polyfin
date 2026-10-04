@@ -1,0 +1,89 @@
+{
+  "ParentalRatingOptions": [
+    {
+      "Name": "Unrated"
+    },
+    {
+      "Name": "Approved",
+      "Value": 0,
+      "RatingScore": {
+        "score": 0,
+        "subScore": 0
+      }
+    },
+    {
+      "Name": "G",
+      "Value": 0,
+      "RatingScore": {
+        "score": 0,
+        "subScore": 0
+      }
+    }
+  ],
+  "Countries": [
+    {
+      "Name": "AF",
+      "DisplayName": "Afghanistan",
+      "TwoLetterISORegionName": "AF",
+      "ThreeLetterISORegionName": "AFG"
+    },
+    {
+      "Name": "AL",
+      "DisplayName": "Albania",
+      "TwoLetterISORegionName": "AL",
+      "ThreeLetterISORegionName": "ALB"
+    },
+    {
+      "Name": "DZ",
+      "DisplayName": "Algeria",
+      "TwoLetterISORegionName": "DZ",
+      "ThreeLetterISORegionName": "DZA"
+    }
+  ],
+  "Cultures": [
+    {
+      "Name": "Abkhazian",
+      "DisplayName": "Abkhazian",
+      "TwoLetterISOLanguageName": "ab",
+      "ThreeLetterISOLanguageName": "abk",
+      "ThreeLetterISOLanguageNames": [
+        "abk"
+      ]
+    },
+    {
+      "Name": "Achinese",
+      "DisplayName": "Achinese",
+      "TwoLetterISOLanguageName": "",
+      "ThreeLetterISOLanguageName": "ace",
+      "ThreeLetterISOLanguageNames": [
+        "ace"
+      ]
+    },
+    {
+      "Name": "Acoli",
+      "DisplayName": "Acoli",
+      "TwoLetterISOLanguageName": "",
+      "ThreeLetterISOLanguageName": "ach",
+      "ThreeLetterISOLanguageNames": [
+        "ach"
+      ]
+    }
+  ],
+  "ExternalIdInfos": [
+    {
+      "Name": "IMDb",
+      "Key": "Imdb"
+    },
+    {
+      "Name": "TheMovieDb",
+      "Key": "Tmdb",
+      "Type": "Movie"
+    },
+    {
+      "Name": "TheMovieDb",
+      "Key": "TmdbCollection",
+      "Type": "BoxSet"
+    }
+  ],
+  "ContentTypeOptions": []
+}

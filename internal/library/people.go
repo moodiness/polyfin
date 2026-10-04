@@ -254,7 +254,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	if more {
 		total++
 	}
-	return Page{Items: items, Total: total, More: more}, s.save(ctx, records)
+	return Page{Items: s.overridden(items), Total: total, More: more}, s.save(ctx, records)
 }
 
 // creditedTitles describes, by name, the titles of the given kinds among a
@@ -383,7 +383,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 			people = append(people, Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}})
 		}
 	}
-	return people, total, rows.Err()
+	return s.overridden(people), total, rows.Err()
 }
 
 // visibleCredits lists the titles crediting the people a query matches

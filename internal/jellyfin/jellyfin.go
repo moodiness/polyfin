@@ -199,6 +199,7 @@ func New(options Options) *Handler {
 	h.appRoutes(rt)
 	h.subtitleUploadRoutes(rt)
 	h.absentRoutes(rt)
+	h.metadataRoutes(rt)
 	h.rootRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 

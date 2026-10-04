@@ -1,0 +1,16 @@
+[
+  {
+    "Name": "IMDb",
+    "Key": "Imdb"
+  },
+  {
+    "Name": "TheMovieDb",
+    "Key": "Tmdb",
+    "Type": "Movie"
+  },
+  {
+    "Name": "TheMovieDb",
+    "Key": "TmdbCollection",
+    "Type": "BoxSet"
+  }
+]

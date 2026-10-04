@@ -40,7 +40,7 @@ func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, err
 		return nil, err
 	}
 	channels, records := s.channels(ctx, v)
-	return channels, s.save(ctx, records)
+	return s.overridden(channels), s.save(ctx, records)
 }
 
 // channels lists the channels of a view, with the records that find them
@@ -219,7 +219,7 @@ func (s *Service) Programs(ctx context.Context, user accounts.User, from, to tim
 		}
 		return comparedNumbers(a.Channel.Number, b.Channel.Number)
 	})
-	return programs, s.save(ctx, records)
+	return s.overridden(programs), s.save(ctx, records)
 }
 
 func comparedNumbers(a, b string) int {
