@@ -268,12 +268,14 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit,
 				skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes,
 				personal_addons, login_attempts, inactive_device_days, detailed_log,
-				analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height`, language).
+				analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height,
+				trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb`, language).
 			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 				&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 				&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
-				&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight)
+				&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
+				&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB)
 	})
 	if err == nil && settings != nil {
 		s.settings.Store(settings)
