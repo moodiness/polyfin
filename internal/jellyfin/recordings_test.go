@@ -524,6 +524,46 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	if status, segment := s.call(http.MethodGet, base+first, "", nil); status != http.StatusOK || len(segment) == 0 {
 		t.Errorf("a segment of the recording: %d", status)
 	}
+	// Its file is served as Jellyfin serves an item's, under the download
+	// permissions, and saved under its name.
+	status, whole := s.call(http.MethodGet, "/Items/"+recording.Id+"/File", app("tv", token), nil)
+	if status != http.StatusOK || len(whole) != len(file) {
+		t.Errorf("the recording's file: %d, %d bytes", status, len(whole))
+	}
+	request, _ := http.NewRequest(http.MethodGet, s.url+"/Items/"+recording.Id+"/Download", nil)
+	request.Header.Set("Authorization", app("tv", token))
+	if response, err := http.DefaultClient.Do(request); err != nil || response.StatusCode != http.StatusOK ||
+		!strings.Contains(response.Header.Get("Content-Disposition"), ".mkv") {
+		t.Errorf("the recording downloaded: %v %v", response, err)
+	} else {
+		response.Body.Close()
+	}
+	s.setting(t, func(settings *accounts.Settings) { settings.Downloads = false })
+	if status, _ := s.call(http.MethodGet, "/Items/"+recording.Id+"/File", app("tv", token), nil); status != http.StatusForbidden {
+		t.Errorf("the recording's file while downloads are off: %d", status)
+	}
+	s.setting(t, func(settings *accounts.Settings) { settings.Downloads = true })
+	// Other app routes answer without failing; subtitle files are refused.
+	for _, route := range [][2]string{{http.MethodGet, "/Items/" + recording.Id + "/Images"}, {http.MethodPost, "/Items/" + recording.Id + "/Refresh"}} {
+		if status, body := s.call(route[0], route[1], app("tv", token), nil); status >= http.StatusInternalServerError {
+			t.Errorf("%s %s on a recording: %d %s", route[0], route[1], status, body)
+		}
+	}
+	upload := map[string]any{"Language": "eng", "Format": "srt", "Data": "MQowMDowMDowMSwwMDAgLS0+IDAwOjAwOjAyLDAwMApIaQo="}
+	if status, _ := s.call(http.MethodPost, "/Videos/"+recording.Id+"/Subtitles", app("tv", token), upload); status != http.StatusBadRequest && status != http.StatusForbidden {
+		t.Errorf("a subtitle file for a recording: %d", status)
+	}
+	admin, err := s.store.CreateUser(t.Context(), accounts.NewUser{Name: "boss", Password: "correct horse", IsAdministrator: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	yes := true
+	if _, err := s.store.UpdateUser(t.Context(), admin.ID, accounts.UserChanges{LiveTv: &yes}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := s.call(http.MethodPost, "/Videos/"+recording.Id+"/Subtitles", app("web", s.signIn("boss", "web")), upload); status != http.StatusBadRequest {
+		t.Errorf("a subtitle file for a recording, by an administrator: %d", status)
+	}
 
 	// Deleted, it is gone with its file.
 	if status, _ := s.call(http.MethodDelete, "/LiveTv/Recordings/"+recording.Id, app("tv", token), nil); status != http.StatusNoContent {
@@ -534,6 +574,10 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	}
 	if status, _ := s.call(http.MethodGet, "/LiveTv/Recordings/"+recording.Id, app("tv", token), nil); status != http.StatusNotFound {
 		t.Errorf("a deleted recording: %d", status)
+	}
+	if page, err := s.activity.Entries(t.Context(), activity.Query{}); err != nil ||
+		!slices.ContainsFunc(page.Entries, func(e activity.Entry) bool { return e.Type == "RecordingDeleted" && strings.Contains(e.Name, "Show") }) {
+		t.Errorf("activity after a recording was deleted: %+v %v", page.Entries, err)
 	}
 }
 

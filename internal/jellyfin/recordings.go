@@ -1233,3 +1233,28 @@ func (h *Handler) recordingArtwork(ctx context.Context, id accounts.ID, imageTyp
 	}
 	return "", false, library.ErrNotFound
 }
+
+// serveRecordingFile serves a recording's file for /Items/{id}/File and
+// /Items/{id}/Download, as a file to save when attachment is set. One
+// still being written has no file yet: Jellyfin refuses what has none as a
+// request it cannot process.
+func (h *Handler) serveRecordingFile(w http.ResponseWriter, r *http.Request, recording library.Item, attachment bool) {
+	versions := h.recordingVersions(r.Context(), recording)
+	if len(versions) == 0 {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
+	if attachment {
+		w.Header().Set("Content-Disposition", `attachment; filename="`+versions[0].Filename+`"`)
+	}
+	h.serveRecording(w, r, versions[0], "")
+}
+
+// isRecording reports whether id is a recording's.
+func (h *Handler) isRecording(ctx context.Context, id accounts.ID) bool {
+	if !h.recordable() {
+		return false
+	}
+	_, err := h.Recordings.Recording(ctx, id)
+	return err == nil
+}
