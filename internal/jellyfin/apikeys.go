@@ -64,6 +64,21 @@ func (h *Handler) administrationRoutes(rt *router) {
 	administrator(http.MethodPost, "/System/Configuration", h.updateServerConfiguration)
 	administrator(http.MethodGet, "/System/Info/Storage", h.storage)
 	administrator(http.MethodGet, "/Library/MediaFolders", h.mediaFolders)
+	// jellyfin-web's dashboard menu lists the plugins' pages, which it asks
+	// before Polyfin takes it to the admin app: Polyfin has no plugins.
+	administrator(http.MethodGet, "/web/ConfigurationPages", h.configurationPages)
+}
+
+// configurationPages lists the plugins' configuration pages, as Jellyfin's
+// do on a server without plugins: none.
+func (h *Handler) configurationPages(w http.ResponseWriter, r *http.Request) {
+	b := bindErrors{}
+	b.bool(r, "enableInMainMenu")
+	if len(b) > 0 {
+		validationProblem(w, b)
+		return
+	}
+	writeJSON(w, http.StatusOK, []struct{}{})
 }
 
 // listResult is Jellyfin's QueryResult of any item type.
