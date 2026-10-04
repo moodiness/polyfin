@@ -82,15 +82,6 @@ func (s *Service) RefreshGuide(ctx context.Context, scope addons.Scope, key addo
 	return s.refreshGuide(ctx, src)
 }
 
-// guideChannel is a channel of a catalog, as a guide is matched to it.
-type guideChannel struct {
-	id   accounts.ID
-	name string
-	// byID and byName are the guide channels it matched: by its Stremio ID,
-	// and the first one declared under its name.
-	byID, byName string
-}
-
 // refreshGuide fetches a catalog's guide and stores its programmes, once
 // at a time for each address.
 func (s *Service) refreshGuide(ctx context.Context, src addons.GuideSource) error {
@@ -147,15 +138,11 @@ type storedProgramme struct {
 
 // fetchGuide lists the catalog's channels, then reads its guide and keeps
 // the programmes of the channels it covers within the window around at.
-// code is empty on success, else the reason it failed.
-//
-// A guide channel matches a catalog channel by its identifier equal to the
-// channel's Stremio ID, else by a display name equal to the channel's
-// name once both are normalized (see xmltv.NormalizeName). Each channel
-// takes one guide channel: the one matched by identifier, else the first
-// declared under its name. XMLTV declares channels before programmes;
-// a programme of a channel not declared yet only counts when its channel
-// is a Stremio ID.
+// code is empty on success, else the reason it failed. Each channel takes
+// the guide channel xmltv.Matcher chooses; only the programmes of its
+// candidates are kept while the guide is read. XMLTV declares channels
+// before programmes; a programme of a channel not declared yet only counts
+// when its channel is a Stremio ID.
 func (s *Service) fetchGuide(ctx context.Context, src addons.GuideSource, at time.Time) (kept []storedProgramme, channels, matched int, code string) {
 	settings := s.settings()
 	v := view{deadline: at, lookups: new(atomic.Int32), held: new(atomic.Bool),
@@ -165,52 +152,32 @@ func (s *Service) fetchGuide(ctx context.Context, src addons.GuideSource, at tim
 	if err != nil {
 		return nil, 0, 0, guideChannelsUnreachable
 	}
-	var list []*guideChannel
-	byStremioID := map[string]*guideChannel{}
-	byName := map[string][]*guideChannel{}
+	var list []accounts.ID
+	seen := map[string]bool{}
+	matcher := xmltv.NewMatcher(settings.Language)
 	for _, meta := range metas {
-		if meta.ID == "" || byStremioID[meta.ID] != nil {
+		if meta.ID == "" || seen[meta.ID] {
 			continue
 		}
-		c := &guideChannel{id: itemID(channelKey(meta.ID)), name: meta.Name}
-		list = append(list, c)
-		byStremioID[meta.ID] = c
-		if name := xmltv.NormalizeName(meta.Name); name != "" {
-			byName[name] = append(byName[name], c)
-		}
+		seen[meta.ID] = true
+		list = append(list, itemID(channelKey(meta.ID)))
+		matcher.Add(meta.ID, meta.Name)
 	}
 	if len(list) == 0 {
 		return nil, 0, 0, ""
 	}
 
 	from, to := at.Add(-guidePast), at.AddDate(0, 0, guideAhead)
-	wanted := map[string]bool{}
 	programmes := map[string][]xmltv.Programme{}
 	count := 0
 	err = s.readGuide(ctx, src, xmltv.Options{Language: settings.Language},
 		func(channel xmltv.Channel) error {
-			if c := byStremioID[channel.ID]; c != nil {
-				c.byID, wanted[channel.ID] = channel.ID, true
-			}
-			for _, name := range channel.Names {
-				for _, c := range byName[xmltv.NormalizeName(name)] {
-					if c.byName == "" {
-						c.byName, wanted[channel.ID] = channel.ID, true
-					}
-				}
-			}
+			matcher.Declare(channel)
 			return nil
 		},
 		func(p xmltv.Programme) error {
-			if !p.Stop.After(from) || !p.Start.Before(to) {
+			if !p.Stop.After(from) || !p.Start.Before(to) || !matcher.Wants(p.Channel) {
 				return nil
-			}
-			if !wanted[p.Channel] {
-				c := byStremioID[p.Channel]
-				if c == nil {
-					return nil
-				}
-				c.byID, wanted[p.Channel] = p.Channel, true
 			}
 			if count++; count > maxGuideProgrammes {
 				return errTooManyProgrammes
@@ -229,17 +196,20 @@ func (s *Service) fetchGuide(ctx context.Context, src addons.GuideSource, at tim
 	default:
 		return nil, 0, 0, guideUnreachable
 	}
-	for _, c := range list {
-		guide := c.byID
-		if guide == "" {
-			guide = c.byName
+	chosen := matcher.Choose(func(id string) int {
+		titles := map[string]bool{}
+		for _, p := range programmes[id] {
+			titles[p.Title] = true
 		}
+		return len(titles)
+	})
+	for i, channel := range list {
 		starts := map[int64]bool{}
-		for _, p := range programmes[guide] {
+		for _, p := range programmes[chosen[i]] {
 			// A channel has one programme at a time from each start.
 			if !starts[p.Start.UnixNano()] {
 				starts[p.Start.UnixNano()] = true
-				kept = append(kept, storedProgramme{Programme: p, channel: c.id})
+				kept = append(kept, storedProgramme{Programme: p, channel: channel})
 			}
 		}
 		if len(starts) > 0 {
