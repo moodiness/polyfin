@@ -173,6 +173,18 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	items, err := h.userViews(r, user, includeHidden)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
+}
+
+// userViews describes the views user sees, in the order apps list them:
+// their libraries and Polyfin's Live TV, Playlists and Collections views,
+// those they hide included when includeHidden is set.
+func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden bool) ([]BaseItemDto, error) {
 	items, err := h.libraryViews(r, user)
 	if err == nil {
 		items, err = h.addLiveTvView(r, user, items)
@@ -184,16 +196,13 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 		items, err = h.addCollectionsView(r, user, items)
 	}
 	if err != nil {
-		h.internalError(w, r, err)
-		return
+		return nil, err
 	}
 	configuration, err := h.userConfiguration(r.Context(), user.ID)
 	if err != nil {
-		h.internalError(w, r, err)
-		return
+		return nil, err
 	}
-	items = arrangeViews(items, configuration, includeHidden)
-	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
+	return arrangeViews(items, configuration, includeHidden), nil
 }
 
 // libraryViews describes the libraries user sees, in the order apps list
@@ -311,6 +320,10 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		h.personListing(w, r, user, ids, start, limit)
+		return
+	}
+	if hasParent && parent == rootFolderID {
+		h.rootChildren(w, r, user, start, limit)
 		return
 	}
 	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
@@ -515,6 +528,10 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, library.ErrNotFound) && id == liveTvViewID && h.describeLiveTvView(w, r, user) {
+		return
+	}
+	if errors.Is(err, library.ErrNotFound) && id == rootFolderID {
+		h.writeRootFolder(w, r, user)
 		return
 	}
 	if errors.Is(err, library.ErrNotFound) && h.describeRecording(w, r, user, id) {
