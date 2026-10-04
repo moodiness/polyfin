@@ -394,3 +394,23 @@ func TestParentalControlCoversPeopleSimilarTitlesAndDownloads(t *testing.T) {
 		t.Errorf("administrator downloading Restricted: %d", status)
 	}
 }
+
+// A user an administrator disables through their policy is signed out of
+// every device, and leaves the SyncPlay groups their apps were in.
+func TestDisablingAUsersPolicySignsTheirAppsOut(t *testing.T) {
+	p := newSyncPlayers(t)
+	p.testServer.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	admin := p.signIn("admin", "admin-tv")
+	bob, _ := p.store.Authenticate(t.Context(), "bob", "correct horse")
+	if status, body := p.postRaw("/Users/"+bob.ID.String()+"/Policy", app("admin-tv", admin), `{"IsDisabled":true}`); status != http.StatusNoContent {
+		t.Fatalf("disabling bob: %d %s", status, body)
+	}
+	p.bob.ended(t)
+	p.alice.expect(t, "UserLeft")
+	if status, _ := p.call(http.MethodGet, "/Users/Me", app("bob-tv", p.bob.token), nil); status != http.StatusUnauthorized {
+		t.Errorf("bob's app still signed in: %d", status)
+	}
+	if status, _ := p.call(http.MethodGet, "/Users/Me", app("admin-tv", admin), nil); status != http.StatusOK {
+		t.Errorf("the administrator's app was signed out: %d", status)
+	}
+}
