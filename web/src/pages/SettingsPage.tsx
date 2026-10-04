@@ -37,6 +37,7 @@ export default function SettingsPage() {
 function SettingsForm({ initial }: { initial: Settings }) {
   const { t } = useI18n()
   const languageId = useId()
+  const playbackId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -115,8 +116,10 @@ function SettingsForm({ initial }: { initial: Settings }) {
               <p className="mt-1 text-amber-100">{t.settings.legacyWarning}</p>
             </div>
           </div>
-          <section className="space-y-4 border-t border-line pt-6">
-            <h2 className="text-lg font-semibold text-white">{t.settings.playbackTitle}</h2>
+          <section className="space-y-3 border-t border-line pt-6" aria-labelledby={playbackId}>
+            <h2 id={playbackId} className="text-sm font-semibold text-white">
+              {t.settings.playbackTitle}
+            </h2>
             <Checkbox
               label={t.settings.chapters}
               help={t.settings.chaptersHelp}
@@ -128,6 +131,18 @@ function SettingsForm({ initial }: { initial: Settings }) {
               help={t.settings.prepareAheadHelp}
               checked={form.prepareAhead}
               onChange={(prepareAhead) => update({ prepareAhead })}
+            />
+            <Checkbox
+              label={t.settings.transcoding}
+              help={t.settings.transcodingHelp}
+              checked={form.transcoding}
+              onChange={(transcoding) => update({ transcoding })}
+            />
+            <Checkbox
+              label={t.settings.downloads}
+              help={t.settings.downloadsHelp}
+              checked={form.downloads}
+              onChange={(downloads) => update({ downloads })}
             />
           </section>
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}

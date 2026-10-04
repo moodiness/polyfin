@@ -197,6 +197,14 @@ const fr: Messages = {
     isDisabled: 'Désactivé',
     isDisabledHelp:
       'Un utilisateur désactivé ne peut plus se connecter, et tous ses appareils sont déconnectés.',
+    canTranscode: 'Peut utiliser la conversion (transcodage)',
+    canTranscodeHelp:
+      'Le serveur peut convertir l’image et le son quand l’application de cet utilisateur ne sait pas lire un fichier tel quel. Sinon, l’image et le son ne sont jamais modifiés.',
+    canDownload: 'Peut télécharger',
+    canDownloadHelp:
+      'Permet à cet utilisateur d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion.',
+    noTranscoding: 'Sans conversion',
+    noDownloads: 'Sans téléchargement',
     lastAdminHelp:
       'Le dernier administrateur actif ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     updated: 'Modifications enregistrées.',
@@ -232,7 +240,6 @@ const fr: Messages = {
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
-    saved: 'Paramètres enregistrés.',
     playbackTitle: 'Lecture',
     chapters: 'Afficher les chapitres',
     chaptersHelp:
@@ -240,6 +247,13 @@ const fr: Messages = {
     prepareAhead: 'Préparer la lecture à l’avance',
     prepareAheadHelp:
       'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
+    transcoding: 'Conversion (transcodage)',
+    transcodingHelp:
+      'Convertit l’image et le son pour les applications qui ne savent pas lire un fichier tel quel. Si cette option est désactivée, les fichiers sont lus tels quels ou simplement présentés autrement, sans toucher à l’image ni au son. Un titre qu’une application ne peut pas lire ainsi ne démarrera pas sur cette application.',
+    downloads: 'Téléchargements',
+    downloadsHelp:
+      'Permet aux utilisateurs d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion. Si cette option est désactivée, personne ne peut télécharger, quelle que soit son autorisation personnelle.',
+    saved: 'Paramètres enregistrés.',
   },
   stremioTypes: {
     movie: 'Films',

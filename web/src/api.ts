@@ -21,6 +21,10 @@ export type User = {
   lastLoginAt: string | null
   lastActivityAt: string | null
   parentalControl: ParentalControl
+  /** Whether the user may have video and audio converted (transcoded). */
+  transcoding: boolean
+  /** Whether the user may download titles. */
+  downloads: boolean
 }
 
 /** Jellyfin parental control: `maxRating` null means no limit. */
@@ -60,6 +64,10 @@ export type Settings = {
   chapters: boolean
   /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
   prepareAhead: boolean
+  /** Whether the server converts (transcodes) video and audio for apps that need it. */
+  transcoding: boolean
+  /** Whether users allowed to download may do so. */
+  downloads: boolean
 }
 
 export type NewUser = {
@@ -76,6 +84,8 @@ export type UserPatch = Partial<{
   isHidden: boolean
   isDisabled: boolean
   parentalControl: ParentalControl
+  transcoding: boolean
+  downloads: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
