@@ -937,8 +937,8 @@ const fr: Messages = {
       unknownChannel: 'Chaîne introuvable',
       refreshesTitle: 'Mises à jour de la TV en direct',
       refreshesHelp: (hours: number) =>
-        `Les listes de chaînes IPTV et les guides des programmes du serveur sont téléchargés à nouveau toutes les ${hours} h (Paramètres › TV en direct), par la tâche « Actualiser les guides TV ».`,
-      noRefreshes: 'Le serveur n’a ni source IPTV ni guide des programmes.',
+        `Les listes de chaînes IPTV et les guides des programmes, ceux du serveur comme ceux des utilisateurs, sont téléchargés à nouveau toutes les ${hours} h (Paramètres › TV en direct), par la tâche « Actualiser les guides TV ».`,
+      noRefreshes: 'Aucune source IPTV ni guide des programmes.',
       channelList: 'Liste de chaînes',
       guide: 'Guide des programmes',
       due: 'À la prochaine vérification',
@@ -948,6 +948,8 @@ const fr: Messages = {
     },
     health: {
       title: 'Santé',
+      noIptv: 'Aucune source IPTV.',
+      owner: { server: 'Serveur', user: (name: string) => `Addons de ${name}` },
       description:
         'L’état du serveur et de ses sources, d’après ce que Polyfin enregistre déjà : cette page ne leur envoie aucune requête.',
       problemsTitle: 'À vérifier',

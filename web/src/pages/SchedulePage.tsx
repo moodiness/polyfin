@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  fetchAddons,
-  fetchLibraries,
   fetchSettings,
+  fetchSources,
   fetchTasks,
   fetchTimers,
   queryClient,
@@ -13,6 +12,7 @@ import {
   type Task,
 } from '@/api'
 import { icons } from '@/components/icons'
+import OwnerChip from '@/components/OwnerChip'
 import { Empty, Panel, Skeleton, StatusText } from '@/components/panels'
 import { Badge, buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { dateTime, errorMessage, formatSpan } from '@/format'
@@ -236,40 +236,50 @@ function Timers() {
 function Refreshes() {
   const { t } = useI18n()
   const text = t.dashboard.schedule
-  const addons = useQuery({
-    queryKey: queryKeys.addons('shared'),
-    queryFn: ({ signal }) => fetchAddons('shared', signal),
-  })
-  const libraries = useQuery({
-    queryKey: queryKeys.libraries('shared'),
-    queryFn: ({ signal }) => fetchLibraries('shared', signal),
+  // The server's IPTV sources and guides, then each user's own.
+  const sources = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: ({ signal }) => fetchSources(signal),
+    refetchInterval: 30_000,
   })
   const settings = useQuery({
     queryKey: queryKeys.settings,
     queryFn: ({ signal }) => fetchSettings(signal),
   })
   const rows = [
-    ...(addons.data ?? [])
+    ...(sources.data?.addons ?? [])
       .filter((addon) => addon.enabled && addon.source !== null)
       .map((addon) => ({
         key: `iptv-${addon.id}`,
         name: addon.name,
+        owner: addon.owner,
         kind: text.channelList,
         last: addon.source?.fetchedAt ?? null,
         next: addon.source?.nextAt ?? null,
       })),
-    ...(libraries.data ?? [])
+    ...(sources.data?.guides ?? [])
       .filter((library) => library.guide !== null && library.guide.url !== '')
       .map((library) => ({
         key: `guide-${library.addonId}-${library.catalogType}-${library.catalogId}`,
         name: library.name ?? library.catalogName,
+        owner: library.owner,
         kind: text.guide,
         last: library.guide?.fetchedAt ?? null,
         next: library.guide?.nextAt ?? null,
       })),
-  ].sort((a, b) => (a.next ?? '').localeCompare(b.next ?? ''))
-  const pending = addons.isPending || libraries.isPending
-  const error = addons.error ?? libraries.error
+  ]
+    // The server's first, then each user's, in the order the server lists them; by next fetch within.
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        Number(a.row.owner !== null) - Number(b.row.owner !== null) ||
+        (a.row.owner?.name ?? '').localeCompare(b.row.owner?.name ?? '') ||
+        (a.row.next ?? '').localeCompare(b.row.next ?? '') ||
+        a.index - b.index,
+    )
+    .map(({ row }) => row)
+  const pending = sources.isPending
+  const error = sources.error
 
   return (
     <Panel
@@ -291,7 +301,10 @@ function Refreshes() {
               className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 text-sm"
             >
               <div className="min-w-0">
-                <p className="font-medium text-white">{row.name}</p>
+                <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                  {row.name}
+                  <OwnerChip owner={row.owner} />
+                </p>
                 <p className="text-xs text-muted">
                   {row.kind} · {text.lastDownload}:{' '}
                   {row.last ? <RelativeTime iso={row.last} /> : text.notYet}

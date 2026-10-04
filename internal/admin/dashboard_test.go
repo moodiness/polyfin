@@ -84,6 +84,7 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 		{http.MethodGet, "/logs"},
 		{http.MethodGet, "/logs/download"},
 		{http.MethodGet, "/variables"},
+		{http.MethodGet, "/sources"},
 	} {
 		if status := member.raw(route.method, route.path, `{"text":"hi"}`, nil); status != http.StatusForbidden {
 			t.Errorf("member %s %s: %d", route.method, route.path, status)

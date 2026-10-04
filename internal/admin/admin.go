@@ -140,6 +140,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/timers", h.administrator(h.timers))
 	mux.Handle("GET /admin/api/health", h.administrator(h.health))
 	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
+	mux.Handle("GET /admin/api/sources", h.administrator(h.sources))
 	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))

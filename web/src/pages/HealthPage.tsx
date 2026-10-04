@@ -5,14 +5,14 @@ import {
   checkAddon,
   queryClient,
   queryKeys,
-  type Addon,
   type AddonHealth,
   type Health,
-  type Library,
+  type Sources,
 } from '@/api'
 import { icons } from '@/components/icons'
 import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/components/panels'
 import { MusicBadge } from '@/components/AddonSettings'
+import OwnerChip from '@/components/OwnerChip'
 import { findProblems, lowOnSpace, useHealthData } from '@/components/problems'
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
@@ -22,8 +22,8 @@ import type { Messages } from '@/i18n/en'
 export default function HealthPage() {
   const { language, t } = useI18n()
   const text = t.dashboard.health
-  const { health, addons, libraries, tasks } = useHealthData()
-  const problems = findProblems(t, language, health.data, addons.data, libraries.data, tasks.data)
+  const { health, sources, tasks } = useHealthData()
+  const problems = findProblems(t, language, health.data, sources.data, tasks.data)
   const location = useLocation()
   const loaded = health.data !== undefined
 
@@ -91,11 +91,11 @@ export default function HealthPage() {
             )}
           </section>
 
-          <Addons health={health.data} addons={addons.data} />
+          <Addons health={health.data} sources={sources.data} />
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Iptv addons={addons.data} />
-            <Guides libraries={libraries.data} />
+            <Iptv sources={sources.data} />
+            <Guides sources={sources.data} />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2 2xl:grid-cols-3">
@@ -118,7 +118,7 @@ function addonTone(
   return addon.failure === '' ? ['ok', 'ok'] : ['warning', 'failing']
 }
 
-function Addons({ health, addons }: { health: Health; addons: Addon[] | undefined }) {
+function Addons({ health, sources }: { health: Health; sources: Sources | undefined }) {
   const { t } = useI18n()
   const text = t.dashboard.health
   const check = useMutation({
@@ -127,7 +127,9 @@ function Addons({ health, addons }: { health: Health; addons: Addon[] | undefine
   })
   // Music addons' answers are recorded like the others': their row carries their badge.
   const music = new Map(
-    (addons ?? []).filter((addon) => addon.music !== null).map((addon) => [addon.id, addon.music]),
+    (sources?.addons ?? [])
+      .filter((addon) => addon.music !== null)
+      .map((addon) => [addon.id, addon.music]),
   )
 
   return (
@@ -153,6 +155,7 @@ function Addons({ health, addons }: { health: Health; addons: Addon[] | undefine
                   <p className="flex flex-wrap items-center gap-2 font-medium text-white">
                     <span className="truncate">{addon.name}</span>
                     {musicOf && <MusicBadge music={musicOf} />}
+                    <OwnerChip owner={addon.owner} />
                   </p>
                   <p className="text-xs">
                     <StatusText tone={tone}>
@@ -209,14 +212,14 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Iptv({ addons }: { addons: Addon[] | undefined }) {
+function Iptv({ sources: all }: { sources: Sources | undefined }) {
   const { t } = useI18n()
   const text = t.dashboard.health
-  const sources = (addons ?? []).filter((addon) => addon.source !== null)
+  const sources = (all?.addons ?? []).filter((addon) => addon.source !== null)
   return (
     <Panel id="iptv" title={text.iptvTitle}>
       {sources.length === 0 ? (
-        <Empty>{t.dashboard.schedule.noRefreshes}</Empty>
+        <Empty>{text.noIptv}</Empty>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
           {sources.map((addon) => {
@@ -224,7 +227,10 @@ function Iptv({ addons }: { addons: Addon[] | undefined }) {
             return (
               <li key={addon.id} className="space-y-1 px-4 py-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium text-white">{addon.name}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                    {addon.name}
+                    <OwnerChip owner={addon.owner} />
+                  </p>
                   {!addon.enabled ? (
                     <StatusText tone="muted">{text.addonStatus.off}</StatusText>
                   ) : source.error !== '' ? (
@@ -259,10 +265,10 @@ function Iptv({ addons }: { addons: Addon[] | undefined }) {
   )
 }
 
-function Guides({ libraries }: { libraries: Library[] | undefined }) {
+function Guides({ sources }: { sources: Sources | undefined }) {
   const { t } = useI18n()
   const text = t.dashboard.health
-  const guides = (libraries ?? []).filter(
+  const guides = (sources?.guides ?? []).filter(
     (library) => library.guide !== null && library.guide.url !== '',
   )
   return (
@@ -279,7 +285,10 @@ function Guides({ libraries }: { libraries: Library[] | undefined }) {
                 className="space-y-1 px-4 py-3 text-sm"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium text-white">{library.name ?? library.catalogName}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                    {library.name ?? library.catalogName}
+                    <OwnerChip owner={library.owner} />
+                  </p>
                   {guide.error !== '' ? (
                     <StatusText tone="warning">{text.addonStatus.failing}</StatusText>
                   ) : guide.fetchedAt ? (

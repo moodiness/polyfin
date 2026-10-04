@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  fetchAddons,
   fetchHealth,
-  fetchLibraries,
+  fetchSources,
   fetchTasks,
   queryKeys,
-  type Addon,
   type Health,
-  type Library,
+  type Owner,
+  type Sources,
   type Task,
 } from '@/api'
 import { formatBytes } from '@/format'
@@ -37,14 +36,10 @@ export function useHealthData() {
     queryFn: ({ signal }) => fetchHealth(signal),
     refetchInterval: 10_000,
   })
-  const addons = useQuery({
-    queryKey: queryKeys.addons('shared'),
-    queryFn: ({ signal }) => fetchAddons('shared', signal),
-    refetchInterval: 30_000,
-  })
-  const libraries = useQuery({
-    queryKey: queryKeys.libraries('shared'),
-    queryFn: ({ signal }) => fetchLibraries('shared', signal),
+  // The server's addons, IPTV sources and guides, then each user's own.
+  const sources = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: ({ signal }) => fetchSources(signal),
     refetchInterval: 30_000,
   })
   const tasks = useQuery({
@@ -52,16 +47,20 @@ export function useHealthData() {
     queryFn: ({ signal }) => fetchTasks(language, signal),
     refetchInterval: 10_000,
   })
-  return { health, addons, libraries, tasks }
+  return { health, sources, tasks }
 }
 
-/** The problems the health data shows, errors first. */
+/** A row's name, followed by whose it is when it is a user's own. */
+export function ownedName(t: Messages, name: string, owner: Owner): string {
+  return owner === null ? name : `${name} (${t.dashboard.health.owner.user(owner.name)})`
+}
+
+/** The problems the health data shows, errors first; users' own sources count too. */
 export function findProblems(
   t: Messages,
   language: string,
   health: Health | undefined,
-  addons: Addon[] | undefined,
-  libraries: Library[] | undefined,
+  sources: Sources | undefined,
   tasks: Task[] | undefined,
 ): Problem[] {
   const text = t.dashboard.health.problems
@@ -86,7 +85,10 @@ export function findProblems(
       if (addon.enabled && addon.failure !== '') {
         problems.push({
           tone: 'warning',
-          text: text.addon(addon.name, t.dashboard.health.failures[addon.failure] ?? addon.failure),
+          text: text.addon(
+            ownedName(t, addon.name, addon.owner),
+            t.dashboard.health.failures[addon.failure] ?? addon.failure,
+          ),
           to: '/health#addons',
         })
       }
@@ -99,16 +101,20 @@ export function findProblems(
       problems.push({ tone: 'warning', text: text.paused(paused.host), to: '/health#thumbnails' })
     }
   }
-  for (const addon of addons ?? []) {
+  for (const addon of sources?.addons ?? []) {
     if (addon.enabled && addon.source !== null && addon.source.error !== '') {
-      problems.push({ tone: 'warning', text: text.iptv(addon.name), to: '/health#iptv' })
+      problems.push({
+        tone: 'warning',
+        text: text.iptv(ownedName(t, addon.name, addon.owner)),
+        to: '/health#iptv',
+      })
     }
   }
-  for (const library of libraries ?? []) {
+  for (const library of sources?.guides ?? []) {
     if (library.guide !== null && library.guide.url !== '' && library.guide.error !== '') {
       problems.push({
         tone: 'warning',
-        text: text.guide(library.name ?? library.catalogName),
+        text: text.guide(ownedName(t, library.name ?? library.catalogName, library.owner)),
         to: '/health#guides',
       })
     }

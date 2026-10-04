@@ -740,8 +740,12 @@ export const fetchTimers = (signal?: AbortSignal) =>
   request<{ available: boolean; timers: Timer[] }>('GET', '/timers', undefined, signal)
 
 /** How the requests made to one of the server's addons went since the server started. */
+/** The user whose own addon, source or guide a dashboard row is; null for the server's. */
+export type Owner = { id: string; name: string } | null
+
 export type AddonHealth = {
   id: string
+  owner: Owner
   name: string
   enabled: boolean
   refreshedAt: string
@@ -792,6 +796,16 @@ export type Health = {
   } | null
   addons: AddonHealth[]
 }
+
+/** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */
+export type Sources = {
+  addons: (Addon & { owner: Owner })[]
+  /** Live TV catalogs that have a guide address. */
+  guides: (Library & { owner: Owner })[]
+}
+
+export const fetchSources = (signal?: AbortSignal) =>
+  request<Sources>('GET', '/sources', undefined, signal)
 
 export const fetchHealth = (signal?: AbortSignal) =>
   request<Health>('GET', '/health', undefined, signal)
@@ -845,6 +859,7 @@ export const queryKeys = {
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
   health: ['health'] as const,
+  sources: ['sources'] as const,
   variables: ['variables'] as const,
 }
 
