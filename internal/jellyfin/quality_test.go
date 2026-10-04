@@ -77,6 +77,16 @@ func fetchStatus(t *testing.T, target string) int {
 	return response.StatusCode
 }
 
+// needsEncoders skips the rest of a test when tests are given no FFmpeg:
+// Polyfin converts video with the encoders FFmpeg has, so without one a
+// version taller than the group plays nowhere.
+func needsEncoders(t *testing.T) {
+	t.Helper()
+	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts video with the encoders FFmpeg has")
+	}
+}
+
 // The movie's first version is 4K, its second 1080p: a group offers the
 // versions that fit, in their order, and when none fits, all of them,
 // the closest to the group first, converted down.
@@ -119,6 +129,7 @@ func TestQualityGroupsLeaveOutTallerVersions(t *testing.T) {
 	// 720p: none fits, so both are kept, the 1080p one first, converted
 	// down to 720 lines, as Jellyfin reports a resolution limit; the other
 	// is not offered as it is.
+	needsEncoders(t)
 	p.group(t, p.user, 720)
 	answer = p.ask(t, p.token, p.movie, chrome, nil)
 	if !slices.Equal(etags(answer), []string{fitting, tall}) {
@@ -203,6 +214,7 @@ func TestQualityGroupsConvertTheClosestVersionWhenNoneFits(t *testing.T) {
 		t.Errorf("details, by labels: %v, want 720p, 1080p, 2160p %v", listed, want)
 	}
 
+	needsEncoders(t)
 	info, err := os.Stat(filepath.Join("..", "container", "testdata", "forced.mkv"))
 	if err != nil {
 		t.Fatal(err)
@@ -303,9 +315,25 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 		t.Errorf("stream under a 4K group: %d", status)
 	}
 
-	// Under 720p, both versions are taller: the 1080p one, the closer, is
-	// converted down to the lower of the group and the server's cap, its
-	// video described at the size sent.
+	// Under 720p, both versions are taller: neither is sent as it is, nor
+	// copied, even from kept or made-up URLs.
+	p.group(t, p.user, 720)
+	if status := fetchStatus(t, stream(tall)); status != http.StatusForbidden {
+		t.Errorf("stream of the 4K version under 720p: %d", status)
+	}
+	if status, _, _ := fetchText(t, p.url+copied); status != http.StatusBadRequest {
+		t.Errorf("remux copying the 4K version's video under 720p: %d", status)
+	}
+	// The title's own identifier stands for its first version that fits.
+	p.group(t, p.user, 1080)
+	if status := fetchStatus(t, stream(p.movie)); status != http.StatusPartialContent {
+		t.Errorf("stream of the title under 1080p: %d", status)
+	}
+
+	// Under 720p, the 1080p version, the closer, is converted down to the
+	// lower of the group and the server's cap, its video described at the
+	// size sent.
+	needsEncoders(t)
 	for _, test := range []struct {
 		cap, height int
 		resolution  string
@@ -321,32 +349,17 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 			t.Errorf("cap %d: %d\n%s", test.cap, status, playlist)
 		}
 	}
-	p.setting(t, func(settings *accounts.Settings) { settings.MaxConversionHeight = 0 })
-	if status := fetchStatus(t, stream(tall)); status != http.StatusForbidden {
-		t.Errorf("stream of the 4K version under 720p: %d", status)
-	}
-	if status, _, _ := fetchText(t, p.url+copied); status != http.StatusBadRequest {
-		t.Errorf("remux copying the 4K version's video under 720p: %d", status)
-	}
-	// The title's own identifier stands for its first version that fits.
-	p.group(t, p.user, 1080)
-	if status := fetchStatus(t, stream(p.movie)); status != http.StatusPartialContent {
-		t.Errorf("stream of the title under 1080p: %d", status)
-	}
 }
 
 // A user who may not have video converted is refused versions taller than
 // their group as other conversions are refused, never sent them as they
-// are.
+// are; with the conversion allowed, they play converted.
 func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
 	chrome := p.profile(t, "jellyfin-web-chrome")
 	p.group(t, p.user, 720)
-	if answer := p.ask(t, p.token, p.movie, chrome, nil); len(answer.MediaSources) == 0 || answer.MediaSources[0].SupportsDirectPlay {
-		t.Fatalf("with conversion: %+v", answer)
-	}
 	p.permit(t, p.user, false, true, true)
 	if answer := p.ask(t, p.token, p.movie, chrome, nil); !answer.refused() {
 		t.Errorf("without the user's permission: %+v", answer)
@@ -363,6 +376,13 @@ func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
 	p.group(t, p.user, 1080)
 	if source := firstSource(t, p.ask(t, p.token, p.movie, chrome, nil)); source.ETag != p.versions[1].ID.String() || !source.SupportsDirectPlay {
 		t.Errorf("1080p with the server's conversion off: %+v", source)
+	}
+	// Both allowed again, under 720p, a version plays converted.
+	needsEncoders(t)
+	p.switches(t, true, true)
+	p.group(t, p.user, 720)
+	if answer := p.ask(t, p.token, p.movie, chrome, nil); len(answer.MediaSources) == 0 || answer.MediaSources[0].SupportsDirectPlay {
+		t.Errorf("with conversion: %+v", answer)
 	}
 }
 
@@ -403,7 +423,19 @@ func TestQualityGroupsConvertLiveTvDown(t *testing.T) {
 	if answer := s.ask(t, token, channel, chrome, nil); len(answer.MediaSources) != 1 || !answer.MediaSources[0].SupportsDirectPlay {
 		t.Fatalf("1080p: %+v", answer)
 	}
+	// Under 720p, the stream is never sent as it is, and the user who may
+	// not convert is refused it.
 	s.group(t, user, 720)
+	if status := fetchStatus(t, stream); status != http.StatusForbidden {
+		t.Errorf("the stream as it is under 720p: %d", status)
+	}
+	s.permit(t, user, false, true, true)
+	if answer := s.ask(t, token, channel, chrome, nil); !answer.refused() {
+		t.Errorf("720p without conversion: %+v", answer)
+	}
+	// With the conversion allowed, it is converted down to 720 lines.
+	needsEncoders(t)
+	s.permit(t, user, true, true, true)
 	answer := s.ask(t, token, channel, chrome, nil)
 	if len(answer.MediaSources) != 1 {
 		t.Fatalf("720p: %+v", answer)
@@ -412,13 +444,6 @@ func TestQualityGroupsConvertLiveTvDown(t *testing.T) {
 	if source.SupportsDirectPlay || !strings.Contains(source.TranscodingUrl, "VideoResolutionNotSupported") ||
 		!strings.HasSuffix(source.TranscodingUrl, "&allowVideoStreamCopy=false") || videoHeightOf(source) != 720 {
 		t.Errorf("720p: direct play %v, height %d, %s", source.SupportsDirectPlay, videoHeightOf(source), source.TranscodingUrl)
-	}
-	if status := fetchStatus(t, stream); status != http.StatusForbidden {
-		t.Errorf("the stream as it is under 720p: %d", status)
-	}
-	s.permit(t, user, false, true, true)
-	if answer := s.ask(t, token, channel, chrome, nil); !answer.refused() {
-		t.Errorf("720p without conversion: %+v", answer)
 	}
 }
 

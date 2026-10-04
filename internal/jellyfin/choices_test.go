@@ -317,6 +317,10 @@ func TestConversionsAtOnceAreLimited(t *testing.T) {
 // Converted video is scaled down to the height cap, keeping its shape;
 // copied video keeps its size.
 func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts video with the encoders FFmpeg has")
+	}
 	p := playing(t)
 	// The file is 64 × 64; its analysis says 1920 × 800, which FFmpeg
 	// scales as the analysis asks.
@@ -351,10 +355,6 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 	}
 	if _, playlist := master(copied); !strings.Contains(playlist, "RESOLUTION=1920x800") {
 		t.Errorf("copied under 480 lines:\n%s", playlist)
-	}
-	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
-	if ffmpeg == "" {
-		return
 	}
 	base, query, _ := strings.Cut(p.url+target, "master.m3u8?")
 	status, _, init := fetchText(t, base+"hls1/main/-1.mp4?"+query)
