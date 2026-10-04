@@ -74,6 +74,7 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/users/{id}", h.administrator(h.deleteUser))
 	mux.Handle("GET /admin/api/users/{id}/devices", h.administrator(h.userDevices))
 	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
+	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 
@@ -169,6 +170,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
 		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
+		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
 		{accounts.ErrSetupComplete, http.StatusConflict, "setup_complete"},

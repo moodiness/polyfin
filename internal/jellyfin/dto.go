@@ -131,6 +131,8 @@ type UserPolicy struct {
 	EnableSubtitleManagement         bool
 	EnableLyricManagement            bool
 	IsDisabled                       bool
+	MaxParentalRating                *int `json:",omitempty"`
+	MaxParentalSubRating             *int `json:",omitempty"`
 	BlockedTags                      []string
 	AllowedTags                      []string
 	EnableUserPreferenceAccess       bool
@@ -206,7 +208,9 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			AllowedTags:                      []string{},
 			EnableUserPreferenceAccess:       true,
 			AccessSchedules:                  []struct{}{},
-			BlockUnratedItems:                []string{},
+			MaxParentalRating:                user.Parental.MaxRating,
+			MaxParentalSubRating:             user.Parental.MaxSubRating,
+			BlockUnratedItems:                append([]string{}, user.Parental.BlockUnrated...),
 			EnableRemoteControlOfOtherUsers:  user.IsAdministrator,
 			EnableSharedDeviceControl:        true,
 			EnableRemoteAccess:               true,

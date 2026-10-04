@@ -50,6 +50,8 @@ type User struct {
 	CreatedAt      time.Time
 	LastLoginAt    *time.Time
 	LastActivityAt *time.Time
+	// Parental limits the titles the user reaches by their rating.
+	Parental ParentalControl
 }
 
 // NewUser describes an account to create.
@@ -67,6 +69,7 @@ type UserChanges struct {
 	IsAdministrator *bool
 	IsHidden        *bool
 	IsDisabled      *bool
+	Parental        *ParentalControl
 }
 
 // Store is the accounts repository.
@@ -107,12 +110,19 @@ func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
 	return store, nil
 }
 
-const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at"
+const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
+	"max_parental_rating, max_parental_sub_rating, block_unrated_items"
+
+// fields lists where the userColumns of a row go.
+func (user *User) fields() []any {
+	return []any{&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
+		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
+		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated}
+}
 
 func scanUser(row pgx.Row) (User, error) {
 	var user User
-	err := row.Scan(&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
-		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt)
+	err := row.Scan(user.fields()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return user, ErrNotFound
 	}
@@ -233,8 +243,7 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 	var user User
 	err := s.db.QueryRow(ctx,
 		"SELECT password_hash, "+userColumns+" FROM users WHERE lower(name) = lower($1)",
-		strings.TrimSpace(name)).Scan(&hash, &user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden,
-		&user.IsDisabled, &user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt)
+		strings.TrimSpace(name)).Scan(append([]any{&hash}, user.fields()...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		_, _ = verifyPassword(password, unknownUserHash)
 		return User{}, ErrInvalidCredentials
@@ -266,6 +275,13 @@ func (s *Store) UpdateUser(ctx context.Context, id ID, changes UserChanges, keep
 	return s.updateUser(ctx, id, changes, signIn{adminSession: keepSession})
 }
 
+// UpdateUserFromDevice applies changes an administrator made from a
+// Jellyfin app: when they sign the account out, the app's device, which
+// may be the account's own, stays signed in.
+func (s *Store) UpdateUserFromDevice(ctx context.Context, id ID, changes UserChanges, device ID) (User, error) {
+	return s.updateUser(ctx, id, changes, signIn{device: &device})
+}
+
 // signIn names the admin session or Jellyfin device that made a change to
 // an account, which stays signed in when the change signs the account out
 // everywhere else. The zero value keeps nothing.
@@ -276,6 +292,14 @@ type signIn struct {
 
 func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep signIn) (User, error) {
 	var name, hash *string
+	var parental ParentalControl
+	if changes.Parental != nil {
+		normalized, err := changes.Parental.normalized()
+		if err != nil {
+			return User{}, err
+		}
+		parental = normalized
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -312,9 +336,13 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				password_hash = coalesce($3, password_hash),
 				is_administrator = coalesce($4, is_administrator),
 				is_hidden = coalesce($5, is_hidden),
-				is_disabled = coalesce($6, is_disabled)
+				is_disabled = coalesce($6, is_disabled),
+				max_parental_rating = CASE WHEN $7 THEN $8 ELSE max_parental_rating END,
+				max_parental_sub_rating = CASE WHEN $7 THEN $9 ELSE max_parental_sub_rating END,
+				block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END
 			WHERE id = $1 RETURNING `+userColumns,
-			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled))
+			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
+			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

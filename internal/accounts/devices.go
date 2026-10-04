@@ -104,9 +104,7 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 	var user User
 	device, err := scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+", "+qualifiedUserColumns("u")+`
 		FROM devices d JOIN users u ON u.id = d.user_id
-		WHERE d.token_hash = $1 AND NOT u.is_disabled`, hashToken(token)),
-		&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
-		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt)
+		WHERE d.token_hash = $1 AND NOT u.is_disabled`, hashToken(token)), user.fields()...)
 	if err != nil {
 		return Device{}, User{}, err
 	}

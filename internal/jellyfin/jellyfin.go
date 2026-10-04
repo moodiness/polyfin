@@ -114,6 +114,7 @@ func New(options Options) *Handler {
 	signedIn(http.MethodGet, "/Users/{userId}", h.user)
 	signedIn(http.MethodPost, "/Users/Password", h.changePassword)
 	signedIn(http.MethodPost, "/Users/{userId}/Password", h.changePassword)
+	signedIn(http.MethodPost, "/Users/{userId}/Policy", h.updatePolicy)
 
 	anonymous(http.MethodGet, "/QuickConnect/Enabled", h.quickConnectEnabled)
 	anonymous(http.MethodPost, "/QuickConnect/Initiate", h.quickConnectInitiate)

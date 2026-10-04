@@ -6,18 +6,30 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 )
 
 type userJSON struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	IsAdministrator bool       `json:"isAdministrator"`
-	IsHidden        bool       `json:"isHidden"`
-	IsDisabled      bool       `json:"isDisabled"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	LastLoginAt     *time.Time `json:"lastLoginAt"`
-	LastActivityAt  *time.Time `json:"lastActivityAt"`
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	IsAdministrator bool                `json:"isAdministrator"`
+	IsHidden        bool                `json:"isHidden"`
+	IsDisabled      bool                `json:"isDisabled"`
+	CreatedAt       time.Time           `json:"createdAt"`
+	LastLoginAt     *time.Time          `json:"lastLoginAt"`
+	LastActivityAt  *time.Time          `json:"lastActivityAt"`
+	ParentalControl parentalControlJSON `json:"parentalControl"`
+}
+
+// parentalControlJSON is a user's parental control: the highest rating
+// score (and subscore at that score) the user may reach, null for no
+// limit, and the kinds of items (Jellyfin's UnratedItem names) hidden when
+// unrated.
+type parentalControlJSON struct {
+	MaxRating    *int     `json:"maxRating"`
+	MaxSubRating *int     `json:"maxSubRating"`
+	BlockUnrated []string `json:"blockUnrated"`
 }
 
 func newUserJSON(user accounts.User) userJSON {
@@ -30,7 +42,32 @@ func newUserJSON(user accounts.User) userJSON {
 		CreatedAt:       user.CreatedAt,
 		LastLoginAt:     user.LastLoginAt,
 		LastActivityAt:  user.LastActivityAt,
+		ParentalControl: parentalControlJSON{
+			MaxRating:    user.Parental.MaxRating,
+			MaxSubRating: user.Parental.MaxSubRating,
+			BlockUnrated: append([]string{}, user.Parental.BlockUnrated...),
+		},
 	}
+}
+
+// ratingJSON is a rating the admin app offers as a user's limit.
+type ratingJSON struct {
+	Name     string `json:"name"`
+	Score    int    `json:"score"`
+	SubScore *int   `json:"subScore"`
+}
+
+// parentalRatings lists the ratings a user's limit can be set to, those
+// Jellyfin apps offer, without the entry for unrated titles: blocking them
+// is a choice of its own.
+func (h *handler) parentalRatings(w http.ResponseWriter, _ *http.Request) {
+	var result []ratingJSON
+	for _, rating := range localization.Ratings() {
+		if rating.Score != nil {
+			result = append(result, ratingJSON{Name: rating.Name, Score: rating.Score.Score, SubScore: rating.Score.SubScore})
+		}
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 type deviceJSON struct {
@@ -212,11 +249,12 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name            *string `json:"name"`
-		Password        *string `json:"password"`
-		IsAdministrator *bool   `json:"isAdministrator"`
-		IsHidden        *bool   `json:"isHidden"`
-		IsDisabled      *bool   `json:"isDisabled"`
+		Name            *string              `json:"name"`
+		Password        *string              `json:"password"`
+		IsAdministrator *bool                `json:"isAdministrator"`
+		IsHidden        *bool                `json:"isHidden"`
+		IsDisabled      *bool                `json:"isDisabled"`
+		ParentalControl *parentalControlJSON `json:"parentalControl"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -226,13 +264,17 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	if id == session.User.ID {
 		keep = session.TokenHash
 	}
-	user, err := h.Accounts.UpdateUser(r.Context(), id, accounts.UserChanges{
+	changes := accounts.UserChanges{
 		Name:            body.Name,
 		Password:        body.Password,
 		IsAdministrator: body.IsAdministrator,
 		IsHidden:        body.IsHidden,
 		IsDisabled:      body.IsDisabled,
-	}, keep)
+	}
+	if p := body.ParentalControl; p != nil {
+		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
+	}
+	user, err := h.Accounts.UpdateUser(r.Context(), id, changes, keep)
 	if accountError(w, err) {
 		return
 	}

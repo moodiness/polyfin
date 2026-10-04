@@ -61,6 +61,7 @@ const en = {
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
     invalid_language: 'Choose the server language from the list.',
+    invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
     invalid_manifest_url:
       'Enter an addon manifest URL starting with https://, http:// or stremio:// and ending in /manifest.json.',
     addon_exists: 'This addon is already installed here.',
@@ -185,6 +186,14 @@ const en = {
     isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
     lastAdminHelp: 'The last enabled administrator cannot be deleted, demoted or disabled.',
     updated: 'Changes saved.',
+    parentalTitle: 'Parental control',
+    maxRating: 'Maximum rating',
+    maxRatingHelp: 'Titles rated above this limit are hidden from this user.',
+    noLimit: 'No limit',
+    blockUnratedMovies: 'Block unrated movies',
+    blockUnratedShows: 'Block unrated shows',
+    ratingLimit: (rating: string) => `Up to ${rating}`,
+    saveParental: 'Save parental control',
     devicesTitle: 'Devices',
     delete: 'Delete user',
     deleteConfirm: (name: string) =>
