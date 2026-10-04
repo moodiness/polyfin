@@ -35,12 +35,20 @@ type Settings struct {
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.
 	Language string
+	// Chapters sends apps the chapters of the versions Polyfin analyzed.
+	// They are read with the analysis every first play needs, so they cost
+	// nothing: turning them off only hides them.
+	Chapters bool
+	// PrepareAhead analyzes the version a title would play as soon as its
+	// details open, and readies the next episode near the end of the one
+	// playing, so that playback starts at once.
+	PrepareAhead bool
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language FROM settings").
-		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language)
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead FROM settings").
+		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language, &settings.Chapters, &settings.PrepareAhead)
 	return settings, err
 }
 
@@ -60,8 +68,8 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, ErrInvalidLanguage
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4",
-		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language)
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6",
+		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language, settings.Chapters, settings.PrepareAhead)
 	if err != nil {
 		return Settings{}, err
 	}

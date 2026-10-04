@@ -176,6 +176,34 @@ func TestSettingsLanguage(t *testing.T) {
 	}
 }
 
+func TestSettingsPlaybackSwitches(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["chapters"] != true || body["prepareAhead"] != false {
+		t.Errorf("default settings: %v", body)
+	}
+	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en",
+		"chapters": false, "prepareAhead": true}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["chapters"] != false || body["prepareAhead"] != true {
+		t.Fatalf("saving the switches: %d %v", status, body)
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["chapters"] != false || body["prepareAhead"] != true {
+		t.Errorf("settings after saving: %v", body)
+	}
+	// A page or script older than the switches leaves them as they are.
+	delete(settings, "chapters")
+	delete(settings, "prepareAhead")
+	settings["serverName"] = "Maison"
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["serverName"] != "Maison" || body["chapters"] != false || body["prepareAhead"] != true {
+		t.Errorf("saving without the switches: %d %v", status, body)
+	}
+	if got := api.store.Settings(); got.Chapters || !got.PrepareAhead {
+		t.Errorf("stored switches after a save without them: %+v", got)
+	}
+}
+
 func TestAccessRequiresTheRightRole(t *testing.T) {
 	api := newTestAPI(t, 10)
 	anonymous := api.browser()
