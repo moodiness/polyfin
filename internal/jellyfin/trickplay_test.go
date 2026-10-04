@@ -71,13 +71,32 @@ func withThumbnails(t *testing.T) trickplaySetup {
 	return s
 }
 
+// trickplayInfo is the TrickplayInfo of withThumbnails' thumbnails, as
+// JSON decodes it.
+var trickplayInfo = map[string]any{"Width": float64(320), "Height": float64(180), "TileWidth": float64(10), "TileHeight": float64(10),
+	"ThumbnailCount": float64(150), "Interval": float64(10000), "Bandwidth": float64(2400)}
+
+// trickplayOf decodes the Trickplay field of an item, and tells whether it
+// was sent.
+func trickplayOf(t *testing.T, body []byte) (map[string]map[string]map[string]any, bool) {
+	t.Helper()
+	var item map[string]json.RawMessage
+	if err := json.Unmarshal(body, &item); err != nil {
+		t.Fatalf("%v in %s", err, body)
+	}
+	raw, ok := item["Trickplay"]
+	var value map[string]map[string]map[string]any
+	_ = json.Unmarshal(raw, &value)
+	return value, ok
+}
+
 // Items describe their versions' thumbnails as Jellyfin does, by media
-// source and width, in details and in listings that ask for them.
+// source and width, in details and in listings that ask for them: under
+// the identifier the item's MediaSources give each version, the title's
+// own for its first, which apps look them up by.
 func TestTrickplayInItems(t *testing.T) {
 	s := withThumbnails(t)
-	want := map[string]map[string]map[string]any{s.versions[0].ID.String(): {"320": {
-		"Width": float64(320), "Height": float64(180), "TileWidth": float64(10), "TileHeight": float64(10),
-		"ThumbnailCount": float64(150), "Interval": float64(10000), "Bandwidth": float64(2400)}}}
+	want := map[string]map[string]map[string]any{s.movie: {"320": trickplayInfo}}
 	trickplay := func(what string, body []byte) (any, bool) {
 		t.Helper()
 		var item map[string]json.RawMessage
@@ -96,7 +115,8 @@ func TestTrickplayInItems(t *testing.T) {
 	}
 	// jellyfin-web opens the version played as an item.
 	_, body = s.call(http.MethodGet, userItem+s.versions[0].ID.String(), app("tv", s.token), nil)
-	if got, _ := trickplay("version", body); !reflect.DeepEqual(got, any(want)) {
+	byVersion := map[string]map[string]map[string]any{s.versions[0].ID.String(): {"320": trickplayInfo}}
+	if got, _ := trickplay("version", body); !reflect.DeepEqual(got, any(byVersion)) {
 		t.Errorf("version: %v", got)
 	}
 	var views QueryResult
@@ -329,4 +349,57 @@ func TestPlaybackStartMakesThumbnails(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Error("no thumbnails were made")
+}
+
+// A user whose quality group leaves out the 4K version gets the
+// thumbnails of the version they are offered, under the title's
+// identifier its media source carries, never the 4K one's; the tiles the
+// title's identifier names are that version's, and none is refused.
+func TestTrickplayFollowsTheQualityGroup(t *testing.T) {
+	s := withThumbnails(t)
+	s.sized(t, 0, 3840, 2160)
+	s.sized(t, 1, 1920, 1080)
+	movie, _ := accounts.ParseID(s.movie)
+	fitting := thumbnails.Info{Width: 320, Height: 180, TileWidth: 10, TileHeight: 10, ThumbnailCount: 150, Interval: 10000, Bandwidth: 1200}
+	if err := s.handler.Thumbnails.SaveTrickplay(t.Context(), s.versions[1].ID, movie, fitting, [][]byte{[]byte("\xff\xd8 1080p 0")}); err != nil {
+		t.Fatal(err)
+	}
+	userItem := "/Users/" + s.user.ID.String() + "/Items/" + s.movie
+	_, body := s.call(http.MethodGet, userItem, app("tv", s.token), nil)
+	if got, _ := trickplayOf(t, body); len(got) != 2 || got[s.movie]["320"]["Bandwidth"] != float64(2400) ||
+		got[s.versions[1].ID.String()]["320"]["Bandwidth"] != float64(1200) {
+		t.Errorf("without a group: %v", got)
+	}
+	// The title's identifier names its first version, whose thumbnails
+	// were not the last made.
+	if status, data := s.call(http.MethodGet, "/Videos/"+s.movie+"/Trickplay/320/0.jpg", app("tv", s.token), nil); status != http.StatusOK || string(data) != string(s.tiles[0]) {
+		t.Errorf("by the title without a group: %d %q", status, data)
+	}
+
+	s.group(t, s.user, 1080)
+	_, body = s.call(http.MethodGet, userItem, app("tv", s.token), nil)
+	got, _ := trickplayOf(t, body)
+	if len(got) != 1 || got[s.movie]["320"]["Bandwidth"] != float64(1200) {
+		t.Errorf("under 1080p: %v", got)
+	}
+	var details BaseItemDto
+	s.get(t, userItem, s.token, &details)
+	if details.MediaSources == nil || len(*details.MediaSources) != 1 || (*details.MediaSources)[0].Id != s.movie {
+		t.Fatalf("media sources under 1080p: %+v", details.MediaSources)
+	}
+	// jellyfin-web asks the tiles of the source playing, by its identifier.
+	base := "/Videos/" + s.movie + "/Trickplay/320/"
+	for _, path := range []string{base + "0.jpg?MediaSourceId=" + s.movie, base + "0.jpg"} {
+		if status, data := s.call(http.MethodGet, path, app("tv", s.token), nil); status != http.StatusOK || string(data) != "\xff\xd8 1080p 0" {
+			t.Errorf("%s under 1080p: %d %q", path, status, data)
+		}
+	}
+	status, playlist := s.call(http.MethodGet, base+"tiles.m3u8", app("tv", s.token), nil)
+	if status != http.StatusOK || !strings.Contains(string(playlist), "MediaSourceId="+s.versions[1].ID.String()) {
+		t.Errorf("playlist under 1080p: %d %s", status, playlist)
+	}
+	// The 4K version named on purpose is served, not refused.
+	if status, _ := s.call(http.MethodGet, base+"1.jpg?MediaSourceId="+s.versions[0].ID.String(), app("tv", s.token), nil); status != http.StatusOK {
+		t.Errorf("the 4K version's tiles named: %d", status)
+	}
 }

@@ -200,7 +200,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	dto.MediaSources = &sources
 	// Recordings get no thumbnails (see queueImages): no Trickplay field.
 	if detail && item.Kind != library.KindRecording {
-		dto.Trickplay = h.trickplayManifest(r.Context(), item.ID)
+		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, p.ordered(opened), opened)
 	}
 	if len(sources) == 0 {
 		dto.MediaStreams = &[]playback.MediaStream{}

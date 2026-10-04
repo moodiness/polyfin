@@ -181,7 +181,8 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	dto.MediaSources, dto.HasSubtitles, dto.People, dto.RemoteTrailers = nil, nil, nil, nil
 	dto.CanDelete, dto.CanDownload, dto.LockData, dto.LockedFields, dto.Tags = nil, nil, nil, nil, nil
 	dto.Etag, dto.SortName, dto.PlayAccess, dto.DisplayPreferencesId = "", "", "", ""
-	dto.UserData, dto.Trickplay = UserItemData{}, h.trickplayManifest(r.Context(), item.ID)
+	dto.UserData = UserItemData{}
+	dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).ordered(playing.Item), playing.Item)
 	info.NowPlayingItem = &dto
 }
 
