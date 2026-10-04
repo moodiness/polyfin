@@ -48,7 +48,9 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
     needle === ''
       ? items
       : items.filter((c) =>
-          `${c.name} ${c.providerName}`.toLocaleLowerCase(language).includes(needle),
+          `${c.name || t.lineup.exclusions.noGroup} ${c.providerName}`
+            .toLocaleLowerCase(language)
+            .includes(needle),
         )
   const filtering = needle !== ''
 
@@ -266,6 +268,9 @@ function CategoryRow({
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(category.name)
   const nameId = useId()
+  // Entries the provider lists without a group share a category with no
+  // name; it is shown under the import preview's "No group".
+  const shown = category.name || t.lineup.exclusions.noGroup
   const key = [...queryKeys.lineup(scope, id), 'categories']
   const update = useMutation({
     mutationFn: (patch: Partial<{ name: string | null; enabled: boolean }>) =>
@@ -332,7 +337,7 @@ function CategoryRow({
           {category.position}
         </span>
         <Switch
-          label={text.enabledLabel(category.name)}
+          label={text.enabledLabel(shown)}
           checked={category.enabled}
           disabled={update.isPending}
           onChange={(enabled) => update.mutate({ enabled })}
@@ -341,7 +346,7 @@ function CategoryRow({
           {renaming ? (
             <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
               <label htmlFor={nameId} className="sr-only">
-                {text.renameLabel(category.name)}
+                {text.renameLabel(shown)}
               </label>
               <input
                 id={nameId}
@@ -363,7 +368,7 @@ function CategoryRow({
           ) : (
             <p className="flex flex-wrap items-center gap-2 text-sm">
               <span className={`font-medium ${category.enabled ? 'text-white' : 'text-zinc-400'}`}>
-                {category.name}
+                {shown}
               </span>
               {category.custom && <Badge tone="fin">{text.custom}</Badge>}
               {renamed && (
@@ -384,7 +389,7 @@ function CategoryRow({
           <Link
             to={`${lineupPath(scope, id, 'channels')}?category=${category.id}`}
             className={rowButton}
-            aria-label={text.channelsLabel(category.name)}
+            aria-label={text.channelsLabel(shown)}
           >
             {text.channels}
           </Link>
@@ -392,7 +397,7 @@ function CategoryRow({
             <button
               type="button"
               className={rowButton}
-              aria-label={text.renameLabel(category.name)}
+              aria-label={text.renameLabel(shown)}
               onClick={() => {
                 update.reset()
                 setName(category.name)
@@ -416,14 +421,12 @@ function CategoryRow({
             <ConfirmButton
               label={text.delete}
               busyLabel={text.deleting}
-              message={text.deleteConfirm(category.name)}
+              message={text.deleteConfirm(shown)}
               busy={remove.isPending}
               onConfirm={() => remove.mutate()}
             />
           )}
-          {reorder && (
-            <MoveButtons name={category.name} index={index} count={count} onMove={onMove} />
-          )}
+          {reorder && <MoveButtons name={shown} index={index} count={count} onMove={onMove} />}
         </div>
       </div>
       {(update.isError || remove.isError) && (

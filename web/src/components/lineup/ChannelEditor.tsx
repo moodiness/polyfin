@@ -186,7 +186,7 @@ function Details({
         >
           {(categories.data?.items ?? [channel.category]).map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.name || t.lineup.exclusions.noGroup}
               {c.id === channel.providerCategoryId ? ` ${text.providerCategory}` : ''}
             </option>
           ))}
