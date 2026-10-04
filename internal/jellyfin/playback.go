@@ -191,13 +191,15 @@ func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts
 	return item, err
 }
 
-// played resolves what a player opens: a movie, an episode or a channel,
-// by its own identifier or by one of its versions'.
+// played resolves what a player opens: a movie, an episode, a channel or a
+// recording, by its own identifier or by one of its versions'.
 func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
 		if owner, ok := h.Library.VersionOwner(opened); ok {
 			item, err = h.Library.Item(ctx, user, owner)
+		} else if recording, ok := h.recordingTitle(ctx, user, opened); ok {
+			return recording, nil
 		}
 	}
 	if err != nil {
@@ -788,7 +790,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 			wanted = id
 		}
 	}
-	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
+	version, err := h.version(r.Context(), user, item, wanted)
 	if err != nil {
 		processingError(w, http.StatusBadRequest)
 		return
@@ -808,6 +810,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	contentType := mimeTypes[strings.ToLower(extension)]
+	if item.Kind == library.KindRecording {
+		h.serveRecording(w, r, version, contentType)
+		return
+	}
 	if contentType == "" {
 		contentType = mimeTypes[containerOfName(version.Filename)]
 	}

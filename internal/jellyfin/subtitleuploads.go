@@ -97,6 +97,13 @@ func (h *Handler) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 	format := strings.ToLower(strings.TrimSpace(body.Format))
 	language := strings.TrimSpace(body.Language)
 	data, decodeErr := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(body.Data), ""))
+	// Recordings take no subtitle files: refused as a request Jellyfin
+	// cannot process, simpler than keeping files for Polyfin's own
+	// recordings beside the addons' titles.
+	if h.isRecording(r.Context(), id) {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
 	item := h.subtitleOwner(id)
 	if _, known := uploadedCodecs[format]; !known || len(language) > 32 || strings.ContainsAny(language, `/\`) ||
 		decodeErr != nil || len(data) == 0 || len(data) > maxSubtitleBytes {

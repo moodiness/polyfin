@@ -74,6 +74,10 @@ type playable struct {
 // that cannot be listed are left out.
 func (h *Handler) playable(ctx context.Context, user accounts.User, item library.Item) (playable, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	if item.Kind == library.KindRecording {
+		p.versions = h.recordingVersions(ctx, item)
+		return p, nil
+	}
 	var versionsErr error
 	var wg sync.WaitGroup
 	wg.Go(func() { p.versions, versionsErr = h.Library.Versions(ctx, user, item.ID) })
@@ -92,6 +96,10 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 // already known, as asking addons for every listed title is too costly.
 func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item library.Item) playable {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	if item.Kind == library.KindRecording {
+		p.versions = h.recordingVersions(ctx, item)
+		return p
+	}
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
 		p.versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
 	}

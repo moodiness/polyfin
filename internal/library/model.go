@@ -35,6 +35,9 @@ const (
 	// a programme of its guide.
 	KindChannel Kind = "channel"
 	KindProgram Kind = "program"
+	// KindRecording is a Live TV recording, a file of Polyfin's own (see
+	// the recordings package), never listed by the library.
+	KindRecording Kind = "recording"
 )
 
 // Item is something a Jellyfin app can browse.

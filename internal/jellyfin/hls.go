@@ -171,7 +171,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
 	}
-	version, err := h.Library.Version(r.Context(), user, item.ID, grant.Version)
+	version, err := h.version(r.Context(), user, item, grant.Version)
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false

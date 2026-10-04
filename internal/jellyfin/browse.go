@@ -316,6 +316,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	if h.channelListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
+	if h.recordingListing(w, r, user, parent, hasParent, start, limit) {
+		return
+	}
 	if filter, ok := stateFilterOf(r); ok {
 		h.stateListing(w, r, user, filter, parent, hasParent, start, limit)
 		return
@@ -486,12 +489,18 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) && id == liveTvViewID && h.describeLiveTvView(w, r, user) {
 		return
 	}
+	if errors.Is(err, library.ErrNotFound) && h.describeRecording(w, r, user, id) {
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
 	if item.Kind == library.KindPerson {
 		h.writePerson(w, r, user, item)
+		return
+	}
+	if item.Kind == library.KindRecording && h.describeRecording(w, r, user, item.ID) {
 		return
 	}
 	state, err := h.userState(r.Context(), user, []library.Item{item})
@@ -504,6 +513,11 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if item.Kind == library.KindChannel {
 		dtos := []BaseItemDto{dto}
 		h.addCurrentPrograms(r, user, dtos, nil)
+		dto = dtos[0]
+	}
+	if item.Kind == library.KindProgram {
+		dtos := []BaseItemDto{dto}
+		h.addTimers(r.Context(), dtos)
 		dto = dtos[0]
 	}
 	writeJSON(w, http.StatusOK, dto)

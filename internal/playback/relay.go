@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/source"
 )
@@ -122,6 +123,10 @@ type loopback struct {
 	mu      sync.Mutex
 	sources map[string]*source.Source
 	feeds   map[string]library.Version
+	// files are Polyfin's own files, recordings, by version (see
+	// FileVersion), served under fileKey.
+	files   map[accounts.ID]string
+	fileKey string
 }
 
 func newLoopback() (*loopback, error) {
@@ -129,7 +134,8 @@ func newLoopback() (*loopback, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &loopback{listener: listener, sources: map[string]*source.Source{}, feeds: map[string]library.Version{}}
+	l := &loopback{listener: listener, sources: map[string]*source.Source{}, feeds: map[string]library.Version{},
+		files: map[accounts.ID]string{}, fileKey: randomKey()}
 	l.server = &http.Server{Handler: http.HandlerFunc(l.serve), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = l.server.Serve(listener) }()
 	return l, nil
@@ -160,6 +166,10 @@ func (l *loopback) register(src *source.Source) (string, func()) {
 func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 	if rest, ok := strings.CutPrefix(r.URL.Path, "/live/"); ok {
 		l.serveLive(w, r, rest)
+		return
+	}
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/file/"); ok {
+		l.serveFile(w, r, rest)
 		return
 	}
 	l.mu.Lock()

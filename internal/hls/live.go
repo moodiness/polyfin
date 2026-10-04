@@ -93,21 +93,16 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 	if l == nil {
 		// Each live encoding reads its source as it comes, until the app
 		// leaves: a user's newest replaces their oldest past userLives, and
-		// none starts past serverLives.
-		var oldest *live
-		mine := 0
-		for k, other := range m.lives {
-			if k.User == key.User {
-				mine++
-				if oldest == nil || other.created.Before(oldest.created) {
-					oldest = other
-				}
-			}
-		}
+		// none starts past serverLives. Recordings count too, but are never
+		// replaced: past userLives with recordings only, none starts.
+		mine, oldest := m.userLives(key.User)
 		switch {
+		case mine >= userLives && oldest == nil:
+			m.mu.Unlock()
+			return nil, ErrBusy
 		case mine >= userLives:
 			replaced = oldest
-		case len(m.lives) >= serverLives:
+		case len(m.lives)+len(m.recordings) >= serverLives:
 			m.mu.Unlock()
 			return nil, ErrBusy
 		}

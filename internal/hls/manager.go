@@ -239,7 +239,10 @@ type Manager struct {
 	mu        sync.Mutex
 	encodings map[Key]*encoding
 	lives     map[Key]*live
-	closed    bool
+	// recordings are the recordings running, by key, with the function
+	// stopping each.
+	recordings map[Key]context.CancelFunc
+	closed     bool
 }
 
 // NewManager returns a manager running FFmpeg from ffmpegPath and keeping
@@ -253,7 +256,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath),
-		encodings: map[Key]*encoding{}, lives: map[Key]*live{}}
+		encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
 	go m.stopIdle()
 	return m, nil
 }
@@ -267,6 +270,9 @@ func (m *Manager) Close() {
 	}
 	m.closed = true
 	close(m.done)
+	for _, cancel := range m.recordings {
+		cancel()
+	}
 	m.mu.Unlock()
 	m.stopWhere(func(Key, *encoding) bool { return true })
 	m.stopLives(func(Key, *live) bool { return true })

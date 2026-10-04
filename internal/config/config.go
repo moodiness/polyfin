@@ -45,6 +45,9 @@ type Config struct {
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
 	// with the folders within.
 	FontsDir string
+	// RecordingsDir is the folder Live TV recordings are written to; empty
+	// leaves recording off.
+	RecordingsDir string
 }
 
 // defaultFontsDir is the system font folder, which the Docker image fills
@@ -121,7 +124,35 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, fmt.Errorf("POLYFIN_SEGMENTS: %w", err))
 	}
 	cfg.Segments = segments
+	if dir := strings.TrimSpace(getenv("POLYFIN_RECORDINGS_DIR")); dir != "" {
+		if err := checkWritableDir(dir); err != nil {
+			errs = append(errs, fmt.Errorf("POLYFIN_RECORDINGS_DIR: %w", err))
+		} else {
+			cfg.RecordingsDir = filepath.Clean(dir)
+		}
+	}
 	return cfg, errors.Join(errs...)
+}
+
+// checkWritableDir reports why dir is not a folder Polyfin can write files
+// into, by writing one.
+func checkWritableDir(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("%q is not an absolute path", dir)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%q is not a folder", dir)
+	}
+	file, err := os.CreateTemp(dir, ".polyfin-check-*")
+	if err != nil {
+		return fmt.Errorf("%q is not writable: %w", dir, err)
+	}
+	_ = file.Close()
+	return os.Remove(file.Name())
 }
 
 // parseSegments reads the segment databases, in order of preference: by

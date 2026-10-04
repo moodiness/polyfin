@@ -58,7 +58,9 @@ func (h *Handler) trickplayManifest(ctx context.Context, item accounts.ID) *map[
 // images of the version a playback started with, when the settings turn
 // them on.
 func (h *Handler) queueImages(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
-	if h.Thumbnails == nil {
+	// Recordings are Polyfin's own files, which may be deleted at any time:
+	// they get no thumbnails or chapter images.
+	if h.Thumbnails == nil || item.Kind == library.KindRecording {
 		return
 	}
 	if settings := h.Accounts.Settings(); !settings.Trickplay && !settings.ChapterImages {

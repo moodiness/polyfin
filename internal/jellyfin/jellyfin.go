@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -80,6 +81,9 @@ type Options struct {
 	// Thumbnails makes and keeps the scrubbing thumbnails and chapter
 	// images of the versions played; nil makes none.
 	Thumbnails *thumbnails.Service
+	// Recordings schedules and keeps Live TV recordings; nil, or one
+	// without a folder, records nothing.
+	Recordings *recordings.Service
 }
 
 // Handler serves the Jellyfin API.

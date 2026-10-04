@@ -39,6 +39,8 @@ export type User = {
   syncPlay: SyncPlayAccess
   /** Whether the user may control other users' apps. */
   remoteControl: boolean
+  /** Whether the user may schedule and delete Live TV recordings. */
+  liveTvManagement: boolean
   /** IDs of the server's libraries this user's apps do not show; libraries added later show. */
   hiddenLibraries: string[]
   /** Titles of any of these genres are hidden from the user, like parental control. */
@@ -168,7 +170,19 @@ export type Settings = {
   chapterImages: boolean
   /** GB the thumbnails and chapter images take at most; past it, those used longest ago are dropped. */
   thumbnailStorageGB: number
+  /** Seconds recordings start before their programme. */
+  recordingPrePadding: number
+  /** Seconds recordings go on after their programme. */
+  recordingPostPadding: number
+  /** Days after which recordings are deleted; 0 keeps them forever. */
+  recordingRetentionDays: number
+  /** Folder recordings are written to (read-only); empty when recording is off. */
+  recordingsFolder: string
 }
+
+/** The ranges the server accepts for the recording settings, padding in minutes here. */
+export const recordingPaddingMinutesRange = { min: 0, max: 60 }
+export const recordingRetentionDaysRange = { min: 0, max: 3650 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
 export const catalogLimitRange = { min: 100, max: 20000 }
@@ -216,6 +230,7 @@ export type UserPatch = Partial<{
   liveTv: boolean
   syncPlay: SyncPlayAccess
   remoteControl: boolean
+  liveTvManagement: boolean
   hiddenLibraries: string[]
   blockedGenres: string[]
   accessSchedules: AccessSchedule[]

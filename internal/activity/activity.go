@@ -244,3 +244,16 @@ func (s *Store) owner(by accounts.User, shared bool) *accounts.ID {
 	}
 	return &by.ID
 }
+
+// RecordingScheduled records that user scheduled the recording of title,
+// one programme or a series.
+func (s *Store) RecordingScheduled(ctx context.Context, user accounts.User, title string) {
+	s.record(ctx, Entry{Name: s.phrase("%s scheduled the recording of %s", "%s a programmé l’enregistrement de %s", user.Name, title),
+		Type: "RecordingScheduled", UserID: &user.ID})
+}
+
+// RecordingDeleted records that user deleted the recording of title.
+func (s *Store) RecordingDeleted(ctx context.Context, user accounts.User, title string) {
+	s.record(ctx, Entry{Name: s.phrase("%s deleted the recording of %s", "%s a supprimé l’enregistrement de %s", user.Name, title),
+		Type: "RecordingDeleted", UserID: &user.ID})
+}

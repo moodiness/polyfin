@@ -649,6 +649,7 @@ function PlaybackAccessForm({ user }: { user: User }) {
     liveTv: user.liveTv,
     syncPlay: user.syncPlay,
     remoteControl: user.remoteControl,
+    liveTvManagement: user.liveTvManagement,
   })
 
   function update(change: Partial<typeof form>) {
@@ -737,6 +738,12 @@ function PlaybackAccessForm({ user }: { user: User }) {
         help={t.users.remoteControlHelp}
         checked={form.remoteControl}
         onChange={(remoteControl) => update({ remoteControl })}
+      />
+      <Checkbox
+        label={t.users.liveTvManagement}
+        help={t.users.liveTvManagementHelp}
+        checked={form.liveTvManagement}
+        onChange={(liveTvManagement) => update({ liveTvManagement })}
       />
       {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
       {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}

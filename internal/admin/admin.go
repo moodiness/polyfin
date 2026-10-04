@@ -55,6 +55,9 @@ type Options struct {
 	// Activity records what administrators change for the activity log;
 	// nil records nothing.
 	Activity *activity.Store
+	// RecordingsDir is the folder Live TV recordings are written to, empty
+	// when recording is off.
+	RecordingsDir string
 }
 
 type handler struct {
@@ -207,6 +210,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidTrickplayInterval, http.StatusBadRequest, "invalid_trickplay_interval"},
 		{accounts.ErrInvalidTrickplayWidth, http.StatusBadRequest, "invalid_trickplay_width"},
 		{accounts.ErrInvalidThumbnailStorage, http.StatusBadRequest, "invalid_thumbnail_storage_gb"},
+		{accounts.ErrInvalidRecordingPadding, http.StatusBadRequest, "invalid_recording_padding"},
+		{accounts.ErrInvalidRecordingRetentionDays, http.StatusBadRequest, "invalid_recording_retention_days"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},

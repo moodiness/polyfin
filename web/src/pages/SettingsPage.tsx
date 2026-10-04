@@ -10,6 +10,8 @@ import {
   inactiveDeviceDaysRange,
   loginAttemptsRange,
   maxConversionsRange,
+  recordingPaddingMinutesRange,
+  recordingRetentionDaysRange,
   playedPercentRange,
   queryClient,
   queryKeys,
@@ -61,6 +63,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const playbackId = useId()
   const catalogsId = useId()
   const contentId = useId()
+  const recordingsId = useId()
   const securityId = useId()
   const heightId = useId()
   const thumbnailsId = useId()
@@ -434,6 +437,52 @@ function SettingsForm({ initial }: { initial: Settings }) {
               help={t.settings.detailedLogHelp}
               checked={form.detailedLog}
               onChange={(detailedLog) => update({ detailedLog })}
+            />
+          </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={recordingsId}>
+            <h2 id={recordingsId} className="text-sm font-semibold text-white">
+              {t.settings.recordingsTitle}
+            </h2>
+            <p className="text-sm text-muted">
+              {form.recordingsFolder
+                ? t.settings.recordingsFolder(form.recordingsFolder)
+                : t.settings.recordingsOff}
+            </p>
+            <TextField
+              label={t.settings.recordingPrePadding}
+              hint={t.settings.recordingPrePaddingHelp}
+              type="number"
+              inputMode="numeric"
+              min={recordingPaddingMinutesRange.min}
+              max={recordingPaddingMinutesRange.max}
+              step={1}
+              value={wholeNumberField(Math.round(form.recordingPrePadding / 60))}
+              onValue={(value) => update({ recordingPrePadding: wholeNumber(value) * 60 })}
+              required
+            />
+            <TextField
+              label={t.settings.recordingPostPadding}
+              hint={t.settings.recordingPostPaddingHelp}
+              type="number"
+              inputMode="numeric"
+              min={recordingPaddingMinutesRange.min}
+              max={recordingPaddingMinutesRange.max}
+              step={1}
+              value={wholeNumberField(Math.round(form.recordingPostPadding / 60))}
+              onValue={(value) => update({ recordingPostPadding: wholeNumber(value) * 60 })}
+              required
+            />
+            <TextField
+              label={t.settings.recordingRetentionDays}
+              hint={t.settings.recordingRetentionDaysHelp}
+              type="number"
+              inputMode="numeric"
+              min={recordingRetentionDaysRange.min}
+              max={recordingRetentionDaysRange.max}
+              step={1}
+              value={wholeNumberField(form.recordingRetentionDays)}
+              onValue={(value) => update({ recordingRetentionDays: wholeNumber(value) })}
+              required
             />
           </section>
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
