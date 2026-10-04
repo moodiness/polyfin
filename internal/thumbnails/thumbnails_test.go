@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
@@ -201,7 +202,7 @@ func TestGenerateFromMatroska(t *testing.T) {
 	keyframes := []float64{0, 5.125, 9.708, 14.5, 3.125, 6, 11, 12.5}
 	for i, at := range keyframes[:4] {
 		cell := image.Rect(i*240, 0, (i+1)*240, 240)
-		if closest := closestKeyframe(t, ffmpeg, img, cell, 240, keyframes); closest != at {
+		if closest := closestKeyframe(t, ffmpeg, "forced.mkv", img, cell, 240, keyframes); closest != at {
 			t.Errorf("thumbnail %d shows the keyframe at %vs, not %vs", i, closest, at)
 		}
 	}
@@ -233,7 +234,7 @@ func TestGenerateFromMatroska(t *testing.T) {
 		if size := img.Bounds().Size(); size != (image.Point{64, 64}) || got.Tag != images[chapter].Tag {
 			t.Errorf("chapter %d: %v, tag %q", chapter, size, got.Tag)
 		}
-		if closest := closestKeyframe(t, ffmpeg, img, img.Bounds(), 64, keyframes); closest != at {
+		if closest := closestKeyframe(t, ffmpeg, "forced.mkv", img, img.Bounds(), 64, keyframes); closest != at {
 			t.Errorf("chapter %d shows the keyframe at %vs, not %vs", chapter, closest, at)
 		}
 	}
@@ -288,13 +289,13 @@ func lit(img image.Image, x, y, width int) int {
 	return total / n
 }
 
-// closestKeyframe returns which of the keyframes of forced.mkv, by time,
+// closestKeyframe returns which of the keyframes of a fixture, by time,
 // the part cell of img looks most like, FFmpeg decoding each at width.
-func closestKeyframe(t *testing.T, ffmpeg string, img image.Image, cell image.Rectangle, width int, keyframes []float64) float64 {
+func closestKeyframe(t *testing.T, ffmpeg, file string, img image.Image, cell image.Rectangle, width int, keyframes []float64) float64 {
 	t.Helper()
 	best, closest := math.MaxFloat64, -1.0
 	for _, at := range keyframes {
-		reference := referenceFrame(t, ffmpeg, at, width)
+		reference := referenceFrame(t, ffmpeg, file, at, width)
 		difference := 0.0
 		for y := range cell.Dy() {
 			for x := range cell.Dx() {
@@ -313,17 +314,17 @@ func closestKeyframe(t *testing.T, ffmpeg string, img image.Image, cell image.Re
 // references holds the keyframes FFmpeg decoded for referenceFrame.
 var references sync.Map
 
-// referenceFrame is the frame of forced.mkv at a keyframe, by time, as
+// referenceFrame is the frame of a fixture at a keyframe, by time, as
 // FFmpeg decodes it, width pixels square.
-func referenceFrame(t *testing.T, ffmpeg string, at float64, width int) image.Image {
+func referenceFrame(t *testing.T, ffmpeg, file string, at float64, width int) image.Image {
 	t.Helper()
-	key := [2]float64{at, float64(width)}
+	key := fmt.Sprint(file, at, width)
 	if img, ok := references.Load(key); ok {
 		return img.(image.Image)
 	}
 	out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", strconv.FormatFloat(at, 'f', -1, 64),
-		"-i", filepath.Join("..", "container", "testdata", "forced.mkv"), "-frames:v", "1",
-		"-vf", "scale="+strconv.Itoa(width)+":"+strconv.Itoa(width), "-f", "image2pipe", "-c:v", "png", "-").Output()
+		"-i", filepath.Join("..", "container", "testdata", file), "-frames:v", "1",
+		"-vf", "scale=w="+strconv.Itoa(width)+":h=trunc(ow/dar/2)*2", "-f", "image2pipe", "-c:v", "png", "-").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +367,7 @@ func TestGenerateWithinTheBudget(t *testing.T) {
 	all := []float64{0, 1.333, 2.916, 3.125, 5.125, 6, 7.708, 9.708, 11, 12.5, 14.5}
 	ffmpeg := testFFmpeg(t)
 	for i, at := range []float64{2.916, 2.916, 7.708, 12.5} {
-		if closest := closestKeyframe(t, ffmpeg, img, image.Rect(i*240, 0, (i+1)*240, 240), 240, all); closest != at {
+		if closest := closestKeyframe(t, ffmpeg, "forced.mkv", img, image.Rect(i*240, 0, (i+1)*240, 240), 240, all); closest != at {
 			t.Errorf("thumbnail %d shows the keyframe at %vs, not %vs", i, closest, at)
 		}
 	}
@@ -380,7 +381,7 @@ func TestGenerateWithinTheBudget(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if closest := closestKeyframe(t, ffmpeg, img, img.Bounds(), 64, all); closest != at {
+		if closest := closestKeyframe(t, ffmpeg, "forced.mkv", img, img.Bounds(), 64, all); closest != at {
 			t.Errorf("chapter %d shows the keyframe at %vs, not %vs", chapter, closest, at)
 		}
 	}
@@ -491,4 +492,118 @@ func TestGenerateWaitsForPlaybacks(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Error("no thumbnails were made once the host was free")
+}
+
+// rangeSource is a countingSource serving several ranges with one
+// request, as some hosts do.
+type rangeSource struct{ *countingSource }
+
+func (r rangeSource) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	r.record(request{kind: "ranges", ranges: len(ranges)})
+	result := make([][]byte, len(ranges))
+	for i, part := range ranges {
+		result[i] = slices.Clone(r.data[part.Off:min(part.Off+int64(part.N), int64(len(r.data)))])
+	}
+	return result, nil
+}
+
+// hevcKeyframes are the keyframes of hevc.mkv, by time: every 4 s, CRA
+// pictures of an open GOP, after which a decoder reorders what it outputs.
+var hevcKeyframes = []float64{0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56}
+
+// Every thumbnail and chapter image shows the keyframe read nearest its
+// time, whatever order the keyframes were read in (coarse to fine), one
+// range a request or several, and when the budget runs out partway: a
+// decoded frame is tied to its keyframe's time, not to its place in the
+// reads, nor in what the decoder outputs.
+func TestImagesFollowTheKeyframesTimes(t *testing.T) {
+	ffmpeg := testFFmpeg(t)
+	data := fixture(t, "hevc.mkv")
+	analysis := media.Analysis{Format: "matroska,webm", Duration: 60 * time.Second,
+		Streams:  []media.Stream{{Index: 0, Type: "video", Codec: "hevc", Width: 128, Height: 72}},
+		Chapters: []media.Chapter{{Start: 0}, {Start: 21 * time.Second}, {Start: 50 * time.Second}}}
+	for _, tc := range []struct {
+		name   string
+		ranges bool
+		budget int
+	}{
+		{"one range a request", false, budget},
+		{"several ranges a request", true, budget},
+		{"one range a request, the budget running out", false, 8},
+		{"several ranges a request, the budget running out", true, 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := newTestService(t, ffmpeg)
+			ts.budget = tc.budget
+			counting := &countingSource{data: data}
+			ts.Open = func(library.Version) Source {
+				if tc.ranges {
+					return rangeSource{counting}
+				}
+				return counting
+			}
+			ts.analysis = analysis
+			ctx := t.Context()
+			ts.generate(ctx, testJob)
+			manifest, err := ts.Manifest(ctx, testVersion.Item)
+			info := manifest[testVersion.ID][240]
+			if err != nil || info.ThumbnailCount != 12 {
+				t.Fatalf("manifest %+v, %v", manifest, err)
+			}
+			tile, err := ts.Tile(ctx, testVersion.ID, 240, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			img, err := jpeg.Decode(bytes.NewReader(tile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			shownAt := make([]float64, info.ThumbnailCount)
+			for i := range shownAt {
+				cell := image.Rect(i%10*info.Width, i/10*info.Height, (i%10+1)*info.Width, (i/10+1)*info.Height)
+				shownAt[i] = closestKeyframe(t, ffmpeg, "hevc.mkv", img, cell, info.Width, hevcKeyframes)
+			}
+			var chapters []float64
+			for chapter := range analysis.Chapters {
+				got, err := ts.ChapterImageOf(ctx, testVersion.ID, chapter, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				img, err := jpeg.Decode(bytes.NewReader(got.Data))
+				if err != nil {
+					t.Fatal(err)
+				}
+				chapters = append(chapters, closestKeyframe(t, ffmpeg, "hevc.mkv", img, img.Bounds(), img.Bounds().Dx(), hevcKeyframes))
+			}
+			// With the whole budget, every keyframe is read; when it runs
+			// out, those read are at least those shown, spread over the
+			// runtime.
+			read := hevcKeyframes
+			if tc.budget < budget {
+				read = slices.Compact(slices.Sorted(slices.Values(append(slices.Clone(shownAt), chapters...))))
+				if len(read) < 2 || read[0] > 20 || read[len(read)-1] < 36 {
+					t.Errorf("the keyframes read do not cover the runtime: %v", read)
+				}
+			}
+			nearestRead := func(at float64) float64 {
+				best := read[0]
+				for _, k := range read {
+					if math.Abs(k-at) < math.Abs(best-at) {
+						best = k
+					}
+				}
+				return best
+			}
+			for i, at := range shownAt {
+				if want := nearestRead(float64(i * 5)); at != want {
+					t.Errorf("thumbnail %d, at %ds, shows the keyframe at %vs, not %vs: %v", i, i*5, at, want, shownAt)
+				}
+			}
+			for c, at := range chapters {
+				if want := nearestRead(analysis.Chapters[c].Start.Seconds()); at != want {
+					t.Errorf("chapter %d shows the keyframe at %vs, not %vs", c, at, want)
+				}
+			}
+		})
+	}
 }

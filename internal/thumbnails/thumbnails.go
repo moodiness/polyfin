@@ -397,42 +397,42 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	order := chooseKeyframes(video.Keyframes, targets)
 	hdr := s.ToneMapping && (stream.ColorTransfer == "smpte2084" || stream.ColorTransfer == "arib-std-b67")
 
-	var thumbnails, chapterImages *imageDecoder
+	var filters []string
 	if want.trickplay {
-		thumbnails = &imageDecoder{}
-		if err := s.startImages(ctx, video, thumbnailFilter(want.width, hdr), thumbnails); err != nil {
-			return reads{requests: p.requests}, err
-		}
-		defer thumbnails.kill()
+		filters = append(filters, thumbnailFilter(want.width, hdr))
 	}
 	if len(want.chapters) > 0 {
-		chapterImages = &imageDecoder{}
-		if err := s.startImages(ctx, video, chapterFilter(hdr), chapterImages); err != nil {
-			return reads{requests: p.requests}, err
-		}
-		defer chapterImages.kill()
+		filters = append(filters, chapterFilter(hdr))
 	}
-	var times []time.Duration
+	// Each keyframe is decoded as soon as it is read, and its images kept
+	// with its time: the images shown are chosen by time, whatever the
+	// order the keyframes were read in.
+	var frames []decodedFrame
 	err = video.ReadFrames(ctx, p, order, func(index int, frame []byte) error {
-		for _, d := range []*imageDecoder{thumbnails, chapterImages} {
-			if d != nil {
-				if err := d.write(frame); err != nil {
-					return err
-				}
-			}
+		images, err := decodeKeyframe(ctx, s.FFmpeg, s.Hardware, video, frame, filters)
+		switch {
+		case err == nil:
+			frames = append(frames, decodedFrame{at: video.Keyframes[index], images: images})
+			return nil
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case !errors.Is(err, errNoImage) || len(frames) == 0:
+			// FFmpeg cannot run, or the first keyframe does not decode: the
+			// others are not read for nothing.
+			return fmt.Errorf("%w: %w", container.ErrUnreadable, err)
 		}
-		times = append(times, video.Keyframes[index])
+		s.Logger.Debug("A keyframe could not be decoded", "addon", version.Addon, "at", video.Keyframes[index], "error", err)
 		return nil
 	})
-	read := reads{requests: p.requests, keyframes: len(times)}
-	if err != nil && (!errors.Is(err, errBudget) || len(times) == 0) {
+	read := reads{requests: p.requests, keyframes: len(frames)}
+	if err != nil && (!errors.Is(err, errBudget) || len(frames) == 0) {
 		return read, err
 	}
-	if thumbnails != nil {
-		images, err := thumbnails.finish()
-		if err != nil {
-			return read, err
-		}
+	times := make([]time.Duration, len(frames))
+	for i, f := range frames {
+		times[i] = f.at
+	}
+	if want.trickplay {
 		count := thumbnailCount(analysis.Duration, want.interval)
 		asked := make([]time.Duration, count)
 		for i := range asked {
@@ -441,7 +441,7 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		tiles := newTiler(count, want.interval)
 		tiles.info.Width = want.width
 		for _, k := range shown(times, asked) {
-			if err := tiles.add(images[min(k, len(images)-1)]); err != nil {
+			if err := tiles.add(frames[k].images[0]); err != nil {
 				return read, err
 			}
 		}
@@ -453,11 +453,7 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 			return read, err
 		}
 	}
-	if chapterImages != nil {
-		images, err := chapterImages.finish()
-		if err != nil {
-			return read, err
-		}
+	if len(want.chapters) > 0 {
 		starts := make([]time.Duration, len(want.chapters))
 		for i, chapter := range want.chapters {
 			starts[i] = chapter.Start
@@ -465,9 +461,8 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		encoded := map[int][]byte{}
 		data := make([][]byte, len(starts))
 		for c, k := range shown(times, starts) {
-			k = min(k, len(images)-1)
 			if encoded[k] == nil {
-				if encoded[k], err = encodeJPEG(images[k]); err != nil {
+				if encoded[k], err = encodeJPEG(frames[k].images[len(filters)-1]); err != nil {
 					return read, err
 				}
 			}
@@ -480,39 +475,11 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	return read, nil
 }
 
-// imageDecoder keeps the images FFmpeg decodes, in the order the
-// keyframes were written.
-type imageDecoder struct {
-	*decoder
+// decodedFrame is a keyframe decoded: its time, and its image through each
+// filter.
+type decodedFrame struct {
+	at     time.Duration
 	images []*image.YCbCr
-}
-
-// startImages starts FFmpeg decoding the keyframes written to d.
-func (s *Service) startImages(ctx context.Context, video *container.Video, filter string, d *imageDecoder) error {
-	var err error
-	d.decoder, err = startDecoder(ctx, s.FFmpeg, s.Hardware, video, filter, d.decoded)
-	return err
-}
-
-// decoded keeps a copy of the image of the k-th keyframe written: FFmpeg's
-// frame is reused for the next.
-func (d *imageDecoder) decoded(_ int, img *image.YCbCr) error {
-	kept := *img
-	kept.Y, kept.Cb, kept.Cr = slices.Clone(img.Y), slices.Clone(img.Cb), slices.Clone(img.Cr)
-	d.images = append(d.images, &kept)
-	return nil
-}
-
-// finish waits for FFmpeg and returns the images. Keyframes it did not
-// decode at the end have none; none decoded fails.
-func (d *imageDecoder) finish() ([]*image.YCbCr, error) {
-	if _, err := d.decoder.finish(); err != nil {
-		return nil, err
-	}
-	if len(d.images) == 0 {
-		return nil, fmt.Errorf("%w: FFmpeg decoded no keyframe", container.ErrUnreadable)
-	}
-	return d.images, nil
 }
 
 // thumbnailFilter scales keyframes to thumbnails width pixels wide,

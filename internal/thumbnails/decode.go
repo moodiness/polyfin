@@ -8,126 +8,138 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
 )
 
-// Keyframes are decoded by FFmpeg, read alone from the source: Polyfin
-// writes them to FFmpeg as a Matroska stream of their own, with the
-// source's codec description, one keyframe a second, and FFmpeg writes
-// back each scaled down, as YUV4MPEG frames. Every frame a keyframe, each
-// decodes alone; a constant output rate of one frame a second keeps
-// FFmpeg's frames in step with the keyframes written, repeating the one
-// before a keyframe that does not decode.
-
-// decoder is FFmpeg decoding keyframes into images.
-type decoder struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	writer *bufio.Writer
-	// written counts the keyframes written.
-	written int
-	// read reports, once FFmpeg's output ends, the images read and why
-	// reading stopped.
-	read   chan decoded
-	stderr *bytes.Buffer
-	// ended is set once finish or kill waited for FFmpeg.
-	ended bool
-}
-
-type decoded struct {
-	images int
-	err    error
-}
+// Keyframes are decoded by FFmpeg, each alone, as soon as it is read:
+// Polyfin writes it to FFmpeg as a Matroska stream of its own, with the
+// source's codec description, and FFmpeg writes back the image, scaled
+// down, as a YUV4MPEG frame for each size asked. Each keyframe is decoded
+// by its own FFmpeg, so that its image is tied to it whatever the order the
+// keyframes are read in: one decoder fed several keyframes may output them
+// in another order, as HEVC's does with the CRA pictures of open GOPs,
+// whose picture order counts it compares across keyframes.
 
 // maxImageSide bounds the size of the images FFmpeg sends back.
 const maxImageSide = 8192
 
-// startDecoder starts FFmpeg decoding the keyframes of video written to
-// it, on hw when not nil, through filter, which must end with yuv420p
-// frames. onImage receives each image in order, valid until it returns.
-func startDecoder(ctx context.Context, ffmpeg string, hw *hls.Hardware, video *container.Video, filter string,
-	onImage func(i int, img *image.YCbCr) error) (*decoder, error) {
+// errNoImage reports a keyframe FFmpeg decoded no image of.
+var errNoImage = errors.New("FFmpeg decoded no image of the keyframe")
+
+// decodeKeyframe decodes frame, a keyframe of video, on hw when not nil,
+// and returns its image through each of filters, which must end with
+// yuv420p frames.
+func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video *container.Video, frame []byte, filters []string) ([]*image.YCbCr, error) {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, hw.DecodeInputs()...)
-	args = append(args, "-f", "matroska", "-i", "pipe:0", "-map", "0:v:0", "-an", "-sn", "-dn",
-		"-vf", filter, "-fps_mode", "cfr", "-r", "1", "-f", "yuv4mpegpipe", "pipe:1")
-	cmd := exec.CommandContext(ctx, ffmpeg, args...)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
+	args = append(args, "-f", "matroska", "-i", "pipe:0")
+	if len(filters) == 1 {
+		args = append(args, "-map", "0:v:0", "-vf", filters[0], "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:1")
+	} else {
+		graph := "[0:v:0]split=" + strconv.Itoa(len(filters))
+		for i := range filters {
+			graph += "[in" + strconv.Itoa(i) + "]"
+		}
+		for i, filter := range filters {
+			graph += ";[in" + strconv.Itoa(i) + "]" + filter + "[out" + strconv.Itoa(i) + "]"
+		}
+		args = append(args, "-filter_complex", graph)
+		for i := range filters {
+			// The first output goes to the standard output, the others to
+			// the descriptors after the standard error.
+			fd := 1
+			if i > 0 {
+				fd = 2 + i
+			}
+			args = append(args, "-map", "[out"+strconv.Itoa(i)+"]", "-frames:v", "1", "-f", "yuv4mpegpipe", "pipe:"+strconv.Itoa(fd))
+		}
 	}
+	cmd := exec.CommandContext(ctx, ffmpeg, args...)
+	cmd.Stdin = bytes.NewReader(append(streamHead(video), cluster(0, frame)...))
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = &limitedBuffer{b: stderr, limit: 4 << 10}
+	outputs := make([]io.ReadCloser, len(filters))
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	stderr := &bytes.Buffer{}
-	cmd.Stderr = &limitedBuffer{b: stderr, limit: 4 << 10}
+	outputs[0] = stdout
+	var writers []*os.File
+	defer func() {
+		for _, w := range writers {
+			_ = w.Close()
+		}
+	}()
+	for i := 1; i < len(filters); i++ {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, err
+		}
+		outputs[i] = r
+		defer r.Close()
+		writers = append(writers, w)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start FFmpeg: %w", err)
 	}
-	d := &decoder{cmd: cmd, stdin: stdin, writer: bufio.NewWriterSize(stdin, 256<<10), read: make(chan decoded, 1), stderr: stderr}
-	go func() {
-		n, err := readY4M(bufio.NewReaderSize(stdout, 1<<20), onImage)
-		if err != nil {
+	// FFmpeg holds the write ends now: those here are closed, so that a
+	// read ends with FFmpeg.
+	for _, w := range writers {
+		_ = w.Close()
+	}
+	writers = nil
+	images := make([]*image.YCbCr, len(filters))
+	errs := make([]error, len(filters))
+	var wg sync.WaitGroup
+	for i, output := range outputs {
+		wg.Go(func() {
+			images[i], errs[i] = firstImage(output)
 			// FFmpeg must not block on a pipe no one reads.
-			_, _ = io.Copy(io.Discard, stdout)
+			_, _ = io.Copy(io.Discard, output)
+		})
+	}
+	wg.Wait()
+	waitErr := cmd.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	for _, img := range images {
+		if img == nil {
+			if waitErr != nil {
+				return nil, fmt.Errorf("%w: %w: %s", errNoImage, waitErr, strings.TrimSpace(stderr.String()))
+			}
+			return nil, errNoImage
 		}
-		d.read <- decoded{n, err}
-	}()
-	if _, err := d.writer.Write(streamHead(video)); err != nil {
-		d.kill()
-		return nil, fmt.Errorf("write to FFmpeg: %w", err)
 	}
-	return d, nil
+	return images, nil
 }
 
-// write writes the next keyframe.
-func (d *decoder) write(frame []byte) error {
-	_, err := d.writer.Write(cluster(int64(d.written)*1000, frame))
-	d.written++
-	if err != nil {
-		return fmt.Errorf("write to FFmpeg: %w", err)
-	}
-	return nil
-}
+// errFirstImage stops readY4M once it read the first image.
+var errFirstImage = errors.New("first image read")
 
-// finish ends the stream and waits for FFmpeg, returning the images read.
-func (d *decoder) finish() (int, error) {
-	d.ended = true
-	err := d.writer.Flush()
-	if closeErr := d.stdin.Close(); err == nil {
-		err = closeErr
+// firstImage reads the first frame of a YUV4MPEG stream, nil when it has
+// none.
+func firstImage(r io.Reader) (*image.YCbCr, error) {
+	var first *image.YCbCr
+	_, err := readY4M(bufio.NewReaderSize(r, 1<<20), func(_ int, img *image.YCbCr) error {
+		kept := *img
+		kept.Y, kept.Cb, kept.Cr = slices.Clone(img.Y), slices.Clone(img.Cb), slices.Clone(img.Cr)
+		first = &kept
+		return errFirstImage
+	})
+	if errors.Is(err, errFirstImage) {
+		err = nil
 	}
-	result := <-d.read
-	waitErr := d.cmd.Wait()
-	switch {
-	case result.err != nil:
-		return result.images, result.err
-	case waitErr != nil:
-		return result.images, fmt.Errorf("FFmpeg: %w: %s", waitErr, strings.TrimSpace(d.stderr.String()))
-	case err != nil:
-		return result.images, fmt.Errorf("write to FFmpeg: %w", err)
-	}
-	return result.images, nil
-}
-
-// kill stops FFmpeg, unless finish waited for it, and waits for it.
-func (d *decoder) kill() {
-	if d.ended {
-		return
-	}
-	d.ended = true
-	if d.cmd.Process != nil {
-		_ = d.cmd.Process.Kill()
-	}
-	_ = d.stdin.Close()
-	<-d.read
-	_ = d.cmd.Wait()
+	return first, err
 }
 
 // limitedBuffer keeps the first bytes FFmpeg writes to its error output.
