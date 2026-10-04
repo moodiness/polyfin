@@ -3,6 +3,7 @@ package xmltv
 import (
 	"cmp"
 	"slices"
+	"strings"
 )
 
 // Matcher chooses, for each channel of a catalog, the guide channel that
@@ -13,8 +14,13 @@ import (
 //
 // A guide channel whose identifier is a channel's Stremio ID, or the
 // channel's own guide identifier (an IPTV list's tvg-id or epg_channel_id),
-// gives that channel its programmes. Otherwise guide channels are
-// candidates by name (see ParseName), ranked by:
+// gives that channel its programmes. Lists often write that identifier in
+// another case, or as "<channel>@<feed>" ("Name.fr@SD"): failing an exact
+// match, guide channels are candidates whose identifier is the channel's
+// ignoring case, then the part before its last "@", exactly and then
+// ignoring case, each before the next, and before any name. Otherwise
+// guide channels are candidates by name (see ParseName). Among candidates
+// of the same kind, they are ranked by:
 //   - country: one of the guide channel's countries (that of its
 //     identifier, as in "Name.fr", and those of its display names'
 //     prefixes, as in "FR| Name") is the channel's own prefix country, else
@@ -34,12 +40,16 @@ type Matcher struct {
 	country  string
 	channels []matchChannel
 	// byID, exact and loose index the channels by Stremio ID and guide
-	// identifier, and by names.
-	byID         map[string][]int
-	exact, loose map[string][]int
+	// identifier, and by names; folded, base and foldedBase by their guide
+	// identifier in lower case, before its last "@", and both.
+	byID                     map[string][]int
+	exact, loose             map[string][]int
+	folded, base, foldedBase map[string][]int
 	// wanted counts, for each guide channel, the channels it is a
-	// candidate of or matched by identifier.
-	wanted map[string]int
+	// candidate of or matched by identifier; declared holds the guide
+	// channels ranked already.
+	wanted   map[string]int
+	declared map[string]bool
 }
 
 type matchChannel struct {
@@ -57,7 +67,15 @@ type matchChannel struct {
 // LanguageCountry).
 func NewMatcher(language string) *Matcher {
 	return &Matcher{country: LanguageCountry(language), byID: map[string][]int{},
-		exact: map[string][]int{}, loose: map[string][]int{}, wanted: map[string]int{}}
+		exact: map[string][]int{}, loose: map[string][]int{}, folded: map[string][]int{}, base: map[string][]int{},
+		foldedBase: map[string][]int{}, wanted: map[string]int{}, declared: map[string]bool{}}
+}
+
+// index adds channel i to the channels of key in index, once.
+func index(m map[string][]int, key string, i int) {
+	if key != "" && !slices.Contains(m[key], i) {
+		m[key] = append(m[key], i)
+	}
 }
 
 // Add adds the next channel of the catalog, with its guide identifier if
@@ -67,9 +85,13 @@ func (m *Matcher) Add(stremioID, guideID, name string) {
 	i := len(m.channels)
 	parsed := ParseName(name)
 	m.channels = append(m.channels, matchChannel{country: cmp.Or(parsed.Country, m.country)})
-	for _, id := range []string{stremioID, guideID} {
-		if id != "" && !slices.Contains(m.byID[id], i) {
-			m.byID[id] = append(m.byID[id], i)
+	index(m.byID, stremioID, i)
+	index(m.byID, guideID, i)
+	if guideID != "" {
+		index(m.folded, strings.ToLower(guideID), i)
+		if at := strings.LastIndexByte(guideID, '@'); at > 0 {
+			index(m.base, guideID[:at], i)
+			index(m.foldedBase, strings.ToLower(guideID[:at]), i)
 		}
 	}
 	if parsed.Exact != "" {
@@ -94,9 +116,19 @@ func (m *Matcher) matchByID(i int, id string) {
 	m.wanted[id]++
 }
 
-// Declare ranks a guide channel against the channels whose names it
-// shares.
+// Identifier kinds of candidates, above any name (see Declare): the guide
+// identifier in another case, then before its "@", exactly and in another
+// case.
+const (
+	byFoldedBase = 1
+	byBase       = 2
+	byFolded     = 3
+)
+
+// Declare ranks a guide channel against the channels whose guide
+// identifiers or names it shares.
 func (m *Matcher) Declare(channel Channel) {
+	m.declared[channel.ID] = true
 	for _, i := range m.byID[channel.ID] {
 		m.matchByID(i, channel.ID)
 	}
@@ -112,15 +144,29 @@ func (m *Matcher) Declare(channel Channel) {
 			tiers[i] = 2
 		}
 	}
+	// An identifier's kind outranks every name; the country and the name's
+	// tier rank candidates of the same kind.
+	kinds := map[int]int{}
+	lower := strings.ToLower(channel.ID)
+	for kind, channels := range map[int][]int{byFoldedBase: m.foldedBase[lower], byBase: m.base[channel.ID], byFolded: m.folded[lower]} {
+		for _, i := range channels {
+			kinds[i] = max(kinds[i], kind)
+		}
+	}
+	for i := range kinds {
+		if _, ok := tiers[i]; !ok {
+			tiers[i] = 0
+		}
+	}
 	for i, tier := range tiers {
 		c := &m.channels[i]
 		if c.byID != "" {
 			continue
 		}
-		// The country first, then the tier.
-		rank := tier
+		// The identifier's kind first, then the country, then the tier.
+		rank := kinds[i]*10 + tier
 		if c.country != "" && slices.Contains(countries, c.country) {
-			rank += 2
+			rank += 3
 		}
 		switch {
 		case rank > c.rank:
@@ -149,7 +195,11 @@ func (m *Matcher) Wants(id string) bool {
 		}
 		return true
 	}
-	return false
+	// A guide channel not declared yet may still match by identifier.
+	if !m.declared[id] {
+		m.Declare(Channel{ID: id})
+	}
+	return m.wanted[id] > 0
 }
 
 // Choose returns the guide channel of each channel, in the order they were

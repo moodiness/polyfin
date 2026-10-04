@@ -130,6 +130,44 @@ func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
 		"Orbe.zz", "Orbe.zz", "ZebMax.fr", "ZebMax.fr")
 }
 
+// Lists write guide identifiers in another case, or with a feed after an
+// "@": the exact identifier wins, then the same in another case, then the
+// part before the "@", exactly and then in another case, all before names;
+// an "@" identifier whose part before it is unknown falls back to names.
+func TestGuideIdentifiersWithFeedsAndCase(t *testing.T) {
+	m := NewMatcher("fr")
+	m.Add("polyfin-iptv:1", "Zeb.zz@HD", "Zeb One")
+	m.Add("polyfin-iptv:2", "ORBE.ZZ@SD", "Orbe")
+	m.Add("polyfin-iptv:3", "quill.ZZ", "Quill")
+	m.Add("polyfin-iptv:4", "Gone.zz@HD", "Lumo")
+	m.Add("polyfin-iptv:5", "Pif.zz@HD", "Pif")
+	m.Add("polyfin-iptv:6", "Tac.zz@SD", "Tac")
+	for _, g := range []Channel{
+		{ID: "ZebOther.zz", Names: []string{"Zeb One"}},
+		{ID: "zeb.zz", Names: []string{"Elsewhere"}},
+		{ID: "Zeb.zz", Names: []string{"Elsewhere"}},
+		{ID: "orbe.zz"},
+		{ID: "Quill.zz"},
+		{ID: "Lumo.zz", Names: []string{"Lumo"}},
+		{ID: "pif.zz"},
+		{ID: "Pif.zz@hd"},
+		{ID: "Tac.zz"},
+		{ID: "Tac.zz@SD"},
+	} {
+		m.Declare(g)
+	}
+	expect(t, "feeds and case", m.Choose(func(string) int { return 1 }),
+		"Zeb.zz", "orbe.zz", "Quill.zz", "Lumo.zz", "Pif.zz@hd", "Tac.zz@SD")
+	// A programme before its channel is declared still finds the channel
+	// by the part before the "@".
+	late := NewMatcher("fr")
+	late.Add("polyfin-iptv:1", "Zeb.zz@HD", "Zeb One")
+	if !late.Wants("zeb.zz") || late.Wants("Other.zz") {
+		t.Error("an undeclared guide channel by its identifier without the feed")
+	}
+	expect(t, "undeclared", late.Choose(func(string) int { return 1 }), "zeb.zz")
+}
+
 // Only the programmes of the best-ranked candidates are kept while the
 // guide is read.
 func TestOnlyTheBestCandidatesAreWanted(t *testing.T) {
