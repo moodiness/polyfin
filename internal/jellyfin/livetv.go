@@ -706,7 +706,7 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	user, userErr := h.Accounts.User(r.Context(), grant.User)
-	if !ok || userErr != nil || user.IsDisabled {
+	if !ok || userErr != nil || user.IsDisabled || h.outsideHours(user) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

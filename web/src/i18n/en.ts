@@ -100,6 +100,13 @@ const en = {
       'Days before unused devices are signed out must be a whole number from 0 to 365.',
     personal_addons_disabled:
       'Your own addons are turned off by an administrator. They are kept, but you cannot add, refresh or turn on any.',
+    invalid_hidden_libraries: 'The library list changed in the meantime. Reload the page.',
+    invalid_blocked_genres:
+      'Genres must be 1 to 100 characters long, and at most 100 can be blocked.',
+    invalid_access_schedules:
+      'Hours run from 00:00 to 24:00, and each end must come after its start (50 rows at most).',
+    outside_allowed_hours:
+      'This account cannot be used at this time. Try again during its allowed hours.',
   },
   status: {
     title: 'Server status',
@@ -268,6 +275,43 @@ const en = {
     remoteControlHelp:
       'Lets this user play, pause or send messages to the Jellyfin apps of other users. Everyone can control their own apps.',
     savePlaybackAccess: 'Save playback and access',
+    visibleLibrariesTitle: 'Visible libraries',
+    visibleLibrariesHelp:
+      'The server’s libraries this user’s apps show. Libraries added later are shown. This only chooses the libraries shown: titles stay reachable through other libraries, search or links. To block titles, use parental control or blocked genres.',
+    noServerLibraries: 'The server has no library yet.',
+    saveVisibleLibraries: 'Save visible libraries',
+    blockedGenresTitle: 'Blocked genres',
+    blockedGenresHelp:
+      'Titles of any of these genres are hidden from this user everywhere, like titles above their parental control limit.',
+    genre: 'Genre',
+    genreHint: 'Pick a genre from the server’s libraries, or type one.',
+    addGenre: 'Add',
+    removeGenre: (genre: string) => `Remove ${genre}`,
+    noBlockedGenres: 'No genre is blocked.',
+    saveBlockedGenres: 'Save blocked genres',
+    allowedHoursTitle: 'Allowed hours',
+    allowedHoursHelp:
+      'When hours are set, this user can only sign in and use the server during them, in the server’s time zone. Outside them, their apps are refused.',
+    noAllowedHours: 'No hours set: this user can use the server at any time.',
+    day: 'Day',
+    from: 'From',
+    to: 'To',
+    addHours: 'Add hours',
+    removeHours: 'Remove',
+    hoursOrder: 'Each end time must come after its start time.',
+    saveAllowedHours: 'Save allowed hours',
+    days: {
+      Sunday: 'Sunday',
+      Monday: 'Monday',
+      Tuesday: 'Tuesday',
+      Wednesday: 'Wednesday',
+      Thursday: 'Thursday',
+      Friday: 'Friday',
+      Saturday: 'Saturday',
+      Everyday: 'Every day',
+      Weekday: 'Weekdays (Monday to Friday)',
+      Weekend: 'Weekends',
+    },
   },
   settings: {
     title: 'Settings',

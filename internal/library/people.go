@@ -347,7 +347,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 	}
 	args := []any{q.NameContains, q.NameStartsWith, q.NameBefore, q.NameFrom, lower(q.Types), lower(q.ExcludedTypes),
 		q.Restricted, ids(q.Only), ids(q.Excluded), addonIDs, types, prefixes, []accounts.ID(nil)}
-	if v.parental.Restricted() {
+	if v.restricted() {
 		visible, err := s.visibleCredits(ctx, v, args)
 		if err != nil {
 			return nil, 0, err

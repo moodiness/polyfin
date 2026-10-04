@@ -45,9 +45,11 @@ type record struct {
 	Confined bool `json:"confined,omitempty"`
 	// Rating is the rating a description by one of the server's addons
 	// gave, empty when it gave none, at RatedAt; nil until one was read
-	// (see learnRating).
+	// (see learnTraits). Genres are the genres the same description gave;
+	// nil until one was read since Polyfin keeps them.
 	Rating  *string    `json:"rating,omitempty"`
 	RatedAt *time.Time `json:"ratedAt,omitempty"`
+	Genres  *[]string  `json:"genres,omitempty"`
 }
 
 func (s *Service) save(ctx context.Context, records []record) error {
@@ -76,7 +78,8 @@ func (s *Service) save(ctx context.Context, records []record) error {
 		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
 	}
 	// A search result has no folder: it keeps the one it was last listed in.
-	// A listing carries no rating: the title keeps the one learned before.
+	// A listing carries no rating or genres: the title keeps those learned
+	// before.
 	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
 		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[])
 		ON CONFLICT (id) DO UPDATE SET data = `+keptData+`, updated_at = now()
@@ -85,9 +88,9 @@ func (s *Service) save(ctx context.Context, records []record) error {
 }
 
 // keptData is the record an upsert stores: the new one, with the stored
-// folder and rating when the new one has none.
+// folder, rating and genres when the new one has none.
 const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
-	WHERE key IN ('parent', 'rating', 'ratedAt')), '{}'::jsonb) || excluded.data`
+	WHERE key IN ('parent', 'rating', 'ratedAt', 'genres')), '{}'::jsonb) || excluded.data`
 
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	var r record

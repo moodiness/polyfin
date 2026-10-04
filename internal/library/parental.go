@@ -2,6 +2,8 @@ package library
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -13,7 +15,9 @@ import (
 // install one that rates titles as they please. Catalog pages rarely carry
 // ratings, so listings for a user whose parental control hides titles must
 // look them up: once known, from any user's visit, a rating is kept with
-// the item and listings read it from there.
+// the item and listings read it from there. A title's genres, which the
+// genres a user blocks hide, are learned the same way, from the same
+// descriptions.
 const (
 	// ratingWait bounds how long one request waits for the ratings of the
 	// titles it lists. Titles still unknown then are hidden from the
@@ -63,22 +67,73 @@ func unratedKind(kind Kind) (string, bool) {
 	return "", false
 }
 
-// judges reports whether the user's parental control may hide an item of
-// kind depending on its rating; the others need no rating.
+// judges reports whether the user's parental control or blocked genres
+// may hide an item of kind depending on its rating or genres; the others
+// need neither.
 func (v view) judges(kind Kind) bool {
 	name, ok := unratedKind(kind)
-	return ok && v.parental.Judges(name)
+	return ok && (v.parental.Judges(name) || v.blocksGenres())
 }
 
-// allows reports whether the user's parental control lets them reach an
-// item of kind rated rating. A title whose rating is not known is hidden
-// when its rating matters: it may be one the control hides.
-func (v view) allows(kind Kind, rating string, known bool) bool {
+// restricted reports whether the user's parental control or blocked
+// genres hide titles (see accounts.User.Restricted).
+func (v view) restricted() bool {
+	return v.parental.Restricted() || v.blocksGenres()
+}
+
+func (v view) blocksGenres() bool {
+	return len(v.genres) > 0
+}
+
+// blocked reports whether one of genres is one the user blocks, compared
+// without regard to case.
+func (v view) blocked(genres []string) bool {
+	return slices.ContainsFunc(genres, func(genre string) bool {
+		genre = strings.TrimSpace(genre)
+		return slices.ContainsFunc(v.genres, func(b string) bool { return strings.EqualFold(genre, b) })
+	})
+}
+
+// traits are what hides a title from a restricted user: its rating and
+// its genres, each with whether Polyfin knows it.
+type traits struct {
+	rating      string
+	genres      []string
+	ratingKnown bool
+	genresKnown bool
+}
+
+// describedTraits are the traits a complete description gives.
+func describedTraits(meta stremio.Meta) traits {
+	return traits{rating: certification(meta), genres: meta.Genres, ratingKnown: true, genresKnown: true}
+}
+
+// verdict decides whether the user may reach an item of kind with traits
+// t. A title is hidden as soon as a trait known hides it, and allowed once
+// every trait that matters is known; until then, decided is false: it may
+// be one the user's restrictions hide.
+func (v view) verdict(kind Kind, t traits) (allowed, decided bool) {
 	if !v.judges(kind) {
-		return true
+		return true, true
 	}
 	name, _ := unratedKind(kind)
-	return known && v.parental.Allows(name, rating)
+	byRating := v.parental.Judges(name)
+	switch {
+	case t.genresKnown && v.blocked(t.genres):
+		return false, true
+	case byRating && t.ratingKnown && !v.parental.Allows(name, t.rating):
+		return false, true
+	case byRating && !t.ratingKnown, v.blocksGenres() && !t.genresKnown:
+		return false, false
+	}
+	return true, true
+}
+
+// allows reports whether the user may reach an item of kind with traits t;
+// a title whose verdict is not decided is hidden.
+func (v view) allows(kind Kind, t traits) bool {
+	allowed, decided := v.verdict(kind, t)
+	return allowed && decided
 }
 
 // sharedAddon reports whether the addon identified by id is one of the
@@ -92,7 +147,7 @@ func (v view) sharedAddon(id *accounts.ID) bool {
 }
 
 // rates reports whether one of the server's addons the user reaches can
-// describe a title, which gives its rating.
+// describe a title, which gives its rating and genres.
 func (v view) rates(r record) bool {
 	if r.Meta == nil {
 		return false
@@ -105,32 +160,47 @@ func (v view) rates(r record) bool {
 	return false
 }
 
-// knownRating returns a title's rating when Polyfin knows it: kept from a
-// complete description, from one still cached, or carried by its listing,
-// from the server's addons. A title none of them describes has none. stale
-// is set when the rating kept is old enough to be asked again.
-func (s *Service) knownRating(v view, r record) (rating string, known, stale bool) {
-	fresh := r.Rating != nil && r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating)
-	if fresh {
-		return *r.Rating, true, false
+// knownTraits returns what Polyfin knows of a title's rating and genres:
+// kept from a complete description, from one still cached, or carried by
+// its listing, from the server's addons. A listing's genres count only
+// when they include one the user blocks, as a description may give more
+// genres. A title none of the server's addons describes has no rating,
+// and the genres of its listing. stale is set when the traits kept are old
+// enough to be asked again.
+func (s *Service) knownTraits(v view, r record) (t traits, stale bool) {
+	if r.Rating != nil && (r.Genres != nil || !v.blocksGenres()) {
+		kept := traits{rating: *r.Rating, ratingKnown: true, genresKnown: r.Genres != nil}
+		if r.Genres != nil {
+			kept.genres = *r.Genres
+		}
+		if r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating) {
+			return kept, false
+		}
+		if v.sharedAddon(r.Addon) {
+			if full, ok := s.cachedMeta(r); ok {
+				return describedTraits(full), false
+			}
+		}
+		return kept, true
 	}
 	if v.sharedAddon(r.Addon) {
 		if full, ok := s.cachedMeta(r); ok {
-			return certification(full), true, false
+			return describedTraits(full), false
 		}
 	}
-	if r.Rating != nil {
-		return *r.Rating, true, true
-	}
+	describable := v.rates(r)
 	if v.sharedAddon(r.Addon) && r.Meta != nil {
 		if rating := certification(*r.Meta); rating != "" {
-			return rating, true, false
+			t.rating, t.ratingKnown = rating, true
+		}
+		if !describable || v.blocked(r.Meta.Genres) {
+			t.genres, t.genresKnown = r.Meta.Genres, true
 		}
 	}
-	if !v.rates(r) {
-		return "", true, false
+	if !describable {
+		t.ratingKnown, t.genresKnown = true, true
 	}
-	return "", false, false
+	return t, false
 }
 
 func ratingTTL(rating string) time.Duration {
@@ -140,30 +210,35 @@ func ratingTTL(rating string) time.Duration {
 	return ratedTTL
 }
 
-// learnRating keeps the rating a description by one of the server's
-// addons gives, none included, so that listings know it without asking
-// again.
-func (s *Service) learnRating(ctx context.Context, r record, meta stremio.Meta) {
-	rating := certification(meta)
+// learnTraits keeps the rating and genres a description by one of the
+// server's addons gives, none included, so that listings know them
+// without asking again.
+func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta) {
+	rating, genres := certification(meta), []string(meta.Genres)
+	if genres == nil {
+		genres = []string{}
+	}
 	now := s.now()
-	// A rating confirmed recently is not written again.
-	if r.Rating != nil && *r.Rating == rating && r.RatedAt != nil && now.Sub(*r.RatedAt) < unratedTTL {
+	// Traits confirmed recently are not written again.
+	if r.Rating != nil && *r.Rating == rating && r.Genres != nil && slices.Equal(*r.Genres, genres) &&
+		r.RatedAt != nil && now.Sub(*r.RatedAt) < unratedTTL {
 		return
 	}
-	r.Rating, r.RatedAt = &rating, &now
+	r.Rating, r.Genres, r.RatedAt = &rating, &genres, &now
 	if err := s.save(ctx, []record{r}); err != nil && ctx.Err() == nil {
-		s.logger.Warn("The rating of a title could not be kept", "item", r.ID, "error", err)
+		s.logger.Warn("The rating and genres of a title could not be kept", "item", r.ID, "error", err)
 	}
 }
 
-// visible keeps the records of the items the user's parental control lets
-// them reach, in order. Seasons and episodes are judged by their series.
-// The ratings of titles not known yet are looked up, until the request's
-// deadline; those still unknown then are left out. held reports that some
-// were left out only because their lookup did not answer in time or could
-// not start, the request's lookups being spent.
+// visible keeps the records of the items the user's parental control and
+// blocked genres let them reach, in order. Seasons and episodes are judged
+// by their series. The ratings and genres of titles not known yet are
+// looked up, until the request's deadline; those still unknown then are
+// left out. held reports that some were left out only because their lookup
+// did not answer in time or could not start, the request's lookups being
+// spent.
 func (s *Service) visible(ctx context.Context, v view, records []record) (kept []record, held bool) {
-	if !v.parental.Restricted() || len(records) == 0 {
+	if !v.restricted() || len(records) == 0 {
 		return records, false
 	}
 	titles := make([]record, len(records))
@@ -175,7 +250,7 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 			}
 		}
 	}
-	s.storedRatings(ctx, titles)
+	s.storedTraits(ctx, titles)
 	allowed := make([]bool, len(records))
 	var unknown, stale []int
 	for i, r := range titles {
@@ -183,27 +258,26 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 			allowed[i] = true
 			continue
 		}
-		rating, known, old := s.knownRating(v, r)
-		switch {
-		case known:
-			allowed[i] = v.allows(r.Kind, rating, true)
+		t, old := s.knownTraits(v, r)
+		if ok, decided := v.verdict(r.Kind, t); decided {
+			allowed[i] = ok
 			if old {
 				stale = append(stale, i)
 			}
-		default:
+		} else {
 			unknown = append(unknown, i)
 		}
 	}
-	ratings, pending := s.lookUpRatings(ctx, v, titles, unknown)
-	for i, rating := range ratings {
-		if rating != nil {
-			allowed[unknown[i]] = v.allows(titles[unknown[i]].Kind, *rating, true)
+	found, pending := s.lookUpTraits(ctx, v, titles, unknown)
+	for i, t := range found {
+		if t != nil {
+			allowed[unknown[i]] = v.allows(titles[unknown[i]].Kind, *t)
 		}
 		held = held || pending[i]
 	}
-	// Ratings kept long ago are asked again for the next listings; this one
+	// Traits kept long ago are asked again for the next listings; this one
 	// uses them.
-	s.lookUpRatings(context.WithoutCancel(ctx), v.withoutWait(), titles, stale)
+	s.lookUpTraits(context.WithoutCancel(ctx), v.withoutWait(), titles, stale)
 	kept = records[:0:0]
 	for i, r := range records {
 		if allowed[i] {
@@ -221,11 +295,11 @@ func (v view) withoutWait() view {
 }
 
 // visibleMetas keeps the entries of a catalog page the user's parental
-// control lets them see. Entries that are not titles, collections among
-// them, are kept. held reports titles left out only because their rating
-// is not known yet (see visible).
+// control and blocked genres let them see. Entries that are not titles,
+// collections among them, are kept. held reports titles left out only
+// because their rating or genres are not known yet (see visible).
 func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []stremio.Meta) ([]stremio.Meta, bool) {
-	if !v.parental.Restricted() || len(metas) == 0 {
+	if !v.restricted() || len(metas) == 0 {
 		return metas, false
 	}
 	var titles []record
@@ -258,9 +332,9 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 	return kept, held
 }
 
-// storedRatings fills in the ratings kept for records made from a listing,
-// which carry none of their own.
-func (s *Service) storedRatings(ctx context.Context, records []record) {
+// storedTraits fills in the ratings and genres kept for records made from
+// a listing, which carry none of their own.
+func (s *Service) storedTraits(ctx context.Context, records []record) {
 	ids := make([]accounts.ID, 0, len(records))
 	for _, r := range records {
 		if r.Rating == nil {
@@ -270,7 +344,7 @@ func (s *Service) storedRatings(ctx context.Context, records []record) {
 	if len(ids) == 0 {
 		return
 	}
-	rows, err := s.db.Query(ctx, `SELECT id, data->>'rating', (data->>'ratedAt')::timestamptz FROM items
+	rows, err := s.db.Query(ctx, `SELECT id, data->>'rating', (data->>'ratedAt')::timestamptz, data->'genres' FROM items
 		WHERE id = ANY($1) AND data ? 'rating'`, ids)
 	if err != nil {
 		s.logger.Debug("Stored ratings could not be read", "error", err)
@@ -280,42 +354,43 @@ func (s *Service) storedRatings(ctx context.Context, records []record) {
 	type kept struct {
 		rating string
 		at     *time.Time
+		genres *[]string
 	}
 	stored := map[accounts.ID]kept{}
 	for rows.Next() {
 		var id accounts.ID
 		var k kept
-		if rows.Scan(&id, &k.rating, &k.at) == nil {
+		if rows.Scan(&id, &k.rating, &k.at, &k.genres) == nil {
 			stored[id] = k
 		}
 	}
 	for i := range records {
 		if k, ok := stored[records[i].ID]; ok && records[i].Rating == nil {
-			records[i].Rating, records[i].RatedAt = &k.rating, k.at
+			records[i].Rating, records[i].RatedAt, records[i].Genres = &k.rating, k.at, k.genres
 		}
 	}
 }
 
-// lookUpRatings looks up the ratings of the titles at indexes among the
-// server's addons, a few at a time, and returns those known by the
-// request's deadline, nil for the others. pending marks the titles whose
-// lookup did not answer in time, or did not start because the request
-// started its share. Lookups outlive the request, so that a later one
-// knows them.
-func (s *Service) lookUpRatings(ctx context.Context, v view, titles []record, indexes []int) (ratings []*string, pending []bool) {
-	ratings, pending = make([]*string, len(indexes)), make([]bool, len(indexes))
+// lookUpTraits looks up the ratings and genres of the titles at indexes
+// among the server's addons, a few at a time, and returns those known by
+// the request's deadline, nil for the others. pending marks the titles
+// whose lookup did not answer in time, or did not start because the
+// request started its share. Lookups outlive the request, so that a later
+// one knows them.
+func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, indexes []int) (found []*traits, pending []bool) {
+	found, pending = make([]*traits, len(indexes)), make([]bool, len(indexes))
 	if len(indexes) == 0 {
-		return ratings, pending
+		return found, pending
 	}
-	type found struct {
+	type result struct {
 		at     int
-		rating *string
+		traits *traits
 	}
-	done := make(chan found, len(indexes))
+	done := make(chan result, len(indexes))
 	started := 0
 	for at, i := range indexes {
-		r := titles[i]
-		if r.Meta == nil {
+		title := titles[i]
+		if title.Meta == nil {
 			continue
 		}
 		pending[at] = true
@@ -324,8 +399,8 @@ func (s *Service) lookUpRatings(ctx context.Context, v view, titles []record, in
 		}
 		started++
 		go func() {
-			result := found{at: at}
-			defer func() { done <- result }()
+			r := result{at: at}
+			defer func() { done <- r }()
 			lookup, cancel := context.WithTimeout(context.WithoutCancel(ctx), ratingLookupTime)
 			defer cancel()
 			select {
@@ -334,26 +409,26 @@ func (s *Service) lookUpRatings(ctx context.Context, v view, titles []record, in
 			case <-lookup.Done():
 				return
 			}
-			// describe keeps the rating it finds.
-			if meta, ok := s.describe(lookup, v, r, true); ok {
-				result.rating = new(certification(meta))
+			// describe keeps the rating and genres it finds.
+			if meta, ok := s.describe(lookup, v, title, true); ok {
+				r.traits = new(describedTraits(meta))
 			}
 		}()
 	}
 	if started == 0 || v.deadline.IsZero() {
-		return ratings, pending
+		return found, pending
 	}
 	wait := time.NewTimer(time.Until(v.deadline))
 	defer wait.Stop()
 	for range started {
 		select {
-		case f := <-done:
-			ratings[f.at], pending[f.at] = f.rating, false
+		case r := <-done:
+			found[r.at], pending[r.at] = r.traits, false
 		case <-wait.C:
-			return ratings, pending
+			return found, pending
 		case <-ctx.Done():
-			return ratings, pending
+			return found, pending
 		}
 	}
-	return ratings, pending
+	return found, pending
 }

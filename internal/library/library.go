@@ -134,11 +134,13 @@ type view struct {
 	addons    []installed
 	libraries []library
 	channels  []source
-	// parental is the user's parental control, which hides titles (see
-	// visible). The ratings of the titles a request lists are looked up
-	// until deadline, lookups counting how many it started; held is set
-	// once a listing of the request stopped short for parental control.
+	// parental is the user's parental control and genres the genres they
+	// block, which hide titles (see visible). The ratings and genres of the
+	// titles a request lists are looked up until deadline, lookups counting
+	// how many it started; held is set once a listing of the request
+	// stopped short for them.
 	parental accounts.ParentalControl
+	genres   []string
 	deadline time.Time
 	lookups  *atomic.Int32
 	held     *atomic.Bool
@@ -160,12 +162,13 @@ func (v view) limit(src source) int {
 
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	settings := s.settings()
-	// A user under parental control browses the server's addons only: their
-	// own addons could describe titles without the ratings that hide them.
-	// So does a user whose own addons the server or their own permission
-	// turned off: their addons are kept, but not used.
+	// A user under parental control or blocking genres browses the server's
+	// addons only: their own addons could describe titles without the
+	// ratings or genres that hide them. So does a user whose own addons the
+	// server or their own permission turned off: their addons are kept, but
+	// not used.
 	scopes := []addons.Scope{addons.Shared()}
-	if !user.Parental.Restricted() && settings.PersonalAddonsAllowed(user) {
+	if !user.Restricted() && settings.PersonalAddonsAllowed(user) {
 		scopes = []addons.Scope{addons.Personal(user.ID)}
 		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
 			return view{}, err
@@ -173,7 +176,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 		}
 	}
-	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
+	v := view{parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
 	var visible []addons.Library
 	var entries []installed
@@ -207,6 +210,9 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 				if user.LiveTv {
 					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog})
 				}
+			// The server's libraries the user does not see; their titles stay
+			// reachable through the addon.
+			case scope.Owner == nil && slices.Contains(user.HiddenLibraries, libraryID(l)):
 			default:
 				visible = append(visible, l)
 				entries = append(entries, entry)
@@ -217,7 +223,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 		l := visible[i]
 		v.libraries = append(v.libraries, library{
 			item: Item{
-				ID:             itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID)),
+				ID:             libraryID(l),
 				Kind:           KindLibrary,
 				Name:           name,
 				CollectionType: collectionType(l.Catalog.Type),
@@ -262,6 +268,59 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 			Addon: &addon, CatalogType: l.catalog.Type, CatalogID: l.catalog.ID, Confined: l.addon.confined})
 	}
 	return items, s.save(ctx, records)
+}
+
+func libraryID(l addons.Library) accounts.ID {
+	return itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID))
+}
+
+// ServerLibrary is one of the server's libraries, with the genres its
+// catalog can be narrowed to, which name its genre pages.
+type ServerLibrary struct {
+	ID     accounts.ID
+	Name   string
+	Genres []string
+}
+
+// ServerLibraries lists the server's libraries, in order and named in
+// language as apps show them: the enabled catalogs of its enabled addons,
+// but live TV catalogs, which make no library. A user's apps show those
+// the user does not hide, when the user uses the server's addons.
+func ServerLibraries(ctx context.Context, store *addons.Store, language string) ([]ServerLibrary, error) {
+	list, err := store.Addons(ctx, addons.Shared())
+	if err != nil {
+		return nil, err
+	}
+	enabled := map[accounts.ID]bool{}
+	for _, addon := range list {
+		enabled[addon.ID] = addon.Enabled
+	}
+	libraries, err := store.Libraries(ctx, addons.Shared())
+	if err != nil {
+		return nil, err
+	}
+	var shown []addons.Library
+	for _, l := range libraries {
+		if l.Enabled && enabled[l.AddonID] && !LiveCatalog(l.Catalog.Type) {
+			shown = append(shown, l)
+		}
+	}
+	result := make([]ServerLibrary, 0, len(shown))
+	for i, name := range LibraryNames(shown, language) {
+		library := ServerLibrary{ID: libraryID(shown[i]), Name: name, Genres: []string{}}
+		for _, extra := range shown[i].Catalog.Extra {
+			if extra.Name == "genre" {
+				library.Genres = append(library.Genres, extra.Options...)
+			}
+		}
+		result = append(result, library)
+	}
+	return result, nil
+}
+
+// ServerLibraries lists the server's libraries (see ServerLibraries).
+func (s *Service) ServerLibraries(ctx context.Context) ([]ServerLibrary, error) {
+	return ServerLibraries(ctx, s.addons, s.settings().Language)
 }
 
 // source is a catalog to list, possibly narrowed to a genre.
@@ -347,7 +406,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	more := true
 	limit := v.limit(src)
 	reach := limit
-	if v.parental.Restricted() {
+	if v.restricted() {
 		reach = min(limit, hiddenReach*(start+count))
 	}
 	for len(collected) < start+count {
@@ -719,7 +778,7 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
 			if candidate.shared {
-				s.learnRating(ctx, r, meta)
+				s.learnTraits(ctx, r, meta)
 			}
 			return meta, true
 		}
@@ -798,19 +857,19 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			meta = full
 		}
 		// A restricted user's addons are the server's (see view): the
-		// description gives the rating.
-		rating, known := certification(meta), described
+		// description gives the rating and genres.
+		t := describedTraits(meta)
 		if !described {
-			rating, known, _ = s.knownRating(v, r)
+			t, _ = s.knownTraits(v, r)
 		}
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.
-		if !v.allows(r.Kind, rating, known) {
+		if !v.allows(r.Kind, t) {
 			return Item{}, ErrNotFound
 		}
 		item := Item{ID: id, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
 		fromMeta(&item, meta)
-		item.OfficialRating = rating
+		item.OfficialRating = t.rating
 		if r.Kind == KindSeries && len(meta.Videos) > 0 {
 			item.Contents = contents(meta, nil, s.now())
 		}
@@ -863,7 +922,7 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
-	if !ok || !v.allows(KindSeries, certification(meta), true) {
+	if !ok || !v.allows(KindSeries, describedTraits(meta)) {
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}

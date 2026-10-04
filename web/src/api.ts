@@ -39,6 +39,12 @@ export type User = {
   syncPlay: SyncPlayAccess
   /** Whether the user may control other users' apps. */
   remoteControl: boolean
+  /** IDs of the server's libraries this user's apps do not show; libraries added later show. */
+  hiddenLibraries: string[]
+  /** Titles of any of these genres are hidden from the user, like parental control. */
+  blockedGenres: string[]
+  /** When not empty, the only hours the user may use the server in (server time). */
+  accessSchedules: AccessSchedule[]
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
@@ -46,6 +52,28 @@ export type SyncPlayAccess = 'CreateAndJoinGroups' | 'JoinGroups' | 'None'
 
 /** The range the server accepts for User.maxPlaybacks. */
 export const maxPlaybacksRange = { min: 0, max: 20 }
+
+/** Jellyfin's DynamicDayOfWeek names, in its order. */
+export const scheduleDays = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Everyday',
+  'Weekday',
+  'Weekend',
+] as const
+
+export type ScheduleDay = (typeof scheduleDays)[number]
+
+/** Hours from `startHour` to `endHour` (0 to 24, fractions allowed) on `day`. */
+export type AccessSchedule = { day: ScheduleDay; startHour: number; endHour: number }
+
+/** What the admin app offers for a user's content: the server's libraries and the genres they offer. */
+export type UserContentChoices = { libraries: { id: string; name: string }[]; genres: string[] }
 
 /** Jellyfin parental control: `maxRating` null means no limit. */
 export type ParentalControl = {
@@ -166,6 +194,9 @@ export type UserPatch = Partial<{
   liveTv: boolean
   syncPlay: SyncPlayAccess
   remoteControl: boolean
+  hiddenLibraries: string[]
+  blockedGenres: string[]
+  accessSchedules: AccessSchedule[]
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -326,6 +357,9 @@ export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(i
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
 
+export const fetchUserContentChoices = (signal?: AbortSignal) =>
+  request<UserContentChoices>('GET', '/user-content-choices', undefined, signal)
+
 export const fetchSettings = (signal?: AbortSignal) =>
   request<Settings>('GET', '/settings', undefined, signal)
 
@@ -380,6 +414,7 @@ export const queryKeys = {
   addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
   libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,
+  userContentChoices: ['user-content-choices'] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */

@@ -139,8 +139,19 @@ func (h *Handler) signedInCaller(r *http.Request) (c caller, ok bool, err error)
 }
 
 // authenticated serves next only for a valid access token of an enabled
-// user. Like Jellyfin, a refused request gets an empty 401.
+// user, within their allowed hours. Like Jellyfin, a request without a
+// valid token gets an empty 401, and one outside the hours an empty 403.
 func (h *Handler) authenticated(next http.HandlerFunc) http.Handler {
+	return h.authorized(next, true)
+}
+
+// authenticatedAnyHour is authenticated for the endpoints Jellyfin serves
+// whatever the user's allowed hours (its IgnoreParentalControl policy).
+func (h *Handler) authenticatedAnyHour(next http.HandlerFunc) http.Handler {
+	return h.authorized(next, false)
+}
+
+func (h *Handler) authorized(next http.HandlerFunc, hours bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, ok, err := h.signedInCaller(r)
 		switch {
@@ -148,10 +159,20 @@ func (h *Handler) authenticated(next http.HandlerFunc) http.Handler {
 			h.internalError(w, r, err)
 		case !ok:
 			w.WriteHeader(http.StatusUnauthorized)
+		case hours && h.outsideHours(c.User):
+			w.WriteHeader(http.StatusForbidden)
 		default:
 			next(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, c)))
 		}
 	})
+}
+
+// outsideHours reports whether a user's requests are refused for now
+// being outside their allowed hours. Like Jellyfin, administrators are
+// served at any hour once signed in; signing in is refused to everyone
+// (see authenticateByName).
+func (h *Handler) outsideHours(user accounts.User) bool {
+	return !user.IsAdministrator && !user.AllowedAt(h.now())
 }
 
 func remoteAddress(r *http.Request) string {

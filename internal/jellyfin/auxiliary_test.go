@@ -44,6 +44,7 @@ func newAuxiliaryServer(t *testing.T) auxiliaryServer {
 		Preferences: preferences.New(pool),
 		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}, configurations: cache.New[accounts.ID, UserConfiguration](10, time.Hour)}
+	h.now = time.Now
 	rt := &router{}
 	rt.handle(http.MethodPost, "/Users/AuthenticateByName", http.HandlerFunc(h.authenticateByName))
 	h.auxiliaryRoutes(rt)
