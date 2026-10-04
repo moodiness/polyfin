@@ -31,6 +31,10 @@ const (
 	KindEpisode    Kind = "episode"
 	// KindPerson is someone credited for titles, known by name.
 	KindPerson Kind = "person"
+	// KindChannel is a live TV channel, listed by a tv catalog; KindProgram
+	// a programme of its guide.
+	KindChannel Kind = "channel"
+	KindProgram Kind = "program"
 )
 
 // Item is something a Jellyfin app can browse.
@@ -79,6 +83,12 @@ type Item struct {
 	// for the addons.
 	StremioType string
 	StremioID   string
+	// Number is a channel's number: its place among the user's channels.
+	Number string
+	// StartDate is when a programme begins; it ends at EndDate.
+	StartDate *time.Time
+	// Channel is the channel a programme is on.
+	Channel *Item
 }
 
 // Contents describes the episodes under a series or season.
@@ -158,6 +168,10 @@ func episodeKey(videoID string) string { return "episode|" + videoID }
 
 func personKey(name string) string { return "person|" + strings.ToLower(name) }
 
+func channelKey(stremioID string) string { return "channel|" + stremioID }
+
+func programKey(channel, programme string) string { return "program|" + channel + "|" + programme }
+
 // ImageTag identifies a version of an artwork for HTTP caching; it is empty
 // when there is no artwork.
 func ImageTag(url string) string {
@@ -168,12 +182,13 @@ func ImageTag(url string) string {
 	return hex.EncodeToString(sum[:16])
 }
 
-// titleKind maps a Stremio type to a playable title kind.
+// titleKind maps a Stremio type to a playable title kind. The tv type is
+// live TV, which lists channels rather than titles (see LiveCatalog).
 func titleKind(stremioType string) (Kind, bool) {
 	switch stremioType {
 	case "movie", "anime.movie":
 		return KindMovie, true
-	case "series", "anime.series", "anime", "tv":
+	case "series", "anime.series", "anime":
 		return KindSeries, true
 	default:
 		return "", false

@@ -31,6 +31,8 @@ type record struct {
 	SeriesID string         `json:"seriesId,omitempty"`
 	Season   int            `json:"season,omitempty"`
 	Video    *stremio.Video `json:"video,omitempty"`
+	// Channel is the Stremio ID of a programme's channel.
+	Channel string `json:"channel,omitempty"`
 	// Person is the name and photo of a person.
 	Person *Person `json:"person,omitempty"`
 	// Credits maps the titles a person is credited in, by item identifier,

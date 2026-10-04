@@ -131,6 +131,8 @@ type remuxRequest struct {
 	// files are the subtitle files addons offer: the first of the
 	// version's subtitle streams.
 	files []library.ExternalSubtitle
+	// live is set for a channel, whose stream FFmpeg converts as it comes.
+	live bool
 }
 
 // remuxOf reads which remux an HLS request is about. HLS requests carry
@@ -152,7 +154,8 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		w.WriteHeader(http.StatusUnauthorized)
 		return remuxRequest{}, false
 	}
-	item, err := h.title(r.Context(), user, opened)
+	item, err := h.played(r.Context(), user, opened)
+	live := item.Kind == library.KindChannel
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
@@ -166,14 +169,21 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	if !ok {
 		format = hls.TS
 	}
-	analysis, err := h.Playback.Analyze(r.Context(), version)
+	var analysis media.Analysis
+	var files []library.ExternalSubtitle
+	if live {
+		analysis, err = h.Playback.AnalyzeLive(r.Context(), version)
+	} else {
+		analysis, err = h.Playback.Analyze(r.Context(), version)
+		if cached, ok := h.subtitleFiles.Get(item.ID); ok {
+			files = cached
+		} else {
+			files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
+		}
+	}
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
-	}
-	files, ok := h.subtitleFiles.Get(item.ID)
-	if !ok {
-		files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
 	}
 	remux := playback.Remux{Session: session, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
@@ -200,7 +210,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		}
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
 	}
-	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files}, true
+	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files, live: live}, true
 }
 
 // audioTrack converts a Jellyfin audio stream index, counted after the
@@ -229,11 +239,20 @@ func audioTrack(analysis media.Analysis, files int, asked string) int {
 	return fallback
 }
 
-// hlsPlaylist serves master.m3u8 and main.m3u8. Their URIs are relative and
-// repeat the query, which carries the play session.
+// hlsPlaylist serves master.m3u8 and main.m3u8, or live.m3u8 for a
+// channel. Their URIs are relative and repeat the query, which carries the
+// play session.
 func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name string) {
 	req, ok := h.remuxOf(w, r)
 	if !ok {
+		return
+	}
+	if req.live {
+		h.livePlaylist(w, r, req.remux, name)
+		return
+	}
+	if strings.EqualFold(name, "live") {
+		processingError(w, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
@@ -299,6 +318,10 @@ func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if req.live {
+		processingError(w, http.StatusNotFound)
+		return
+	}
 	remux := req.remux
 	// The initialization segment of fragmented MP4 is -1.mp4.
 	if !strings.EqualFold(extension, remux.Format.Extension()) {
@@ -331,6 +354,10 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
 	req, ok := h.remuxOf(w, r)
 	if !ok {
+		return
+	}
+	if req.live {
+		processingError(w, http.StatusNotFound)
 		return
 	}
 	stream := index - len(req.files)

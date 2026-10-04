@@ -170,8 +170,8 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 // enableDefaults makes libraries of a new addon's catalogs. An addon that
 // groups its catalogs into collections (such as AIOMetadata) already says how
 // to organize them: its browsable collection catalogs become the libraries.
-// Otherwise its browsable movie and series catalogs do, until the scope has
-// DefaultLibraries.
+// Otherwise its browsable movie, series and live TV catalogs do, until the
+// scope has DefaultLibraries.
 func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) error {
 	var count, last int
 	err := tx.QueryRow(ctx, `SELECT count(*), coalesce(max(l.position), 0) FROM libraries l
@@ -179,7 +179,9 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 	if err != nil {
 		return err
 	}
-	wanted := func(catalog stremio.Catalog) bool { return catalog.Type == "movie" || catalog.Type == "series" }
+	wanted := func(catalog stremio.Catalog) bool {
+		return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
+	}
 	if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
 		wanted = func(catalog stremio.Catalog) bool { return catalog.Type == "collection" }
 	}

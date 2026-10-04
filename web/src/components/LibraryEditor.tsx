@@ -275,26 +275,32 @@ function LibraryForm({
                         )}
                         {missing && <Badge tone="danger">{t.libraries.missing}</Badge>}
                       </p>
-                      <label
-                        htmlFor={inputId}
-                        className="mt-2 block text-xs font-medium text-zinc-300"
-                      >
-                        {t.libraries.name}
-                      </label>
-                      <input
-                        id={inputId}
-                        value={entry.name}
-                        onChange={(event) => rename(index, event.target.value)}
-                        placeholder={appName ?? library.catalogName}
-                        aria-describedby={renamed ? `${titleId} ${appNameId}` : titleId}
-                        maxLength={64}
-                        autoComplete="off"
-                        className={fieldClass}
-                      />
-                      {renamed && (
-                        <p id={appNameId} className="mt-1 text-xs text-muted">
-                          {t.libraries.appName(appName)}
-                        </p>
+                      {library.catalogType === 'tv' ? (
+                        <p className="mt-2 text-xs text-muted">{t.libraries.liveTv}</p>
+                      ) : (
+                        <>
+                          <label
+                            htmlFor={inputId}
+                            className="mt-2 block text-xs font-medium text-zinc-300"
+                          >
+                            {t.libraries.name}
+                          </label>
+                          <input
+                            id={inputId}
+                            value={entry.name}
+                            onChange={(event) => rename(index, event.target.value)}
+                            placeholder={appName ?? library.catalogName}
+                            aria-describedby={renamed ? `${titleId} ${appNameId}` : titleId}
+                            maxLength={64}
+                            autoComplete="off"
+                            className={fieldClass}
+                          />
+                          {renamed && (
+                            <p id={appNameId} className="mt-1 text-xs text-muted">
+                              {t.libraries.appName(appName)}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
