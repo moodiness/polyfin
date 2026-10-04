@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ var (
 	ErrInvalidOrder       = errors.New("the order must list every addon of the scope once")
 	ErrInvalidLibrary     = errors.New("unknown or unbrowsable catalog")
 	ErrInvalidLibraryName = errors.New("library names are 1 to 64 printable characters")
+	ErrInvalidGuideURL    = errors.New("guide addresses are http or https URLs of at most 4096 characters")
 )
 
 // Scope owns addons: the server (no owner) or one user.
@@ -63,6 +65,30 @@ type Library struct {
 	Name        *string
 	Enabled     bool
 	AddonActive bool
+	// Guide is the XMLTV guide of an enabled live TV catalog; nil for any
+	// other library.
+	Guide *Guide
+}
+
+// Guide is the XMLTV guide of a live TV catalog: its address, empty when
+// it has none, which may embed credentials, and how its last fetch went.
+// FetchedAt is the last success, CheckedAt the last attempt; Channels
+// counts the catalog's channels then and Matched those the guide covers;
+// Error is the code of the last failure, empty after a success.
+type Guide struct {
+	URL       string
+	CheckedAt *time.Time
+	FetchedAt *time.Time
+	Channels  int
+	Matched   int
+	Error     string
+}
+
+// LibraryKey identifies a catalog of an addon.
+type LibraryKey struct {
+	AddonID     accounts.ID
+	CatalogType string
+	CatalogID   string
 }
 
 // LibraryChoice selects a catalog as a library, with an optional name.
@@ -334,7 +360,8 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT l.addon_id, l.catalog_type, l.catalog_id, l.name FROM libraries l
+	rows, err := db.Query(ctx, `SELECT l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_url, l.guide_checked_at,
+		l.guide_fetched_at, l.guide_channels, l.guide_matched, l.guide_error FROM libraries l
 		JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1 ORDER BY l.position`, scope.Owner)
 	if err != nil {
 		return nil, err
@@ -349,8 +376,10 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 		addon       accounts.ID
 		kind, catID string
 		name        *string
+		guide       Guide
 	}
-	if _, err := pgx.ForEachRow(rows, []any{&row.addon, &row.kind, &row.catID, &row.name}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&row.addon, &row.kind, &row.catID, &row.name, &row.guide.URL, &row.guide.CheckedAt,
+		&row.guide.FetchedAt, &row.guide.Channels, &row.guide.Matched, &row.guide.Error}, func() error {
 		index := slices.IndexFunc(installed, func(a Addon) bool { return a.ID == row.addon })
 		if index < 0 {
 			return nil
@@ -361,8 +390,12 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 			return nil
 		}
 		chosen[key{row.addon, row.kind, row.catID}] = true
-		enabled = append(enabled, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-			Name: row.name, Enabled: true, AddonActive: addon.Enabled})
+		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
+			Name: row.name, Enabled: true, AddonActive: addon.Enabled}
+		if catalog.Type == "tv" {
+			library.Guide = new(row.guide)
+		}
+		enabled = append(enabled, library)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -418,12 +451,32 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			}
 			seen[unique] = true
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM libraries WHERE addon_id IN
-			(SELECT id FROM addons WHERE owner_id IS NOT DISTINCT FROM $1)`, scope.Owner); err != nil {
+		// Libraries kept keep their guide: only those dropped are deleted,
+		// with their guide's programmes.
+		rows, err := tx.Query(ctx, `SELECT addon_id, catalog_type, catalog_id FROM libraries WHERE addon_id IN
+			(SELECT id FROM addons WHERE owner_id IS NOT DISTINCT FROM $1)`, scope.Owner)
+		if err != nil {
 			return err
 		}
+		var existing LibraryKey
+		var dropped []LibraryKey
+		if _, err := pgx.ForEachRow(rows, []any{&existing.AddonID, &existing.CatalogType, &existing.CatalogID}, func() error {
+			if !seen[fmt.Sprintf("%s\x00%s\x00%s", existing.AddonID, existing.CatalogType, existing.CatalogID)] {
+				dropped = append(dropped, existing)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		for _, key := range dropped {
+			if _, err := tx.Exec(ctx, "DELETE FROM libraries WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3",
+				key.AddonID, key.CatalogType, key.CatalogID); err != nil {
+				return err
+			}
+		}
 		for position, choice := range choices {
-			if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position) VALUES ($1, $2, $3, $4, $5)",
+			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position) VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE SET name = excluded.name, position = excluded.position`,
 				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1); err != nil {
 				return err
 			}
@@ -432,6 +485,142 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 		return err
 	})
 	return result, err
+}
+
+// SetGuide sets the address of the XMLTV guide of one of the scope's
+// enabled live TV catalogs; an empty address removes it. A new address
+// forgets the programmes and the fetch status of the previous one.
+func (s *Store) SetGuide(ctx context.Context, scope Scope, key LibraryKey, rawURL string) error {
+	guideURL := strings.TrimSpace(rawURL)
+	if guideURL != "" {
+		parsed, err := url.Parse(guideURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || len(guideURL) > 4096 {
+			return ErrInvalidGuideURL
+		}
+	}
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var current string
+		err := tx.QueryRow(ctx, `SELECT l.guide_url FROM libraries l JOIN addons a ON a.id = l.addon_id
+			WHERE l.addon_id = $1 AND l.catalog_type = $2 AND l.catalog_id = $3 AND l.catalog_type = 'tv'
+			AND a.owner_id IS NOT DISTINCT FROM $4 FOR UPDATE OF l`, key.AddonID, key.CatalogType, key.CatalogID, scope.Owner).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidLibrary
+		}
+		if err != nil || current == guideURL {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE libraries SET guide_url = $4, guide_checked_at = NULL, guide_fetched_at = NULL,
+			guide_channels = 0, guide_matched = 0, guide_error = '' WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3`,
+			key.AddonID, key.CatalogType, key.CatalogID, guideURL); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, "DELETE FROM guide_programmes WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3",
+			key.AddonID, key.CatalogType, key.CatalogID)
+		return err
+	})
+}
+
+// GuideSource is a live TV catalog with an XMLTV guide, and what fetching
+// it needs.
+type GuideSource struct {
+	Scope     Scope
+	Key       LibraryKey
+	Addon     Addon
+	Catalog   stremio.Catalog
+	URL       string
+	CheckedAt *time.Time
+	// Confined is true when the guide may only be fetched from public
+	// addresses: one of a user's own catalogs, unless they are an
+	// administrator.
+	Confined bool
+}
+
+// GuideSources lists the catalogs with an XMLTV guide, of every scope, in
+// no particular order; those of turned-off addons, or that the addon no
+// longer offers, are left out.
+func (s *Store) GuideSources(ctx context.Context) ([]GuideSource, error) {
+	return s.guideSources(ctx, "")
+}
+
+// GuideSource returns one of the scope's catalogs with an XMLTV guide.
+func (s *Store) GuideSource(ctx context.Context, scope Scope, key LibraryKey) (GuideSource, error) {
+	sources, err := s.guideSources(ctx, ` AND l.addon_id = $1 AND l.catalog_type = $2 AND l.catalog_id = $3
+		AND a.owner_id IS NOT DISTINCT FROM $4`, key.AddonID, key.CatalogType, key.CatalogID, scope.Owner)
+	if err == nil && len(sources) == 0 {
+		err = ErrInvalidLibrary
+	}
+	if err != nil {
+		return GuideSource{}, err
+	}
+	return sources[0], nil
+}
+
+func (s *Store) guideSources(ctx context.Context, filter string, args ...any) ([]GuideSource, error) {
+	rows, err := s.db.Query(ctx, `SELECT a.id, a.manifest_url, a.manifest, a.enabled, a.refreshed_at, a.owner_id,
+		coalesce(u.is_administrator, true), l.catalog_type, l.catalog_id, l.guide_url, l.guide_checked_at
+		FROM libraries l JOIN addons a ON a.id = l.addon_id LEFT JOIN users u ON u.id = a.owner_id
+		WHERE l.guide_url <> '' AND a.enabled`+filter, args...)
+	if err != nil {
+		return nil, err
+	}
+	var result []GuideSource
+	var source GuideSource
+	var manifest []byte
+	var administrator bool
+	if _, err := pgx.ForEachRow(rows, []any{&source.Addon.ID, &source.Addon.ManifestURL, &manifest, &source.Addon.Enabled,
+		&source.Addon.RefreshedAt, &source.Scope.Owner, &administrator, &source.Key.CatalogType, &source.Key.CatalogID,
+		&source.URL, &source.CheckedAt}, func() error {
+		source.Addon.Manifest = stremio.Manifest{}
+		if err := json.Unmarshal(manifest, &source.Addon.Manifest); err != nil {
+			return err
+		}
+		catalog, ok := source.Addon.Manifest.Catalog(source.Key.CatalogType, source.Key.CatalogID)
+		if !ok {
+			return nil
+		}
+		source.Key.AddonID, source.Catalog = source.Addon.ID, catalog
+		// The server's addons were installed by an administrator; a user's
+		// own may only reach the local network if that user is one.
+		source.Confined = source.Scope.Owner != nil && !administrator
+		result = append(result, source)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GuideFetch is how fetching a guide went: Error is the code of a failure,
+// else Channels counts the catalog's channels and Matched those the guide
+// covers.
+type GuideFetch struct {
+	At       time.Time
+	Channels int
+	Matched  int
+	Error    string
+}
+
+// StoreGuideFetch records how fetching a catalog's guide from guideURL
+// went, unless its address changed meanwhile. A success runs replace in
+// the same transaction, which stores the programmes; a failure keeps those
+// of the last success.
+func (s *Store) StoreGuideFetch(ctx context.Context, key LibraryKey, guideURL string, fetch GuideFetch, replace func(pgx.Tx) error) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		query := `UPDATE libraries SET guide_checked_at = $5, guide_error = $6
+			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND guide_url = $4`
+		args := []any{key.AddonID, key.CatalogType, key.CatalogID, guideURL, fetch.At, fetch.Error}
+		if fetch.Error == "" {
+			query = `UPDATE libraries SET guide_checked_at = $5, guide_error = $6, guide_fetched_at = $5,
+				guide_channels = $7, guide_matched = $8
+				WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND guide_url = $4`
+			args = append(args, fetch.Channels, fetch.Matched)
+		}
+		tag, err := tx.Exec(ctx, query, args...)
+		if err != nil || tag.RowsAffected() == 0 || fetch.Error != "" {
+			return err
+		}
+		return replace(tx)
+	})
 }
 
 func validName(name string) bool {

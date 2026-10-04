@@ -127,6 +127,15 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 			dto.ChannelPrimaryImageTag = library.ImageTag(channel.Images.Primary)
 			dto.Tags = new(nonNil(item.Genres))
 		}
+		// Like Jellyfin's guide programmes, a programme gives the episode it
+		// airs, when its guide numbers or names it.
+		dto.EpisodeTitle = item.EpisodeTitle
+		if item.IndexNumber > 0 {
+			dto.IndexNumber = new(item.IndexNumber)
+		}
+		if item.ParentIndexNumber > 0 {
+			dto.ParentIndexNumber = new(item.ParentIndexNumber)
+		}
 		flags := programFlags(item)
 		for flag, field := range map[string]**bool{"movie": &dto.IsMovie, "series": &dto.IsSeries, "news": &dto.IsNews,
 			"kids": &dto.IsKids, "sports": &dto.IsSports} {

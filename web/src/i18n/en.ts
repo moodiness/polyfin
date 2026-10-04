@@ -107,6 +107,8 @@ const en = {
       'Hours run from 00:00 to 24:00, and each end must come after its start (50 rows at most).',
     outside_allowed_hours:
       'This account cannot be used at this time. Try again during its allowed hours.',
+    invalid_guide_url:
+      'Enter a guide address starting with https:// or http://, of at most 4,096 characters.',
   },
   status: {
     title: 'Server status',
@@ -499,6 +501,36 @@ const en = {
     upToDate: 'No unsaved changes',
     reset: 'Reset',
     saved: 'Libraries saved.',
+    guideTitle: 'Programme guide (XMLTV)',
+    guideHelp:
+      'Some providers publish their programme guide as an XMLTV file. Its programmes fill the channels the addon gives no guide for. The guide is fetched again every 12 hours.',
+    guideAfterSave: 'Save the libraries to add a programme guide to this catalog.',
+    guideNone: 'No programme guide.',
+    guideAddress: 'Guide address',
+    guideAddressHint: 'Plain or compressed (.gz) XMLTV file, up to 300 MB.',
+    guidePlaceholder: 'https://…/guide.xml.gz',
+    guideAdd: 'Add a guide',
+    guideChange: 'Change address',
+    guideRemove: 'Remove guide',
+    guideSave: 'Save and fetch',
+    guideFetching: 'Fetching the guide…',
+    guideRefresh: 'Refresh guide',
+    guideRefreshLabel: (name: string) => `Refresh the programme guide of ${name}`,
+    guideFetched: 'Last fetched',
+    guideNever: 'Not fetched yet.',
+    guideMatched: (matched: number, channels: number) =>
+      `${matched} of ${channels} ${channels === 1 ? 'channel has' : 'channels have'} a guide.`,
+    guideRemoved: 'Programme guide removed.',
+    guideErrors: {
+      unreachable:
+        'The last fetch failed: the guide could not be downloaded. Check the address and try again.',
+      private_network:
+        'The last fetch failed: this guide is on a local network address. Only administrators can use such addresses.',
+      too_large: 'The last fetch failed: the guide is larger than 300 MB.',
+      malformed: 'The last fetch failed: this file is not an XMLTV guide.',
+      channels_unreachable:
+        'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
+    } as Record<string, string>,
   },
   myAddons: {
     title: 'My addons',
