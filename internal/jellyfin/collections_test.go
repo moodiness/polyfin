@@ -452,3 +452,44 @@ func TestCollectionsShowEachUserTheTitlesTheyMaySee(t *testing.T) {
 		t.Errorf("after playing a title: %+v", data)
 	}
 }
+
+// jellyfin-web opens a playlist or a collection like any item: its page
+// asks for its ancestors, theme media, similar titles and collections, and
+// its filters, as the Playlists and Collections views' pages ask theirs.
+// Jellyfin answers each, empty where it has nothing.
+func TestOwnFoldersAnswerItemPages(t *testing.T) {
+	s, token, titles := grouping(t)
+	playlist := s.createPlaylist(t, token, map[string]any{"Name": "Mix", "Ids": []string{titles.kids}})
+	collection := s.createCollection(t, token, "name=Saga&ids="+titles.teens)
+	views := s.viewIDs(t, token)
+	if views["Playlists"] == "" || views["Collections"] == "" {
+		t.Fatalf("views: %v", views)
+	}
+	for _, id := range []string{playlist, collection} {
+		for _, path := range []string{"/Items/" + id + "/ThemeMedia?inheritFromParent=true&sortBy=Random",
+			"/Items/" + id + "/Similar?limit=12&fields=PrimaryImageAspectRatio,CanDelete",
+			"/Items/" + id + "/Collections?fields=PrimaryImageAspectRatio"} {
+			if status, body := s.call(http.MethodGet, path, app("web", token), nil); status != http.StatusOK {
+				t.Errorf("%s: %d %s", path, status, body)
+			}
+		}
+	}
+	for id, want := range map[string]string{playlist: "Playlists", collection: "Collections"} {
+		var ancestors []BaseItemDto
+		if status := s.get(t, "/Items/"+id+"/Ancestors", token, &ancestors); status != http.StatusOK ||
+			len(ancestors) != 1 || ancestors[0].Name != want {
+			t.Errorf("ancestors of a %s item: %d %+v", want, status, ancestors)
+		}
+	}
+	for _, id := range []string{playlist, collection, views["Playlists"], views["Collections"]} {
+		for _, path := range []string{"/Items/Filters?parentId=" + id, "/Items/Filters2?parentId=" + id + "&includeItemTypes=BoxSet"} {
+			if status, body := s.call(http.MethodGet, path, app("web", token), nil); status != http.StatusOK {
+				t.Errorf("%s: %d %s", path, status, body)
+			}
+		}
+	}
+	// What does not exist is still refused.
+	unknown := randomID().String()
+	s.expectStatus(t, http.StatusNotFound, http.MethodGet, "/Items/"+unknown+"/ThemeMedia", token, nil)
+	s.expectStatus(t, http.StatusBadRequest, http.MethodGet, "/Items/Filters?parentId="+unknown, token, nil)
+}

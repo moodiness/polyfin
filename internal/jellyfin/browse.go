@@ -563,7 +563,7 @@ func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
 		id = owner
 	}
 	folders, err := h.Library.Ancestors(r.Context(), user, id)
-	if errors.Is(err, library.ErrNotFound) && h.collectionAncestors(w, r, user, id) {
+	if errors.Is(err, library.ErrNotFound) && (h.collectionAncestors(w, r, user, id) || h.playlistAncestors(w, r, user, id)) {
 		return
 	}
 	if err != nil {
@@ -654,8 +654,8 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 }
 
 // libraryGenres returns the genres a library's catalog offers. Other
-// folders have none; a folder that does not exist is refused, as Jellyfin
-// does.
+// folders have none, Polyfin's own among them; a folder that does not
+// exist is refused, as Jellyfin does.
 func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]string, bool) {
 	b := bindErrors{}
 	id, hasParent := b.guid(r, "parentId")
@@ -666,6 +666,14 @@ func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]strin
 	genres, err := h.Library.Genres(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		if _, err := h.Library.Item(r.Context(), user, id); err == nil {
+			return nil, true
+		}
+		exists, err := h.ownItemExists(r.Context(), user, id)
+		if err != nil {
+			h.internalError(w, r, err)
+			return nil, false
+		}
+		if exists {
 			return nil, true
 		}
 		processingError(w, http.StatusBadRequest)

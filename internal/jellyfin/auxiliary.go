@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/binary"
@@ -19,7 +20,9 @@ import (
 	"unicode/utf16"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playlists"
 )
 
 // auxiliaryRoutes registers the endpoints Jellyfin apps call around
@@ -1022,12 +1025,37 @@ func (h *Handler) itemRequest(w http.ResponseWriter, r *http.Request, bind func(
 }
 
 // auxiliaryItemExists reports whether an item exists for the caller, a
-// version of a title counting as an item.
+// version of a title counting as an item, as do the caller's playlists and
+// collections (see ownItemExists).
 func (h *Handler) auxiliaryItemExists(r *http.Request, id accounts.ID) (bool, error) {
-	_, err := h.Library.Item(r.Context(), callerFrom(r.Context()).User, id)
-	if errors.Is(err, library.ErrNotFound) {
-		_, isVersion := h.Library.VersionOwner(id)
-		return isVersion, nil
+	user := callerFrom(r.Context()).User
+	_, err := h.Library.Item(r.Context(), user, id)
+	if !errors.Is(err, library.ErrNotFound) {
+		return err == nil, err
+	}
+	if _, isVersion := h.Library.VersionOwner(id); isVersion {
+		return true, nil
+	}
+	return h.ownItemExists(r.Context(), user, id)
+}
+
+// ownItemExists reports whether id names an item Polyfin keeps rather than
+// the addons: a playlist user sees, a collection, or the Playlists or
+// Collections view, which jellyfin-web opens like any folder.
+func (h *Handler) ownItemExists(ctx context.Context, user accounts.User, id accounts.ID) (bool, error) {
+	if id == playlistsViewID || id == collectionsViewID {
+		return true, nil
+	}
+	p, err := h.Playlists.Get(ctx, id)
+	if err == nil {
+		return p.Visible(user.ID), nil
+	}
+	if !errors.Is(err, playlists.ErrNotFound) {
+		return false, err
+	}
+	_, err = h.Collections.Get(ctx, id)
+	if errors.Is(err, collections.ErrNotFound) {
+		return false, nil
 	}
 	return err == nil, err
 }

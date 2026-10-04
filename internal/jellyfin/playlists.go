@@ -802,6 +802,26 @@ func (h *Handler) describePlaylist(w http.ResponseWriter, r *http.Request, user 
 	return true
 }
 
+// playlistAncestors answers the folders above a playlist user may see: the
+// Playlists view. It reports whether id named one.
+func (h *Handler) playlistAncestors(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
+	p, err := h.Playlists.Get(r.Context(), id)
+	if errors.Is(err, playlists.ErrNotFound) || err == nil && !p.Visible(user.ID) {
+		return false
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	view, err := h.playlistsView(r, user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	writeJSON(w, http.StatusOK, []BaseItemDto{view})
+	return true
+}
+
 // playlistDtos describes playlists from the titles user can reach in them:
 // their number, runtime and genres, and how many the user played.
 func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []playlists.Playlist, fields fieldSet, detail bool) ([]BaseItemDto, error) {
