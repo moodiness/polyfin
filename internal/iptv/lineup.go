@@ -140,10 +140,14 @@ func (s *Service) CreateCategory(ctx context.Context, scope addons.Scope, source
 	if !printable(name, 64) {
 		return Category{}, ErrInvalidCategoryName
 	}
+	// A custom category's key is u: and its identifier, as the admin API
+	// writes identifiers.
 	var id accounts.ID
-	if err := s.db.QueryRow(ctx, `INSERT INTO iptv_categories (addon_id, key, name, position, custom)
-		VALUES ($1, $2, $3, (SELECT coalesce(max(position), 0) + 1 FROM iptv_categories WHERE addon_id = $1), true) RETURNING id`,
-		source, "u:"+randomKey(), name).Scan(&id); err != nil {
+	if err := s.db.QueryRow(ctx, `WITH new AS (SELECT gen_random_uuid() AS id)
+		INSERT INTO iptv_categories (id, addon_id, key, name, position, custom)
+		SELECT new.id, $1, 'u:' || replace(new.id::text, '-', ''), $2,
+			(SELECT coalesce(max(position), 0) + 1 FROM iptv_categories WHERE addon_id = $1), true FROM new RETURNING id`,
+		source, name).Scan(&id); err != nil {
 		return Category{}, err
 	}
 	return s.category(ctx, source, id)
@@ -716,8 +720,12 @@ func (s *Service) AddStream(ctx context.Context, scope addons.Scope, source, id 
 			return Channel{}, err
 		}
 	}
+	// A custom stream follows the provider's, whose ranks are their places,
+	// and the custom ones before it; an order the administrator set puts
+	// it after every stream too.
 	if _, err := s.db.Exec(ctx, `INSERT INTO iptv_streams (addon_id, key, channel_id, label, rank, sort, custom_url)
-		VALUES ($1, $2, $3, $4, 1000000, (SELECT coalesce(max(sort), count(*)) + 1 FROM iptv_streams WHERE addon_id = $1 AND channel_id = $3), $5)`,
+		SELECT $1, $2, $3, $4, 1000000 + count(*) FILTER (WHERE custom_url IS NOT NULL), CASE WHEN count(sort) > 0 THEN max(sort) + 1 END, $5
+		FROM iptv_streams WHERE addon_id = $1 AND channel_id = $3`,
 		source, "u:"+randomKey(), current.key, label, address); err != nil {
 		return Channel{}, err
 	}
