@@ -1,0 +1,442 @@
+[
+  {
+    "Name": "Unrated"
+  },
+  {
+    "Name": "Approved",
+    "Value": 0,
+    "RatingScore": {
+      "score": 0,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "G",
+    "Value": 0,
+    "RatingScore": {
+      "score": 0,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-G",
+    "Value": 0,
+    "RatingScore": {
+      "score": 0,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-Y",
+    "Value": 0,
+    "RatingScore": {
+      "score": 0,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-Y7",
+    "Value": 7,
+    "RatingScore": {
+      "score": 7,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-Y7-FV",
+    "Value": 7,
+    "RatingScore": {
+      "score": 7,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "PG",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-PG",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-PG-D",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-L",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-S",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-V",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DL",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DS",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-LS",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-LV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-SV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DLS",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DLV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DSV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-LSV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-PG-DLSV",
+    "Value": 10,
+    "RatingScore": {
+      "score": 10,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "PG-13",
+    "Value": 13,
+    "RatingScore": {
+      "score": 13,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-14",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-14-D",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-L",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-S",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-V",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DL",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DS",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-LS",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-LV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-SV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DLS",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DLV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DSV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-LSV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-14-DLSV",
+    "Value": 14,
+    "RatingScore": {
+      "score": 14,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "R",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "NC-17",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-L",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-S",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-V",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-LS",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-LV",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-SV",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-MA-LSV",
+    "Value": 17,
+    "RatingScore": {
+      "score": 17,
+      "subScore": 1
+    }
+  },
+  {
+    "Name": "TV-X",
+    "Value": 18,
+    "RatingScore": {
+      "score": 18,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "TV-AO",
+    "Value": 18,
+    "RatingScore": {
+      "score": 18,
+      "subScore": 0
+    }
+  },
+  {
+    "Name": "21",
+    "Value": 21,
+    "RatingScore": {
+      "score": 21
+    }
+  },
+  {
+    "Name": "XXX",
+    "Value": 1000,
+    "RatingScore": {
+      "score": 1000
+    }
+  },
+  {
+    "Name": "Banned",
+    "Value": 1001,
+    "RatingScore": {
+      "score": 1001
+    }
+  }
+]
