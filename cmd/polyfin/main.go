@@ -183,6 +183,7 @@ func serve(ctx context.Context) error {
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
+	channels.OnChange(lib.LineupChanged)
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)
 	}

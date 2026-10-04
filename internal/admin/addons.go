@@ -37,22 +37,35 @@ type addonJSON struct {
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
-// credentials; its list's groups, and those shown (null for all of them);
-// and how its list was last fetched, and when it is fetched again.
+// credentials; how many entries its list has, how it was last fetched and
+// when it is fetched again; its import options and its line-up's counts.
 type sourceJSON struct {
-	Address        string      `json:"address"`
-	Channels       int         `json:"channels"`
-	Groups         []groupJSON `json:"groups"`
-	IncludedGroups []string    `json:"includedGroups"`
-	CheckedAt      *time.Time  `json:"checkedAt"`
-	FetchedAt      *time.Time  `json:"fetchedAt"`
-	NextAt         *time.Time  `json:"nextAt"`
-	Error          string      `json:"error"`
+	Address   string      `json:"address"`
+	Channels  int         `json:"channels"`
+	CheckedAt *time.Time  `json:"checkedAt"`
+	FetchedAt *time.Time  `json:"fetchedAt"`
+	NextAt    *time.Time  `json:"nextAt"`
+	Error     string      `json:"error"`
+	Options   optionsJSON `json:"options"`
+	Lineup    lineupJSON  `json:"lineup"`
 }
 
-type groupJSON struct {
-	Name     string `json:"name"`
-	Channels int    `json:"channels"`
+type optionsJSON struct {
+	Categories  string   `json:"categories"`
+	Channels    string   `json:"channels"`
+	Excluded    []string `json:"excluded"`
+	NewChannels bool     `json:"newChannels"`
+	Numbering   string   `json:"numbering"`
+}
+
+type lineupJSON struct {
+	Categories        int `json:"categories"`
+	EnabledCategories int `json:"enabledCategories"`
+	Channels          int `json:"channels"`
+	EnabledChannels   int `json:"enabledChannels"`
+	ShownChannels     int `json:"shownChannels"`
+	Mapped            int `json:"mapped"`
+	Unmapped          int `json:"unmapped"`
 }
 
 func newAddonJSON(addon addons.Addon) addonJSON {
@@ -98,12 +111,12 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 	if err != nil {
 		return addonJSON{}, err
 	}
-	groups := make([]groupJSON, 0, len(source.Groups))
-	for _, group := range source.Groups {
-		groups = append(groups, groupJSON(group))
-	}
-	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, Groups: groups, IncludedGroups: source.Included,
-		CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt, NextAt: source.NextAt, Error: source.Error}
+	o, n := source.Options, source.Lineup
+	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt,
+		NextAt: source.NextAt, Error: source.Error,
+		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering},
+		Lineup: lineupJSON{Categories: n.Categories, EnabledCategories: n.EnabledCategories, Channels: n.Channels, EnabledChannels: n.EnabledChannels,
+			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped}}
 	return result, nil
 }
 
@@ -119,14 +132,19 @@ type libraryJSON struct {
 	AppName   *string `json:"appName"`
 	Enabled   bool    `json:"enabled"`
 	Browsable bool    `json:"browsable"`
-	// Guide is the XMLTV guide of an enabled live TV catalog, null for any
-	// other library.
-	Guide *guideJSON `json:"guide"`
+	// Guide is the first XMLTV guide of an enabled live TV catalog (an
+	// empty address when it has none), with the catalog's channels and
+	// those mapped; Guides are all of them. Both are null for any other
+	// library.
+	Guide  *libraryGuideJSON `json:"guide"`
+	Guides []guideJSON       `json:"guides"`
 }
 
-// guideJSON describes a live TV catalog's XMLTV guide. Its address is
-// redacted, as it may embed credentials: empty when it has none.
-type guideJSON struct {
+// libraryGuideJSON describes a live TV catalog's first XMLTV guide, as
+// v0.8 did: its address, redacted as it may embed credentials (empty when
+// it has none), its last download, and the catalog's channels and those
+// mapped to a guide channel.
+type libraryGuideJSON struct {
 	URL       string     `json:"url"`
 	CheckedAt *time.Time `json:"checkedAt"`
 	FetchedAt *time.Time `json:"fetchedAt"`
@@ -139,14 +157,55 @@ type guideJSON struct {
 	NextAt *time.Time `json:"nextAt"`
 }
 
-func newGuideJSON(guide *addons.Guide, refreshHours int) *guideJSON {
-	if guide == nil {
+// guideJSON describes an XMLTV guide of a live TV catalog: its address,
+// redacted, its last download and what it held.
+type guideJSON struct {
+	ID         string     `json:"id"`
+	Position   int        `json:"position"`
+	URL        string     `json:"url"`
+	CheckedAt  *time.Time `json:"checkedAt"`
+	FetchedAt  *time.Time `json:"fetchedAt"`
+	NextAt     *time.Time `json:"nextAt"`
+	Channels   int        `json:"channels"`
+	Programmes int        `json:"programmes"`
+	Error      string     `json:"error"`
+}
+
+func nextGuideFetch(guide addons.Guide, refreshHours int) *time.Time {
+	if guide.CheckedAt == nil {
 		return nil
 	}
-	result := &guideJSON{URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt, FetchedAt: guide.FetchedAt,
-		Channels: guide.Channels, Matched: guide.Matched, Error: guide.Error}
-	if guide.URL != "" && guide.CheckedAt != nil {
-		result.NextAt = new(guide.CheckedAt.Add(time.Duration(refreshHours) * time.Hour))
+	return new(guide.CheckedAt.Add(time.Duration(refreshHours) * time.Hour))
+}
+
+func newGuideJSON(guide addons.Guide, refreshHours int) guideJSON {
+	return guideJSON{ID: guide.ID.String(), Position: guide.Position, URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt,
+		FetchedAt: guide.FetchedAt, NextAt: nextGuideFetch(guide, refreshHours), Channels: guide.Channels, Programmes: guide.Programmes,
+		Error: guide.Error}
+}
+
+func newGuidesJSON(guides []addons.Guide, refreshHours int) []guideJSON {
+	if guides == nil {
+		return nil
+	}
+	result := make([]guideJSON, 0, len(guides))
+	for _, g := range guides {
+		result = append(result, newGuideJSON(g, refreshHours))
+	}
+	return result
+}
+
+// newLibraryGuideJSON describes a library's first guide, nil for a library
+// that is not an enabled live TV catalog.
+func newLibraryGuideJSON(l addons.Library, refreshHours int) *libraryGuideJSON {
+	if l.Guides == nil {
+		return nil
+	}
+	result := &libraryGuideJSON{Channels: l.GuideChannels, Matched: l.GuideMapped}
+	if len(l.Guides) > 0 {
+		first := l.Guides[0]
+		result.URL, result.CheckedAt, result.FetchedAt, result.Error = redactGuideURL(first.URL), first.CheckedAt, first.FetchedAt, first.Error
+		result.NextAt = nextGuideFetch(first, refreshHours)
 	}
 	return result
 }
@@ -212,7 +271,8 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			AppName:     appNames[i],
 			Enabled:     l.Enabled,
 			Browsable:   l.Catalog.Browsable(),
-			Guide:       newGuideJSON(l.Guide, h.Accounts.Settings().LiveTvRefreshHours),
+			Guide:       newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
+			Guides:      newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -282,6 +342,27 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},
 		{iptv.ErrTooLarge, http.StatusUnprocessableEntity, "channel_list_too_large"},
 		{iptv.ErrLoginRefused, http.StatusUnprocessableEntity, "iptv_login_refused"},
+		{iptv.ErrInvalidOptions, http.StatusBadRequest, "invalid_options"},
+		{iptv.ErrInvalidCategoryName, http.StatusBadRequest, "invalid_category_name"},
+		{iptv.ErrCategoryNotCustom, http.StatusBadRequest, "category_not_custom"},
+		{iptv.ErrInvalidOrder, http.StatusBadRequest, "invalid_order"},
+		{iptv.ErrInvalidChannelName, http.StatusBadRequest, "invalid_channel_name"},
+		{iptv.ErrInvalidLogo, http.StatusBadRequest, "invalid_logo"},
+		{iptv.ErrInvalidDescription, http.StatusBadRequest, "invalid_description"},
+		{iptv.ErrInvalidCategory, http.StatusBadRequest, "invalid_category"},
+		{iptv.ErrInvalidNumber, http.StatusBadRequest, "invalid_number"},
+		{iptv.ErrInvalidMove, http.StatusBadRequest, "invalid_move"},
+		{iptv.ErrInvalidBulk, http.StatusBadRequest, "invalid_bulk"},
+		{iptv.ErrInvalidStreams, http.StatusBadRequest, "invalid_streams"},
+		{iptv.ErrInvalidStreamURL, http.StatusBadRequest, "invalid_stream_url"},
+		// The admin app bounds labels: only a hand-made request is refused.
+		{iptv.ErrInvalidStreamLabel, http.StatusBadRequest, "invalid_request"},
+		{iptv.ErrStreamNotCustom, http.StatusBadRequest, "stream_not_custom"},
+		{addons.ErrTooManyGuides, http.StatusBadRequest, "too_many_guides"},
+		{addons.ErrInvalidGuide, http.StatusBadRequest, "invalid_guide"},
+		{library.ErrInvalidMode, http.StatusBadRequest, "invalid_mode"},
+		{library.ErrInvalidMapping, http.StatusBadRequest, "invalid_mapping"},
+		{library.ErrNotFound, http.StatusNotFound, "not_found"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)
@@ -514,12 +595,6 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 	h.writeLibraries(w, r, scope, libraries)
 }
 
-// GuideRefresher fetches the XMLTV guide of a live TV catalog now (see
-// library.Service.RefreshGuide).
-type GuideRefresher interface {
-	RefreshGuide(ctx context.Context, scope addons.Scope, key addons.LibraryKey) error
-}
-
 type guideRequest struct {
 	AddonID     string `json:"addonId"`
 	CatalogType string `json:"catalogType"`
@@ -553,7 +628,7 @@ func (h *handler) saveGuide(w http.ResponseWriter, r *http.Request) {
 	if !ok || (body.URL != "" && h.personalAddonsRefused(w, r, scope)) {
 		return
 	}
-	err := h.Addons.SetGuide(r.Context(), scope, key, body.URL)
+	_, err := h.Addons.SetGuide(r.Context(), scope, key, body.URL)
 	if err == nil && body.URL != "" {
 		// A turned-off addon's guide is kept, and fetched once it is on.
 		if err = h.fetchGuide(r, scope, key); errors.Is(err, addons.ErrInvalidLibrary) {

@@ -192,6 +192,9 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	if item.Kind == library.KindChannel && detail {
 		dto.MediaSources = &[]MediaSourceInfo{channelPlaceholder(item)}
 		dto.MediaStreams = &[]playback.MediaStream{}
+		if sources := h.lineupSources(r, user, item, opened); len(sources) > 0 {
+			dto.MediaSources = &sources
+		}
 		return
 	}
 	if library.AudioKind(item.Kind) {

@@ -95,6 +95,29 @@ func public(ip netip.Addr) bool {
 	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !cgnat.Contains(ip)
 }
 
+// CheckPublic reports ErrPrivateNetwork when host is, or resolves to, an
+// address on a local network, which confined requests may not reach. A
+// host that does not resolve is not refused: confined requests check the
+// address they connect to anyway.
+func CheckPublic(ctx context.Context, host string) error {
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if !public(ip) {
+			return ErrPrivateNetwork
+		}
+		return nil
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil
+	}
+	for _, ip := range ips {
+		if !public(ip) {
+			return ErrPrivateNetwork
+		}
+	}
+	return nil
+}
+
 // do sends a request with the client allowed for it. Errors never contain
 // the URL, which usually carries credentials.
 func (c *Client) do(request *http.Request, confined bool) (*http.Response, error) {

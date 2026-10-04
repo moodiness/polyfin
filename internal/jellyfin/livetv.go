@@ -628,7 +628,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		h.browseError(w, r, err)
 		return
 	}
-	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
+	versions = h.inGroup(r.Context(), user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 	requested, asked := parseGUID(request.MediaSourceId)
 	allowed := h.Accounts.Conversions(user)
 	attempts, tries := 0, h.Accounts.Settings().VersionAttempts

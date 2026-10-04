@@ -397,7 +397,7 @@ func (h *handler) sources(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, l := range libraries {
-			if l.Guide == nil || l.Guide.URL == "" {
+			if len(l.Guides) == 0 {
 				continue
 			}
 			// A live TV catalog lists channels, not a library: it has no
@@ -405,7 +405,7 @@ func (h *handler) sources(w http.ResponseWriter, r *http.Request) {
 			result.Guides = append(result.Guides, ownedGuideJSON{Owner: scope.Owner, libraryJSON: libraryJSON{
 				AddonID: l.AddonID.String(), AddonName: l.AddonName, CatalogType: l.Catalog.Type, CatalogID: l.Catalog.ID,
 				CatalogName: l.Catalog.Name, Name: l.Name, Enabled: l.Enabled, Browsable: l.Catalog.Browsable(),
-				Guide: newGuideJSON(l.Guide, refreshHours)}})
+				Guide: newLibraryGuideJSON(l, refreshHours), Guides: newGuidesJSON(l.Guides, refreshHours)}})
 		}
 	}
 	writeJSON(w, http.StatusOK, result)

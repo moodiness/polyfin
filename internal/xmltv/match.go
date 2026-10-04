@@ -7,20 +7,19 @@ import (
 )
 
 // Matcher chooses, for each channel of a catalog, the guide channel that
-// gives its programmes. Channels are added first, then the guide's channels
-// declared as the guide is read (see Read); the programmes worth keeping
-// are those of the guide channels it Wants, and Choose decides once the
-// guide is read.
+// gives its programmes, among the channels of the catalog's guides.
+// Channels are added first, then each guide's channels declared, guide by
+// guide in the guides' order; Choose decides.
 //
 // A guide channel whose identifier is a channel's Stremio ID, or the
 // channel's own guide identifier (an IPTV list's tvg-id or epg_channel_id),
-// gives that channel its programmes. Lists often write that identifier in
-// another case, or as "<channel>@<feed>" ("Name.fr@SD"): failing an exact
-// match, guide channels are candidates whose identifier is the channel's
-// ignoring case, then the part before its last "@", exactly and then
-// ignoring case, each before the next, and before any name. Otherwise
-// guide channels are candidates by name (see ParseName). Among candidates
-// of the same kind, they are ranked by:
+// gives that channel its programmes, the first guide's first. Lists often
+// write that identifier in another case, or as "<channel>@<feed>"
+// ("Name.fr@SD"): failing an exact match, guide channels are candidates
+// whose identifier is the channel's ignoring case, then the part before its
+// last "@", exactly and then ignoring case, each before the next, and
+// before any name. Otherwise guide channels are candidates by name (see
+// ParseName). Among candidates of the same kind, they are ranked by:
 //   - country: one of the guide channel's countries (that of its
 //     identifier, as in "Name.fr", and those of its display names'
 //     prefixes, as in "FR| Name") is the channel's own prefix country, else
@@ -30,6 +29,7 @@ import (
 //   - tier: a display name equal to the channel's name once folded (Exact)
 //     before one equal once quality tags are left out too (Loose), which
 //     a placeholder such as "Name 4K" may share with "Name";
+//   - then the guide's order;
 //   - then, among the candidates left, the one with the most distinct
 //     programme titles in the guide's window, so that placeholders, which
 //     repeat one title, lose to real guides;
@@ -45,11 +45,13 @@ type Matcher struct {
 	byID                     map[string][]int
 	exact, loose             map[string][]int
 	folded, base, foldedBase map[string][]int
-	// wanted counts, for each guide channel, the channels it is a
-	// candidate of or matched by identifier; declared holds the guide
-	// channels ranked already.
-	wanted   map[string]int
-	declared map[string]bool
+}
+
+// Match is a guide channel: the position of its guide among those
+// declared (from 0) and its identifier.
+type Match struct {
+	Guide int
+	ID    string
 }
 
 type matchChannel struct {
@@ -58,9 +60,9 @@ type matchChannel struct {
 	// byID is the guide channel matched by the channel's Stremio ID or
 	// guide identifier; otherwise candidates are the guide channels of the
 	// best rank, in the order they were declared.
-	byID       string
+	byID       *Match
 	rank       int
-	candidates []string
+	candidates []Match
 }
 
 // NewMatcher returns a matcher for a server in language (see
@@ -68,7 +70,7 @@ type matchChannel struct {
 func NewMatcher(language string) *Matcher {
 	return &Matcher{country: LanguageCountry(language), byID: map[string][]int{},
 		exact: map[string][]int{}, loose: map[string][]int{}, folded: map[string][]int{}, base: map[string][]int{},
-		foldedBase: map[string][]int{}, wanted: map[string]int{}, declared: map[string]bool{}}
+		foldedBase: map[string][]int{}}
 }
 
 // index adds channel i to the channels of key in index, once.
@@ -102,20 +104,6 @@ func (m *Matcher) Add(stremioID, guideID, name string) {
 	}
 }
 
-// matchByID gives channel i the guide channel id, its Stremio ID or guide
-// identifier, in place of its candidates.
-func (m *Matcher) matchByID(i int, id string) {
-	c := &m.channels[i]
-	if c.byID != "" {
-		return
-	}
-	for _, candidate := range c.candidates {
-		m.wanted[candidate]--
-	}
-	c.byID, c.candidates = id, nil
-	m.wanted[id]++
-}
-
 // Identifier kinds of candidates, above any name (see Declare): the guide
 // identifier in another case, then before its "@", exactly and in another
 // case.
@@ -125,12 +113,15 @@ const (
 	byFolded     = 3
 )
 
-// Declare ranks a guide channel against the channels whose guide
-// identifiers or names it shares.
-func (m *Matcher) Declare(channel Channel) {
-	m.declared[channel.ID] = true
+// Declare ranks a channel of the guide at position guide against the
+// channels whose guide identifiers or names it shares. Guides are declared
+// in their order, and a guide's channels in its order.
+func (m *Matcher) Declare(guide int, channel Channel) {
+	match := Match{Guide: guide, ID: channel.ID}
 	for _, i := range m.byID[channel.ID] {
-		m.matchByID(i, channel.ID)
+		if c := &m.channels[i]; c.byID == nil {
+			c.byID, c.candidates = &match, nil
+		}
 	}
 	countries := []string{IDCountry(channel.ID)}
 	tiers := map[int]int{}
@@ -160,7 +151,7 @@ func (m *Matcher) Declare(channel Channel) {
 	}
 	for i, tier := range tiers {
 		c := &m.channels[i]
-		if c.byID != "" {
+		if c.byID != nil {
 			continue
 		}
 		// The identifier's kind first, then the country, then the tier.
@@ -170,61 +161,37 @@ func (m *Matcher) Declare(channel Channel) {
 		}
 		switch {
 		case rank > c.rank:
-			for _, candidate := range c.candidates {
-				m.wanted[candidate]--
-			}
-			c.rank, c.candidates = rank, []string{channel.ID}
-			m.wanted[channel.ID]++
-		case rank == c.rank && !slices.Contains(c.candidates, channel.ID):
-			c.candidates = append(c.candidates, channel.ID)
-			m.wanted[channel.ID]++
+			c.rank, c.candidates = rank, []Match{match}
+		case rank == c.rank && !slices.Contains(c.candidates, match):
+			c.candidates = append(c.candidates, match)
 		}
 	}
-}
-
-// Wants reports whether the programmes of a guide channel may be chosen: it
-// is a candidate of a channel, or a channel's Stremio ID or guide
-// identifier, declared or not.
-func (m *Matcher) Wants(id string) bool {
-	if m.wanted[id] > 0 {
-		return true
-	}
-	if channels, ok := m.byID[id]; ok {
-		for _, i := range channels {
-			m.matchByID(i, id)
-		}
-		return true
-	}
-	// A guide channel not declared yet may still match by identifier.
-	if !m.declared[id] {
-		m.Declare(Channel{ID: id})
-	}
-	return m.wanted[id] > 0
 }
 
 // Choose returns the guide channel of each channel, in the order they were
-// added, "" for a channel without one. titles counts the distinct titles
+// added, nil for a channel without one. titles counts the distinct titles
 // of a guide channel's programmes within the guide's window.
-func (m *Matcher) Choose(titles func(id string) int) []string {
-	counts := map[string]int{}
-	count := func(id string) int {
-		n, ok := counts[id]
+func (m *Matcher) Choose(titles func(Match) int) []*Match {
+	counts := map[Match]int{}
+	count := func(match Match) int {
+		n, ok := counts[match]
 		if !ok {
-			n = titles(id)
-			counts[id] = n
+			n = titles(match)
+			counts[match] = n
 		}
 		return n
 	}
-	chosen := make([]string, len(m.channels))
+	chosen := make([]*Match, len(m.channels))
 	for i, c := range m.channels {
-		if c.byID != "" {
+		if c.byID != nil {
 			chosen[i] = c.byID
 			continue
 		}
-		best := -1
-		for _, candidate := range c.candidates {
-			if n := count(candidate); n > best {
-				chosen[i], best = candidate, n
+		for j := range c.candidates {
+			candidate := c.candidates[j]
+			best := chosen[i]
+			if best == nil || candidate.Guide < best.Guide || candidate.Guide == best.Guide && count(candidate) > count(*best) {
+				chosen[i] = &c.candidates[j]
 			}
 		}
 	}

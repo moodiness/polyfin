@@ -55,8 +55,9 @@ type Options struct {
 	// Now tells the time users' allowed hours are checked against; nil
 	// means the system clock.
 	Now func() time.Time
-	// Guides fetches the XMLTV guides of live TV catalogs.
-	Guides GuideRefresher
+	// Guides fetches the XMLTV guides of live TV catalogs and maps their
+	// channels.
+	Guides Guides
 	// Activity records what administrators change for the activity log;
 	// nil records nothing.
 	Activity *activity.Store
@@ -160,6 +161,30 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
 	mux.Handle("PUT /admin/api/scopes/{scope}/guides", h.signedIn(h.saveGuide))
 	mux.Handle("POST /admin/api/scopes/{scope}/guides/refresh", h.signedIn(h.refreshGuide))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/preview", h.signedIn(h.previewAccount))
+	mux.Handle("GET /admin/api/scopes/{scope}/iptv/{id}/preview", h.signedIn(h.previewSource))
+	mux.Handle("GET /admin/api/scopes/{scope}/iptv/{id}/categories", h.signedIn(h.listCategories))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/categories", h.signedIn(h.createCategory))
+	mux.Handle("PUT /admin/api/scopes/{scope}/iptv/{id}/categories/order", h.signedIn(h.orderCategories))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/categories/bulk", h.signedIn(h.bulkCategories))
+	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}/categories/{cid}", h.signedIn(h.updateCategory))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/iptv/{id}/categories/{cid}", h.signedIn(h.deleteCategory))
+	mux.Handle("GET /admin/api/scopes/{scope}/iptv/{id}/channels", h.signedIn(h.listChannels))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/bulk", h.signedIn(h.bulkChannels))
+	mux.Handle("GET /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}", h.signedIn(h.getChannel))
+	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}", h.signedIn(h.updateChannel))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/move", h.signedIn(h.moveChannel))
+	mux.Handle("PUT /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams", h.signedIn(h.setStreams))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams", h.signedIn(h.addStream))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams/{sid}", h.signedIn(h.deleteStream))
+	mux.Handle("GET /admin/api/scopes/{scope}/catalog-guides", h.signedIn(h.catalogGuides))
+	mux.Handle("PUT /admin/api/scopes/{scope}/catalog-guides", h.signedIn(h.saveCatalogGuides))
+	mux.Handle("POST /admin/api/scopes/{scope}/catalog-guides/refresh", h.signedIn(h.refreshCatalogGuides))
+	mux.Handle("POST /admin/api/scopes/{scope}/catalog-guides/automap", h.signedIn(h.automapCatalog))
+	mux.Handle("GET /admin/api/scopes/{scope}/catalog-guides/channels", h.signedIn(h.guideChannels))
+	mux.Handle("GET /admin/api/scopes/{scope}/catalog-guides/mappings", h.signedIn(h.catalogMappings))
+	mux.Handle("PUT /admin/api/scopes/{scope}/catalog-guides/mappings", h.signedIn(h.setMapping))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/catalog-guides/mappings", h.signedIn(h.clearMapping))
 
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")

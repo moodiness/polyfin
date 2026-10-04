@@ -192,6 +192,12 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		wg.Wait()
 	} else {
 		for i, entry := range serving {
+			// An IPTV source's streams are Polyfin's own: reading them asks
+			// no addon.
+			if entry.addon.IPTV() {
+				lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
+				continue
+			}
 			streams, ok := s.streamLists.Get(streamKey{entry.addon.ID, t.metaType, t.id})
 			lists[i], complete = streams, complete && ok
 		}
@@ -315,6 +321,10 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 }
 
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
+	// An IPTV source's line-up changes its streams at once.
+	if entry.addon.IPTV() {
+		return s.fetchStreams(ctx, entry, contentType, id)
+	}
 	key := streamKey{entry.addon.ID, contentType, id}
 	if streams, ok := s.streamLists.Get(key); ok {
 		return streams, nil

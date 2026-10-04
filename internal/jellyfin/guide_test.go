@@ -39,7 +39,7 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 		t.Fatal(libraries, err)
 	}
 	key := addons.LibraryKey{AddonID: libraries[0].AddonID, CatalogType: "tv", CatalogID: "channels"}
-	if err := s.addons.SetGuide(t.Context(), addons.Shared(), key, guide.URL+"/epg"); err != nil {
+	if _, err := s.addons.SetGuide(t.Context(), addons.Shared(), key, guide.URL+"/epg"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.library.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {

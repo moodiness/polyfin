@@ -69,6 +69,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	lib.UseIPTV(channels)
+	channels.OnChange(lib.LineupChanged)
 	options := Options{
 		Version:      "1.2.3",
 		ServerID:     "0123456789abcdef0123456789abcdef",

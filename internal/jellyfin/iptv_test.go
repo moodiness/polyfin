@@ -126,14 +126,15 @@ func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
 		t.Errorf("relayed segment: %d %q, %d requests without the list's user agent", response.StatusCode, body, provider.refusedUser.Load())
 	}
 
-	if err := s.iptv.Update(t.Context(), addons.Shared(), addon.ID, iptv.Changes{Groups: []string{"Kids"}}, false); err != nil {
+	excluded := []string{"g:News"}
+	if err := s.iptv.Update(t.Context(), addons.Shared(), addon.ID, iptv.Changes{Options: &iptv.OptionsPatch{Excluded: &excluded}}, false); err != nil {
 		t.Fatal(err)
 	}
 	s.get(t, "/LiveTv/Channels", token, &channels)
 	if len(channels.Items) != 1 || channels.Items[0].Name != "Orbe Junior" {
-		t.Errorf("the groups chosen: %+v", channels.Items)
+		t.Errorf("the groups kept: %+v", channels.Items)
 	}
-	// A channel of a group no longer shown is no longer played.
+	// A channel of a group no longer imported is no longer played.
 	if status, _ := s.call(http.MethodPost, "/Items/"+zeb.Id+"/PlaybackInfo", app("tv", token), map[string]any{}); status != http.StatusNotFound {
 		t.Errorf("PlaybackInfo of a channel no longer listed: %d", status)
 	}
