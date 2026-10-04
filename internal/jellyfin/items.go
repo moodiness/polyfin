@@ -74,7 +74,8 @@ type BaseItemDto struct {
 	Path                     string             `json:",omitempty"`
 	EnableMediaSourceDisplay *bool              `json:",omitempty"`
 	OfficialRating           string             `json:",omitempty"`
-	ChannelId                *string            // always sent, null
+	ChannelId                *string            // always sent: null but for a programme's channel
+	ChannelName              string             `json:",omitempty"`
 	Overview                 *string            `json:",omitempty"`
 	Taglines                 *[]string          `json:",omitempty"`
 	Genres                   *[]string          `json:",omitempty"`
@@ -127,6 +128,19 @@ type BaseItemDto struct {
 	LockData               *bool     `json:",omitempty"`
 	CumulativeRunTimeTicks *int64    `json:",omitempty"`
 	DateLastMediaAdded     *Time     `json:",omitempty"`
+	// Number, ChannelNumber and ChannelType describe a channel, and
+	// CurrentProgram its programme airing now; the others a programme.
+	Number                 string       `json:",omitempty"`
+	ChannelNumber          string       `json:",omitempty"`
+	ChannelPrimaryImageTag string       `json:",omitempty"`
+	StartDate              *Time        `json:",omitempty"`
+	CurrentProgram         *BaseItemDto `json:",omitempty"`
+	IsMovie                *bool        `json:",omitempty"`
+	IsSeries               *bool        `json:",omitempty"`
+	IsNews                 *bool        `json:",omitempty"`
+	IsKids                 *bool        `json:",omitempty"`
+	IsSports               *bool        `json:",omitempty"`
+	ChannelType            string       `json:",omitempty"`
 	// Container, MediaSources, MediaStreams, HasSubtitles, Width, Height
 	// and Trickplay describe a movie's or episode's versions.
 	Container    string                  `json:",omitempty"`
@@ -143,7 +157,14 @@ type BaseItemDto struct {
 // Jellyfin does in item details and, when asked, in listings. opened is the
 // identifier the item was asked by: its own, or one of its versions'. Item
 // details ask the addons for streams; listings only show what is known.
+// A channel's details describe its streams as a placeholder, as Jellyfin's
+// do: PlaybackInfo describes them once the channel plays.
 func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, opened accounts.ID, detail bool) {
+	if item.Kind == library.KindChannel && detail {
+		dto.MediaSources = &[]MediaSourceInfo{channelPlaceholder(item)}
+		dto.MediaStreams = &[]playback.MediaStream{}
+		return
+	}
 	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
 		return
 	}
@@ -227,6 +248,17 @@ var itemTypes = map[library.Kind]string{
 	library.KindSeason:     "Season",
 	library.KindEpisode:    "Episode",
 	library.KindPerson:     "Person",
+	library.KindChannel:    "TvChannel",
+	library.KindProgram:    "Program",
+}
+
+// isFolder reports whether items of a kind hold other items.
+func isFolder(kind library.Kind) bool {
+	switch kind {
+	case library.KindLibrary, library.KindCollection, library.KindSeries, library.KindSeason:
+		return true
+	}
+	return false
 }
 
 // newItemDto describes an item, with what the user did with it in state.
@@ -234,7 +266,7 @@ var itemTypes = map[library.Kind]string{
 // listings carry the base fields plus those in fields.
 func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, state userState) BaseItemDto {
 	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode
-	folder := !playable && item.Kind != library.KindPerson
+	folder := isFolder(item.Kind)
 	dto := BaseItemDto{
 		Name:              item.Name,
 		ServerId:          h.ServerID,
@@ -376,6 +408,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 			}
 		}
 	}
+	describeLive(&dto, item, fields, detail)
 	return dto
 }
 
@@ -390,8 +423,12 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 	if item.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		ratio := 2.0 / 3.0
-		if item.Kind == library.KindEpisode {
+		switch item.Kind {
+		case library.KindEpisode, library.KindProgram:
 			ratio = 16.0 / 9.0
+		case library.KindChannel:
+			// Channel logos are square, as Jellyfin's tuners give them.
+			ratio = 1
 		}
 		dto.PrimaryImageAspectRatio = new(ratio)
 	}
@@ -479,16 +516,18 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	folders, others := matches(filters, "IsFolder"), matches(filters, "IsNotFolder")
 	return func(item library.Item) bool {
 		itemType := itemTypes[item.Kind]
-		folder := item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindPerson
+		folder := isFolder(item.Kind)
 		return (len(include) == 0 || matches(include, itemType)) && !matches(exclude, itemType) &&
 			(len(media) == 0 || matches(media, mediaType(item.Kind))) && (!folders || folder) && (!others || !folder)
 	}
 }
 
-// mediaType is the kind of media an item plays: only titles and episodes
-// are videos, folders have none.
+// mediaType is the kind of media an item plays: titles, episodes and
+// channels are videos, and programmes, which play their channel; folders
+// have none.
 func mediaType(kind library.Kind) string {
-	if kind == library.KindMovie || kind == library.KindEpisode {
+	switch kind {
+	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram:
 		return "Video"
 	}
 	return "Unknown"

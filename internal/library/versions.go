@@ -98,6 +98,8 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			meta = &full
 		}
 		return target{item: id, kind: KindMovie, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil
+	case r.Kind == KindChannel && r.Meta != nil:
+		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindEpisode && r.Video != nil:
 		series, err := s.load(ctx, r.seriesItemID())
 		if err != nil || series.Meta == nil {

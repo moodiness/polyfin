@@ -25,6 +25,10 @@
 # source, PlaybackInfo, attachments, tracks in each format, encoding
 # options) go to ass/.
 #
+# Live TV comes last: an M3U tuner whose one HLS channel the static file
+# server serves, first without a guide, then with an XMLTV one. Unscrubbed
+# answers (channels, programmes, playback, live playlists) go to livetv/.
+#
 # Requirements: Docker, curl, jq, ffmpeg, ffprobe. Usage: scripts/jellyfin-fixtures.sh
 set -euo pipefail
 
@@ -642,6 +646,128 @@ get "/Persons?userId=$user&searchTerm=$(uri "$person_name")&limit=24" | save per
 get "/Items?userId=$user&personIds=$person&recursive=true&includeItemTypes=Movie,Series&fields=ParentId,PrimaryImageAspectRatio&sortBy=PremiereDate,ProductionYear,SortName&sortOrder=Descending,Descending,Ascending&startIndex=0&limit=20" |
 	save person-titles
 get "/Items/$movie/Similar?userId=$user&limit=12&fields=PrimaryImageAspectRatio,CanDelete" | save similar
+
+# Live TV, last, as adding a tuner adds a view to the user's: an M3U tuner
+# with one HLS channel, served by the .strm movie's file server, and no
+# guide, as addons give none. Besides shape fixtures, livetv/ holds
+# unscrubbed answers with tokens redacted: the channel's PlaybackInfo,
+# opened and not, and the playlists of its live transcoding.
+live_files="$remote/live"
+mkdir -p "$live_files"
+encode -f lavfi -i "$pattern" -f lavfi -i "$(tone 440)" -c:v libx264 -b:v 1M -pix_fmt yuv420p -g 48 -c:a aac -b:a 128k \
+	-f hls -hls_time 2 -hls_list_size 0 -hls_segment_filename "$live_files/segment%d.ts" "$live_files/channel.m3u8"
+encode -f lavfi -i 'color=c=blue:size=128x128' -frames:v 1 "$live_files/logo.png"
+printf '#EXTM3U\n#EXTINF:-1 tvg-id="fixture.one" tvg-chno="7" tvg-logo="http://%s:8000/live/logo.png" group-title="News",Fixture One\nhttp://%s:8000/live/channel.m3u8\n' \
+	"$files" "$files" >"$live_files/channels.m3u"
+post "$base/LiveTv/TunerHosts" --header "Authorization: $signed" \
+	--data "{\"Type\":\"m3u\",\"Url\":\"http://$files:8000/live/channels.m3u\",\"FriendlyName\":\"Fixtures\"}" >/dev/null
+guide_task=$(get /ScheduledTasks | jq --exit-status --raw-output 'first(.[] | select(.Key == "RefreshGuide")) | .Id')
+# Saving a tuner refreshes the guide; a refresh that ran before the tuner
+# was saved is asked again once over.
+live_channels() {
+	total "/LiveTv/Channels?userId=$user" 1 && return 0
+	get /ScheduledTasks | jq --exit-status '.[] | select(.Key == "RefreshGuide") | .State == "Idle"' >/dev/null &&
+		post "$base/ScheduledTasks/Running/$guide_task" --header "Authorization: $signed" && sleep 10
+	return 1
+}
+await 'the M3U channel' live_channels
+channel=$(get "/LiveTv/Channels?userId=$user" | jq --exit-status --raw-output '.Items[0].Id')
+await 'the Live TV view' view livetv
+livetv=$(view livetv)
+livetv_out="$out/livetv"
+mkdir -p "$livetv_out"
+live_redact='walk(if type == "string" then gsub("(?<k>api_key|ApiKey|LiveStreamId|PlaySessionId|OpenToken)=[^&]*"; "\(.k)=<redacted>"; "i") else . end)
+	| walk(if type == "object" then with_entries(if (.key | test("^(LiveStreamId|OpenToken|PlaySessionId)$")) and .value != null then .value = "<redacted>" else . end) else . end)'
+# Saves an answer as a shape fixture and, unscrubbed, as livetv/$2.json.
+live_save() {
+	local body
+	body=$(cat)
+	save "$1" <<<"$body"
+	jq --sort-keys "$live_redact" <<<"$body" >"$livetv_out/$2.json"
+}
+get /LiveTv/Info | live_save livetv-info info
+get /LiveTv/GuideInfo | save livetv-guide-info
+# jellyfin-web's Channels tab, the channel as the player and item details
+# open it, and the Live TV view among the user's.
+get "/LiveTv/Channels?userId=$user&fields=PrimaryImageAspectRatio&startIndex=0&enableImageTypes=Primary" | live_save livetv-channels channels
+get "/LiveTv/Channels/$channel?userId=$user" | live_save livetv-channel channel
+get "/Users/$user/Items/$channel" | live_save livetv-channel-item channel-item
+get "/UserViews?userId=$user" | jq '.Items[] | select(.CollectionType == "livetv")' | live_save livetv-view view
+get "/Users/$user/Items/$livetv" | live_save livetv-view-item view-item
+get "/Users/$user/Items?ParentId=$livetv" | save livetv-view-children
+get "/Items?userId=$user&recursive=true&includeItemTypes=TvChannel" | live_save livetv-channel-items channel-items
+# The guide without programs: jellyfin-web's Programs tab and home section,
+# its guide's query, and the lists of its Recordings, Schedule and Series
+# tabs.
+get "/LiveTv/Programs/Recommended?userId=$user&IsAiring=true&limit=12&ImageTypeLimit=1&EnableImageTypes=Primary,Thumb,Backdrop&EnableTotalRecordCount=false&Fields=ChannelInfo,PrimaryImageAspectRatio" |
+	save livetv-recommended
+get "/LiveTv/Programs?userId=$user&HasAired=false&limit=9&IsMovie=true&EnableTotalRecordCount=false&Fields=ChannelInfo&EnableImageTypes=Primary,Thumb" |
+	save livetv-programs
+get "/LiveTv/Programs?userId=$user&channelIds=$channel&MaxStartDate=$(jq --null-input --raw-output 'now + 86400 | todate')&MinEndDate=$(jq --null-input --raw-output 'now | todate')&ImageTypeLimit=1&EnableImages=false&SortBy=StartDate&EnableTotalRecordCount=false&EnableUserData=false" |
+	save livetv-guide-programs
+post "$base/LiveTv/Programs" --header "Authorization: $signed" \
+	--data "{\"UserId\":\"$user\",\"ChannelIds\":[\"$channel\"],\"HasAired\":false}" | save livetv-posted-programs
+get "/LiveTv/Recordings?userId=$user&IsInProgress=true&Fields=CanDelete,PrimaryImageAspectRatio&EnableTotalRecordCount=false&EnableImageTypes=Primary,Thumb,Backdrop" |
+	save livetv-recordings
+get "/LiveTv/Recordings/Folders?userId=$user" | save livetv-recording-folders
+get '/LiveTv/Timers?IsActive=false&IsScheduled=true' | save livetv-timers
+get '/LiveTv/SeriesTimers?SortBy=SortName&SortOrder=Ascending' | save livetv-series-timers
+# PlaybackInfo as jellyfin-web asks it for playback, which opens the live
+# stream, and before, which leaves it to open.
+live_playback_info() {
+	post "$base/Items/$channel/PlaybackInfo" --header "Authorization: $signed" \
+		--data "$(jq --null-input --arg user "$user" --argjson options "$1" \
+			--slurpfile profile "$playback_out/profiles/jellyfin-web-chrome.json" \
+			'$options + {UserId: $user, StartTimeTicks: 0, DeviceProfile: $profile[0]}')"
+}
+opened=$(live_playback_info '{"IsPlayback":true,"AutoOpenLiveStream":true}')
+unopened=$(live_playback_info '{"IsPlayback":false,"AutoOpenLiveStream":false}')
+jq --null-input --sort-keys --argjson opened "$opened" --argjson unopened "$unopened" \
+	"{opened: \$opened, unopened: \$unopened} | $live_redact" >"$livetv_out/playback-info.json"
+# The live transcoding's master playlist, and the media playlist it names
+# once FFmpeg has written segments.
+transcoding=$(jq --exit-status --raw-output '.MediaSources[0].TranscodingUrl' <<<"$opened")
+playlist_redact='gsub("(?<k>api_key|ApiKey|LiveStreamId|PlaySessionId|DeviceId)=[^&\"]*"; "\(.k)=<redacted>"; "i")'
+master=$(get "$transcoding")
+jq --raw-input --raw-output "$playlist_redact" <<<"$master" >"$livetv_out/master.m3u8"
+media_playlist="$(dirname "${transcoding%%\?*}")/$(grep -v '^#' <<<"$master" | head -n 1)"
+live_segments() { get "$media_playlist" | grep '^#EXTINF' >/dev/null; }
+await 'the live playlist' live_segments
+get "$media_playlist" | jq --raw-input --raw-output "$playlist_redact" >"$livetv_out/media.m3u8"
+post "$base/LiveStreams/Close?liveStreamId=$(jq --exit-status --raw-output '.MediaSources[0].LiveStreamId' <<<"$opened")" \
+	--header "Authorization: $signed"
+
+# The same channel with a guide: an XMLTV listing whose programme airs now,
+# then a film, as the answers apps read programmes from.
+programme() {
+	printf '<programme start="%s +0000" stop="%s +0000" channel="fixture.one"><title>%s</title><desc>%s</desc><category>%s</category></programme>\n' \
+		"$(jq --null-input --raw-output "now + $1 | strftime(\"%Y%m%d%H%M%S\")")" \
+		"$(jq --null-input --raw-output "now + $2 | strftime(\"%Y%m%d%H%M%S\")")" "$3" "$4" "$5"
+}
+{
+	printf '<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n<channel id="fixture.one"><display-name>Fixture One</display-name></channel>\n'
+	programme -3600 3600 'Fixture News' 'The news of the fixtures.' News
+	programme 3600 10800 'Fixture Film' 'A film after the news.' Movie
+	printf '</tv>\n'
+} >"$live_files/guide.xml"
+post "$base/LiveTv/ListingProviders?validateListings=false&validateLogin=false" --header "Authorization: $signed" \
+	--data "{\"Type\":\"xmltv\",\"Path\":\"http://$files:8000/live/guide.xml\",\"EnableAllTuners\":true}" >/dev/null
+live_programs() {
+	total "/LiveTv/Programs?userId=$user" 2 && return 0
+	get /ScheduledTasks | jq --exit-status '.[] | select(.Key == "RefreshGuide") | .State == "Idle"' >/dev/null &&
+		post "$base/ScheduledTasks/Running/$guide_task" --header "Authorization: $signed" && sleep 10
+	return 1
+}
+await 'the guide programmes' live_programs
+get "/LiveTv/Programs?userId=$user&channelIds=$channel&MaxStartDate=$(jq --null-input --raw-output 'now + 86400 | todate')&MinEndDate=$(jq --null-input --raw-output 'now | todate')&ImageTypeLimit=1&EnableImages=false&SortBy=StartDate&EnableUserData=false" |
+	live_save livetv-guided-programs guided-programs
+get "/LiveTv/Programs/Recommended?userId=$user&IsAiring=true&limit=12&ImageTypeLimit=1&EnableImageTypes=Primary,Thumb,Backdrop&EnableTotalRecordCount=false&Fields=ChannelInfo,PrimaryImageAspectRatio" |
+	live_save livetv-guided-recommended guided-recommended
+program=$(get "/LiveTv/Programs?userId=$user&IsAiring=true" | jq --exit-status --raw-output '.Items[0].Id')
+get "/LiveTv/Programs/$program?userId=$user" | live_save livetv-program program
+get "/Users/$user/Items/$program" | live_save livetv-program-item program-item
+get "/LiveTv/Channels?userId=$user&fields=PrimaryImageAspectRatio&startIndex=0&enableImageTypes=Primary" | live_save livetv-guided-channels guided-channels
+get "/LiveTv/Channels/$channel?userId=$user" | live_save livetv-guided-channel guided-channel
 
 echo "Fixtures written to $out"
 

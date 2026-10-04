@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
@@ -27,6 +28,8 @@ var ErrNotRemuxable = errors.New("the version cannot be remuxed")
 type Remux struct {
 	// Session is the play session it belongs to.
 	Session string
+	// User is who plays it.
+	User    accounts.ID
 	Version library.Version
 	// Audio is the audio track, as an index among the version's streams
 	// (ffprobe's); -1 plays none.
@@ -172,10 +175,17 @@ func (s *Service) Variant(ctx context.Context, remux Remux) (hls.Variant, error)
 	if !ok {
 		return hls.Variant{}, ErrNotRemuxable
 	}
-	v := hls.Variant{Bandwidth: analysis.Bitrate, Width: video.Width, Height: video.Height, Range: hlsRange(video)}
-	if v.Bandwidth <= 0 && analysis.Duration > 0 {
-		v.Bandwidth = int64(float64(analysis.Size*8) / analysis.Duration.Seconds())
+	bandwidth := analysis.Bitrate
+	if bandwidth <= 0 && analysis.Duration > 0 {
+		bandwidth = int64(float64(analysis.Size*8) / analysis.Duration.Seconds())
 	}
+	return variant(analysis, video, bandwidth, remux), nil
+}
+
+// variant describes in a master playlist what remux makes of video, the
+// source being bandwidth bits per second.
+func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux Remux) hls.Variant {
+	v := hls.Variant{Bandwidth: bandwidth, Width: video.Width, Height: video.Height, Range: hlsRange(video)}
 	if rate := video.AverageRate; rate > 0 {
 		v.FrameRate = math.Round(rate*1000) / 1000
 	} else if video.FrameRate > 0 {
@@ -199,7 +209,7 @@ func (s *Service) Variant(ctx context.Context, remux Remux) (hls.Variant, error)
 	if !strings.Contains(","+strings.Join(codecs, ",")+",", ",,") {
 		v.Codecs = strings.Join(codecs, ",")
 	}
-	return v, nil
+	return v
 }
 
 // hlsRange is a video's VIDEO-RANGE: PQ and HLG name the transfer of HDR
@@ -323,7 +333,7 @@ func (s *Service) StopRemux(session string) {
 }
 
 func (r Remux) key() hls.Key {
-	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format}
+	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String()}
 }
 
 // remuxOpener reads the version through the source cache, which keeps
@@ -340,18 +350,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			return hls.Remux{}, nil, err
 		}
 		video, _ := videoOf(analysis)
-		audio := -1
-		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Type == "audio" {
-			audio = stream.Index
-		}
-		codec := video.Codec
-		if remux.ConvertVideo != nil {
-			codec = remux.ConvertVideo.Codec
-		}
-		tag := ""
-		if remux.Format == hls.FMP4 {
-			tag = RemuxTag(codec, "mp4")
-		}
+		audio := audioOf(analysis, remux.Audio)
 		x := s.extractedOf(ctx, remux.Version.ID)
 		var streams []int
 		if !x.Covers(0, analysis.Duration) {
@@ -364,19 +363,40 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			src.Release()
 			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
-		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, VideoTag: tag, Format: remux.Format, Plan: plan,
+		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
 			Subtitles: streams, Extracted: x}
-		if c := remux.ConvertVideo; c != nil {
-			rate := video.AverageRate
-			if rate <= 0 {
-				rate = video.FrameRate
-			}
-			r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-				FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware}
-		}
-		if c := remux.ConvertAudio; c != nil && audio >= 0 {
-			r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate
-		}
+		remux.convert(&r, video)
 		return r, release, nil
+	}
+}
+
+// audioOf is the FFmpeg index of the audio track index names, -1 for none.
+func audioOf(analysis media.Analysis, index int) int {
+	if stream, ok := streamOf(analysis, index); ok && stream.Type == "audio" {
+		return stream.Index
+	}
+	return -1
+}
+
+// convert sets what an encoding of video tags and converts its video and
+// audio to.
+func (remux Remux) convert(r *hls.Remux, video media.Stream) {
+	codec := video.Codec
+	if remux.ConvertVideo != nil {
+		codec = remux.ConvertVideo.Codec
+	}
+	if remux.Format == hls.FMP4 {
+		r.VideoTag = RemuxTag(codec, "mp4")
+	}
+	if c := remux.ConvertVideo; c != nil {
+		rate := video.AverageRate
+		if rate <= 0 {
+			rate = video.FrameRate
+		}
+		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
+			FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware}
+	}
+	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
+		r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate
 	}
 }

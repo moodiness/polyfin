@@ -125,16 +125,26 @@ type Prober struct {
 
 // Probe analyzes the source at url, which ffprobe reads over HTTP.
 func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
+	// Enough to find every track of a remote file without reading far.
+	return p.probe(ctx, url, "-probesize", "20M", "-analyzeduration", "10M")
+}
+
+// LiveOptions are the options FFmpeg and ffprobe read a live HLS stream
+// with: segments of any name, as some live sources name them oddly. The
+// demuxer still checks that each segment's content matches its name.
+var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL"}
+
+// ProbeLive analyzes a live stream at url, an HLS playlist or an endless
+// stream, reading a few seconds of it, as Jellyfin analyzes live TV.
+func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
+	return p.probe(ctx, url, append([]string{"-probesize", "5M", "-analyzeduration", "3M"}, LiveOptions...)...)
+}
+
+func (p Prober) probe(ctx context.Context, url string, options ...string) (Analysis, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
-	command := exec.CommandContext(ctx, p.Path,
-		"-v", "error",
-		"-print_format", "json",
-		"-show_format", "-show_streams", "-show_chapters",
-		// Enough to find every track of a remote file without reading far.
-		"-probesize", "20M", "-analyzeduration", "10M",
-		"-reconnect", "1", "-reconnect_streamed", "1",
-		"-i", url)
+	args := append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters"}, options...)
+	command := exec.CommandContext(ctx, p.Path, append(args, "-reconnect", "1", "-reconnect_streamed", "1", "-i", url)...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if err := command.Run(); err != nil {

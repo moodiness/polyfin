@@ -1,0 +1,85 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "ChannelNumber": "7",
+  "ChannelType": "TV",
+  "Chapters": [],
+  "DateCreated": "2026-10-03T23:51:10.5094832Z",
+  "DisplayPreferencesId": "b5f10d1557c81848cb2d3b2fda19134d",
+  "EnableMediaSourceDisplay": true,
+  "Etag": "ad4485dbd300ac1ca82f2b29070d4578",
+  "ExternalUrls": [],
+  "GenreItems": [],
+  "Genres": [],
+  "Id": "86f80cbd21fb6155f83c0e6fb2302f7c",
+  "ImageBlurHashes": {
+    "Primary": {
+      "372f0917cd946f52efd026deb946a8f1": "e20036fYfQfYfQfYfRfQfRfQfQfQfQfQfQfYfRfQfRfQfQfQfQfQfQ"
+    }
+  },
+  "ImageTags": {
+    "Primary": "372f0917cd946f52efd026deb946a8f1"
+  },
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "Remote",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaSources": [
+    {
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "86f80cbd21fb6155f83c0e6fb2302f7c",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": true,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [],
+      "Name": "Fixture One",
+      "Protocol": "File",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "SupportsDirectPlay": true,
+      "SupportsDirectStream": true,
+      "SupportsProbing": true,
+      "SupportsTranscoding": true,
+      "TranscodingSubProtocol": "http",
+      "Type": "Placeholder",
+      "UseMostCompatibleTranscodingProfile": false
+    }
+  ],
+  "MediaStreams": [],
+  "MediaType": "Video",
+  "Name": "Fixture One",
+  "Number": "7",
+  "ParentId": "54c4e8dbdc43511d9b3a452c48adf58a",
+  "People": [],
+  "PlayAccess": "Full",
+  "PrimaryImageAspectRatio": 1,
+  "ProviderIds": {
+    "ExternalServiceId": "Emby"
+  },
+  "RemoteTrailers": [],
+  "ServerId": "6fd928940fcf4c7c8d3ddb4a10bdf863",
+  "SortName": "0000000007.00000-Fixture One",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "TvChannel",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "86f80cbd21fb6155f83c0e6fb2302f7c",
+    "Key": "86f80cbd-21fb-6155-f83c-0e6fb2302f7c",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

@@ -109,7 +109,7 @@ type Trailer struct {
 	Name   string `json:"name,omitempty"`
 }
 
-// Video is an episode of a series.
+// Video is an episode of a series, or a programme of a live TV channel.
 type Video struct {
 	ID        string `json:"id"`
 	Title     string `json:"title,omitempty"`
@@ -122,6 +122,11 @@ type Video struct {
 	Overview  string `json:"overview,omitempty"`
 	Available *bool  `json:"available,omitempty"`
 	Runtime   Text   `json:"runtime,omitempty"`
+	// StartTime and EndTime, ISO 8601, make a video a programme of a
+	// channel's guide; Genres are its categories.
+	StartTime string `json:"startTime,omitempty"`
+	EndTime   string `json:"endTime,omitempty"`
+	Genres    Names  `json:"genres,omitempty"`
 }
 
 // EpisodeNumber reads the episode number from either field addons use.
@@ -219,11 +224,17 @@ func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogI
 	if err != nil {
 		return nil, err
 	}
+	// Guide pages, those of live TV catalogs asked for a date, list their
+	// channels with their programmes as metasDetailed.
 	var response struct {
-		Metas []json.RawMessage `json:"metas"`
+		Metas         []json.RawMessage `json:"metas"`
+		MetasDetailed []json.RawMessage `json:"metasDetailed"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
+	}
+	if response.Metas == nil {
+		response.Metas = response.MetasDetailed
 	}
 	// Every title keeps its place in the page, whose length tells where the
 	// next page starts.

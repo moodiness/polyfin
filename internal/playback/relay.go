@@ -112,13 +112,16 @@ func expired(status int) bool {
 
 // loopback serves cached sources on the loopback interface, so that
 // ffprobe and FFmpeg read them through Polyfin: confined sources stay
-// confined, headers are sent, and what they read is cached.
+// confined, headers are sent, and what they read is cached. It serves live
+// streams too, through live, uncached.
 type loopback struct {
 	listener net.Listener
 	server   *http.Server
+	live     func(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(string) string) error
 
 	mu      sync.Mutex
 	sources map[string]*source.Source
+	feeds   map[string]library.Version
 }
 
 func newLoopback() (*loopback, error) {
@@ -126,18 +129,23 @@ func newLoopback() (*loopback, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &loopback{listener: listener, sources: map[string]*source.Source{}}
+	l := &loopback{listener: listener, sources: map[string]*source.Source{}, feeds: map[string]library.Version{}}
 	l.server = &http.Server{Handler: http.HandlerFunc(l.serve), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = l.server.Serve(listener) }()
 	return l, nil
 }
 
+// randomKey names what the loopback interface serves, unguessably.
+func randomKey() string {
+	var token [24]byte
+	_, _ = rand.Read(token[:])
+	return hex.EncodeToString(token[:])
+}
+
 // register makes a source readable at the returned URL until release is
 // called.
 func (l *loopback) register(src *source.Source) (string, func()) {
-	var token [24]byte
-	_, _ = rand.Read(token[:])
-	key := hex.EncodeToString(token[:])
+	key := randomKey()
 	l.mu.Lock()
 	l.sources[key] = src
 	l.mu.Unlock()
@@ -150,6 +158,10 @@ func (l *loopback) register(src *source.Source) (string, func()) {
 }
 
 func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/live/"); ok {
+		l.serveLive(w, r, rest)
+		return
+	}
 	l.mu.Lock()
 	src, ok := l.sources[strings.TrimPrefix(r.URL.Path, "/")]
 	l.mu.Unlock()

@@ -1,0 +1,19 @@
+{
+  "Items": [
+    {
+      "ChannelId": "",
+      "EndDate": "",
+      "Id": "",
+      "ImageBlurHashes": {},
+      "IsNews": false,
+      "MediaType": "",
+      "Name": "",
+      "RunTimeTicks": 0,
+      "ServerId": "",
+      "StartDate": "",
+      "Type": ""
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

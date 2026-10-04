@@ -162,7 +162,7 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 		RepeatMode:          playing.RepeatMode,
 		PlaybackOrder:       playing.PlaybackOrder,
 	}
-	item, err := h.title(r.Context(), user, playing.Item)
+	item, err := h.played(r.Context(), user, playing.Item)
 	if err != nil {
 		return
 	}
@@ -185,6 +185,16 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 // title resolves the item a player opens: a movie or an episode, by its own
 // identifier or by one of its versions'.
 func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
+	item, err := h.played(ctx, user, opened)
+	if err == nil && item.Kind == library.KindChannel {
+		return library.Item{}, library.ErrNotFound
+	}
+	return item, err
+}
+
+// played resolves what a player opens: a movie, an episode or a channel,
+// by its own identifier or by one of its versions'.
+func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
 		if owner, ok := h.Library.VersionOwner(opened); ok {
@@ -194,10 +204,11 @@ func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts
 	if err != nil {
 		return library.Item{}, err
 	}
-	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
-		return library.Item{}, library.ErrNotFound
+	switch item.Kind {
+	case library.KindMovie, library.KindEpisode, library.KindChannel:
+		return item, nil
 	}
-	return item, nil
+	return library.Item{}, library.ErrNotFound
 }
 
 // looseInt reads a number that apps send as a JSON number or string.
@@ -267,9 +278,13 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := h.title(r.Context(), user, opened)
+	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
 		h.browseError(w, r, err)
+		return
+	}
+	if item.Kind == library.KindChannel {
+		h.livePlaybackInfo(w, r, user, item, opened, request)
 		return
 	}
 	p, err := h.playable(r.Context(), user, item)
@@ -609,7 +624,7 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 // optional container extension.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
-	if strings.EqualFold(extension, "m3u8") && (strings.EqualFold(name, "master") || strings.EqualFold(name, "main")) {
+	if strings.EqualFold(extension, "m3u8") && (strings.EqualFold(name, "master") || strings.EqualFold(name, "main") || strings.EqualFold(name, "live")) {
 		h.hlsPlaylist(w, r, name)
 		return
 	}
@@ -627,7 +642,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	item, err := h.title(r.Context(), user, opened)
+	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return
@@ -655,6 +670,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// A player that authenticates with a header might send it to the
 	// source too: relay instead of redirecting it.
 	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
+	if item.Kind == library.KindChannel {
+		h.serveChannel(w, r, user, item, version, relay)
+		return
+	}
 	contentType := mimeTypes[strings.ToLower(extension)]
 	if contentType == "" {
 		contentType = mimeTypes[containerOfName(version.Filename)]

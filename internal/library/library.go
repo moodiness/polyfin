@@ -64,6 +64,7 @@ type pageKey struct {
 	catalogID   string
 	genre       string
 	search      string
+	date        string
 	skip        int
 }
 
@@ -115,10 +116,12 @@ type library struct {
 }
 
 // view is what a user can browse: their enabled addons and libraries, the
-// server's first unless they turned them off.
+// server's first unless they turned them off. Enabled live TV catalogs are
+// not libraries: they list the user's channels, in the same order.
 type view struct {
 	addons    []installed
 	libraries []library
+	channels  []source
 	// parental is the user's parental control, which hides titles (see
 	// visible). The ratings of the titles a request lists are looked up
 	// until deadline, lookups counting how many it started; held is set
@@ -165,7 +168,12 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			return view{}, err
 		}
 		for _, l := range libraries {
-			if entry, active := byID[l.AddonID]; l.Enabled && active {
+			entry, active := byID[l.AddonID]
+			switch {
+			case !l.Enabled || !active:
+			case LiveCatalog(l.Catalog.Type):
+				v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog})
+			default:
 				visible = append(visible, l)
 				entries = append(entries, entry)
 			}
@@ -228,6 +236,9 @@ type source struct {
 	catalog stremio.Catalog
 	genre   string
 	search  string
+	// date asks a guide catalog for the programmes of a UTC day,
+	// YYYY-MM-DD.
+	date string
 }
 
 // paged reports whether the catalog can be read past its first page.
@@ -243,6 +254,8 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 			values = append(values, stremio.ExtraValue{Name: "search", Value: src.search})
 		case extra.Name == "genre" && src.genre != "":
 			values = append(values, stremio.ExtraValue{Name: "genre", Value: src.genre})
+		case extra.Name == "date" && src.date != "":
+			values = append(values, stremio.ExtraValue{Name: "date", Value: src.date})
 		case extra.Name != "skip" && extra.IsRequired && len(extra.Options) > 0:
 			values = append(values, stremio.ExtraValue{Name: extra.Name, Value: extra.Options[0]})
 		}
@@ -259,7 +272,7 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // page fetches the catalog page starting at skip, sharing concurrent and
 // recent requests.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
-	key := pageKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, skip}
+	key := pageKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, src.date, skip}
 	if metas, ok := s.pages.Get(key); ok {
 		return metas, nil
 	}
@@ -787,6 +800,10 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			return Item{}, err
 		}
 		return Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}}, nil
+	case KindChannel:
+		return s.channel(v, r)
+	case KindProgram:
+		return s.program(ctx, v, r)
 	default:
 		return Item{}, ErrNotFound
 	}
@@ -1084,6 +1101,14 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	var images Images
 	confined := r.Confined
 	switch {
+	case r.Kind == KindChannel && r.Meta != nil:
+		images = channelImages(*r.Meta)
+	case r.Kind == KindProgram && r.Video != nil:
+		// The guide that listed the programme may come from another addon
+		// than its channel: either one confines its artwork.
+		images.Primary = r.Video.Thumbnail
+		channel, err := s.load(ctx, itemID(channelKey(r.Channel)))
+		confined = r.Confined || err != nil || channel.Confined
 	case r.Meta != nil:
 		var item Item
 		fromMeta(&item, *r.Meta)

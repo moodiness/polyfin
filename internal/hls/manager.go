@@ -57,8 +57,14 @@ var (
 type Remux struct {
 	// Input is the URL FFmpeg reads the version from.
 	Input string
+	// InputOptions are FFmpeg's options for reading a live Input, such as
+	// those of its HLS demuxer.
+	InputOptions []string
 	// Video and Audio are FFmpeg stream indexes; Audio is -1 for none.
 	Video, Audio int
+	// ADTS marks live AAC audio, framed as MPEG-TS carries it, which MP4
+	// stores otherwise when it is copied.
+	ADTS bool
 	// AudioCodec is the encoder the audio is converted with, empty to copy
 	// it; AudioChannels and AudioBitrate, what it is converted to, the
 	// bitrate zero for lossless codecs.
@@ -164,9 +170,15 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
 	}
+	return v.encoderArgs(strings.Join(times, ","))
+}
+
+// encoderArgs are FFmpeg's encoder options, with keyframes forced as
+// -force_key_frames takes them.
+func (v *VideoEncoding) encoderArgs(keyframes string) []string {
 	args := []string{"-c:v", v.Encoder,
 		"-b:v", strconv.FormatInt(v.Bitrate, 10), "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
-		"-force_key_frames", strings.Join(times, ",")}
+		"-force_key_frames", keyframes}
 	if v.Burn == nil {
 		args = append(args, "-vf", v.filters())
 	}
@@ -197,6 +209,8 @@ type Key struct {
 	Session string
 	Audio   int
 	Format  Format
+	// User is who plays, which bounds the live encodings each user runs.
+	User string
 }
 
 func (k Key) name() string {
@@ -216,6 +230,7 @@ type Manager struct {
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
+	lives     map[Key]*live
 	closed    bool
 }
 
@@ -229,7 +244,8 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), encodings: map[Key]*encoding{}}
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath),
+		encodings: map[Key]*encoding{}, lives: map[Key]*live{}}
 	go m.stopIdle()
 	return m, nil
 }
@@ -245,11 +261,13 @@ func (m *Manager) Close() {
 	close(m.done)
 	m.mu.Unlock()
 	m.stopWhere(func(Key, *encoding) bool { return true })
+	m.stopLives(func(Key, *live) bool { return true })
 }
 
 // Stop stops the encodings of a play session.
 func (m *Manager) Stop(session string) {
 	m.stopWhere(func(key Key, _ *encoding) bool { return key.Session == session })
+	m.stopLives(func(key Key, _ *live) bool { return key.Session == session })
 }
 
 func (m *Manager) stopWhere(match func(Key, *encoding) bool) {
@@ -276,6 +294,7 @@ func (m *Manager) stopIdle() {
 			return
 		case <-ticker.C:
 			m.stopWhere(func(_ Key, e *encoding) bool { return e.idle() })
+			m.stopLives(func(_ Key, l *live) bool { return l.idle() })
 		}
 	}
 }

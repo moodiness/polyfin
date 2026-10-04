@@ -73,3 +73,17 @@ func (s Signer) mac(payload []byte) []byte {
 	h.Write(payload)
 	return h.Sum(nil)[:grantMAC]
 }
+
+// Link signs the address of a file of a live stream that the player of a
+// grant, given as signed, may fetch through Polyfin: the playlists and
+// segments a channel's playlist names.
+func (s Signer) Link(grant, target string) string {
+	h := hmac.New(sha256.New, s.secret)
+	h.Write([]byte("polyfin.playback.link\x00" + grant + "\x00" + target))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:grantMAC])
+}
+
+// VerifyLink reports whether signature is Link's for grant and target.
+func (s Signer) VerifyLink(grant, target, signature string) bool {
+	return hmac.Equal([]byte(s.Link(grant, target)), []byte(signature))
+}

@@ -184,7 +184,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		RequiredHttpHeaders:    map[string]string{},
 		TranscodingSubProtocol: "http",
 	}
-	source.Path = h.streamURL(r, p.item.ID, id, version, source.Container)
+	source.Path = h.streamURL(r, p.item.ID, id, version, source.Container, mustRelay(r, version))
 	size, runtime := version.Size, version.Runtime
 	if analyzed {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(), language)
@@ -211,10 +211,11 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 
 // streamURL is the address players fetch a version from when they use a
 // media source's Path. Players send no credentials with it, so it carries a
-// grant signed for the caller.
-func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version library.Version, container string) string {
+// grant signed for the caller, which tells whether Polyfin must relay the
+// source rather than redirect the player to it.
+func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version library.Version, container string, relay bool) string {
 	user := callerFrom(r.Context()).User
-	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
+	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
 	query := url.Values{
 		"static":        {"true"},
 		"mediaSourceId": {sourceID.String()},

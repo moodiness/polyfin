@@ -172,6 +172,9 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.libraryViews(r, user)
 	if err == nil {
+		items, err = h.addLiveTvView(r, user, items)
+	}
+	if err == nil {
 		items, err = h.addPlaylistsView(r, user, items)
 	}
 	if err != nil {
@@ -296,6 +299,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
+		return
+	}
+	if h.channelListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
 	if filter, ok := stateFilterOf(r); ok {
@@ -442,6 +448,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) && h.describePlaylist(w, r, user, id) {
 		return
 	}
+	if errors.Is(err, library.ErrNotFound) && id == liveTvViewID && h.describeLiveTvView(w, r, user) {
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -457,6 +466,11 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	}
 	dto := h.newItemDto(item, requestedFields(r), true, state)
 	h.addMediaSources(r, user, &dto, item, id, true)
+	if item.Kind == library.KindChannel {
+		dtos := []BaseItemDto{dto}
+		h.addCurrentPrograms(r, user, dtos, nil)
+		dto = dtos[0]
+	}
 	writeJSON(w, http.StatusOK, dto)
 }
 

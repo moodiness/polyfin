@@ -13,15 +13,23 @@ import (
 // Manifest describes an addon: what it serves, for which types, and its
 // catalogs.
 type Manifest struct {
-	ID          string     `json:"id"`
-	Version     string     `json:"version"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Logo        string     `json:"logo"`
-	Types       []string   `json:"types"`
-	Resources   []Resource `json:"resources"`
-	Catalogs    []Catalog  `json:"catalogs"`
-	IDPrefixes  []string   `json:"idPrefixes"`
+	ID            string           `json:"id"`
+	Version       string           `json:"version"`
+	Name          string           `json:"name"`
+	Description   string           `json:"description"`
+	Logo          string           `json:"logo"`
+	Types         []string         `json:"types"`
+	Resources     []Resource       `json:"resources"`
+	Catalogs      []Catalog        `json:"catalogs"`
+	IDPrefixes    []string         `json:"idPrefixes"`
+	BehaviorHints ManifestBehavior `json:"behaviorHints,omitzero"`
+}
+
+// ManifestBehavior holds hints about the addon as a whole.
+type ManifestBehavior struct {
+	// EpgProvider marks an addon whose live TV catalogs taking the date
+	// extra return a programme guide, Stremio's Native EPG.
+	EpgProvider bool `json:"epgProvider,omitempty"`
 }
 
 // Resource is a resource the addon serves. Manifests list resources either

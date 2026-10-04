@@ -36,10 +36,7 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/System/Endpoint", h.endpointInfo)
 	signedIn(http.MethodGet, "/Playback/BitrateTest", h.bitrateTest)
 
-	// Polyfin has no live TV, studio list or artists.
-	signedIn(http.MethodGet, "/LiveTv/Programs", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/LiveTv/Programs/Recommended", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/LiveTv/Channels", h.emptyQueryResult)
+	// Polyfin has no studio list or artists.
 	signedIn(http.MethodGet, "/Studios", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Artists", h.emptyQueryResult)
 	// Jellyfin answers similar titles under each of these routes.

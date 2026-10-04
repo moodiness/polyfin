@@ -104,7 +104,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 	if err != nil {
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
-	return &Service{
+	s := &Service{
 		db:          db,
 		opener:      opener,
 		prober:      media.Prober{Path: ffprobePath, Timeout: probeTimeout},
@@ -128,7 +128,9 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		trackReads:  make(chan struct{}, maxTrackReads),
 		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
-	}, nil
+	}
+	server.live = s.ServeLive
+	return s, nil
 }
 
 // Close stops the source server.

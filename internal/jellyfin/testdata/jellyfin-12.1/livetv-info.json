@@ -1,0 +1,15 @@
+{
+  "EnabledUsers": [
+    ""
+  ],
+  "IsEnabled": false,
+  "Services": [
+    {
+      "HasUpdateAvailable": false,
+      "IsVisible": false,
+      "Name": "",
+      "Status": "",
+      "Tuners": []
+    }
+  ]
+}

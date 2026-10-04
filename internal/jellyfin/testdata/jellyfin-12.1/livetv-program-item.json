@@ -1,0 +1,61 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": "",
+  "ChannelName": "",
+  "ChannelNumber": "",
+  "ChannelPrimaryImageTag": "",
+  "Chapters": [],
+  "DateCreated": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "EndDate": "",
+  "Etag": "",
+  "ExternalUrls": [],
+  "GenreItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Genres": [
+    ""
+  ],
+  "Id": "",
+  "ImageBlurHashes": {},
+  "ImageTags": {},
+  "IsNews": false,
+  "LocalTrailerCount": 0,
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "",
+  "Name": "",
+  "Overview": "",
+  "ParentId": "",
+  "People": [],
+  "PlayAccess": "",
+  "ProviderIds": {
+    "ProgramEtag": ""
+  },
+  "RemoteTrailers": [],
+  "RunTimeTicks": 0,
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "StartDate": "",
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [
+    ""
+  ],
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

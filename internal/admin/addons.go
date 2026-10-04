@@ -67,7 +67,8 @@ type libraryJSON struct {
 // writeLibraries answers a scope's libraries with the names apps show
 // them under. A user's own libraries follow the server's when they use
 // them, as in their apps; the server's are named as for a user without
-// libraries of their own.
+// libraries of their own. Live TV catalogs list channels, not a library:
+// they have no such name.
 func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope addons.Scope, libraries []addons.Library) {
 	var shown []addons.Library
 	if scope.Owner != nil {
@@ -75,7 +76,9 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 		if err == nil && shared {
 			var list []addons.Library
 			list, err = h.Addons.Libraries(r.Context(), addons.Shared())
-			shown = slices.DeleteFunc(list, func(l addons.Library) bool { return !l.Enabled || !l.AddonActive })
+			shown = slices.DeleteFunc(list, func(l addons.Library) bool {
+				return !l.Enabled || !l.AddonActive || library.LiveCatalog(l.Catalog.Type)
+			})
 		}
 		if err != nil {
 			h.internalError(w, r, err)
@@ -85,7 +88,7 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 	first := len(shown)
 	var positions []int // libraries index of each shown library of the scope
 	for i, l := range libraries {
-		if l.Enabled && l.AddonActive {
+		if l.Enabled && l.AddonActive && !library.LiveCatalog(l.Catalog.Type) {
 			shown = append(shown, l)
 			positions = append(positions, i)
 		}

@@ -471,7 +471,7 @@ func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
 	// The member's own addon only reaches public addresses; its page comes
 	// from cache, as from an addon on a public host.
 	mine := stremio.Meta{ID: "tt-own", Type: "movie", Name: "movie own", Poster: "http://192.168.1.2/poster.jpg"}
-	e.service.pages.Put(pageKey{own.ID, "movie", "mine", "", "movie", 0}, []stremio.Meta{mine})
+	e.service.pages.Put(pageKey{own.ID, "movie", "mine", "", "movie", "", 0}, []stremio.Meta{mine})
 	found, err := e.service.Search(t.Context(), e.member, "movie", []Kind{KindMovie}, 10)
 	if got := names(found); err != nil || !slices.Equal(got, []string{"movie 0", "movie own"}) {
 		t.Fatalf("search: %v %v", got, err)
