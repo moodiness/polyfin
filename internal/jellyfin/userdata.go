@@ -376,7 +376,7 @@ const (
 // as Jellyfin does: a start counts a play, positions move the resume point
 // or mark the title played, and a stop without a position plays it
 // through. playing is what the device was known to play before the report.
-func (h *Handler) track(ctx context.Context, user accounts.User, device string, event playbackEvent, state playback.PlayState, positionKnown bool, playing playback.NowPlaying) {
+func (h *Handler) track(ctx context.Context, user accounts.User, device string, deviceID accounts.ID, event playbackEvent, state playback.PlayState, positionKnown bool, playing playback.NowPlaying) {
 	id, mediaSource := state.Item, state.MediaSourceID
 	if id == (accounts.ID{}) {
 		id = playing.Item
@@ -397,10 +397,10 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	h.recordPlayback(ctx, user, device, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
 	if event != playbackStopped && (positionKnown || event == playbackStarted) {
-		h.prepareNearTheEnd(user, item, runtime, state.Position)
+		h.prepareNearTheEnd(user, deviceID, item, runtime, state.Position)
 	}
 	if event == playbackStarted {
-		h.queueImages(ctx, user, item, mediaSource)
+		h.queueImages(ctx, user, deviceID, item, mediaSource)
 	}
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()

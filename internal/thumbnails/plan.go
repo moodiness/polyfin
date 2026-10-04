@@ -1,29 +1,21 @@
 package thumbnails
 
 import (
+	"cmp"
+	"math/bits"
 	"slices"
 	"sort"
 	"time"
-
-	"github.com/moodiness/polyfin/internal/media"
 )
 
-// shots are the images made of distinct keyframes, and which of them each
-// image shows: images[i] is the index in keyframes of the keyframe image i
-// shows. keyframes are indexes in the version's keyframes, ascending.
-type shots struct {
-	keyframes []int
-	images    []int
-}
-
-// nearest returns the index of the keyframe nearest t, the earlier of two
-// as near. keyframes is ascending and not empty.
-func nearest(keyframes []time.Duration, t time.Duration) int {
-	i := sort.Search(len(keyframes), func(i int) bool { return keyframes[i] >= t })
+// nearest returns the index of the time in times, ascending and not
+// empty, nearest t: the earlier of two as near.
+func nearest(times []time.Duration, t time.Duration) int {
+	i := sort.Search(len(times), func(i int) bool { return times[i] >= t })
 	switch {
-	case i == len(keyframes):
+	case i == len(times):
 		return i - 1
-	case i > 0 && t-keyframes[i-1] <= keyframes[i]-t:
+	case i > 0 && t-times[i-1] <= times[i]-t:
 		return i - 1
 	}
 	return i
@@ -35,50 +27,68 @@ func thumbnailCount(duration, interval time.Duration) int {
 	return int((duration + interval - 1) / interval)
 }
 
-// planThumbnails chooses the keyframe each thumbnail shows: the one
-// nearest its time. A version that would need more than limit keyframes
-// read shows the same keyframe on a few thumbnails in a row, as Jellyfin's
-// thumbnails of a version with sparse keyframes do.
-func planThumbnails(keyframes []time.Duration, duration, interval time.Duration, limit int) shots {
-	count := thumbnailCount(duration, interval)
-	step := max(1, (count+limit-1)/limit)
-	var s shots
-	for i := range count {
-		k := nearest(keyframes, time.Duration(i/step*step)*interval)
-		s.images = append(s.images, s.index(k))
+// spread returns n times spread evenly over duration, each in the middle
+// of its share.
+func spread(duration time.Duration, n int) []time.Duration {
+	times := make([]time.Duration, n)
+	for i := range times {
+		times[i] = time.Duration((float64(i) + 0.5) * float64(duration) / float64(n))
 	}
-	return s
+	return times
 }
 
-// planChapters chooses the keyframe each chapter's image shows: the one
-// nearest its start.
-func planChapters(keyframes []time.Duration, chapters []media.Chapter) shots {
-	var s shots
-	nearestOf := make([]int, len(chapters))
-	for c, chapter := range chapters {
-		nearestOf[c] = nearest(keyframes, chapter.Start)
+// chooseKeyframes returns the keyframes, by index, nearest the targets,
+// each once, coarse to fine: the first ones spread over the whole
+// runtime, the next ones between them. Read in that order, the keyframes
+// read when the budget runs out still cover the version evenly.
+func chooseKeyframes(keyframes, targets []time.Duration) []int {
+	chosen := make([]int, 0, len(targets))
+	for _, t := range targets {
+		chosen = append(chosen, nearest(keyframes, t))
 	}
-	s.keyframes = slices.Compact(slices.Sorted(slices.Values(nearestOf)))
-	for _, k := range nearestOf {
-		position, _ := slices.BinarySearch(s.keyframes, k)
-		s.images = append(s.images, position)
+	slices.Sort(chosen)
+	chosen = slices.Compact(chosen)
+	order := coarseToFine(len(chosen))
+	result := make([]int, len(chosen))
+	for i, position := range order {
+		result[i] = chosen[position]
 	}
-	return s
+	return result
 }
 
-// index returns the position of keyframe k among those read, adding it
-// when it follows them.
-func (s *shots) index(k int) int {
-	if n := len(s.keyframes); n > 0 && s.keyframes[n-1] == k {
-		return n - 1
+// coarseToFine orders the positions 0 to n-1 by their bits reversed: 0,
+// then n/2, then n/4 and 3n/4, and so on.
+func coarseToFine(n int) []int {
+	order := make([]int, n)
+	for i := range order {
+		order[i] = i
 	}
-	s.keyframes = append(s.keyframes, k)
-	return len(s.keyframes) - 1
+	if n < 2 {
+		return order
+	}
+	width := bits.Len(uint(n - 1))
+	slices.SortFunc(order, func(a, b int) int {
+		ra, rb := bits.Reverse(uint(a))>>(bits.UintSize-width), bits.Reverse(uint(b))>>(bits.UintSize-width)
+		return cmp.Compare(ra, rb)
+	})
+	return order
 }
 
-// union is the keyframes either reads, ascending.
-func union(a, b []int) []int {
-	all := append(slices.Clone(a), b...)
-	slices.Sort(all)
-	return slices.Compact(all)
+// shown returns, for each time asked, the position among read, the times
+// of the keyframes read in any order, of the one nearest it.
+func shown(read, asked []time.Duration) []int {
+	sorted := make([]int, len(read))
+	for i := range sorted {
+		sorted[i] = i
+	}
+	slices.SortStableFunc(sorted, func(a, b int) int { return cmp.Compare(read[a], read[b]) })
+	times := make([]time.Duration, len(sorted))
+	for i, position := range sorted {
+		times[i] = read[position]
+	}
+	result := make([]int, len(asked))
+	for i, t := range asked {
+		result[i] = sorted[nearest(times, t)]
+	}
+	return result
 }

@@ -174,7 +174,7 @@ func nextEpisodeLead(settings accounts.Settings) time.Duration {
 // prepareNearTheEnd prepares the episode after the one a user plays once
 // at most nextEpisodeLead of it is left. runtime is that of the version
 // playing; an unknown runtime prepares nothing.
-func (h *Handler) prepareNearTheEnd(user accounts.User, item library.Item, runtime, position time.Duration) {
+func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item library.Item, runtime, position time.Duration) {
 	settings := h.Accounts.Settings()
 	if item.Kind != library.KindEpisode || runtime <= 0 || runtime-position > nextEpisodeLead(settings) || !settings.PrepareAhead {
 		return
@@ -202,9 +202,10 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, item library.Item, runti
 		}
 		if versions := p.ordered(next.ID); len(versions) > 0 {
 			h.analyzeAhead(ctx, versions[0])
-			// Its images too, in the background, as its play would ask.
+			// Its images too, in the background, as its play would ask,
+			// once the playback of this episode stopped.
 			if h.Thumbnails != nil {
-				h.Thumbnails.Queue(versions[0])
+				h.Thumbnails.Queue(versions[0], device)
 			}
 		}
 	})

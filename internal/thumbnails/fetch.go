@@ -12,86 +12,165 @@ import (
 	"github.com/moodiness/polyfin/internal/container"
 )
 
-// Source is a version's file as thumbnails read it: *source.Source is one.
-// It may also serve several ranges with one request, as a
-// container.RangeFetcher.
+// Source is a version's file as thumbnails read it, with one attempt per
+// request, never sent again: source.Once is one. It may also serve
+// several ranges with one request, as a container.RangeFetcher.
 type Source interface {
 	container.Fetcher
-	Size(ctx context.Context) (int64, error)
+	// KnownSize is the file's size, once a request told it.
+	KnownSize() (int64, bool)
 	Release()
 }
 
-// errTooManyRequests reports a version whose thumbnails would take its
-// host more requests than a generation may make.
-var errTooManyRequests = errors.New("making the images would take the source too many requests")
+// errBudget reports a version whose images took every request allowed: the
+// keyframes read so far are used.
+var errBudget = errors.New("the requests allowed for the images of a version were all made")
 
-// pacer spaces the requests made to each host: providers answer bursts
-// with 429, and slow the video they serve meanwhile.
-type pacer struct {
+// errHostPaused reports a host whose thumbnail work is paused, after it
+// asked to slow down.
+var errHostPaused = errors.New("the source's host asked to slow down: its images are paused")
+
+// gate spaces the requests made to each host for images, bounds those of
+// each rolling hour, and pauses a host that asked to slow down. Providers
+// answer bursts with 429 and then refuse every file of the account for
+// minutes, the playbacks they serve included.
+type gate struct {
+	// interval spaces two requests to a host; perHour bounds those of an
+	// hour, window, to a host.
 	interval time.Duration
+	perHour  int
+	window   time.Duration
+	// poll is how often a host busy with a playback is checked again.
+	poll time.Duration
 
-	mu   sync.Mutex
-	next map[string]time.Time
+	mu    sync.Mutex
+	hosts map[string]*hostState
 }
 
-func newPacer(interval time.Duration) *pacer {
-	return &pacer{interval: interval, next: map[string]time.Time{}}
+type hostState struct {
+	next   time.Time
+	recent []time.Time
+	paused time.Time
 }
 
-// wait waits for host's next turn.
-func (p *pacer) wait(ctx context.Context, host string) error {
-	p.mu.Lock()
+func newGate(interval time.Duration, perHour int, window, poll time.Duration) *gate {
+	return &gate{interval: interval, perHour: perHour, window: window, poll: poll, hosts: map[string]*hostState{}}
+}
+
+// state returns host's state, dropping the requests out of the window.
+// The caller holds g.mu.
+func (g *gate) state(host string, now time.Time) *hostState {
+	h, ok := g.hosts[host]
+	if !ok {
+		h = &hostState{}
+		g.hosts[host] = h
+	}
+	for len(h.recent) > 0 && now.Sub(h.recent[0]) >= g.window {
+		h.recent = h.recent[1:]
+	}
+	return h
+}
+
+// ready reports whether a version of host may start: the host is not
+// paused, and has room left in its hour.
+func (g *gate) ready(host string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	now := time.Now()
-	at := now
-	if next := p.next[host]; next.After(now) {
-		at = next
-	}
-	p.next[host] = at.Add(p.interval)
-	if len(p.next) > 1000 {
-		for other, next := range p.next {
-			if next.Before(now) {
-				delete(p.next, other)
-			}
+	h := g.state(host, now)
+	return !now.Before(h.paused) && len(h.recent) < g.perHour
+}
+
+// paused reports whether host's images are paused.
+func (g *gate) paused(host string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return time.Now().Before(g.state(host, time.Now()).paused)
+}
+
+// pause pauses host's images for d.
+func (g *gate) pause(host string, d time.Duration) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.state(host, time.Now()).paused = time.Now().Add(d)
+}
+
+// wait waits for host's next turn, past the interval since its last
+// request and within its hour, and takes it. A paused host fails it.
+func (g *gate) wait(ctx context.Context, host string) error {
+	for {
+		g.mu.Lock()
+		now := time.Now()
+		h := g.state(host, now)
+		if now.Before(h.paused) {
+			g.mu.Unlock()
+			return errHostPaused
+		}
+		at := h.next
+		if len(h.recent) >= g.perHour {
+			at = later(at, h.recent[0].Add(g.window))
+		}
+		if !at.After(now) {
+			h.recent = append(h.recent, now)
+			h.next = now.Add(g.interval)
+			g.mu.Unlock()
+			return nil
+		}
+		g.mu.Unlock()
+		if err := sleep(ctx, at.Sub(now)); err != nil {
+			return err
 		}
 	}
-	p.mu.Unlock()
-	if wait := time.Until(at); wait > 0 {
-		timer := time.NewTimer(wait)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+}
+
+func later(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
 	}
-	// A turn taken late pushes the next one back: requests never come
-	// closer than the interval.
-	p.mu.Lock()
-	if next := time.Now().Add(p.interval); next.After(p.next[host]) {
-		p.next[host] = next
+	return b
+}
+
+// sleep waits for d, or until ctx is done.
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	p.mu.Unlock()
-	return ctx.Err()
 }
 
 // paced reads a version's source for one generation: each request waits
-// for its host's turn, and those past the generation's share fail.
+// while a playback reads the same host, then for the host's turn, and
+// those past the generation's budget fail with errBudget.
 type paced struct {
-	src   Source
-	host  string
-	pacer *pacer
-	left  int
+	src  Source
+	host string
+	gate *gate
+	// busy reports whether a playback reads host.
+	busy func(host string) bool
+	left int
 	// requests counts the requests made.
 	requests int
 }
 
 func (p *paced) take(ctx context.Context) error {
 	if p.left <= 0 {
-		return errTooManyRequests
+		return errBudget
+	}
+	for p.busy != nil && p.busy(p.host) {
+		if err := sleep(ctx, p.gate.poll); err != nil {
+			return err
+		}
+	}
+	if err := p.gate.wait(ctx, p.host); err != nil {
+		return err
 	}
 	p.left--
 	p.requests++
-	return p.pacer.wait(ctx, p.host)
+	return nil
 }
 
 // ReadAt reads the index, as the keyframes, with requests for the spans
@@ -122,13 +201,6 @@ func (p *paced) FetchRanges(ctx context.Context, ranges []container.Range) ([][]
 		return nil, err
 	}
 	return rf.FetchRanges(ctx, ranges)
-}
-
-func (p *paced) Size(ctx context.Context) (int64, error) {
-	if err := p.take(ctx); err != nil {
-		return 0, err
-	}
-	return p.src.Size(ctx)
 }
 
 // hostOf is the host a version's URL names.

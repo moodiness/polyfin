@@ -55,9 +55,9 @@ func (h *Handler) trickplayManifest(ctx context.Context, item accounts.ID) *map[
 }
 
 // queueImages asks, in the background, for the thumbnails and chapter
-// images of the version a playback started with, when the settings turn
-// them on.
-func (h *Handler) queueImages(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
+// images of the version a playback on device started with, when the
+// settings turn them on: they are made once it stopped.
+func (h *Handler) queueImages(ctx context.Context, user accounts.User, device accounts.ID, item library.Item, mediaSource string) {
 	// Recordings are Polyfin's own files, which may be deleted at any time:
 	// they get no thumbnails or chapter images.
 	if h.Thumbnails == nil || item.Kind == library.KindRecording {
@@ -79,7 +79,30 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, item libr
 	if err != nil {
 		return
 	}
-	h.Thumbnails.Queue(version)
+	h.Thumbnails.Queue(version, device)
+}
+
+// playingStale is how long a playback no report came for still counts as
+// under way: apps report every few seconds, and some never report a stop.
+const playingStale = 5 * time.Minute
+
+// thumbnailPlaybacks lists the playbacks under way for the thumbnails,
+// which wait for them, with the URL of their version when it is known.
+func (h *Handler) thumbnailPlaybacks() []thumbnails.Playing {
+	var playing []thumbnails.Playing
+	for device, now := range h.sessions.All() {
+		if time.Since(now.CheckedIn) > playingStale {
+			continue
+		}
+		p := thumbnails.Playing{Device: device}
+		if id, ok := parseGUID(now.MediaSourceID); ok {
+			if version, known := h.Library.KnownVersion(id); known {
+				p.URL = version.URL
+			}
+		}
+		playing = append(playing, p)
+	}
+	return playing
 }
 
 // trickplayFile serves a title's thumbnails at a width:

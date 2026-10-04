@@ -286,7 +286,7 @@ func TestChapterImages(t *testing.T) {
 }
 
 // A version that starts playing gets its thumbnails in the background,
-// read from its source's keyframes.
+// read from its source's keyframes once its playback stopped.
 func TestPlaybackStartMakesThumbnails(t *testing.T) {
 	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -305,6 +305,15 @@ func TestPlaybackStartMakesThumbnails(t *testing.T) {
 		t.Fatalf("report: %d %s", status, data)
 	}
 	movie, _ := accounts.ParseID(p.movie)
+	// Nothing is read from the source while the title plays.
+	time.Sleep(300 * time.Millisecond)
+	if manifest, _ := p.handler.Thumbnails.Manifest(t.Context(), movie); len(manifest) != 0 {
+		t.Fatalf("thumbnails made during the playback: %v", manifest)
+	}
+	if status, data := p.call(http.MethodPost, "/Sessions/Playing/Stopped", app("tv", p.token),
+		map[string]any{"ItemId": p.movie, "MediaSourceId": p.versions[0].ID.String(), "PositionTicks": 50_000_000}); status != http.StatusNoContent {
+		t.Fatalf("stop report: %d %s", status, data)
+	}
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		manifest, err := p.handler.Thumbnails.Manifest(t.Context(), movie)

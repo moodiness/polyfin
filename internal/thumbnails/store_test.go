@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -175,50 +176,94 @@ func TestStorageCapEvictsTheOldest(t *testing.T) {
 	}
 }
 
-// Keyframes are read through the index, a request each, paced per host,
-// and a generation's requests are capped.
+// Keyframes are read through the index, a request each, within the
+// version's budget, paced per host, waiting while a playback reads the
+// same host.
 func TestPacedReads(t *testing.T) {
 	data := fixture(t, "forced.mkv")
 	src := &countingSource{data: data}
 	ctx := context.Background()
-	p := &paced{src: src, host: "host.example", pacer: newPacer(15 * time.Millisecond), left: 100}
+	g := newGate(15*time.Millisecond, 100, time.Hour, time.Millisecond)
+	var busy atomic.Bool
+	p := &paced{src: src, host: "host.example", gate: g, busy: func(string) bool { return busy.Load() }, left: 6}
 	video, err := container.OpenVideo(ctx, p, int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	head := len(src.count())
-	read := 0
-	if err := video.ReadFrames(ctx, p, []int{0, 4, 8, 10}, func(int, []byte) error {
-		read++
+	var read []int
+	err = video.ReadFrames(ctx, p, []int{0, 4, 8, 10, 2, 6, 1}, func(index int, _ []byte) error {
+		read = append(read, index)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
+	})
+	// The budget runs out: the keyframes read so far are kept.
+	if !errors.Is(err, errBudget) || len(read) < 4 || p.requests != 6 || len(src.count()) != 6 || head != 1 {
+		t.Errorf("%v: read %v, %d requests, %d for the index", err, read, len(src.count()), head)
 	}
 	requests := src.count()
-	if head > 2 || read != 4 || len(requests)-head < 4 || len(requests)-head > 5 || p.requests != len(requests) {
-		t.Errorf("%d requests for the index, %d for 4 keyframes, %d counted", head, len(requests)-head, p.requests)
-	}
-	for i, r := range requests[head:] {
-		if r.kind != "fetch" {
-			t.Errorf("request %d after the index: %s", i, r.kind)
-		}
-	}
 	for i := 1; i < len(requests); i++ {
 		if gap := requests[i].at.Sub(requests[i-1].at); gap < 14*time.Millisecond {
 			t.Errorf("requests %d and %d %v apart", i-1, i, gap)
 		}
 	}
+	// A playback reading the host holds the next request back.
+	busy.Store(true)
+	q := &paced{src: src, host: "host.example", gate: g, busy: p.busy, left: 1}
+	done := make(chan error, 1)
+	go func() {
+		_, err := q.Fetch(ctx, 0, 10)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("read while the host is busy: %v", err)
+	case <-time.After(60 * time.Millisecond):
+	}
+	busy.Store(false)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
 	// Another host is not held up by this one.
 	start := time.Now()
-	other := &paced{src: src, host: "other.example", pacer: p.pacer, left: 1}
+	other := &paced{src: src, host: "other.example", gate: g, left: 1}
 	if _, err := other.Fetch(ctx, 0, 10); err != nil || time.Since(start) > 10*time.Millisecond {
 		t.Errorf("another host waited %v: %v", time.Since(start), err)
 	}
-	// Past its share, a generation's requests fail.
-	if _, err := other.Fetch(ctx, 0, 10); !errors.Is(err, errTooManyRequests) {
-		t.Errorf("past the cap: %v", err)
+}
+
+// A host gets a request every interval at most, and at most so many an
+// hour: past them, requests wait, they do not fail. A paused host gets
+// none; others are not held up.
+func TestGatePaceAndHourlyCap(t *testing.T) {
+	g := newGate(20*time.Millisecond, 3, 300*time.Millisecond, time.Millisecond)
+	ctx := context.Background()
+	var times []time.Time
+	for range 4 {
+		if err := g.wait(ctx, "host.example"); err != nil {
+			t.Fatal(err)
+		}
+		times = append(times, time.Now())
+		if len(times) == 3 && g.ready("host.example") {
+			t.Error("a host out of requests for the hour is ready")
+		}
 	}
-	if !lasting(errTooManyRequests) {
-		t.Error("a version taking too many requests would be tried again soon")
+	for i := 1; i < 3; i++ {
+		if gap := times[i].Sub(times[i-1]); gap < 19*time.Millisecond {
+			t.Errorf("requests %d and %d %v apart", i-1, i, gap)
+		}
+	}
+	if waited := times[3].Sub(times[0]); waited < 290*time.Millisecond {
+		t.Errorf("the fourth request of the hour came %v after the first", waited)
+	}
+	start := time.Now()
+	if err := g.wait(ctx, "other.example"); err != nil || time.Since(start) > 10*time.Millisecond {
+		t.Errorf("another host waited %v: %v", time.Since(start), err)
+	}
+	g.pause("host.example", time.Hour)
+	if err := g.wait(ctx, "host.example"); !errors.Is(err, errHostPaused) {
+		t.Errorf("a paused host: %v", err)
+	}
+	if g.ready("host.example") || !g.ready("other.example") {
+		t.Error("the pause is not the paused host's alone")
 	}
 }

@@ -132,6 +132,9 @@ func New(options Options) *Handler {
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	options.Accounts.OnSignOut(h.signedOut)
+	if options.Thumbnails != nil {
+		options.Thumbnails.WatchPlaybacks(h.thumbnailPlaybacks)
+	}
 	rt := &router{unmatched: newUnmatchedRequests(options.Logger)}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {

@@ -193,7 +193,7 @@ func serve(ctx context.Context) error {
 		Hardware:    segments.Hardware(),
 		ToneMapping: segments.HasFilters("zscale", "tonemap"),
 		Settings:    store.Settings,
-		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v) },
+		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v).Once() },
 		Analyzed:    player.Analyzed,
 		Logger:      logger,
 	})
