@@ -125,17 +125,33 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 
 // SignOutDevice revokes an access token.
 func (s *Store) SignOutDevice(ctx context.Context, token string) error {
-	_, err := s.db.Exec(ctx, "DELETE FROM devices WHERE token_hash = $1", hashToken(token))
+	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE token_hash = $1 RETURNING id", hashToken(token)))
+	if err == nil {
+		s.notifySignOut(devices)
+	}
 	return err
 }
 
 // RevokeDevice signs a user's device out.
 func (s *Store) RevokeDevice(ctx context.Context, user, device ID) error {
-	tag, err := s.db.Exec(ctx, "DELETE FROM devices WHERE id = $1 AND user_id = $2", device, user)
-	if err == nil && tag.RowsAffected() == 0 {
+	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE id = $1 AND user_id = $2 RETURNING id", device, user))
+	switch {
+	case err != nil:
+		return err
+	case len(devices) == 0:
 		return ErrNotFound
 	}
-	return err
+	s.notifySignOut(devices)
+	return nil
+}
+
+// deletedDevices collects the identifiers of the devices a deletion
+// returns.
+func deletedDevices(rows pgx.Rows, err error) ([]ID, error) {
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[ID])
 }
 
 // Devices lists a user's signed-in devices, most recently active first.

@@ -755,3 +755,276 @@ jq --null-input --sort-keys \
 	--argjson unasked "$(can_download "/Shows/$series/Episodes?seasonId=$season&userId=$user" '.Items[0] | has("CanDownload")')" \
 	'{movieDetail: $movie, episodeDetail: $episode, remoteMovieDetail: $remote, seriesDetail: $series,
 		episodeListedWithTheFields: $listed, listingWithoutTheFieldHasIt: $unasked}' >"$out/downloads/can-download.json"
+# SyncPlay: a group watched together by two sessions, A (the fixtures user)
+# and B (a partner), with C, a user who may see no library, kept out. Each
+# session holds a WebSocket; every request is sent in turn, and the SyncPlay
+# messages each socket receives until it goes quiet are kept with the
+# answer. Identifiers become labels (the group, the titles, playlist items
+# in the order they first appear), dates become "date", and request bodies
+# keep their placeholders, so that tests replay the same session. Written,
+# unscrubbed otherwise, to syncplay-session.json. The titles are ten-second
+# clips: Jellyfin keeps positions within a title's runtime, and the session
+# stays well within it.
+post "$base/Users/New" --header "Authorization: $signed" --data '{"Name":"partner","Password":"partner-password"}' >/dev/null
+restricted=$(post "$base/Users/New" --header "Authorization: $signed" \
+	--data '{"Name":"restricted","Password":"restricted-password"}' | jq --exit-status --raw-output .Id)
+post "$base/Users/$restricted/Policy" --header "Authorization: $signed" \
+	--data "$(get "/Users/$restricted" | jq --compact-output '.Policy | .EnableAllFolders = false | .EnabledFolders = []')"
+syncplay_client() { printf 'MediaBrowser Client="Polyfin fixtures", Device="SyncPlay %s", DeviceId="polyfin-fixtures-syncplay-%s", Version="1.0.0"' "$1" "$1"; }
+syncplay_signed() {
+	local token
+	token=$(post "$base/Users/AuthenticateByName" --header "Authorization: $(syncplay_client "$1")" \
+		--data "$(jq --null-input --compact-output --arg user "$2" --arg password "$3" '{Username: $user, Pw: $password}')" |
+		jq --exit-status --raw-output .AccessToken)
+	printf '%s, Token="%s"' "$(syncplay_client "$1")" "$token"
+}
+syncplay_inputs=$(jq --null-input --compact-output \
+	--arg a "$(syncplay_signed a fixtures fixtures-password)" \
+	--arg b "$(syncplay_signed b partner partner-password)" \
+	--arg c "$(syncplay_signed c restricted restricted-password)" \
+	--arg first "$(clip_id h264-aac-mp4)" --arg second "$(clip_id av1-opus-webm)" --arg third "$(clip_id hevc-dts-truehd-mkv)" \
+	'{auth: {A: $a, B: $b, C: $c}, items: {"title-1": $first, "title-2": $second, "title-3": $third}}')
+syncplay_recorder=$(
+	cat <<'PY'
+import base64, datetime, json, os, re, socket, sys, time, urllib.error, urllib.request
+
+host, inputs = sys.argv[1], json.loads(sys.argv[2])
+base = "http://%s:8096" % host
+
+
+class Socket:
+    """A WebSocket client, enough for the text messages Jellyfin sends."""
+
+    def __init__(self, authorization):
+        self.sock = socket.create_connection((host, 8096))
+        self.sock.sendall((
+            "GET /socket HTTP/1.1\r\nHost: %s:8096\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nAuthorization: %s\r\n\r\n"
+            % (host, base64.b64encode(os.urandom(16)).decode(), authorization)).encode())
+        self.buffer = b""
+        while b"\r\n\r\n" not in self.buffer:
+            self.buffer += self.sock.recv(4096)
+        head, self.buffer = self.buffer.split(b"\r\n\r\n", 1)
+        assert head.startswith(b"HTTP/1.1 101"), head
+
+    def send(self, text):
+        data, mask = text.encode(), os.urandom(4)
+        length = bytes([0x80 | len(data)]) if len(data) < 126 else bytes([0x80 | 126]) + len(data).to_bytes(2, "big")
+        self.sock.sendall(bytes([0x81]) + length + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def frame(self):
+        b = self.buffer
+        if len(b) < 2:
+            return None
+        length, offset = b[1] & 0x7F, 2
+        if length >= 126:
+            offset = 4 if length == 126 else 10
+            if len(b) < offset:
+                return None
+            length = int.from_bytes(b[2:offset], "big")
+        if len(b) < offset + length:
+            return None
+        self.buffer = b[offset + length:]
+        return b[0] & 0x0F, b[offset:offset + length]
+
+    def messages(self, quiet=0.3):
+        """The SyncPlay messages received until none comes for quiet seconds."""
+        received, deadline = [], time.monotonic() + quiet
+        while True:
+            frame = self.frame()
+            if frame is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return received
+                self.sock.settimeout(remaining)
+                try:
+                    chunk = self.sock.recv(65536)
+                except TimeoutError:
+                    return received
+                if not chunk:
+                    return received
+                self.buffer += chunk
+                continue
+            opcode, payload = frame
+            if opcode == 1:
+                message = json.loads(payload)
+                if message["MessageType"].startswith("SyncPlay"):
+                    received.append(message)
+                    deadline = time.monotonic() + quiet
+
+
+labels = {value.lower(): name for name, value in inputs["items"].items()}
+labels[os.urandom(16).hex()] = "unknown-group"
+raw = {name: value for value, name in labels.items()}
+counters = {}
+position = [0]
+guid = re.compile(r"^[0-9a-f]{32}$")
+hyphenated = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+date = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
+
+
+def label(value, key):
+    value = value.lower()
+    if value == "0" * 32:
+        return value
+    if value not in labels:
+        prefix = "playlist-item" if key == "PlaylistItemId" else "id"
+        counters[prefix] = counters.get(prefix, 0) + 1
+        labels[value] = "%s-%d" % (prefix, counters[prefix])
+        raw[labels[value]] = value
+    return labels[value]
+
+
+def normalize(value, key=""):
+    if isinstance(value, dict):
+        return {k: normalize(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize(v, key) for v in value]
+    if not isinstance(value, str):
+        return value
+    if key == "MessageId":
+        return "message-id"
+    if key == "traceId":
+        return "trace-id"
+    if guid.match(value.lower()):
+        return label(value, key)
+    if hyphenated.match(value.lower()):
+        return label(value.replace("-", ""), key) + " (hyphenated)"
+    if date.match(value):
+        return "date"
+    return value
+
+
+def resolve(value):
+    """Fills a request's placeholders: labels, {now} and {group-position}."""
+    if isinstance(value, dict):
+        return {k: resolve(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve(v) for v in value]
+    if isinstance(value, str) and value.startswith("{") and value.endswith("}"):
+        name = value[1:-1]
+        if name == "now":
+            return datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if name == "group-position":
+            return position[0]
+        return raw[name]
+    return value
+
+
+def call(client, method, path, body):
+    headers = {"Authorization": inputs["auth"][client]}
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = b"" if body == "" else json.dumps(resolve(body)).encode()
+    path = re.sub(r"\{([^}]+)\}", lambda m: raw[m.group(1)], path)
+    request = urllib.request.Request(base + path, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+
+sockets = {client: Socket(authorization) for client, authorization in inputs["auth"].items()}
+for s in sockets.values():
+    s.messages()
+
+
+def ready(client, item, ticks=0, playing=False, kind="Ready"):
+    return (client, "POST", "/SyncPlay/" + kind,
+            {"When": "{now}", "PositionTicks": ticks, "IsPlaying": playing, "PlaylistItemId": "{%s}" % item})
+
+
+steps = [
+    ("The server's time", "A", "GET", "/GetUtcTime", None),
+    ("A lists no group", "A", "GET", "/SyncPlay/List", None),
+    ("A creates a group", "A", "POST", "/SyncPlay/New", {"GroupName": "Fixture group"}),
+    ("B lists the group", "B", "GET", "/SyncPlay/List", None),
+    ("B reads the group", "B", "GET", "/SyncPlay/{group}", None),
+    ("B joins", "B", "POST", "/SyncPlay/Join", {"GroupId": "{group}"}),
+    ("A sets a queue", "A", "POST", "/SyncPlay/SetNewQueue",
+     {"PlayingQueue": ["{title-1}"], "PlayingItemPosition": 0, "StartPositionTicks": 0}),
+    ("A is ready", *ready("A", "playlist-item-1")),
+    ("B is ready", *ready("B", "playlist-item-1")),
+    ("A pauses", "A", "POST", "/SyncPlay/Pause", None),
+    ("A unpauses", "A", "POST", "/SyncPlay/Unpause", None),
+    ("A seeks", "A", "POST", "/SyncPlay/Seek", {"PositionTicks": 10000000}),
+    ("A is ready after seeking", *ready("A", "playlist-item-1", 10000000)),
+    ("B is ready after seeking", *ready("B", "playlist-item-1", 10000000)),
+    ("B buffers", *ready("B", "playlist-item-1", 10000000, True, "Buffering")),
+    ("B is ready after buffering", *ready("B", "playlist-item-1", "{group-position}")),
+    ("B leaves while playing", "B", "POST", "/SyncPlay/Leave", None),
+    ("B joins while playing", "B", "POST", "/SyncPlay/Join", {"GroupId": "{group}"}),
+    ("B is ready after joining", *ready("B", "playlist-item-1", "{group-position}")),
+    ("A queues a title", "A", "POST", "/SyncPlay/Queue", {"ItemIds": ["{title-2}"], "Mode": "Queue"}),
+    ("A queues a title next", "A", "POST", "/SyncPlay/Queue", {"ItemIds": ["{title-3}"], "Mode": "QueueNext"}),
+    ("A moves a title", "A", "POST", "/SyncPlay/MovePlaylistItem", {"PlaylistItemId": "{playlist-item-2}", "NewIndex": 1}),
+    ("A repeats all", "A", "POST", "/SyncPlay/SetRepeatMode", {"Mode": "RepeatAll"}),
+    ("A shuffles", "A", "POST", "/SyncPlay/SetShuffleMode", {"Mode": "Shuffle"}),
+    ("A sorts", "A", "POST", "/SyncPlay/SetShuffleMode", {"Mode": "Sorted"}),
+    ("A skips to the next title", "A", "POST", "/SyncPlay/NextItem", {"PlaylistItemId": "{playlist-item-1}"}),
+    ("A is ready on the next title", *ready("A", "playlist-item-2")),
+    ("B is ready on the next title", *ready("B", "playlist-item-2")),
+    ("A goes back", "A", "POST", "/SyncPlay/PreviousItem", {"PlaylistItemId": "{playlist-item-2}"}),
+    ("A is ready on the previous title", *ready("A", "playlist-item-1")),
+    ("B is ready on the previous title", *ready("B", "playlist-item-1")),
+    ("A picks a title", "A", "POST", "/SyncPlay/SetPlaylistItem", {"PlaylistItemId": "{playlist-item-3}"}),
+    ("A is ready on the picked title", *ready("A", "playlist-item-3")),
+    ("B is ready on the picked title", *ready("B", "playlist-item-3")),
+    ("A removes a title", "A", "POST", "/SyncPlay/RemoveFromPlaylist", {"PlaylistItemIds": ["{playlist-item-2}"]}),
+    ("B pings", "B", "POST", "/SyncPlay/Ping", {"Ping": 50}),
+    ("B stops waiting for others", "B", "POST", "/SyncPlay/SetIgnoreWait", {"IgnoreWait": True}),
+    ("A stops", "A", "POST", "/SyncPlay/Stop", None),
+    ("A plays again", "A", "POST", "/SyncPlay/Unpause", None),
+    ("A is ready to play again", *ready("A", "playlist-item-3")),
+    ("B is ready to play again", *ready("B", "playlist-item-3")),
+    ("B waits for others again", "B", "POST", "/SyncPlay/SetIgnoreWait", {"IgnoreWait": False}),
+    ("C lists no group", "C", "GET", "/SyncPlay/List", None),
+    ("C cannot read the group", "C", "GET", "/SyncPlay/{group}", None),
+    ("C cannot join", "C", "POST", "/SyncPlay/Join", {"GroupId": "{group}"}),
+    ("C pings outside a group", "C", "POST", "/SyncPlay/Ping", {"Ping": 10}),
+    ("C cannot pause outside a group", "C", "POST", "/SyncPlay/Pause", None),
+    ("C joins an unknown group", "C", "POST", "/SyncPlay/Join", {"GroupId": "{unknown-group}"}),
+    ("A reads an unknown group", "A", "GET", "/SyncPlay/{unknown-group}", None),
+    ("A reads what is no group", "A", "GET", "/SyncPlay/not-a-group", None),
+    ("A creates a group without a body", "A", "POST", "/SyncPlay/New", ""),
+    ("A creates a group with a long name", "A", "POST", "/SyncPlay/New", {"GroupName": "x" * 201}),
+    ("B leaves", "B", "POST", "/SyncPlay/Leave", None),
+    ("B cannot leave twice", "B", "POST", "/SyncPlay/Leave", None),
+    ("A leaves", "A", "POST", "/SyncPlay/Leave", None),
+    ("A lists no group after leaving", "A", "GET", "/SyncPlay/List", None),
+]
+recorded = []
+for name, client, method, path, body in steps:
+    for s in sockets.values():
+        s.send('{"MessageType":"KeepAlive"}')
+    status, answer = call(client, method, path, body)
+    if answer:
+        try:
+            answer = json.loads(answer)
+        except ValueError:
+            answer = answer.decode()
+    else:
+        answer = None
+    if name == "A creates a group":
+        labels[answer["GroupId"].lower()] = "group"
+        raw["group"] = answer["GroupId"]
+    # Labels are given in order of first appearance: the answer, then the
+    # messages of A, B and C.
+    answer = normalize(answer)
+    messages = {}
+    for c, s in sockets.items():
+        received = s.messages()
+        for message in received:
+            if message["MessageType"] == "SyncPlayCommand":
+                position[0] = message["Data"]["PositionTicks"]
+        messages[c] = normalize(received)
+    recorded.append({"Step": name, "Client": client, "Method": method, "Path": path, "Body": body,
+                     "Status": status, "Answer": answer, "Messages": messages})
+print(json.dumps(recorded))
+PY
+)
+docker run --rm --network "$network" python:3.13-alpine python3 -c "$syncplay_recorder" "$container" "$syncplay_inputs" |
+	jq --sort-keys . >"$out/syncplay-session.json"
+echo "SyncPlay session written to $out/syncplay-session.json"

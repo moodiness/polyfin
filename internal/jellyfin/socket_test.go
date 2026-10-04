@@ -12,10 +12,12 @@ import (
 	"github.com/coder/websocket"
 )
 
-// appSocket is an app's socket, its messages read as they come.
+// appSocket is an app's socket, its messages read as they come. closed is
+// closed once the server closed it.
 type appSocket struct {
 	conn     *websocket.Conn
 	messages chan socketMessage
+	closed   chan struct{}
 }
 
 func (srv testServer) openSocket(t *testing.T, token string) (*appSocket, *http.Response, error) {
@@ -27,8 +29,12 @@ func (srv testServer) openSocket(t *testing.T, token string) (*appSocket, *http.
 		return nil, response, err
 	}
 	t.Cleanup(func() { _ = conn.CloseNow() })
-	s := &appSocket{conn: conn, messages: make(chan socketMessage, 16)}
+	// Apps read messages of any size, such as a long SyncPlay queue; the
+	// library stops at 32 KiB unless told otherwise.
+	conn.SetReadLimit(-1)
+	s := &appSocket{conn: conn, messages: make(chan socketMessage, 16), closed: make(chan struct{})}
 	go func() {
+		defer close(s.closed)
 		for {
 			_, data, err := conn.Read(context.Background())
 			if err != nil {

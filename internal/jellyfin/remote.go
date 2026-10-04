@@ -155,7 +155,7 @@ func (h *Handler) remoteGeneralCommand(w http.ResponseWriter, r *http.Request) {
 		Name      string
 		Arguments map[string]string
 	}
-	if !commandBody(w, r, &body) {
+	if !requiredBody(w, r, "command", &body) {
 		return
 	}
 	b := bindErrors{}
@@ -180,7 +180,7 @@ func (h *Handler) remoteMessage(w http.ResponseWriter, r *http.Request) {
 		Text      string
 		TimeoutMs *int64
 	}
-	if !commandBody(w, r, &body) {
+	if !requiredBody(w, r, "command", &body) {
 		return
 	}
 	if body.Text == "" {
@@ -261,9 +261,9 @@ func (h *Handler) command(w http.ResponseWriter, r *http.Request, kind string, d
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// commandBody decodes the JSON body Jellyfin binds as its command
+// requiredBody decodes the JSON body Jellyfin binds as its required
 // parameter, answering as ASP.NET does when it is missing or malformed.
-func commandBody(w http.ResponseWriter, r *http.Request, into any) bool {
+func requiredBody(w http.ResponseWriter, r *http.Request, parameter string, into any) bool {
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
 		return false
@@ -273,13 +273,13 @@ func commandBody(w http.ResponseWriter, r *http.Request, into any) bool {
 		processingError(w, http.StatusRequestEntityTooLarge)
 		return false
 	}
-	required := []string{"The command field is required."}
+	required := []string{"The " + parameter + " field is required."}
 	if len(bytes.TrimSpace(body)) == 0 {
-		validationProblem(w, map[string][]string{"": {"A non-empty request body is required."}, "command": required})
+		validationProblem(w, map[string][]string{"": {"A non-empty request body is required."}, parameter: required})
 		return false
 	}
 	if json.Unmarshal(body, into) != nil {
-		validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, "command": required})
+		validationProblem(w, map[string][]string{"$": {"The JSON value could not be converted."}, parameter: required})
 		return false
 	}
 	return true

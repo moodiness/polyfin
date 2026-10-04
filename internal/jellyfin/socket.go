@@ -82,7 +82,8 @@ func (s *sockets) add(user, device accounts.ID, conn *websocket.Conn) {
 	s.devices[device] = append(s.devices[device], conn)
 }
 
-func (s *sockets) remove(user, device accounts.ID, conn *websocket.Conn) {
+// remove forgets a socket, and reports whether its device holds no other.
+func (s *sockets) remove(user, device accounts.ID, conn *websocket.Conn) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.open[user], conn)
@@ -92,7 +93,9 @@ func (s *sockets) remove(user, device accounts.ID, conn *websocket.Conn) {
 	s.devices[device] = slices.DeleteFunc(s.devices[device], func(open *websocket.Conn) bool { return open == conn })
 	if len(s.devices[device]) == 0 {
 		delete(s.devices, device)
+		return true
 	}
+	return false
 }
 
 // latest is the socket a device opened last, or nil when it holds none.
@@ -107,6 +110,16 @@ func (s *sockets) latest(device accounts.ID) *websocket.Conn {
 		return nil
 	}
 	return open[len(open)-1]
+}
+
+// close closes the sockets of a device, whose serving then ends.
+func (s *sockets) close(device accounts.ID) {
+	s.mu.Lock()
+	open := slices.Clone(s.devices[device])
+	s.mu.Unlock()
+	for _, conn := range open {
+		_ = conn.CloseNow()
+	}
 }
 
 // changedData is what changed in a user's data since the last push: the
@@ -152,9 +165,9 @@ func isSocket(r *http.Request) bool {
 // long a silent socket lasts, its keep-alives are answered, a socket left
 // silent that long is dropped, the user's data is pushed to it as it
 // changes, and the commands other apps send its device reach it (see
-// remote.go). Other messages, which ask for what Polyfin does not offer,
-// such as the sessions of the server for its dashboard, are left
-// unanswered.
+// remote.go), as do the messages of its SyncPlay group. Other messages,
+// which ask for what Polyfin does not offer, such as the sessions of the
+// server for its dashboard, are left unanswered.
 func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	c, ok, err := h.signedInCaller(r)
 	switch {
@@ -177,9 +190,16 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.CloseNow()
 	h.sockets.add(c.User.ID, c.Device.ID, conn)
-	defer h.sockets.remove(c.User.ID, c.Device.ID, conn)
+	defer func() {
+		// The socket closes first, so that no message still on its way to
+		// it waits on it. Like Jellyfin, a session whose last socket
+		// closes has ended: it leaves its SyncPlay group.
+		_ = conn.CloseNow()
+		if h.sockets.remove(c.User.ID, c.Device.ID, conn) {
+			h.syncPlay.sessionLeft(c.Device.ID)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
