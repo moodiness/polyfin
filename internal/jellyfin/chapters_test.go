@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/media"
 )
 
@@ -119,6 +121,99 @@ func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
 	}
 	expect("playing the first version", nowPlaying(p.movie), recorded.NowPlaying)
 	expect("playing the second version", nowPlaying(p.versions[1].ID.String()), nil)
+}
+
+func TestChaptersFollowTheSetting(t *testing.T) {
+	p := playing(t)
+	probe, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "chapters", "probe.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis, err := media.Parse(probe)
+	if err != nil || len(analysis.Chapters) == 0 {
+		t.Fatalf("recorded analysis: %d chapters, %v", len(analysis.Chapters), err)
+	}
+	analysis.Remote = true
+	stored, _ := json.Marshal(analysis)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", p.versions[0].ID, stored); err != nil {
+		t.Fatal(err)
+	}
+	analyzedAt := func() time.Time {
+		t.Helper()
+		var at time.Time
+		if err := p.pool.QueryRow(t.Context(), "SELECT analyzed_at FROM media_analyses WHERE version_id = $1", p.versions[0].ID).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	before := analyzedAt()
+	chapters := func(what string, body []byte) []any {
+		t.Helper()
+		var item map[string]any
+		if err := json.Unmarshal(body, &item); err != nil {
+			t.Fatalf("%s: %v in %s", what, err, body)
+		}
+		list, ok := item["Chapters"].([]any)
+		if !ok {
+			t.Fatalf("%s: chapters %v", what, item["Chapters"])
+		}
+		return list
+	}
+	userItem := "/Users/" + p.user.ID.String() + "/Items/"
+	var views QueryResult
+	p.get(t, "/UserViews", p.token, &views)
+	seen := func() map[string]int {
+		t.Helper()
+		counts := map[string]int{}
+		_, body := p.call(http.MethodGet, userItem+p.movie, app("tv", p.token), nil)
+		counts["details"] = len(chapters("details", body))
+		_, body = p.call(http.MethodGet, userItem+p.versions[0].ID.String(), app("tv", p.token), nil)
+		counts["version"] = len(chapters("version opened as an item", body))
+		_, body = p.call(http.MethodGet, "/Items?ParentId="+views.Items[0].Id+"&fields=Chapters", app("tv", p.token), nil)
+		var page struct{ Items []json.RawMessage }
+		if err := json.Unmarshal(body, &page); err != nil {
+			t.Fatal(err)
+		}
+		for _, raw := range page.Items {
+			var item struct{ Id string }
+			_ = json.Unmarshal(raw, &item)
+			if item.Id == p.movie {
+				counts["listing"] = len(chapters("listing", raw))
+			}
+		}
+		if status, data := p.call(http.MethodPost, "/Sessions/Playing", app("tv", p.token),
+			map[string]any{"ItemId": p.movie, "MediaSourceId": p.movie, "PositionTicks": 0, "PlayMethod": "DirectPlay"}); status != http.StatusNoContent {
+			t.Fatalf("report: %d %s", status, data)
+		}
+		var sessions []map[string]json.RawMessage
+		p.get(t, "/Sessions", p.token, &sessions)
+		if len(sessions) != 1 {
+			t.Fatalf("sessions: %v", sessions)
+		}
+		counts["now playing"] = len(chapters("now playing", sessions[0]["NowPlayingItem"]))
+		return counts
+	}
+
+	p.setting(t, func(s *accounts.Settings) { s.Chapters = false })
+	off := seen()
+	for where, count := range off {
+		if count != 0 {
+			t.Errorf("chapters off: %d chapters in %s", count, where)
+		}
+	}
+	p.setting(t, func(s *accounts.Settings) { s.Chapters = true })
+	on := seen()
+	for where, count := range on {
+		if count != len(analysis.Chapters) {
+			t.Errorf("chapters back on: %d chapters in %s, want %d", count, where, len(analysis.Chapters))
+		}
+	}
+	if len(off) != 4 || len(on) != 4 {
+		t.Errorf("places checked: %v, then %v", off, on)
+	}
+	if after := analyzedAt(); !after.Equal(before) {
+		t.Errorf("the version was analyzed again: %v, then %v", before, after)
+	}
 }
 
 func TestChapterNames(t *testing.T) {

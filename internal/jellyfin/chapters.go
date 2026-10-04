@@ -23,8 +23,11 @@ type ChapterInfo struct {
 // of the version it plays first: the version it was opened as, else the
 // addons' first. Polyfin reads chapters when it analyzes a version, on its
 // first play, so the chapters of a version never played are not known yet.
+// With chapters turned off in the settings, the item keeps the empty list
+// its caller set; analyses keep their chapters, which show again as soon as
+// they are turned back on.
 func (h *Handler) setChapters(ctx context.Context, dto *BaseItemDto, versions []library.Version) {
-	if dto.Chapters == nil {
+	if dto.Chapters == nil || !h.Accounts.Settings().Chapters {
 		return
 	}
 	chapters := []ChapterInfo{}
