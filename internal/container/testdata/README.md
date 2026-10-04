@@ -19,6 +19,15 @@ ffmpeg $Q -ss 4.2 -i faststart.mp4 -map 0 -c copy trimmed.mp4
 ffmpeg $Q $V $X -movflags +frag_keyframe+empty_moov fragmented.mp4
 ```
 
+`hevc.mkv` is a minute of HEVC in open GOPs, a CRA keyframe every 4 s, as
+streaming encodes are: a decoder fed several of its keyframes may output
+them in another order, which the thumbnail tests check against:
+
+```sh
+ffmpeg $Q -f lavfi -i testsrc2=size=128x72:rate=24:duration=60 -c:v libx265 -preset veryfast -crf 40 -pix_fmt yuv420p \
+  -x265-params keyint=96:min-keyint=96:scenecut=0:open-gop=1:bframes=3:log-level=error hevc.mkv
+```
+
 The expected times in the tests are the keyframe packets of:
 
 ```sh
