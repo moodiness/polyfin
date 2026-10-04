@@ -102,7 +102,14 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 func (p playable) externals() []playback.ExternalSubtitle {
 	result := make([]playback.ExternalSubtitle, len(p.subtitles))
 	for i, subtitle := range p.subtitles {
-		result[i] = playback.ExternalSubtitle{Language: subtitle.Language, Codec: "subrip"}
+		// Addon files are served as SubRip whatever they are; a file a user
+		// added keeps its format, as Jellyfin names its external files.
+		codec := "subrip"
+		if subtitle.Uploaded {
+			codec = uploadedCodecs[subtitle.Format]
+		}
+		result[i] = playback.ExternalSubtitle{Language: subtitle.Language, Codec: codec,
+			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired}
 	}
 	return result
 }

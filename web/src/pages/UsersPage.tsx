@@ -110,24 +110,27 @@ function UserRow({
   return (
     <li className="p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 font-medium text-white">
-            <span className="break-all">{user.name}</span>
-            {user.id === self.id && <Badge tone="muted">{t.users.you}</Badge>}
-            {user.isAdministrator && <Badge tone="fin">{t.users.administrator}</Badge>}
-            {user.isHidden && <Badge tone="muted">{t.users.hidden}</Badge>}
-            {user.isDisabled && <Badge tone="danger">{t.users.disabled}</Badge>}
-            <RatingLimitBadge parentalControl={user.parentalControl} />
-            {!user.transcoding && <Badge tone="muted">{t.users.noTranscoding}</Badge>}
-            {!user.downloads && <Badge tone="muted">{t.users.noDownloads}</Badge>}
-            {!user.personalAddons && <Badge tone="muted">{t.users.noPersonalAddons}</Badge>}
-            {user.blockedUntil !== null && <BlockedBadge until={user.blockedUntil} />}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            {t.users.lastSignIn} —{' '}
-            {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
-          </p>
-          {user.passwordResetPin !== null && <ResetPinNotice pin={user.passwordResetPin} />}
+        <div className="flex min-w-0 items-center gap-3">
+          <UserAvatar user={user} />
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+              <span className="break-all">{user.name}</span>
+              {user.id === self.id && <Badge tone="muted">{t.users.you}</Badge>}
+              {user.isAdministrator && <Badge tone="fin">{t.users.administrator}</Badge>}
+              {user.isHidden && <Badge tone="muted">{t.users.hidden}</Badge>}
+              {user.isDisabled && <Badge tone="danger">{t.users.disabled}</Badge>}
+              <RatingLimitBadge parentalControl={user.parentalControl} />
+              {!user.transcoding && <Badge tone="muted">{t.users.noTranscoding}</Badge>}
+              {!user.downloads && <Badge tone="muted">{t.users.noDownloads}</Badge>}
+              {!user.personalAddons && <Badge tone="muted">{t.users.noPersonalAddons}</Badge>}
+              {user.blockedUntil !== null && <BlockedBadge until={user.blockedUntil} />}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {t.users.lastSignIn} —{' '}
+              {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
+            </p>
+            {user.passwordResetPin !== null && <ResetPinNotice pin={user.passwordResetPin} />}
+          </div>
         </div>
         <button
           type="button"
@@ -145,6 +148,27 @@ function UserRow({
         </div>
       )}
     </li>
+  )
+}
+
+/** The user's profile picture, as their Jellyfin apps show it, or their initial. */
+function UserAvatar({ user }: { user: User }) {
+  if (user.imageTag !== null) {
+    return (
+      <img
+        src={`/UserImage?userId=${encodeURIComponent(user.id)}&tag=${encodeURIComponent(user.imageTag)}`}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-full object-cover"
+      />
+    )
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 font-semibold text-white"
+    >
+      {user.name.charAt(0).toUpperCase()}
+    </span>
   )
 }
 
@@ -306,6 +330,12 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
           help={t.users.canManageCollectionsHelp}
           checked={user.collectionManagement}
           onChange={(collectionManagement) => access.mutate({ collectionManagement })}
+        />
+        <Checkbox
+          label={t.users.canManageSubtitles}
+          help={t.users.canManageSubtitlesHelp}
+          checked={user.subtitleManagement}
+          onChange={(subtitleManagement) => access.mutate({ subtitleManagement })}
         />
         {access.isError && <Notice kind="error">{errorMessage(t, access.error)}</Notice>}
         {access.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}

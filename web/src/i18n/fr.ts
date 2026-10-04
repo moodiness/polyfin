@@ -345,6 +345,9 @@ const fr: Messages = {
     resetPinValidUntil: (time: string) => `, valable jusqu’à ${time}`,
     resetPinHelp:
       'Donnez ce code à l’utilisateur : il se connecte avec, et ce code devient son nouveau mot de passe.',
+    canManageSubtitles: 'Peut gérer les sous-titres',
+    canManageSubtitlesHelp:
+      'Permet à cet utilisateur d’ajouter des fichiers de sous-titres aux titres depuis ses applications Jellyfin, et d’y chercher les sous-titres des addons.',
   },
   settings: {
     title: 'Paramètres',

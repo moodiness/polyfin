@@ -135,6 +135,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 			if isPlaying {
 				h.describePlaying(r, user, &info, playing)
 			}
+			h.describeViewing(r, user, &info, device.ID)
 			sessions = append(sessions, info)
 		}
 	}
@@ -943,10 +944,22 @@ func (h *Handler) embeddedTrack(r *http.Request, item accounts.ID, stream int) (
 // maxSubtitleBytes bounds subtitle downloads.
 const maxSubtitleBytes = 8 << 20
 
-// subtitleFile downloads and reads an addon's subtitle file, keeping it for
-// a while.
+// subtitleFile reads a subtitle file, downloading an addon's, keeping it
+// for a while.
 func (h *Handler) subtitleFile(ctx context.Context, file library.ExternalSubtitle) (subtitleText, error) {
 	if text, ok := h.subtitleCache.Get(file.ID); ok {
+		return text, nil
+	}
+	if file.Uploaded {
+		data, err := h.Library.UploadedSubtitleText(ctx, file.ID)
+		if err != nil {
+			return subtitleText{}, err
+		}
+		text, err := readSubtitleText(data)
+		if err != nil {
+			return subtitleText{}, err
+		}
+		h.subtitleCache.Put(file.ID, text)
 		return text, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)

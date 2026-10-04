@@ -323,6 +323,9 @@ const en = {
     resetPinValidUntil: (time: string) => `, valid until ${time}`,
     resetPinHelp:
       'Give this PIN to the user: they sign in with it, and it becomes their new password.',
+    canManageSubtitles: 'Can manage subtitles',
+    canManageSubtitlesHelp:
+      'Lets this user add subtitle files to titles from their Jellyfin apps, and search the addons’ subtitles there.',
   },
   settings: {
     title: 'Settings',

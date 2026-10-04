@@ -41,16 +41,27 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 // namedConfiguration answers a named part of the server configuration for
 // any signed-in user, as Jellyfin does: encoding, which jellyfin-web reads
 // before rendering ASS subtitles, and skips them when this fails, and
-// branding, the same as /Branding/Configuration. Any other key is unknown.
+// which loads the fallback fonts when they are enabled (see
+// encodingConfiguration); branding, the same as /Branding/Configuration.
+// Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
 	switch key := r.PathValue("key"); {
 	case strings.EqualFold(key, "encoding"):
-		writeJSON(w, http.StatusOK, encodingOptions)
+		writeJSON(w, http.StatusOK, h.encodingConfiguration())
 	case strings.EqualFold(key, "branding"):
 		writeJSON(w, http.StatusOK, BrandingOptions{})
 	default:
 		processingError(w, http.StatusNotFound)
 	}
+}
+
+// encodingConfiguration is the encoding configuration Polyfin answers:
+// Jellyfin's defaults, with the fallback fonts enabled when the fonts
+// folder has some.
+func (h *Handler) encodingConfiguration() EncodingOptions {
+	options := encodingOptions
+	options.EnableFallbackFont = len(h.fallbackFontFiles()) > 0
+	return options
 }
 
 // EncodingOptions is Jellyfin's encoding configuration, in its order.
@@ -103,7 +114,8 @@ type EncodingOptions struct {
 }
 
 // encodingOptions are Jellyfin 12.1's defaults, as a new server answers
-// them. No fallback fonts: ASS subtitles render with the fonts files carry.
+// them; encodingConfiguration enables the fallback fonts when there are
+// some.
 // Polyfin's own encoding settings are its environment variables; the path
 // of Jellyfin's FFmpeg is left out.
 var encodingOptions = EncodingOptions{

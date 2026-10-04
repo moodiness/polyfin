@@ -73,6 +73,9 @@ type Options struct {
 	// folders storage information describes.
 	CacheDir      string
 	RecordingsDir string
+	// FontsDir holds the fonts apps load to render subtitles whose own
+	// fonts are missing; empty or missing, it offers none.
+	FontsDir string
 }
 
 // Handler serves the Jellyfin API.
@@ -101,6 +104,8 @@ type Handler struct {
 	// newKeys remembers the API keys made from Jellyfin apps until a
 	// listing shows them.
 	newKeys newKeys
+	// viewing remembers the item each device last reported showing.
+	viewing *cache.Cache[accounts.ID, accounts.ID]
 }
 
 // New returns the Jellyfin API handler.
@@ -115,6 +120,7 @@ func New(options Options) *Handler {
 		sockets:        newSockets(),
 		preparations:   newPreparations(),
 		now:            time.Now,
+		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	options.Accounts.OnSignOut(h.signedOut)
@@ -172,6 +178,9 @@ func New(options Options) *Handler {
 	h.syncPlayRoutes(rt)
 	h.collectionRoutes(rt)
 	h.administrationRoutes(rt)
+	h.userImageRoutes(rt)
+	h.appRoutes(rt)
+	h.subtitleUploadRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

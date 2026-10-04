@@ -42,7 +42,14 @@ type Config struct {
 	// Segments are the databases asked where titles' intros and credits
 	// are, theintrodb and introdb, the preferred first; empty asks none.
 	Segments []string
+	// FontsDir holds the fallback fonts apps load to render subtitles, read
+	// with the folders within.
+	FontsDir string
 }
+
+// defaultFontsDir is the system font folder, which the Docker image fills
+// with DejaVu.
+const defaultFontsDir = "/usr/share/fonts"
 
 // defaultCacheSize is 10 GB: a few movies, read again for seeks and
 // restarts without downloading them again.
@@ -63,6 +70,10 @@ func Load(getenv func(string) string) (Config, error) {
 		CacheSize:    defaultCacheSize,
 		Acceleration: strings.ToLower(strings.TrimSpace(getenv("POLYFIN_HWACCEL"))),
 		VAAPIDevice:  strings.TrimSpace(getenv("POLYFIN_VAAPI_DEVICE")),
+		FontsDir:     strings.TrimSpace(getenv("POLYFIN_FONTS_DIR")),
+	}
+	if cfg.FontsDir == "" {
+		cfg.FontsDir = defaultFontsDir
 	}
 	if cfg.FFprobe == "" {
 		cfg.FFprobe = "ffprobe"

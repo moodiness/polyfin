@@ -91,6 +91,12 @@ type User struct {
 	// CollectionManagement lets the user create collections, change them
 	// and delete them; every user sees them.
 	CollectionManagement bool
+	// SubtitleManagement lets the user add subtitle files to titles from
+	// their apps, Jellyfin's EnableSubtitleManagement.
+	SubtitleManagement bool
+	// ImageTag identifies the user's profile picture, empty without one
+	// (see Store.SetImage).
+	ImageTag string
 }
 
 // NewUser describes an account to create.
@@ -126,6 +132,8 @@ type UserChanges struct {
 	AccessSchedules *[]AccessSchedule
 	// The user's permission to manage collections, see User.
 	CollectionManagement *bool
+	// SubtitleManagement, see User.
+	SubtitleManagement *bool
 }
 
 // Store is the accounts repository.
@@ -174,7 +182,8 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
 	"personal_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
-	"hidden_libraries, blocked_genres, access_schedules, collection_management"
+	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
+	"subtitle_management, image_tag"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -184,7 +193,8 @@ func (user *User) fields() []any {
 		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
 		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
-		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement}
+		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
+		&user.SubtitleManagement, &user.ImageTag}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -288,9 +298,9 @@ func createUser(ctx context.Context, db interface {
 		return User{}, err
 	}
 	// An administrator may control other users' apps and manage collections
-	// unless that is taken away, a user may not unless given it.
+	// and subtitles unless that is taken away, a user may not unless given it.
 	created, err := scanUser(db.QueryRow(ctx,
-		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, remote_control, collection_management) VALUES ($1, $2, $3, $4, $3, $3) RETURNING "+userColumns,
+		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, remote_control, collection_management, subtitle_management) VALUES ($1, $2, $3, $4, $3, $3, $3) RETURNING "+userColumns,
 		name, hashPassword(user.Password), user.IsAdministrator, user.IsHidden))
 	if uniqueViolation(err) {
 		return User{}, ErrNameTaken
@@ -479,14 +489,16 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				hidden_libraries = coalesce($20, hidden_libraries),
 				blocked_genres = coalesce($21, blocked_genres),
 				access_schedules = coalesce($22::jsonb, access_schedules),
-				collection_management = coalesce($23, collection_management)
+				collection_management = coalesce($23, collection_management),
+				subtitle_management = coalesce($24, subtitle_management)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
 			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
-			hidden, genres, schedules, changes.CollectionManagement))
+			hidden, genres, schedules, changes.CollectionManagement,
+			changes.SubtitleManagement))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}
