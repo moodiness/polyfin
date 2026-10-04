@@ -48,6 +48,14 @@ type testServer struct {
 
 func newTestServer(t *testing.T, failures int) testServer {
 	t.Helper()
+	// Tests seed analyses instead of running ffprobe, which CI lacks.
+	return newProbingServer(t, failures, "ffprobe-not-installed")
+}
+
+// newProbingServer is a test server whose analyses run the ffprobe at
+// ffprobe.
+func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
+	t.Helper()
 	pool := testdb.New(t)
 	if err := database.Migrate(t.Context(), pool); err != nil {
 		t.Fatal(err)
@@ -79,8 +87,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(segments.Close)
-	// Tests seed analyses instead of running ffprobe, which CI lacks.
-	player, err := playback.New(pool, client, "ffprobe-not-installed", playback.NewSigner(secret), sources, segments, lib.Renew, logger)
+	player, err := playback.New(pool, client, ffprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +109,16 @@ func newTestServer(t *testing.T, failures int) testServer {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler}
+}
+
+// setting changes the server's settings.
+func (s testServer) setting(t *testing.T, change func(*accounts.Settings)) {
+	t.Helper()
+	settings := s.store.Settings()
+	change(&settings)
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (s testServer) user(name string, change func(*accounts.UserChanges)) accounts.User {

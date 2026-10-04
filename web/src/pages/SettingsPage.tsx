@@ -115,6 +115,21 @@ function SettingsForm({ initial }: { initial: Settings }) {
               <p className="mt-1 text-amber-100">{t.settings.legacyWarning}</p>
             </div>
           </div>
+          <section className="space-y-4 border-t border-line pt-6">
+            <h2 className="text-lg font-semibold text-white">{t.settings.playbackTitle}</h2>
+            <Checkbox
+              label={t.settings.chapters}
+              help={t.settings.chaptersHelp}
+              checked={form.chapters}
+              onChange={(chapters) => update({ chapters })}
+            />
+            <Checkbox
+              label={t.settings.prepareAhead}
+              help={t.settings.prepareAheadHelp}
+              checked={form.prepareAhead}
+              onChange={(prepareAhead) => update({ prepareAhead })}
+            />
+          </section>
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
           {mutation.isSuccess && <Notice kind="success">{t.settings.saved}</Notice>}
           <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>

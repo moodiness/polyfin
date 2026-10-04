@@ -220,6 +220,13 @@ const en = {
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
     saved: 'Settings saved.',
+    playbackTitle: 'Playback',
+    chapters: 'Show chapters',
+    chaptersHelp:
+      'Chapters are read along with the file analysis Polyfin does anyway before a first play, so they never delay playback. Turning this off only hides them from apps.',
+    prepareAhead: 'Prepare playback in advance',
+    prepareAheadHelp:
+      'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. This sends a few more requests to your sources, also for titles that are opened but not played.',
   },
   stremioTypes: {
     movie: 'Movies',

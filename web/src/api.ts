@@ -56,6 +56,10 @@ export type Settings = {
   legacyAuthorization: boolean
   /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
   language: Language
+  /** Sends apps the chapters of analyzed versions. */
+  chapters: boolean
+  /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
+  prepareAhead: boolean
 }
 
 export type NewUser = {

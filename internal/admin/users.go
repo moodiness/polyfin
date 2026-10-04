@@ -80,11 +80,17 @@ type deviceJSON struct {
 	LastActivityAt time.Time `json:"lastActivityAt"`
 }
 
+// settingsJSON are the settings the admin interface reads and saves.
+// Chapters and PrepareAhead are always sent; a save without them keeps
+// their current value, so that a page or script older than them leaves them
+// alone.
 type settingsJSON struct {
 	ServerName          string `json:"serverName"`
 	QuickConnectEnabled bool   `json:"quickConnectEnabled"`
 	LegacyAuthorization bool   `json:"legacyAuthorization"`
 	Language            string `json:"language"`
+	Chapters            *bool  `json:"chapters"`
+	PrepareAhead        *bool  `json:"prepareAhead"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -93,6 +99,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		QuickConnectEnabled: settings.QuickConnectEnabled,
 		LegacyAuthorization: settings.LegacyAuthorization,
 		Language:            settings.Language,
+		Chapters:            &settings.Chapters,
+		PrepareAhead:        &settings.PrepareAhead,
 	}
 }
 
@@ -332,11 +340,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	current := h.Accounts.Settings()
 	settings, err := h.Accounts.UpdateSettings(r.Context(), accounts.Settings{
 		ServerName:          body.ServerName,
 		QuickConnectEnabled: body.QuickConnectEnabled,
 		LegacyAuthorization: body.LegacyAuthorization,
 		Language:            body.Language,
+		Chapters:            valueOr(body.Chapters, current.Chapters),
+		PrepareAhead:        valueOr(body.PrepareAhead, current.PrepareAhead),
 	})
 	if accountError(w, err) {
 		return
@@ -349,4 +360,12 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		h.QuickConnect.Clear()
 	}
 	writeJSON(w, http.StatusOK, newSettingsJSON(settings))
+}
+
+// valueOr is the value value points to, else fallback.
+func valueOr(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }

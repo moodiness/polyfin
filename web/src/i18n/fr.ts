@@ -233,6 +233,13 @@ const fr: Messages = {
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
     saved: 'Paramètres enregistrés.',
+    playbackTitle: 'Lecture',
+    chapters: 'Afficher les chapitres',
+    chaptersHelp:
+      'Polyfin lit les chapitres en même temps qu’il analyse le fichier, ce qu’il fait de toute façon avant une première lecture : ils ne retardent donc jamais la lecture. Désactivés, ils sont simplement masqués dans les applications.',
+    prepareAhead: 'Préparer la lecture à l’avance',
+    prepareAheadHelp:
+      'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
   },
   stremioTypes: {
     movie: 'Films',

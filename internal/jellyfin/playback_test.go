@@ -91,7 +91,12 @@ type playbackSetup struct {
 // analysis of the movie's second version, as ffprobe would have.
 func playing(t *testing.T) playbackSetup {
 	t.Helper()
-	s := newTestServer(t, 10)
+	return playingOn(t, newTestServer(t, 10))
+}
+
+// playingOn is playing on a given test server.
+func playingOn(t *testing.T, s testServer) playbackSetup {
+	t.Helper()
 	user := s.user("member", nil)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), streamingAddon(t), false); err != nil {
 		t.Fatal(err)

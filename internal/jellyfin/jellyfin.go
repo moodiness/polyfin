@@ -75,6 +75,8 @@ type Handler struct {
 	sockets *sockets
 	// syncPlay holds the groups apps watch together in.
 	syncPlay *syncPlay
+	// preparations bounds the preparations of playback made ahead of it.
+	preparations *preparations
 }
 
 // New returns the Jellyfin API handler.
@@ -87,6 +89,7 @@ func New(options Options) *Handler {
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
+		preparations:   newPreparations(),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	options.Accounts.OnSignOut(h.signedOut)

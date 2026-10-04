@@ -395,6 +395,9 @@ func (h *Handler) track(ctx context.Context, user accounts.User, event playbackE
 		return
 	}
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
+	if event != playbackStopped && (positionKnown || event == playbackStarted) {
+		h.prepareNearTheEnd(user, item, runtime, state.Position)
+	}
 	now := time.Now().UTC()
 	_, err = h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
 		switch {

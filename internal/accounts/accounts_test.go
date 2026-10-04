@@ -93,10 +93,10 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if got := store.Settings().Language; got != "en" {
-		t.Errorf("default language: %q", got)
+	if got := store.Settings(); got.Language != "en" || !got.Chapters || got.PrepareAhead {
+		t.Errorf("defaults: language %q, chapters %v, prepare ahead %v", got.Language, got.Chapters, got.PrepareAhead)
 	}
-	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr"}
+	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr", Chapters: false, PrepareAhead: true}
 	if _, err := store.UpdateSettings(ctx, want); err != nil {
 		t.Fatal(err)
 	}

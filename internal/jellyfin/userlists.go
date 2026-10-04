@@ -346,7 +346,7 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 // out. A next episode already started is only offered when resumable is
 // set. date is when the furthest played episode was played.
 func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, resumable bool) (library.Item, *time.Time, bool) {
-	regular := slices.DeleteFunc(slices.Clone(episodes), func(e library.Item) bool { return e.ParentIndexNumber == 0 })
+	regular := regularEpisodes(episodes)
 	furthest := -1
 	for i, episode := range regular {
 		if data[episode.ID].Played {
@@ -371,6 +371,12 @@ func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, re
 		return episode, date, true
 	}
 	return library.Item{}, nil, false
+}
+
+// regularEpisodes are a series' episodes, in order, without the specials,
+// which Next Up leaves out.
+func regularEpisodes(episodes []library.Item) []library.Item {
+	return slices.DeleteFunc(slices.Clone(episodes), func(e library.Item) bool { return e.ParentIndexNumber == 0 })
 }
 
 // before reports whether date a comes strictly before date b, a missing

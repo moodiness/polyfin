@@ -30,7 +30,13 @@ type tracking struct {
 
 func newTracking(t *testing.T) tracking {
 	t.Helper()
-	s, token, views := browsing(t)
+	return trackingOn(t, newTestServer(t, 10))
+}
+
+// trackingOn is newTracking on a given test server.
+func trackingOn(t *testing.T, s testServer) tracking {
+	t.Helper()
+	s, token, views := browsingOn(t, s)
 	member, _ := s.store.Authenticate(t.Context(), "member", "correct horse")
 	tr := tracking{testServer: s, token: token, user: member.ID.String(), views: views}
 	var page QueryResult
