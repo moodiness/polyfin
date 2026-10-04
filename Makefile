@@ -30,7 +30,8 @@ compose-check:
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.build.yaml config --quiet
 
-# Local tag only: this target never pushes.
+# Local tag only: this target never pushes. It also checks that the
+# jellyfin-web source releases attach still matches its checksum.
 image-check:
 	docker buildx build --load --build-arg VERSION=$(VERSION) --tag polyfin-local:check .
 	@printed="$$(docker run --rm --network none polyfin-local:check version)"; \
@@ -38,3 +39,4 @@ image-check:
 		echo "image reports version '$$printed', expected '$(VERSION)'"; exit 1; \
 	fi
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --output type=cacheonly .
+	docker buildx build --target jellyfin-web-source --output type=cacheonly .
