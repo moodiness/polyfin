@@ -36,16 +36,20 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/System/Endpoint", h.endpointInfo)
 	signedIn(http.MethodGet, "/Playback/BitrateTest", h.bitrateTest)
 
-	// Polyfin has no live TV, people, studios or artists.
+	// Polyfin has no live TV, studio list or artists.
 	signedIn(http.MethodGet, "/LiveTv/Programs", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/LiveTv/Programs/Recommended", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/LiveTv/Channels", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Studios", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Artists", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/SyncPlay/List", h.syncPlayGroups)
-	// Polyfin knows no similar items, extras or theme media of an item.
-	signedIn(http.MethodGet, "/Items/{itemId}/Similar", h.similarItems)
+	// Jellyfin answers similar titles under each of these routes.
+	for _, similar := range []string{"/Items/{itemId}/Similar", "/Movies/{itemId}/Similar", "/Shows/{itemId}/Similar", "/Trailers/{itemId}/Similar"} {
+		signedIn(http.MethodGet, similar, h.similarItems)
+	}
 	signedIn(http.MethodGet, "/Items/{itemId}/Collections", h.itemCollections)
+	// Addons give trailers, which apps get as RemoteTrailers, and no other
+	// extras: no local trailers, special features or theme media.
 	signedIn(http.MethodGet, "/Items/{itemId}/SpecialFeatures", h.itemExtras)
 	signedIn(http.MethodGet, "/Items/{itemId}/LocalTrailers", h.itemExtras)
 	signedIn(http.MethodGet, "/Items/{itemId}/ThemeMedia", h.themeMedia)
@@ -1041,11 +1045,45 @@ func (h *Handler) auxiliaryItemExists(r *http.Request, id accounts.ID) (bool, er
 	return err == nil, err
 }
 
+// similarLimit is how many similar titles Jellyfin answers when the app
+// does not say.
+const similarLimit = 50
+
+// similarItems lists titles close to a movie or series (see
+// library.Service.Similar). Like Jellyfin, it leaves out the titles the user
+// played, and describes the titles with their provider identifiers, asked
+// for or not. Other items have none.
 func (h *Handler) similarItems(w http.ResponseWriter, r *http.Request) {
+	limit, limited := 0, false
 	// Similar items take a limit but no start index: StartIndex is 0.
-	if _, ok := h.itemRequest(w, r, func(errs bindErrors) { errs.int32(r, "limit") }); ok {
-		writeJSON(w, http.StatusOK, emptyResult{Items: []struct{}{}})
+	id, ok := h.itemRequest(w, r, func(errs bindErrors) { limit, limited = errs.int32(r, "limit") })
+	if !ok {
+		return
 	}
+	if !limited || limit < 0 {
+		limit = similarLimit
+	}
+	user := callerFrom(r.Context()).User
+	var items []library.Item
+	if id != (accounts.ID{}) {
+		// Twice the limit leaves room for the played titles left out.
+		found, err := h.Library.Similar(r.Context(), user, id, 2*limit)
+		if err != nil && !errors.Is(err, library.ErrNotFound) {
+			h.browseError(w, r, err)
+			return
+		}
+		items = found
+	}
+	state, err := h.userState(r.Context(), user, items)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	items = slices.DeleteFunc(items, func(item library.Item) bool { return state.of(item).Played })
+	items = items[:min(limit, len(items))]
+	fields := requestedFields(r)
+	fields["providerids"] = true
+	writeJSON(w, http.StatusOK, QueryResult{Items: h.listDtos(r, user, items, fields, state), TotalRecordCount: len(items)})
 }
 
 func (h *Handler) itemCollections(w http.ResponseWriter, r *http.Request) {

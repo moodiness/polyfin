@@ -440,6 +440,40 @@ func TestSearchKeepsTheFolderATitleWasListedIn(t *testing.T) {
 	}
 }
 
+// A title is recorded with the catalog that listed it, whose addon decides
+// whether its artwork may be fetched from the local network.
+func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
+	e := newEnv(t)
+	search := []stremio.Extra{{Name: "search", IsRequired: true}}
+	e.install(addons.Shared(), &fakeAddon{
+		manifest: stremio.Manifest{ID: "shared", Name: "Shared", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
+			Catalogs: []stremio.Catalog{{Type: "movie", ID: "search", Name: "Search", Extra: search}}},
+		catalogs: map[string][]stremio.Meta{"movie/search": titles("movie", 1)},
+	})
+	server := httptest.NewServer(&fakeAddon{manifest: stremio.Manifest{ID: "own", Name: "Own", Version: "1",
+		Resources: []stremio.Resource{{Name: "catalog"}}, Catalogs: []stremio.Catalog{{Type: "movie", ID: "mine", Name: "Mine", Extra: search}}}})
+	t.Cleanup(server.Close)
+	own, err := e.addons.Install(t.Context(), addons.Personal(e.member.ID), server.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The member's own addon only reaches public addresses; its page comes
+	// from cache, as from an addon on a public host.
+	mine := stremio.Meta{ID: "tt-own", Type: "movie", Name: "movie own", Poster: "http://192.168.1.2/poster.jpg"}
+	e.service.pages.Put(pageKey{own.ID, "movie", "mine", "", "movie", 0}, []stremio.Meta{mine})
+	found, err := e.service.Search(t.Context(), e.member, "movie", []Kind{KindMovie}, 10)
+	if got := names(found); err != nil || !slices.Equal(got, []string{"movie 0", "movie own"}) {
+		t.Fatalf("search: %v %v", got, err)
+	}
+	r, err := e.service.load(t.Context(), found[1].ID)
+	if err != nil || r.Addon == nil || *r.Addon != own.ID || r.CatalogID != "mine" || !r.Confined {
+		t.Errorf("record of the member's title: %+v %v", r, err)
+	}
+	if _, confined, err := e.service.Artwork(t.Context(), found[1].ID, "Primary"); err != nil || !confined {
+		t.Errorf("artwork of the member's title: confined %t, %v", confined, err)
+	}
+}
+
 func TestUsersOnlyReachTheirLibraries(t *testing.T) {
 	e := newEnv(t)
 	addon := &fakeAddon{

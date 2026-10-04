@@ -630,6 +630,19 @@ get "/Videos/$ass/$ass/Subtitles/$srt_index/0/Stream.ass" >"$ass_out/srt-track.a
 jq --sort-keys . <<<"$statuses" >"$out/next-statuses.json"
 save next-error-bodies <<<"$error_bodies"
 
+# People and similar titles: someone credited in Sintel (an actor when it
+# has one) as an item, by name and in the people list, the titles apps list
+# on a person's page, and the titles similar to the test movie.
+credit=$(get "/Users/$user/Items/$sintel" | jq --exit-status --compact-output '(.People | map(select(.Type == "Actor")) + .)[0]')
+person=$(jq --exit-status --raw-output .Id <<<"$credit")
+person_name=$(jq --exit-status --raw-output .Name <<<"$credit")
+get "/Users/$user/Items/$person" | save person
+get "/Persons/$(uri "$person_name")?userId=$user" | save person-by-name
+get "/Persons?userId=$user&searchTerm=$(uri "$person_name")&limit=24" | save persons
+get "/Items?userId=$user&personIds=$person&recursive=true&includeItemTypes=Movie,Series&fields=ParentId,PrimaryImageAspectRatio&sortBy=PremiereDate,ProductionYear,SortName&sortOrder=Descending,Descending,Ascending&startIndex=0&limit=20" |
+	save person-titles
+get "/Items/$movie/Similar?userId=$user&limit=12&fields=PrimaryImageAspectRatio,CanDelete" | save similar
+
 echo "Fixtures written to $out"
 
 # Chapters, on a library of their own: an MKV whose chapters are titled,

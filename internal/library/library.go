@@ -335,12 +335,30 @@ func (s *Service) pagesAt(ctx context.Context, src source, offsets []int) ([][]s
 	return pages, group.Wait()
 }
 
+// listed is a title of a catalog, with the catalog that listed it.
+type listed struct {
+	meta stremio.Meta
+	src  source
+}
+
+// title describes a listed title as an item under parent, with the record
+// that finds it again through the catalog that listed it.
+func (l listed) title(parent accounts.ID) (Item, record, error) {
+	return titleItem(l.src.addon.addon.ID, l.src.catalog, l.meta, parent, l.src.addon.confined)
+}
+
 // merged interleaves several catalogs, one item of each in turn, without
-// duplicates, and returns the items [start, start+count) and the number of
-// items, plus one when more may follow.
-func (s *Service) merged(ctx context.Context, sources []source, start, count int) ([]stremio.Meta, int, error) {
+// duplicates, and returns the items [start, start+count), each with the
+// catalog that listed it first, and the number of items, plus one when
+// more may follow.
+func (s *Service) merged(ctx context.Context, sources []source, start, count int) ([]listed, int, error) {
 	if len(sources) == 1 {
-		return s.window(ctx, sources[0], start, count)
+		metas, total, err := s.window(ctx, sources[0], start, count)
+		result := make([]listed, 0, len(metas))
+		for _, meta := range metas {
+			result = append(result, listed{meta, sources[0]})
+		}
+		return result, total, err
 	}
 	need := start + count
 	per := need/len(sources) + 1
@@ -363,16 +381,16 @@ func (s *Service) merged(ctx context.Context, sources []source, start, count int
 			})
 		}
 		_ = group.Wait()
-		var result []stremio.Meta
+		var result []listed
 		seen := map[string]bool{}
 		for rank := 0; ; rank++ {
 			added := false
-			for _, list := range lists {
+			for i, list := range lists {
 				if rank < len(list) {
 					added = true
 					if !seen[list[rank].ID] {
 						seen[list[rank].ID] = true
-						result = append(result, list[rank])
+						result = append(result, listed{list[rank], sources[i]})
 					}
 				}
 			}
@@ -533,20 +551,13 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	}
 	total := len(nested)
 	if len(sources) > 0 {
-		metas, titles, err := s.merged(ctx, sources, max(start-len(nested), 0), count-len(items))
+		titles, listedTotal, err := s.merged(ctx, sources, max(start-len(nested), 0), count-len(items))
 		if err != nil {
 			return Page{}, err
 		}
-		total += titles
-		for _, meta := range metas {
-			catalog := sources[0].catalog
-			for _, src := range sources {
-				if src.catalog.Type == meta.Type {
-					catalog = src.catalog
-					break
-				}
-			}
-			item, rec, err := titleItem(addon.addon.ID, catalog, meta, r.ID, addon.confined)
+		total += listedTotal
+		for _, title := range titles {
+			item, rec, err := title.title(r.ID)
 			if err != nil {
 				continue
 			}
@@ -681,12 +692,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			item.Contents = contents(meta, nil, s.now())
 		}
 		// Apps show the credited people and open them by identifier.
-		credits := make([]record, 0, len(item.People))
-		for _, person := range item.People {
-			credits = append(credits, record{ID: person.ID, Key: personKey(person.Name), Kind: KindPerson,
-				Person: &Person{Name: person.Name, Image: person.Image}, Confined: r.Confined})
-		}
-		return item, s.save(ctx, credits)
+		return item, s.saveCredits(ctx, id, item.People, r.Confined)
 	case KindSeason, KindEpisode:
 		series, meta, err := s.series(ctx, v, r.seriesItemID())
 		if err != nil {
@@ -707,6 +713,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		}
 		return Item{}, ErrNotFound
 	case KindPerson:
+		if _, err := s.credited(ctx, v, r); err != nil {
+			return Item{}, err
+		}
 		return Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}}, nil
 	default:
 		return Item{}, ErrNotFound
@@ -930,20 +939,7 @@ func (s *Service) Search(ctx context.Context, user accounts.User, term string, k
 	var sources []source
 	for _, entry := range v.addons {
 		for _, catalog := range entry.addon.Manifest.Catalogs {
-			kind, ok := titleKind(catalog.Type)
-			if !ok || !slices.Contains(kinds, kind) {
-				continue
-			}
-			searchable := false
-			for _, extra := range catalog.Extra {
-				if extra.Name == "search" {
-					searchable = true
-				} else if extra.IsRequired && len(extra.Options) == 0 {
-					searchable = false
-					break
-				}
-			}
-			if searchable {
+			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchable(catalog) {
 				sources = append(sources, source{addon: entry, catalog: catalog, search: term})
 			}
 		}
@@ -951,21 +947,14 @@ func (s *Service) Search(ctx context.Context, user accounts.User, term string, k
 	if len(sources) == 0 {
 		return nil, nil
 	}
-	metas, _, err := s.merged(ctx, sources, 0, limit)
+	titles, _, err := s.merged(ctx, sources, 0, limit)
 	if err != nil {
 		return nil, err
 	}
 	var items []Item
 	var records []record
-	for _, meta := range metas {
-		src := sources[0]
-		for _, candidate := range sources {
-			if candidate.catalog.Type == meta.Type {
-				src = candidate
-				break
-			}
-		}
-		item, r, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined)
+	for _, title := range titles {
+		item, r, err := title.title(accounts.ID{})
 		if err != nil {
 			continue
 		}

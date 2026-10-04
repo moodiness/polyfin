@@ -32,6 +32,9 @@ type record struct {
 	Video    *stremio.Video `json:"video,omitempty"`
 	// Person is the name and photo of a person.
 	Person *Person `json:"person,omitempty"`
+	// Credits maps the titles a person is credited in, by item identifier,
+	// to their credits there ("Actor", "Director", "Writer").
+	Credits map[string][]string `json:"credits,omitempty"`
 	// Confined is true when the addon may only reach public addresses, which
 	// also applies to its artwork.
 	Confined bool `json:"confined,omitempty"`
@@ -90,4 +93,32 @@ func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	}
 	r.ID = id
 	return r, nil
+}
+
+// loadAll returns the records of the identifiers Polyfin knows, in no
+// particular order.
+func (s *Service) loadAll(ctx context.Context, ids []accounts.ID) ([]record, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, "SELECT id, key, data FROM items WHERE id = ANY($1::uuid[])", ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []record
+	for rows.Next() {
+		var r record
+		var id accounts.ID
+		var data []byte
+		if err := rows.Scan(&id, &r.Key, &data); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &r); err != nil {
+			return nil, err
+		}
+		r.ID = id
+		records = append(records, r)
+	}
+	return records, rows.Err()
 }
