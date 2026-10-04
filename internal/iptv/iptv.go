@@ -329,7 +329,7 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 	if err != nil {
 		return Source{}, err
 	}
-	index := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && !a.Stremio() })
+	index := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && a.IPTV() })
 	if index < 0 {
 		return Source{}, addons.ErrNotFound
 	}

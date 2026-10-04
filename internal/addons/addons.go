@@ -87,6 +87,9 @@ type Addon struct {
 // are asked for over HTTP.
 func (a Addon) Stremio() bool { return a.Kind == KindStremio }
 
+// IPTV reports whether the addon is one of Polyfin's own IPTV sources.
+func (a Addon) IPTV() bool { return a.Kind == KindM3U || a.Kind == KindXtream }
+
 // Eclipse reports whether the addon is an Eclipse music addon.
 func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
 

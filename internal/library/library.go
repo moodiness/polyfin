@@ -409,7 +409,7 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's catalog is one page, which it remembers itself
 	// until its list changes.
-	if !src.addon.addon.Stremio() {
+	if src.addon.addon.IPTV() {
 		if skip > 0 || src.genre != "" || src.search != "" || src.date != "" || s.iptv == nil {
 			return nil, nil
 		}
