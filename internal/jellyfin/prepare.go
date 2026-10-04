@@ -17,10 +17,10 @@ import (
 // near the end of the one playing.
 
 const (
-	// nextEpisodeLead is how long before an episode ends the next one is
-	// prepared: less than the ten minutes stream lists are cached, so they
-	// still are when it starts.
-	nextEpisodeLead = 9 * time.Minute
+	// maxNextEpisodeLead is how long before an episode ends the next one is
+	// prepared with version lists kept ten minutes, their default life (see
+	// nextEpisodeLead).
+	maxNextEpisodeLead = 9 * time.Minute
 	// maxPreparing, preparationsPerMinute and preparedFor bound the load
 	// preparations put on sources, some of which limit their rate: the
 	// preparations running at once over the server, those starting per user
@@ -162,11 +162,21 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 	})
 }
 
+// nextEpisodeLead is how long before an episode ends the next one is
+// prepared: a minute less than version lists are kept (the settings'
+// VersionListMinutes), so they still are when it starts, and at most
+// maxNextEpisodeLead; at least a minute all the same.
+func nextEpisodeLead(settings accounts.Settings) time.Duration {
+	life := time.Duration(settings.VersionListMinutes) * time.Minute
+	return max(min(maxNextEpisodeLead, life-time.Minute), time.Minute)
+}
+
 // prepareNearTheEnd prepares the episode after the one a user plays once
 // at most nextEpisodeLead of it is left. runtime is that of the version
 // playing; an unknown runtime prepares nothing.
 func (h *Handler) prepareNearTheEnd(user accounts.User, item library.Item, runtime, position time.Duration) {
-	if item.Kind != library.KindEpisode || runtime <= 0 || runtime-position > nextEpisodeLead || !h.Accounts.Settings().PrepareAhead {
+	settings := h.Accounts.Settings()
+	if item.Kind != library.KindEpisode || runtime <= 0 || runtime-position > nextEpisodeLead(settings) || !settings.PrepareAhead {
 		return
 	}
 	h.prepare(preparationKey{user: user.ID, title: item.ID, next: true}, func(ctx context.Context) {

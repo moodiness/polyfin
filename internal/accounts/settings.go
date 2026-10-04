@@ -33,6 +33,44 @@ const (
 	DefaultChannelLimit = 10000
 )
 
+// ErrInvalidPlayedPercent reports a PlayedPercent outside [MinPlayedPercent,
+// MaxPlayedPercent].
+var ErrInvalidPlayedPercent = errors.New("invalid played percent")
+
+// ErrInvalidResumePercent reports a ResumePercent outside [MinResumePercent,
+// MaxResumePercent].
+var ErrInvalidResumePercent = errors.New("invalid resume percent")
+
+// ErrResumeNotBelowPlayed reports a ResumePercent that is not below
+// PlayedPercent: no position would then keep a resume point.
+var ErrResumeNotBelowPlayed = errors.New("resume percent not below played percent")
+
+// ErrInvalidVersionListMinutes reports a VersionListMinutes outside
+// [MinVersionListMinutes, MaxVersionListMinutes].
+var ErrInvalidVersionListMinutes = errors.New("invalid version list minutes")
+
+// ErrInvalidCatalogRefreshMinutes reports a CatalogRefreshMinutes outside
+// [MinCatalogRefreshMinutes, MaxCatalogRefreshMinutes].
+var ErrInvalidCatalogRefreshMinutes = errors.New("invalid catalog refresh minutes")
+
+// The bounds and defaults of Settings.PlayedPercent, ResumePercent,
+// VersionListMinutes and CatalogRefreshMinutes. The percents default to
+// those of a Jellyfin server (MaxResumePct and MinResumePct).
+const (
+	MinPlayedPercent             = 50
+	MaxPlayedPercent             = 100
+	DefaultPlayedPercent         = 90
+	MinResumePercent             = 0
+	MaxResumePercent             = 50
+	DefaultResumePercent         = 5
+	MinVersionListMinutes        = 1
+	MaxVersionListMinutes        = 360
+	DefaultVersionListMinutes    = 10
+	MinCatalogRefreshMinutes     = 1
+	MaxCatalogRefreshMinutes     = 1440
+	DefaultCatalogRefreshMinutes = 10
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -74,13 +112,30 @@ type Settings struct {
 	// ChannelLimit is how many items one read of a live TV catalog fetches
 	// at most: its channels, or one day of its guide.
 	ChannelLimit int
+	// SkipButtons finds the parts of titles apps offer to skip (intro,
+	// recap, credits) in the segment databases; off, titles have none.
+	SkipButtons bool
+	// SimilarTitles lists titles close to a movie or series from the
+	// addons' catalogs; off, titles have none.
+	SimilarTitles bool
+	// PlayedPercent is how far into a title, in percent of its runtime, a
+	// reported position marks it played; ResumePercent is how far it must
+	// be to keep a resume point. ResumePercent is below PlayedPercent.
+	PlayedPercent int
+	ResumePercent int
+	// VersionListMinutes is how long a title's version and subtitle lists
+	// from the addons are kept.
+	VersionListMinutes int
+	// CatalogRefreshMinutes is how long catalog pages are kept.
+	CatalogRefreshMinutes int
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
-			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit)
+			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
+			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes)
 	return settings, err
 }
 
@@ -105,10 +160,26 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.ChannelLimit < MinChannelLimit || settings.ChannelLimit > MaxChannelLimit {
 		return Settings{}, ErrInvalidChannelLimit
 	}
+	if settings.PlayedPercent < MinPlayedPercent || settings.PlayedPercent > MaxPlayedPercent {
+		return Settings{}, ErrInvalidPlayedPercent
+	}
+	if settings.ResumePercent < MinResumePercent || settings.ResumePercent > MaxResumePercent {
+		return Settings{}, ErrInvalidResumePercent
+	}
+	if settings.ResumePercent >= settings.PlayedPercent {
+		return Settings{}, ErrResumeNotBelowPlayed
+	}
+	if settings.VersionListMinutes < MinVersionListMinutes || settings.VersionListMinutes > MaxVersionListMinutes {
+		return Settings{}, ErrInvalidVersionListMinutes
+	}
+	if settings.CatalogRefreshMinutes < MinCatalogRefreshMinutes || settings.CatalogRefreshMinutes > MaxCatalogRefreshMinutes {
+		return Settings{}, ErrInvalidCatalogRefreshMinutes
+	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
-		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit)
+		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
+		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes)
 	if err != nil {
 		return Settings{}, err
 	}

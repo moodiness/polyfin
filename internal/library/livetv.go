@@ -115,7 +115,7 @@ func (s *Service) channel(v view, r record) (Item, error) {
 // one: Stremio's Native EPG, where a live TV catalog asked for a UTC day
 // lists its channels with that day's programmes. Only the days from
 // yesterday to guideDays ahead are asked for, each day's pages once in a
-// while (see pageTTL).
+// while (see catalogLife).
 func (s *Service) Programs(ctx context.Context, user accounts.User, from, to time.Time) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {

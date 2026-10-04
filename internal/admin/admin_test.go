@@ -253,6 +253,79 @@ func TestSettingsCatalogLimits(t *testing.T) {
 	}
 }
 
+func TestSettingsContent(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	defaults := map[string]any{"skipButtons": true, "similarTitles": true, "playedPercent": float64(90), "resumePercent": float64(5),
+		"versionListMinutes": float64(10), "catalogRefreshMinutes": float64(10)}
+	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
+	for key, want := range defaults {
+		if body[key] != want {
+			t.Errorf("default %s: %v, want %v", key, body[key], want)
+		}
+	}
+	base := func() map[string]any {
+		return map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
+	}
+	saved := map[string]any{"skipButtons": false, "similarTitles": false, "playedPercent": float64(95), "resumePercent": float64(20),
+		"versionListMinutes": float64(60), "catalogRefreshMinutes": float64(720)}
+	settings := base()
+	for key, value := range saved {
+		settings[key] = value
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
+		t.Fatalf("saving: %d %v", status, body)
+	}
+	_, body, _ = administrator.call(http.MethodGet, "/settings", nil)
+	for key, want := range saved {
+		if body[key] != want {
+			t.Errorf("saved %s: %v, want %v", key, body[key], want)
+		}
+	}
+	// A save that leaves them out keeps them.
+	status, body, _ := administrator.call(http.MethodPut, "/settings", base())
+	if status != http.StatusOK {
+		t.Fatalf("saving without them: %d %v", status, body)
+	}
+	for key, want := range saved {
+		if body[key] != want {
+			t.Errorf("saved without them, %s: %v, want %v", key, body[key], want)
+		}
+	}
+	changed := base()
+	changed["versionListMinutes"] = 5
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", changed); status != http.StatusOK ||
+		body["versionListMinutes"] != float64(5) || body["catalogRefreshMinutes"] != float64(720) || body["playedPercent"] != float64(95) ||
+		body["resumePercent"] != float64(20) || body["skipButtons"] != false || body["similarTitles"] != false {
+		t.Errorf("saving the list life only: %d %v", status, body)
+	}
+	for _, tc := range []struct {
+		values map[string]any
+		code   string
+	}{
+		{map[string]any{"playedPercent": accounts.MinPlayedPercent - 1}, "invalid_played_percent"},
+		{map[string]any{"playedPercent": accounts.MaxPlayedPercent + 1}, "invalid_played_percent"},
+		{map[string]any{"resumePercent": accounts.MinResumePercent - 1}, "invalid_resume_percent"},
+		{map[string]any{"resumePercent": accounts.MaxResumePercent + 1}, "invalid_resume_percent"},
+		{map[string]any{"playedPercent": 50, "resumePercent": 50}, "resume_not_below_played"},
+		{map[string]any{"versionListMinutes": accounts.MinVersionListMinutes - 1}, "invalid_version_list_minutes"},
+		{map[string]any{"versionListMinutes": accounts.MaxVersionListMinutes + 1}, "invalid_version_list_minutes"},
+		{map[string]any{"catalogRefreshMinutes": accounts.MinCatalogRefreshMinutes - 1}, "invalid_catalog_refresh_minutes"},
+		{map[string]any{"catalogRefreshMinutes": accounts.MaxCatalogRefreshMinutes + 1}, "invalid_catalog_refresh_minutes"},
+	} {
+		refused := base()
+		for key, value := range tc.values {
+			refused[key] = value
+		}
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != tc.code {
+			t.Errorf("%v: %d %v", tc.values, status, body)
+		}
+	}
+	if got := api.store.Settings(); got.PlayedPercent != 95 || got.ResumePercent != 20 || got.VersionListMinutes != 5 || got.CatalogRefreshMinutes != 720 {
+		t.Errorf("a refused value changed the settings: %+v", got)
+	}
+}
+
 func TestAccessRequiresTheRightRole(t *testing.T) {
 	api := newTestAPI(t, 10)
 	anonymous := api.browser()

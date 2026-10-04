@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	pageTTL     = 10 * time.Minute
 	metaTTL     = 6 * time.Hour
 	pageFetches = 4 // catalog pages of one catalog fetched at once
 	// catalogFetches bounds the catalogs merged reads at once.
@@ -74,24 +73,38 @@ type metaKey struct {
 }
 
 // New returns a library service. settings returns the server settings, of
-// which it uses the language and the catalog limits; they are read for
-// every request, so a change applies at once.
+// which it uses the language, the catalog limits and how long catalog
+// pages and version lists are kept; they are read for every request, so a
+// change applies at once.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
-	return &Service{
+	s := &Service{
 		db:            db,
 		addons:        store,
 		client:        client,
 		logger:        logger,
 		now:           time.Now,
 		settings:      settings,
-		pages:         cache.New[pageKey, []stremio.Meta](4000, pageTTL),
 		metas:         cache.New[metaKey, stremio.Meta](4000, metaTTL),
-		streamLists:   cache.New[streamKey, []stremio.Stream](2000, streamsTTL),
-		subtitleLists: cache.New[streamKey, []stremio.Subtitle](2000, streamsTTL),
 		versions:      cache.New[accounts.ID, Version](20000, versionsTTL),
 		ratingLookups: make(chan struct{}, ratingFetches),
 		ratingWait:    ratingWait,
 	}
+	clock := func() time.Time { return s.now() }
+	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
+	s.streamLists = cache.NewLasting[streamKey, []stremio.Stream](2000, s.listLife, clock)
+	s.subtitleLists = cache.NewLasting[streamKey, []stremio.Subtitle](2000, s.listLife, clock)
+	return s
+}
+
+// catalogLife is how long catalog pages are kept, and listLife how long a
+// title's version and subtitle lists from the addons are: the settings'
+// CatalogRefreshMinutes and VersionListMinutes.
+func (s *Service) catalogLife() time.Duration {
+	return time.Duration(s.settings().CatalogRefreshMinutes) * time.Minute
+}
+
+func (s *Service) listLife() time.Duration {
+	return time.Duration(s.settings().VersionListMinutes) * time.Minute
 }
 
 // words returns the generated names in the current server language.

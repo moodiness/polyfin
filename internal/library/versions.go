@@ -14,10 +14,8 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-const (
-	streamsTTL  = 10 * time.Minute
-	versionsTTL = 12 * time.Hour
-)
+// versionsTTL is how long a version listed stays known by its identifier.
+const versionsTTL = 12 * time.Hour
 
 // Version is a stream of a movie or an episode, one of its versions in
 // Jellyfin apps.

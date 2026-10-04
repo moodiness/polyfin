@@ -212,6 +212,52 @@ func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
 	}
 }
 
+func TestNextEpisodeLeadFollowsTheVersionListLife(t *testing.T) {
+	for minutes, want := range map[int]time.Duration{
+		accounts.DefaultVersionListMinutes: 9 * time.Minute,
+		accounts.MaxVersionListMinutes:     9 * time.Minute,
+		5:                                  4 * time.Minute,
+		2:                                  time.Minute,
+		accounts.MinVersionListMinutes:     time.Minute,
+	} {
+		if got := nextEpisodeLead(accounts.Settings{VersionListMinutes: minutes}); got != want {
+			t.Errorf("lists kept %d minutes: lead %v, want %v", minutes, got, want)
+		}
+	}
+
+	probe := newFakeProbe(t, true)
+	tr := trackingOn(t, newProbingServer(t, 10, probe.path))
+	t.Cleanup(func() { tr.settle(t) })
+	if _, err := tr.addons.Install(t.Context(), addons.Shared(), episodeStreams(t), false); err != nil {
+		t.Fatal(err)
+	}
+	member, err := tr.store.Authenticate(t.Context(), "member", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, _ := accounts.ParseID(tr.episodes[1])
+	tr.setting(t, func(s *accounts.Settings) { s.PrepareAhead, s.VersionListMinutes = true, 5 })
+	// The first episode lasts 45 minutes; with lists kept 5 minutes, the
+	// next one is prepared 4 minutes before its end, not 9.
+	progress := func(position time.Duration) {
+		t.Helper()
+		tr.report(t, "/Sessions/Playing/Progress", map[string]any{"ItemId": tr.episodes[0], "PositionTicks": int64(position / 100), "PlayMethod": "DirectPlay"})
+		tr.settle(t)
+	}
+	listed := func() int {
+		versions, _ := tr.library.CachedVersions(t.Context(), member, next)
+		return len(versions)
+	}
+	progress(37 * time.Minute)
+	if listed() != 0 || probe.runs() != 0 {
+		t.Fatalf("8 minutes left: %d versions listed, %d runs", listed(), probe.runs())
+	}
+	progress(41*time.Minute + 30*time.Second)
+	if listed() != 2 || probe.runs() != 1 {
+		t.Errorf("3m30 left: %d versions listed, %d runs", listed(), probe.runs())
+	}
+}
+
 func TestEpisodeAfter(t *testing.T) {
 	episode := func(id byte, season int, available bool) library.Item {
 		return library.Item{ID: accounts.ID{id}, Kind: library.KindEpisode, ParentIndexNumber: season, Available: available}

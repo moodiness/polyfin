@@ -103,6 +103,8 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	}
 	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr", Chapters: false, PrepareAhead: true,
 		CatalogLimit: 5000, ChannelLimit: 30000}
+	want.PlayedPercent, want.ResumePercent = DefaultPlayedPercent, DefaultResumePercent
+	want.VersionListMinutes, want.CatalogRefreshMinutes = DefaultVersionListMinutes, DefaultCatalogRefreshMinutes
 	if _, err := store.UpdateSettings(ctx, want); err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +163,76 @@ func TestSettingsKeepCatalogLimitsInRange(t *testing.T) {
 		if got := reopened.Settings(); got.CatalogLimit != limits[0] || got.ChannelLimit != limits[1] {
 			t.Errorf("limits %v after reopening: %d and %d", limits, got.CatalogLimit, got.ChannelLimit)
 		}
+	}
+}
+
+func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	defaults := store.Settings()
+	if !defaults.SkipButtons || !defaults.SimilarTitles || defaults.PlayedPercent != 90 || defaults.ResumePercent != 5 ||
+		defaults.VersionListMinutes != 10 || defaults.CatalogRefreshMinutes != 10 {
+		t.Errorf("defaults: %+v", defaults)
+	}
+	if DefaultPlayedPercent != 90 || DefaultResumePercent != 5 || DefaultVersionListMinutes != 10 || DefaultCatalogRefreshMinutes != 10 {
+		t.Error("the default constants are not today's behavior")
+	}
+	want := defaults
+	want.SkipButtons, want.SimilarTitles = false, false
+	want.PlayedPercent, want.ResumePercent = 95, 20
+	want.VersionListMinutes, want.CatalogRefreshMinutes = 60, 720
+	if _, err := store.UpdateSettings(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Settings(); got != want {
+		t.Errorf("after reopening: %+v, want %+v", got, want)
+	}
+
+	for _, tc := range []struct {
+		name                    string
+		played, resume          int
+		versionList, catalogRef int
+		err                     error
+	}{
+		{"played below its range", MinPlayedPercent - 1, 5, 10, 10, ErrInvalidPlayedPercent},
+		{"played above its range", MaxPlayedPercent + 1, 5, 10, 10, ErrInvalidPlayedPercent},
+		{"resume below its range", 90, MinResumePercent - 1, 10, 10, ErrInvalidResumePercent},
+		{"resume above its range", 90, MaxResumePercent + 1, 10, 10, ErrInvalidResumePercent},
+		{"resume equal to played", 50, 50, 10, 10, ErrResumeNotBelowPlayed},
+		{"version lists below their range", 90, 5, MinVersionListMinutes - 1, 10, ErrInvalidVersionListMinutes},
+		{"version lists above their range", 90, 5, MaxVersionListMinutes + 1, 10, ErrInvalidVersionListMinutes},
+		{"catalogs below their range", 90, 5, 10, MinCatalogRefreshMinutes - 1, ErrInvalidCatalogRefreshMinutes},
+		{"catalogs above their range", 90, 5, 10, MaxCatalogRefreshMinutes + 1, ErrInvalidCatalogRefreshMinutes},
+	} {
+		changed := store.Settings()
+		changed.PlayedPercent, changed.ResumePercent = tc.played, tc.resume
+		changed.VersionListMinutes, changed.CatalogRefreshMinutes = tc.versionList, tc.catalogRef
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, tc.err) {
+			t.Errorf("%s: got %v, want %v", tc.name, err, tc.err)
+		}
+	}
+	if got := store.Settings(); got != want {
+		t.Errorf("a refused update changed the settings: %+v", got)
+	}
+	for _, bounds := range [][4]int{
+		{MinPlayedPercent, MinResumePercent, MinVersionListMinutes, MinCatalogRefreshMinutes},
+		{MaxPlayedPercent, MaxResumePercent, MaxVersionListMinutes, MaxCatalogRefreshMinutes},
+		{MinPlayedPercent, MinPlayedPercent - 1, 10, 10},
+	} {
+		changed := store.Settings()
+		changed.PlayedPercent, changed.ResumePercent, changed.VersionListMinutes, changed.CatalogRefreshMinutes = bounds[0], bounds[1], bounds[2], bounds[3]
+		if _, err := store.UpdateSettings(ctx, changed); err != nil {
+			t.Errorf("bounds %v: %v", bounds, err)
+		}
+	}
+	// The database refuses what the store would, should anything else
+	// write the settings.
+	if _, err := store.db.Exec(ctx, "UPDATE settings SET resume_percent = 50, played_percent = 50"); err == nil {
+		t.Error("the database took a resume percent equal to the played percent")
 	}
 }
 

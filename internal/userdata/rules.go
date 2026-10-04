@@ -2,13 +2,18 @@ package userdata
 
 import "time"
 
-// The thresholds of a Jellyfin server's default configuration
-// (MinResumePct, MaxResumePct and MinResumeDurationSeconds).
-const (
-	minResumePercent  = 5
-	maxResumePercent  = 90
-	minResumeDuration = 5 * time.Minute
-)
+// minResumeDuration is the runtime under which an item is played as soon
+// as it is past its start, as on a Jellyfin server with its default
+// configuration (MinResumeDurationSeconds).
+const minResumeDuration = 5 * time.Minute
+
+// Thresholds are how far into an item, in percent of its runtime, a
+// position must be to keep a resume point (Resume) and to mark it played
+// (Played): Jellyfin's MinResumePct and MaxResumePct, which the server
+// settings choose. Resume is below Played.
+type Thresholds struct {
+	Resume, Played int
+}
 
 // Start records that playback began at now: one more play.
 func (d *Data) Start(now time.Time) {
@@ -17,11 +22,12 @@ func (d *Data) Start(now time.Time) {
 }
 
 // Reach records the position a player reported while playing or when it
-// stopped, against the runtime of what it played. Near the start there is
-// nothing to resume; near the end, or anywhere past the start of a short
-// item, the item is played and there is nothing to resume either. Without
-// a runtime, the position is kept as it is.
-func (d *Data) Reach(position, runtime time.Duration) {
+// stopped, against the runtime of what it played. Near the start (before
+// the Resume threshold) there is nothing to resume; near the end (past the
+// Played threshold), or anywhere past the start of a short item, the item
+// is played and there is nothing to resume either. Without a runtime, the
+// position is kept as it is.
+func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
 	d.Runtime = runtime
 	if runtime <= 0 {
 		d.Position = max(position, 0)
@@ -29,9 +35,9 @@ func (d *Data) Reach(position, runtime time.Duration) {
 	}
 	percent := float64(position) / float64(runtime) * 100
 	switch {
-	case percent < minResumePercent:
+	case percent < float64(thresholds.Resume):
 		d.Position = 0
-	case percent > maxResumePercent || runtime < minResumeDuration:
+	case percent > float64(thresholds.Played) || runtime < minResumeDuration:
 		d.Position = 0
 		d.Played = true
 	default:

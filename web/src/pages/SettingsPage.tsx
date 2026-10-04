@@ -2,11 +2,15 @@ import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   catalogLimitRange,
+  catalogRefreshMinutesRange,
   channelLimitRange,
   fetchSettings,
+  playedPercentRange,
   queryClient,
   queryKeys,
+  resumePercentRange,
   saveSettings,
+  versionListMinutesRange,
   type Settings,
 } from '@/api'
 import {
@@ -47,6 +51,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const languageId = useId()
   const playbackId = useId()
   const catalogsId = useId()
+  const contentId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -154,6 +159,48 @@ function SettingsForm({ initial }: { initial: Settings }) {
               onChange={(downloads) => update({ downloads })}
             />
           </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={contentId}>
+            <h2 id={contentId} className="text-sm font-semibold text-white">
+              {t.settings.contentTitle}
+            </h2>
+            <Checkbox
+              label={t.settings.skipButtons}
+              help={t.settings.skipButtonsHelp}
+              checked={form.skipButtons}
+              onChange={(skipButtons) => update({ skipButtons })}
+            />
+            <Checkbox
+              label={t.settings.similarTitles}
+              help={t.settings.similarTitlesHelp}
+              checked={form.similarTitles}
+              onChange={(similarTitles) => update({ similarTitles })}
+            />
+            <TextField
+              label={t.settings.playedPercent}
+              hint={t.settings.playedPercentHelp}
+              type="number"
+              inputMode="numeric"
+              min={playedPercentRange.min}
+              max={playedPercentRange.max}
+              step={1}
+              value={form.playedPercent || ''}
+              onValue={(value) => update({ playedPercent: Math.trunc(Number(value)) })}
+              required
+            />
+            <TextField
+              label={t.settings.resumePercent}
+              hint={t.settings.resumePercentHelp}
+              type="number"
+              inputMode="numeric"
+              min={resumePercentRange.min}
+              max={resumePercentRange.max}
+              step={1}
+              // 0 is a valid threshold: it is shown, not left blank.
+              value={form.resumePercent}
+              onValue={(value) => update({ resumePercent: Math.trunc(Number(value)) })}
+              required
+            />
+          </section>
           <section className="space-y-4 border-t border-line pt-6" aria-labelledby={catalogsId}>
             <h2 id={catalogsId} className="text-sm font-semibold text-white">
               {t.settings.catalogsTitle}
@@ -180,6 +227,30 @@ function SettingsForm({ initial }: { initial: Settings }) {
               step={1}
               value={form.channelLimit || ''}
               onValue={(value) => update({ channelLimit: Math.trunc(Number(value)) })}
+              required
+            />
+            <TextField
+              label={t.settings.versionListMinutes}
+              hint={t.settings.versionListMinutesHelp}
+              type="number"
+              inputMode="numeric"
+              min={versionListMinutesRange.min}
+              max={versionListMinutesRange.max}
+              step={1}
+              value={form.versionListMinutes || ''}
+              onValue={(value) => update({ versionListMinutes: Math.trunc(Number(value)) })}
+              required
+            />
+            <TextField
+              label={t.settings.catalogRefreshMinutes}
+              hint={t.settings.catalogRefreshMinutesHelp}
+              type="number"
+              inputMode="numeric"
+              min={catalogRefreshMinutesRange.min}
+              max={catalogRefreshMinutesRange.max}
+              step={1}
+              value={form.catalogRefreshMinutes || ''}
+              onValue={(value) => update({ catalogRefreshMinutes: Math.trunc(Number(value)) })}
               required
             />
           </section>

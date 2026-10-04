@@ -69,6 +69,16 @@ const fr: Messages = {
       'Le nombre de titres lus par catalogue doit être un nombre entier de 100 à 20 000.',
     invalid_channel_limit:
       'Le nombre de chaînes lues par catalogue de TV en direct doit être un nombre entier de 100 à 50 000.',
+    invalid_played_percent:
+      'Le pourcentage « Marqué comme vu après » doit être un nombre entier de 50 à 100.',
+    invalid_resume_percent:
+      'Le pourcentage « Point de reprise gardé après » doit être un nombre entier de 0 à 50.',
+    resume_not_below_played:
+      'Le pourcentage « Point de reprise gardé après » doit être plus petit que « Marqué comme vu après ».',
+    invalid_version_list_minutes:
+      'La durée de conservation des listes de versions doit être un nombre entier de minutes de 1 à 360.',
+    invalid_catalog_refresh_minutes:
+      'Le délai de rafraîchissement des catalogues doit être un nombre entier de minutes de 1 à 1 440.',
     parental_control:
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
@@ -264,6 +274,25 @@ const fr: Messages = {
     channelLimit: 'Chaînes lues par catalogue de TV en direct',
     channelLimitHelp:
       'Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De 100 à 50 000 ; 10 000 par défaut.',
+    contentTitle: 'Contenu',
+    skipButtons: 'Boutons « Passer l’intro » et « Passer le générique »',
+    skipButtonsHelp:
+      'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
+    similarTitles: 'Titres similaires',
+    similarTitlesHelp:
+      'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
+    playedPercent: 'Marqué comme vu après (%)',
+    playedPercentHelp:
+      'Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De 50 à 100 ; 90 par défaut, comme dans Jellyfin.',
+    resumePercent: 'Point de reprise gardé après (%)',
+    resumePercentHelp:
+      'L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de « Marqué comme vu après ». De 0 à 50 ; 5 par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.',
+    versionListMinutes: 'Garder les listes de versions pendant (minutes)',
+    versionListMinutesHelp:
+      'Combien de temps Polyfin garde les versions et les sous-titres que les addons donnent pour un titre. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De 1 à 360 ; 10 par défaut.',
+    catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
+    catalogRefreshMinutesHelp:
+      'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',
     saved: 'Paramètres enregistrés.',
   },
   stremioTypes: {

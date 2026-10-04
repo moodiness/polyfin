@@ -399,12 +399,14 @@ func (h *Handler) track(ctx context.Context, user accounts.User, event playbackE
 		h.prepareNearTheEnd(user, item, runtime, state.Position)
 	}
 	now := time.Now().UTC()
+	settings := h.Accounts.Settings()
+	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}
 	_, err = h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
 		switch {
 		case event == playbackStarted:
 			d.Start(now)
 		case positionKnown:
-			d.Reach(state.Position, runtime)
+			d.Reach(state.Position, runtime, thresholds)
 		case event == playbackStopped:
 			d.Finish()
 		}

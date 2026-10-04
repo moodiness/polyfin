@@ -38,7 +38,7 @@ func TestDataIsKeptPerUser(t *testing.T) {
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	changed, err := store.Change(t.Context(), alice, []Item{{ID: movie}}, func(d *Data) {
 		d.Start(now)
-		d.Reach(time.Hour, 2*time.Hour)
+		d.Reach(time.Hour, 2*time.Hour, jellyfin)
 		d.Favorite = true
 		d.Like(true)
 	})
@@ -75,7 +75,7 @@ func TestSeriesAndSeasonsCountTheirEpisodes(t *testing.T) {
 	}
 	// A started episode is not played, but can be resumed.
 	if _, err := store.Change(t.Context(), alice, []Item{{ID: accounts.ID{4}, Series: series, Season: second}}, func(d *Data) {
-		d.Reach(time.Minute*10, time.Hour)
+		d.Reach(time.Minute*10, time.Hour, jellyfin)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestListsFollowWhatUsersDid(t *testing.T) {
 		t.Helper()
 		if _, err := store.Change(t.Context(), alice, []Item{{ID: id}}, func(d *Data) {
 			d.Start(at)
-			d.Reach(time.Hour, 2*time.Hour)
+			d.Reach(time.Hour, 2*time.Hour, jellyfin)
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -104,7 +104,7 @@ func TestListsFollowWhatUsersDid(t *testing.T) {
 	resume(accounts.ID{1}, start)
 	resume(accounts.ID{2}, start.Add(time.Hour))
 	// A position reported without a start has no date: it comes last.
-	if _, err := store.Change(t.Context(), alice, []Item{{ID: accounts.ID{3}}}, func(d *Data) { d.Reach(time.Hour, 2*time.Hour) }); err != nil {
+	if _, err := store.Change(t.Context(), alice, []Item{{ID: accounts.ID{3}}}, func(d *Data) { d.Reach(time.Hour, 2*time.Hour, jellyfin) }); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Change(t.Context(), alice, []Item{{ID: accounts.ID{4}}}, func(d *Data) { d.Favorite = true; d.Played = true }); err != nil {
