@@ -52,6 +52,8 @@ type record struct {
 	Genres  *[]string  `json:"genres,omitempty"`
 	// EpisodeTitle is the episode title of a programme from an XMLTV guide.
 	EpisodeTitle string `json:"episodeTitle,omitempty"`
+	// Music describes an item of an Eclipse addon (see music.go).
+	Music *musicEntry `json:"music,omitempty"`
 }
 
 func (s *Service) save(ctx context.Context, records []record) error {
@@ -86,6 +88,34 @@ func (s *Service) save(ctx context.Context, records []record) error {
 		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[])
 		ON CONFLICT (id) DO UPDATE SET data = `+keptData+`, updated_at = now()
 		WHERE items.data IS DISTINCT FROM `+keptData, ids, keys, kinds, data)
+	return err
+}
+
+// saveNew stores the records of identifiers Polyfin does not know yet,
+// leaving those it knows as they are: the albums and artists a track names
+// stand in for them only until Polyfin learns more of them.
+func (s *Service) saveNew(ctx context.Context, records []record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]accounts.ID, 0, len(records))
+	keys := make([]string, 0, len(records))
+	kinds := make([]string, 0, len(records))
+	data := make([]string, 0, len(records))
+	seen := map[accounts.ID]bool{}
+	for _, r := range records {
+		if seen[r.ID] {
+			continue
+		}
+		seen[r.ID] = true
+		encoded, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
+	}
+	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT (id) DO NOTHING`, ids, keys, kinds, data)
 	return err
 }
 

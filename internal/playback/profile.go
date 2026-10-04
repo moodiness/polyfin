@@ -8,11 +8,14 @@ type DeviceProfile struct {
 	Name                string
 	MaxStreamingBitrate *int64 `json:",omitempty"`
 	MaxStaticBitrate    *int64 `json:",omitempty"`
-	DirectPlayProfiles  []DirectPlayProfile
-	TranscodingProfiles []TranscodingProfile
-	ContainerProfiles   []ContainerProfile
-	CodecProfiles       []CodecProfile
-	SubtitleProfiles    []SubtitleProfile
+	// MusicStreamingTranscodingBitrate is the bitrate tracks are converted
+	// to when streamed.
+	MusicStreamingTranscodingBitrate *int64 `json:",omitempty"`
+	DirectPlayProfiles               []DirectPlayProfile
+	TranscodingProfiles              []TranscodingProfile
+	ContainerProfiles                []ContainerProfile
+	CodecProfiles                    []CodecProfile
+	SubtitleProfiles                 []SubtitleProfile
 }
 
 // DirectPlayProfile is a combination of container and codecs the app plays

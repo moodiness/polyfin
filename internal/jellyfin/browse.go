@@ -285,6 +285,12 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	if term := strings.TrimSpace(query(r, "searchTerm")); term != "" {
 		found, err := h.Library.Search(r.Context(), user, term, searchKinds(keep), max(start, 0)+limit)
+		// Then what the user's music addons find.
+		if kinds := musicSearchKinds(keep); err == nil && len(kinds) > 0 {
+			var music []library.Item
+			music, err = h.Library.SearchMusic(r.Context(), user, term, kinds, max(start, 0)+limit)
+			found = append(found, music...)
+		}
 		if err != nil {
 			h.browseError(w, r, err)
 			return
@@ -308,6 +314,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
+		return
+	}
+	if h.musicListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
 	if h.collectionListing(w, r, user, parent, hasParent, start, limit) {
@@ -435,17 +444,36 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []BaseItemDto{})
 		return
 	}
-	page, err := h.Library.Children(r.Context(), user, parent, 0, limit, "")
-	if errors.Is(err, library.ErrNotFound) {
-		writeJSON(w, http.StatusOK, []BaseItemDto{})
+	var items []library.Item
+	if folder, err := h.Library.MusicFolder(r.Context(), user, parent); err != nil {
+		h.internalError(w, r, err)
 		return
+	} else if folder {
+		// Jellyfin groups the latest songs by album, whatever the types
+		// asked for: a music library's latest are its albums, in its row's
+		// order, else its row's items.
+		items, err = h.Library.Music(r.Context(), user, library.MusicQuery{Parent: parent, Kinds: []library.Kind{library.KindAlbum}, Recursive: true, Shallow: true})
+		if err == nil && len(items) == 0 {
+			items, err = h.Library.Music(r.Context(), user, library.MusicQuery{Parent: parent})
+		}
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		items = items[:min(len(items), limit)]
+	} else {
+		page, err := h.Library.Children(r.Context(), user, parent, 0, limit, "")
+		if errors.Is(err, library.ErrNotFound) {
+			writeJSON(w, http.StatusOK, []BaseItemDto{})
+			return
+		}
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		keep := itemTypeFilter(r)
+		items = slices.DeleteFunc(slices.Clone(page.Items), func(item library.Item) bool { return !keep(item) })
 	}
-	if err != nil {
-		h.browseError(w, r, err)
-		return
-	}
-	keep := itemTypeFilter(r)
-	items := slices.DeleteFunc(slices.Clone(page.Items), func(item library.Item) bool { return !keep(item) })
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {
 		h.internalError(w, r, err)

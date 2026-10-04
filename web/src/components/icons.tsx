@@ -147,6 +147,13 @@ export const icons = {
       <path d="m5 12.5 4.5 4.5L19 7.5" />
     </Icon>
   ),
+  music: (props: IconProps) => (
+    <Icon {...props}>
+      <path d="M9 18V6l10-2v12" />
+      <circle cx="6.5" cy="18" r="2.5" />
+      <circle cx="16.5" cy="16" r="2.5" />
+    </Icon>
+  ),
   alert: (props: IconProps) => (
     <Icon {...props}>
       <path d="M12 4 21 19.5H3L12 4Z" />

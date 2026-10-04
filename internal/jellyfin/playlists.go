@@ -369,6 +369,19 @@ func (h *Handler) playlistItems(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A music addon's playlist lists its tracks.
+	if folder, err := h.Library.MusicFolder(r.Context(), user, id); err == nil && folder {
+		tracks, err := h.Library.Music(r.Context(), user, library.MusicQuery{Parent: id})
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		if limit < 0 {
+			limit = len(tracks)
+		}
+		h.writeMusic(w, r, user, tracks, start, limit, nil)
+		return
+	}
 	p, ok := h.visiblePlaylist(w, r, user, id)
 	if !ok {
 		return

@@ -143,6 +143,26 @@ type BaseItemDto struct {
 	ChannelType            string       `json:",omitempty"`
 	// EpisodeTitle is the title of the episode a programme airs.
 	EpisodeTitle string `json:",omitempty"`
+	// The fields of music (see describeMusic): a track's album and its
+	// artwork, the artists of a track or an album and the artist of its
+	// album, whether a track has lyrics, and what an artist's page counts.
+	Album                string          `json:",omitempty"`
+	AlbumId              string          `json:",omitempty"`
+	AlbumPrimaryImageTag string          `json:",omitempty"`
+	AlbumArtist          string          `json:",omitempty"`
+	AlbumArtists         *[]NameGuidPair `json:",omitempty"`
+	ArtistItems          *[]NameGuidPair `json:",omitempty"`
+	Artists              *[]string       `json:",omitempty"`
+	HasLyrics            *bool           `json:",omitempty"`
+	SongCount            *int            `json:",omitempty"`
+	AlbumCount           *int            `json:",omitempty"`
+	ArtistCount          *int            `json:",omitempty"`
+	MovieCount           *int            `json:",omitempty"`
+	SeriesCount          *int            `json:",omitempty"`
+	EpisodeCount         *int            `json:",omitempty"`
+	TrailerCount         *int            `json:",omitempty"`
+	MusicVideoCount      *int            `json:",omitempty"`
+	ProgramCount         *int            `json:",omitempty"`
 	// Container, MediaSources, MediaStreams, HasSubtitles, Width, Height
 	// and Trickplay describe a movie's or episode's versions.
 	Container    string                  `json:",omitempty"`
@@ -172,6 +192,10 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	if item.Kind == library.KindChannel && detail {
 		dto.MediaSources = &[]MediaSourceInfo{channelPlaceholder(item)}
 		dto.MediaStreams = &[]playback.MediaStream{}
+		return
+	}
+	if library.AudioKind(item.Kind) {
+		h.addAudioSources(r, user, dto, item, detail)
 		return
 	}
 	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindRecording {
@@ -264,13 +288,19 @@ var itemTypes = map[library.Kind]string{
 	library.KindChannel:    "TvChannel",
 	library.KindProgram:    "Program",
 	// Jellyfin's recordings are videos of its recordings folders.
-	library.KindRecording: "Video",
+	library.KindRecording:     "Video",
+	library.KindArtist:        "MusicArtist",
+	library.KindAlbum:         "MusicAlbum",
+	library.KindTrack:         "Audio",
+	library.KindAudiobook:     "AudioBook",
+	library.KindMusicPlaylist: "Playlist",
 }
 
 // isFolder reports whether items of a kind hold other items.
 func isFolder(kind library.Kind) bool {
 	switch kind {
-	case library.KindLibrary, library.KindCollection, library.KindSeries, library.KindSeason:
+	case library.KindLibrary, library.KindCollection, library.KindSeries, library.KindSeason,
+		library.KindArtist, library.KindAlbum, library.KindMusicPlaylist:
 		return true
 	}
 	return false
@@ -424,6 +454,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		}
 	}
 	describeLive(&dto, item, fields, detail)
+	describeMusic(&dto, item, fields, detail)
 	return dto
 }
 
@@ -443,6 +474,9 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 			ratio = 16.0 / 9.0
 		case library.KindChannel:
 			// Channel logos are square, as Jellyfin's tuners give them.
+			ratio = 1
+		case library.KindArtist, library.KindAlbum, library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
+			// Covers are square.
 			ratio = 1
 		}
 		dto.PrimaryImageAspectRatio = new(ratio)
@@ -544,6 +578,8 @@ func mediaType(kind library.Kind) string {
 	switch kind {
 	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording:
 		return "Video"
+	case library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
+		return "Audio"
 	}
 	return "Unknown"
 }

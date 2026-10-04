@@ -1,0 +1,10 @@
+[
+  {
+    "Name": "fixtures has finished playing Square Circle; Tone Quartet - Duet on Fixtures",
+    "Type": "AudioPlaybackStopped"
+  },
+  {
+    "Name": "fixtures is playing Square Circle; Tone Quartet - Duet on Fixtures",
+    "Type": "AudioPlayback"
+  }
+]

@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -59,6 +60,16 @@ type Service struct {
 	guideDir string
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
+
+	// music asks Eclipse addons for their resources, which the caches
+	// below keep: catalog pages as long as other catalogs', album, artist
+	// and playlist pages as long as descriptions, searches briefly.
+	music          *eclipse.Client
+	musicPages     *cache.Cache[musicKey, musicPage]
+	musicAlbums    *cache.Cache[musicKey, eclipse.Album]
+	musicArtists   *cache.Cache[musicKey, eclipse.Artist]
+	musicPlaylists *cache.Cache[musicKey, eclipse.Playlist]
+	musicSearches  *cache.Cache[musicKey, eclipse.Results]
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -95,21 +106,27 @@ type metaKey struct {
 // change applies at once.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	s := &Service{
-		db:            db,
-		addons:        store,
-		client:        client,
-		logger:        logger,
-		now:           time.Now,
-		settings:      settings,
-		metas:         cache.New[metaKey, stremio.Meta](4000, metaTTL),
-		versions:      cache.New[accounts.ID, Version](20000, versionsTTL),
-		ratingLookups: make(chan struct{}, ratingFetches),
-		ratingWait:    ratingWait,
+		db:             db,
+		addons:         store,
+		client:         client,
+		logger:         logger,
+		now:            time.Now,
+		settings:       settings,
+		metas:          cache.New[metaKey, stremio.Meta](4000, metaTTL),
+		versions:       cache.New[accounts.ID, Version](20000, versionsTTL),
+		ratingLookups:  make(chan struct{}, ratingFetches),
+		ratingWait:     ratingWait,
+		music:          eclipse.NewClient(client),
+		musicAlbums:    cache.New[musicKey, eclipse.Album](2000, metaTTL),
+		musicArtists:   cache.New[musicKey, eclipse.Artist](2000, metaTTL),
+		musicPlaylists: cache.New[musicKey, eclipse.Playlist](1000, metaTTL),
+		musicSearches:  cache.New[musicKey, eclipse.Results](500, searchTTL),
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
 	s.streamLists = cache.NewLasting[streamKey, []stremio.Stream](2000, s.listLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, []stremio.Subtitle](2000, s.listLife, clock)
+	s.musicPages = cache.NewLasting[musicKey, musicPage](2000, s.catalogLife, clock)
 	return s
 }
 
@@ -239,12 +256,17 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	}
 	for i, name := range LibraryNames(visible, settings.Language) {
 		l := visible[i]
+		collection := collectionType(l.Catalog.Type)
+		if music := entries[i].addon.Music; music != nil && music.ContentType == eclipse.ContentAudiobook {
+			// Jellyfin keeps audiobooks in books libraries.
+			collection = "books"
+		}
 		v.libraries = append(v.libraries, library{
 			item: Item{
 				ID:             libraryID(l),
 				Kind:           KindLibrary,
 				Name:           name,
-				CollectionType: collectionType(l.Catalog.Type),
+				CollectionType: collection,
 			},
 			addon:   entries[i],
 			catalog: l.Catalog,
@@ -387,7 +409,7 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's catalog is one page, which it remembers itself
 	// until its list changes.
-	if !src.addon.addon.Stremio() {
+	if src.addon.addon.IPTV() {
 		if skip > 0 || src.genre != "" || src.search != "" || src.date != "" || s.iptv == nil {
 			return nil, nil
 		}
@@ -631,6 +653,16 @@ func (s *Service) Children(ctx context.Context, user accounts.User, parent accou
 	case KindSeason:
 		episodes, err := s.Episodes(ctx, user, r.seriesItemID(), &parent)
 		return slicePage(episodes, start, count), err
+	case KindAlbum, KindArtist, KindMusicPlaylist:
+		folder, entry, err := s.musicFolder(ctx, v, parent)
+		if err != nil {
+			return Page{}, err
+		}
+		records, err := s.folderMusic(ctx, v, entry, folder, nil)
+		if err != nil {
+			return Page{}, err
+		}
+		return s.musicChildren(ctx, v, records, entry, start, count)
 	default:
 		return Page{}, ErrNotFound
 	}
@@ -647,6 +679,13 @@ func slicePage(items []Item, start, count int) Page {
 func (r record) seriesItemID() accounts.ID { return itemID(titleKey(KindSeries, r.SeriesID)) }
 
 func (s *Service) libraryChildren(ctx context.Context, v view, l library, start, count int, genre string) (Page, error) {
+	if l.addon.addon.Eclipse() {
+		records, err := s.musicLibraryRecords(ctx, v, l)
+		if err != nil {
+			return Page{}, err
+		}
+		return s.musicChildren(ctx, v, records, l.addon, start, count)
+	}
 	metas, total, err := s.window(ctx, v, source{addon: l.addon, catalog: l.catalog, genre: genre}, start, count)
 	if err != nil {
 		return Page{}, err
@@ -943,6 +982,8 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		return s.channel(ctx, v, r)
 	case KindProgram:
 		return s.program(ctx, v, r)
+	case KindArtist, KindAlbum, KindTrack, KindAudiobook, KindMusicPlaylist:
+		return s.musicDetails(ctx, v, r)
 	default:
 		return Item{}, ErrNotFound
 	}
@@ -1263,6 +1304,8 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		}
 	case r.Kind == KindPerson && r.Person != nil:
 		images.Primary = r.Person.Image
+	case r.Music != nil:
+		images.Primary = r.Music.Artwork
 	case r.Kind == KindSeason:
 		series, err := s.load(ctx, r.seriesItemID())
 		if err != nil || series.Meta == nil {

@@ -110,6 +110,10 @@ encode -f lavfi -i "$pattern" -f lavfi -i "$(tone 770)" \
 	-c:v libx264 -b:v 1M -pix_fmt yuv420p -c:a aac -b:a 128k "$remote/remote-h264-aac-mkv.mkv"
 printf 'http://%s:8000/remote-h264-aac-mkv.mkv\n' "$files" >"$(clip remote-h264-aac-mkv strm)"
 
+# Music and audiobooks: their files now, their answers at the end.
+source "$(dirname "$0")/jellyfin-fixtures-music.sh"
+music_media "$media"
+
 docker network create "$network" >/dev/null
 docker run --detach --rm --name "$files" --network "$network" --volume "$remote:/srv:ro" --workdir /srv \
 	python:3.13-alpine python3 -m http.server 8000 >/dev/null
@@ -1231,3 +1235,6 @@ parental FavoriteRestricted POST "/UserFavoriteItems/$movie?userId=$child" "$chi
 parental Unrestricted GET "/Users/$user/Items/$movie" "$signed"
 jq --sort-keys . <<<"$parental_answers" >"$parental_out/answers.json"
 echo "Parental control fixtures written to $parental_out"
+
+# Music last, on libraries of its own.
+music_fixtures

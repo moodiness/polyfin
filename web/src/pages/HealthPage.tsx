@@ -12,6 +12,7 @@ import {
 } from '@/api'
 import { icons } from '@/components/icons'
 import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/components/panels'
+import { MusicBadge } from '@/components/AddonSettings'
 import { findProblems, lowOnSpace, useHealthData } from '@/components/problems'
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
@@ -90,7 +91,7 @@ export default function HealthPage() {
             )}
           </section>
 
-          <Addons health={health.data} />
+          <Addons health={health.data} addons={addons.data} />
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Iptv addons={addons.data} />
@@ -117,13 +118,17 @@ function addonTone(
   return addon.failure === '' ? ['ok', 'ok'] : ['warning', 'failing']
 }
 
-function Addons({ health }: { health: Health }) {
+function Addons({ health, addons }: { health: Health; addons: Addon[] | undefined }) {
   const { t } = useI18n()
   const text = t.dashboard.health
   const check = useMutation({
     mutationFn: checkAddon,
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
   })
+  // Music addons' answers are recorded like the others': their row carries their badge.
+  const music = new Map(
+    (addons ?? []).filter((addon) => addon.music !== null).map((addon) => [addon.id, addon.music]),
+  )
 
   return (
     <Panel id="addons" title={text.addonsTitle} description={text.addonsHelp}>
@@ -138,13 +143,17 @@ function Addons({ health }: { health: Health }) {
         <ul className="divide-y divide-line rounded-xl border border-line">
           {health.addons.map((addon) => {
             const [tone, status] = addonTone(addon)
+            const musicOf = music.get(addon.id)
             return (
               <li
                 key={addon.id}
                 className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_auto] md:items-center"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-white">{addon.name}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                    <span className="truncate">{addon.name}</span>
+                    {musicOf && <MusicBadge music={musicOf} />}
+                  </p>
                   <p className="text-xs">
                     <StatusText tone={tone}>
                       {text.addonStatus[status]}

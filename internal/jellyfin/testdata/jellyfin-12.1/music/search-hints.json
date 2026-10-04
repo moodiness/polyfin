@@ -1,0 +1,22 @@
+{
+  "SearchHints": [
+    {
+      "Album": "",
+      "AlbumArtist": "",
+      "AlbumId": "",
+      "Artists": [
+        ""
+      ],
+      "ChannelId": null,
+      "Id": "",
+      "IndexNumber": 0,
+      "ItemId": "",
+      "MediaType": "",
+      "Name": "",
+      "ProductionYear": 0,
+      "RunTimeTicks": 0,
+      "Type": ""
+    }
+  ],
+  "TotalRecordCount": 0
+}

@@ -1,0 +1,13 @@
+{
+  "InstantMixAlbum": 200,
+  "InstantMixArtist": 200,
+  "InstantMixArtistQuery": 200,
+  "InstantMixNone": 200,
+  "InstantMixSong": 200,
+  "InstantMixSongs": 200,
+  "InstantMixUnknown": 404,
+  "LyricProviders": 404,
+  "Lyrics": 404,
+  "LyricsUnknown": 404,
+  "RemoteLyrics": 200
+}

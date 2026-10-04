@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -27,10 +28,12 @@ type addonJSON struct {
 	Types        []string  `json:"types"`
 	CatalogCount int       `json:"catalogCount"`
 	RefreshedAt  time.Time `json:"refreshedAt"`
-	// Kind is "stremio" for a Stremio addon, "m3u" or "xtream" for an IPTV
-	// source, which Source then describes.
+	// Kind is "stremio" for a Stremio addon, "eclipse" for an Eclipse
+	// music addon, which Music then describes, or "m3u" or "xtream" for an
+	// IPTV source, which Source then describes.
 	Kind   string      `json:"kind"`
 	Source *sourceJSON `json:"source"`
+	Music  *musicJSON  `json:"music"`
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -57,12 +60,15 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	if addon.Manifest.Logo != "" {
 		logo = &addon.Manifest.Logo
 	}
-	types := addon.Manifest.Types
+	types, resources := addon.Manifest.Types, addon.Manifest.ResourceNames()
+	if addon.Eclipse() {
+		types, resources = addon.Music.Types, addon.Music.Resources
+	}
 	if types == nil {
 		types = []string{}
 	}
 	manifestURL := stremio.RedactManifestURL(addon.ManifestURL)
-	if !addon.Stremio() {
+	if !addon.Stremio() && !addon.Eclipse() {
 		manifestURL = iptv.Redact(addon.ManifestURL)
 	}
 	return addonJSON{
@@ -73,18 +79,19 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		Logo:         logo,
 		ManifestURL:  manifestURL,
 		Enabled:      addon.Enabled,
-		Resources:    addon.Manifest.ResourceNames(),
+		Resources:    resources,
 		Types:        types,
 		CatalogCount: len(addon.Manifest.Catalogs),
 		RefreshedAt:  addon.RefreshedAt,
 		Kind:         addon.Kind,
+		Music:        newMusicJSON(addon),
 	}
 }
 
 // addonJSON describes an addon, and an IPTV source's list.
 func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Addon) (addonJSON, error) {
 	result := newAddonJSON(addon)
-	if addon.Stremio() {
+	if addon.Stremio() || addon.Eclipse() {
 		return result, nil
 	}
 	source, err := h.IPTV.Source(r.Context(), scope, addon.ID)
@@ -267,6 +274,9 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidLibraryName, http.StatusBadRequest, "invalid_library_name"},
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
+		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
+		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
+		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
 		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},

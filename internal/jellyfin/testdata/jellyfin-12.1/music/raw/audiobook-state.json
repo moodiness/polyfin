@@ -1,0 +1,22 @@
+{
+  "Chapters": [
+    {
+      "Name": "Opening",
+      "StartPositionTicks": 0
+    },
+    {
+      "Name": "Middle",
+      "StartPositionTicks": 100000000
+    },
+    {
+      "Name": "Ending",
+      "StartPositionTicks": 200000000
+    }
+  ],
+  "UserData": {
+    "IsFavorite": false,
+    "PlayCount": 1,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

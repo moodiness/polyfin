@@ -115,7 +115,7 @@ func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 	if r.Kind != KindChannel || r.Meta == nil || index < 0 {
 		return Item{}, ErrNotFound
 	}
-	if src := v.channels[index]; !src.addon.addon.Stremio() {
+	if src := v.channels[index]; src.addon.addon.IPTV() {
 		if _, err := s.fetchMeta(ctx, src.addon, r.CatalogType, r.Meta.ID); errors.Is(err, stremio.ErrNotFound) {
 			return Item{}, ErrNotFound
 		} else if err != nil {

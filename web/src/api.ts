@@ -269,9 +269,39 @@ export type Addon = {
   types: string[]
   catalogCount: number
   refreshedAt: string
-  /** 'stremio' for a Stremio addon; 'm3u' or 'xtream' for an IPTV source, which `source` describes. */
-  kind: 'stremio' | 'm3u' | 'xtream'
+  /**
+   * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
+   * 'm3u' or 'xtream' for an IPTV source, which `source` describes.
+   */
+  kind: 'stremio' | 'eclipse' | 'm3u' | 'xtream'
   source: IptvSource | null
+  music: AddonMusic | null
+}
+
+/** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */
+export type MusicContent = 'music' | 'audiobook' | 'podcast'
+
+/** A setting an Eclipse addon declares; values travel as strings, toggles as "true" or "false". */
+export type AddonSetting = {
+  key: string
+  type: 'select' | 'toggle' | 'text' | 'number'
+  label: string
+  help: string
+  default: string
+  options: { value: string; label: string }[]
+  /** Text only; 0 for the server's own limit of 1,000 characters. */
+  maxLength: number
+  placeholder: string
+  min: number | null
+  max: number | null
+  step: number | null
+}
+
+/** An Eclipse addon's content, settings, and the values chosen (a setting left out uses its default). */
+export type AddonMusic = {
+  contentType: MusicContent
+  settings: AddonSetting[]
+  values: Record<string, string>
 }
 
 /** An IPTV source's channel list and how it was last fetched. */
@@ -543,6 +573,10 @@ export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
 
 export const updateIptvSource = (scope: Scope, id: string, patch: IptvSourcePatch) =>
   request<Addon>('PATCH', `${scopePath(scope)}/iptv/${seg(id)}`, patch)
+
+/** Replaces the values of an Eclipse addon's settings; the addon receives them on every request. */
+export const saveAddonSettings = (scope: Scope, id: string, values: Record<string, string>) =>
+  request<Addon>('PUT', `${scopePath(scope)}/addons/${seg(id)}/settings`, { values })
 
 export const deleteAddon = (scope: Scope, id: string) =>
   request<void>('DELETE', `${scopePath(scope)}/addons/${seg(id)}`)

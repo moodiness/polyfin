@@ -19,7 +19,8 @@ import (
 
 // recordPlayback records in the activity log that user started or stopped
 // playing item on device, as Jellyfin does: an episode is named after its
-// series. Progress reports are not recorded.
+// series, and a track or an audiobook after its first artist, as audio.
+// Progress reports are not recorded.
 func (h *Handler) recordPlayback(ctx context.Context, user accounts.User, device string, event playbackEvent, item library.Item) {
 	if user.ID == (accounts.ID{}) || event != playbackStarted && event != playbackStopped {
 		return
@@ -28,9 +29,17 @@ func (h *Handler) recordPlayback(ctx context.Context, user accounts.User, device
 	if item.SeriesName != "" {
 		title = item.SeriesName + " - " + title
 	}
-	if event == playbackStarted {
+	if len(item.Artists) > 0 {
+		title = item.Artists[0].Name + " - " + title
+	}
+	switch {
+	case library.AudioKind(item.Kind) && event == playbackStarted:
+		h.Activity.AudioStarted(ctx, user, title, item.ID.String(), device)
+	case library.AudioKind(item.Kind):
+		h.Activity.AudioStopped(ctx, user, title, item.ID.String(), device)
+	case event == playbackStarted:
 		h.Activity.PlaybackStarted(ctx, user, title, item.ID.String(), device)
-	} else {
+	default:
 		h.Activity.PlaybackStopped(ctx, user, title, item.ID.String(), device)
 	}
 }

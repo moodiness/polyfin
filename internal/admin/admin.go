@@ -150,6 +150,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.updateAddon))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons/{id}/refresh", h.signedIn(h.refreshAddon))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/addons/{id}", h.signedIn(h.removeAddon))
+	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv", h.signedIn(h.addSource))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}", h.signedIn(h.updateSource))
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))

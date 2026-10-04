@@ -1,5 +1,5 @@
-// Package addons stores the Stremio addons of the server and of each user,
-// and which of their catalogs are shown as libraries.
+// Package addons stores the Stremio and Eclipse addons of the server and of
+// each user, and which of their catalogs are shown as libraries.
 package addons
 
 import (
@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -36,6 +37,11 @@ var (
 	ErrInvalidGuideURL    = errors.New("guide addresses are http or https URLs of at most 4096 characters")
 	// ErrNotStremio reports an IPTV source asked for a manifest.
 	ErrNotStremio = errors.New("not a Stremio addon")
+	// ErrNotEclipse reports settings given to an addon that has none.
+	ErrNotEclipse = errors.New("not an Eclipse addon")
+	// ErrKindChanged reports a new address of an addon that serves another
+	// kind of addon than it did.
+	ErrKindChanged = errors.New("the address serves another kind of addon")
 )
 
 // Scope owns addons: the server (no owner) or one user.
@@ -49,23 +55,30 @@ func Shared() Scope { return Scope{} }
 // Personal is the scope of a user's own addons.
 func Personal(user accounts.ID) Scope { return Scope{Owner: &user} }
 
-// Kinds of addons: Stremio addons, installed from their manifest, and
-// Polyfin's own IPTV sources, an M3U playlist or an Xtream Codes account,
-// which answer as an addon with one live TV catalog (see package iptv).
+// Kinds of addons: Stremio addons and Eclipse music addons, installed from
+// their manifest, and Polyfin's own IPTV sources, an M3U playlist or an
+// Xtream Codes account, which answer as an addon with one live TV catalog
+// (see package iptv).
 const (
 	KindStremio = "stremio"
+	KindEclipse = "eclipse"
 	KindM3U     = "m3u"
 	KindXtream  = "xtream"
 )
 
-// Addon is an installed Stremio addon or an IPTV source. For an IPTV
-// source, ManifestURL is the address of its list, which embeds its
-// credentials, and Manifest describes its live TV catalog.
+// Addon is an installed Stremio or Eclipse addon, or an IPTV source. For an
+// IPTV source, ManifestURL is the address of its list, which embeds its
+// credentials, and Manifest describes its live TV catalog. For an Eclipse
+// addon, Music is its manifest, Manifest what libraries see of it (its
+// name, icon and catalog rows), and Settings the values chosen for its
+// settings.
 type Addon struct {
 	ID          accounts.ID
 	Kind        string
 	ManifestURL string
 	Manifest    stremio.Manifest
+	Music       *eclipse.Manifest
+	Settings    map[string]string
 	Enabled     bool
 	RefreshedAt time.Time
 }
@@ -73,6 +86,12 @@ type Addon struct {
 // Stremio reports whether the addon is a Stremio addon, whose resources
 // are asked for over HTTP.
 func (a Addon) Stremio() bool { return a.Kind == KindStremio }
+
+// IPTV reports whether the addon is one of Polyfin's own IPTV sources.
+func (a Addon) IPTV() bool { return a.Kind == KindM3U || a.Kind == KindXtream }
+
+// Eclipse reports whether the addon is an Eclipse music addon.
+func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
 
 // Library is a catalog of an addon of the scope, shown as a library when
 // Enabled.
@@ -135,17 +154,25 @@ type queryer interface {
 func scanAddon(row pgx.Row) (Addon, error) {
 	var addon Addon
 	var manifest []byte
-	err := row.Scan(&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Enabled, &addon.RefreshedAt)
+	err := row.Scan(&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
 	if err != nil {
 		return addon, err
 	}
+	if addon.Kind == KindEclipse {
+		var music eclipse.Manifest
+		if err := json.Unmarshal(manifest, &music); err != nil {
+			return addon, err
+		}
+		addon.Music, addon.Manifest = &music, music.Stremio()
+		return addon, nil
+	}
 	return addon, json.Unmarshal(manifest, &addon.Manifest)
 }
 
-const addonColumns = "id, kind, manifest_url, manifest, enabled, refreshed_at"
+const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at"
 
 // Addons lists the scope's addons in order.
 func (s *Store) Addons(ctx context.Context, scope Scope) ([]Addon, error) {
@@ -169,25 +196,87 @@ func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
 	return scanAddon(s.db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1", id))
 }
 
-// fetch normalizes a manifest URL and downloads the manifest. confined
-// keeps the request on public addresses (see stremio.Client).
-func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (string, stremio.Manifest, error) {
+// fetched is a downloaded manifest: its normalized URL, the kind of addon
+// it describes, what is stored of it, and what libraries see of it.
+type fetched struct {
+	url      string
+	kind     string
+	encoded  []byte
+	manifest stremio.Manifest
+}
+
+// fetch normalizes a manifest URL and downloads the manifest, telling a
+// Stremio addon's from an Eclipse addon's by what it declares. An Eclipse
+// addon may also be given by its base address, without /manifest.json,
+// as Eclipse takes it. confined keeps the request on public addresses (see
+// stremio.Client).
+func (s *Store) fetch(ctx context.Context, rawURL string, confined bool) (fetched, error) {
 	manifestURL, err := stremio.NormalizeManifestURL(rawURL)
-	if err != nil {
-		return "", stremio.Manifest{}, err
+	based := false
+	if errors.Is(err, stremio.ErrInvalidManifestURL) {
+		if candidate, ok := eclipseManifestURL(rawURL); ok {
+			manifestURL, err, based = candidate, nil, true
+		}
 	}
-	manifest, err := s.client.Manifest(ctx, manifestURL, confined)
-	return manifestURL, manifest, err
+	if err != nil {
+		return fetched{}, err
+	}
+	body, err := s.client.Fetch(ctx, manifestURL, manifestURL, confined)
+	switch {
+	case errors.Is(err, stremio.ErrNotFound):
+		return fetched{}, fmt.Errorf("%w: HTTP 404", stremio.ErrUnreachable)
+	case errors.Is(err, stremio.ErrInvalidResponse):
+		return fetched{}, fmt.Errorf("%w: %v", stremio.ErrInvalidManifest, err)
+	case err != nil:
+		return fetched{}, err
+	}
+	if eclipse.Detect(body) {
+		music, err := eclipse.ParseManifest(body)
+		if err != nil {
+			return fetched{}, fmt.Errorf("%w: %w", stremio.ErrInvalidManifest, err)
+		}
+		encoded, err := json.Marshal(music)
+		return fetched{url: manifestURL, kind: KindEclipse, encoded: encoded, manifest: music.Stremio()}, err
+	}
+	if based {
+		// Only Eclipse addons are installed by their base address.
+		return fetched{}, stremio.ErrInvalidManifestURL
+	}
+	manifest, err := stremio.ParseManifest(body)
+	if err != nil {
+		return fetched{}, err
+	}
+	encoded, err := json.Marshal(manifest)
+	return fetched{url: manifestURL, kind: KindStremio, encoded: encoded, manifest: manifest}, err
+}
+
+// eclipseManifestURL is the manifest URL of an addon given by its base
+// address, such as https://addon.example/{token}/: an http or https URL
+// without credentials nor query, naming a folder rather than a file;
+// the manifest is /manifest.json in it.
+func eclipseManifestURL(raw string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery {
+		return "", false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	// A base address is a folder: an address naming a file is no addon's.
+	if last := parsed.Path[strings.LastIndex(parsed.Path, "/")+1:]; strings.Contains(last, ".") {
+		return "", false
+	}
+	parsed.Scheme, parsed.Fragment, parsed.RawFragment = scheme, "", ""
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/manifest.json"
+	parsed.RawPath = ""
+	return parsed.String(), true
 }
 
 // Install adds an addon at the end of the scope and enables some of its
 // catalogs as libraries (see enableDefaults).
 func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confined bool) (Addon, error) {
-	manifestURL, manifest, err := s.fetch(ctx, rawURL, confined)
-	if err != nil {
-		return Addon{}, err
-	}
-	encoded, err := json.Marshal(manifest)
+	f, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
 		return Addon{}, err
 	}
@@ -196,9 +285,9 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, manifest_url, manifest, position)
-			VALUES ($1, $2, $3, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1))
-			RETURNING `+addonColumns, scope.Owner, manifestURL, encoded))
+		addon, err = scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position)
+			VALUES ($1, $2, $3, $4, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1))
+			RETURNING `+addonColumns, scope.Owner, f.kind, f.url, f.encoded))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -285,8 +374,8 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 // enableDefaults makes libraries of a new addon's catalogs. An addon that
 // groups its catalogs into collections (such as AIOMetadata) already says how
 // to organize them: its browsable collection catalogs become the libraries.
-// Otherwise its browsable movie, series and live TV catalogs do, until the
-// scope has DefaultLibraries.
+// Otherwise its browsable movie, series and live TV catalogs do, or an
+// Eclipse addon's catalog rows, until the scope has DefaultLibraries.
 func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) error {
 	var count, last int
 	err := tx.QueryRow(ctx, `SELECT count(*), coalesce(max(l.position), 0) FROM libraries l
@@ -297,7 +386,9 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 	wanted := func(catalog stremio.Catalog) bool {
 		return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
 	}
-	if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
+	if addon.Eclipse() {
+		wanted = func(catalog stremio.Catalog) bool { return eclipse.CatalogType(catalog.Type) }
+	} else if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
 		wanted = func(catalog stremio.Catalog) bool { return catalog.Type == "collection" }
 	}
 	for _, catalog := range addon.Manifest.Catalogs {
@@ -334,19 +425,52 @@ func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, ena
 		id, scope.Owner, enabled))
 }
 
+// SetSettings replaces the values chosen for an Eclipse addon's settings,
+// checked against its manifest (see eclipse.Manifest.CheckSettings). A
+// setting left out is sent with its default.
+func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, values map[string]string) (Addon, error) {
+	var addon Addon
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		current, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+			id, scope.Owner))
+		if err != nil {
+			return err
+		}
+		if !current.Eclipse() {
+			return ErrNotEclipse
+		}
+		checked, err := current.Music.CheckSettings(values)
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(checked)
+		if err != nil {
+			return err
+		}
+		addon, err = scanAddon(tx.QueryRow(ctx, "UPDATE addons SET settings = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded))
+		return err
+	})
+	return addon, err
+}
+
 // Replace installs a new manifest URL for an addon, keeping the libraries
-// whose catalogs still exist.
+// whose catalogs still exist. The address must serve the same kind of
+// addon: a Stremio addon stays one, and so does an Eclipse addon.
 func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL string, confined bool) (Addon, error) {
-	if addon, err := s.addon(ctx, s.db, scope, id); err != nil {
+	addon, err := s.addon(ctx, s.db, scope, id)
+	if err != nil {
 		return Addon{}, err
-	} else if !addon.Stremio() {
+	} else if !addon.Stremio() && !addon.Eclipse() {
 		return Addon{}, ErrNotStremio
 	}
-	manifestURL, manifest, err := s.fetch(ctx, rawURL, confined)
+	f, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
 		return Addon{}, err
 	}
-	return s.store(ctx, scope, id, manifestURL, manifest)
+	if f.kind != addon.Kind {
+		return Addon{}, ErrKindChanged
+	}
+	return s.store(ctx, scope, id, f)
 }
 
 // Refresh downloads an addon's manifest again.
@@ -355,23 +479,24 @@ func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confin
 	if err != nil {
 		return Addon{}, err
 	}
-	if !addon.Stremio() {
+	if !addon.Stremio() && !addon.Eclipse() {
 		return Addon{}, ErrNotStremio
 	}
-	manifest, err := s.client.Manifest(ctx, addon.ManifestURL, confined)
+	f, err := s.fetch(ctx, addon.ManifestURL, confined)
 	if err != nil {
 		return Addon{}, err
 	}
-	return s.store(ctx, scope, id, addon.ManifestURL, manifest)
+	if f.kind != addon.Kind {
+		return Addon{}, ErrKindChanged
+	}
+	return s.store(ctx, scope, id, f)
 }
 
-func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, manifestURL string, manifest stremio.Manifest) (Addon, error) {
-	encoded, err := json.Marshal(manifest)
-	if err != nil {
-		return Addon{}, err
-	}
+func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched) (Addon, error) {
+	manifestURL, encoded, manifest := f.url, f.encoded, f.manifest
 	var addon Addon
-	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var err error
 		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, refreshed_at = now()
 			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded))
 		var pgErr *pgconn.PgError

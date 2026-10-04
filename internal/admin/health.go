@@ -208,7 +208,8 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, addon := range list {
-		if !addon.Stremio() {
+		// Eclipse addons' requests count in their health too.
+		if !addon.Stremio() && !addon.Eclipse() {
 			continue
 		}
 		result.Addons = append(result.Addons, h.addonHealth(addon))
@@ -279,7 +280,7 @@ func (h *handler) checkAddon(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	index := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && a.Stremio() })
+	index := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == id && (a.Stremio() || a.Eclipse()) })
 	if index < 0 || h.Health.Addons == nil {
 		writeError(w, http.StatusNotFound, "not_found")
 		return

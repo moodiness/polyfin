@@ -136,7 +136,7 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		c.health.record(ctx, manifestURL, started, failureOfStatus(response.StatusCode))
-		return nil, fmt.Errorf("%w: HTTP %d", ErrUnreachable, response.StatusCode)
+		return nil, fmt.Errorf("%w: %w", ErrUnreachable, httpStatus(response.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
@@ -149,6 +149,23 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	}
 	c.health.record(ctx, manifestURL, started, "")
 	return body, nil
+}
+
+// httpStatus is the status of an answer that is not a success.
+type httpStatus int
+
+func (s httpStatus) Error() string { return fmt.Sprintf("HTTP %d", int(s)) }
+
+// Fetch downloads a resource of an addon of another protocol than
+// Stremio's, through the same rules: bounded, confined when asked, its URL
+// kept out of errors, its outcome counted in the health of the addon of
+// manifestURL. An answer 404 is ErrNotFound.
+func (c *Client) Fetch(ctx context.Context, manifestURL, target string, confined bool) ([]byte, error) {
+	body, err := c.get(ctx, manifestURL, target, confined)
+	if status, ok := errors.AsType[httpStatus](err); ok && status == http.StatusNotFound {
+		return nil, fmt.Errorf("%w: HTTP 404", ErrNotFound)
+	}
+	return body, err
 }
 
 // Open requests a file an addon points to, a stream or a subtitle, to relay

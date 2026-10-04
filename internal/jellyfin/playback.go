@@ -196,8 +196,9 @@ func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts
 	return item, err
 }
 
-// played resolves what a player opens: a movie, an episode, a channel or a
-// recording, by its own identifier or by one of its versions'.
+// played resolves what a player opens: a movie, an episode, a channel, a
+// recording, a track or an audiobook, by its own identifier or by one of
+// its versions'.
 func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
@@ -211,7 +212,7 @@ func (h *Handler) played(ctx context.Context, user accounts.User, opened account
 		return library.Item{}, err
 	}
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindChannel:
+	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindTrack, library.KindAudiobook:
 		return item, nil
 	}
 	return library.Item{}, library.ErrNotFound
@@ -305,6 +306,10 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	if item.Kind == library.KindChannel {
 		h.livePlaybackInfo(w, r, user, item, opened, request)
+		return
+	}
+	if library.AudioKind(item.Kind) {
+		h.audioPlaybackInfo(w, r, user, item, request)
 		return
 	}
 	p, err := h.playable(r.Context(), user, item)
