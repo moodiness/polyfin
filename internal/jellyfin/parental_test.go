@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -19,19 +20,24 @@ import (
 
 // ratingsAddon serves movies rated as the fixture titles were (Restricted R,
 // Allowed PG, Unrated none) and a TV-MA series, with streams. Its catalog
-// rows carry no rating, as AIOMetadata's do.
+// rows carry no rating, as AIOMetadata's do. Ann Lee plays in Allowed and
+// Restricted, both dramas, Rex Only in Restricted alone; a people search
+// finds Ann Lee's.
 func ratingsAddon(t *testing.T) string {
 	t.Helper()
+	var server *httptest.Server
 	ratings := map[string]string{"tt1": "PG", "tt2": "R", "tt3": "", "tt4": "TV-MA"}
 	meta := func(id string) stremio.Meta {
 		names := map[string]string{"tt1": "Allowed", "tt2": "Restricted", "tt3": "Unrated", "tt4": "Show"}
-		m := stremio.Meta{ID: id, Type: "movie", Name: names[id]}
-		if id == "tt4" {
+		m := stremio.Meta{ID: id, Type: "movie", Name: names[id], Extras: &stremio.Extras{Certification: ratings[id]}}
+		switch id {
+		case "tt1":
+			m.Genres, m.Extras.Cast = []string{"Drama"}, []stremio.CastMember{{Name: "Ann Lee"}}
+		case "tt2":
+			m.Genres, m.Extras.Cast = []string{"Drama"}, []stremio.CastMember{{Name: "Ann Lee"}, {Name: "Rex Only"}}
+		case "tt4":
 			m.Type = "series"
 			m.Videos = []stremio.Video{{ID: "tt4:1:1", Title: "Pilot", Season: 1, Episode: 1, Released: "2020-01-01T00:00:00Z"}}
-		}
-		if ratings[id] != "" {
-			m.Extras = &stremio.Extras{Certification: ratings[id]}
 		}
 		return m
 	}
@@ -40,7 +46,7 @@ func ratingsAddon(t *testing.T) string {
 		m.Extras, m.Videos = nil, nil
 		return m
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimSuffix(r.URL.EscapedPath(), ".json")
 		parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
 		switch {
@@ -49,13 +55,22 @@ func ratingsAddon(t *testing.T) string {
 				Types: []string{"movie", "series"}, IDPrefixes: []string{"tt"},
 				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}, {Name: "subtitles"}},
 				Catalogs: []stremio.Catalog{
-					{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "search"}}},
+					{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "search"}, {Name: "genre", Options: []string{"Drama"}}}},
 					{Type: "series", ID: "shows", Name: "Shows"},
+					{Type: "movie", ID: "people_search.people_search_movie", Name: "People Search", Extra: []stremio.Extra{{Name: "search", IsRequired: true}}},
 				}})
+		case strings.HasPrefix(path, "/catalog/movie/people_search.people_search_movie/"):
+			var found []stremio.Meta
+			if strings.Contains(path, "search=Ann%20Lee") {
+				found = []stremio.Meta{row("tt2"), row("tt1")}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": found})
 		case strings.HasPrefix(path, "/catalog/movie/top"):
 			metas := []stremio.Meta{row("tt1"), row("tt2"), row("tt3")}
 			if strings.Contains(path, "search=") {
 				metas = []stremio.Meta{row("tt2")}
+			} else if strings.Contains(path, "genre=Drama") {
+				metas = metas[:2]
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": metas})
 		case strings.HasPrefix(path, "/catalog/series/shows"):
@@ -63,9 +78,12 @@ func ratingsAddon(t *testing.T) string {
 		case len(parts) == 3 && parts[0] == "meta":
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta(parts[2])})
 		case len(parts) == 3 && parts[0] == "stream":
-			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "1080p", URL: "https://cdn.example/" + parts[2]}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "1080p", URL: server.URL + "/files/" + parts[2] + ".mkv",
+				BehaviorHints: stremio.StreamBehavior{Filename: parts[2] + ".mkv", VideoSize: 4_000_000_000}}}})
 		case len(parts) == 3 && parts[0] == "subtitles":
 			_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": []stremio.Subtitle{{ID: "en", URL: "https://subs.example/en.srt", Lang: "eng"}}})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
 			http.NotFound(w, r)
 		}
@@ -287,5 +305,92 @@ func TestParentalControlMatchesJellyfin(t *testing.T) {
 	}
 	if entries := s.playlistEntries(t, adminToken, playlist); len(entries) != 2 {
 		t.Errorf("playlist as the administrator sees it: %v", itemNames(entries))
+	}
+}
+
+func TestParentalControlCoversPeopleSimilarTitlesAndDownloads(t *testing.T) {
+	s := newTestServer(t, 10)
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	s.user("child", func(c *accounts.UserChanges) { c.Parental = &accounts.ParentalControl{MaxRating: new(13)} })
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), ratingsAddon(t), false); err != nil {
+		t.Fatal(err)
+	}
+	adminToken, childToken := s.signIn("admin", "tv"), s.signIn("child", "tablet")
+	var views, page QueryResult
+	s.get(t, "/UserViews", adminToken, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, adminToken, &page)
+	ids := map[string]string{}
+	for _, item := range page.Items {
+		ids[item.Name] = item.Id
+	}
+	// The administrator opens both dramas, which records their credits.
+	people := map[string]string{}
+	for _, title := range []string{"Allowed", "Restricted"} {
+		var item BaseItemDto
+		if status := s.get(t, "/Items/"+ids[title], adminToken, &item); status != http.StatusOK || item.People == nil {
+			t.Fatalf("%s: %d", title, status)
+		}
+		for _, person := range *item.People {
+			people[person.Name] = person.Id
+		}
+	}
+	names := func(token, path string) []string {
+		t.Helper()
+		var page QueryResult
+		if status := s.get(t, path, token, &page); status != http.StatusOK {
+			t.Fatalf("%s: %d", path, status)
+		}
+		return itemNames(page.Items)
+	}
+
+	// The person page counts, and lists, only the titles the child may see.
+	var ann namedItemDto
+	if status := s.get(t, "/Items/"+people["Ann Lee"], childToken, &ann); status != http.StatusOK || ann.MovieCount != 1 {
+		t.Errorf("Ann Lee for the child: %d, %d movies", status, ann.MovieCount)
+	}
+	if s.get(t, "/Items/"+people["Ann Lee"], adminToken, &ann); ann.MovieCount != 2 {
+		t.Errorf("Ann Lee for the administrator: %d movies", ann.MovieCount)
+	}
+	titles := "/Items?personIds=" + people["Ann Lee"] + "&recursive=true&includeItemTypes=Movie"
+	if got := names(childToken, titles); !slices.Equal(got, []string{"Allowed"}) {
+		t.Errorf("Ann Lee's titles for the child: %v", got)
+	}
+	if got := names(adminToken, titles); !slices.Contains(got, "Restricted") {
+		t.Errorf("Ann Lee's titles for the administrator: %v", got)
+	}
+	// Someone credited only in a hidden title is not found, nor counted.
+	if status := s.get(t, "/Items/"+people["Rex Only"], childToken, nil); status != http.StatusNotFound {
+		t.Errorf("Rex Only for the child: %d", status)
+	}
+	var persons QueryResult
+	s.get(t, "/Persons", childToken, &persons)
+	if got := itemNames(persons.Items); !slices.Equal(got, []string{"Ann Lee"}) || persons.TotalRecordCount != 1 {
+		t.Errorf("people for the child: %v (%d)", got, persons.TotalRecordCount)
+	}
+	if got := names(adminToken, "/Persons"); !slices.Equal(got, []string{"Ann Lee", "Rex Only"}) {
+		t.Errorf("people for the administrator: %v", got)
+	}
+
+	// Similar titles leave out what the child may not see.
+	if got := names(childToken, "/Items/"+ids["Allowed"]+"/Similar"); slices.Contains(got, "Restricted") {
+		t.Errorf("similar titles for the child: %v", got)
+	}
+	if got := names(adminToken, "/Items/"+ids["Allowed"]+"/Similar"); !slices.Contains(got, "Restricted") {
+		t.Errorf("similar titles for the administrator: %v", got)
+	}
+
+	// A hidden title is refused for download, as for streaming.
+	download := func(token, title string) int {
+		response, _ := fetchURL(t, s.url+"/Items/"+ids[title]+"/Download?ApiKey="+token, nil)
+		return response.StatusCode
+	}
+	if status := download(childToken, "Restricted"); status != http.StatusNotFound {
+		t.Errorf("child downloading Restricted: %d", status)
+	}
+	if status := download(childToken, "Allowed"); status != http.StatusOK {
+		t.Errorf("child downloading Allowed: %d", status)
+	}
+	if status := download(adminToken, "Restricted"); status != http.StatusOK {
+		t.Errorf("administrator downloading Restricted: %d", status)
 	}
 }

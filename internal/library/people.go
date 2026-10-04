@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -160,8 +162,9 @@ const reachesTitle = `(title.data->'addon' = ANY($10::jsonb[]) OR EXISTS (
 	WHERE title.data->'meta'->>'type' = rule.type AND starts_with(title.data->'meta'->>'id', rule.prefix)))`
 
 // credited lists the titles a person is credited in that the user's view
-// reaches. Jellyfin knows people through the items a user can access;
-// likewise, a person credited only in titles of other users' addons is not
+// reaches and their parental control lets them see. Jellyfin knows people
+// through the items a user can access; likewise, a person credited only in
+// titles of other users' addons, or in titles hidden from the user, is not
 // found.
 func (s *Service) credited(ctx context.Context, v view, person record) ([]record, error) {
 	if person.Person == nil {
@@ -178,6 +181,7 @@ func (s *Service) credited(ctx context.Context, v view, person record) ([]record
 		return nil, err
 	}
 	titles = slices.DeleteFunc(titles, func(title record) bool { return title.Meta == nil || !v.reaches(title) })
+	titles, _ = s.visible(ctx, v, titles)
 	if len(titles) == 0 {
 		return nil, ErrNotFound
 	}
@@ -297,8 +301,9 @@ type PeopleQuery struct {
 	Start, Limit int
 }
 
-// peopleFilter selects the people matching $1 to $12 (see People): those
-// credited in a title the user reaches.
+// peopleFilter selects the people matching $1 to $13 (see People): those
+// credited in a title the user reaches, among the titles of $13 when it is
+// set.
 const peopleFilter = `FROM items AS person WHERE person.kind = 'person'
 	AND ($1 = '' OR strpos(lower(person.data->'person'->>'name'), lower($1)) > 0)
 	AND ($2 = '' OR starts_with(lower(person.data->'person'->>'name'), lower($2)))
@@ -309,6 +314,7 @@ const peopleFilter = `FROM items AS person WHERE person.kind = 'person'
 			JOIN items AS title ON title.id = credit.item::uuid
 			CROSS JOIN jsonb_array_elements_text(credit.kinds) AS credited(kind)
 		WHERE (cardinality($5::text[]) = 0 OR lower(credited.kind) = ANY($5::text[])) AND NOT lower(credited.kind) = ANY($6::text[])
+			AND ($13::uuid[] IS NULL OR title.id = ANY($13::uuid[]))
 			AND ` + reachesTitle + `)
 	AND (NOT $7 OR person.id = ANY($8::uuid[]))
 	AND NOT person.id = ANY($9::uuid[])`
@@ -316,7 +322,7 @@ const peopleFilter = `FROM items AS person WHERE person.kind = 'person'
 // People lists, by name, the people credited in the titles Polyfin knows
 // that the user reaches, and how many match the query. Jellyfin likewise
 // knows people through the items a user can access, whatever their
-// library.
+// library; titles the user's parental control hides credit no one.
 func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery) ([]Item, int, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -340,7 +346,14 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 		return values
 	}
 	args := []any{q.NameContains, q.NameStartsWith, q.NameBefore, q.NameFrom, lower(q.Types), lower(q.ExcludedTypes),
-		q.Restricted, ids(q.Only), ids(q.Excluded), addonIDs, types, prefixes}
+		q.Restricted, ids(q.Only), ids(q.Excluded), addonIDs, types, prefixes, []accounts.ID(nil)}
+	if v.parental.Restricted() {
+		visible, err := s.visibleCredits(ctx, v, args)
+		if err != nil {
+			return nil, 0, err
+		}
+		args[len(args)-1] = visible
+	}
 	var total int
 	if err := s.db.QueryRow(ctx, "SELECT count(*) "+peopleFilter, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -350,7 +363,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 		limit = &q.Limit
 	}
 	rows, err := s.db.Query(ctx, "SELECT person.id, person.data "+peopleFilter+
-		" ORDER BY lower(person.data->'person'->>'name'), person.id OFFSET $13 LIMIT $14", append(args, max(q.Start, 0), limit)...)
+		" ORDER BY lower(person.data->'person'->>'name'), person.id OFFSET $14 LIMIT $15", append(args, max(q.Start, 0), limit)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -371,4 +384,29 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 		}
 	}
 	return people, total, rows.Err()
+}
+
+// visibleCredits lists the titles crediting the people a query matches
+// (see People, whose arguments args are) that the user's parental control
+// lets them see.
+func (s *Service) visibleCredits(ctx context.Context, v view, args []any) ([]accounts.ID, error) {
+	rows, err := s.db.Query(ctx, "SELECT DISTINCT credit.item::uuid FROM items AS person, jsonb_each(person.data->'credits') AS credit(item, kinds) WHERE person.id IN (SELECT person.id "+peopleFilter+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+	if err != nil {
+		return nil, err
+	}
+	titles, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	titles = slices.DeleteFunc(titles, func(title record) bool { return title.Meta == nil || !v.reaches(title) })
+	titles, _ = s.visible(ctx, v, titles)
+	visible := make([]accounts.ID, 0, len(titles))
+	for _, title := range titles {
+		visible = append(visible, title.ID)
+	}
+	return visible, nil
 }
