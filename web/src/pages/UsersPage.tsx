@@ -12,10 +12,12 @@ import {
   signOutUserDevice,
   unblockUser,
   updateUser,
+  maxPlaybacksRange,
   type ParentalControl,
   type ParentalRating,
   type User,
   type UserPatch,
+  type SyncPlayAccess,
 } from '@/api'
 import DeviceList from '@/components/DeviceList'
 import { useSessionUser } from '@/components/session'
@@ -312,6 +314,8 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
         {unblock.isSuccess && <Notice kind="success">{t.users.unblocked}</Notice>}
       </fieldset>
 
+      <PlaybackAccessForm user={user} />
+
       <ParentalControlForm user={user} />
 
       <section className="lg:col-span-2">
@@ -554,6 +558,125 @@ function CreateUserForm() {
       {mutation.isSuccess && <Notice kind="success">{t.users.created(mutation.data.name)}</Notice>}
       <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>
         {mutation.isPending ? t.users.creating : t.users.create}
+      </button>
+    </form>
+  )
+}
+
+/** The maximum quality choices, in bits per second (0 for no limit), like jellyfin-web's. */
+const bitrateChoices = [
+  { value: 0, label: 'bitrateNoLimit' },
+  { value: 40_000_000, label: 'bitrate4k' },
+  { value: 20_000_000, label: 'bitrate1080High' },
+  { value: 10_000_000, label: 'bitrate1080' },
+  { value: 4_000_000, label: 'bitrate720' },
+  { value: 2_000_000, label: 'bitrate480' },
+] as const
+
+function PlaybackAccessForm({ user }: { user: User }) {
+  const { t, language } = useI18n()
+  const bitrateId = useId()
+  const syncPlayId = useId()
+  const save = useUserPatch(user)
+  const [form, setForm] = useState({
+    maxPlaybacks: user.maxPlaybacks,
+    maxBitrate: user.maxBitrate,
+    liveTv: user.liveTv,
+    syncPlay: user.syncPlay,
+    remoteControl: user.remoteControl,
+  })
+
+  function update(change: Partial<typeof form>) {
+    save.reset()
+    setForm((current) => ({ ...current, ...change }))
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    save.mutate(form)
+  }
+
+  // A limit set from a Jellyfin app may match none of the choices: it is shown as it is.
+  const custom = bitrateChoices.some((choice) => choice.value === form.maxBitrate)
+    ? null
+    : (form.maxBitrate / 1_000_000).toLocaleString(language, { maximumFractionDigits: 2 })
+  const selectClass =
+    'mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white sm:max-w-sm'
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
+      <h4 className="text-sm font-semibold text-white">{t.users.playbackAccessTitle}</h4>
+      <TextField
+        label={t.users.maxPlaybacks}
+        hint={t.users.maxPlaybacksHelp}
+        type="number"
+        inputMode="numeric"
+        min={maxPlaybacksRange.min}
+        max={maxPlaybacksRange.max}
+        step={1}
+        value={form.maxPlaybacks}
+        onValue={(value) => update({ maxPlaybacks: Math.trunc(Number(value)) })}
+        className="sm:max-w-sm"
+      />
+      <div>
+        <label htmlFor={bitrateId} className="block text-sm font-medium text-zinc-200">
+          {t.users.maxBitrate}
+        </label>
+        <select
+          id={bitrateId}
+          value={form.maxBitrate}
+          onChange={(event) => update({ maxBitrate: Number(event.target.value) })}
+          aria-describedby={`${bitrateId}-hint`}
+          className={selectClass}
+        >
+          {bitrateChoices.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {t.users[choice.label]}
+            </option>
+          ))}
+          {custom !== null && (
+            <option value={form.maxBitrate}>{t.users.bitrateOther(custom)}</option>
+          )}
+        </select>
+        <p id={`${bitrateId}-hint`} className="mt-1 text-xs text-muted">
+          {t.users.maxBitrateHelp}
+        </p>
+      </div>
+      <Checkbox
+        label={t.users.liveTv}
+        help={t.users.liveTvHelp}
+        checked={form.liveTv}
+        onChange={(liveTv) => update({ liveTv })}
+      />
+      <div>
+        <label htmlFor={syncPlayId} className="block text-sm font-medium text-zinc-200">
+          {t.users.syncPlay}
+        </label>
+        <select
+          id={syncPlayId}
+          value={form.syncPlay}
+          onChange={(event) => update({ syncPlay: event.target.value as SyncPlayAccess })}
+          aria-describedby={`${syncPlayId}-hint`}
+          className={selectClass}
+        >
+          <option value="CreateAndJoinGroups">{t.users.syncPlayCreateAndJoin}</option>
+          <option value="JoinGroups">{t.users.syncPlayJoin}</option>
+          <option value="None">{t.users.syncPlayNone}</option>
+        </select>
+        <p id={`${syncPlayId}-hint`} className="mt-1 text-xs text-muted">
+          {t.users.syncPlayHelp}
+        </p>
+      </div>
+      <Checkbox
+        label={t.users.remoteControl}
+        help={t.users.remoteControlHelp}
+        checked={form.remoteControl}
+        onChange={(remoteControl) => update({ remoteControl })}
+      />
+      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
+      {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+      <button type="submit" className={buttonSecondary} disabled={save.isPending}>
+        {save.isPending ? t.common.saving : t.users.savePlaybackAccess}
       </button>
     </form>
   )

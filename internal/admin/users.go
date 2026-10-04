@@ -29,6 +29,16 @@ type userJSON struct {
 	// BlockedUntil is when the block of the account for wrong passwords
 	// ends, null when it is not blocked.
 	BlockedUntil *time.Time `json:"blockedUntil"`
+	// MaxPlaybacks is how many of the user's other devices may be playing
+	// when one more starts, 0 for no limit; MaxBitrate, the highest bitrate
+	// of their playback in bits per second, 0 for no limit. LiveTv lets them
+	// watch Live TV; SyncPlay is CreateAndJoinGroups, JoinGroups or None;
+	// RemoteControl lets them control other users' apps.
+	MaxPlaybacks  int    `json:"maxPlaybacks"`
+	MaxBitrate    int    `json:"maxBitrate"`
+	LiveTv        bool   `json:"liveTv"`
+	SyncPlay      string `json:"syncPlay"`
+	RemoteControl bool   `json:"remoteControl"`
 }
 
 // parentalControlJSON is a user's parental control: the highest rating
@@ -61,6 +71,12 @@ func newUserJSON(user accounts.User) userJSON {
 		// Whether the user may have their own addons, and their block.
 		PersonalAddons: user.PersonalAddons,
 		BlockedUntil:   blockedUntil(user),
+		// The user's playback and access limits.
+		MaxPlaybacks:  user.MaxPlaybacks,
+		MaxBitrate:    user.MaxBitrate,
+		LiveTv:        user.LiveTv,
+		SyncPlay:      string(user.SyncPlay),
+		RemoteControl: user.RemoteControl,
 	}
 }
 
@@ -326,6 +342,12 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		Downloads   *bool `json:"downloads"`
 		// PersonalAddons lets the user add and use their own addons.
 		PersonalAddons *bool `json:"personalAddons"`
+		// The user's playback and access limits, see userJSON.
+		MaxPlaybacks  *int                     `json:"maxPlaybacks"`
+		MaxBitrate    *int                     `json:"maxBitrate"`
+		LiveTv        *bool                    `json:"liveTv"`
+		SyncPlay      *accounts.SyncPlayAccess `json:"syncPlay"`
+		RemoteControl *bool                    `json:"remoteControl"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -345,6 +367,11 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		AudioTranscoding:   body.Transcoding,
 		ContentDownloading: body.Downloads,
 		PersonalAddons:     body.PersonalAddons,
+		MaxPlaybacks:       body.MaxPlaybacks,
+		MaxBitrate:         body.MaxBitrate,
+		LiveTv:             body.LiveTv,
+		SyncPlay:           body.SyncPlay,
+		RemoteControl:      body.RemoteControl,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}

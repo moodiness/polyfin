@@ -105,7 +105,9 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	users := []accounts.User{caller.User}
-	if caller.User.IsAdministrator {
+	// Like Jellyfin, a user allowed to control other users' apps is shown
+	// them when asking which sessions they can control.
+	if caller.User.IsAdministrator || controlled && caller.User.RemoteControl {
 		all, err := h.Accounts.Users(r.Context())
 		if err != nil {
 			h.internalError(w, r, err)
@@ -241,6 +243,8 @@ type playbackInfoRequest struct {
 	EnableDirectStream   *bool
 	AllowAudioStreamCopy *bool
 	AllowVideoStreamCopy *bool
+	// userLimit is the user's MaxBitrate, 0 for none (see limitBitrate).
+	userLimit int64
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -278,6 +282,14 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if reached, err := h.playbackLimitReached(r.Context(), callerFrom(r.Context())); err != nil {
+		h.internalError(w, r, err)
+		return
+	} else if reached {
+		rateLimitExceeded(w)
+		return
+	}
+	limitBitrate(&request, user)
 	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
 		h.browseError(w, r, err)
@@ -335,7 +347,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
 		decided, ok := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session, allowed)
 		if !ok {
-			h.Logger.Info("A version would need a conversion the user may not have", "addon", version.Addon)
+			h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
 			continue
 		}
 		sources := []MediaSourceInfo{decided}
@@ -348,7 +360,13 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		if request.MediaSourceId == "" {
 			for j, other := range versions {
 				if j != i && !unreadable[j] {
-					sources = append(sources, h.describedSource(r, p, other, sourceID(opened, other, j == 0)))
+					described := h.describedSource(r, p, other, sourceID(opened, other, j == 0))
+					// A version known to be above the user's limit is not
+					// offered as it is.
+					if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) {
+						described.SupportsDirectPlay, described.SupportsDirectStream = false, false
+					}
+					sources = append(sources, described)
 				}
 			}
 		}
@@ -492,6 +510,11 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		}
 	}
 	if decision.HLS && !permitted(allowed, decision) {
+		return MediaSourceInfo{}, false
+	}
+	// Above the user's bitrate limit, a version plays only converted down to
+	// it; else the next version is tried.
+	if beyondUserLimit(request, analysis.Bitrate, decision) {
 		return MediaSourceInfo{}, false
 	}
 	// Streaming over HLS needs the keyframe index: a version without one
@@ -700,6 +723,13 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	if item.Kind == library.KindChannel {
 		h.serveChannel(w, r, user, item, version, relay)
+		return
+	}
+	// PlaybackInfo never offers a version above the user's bitrate limit as
+	// it is: this guards URLs kept from before the limit was set, or made up.
+	if analysis, known := h.Playback.Analyzed(r.Context(), version.ID); known && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
+		h.Logger.Info("A version above the user's bitrate limit was refused", "addon", version.Addon)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	contentType := mimeTypes[strings.ToLower(extension)]

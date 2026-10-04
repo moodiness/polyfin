@@ -68,6 +68,16 @@ type User struct {
 	// BlockedUntil is when the last block ends (see Store.BlockedUntil).
 	InvalidLoginAttempts int
 	BlockedUntil         *time.Time
+	// MaxPlaybacks is how many of the user's other devices may be playing
+	// when one more asks to play, 0 for no limit; MaxBitrate, the highest
+	// bitrate the user plays at, in bits per second, 0 for no limit. LiveTv
+	// lets the user reach Live TV; SyncPlay is what they may do in SyncPlay
+	// groups; RemoteControl lets them control other users' apps.
+	MaxPlaybacks  int
+	MaxBitrate    int
+	LiveTv        bool
+	SyncPlay      SyncPlayAccess
+	RemoteControl bool
 }
 
 // NewUser describes an account to create.
@@ -91,6 +101,12 @@ type UserChanges struct {
 	AudioTranscoding   *bool
 	ContentDownloading *bool
 	PersonalAddons     *bool
+	// The user's playback and access limits, see User.
+	MaxPlaybacks  *int
+	MaxBitrate    *int
+	LiveTv        *bool
+	SyncPlay      *SyncPlayAccess
+	RemoteControl *bool
 }
 
 // Store is the accounts repository.
@@ -137,7 +153,8 @@ func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
 
 const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
 	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
-	"personal_addons, invalid_login_attempts, blocked_until"
+	"personal_addons, invalid_login_attempts, blocked_until, " +
+	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -145,7 +162,8 @@ func (user *User) fields() []any {
 		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
 		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
 		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
-		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil}
+		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
+		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -246,8 +264,10 @@ func createUser(ctx context.Context, db interface {
 	if err := checkPassword(user.Password); err != nil {
 		return User{}, err
 	}
+	// An administrator may control other users' apps unless that is taken
+	// away, a user may not unless given it.
 	created, err := scanUser(db.QueryRow(ctx,
-		"INSERT INTO users (name, password_hash, is_administrator, is_hidden) VALUES ($1, $2, $3, $4) RETURNING "+userColumns,
+		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, remote_control) VALUES ($1, $2, $3, $4, $3) RETURNING "+userColumns,
 		name, hashPassword(user.Password), user.IsAdministrator, user.IsHidden))
 	if uniqueViolation(err) {
 		return User{}, ErrNameTaken
@@ -355,6 +375,9 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 		}
 		parental = normalized
 	}
+	if err := changes.checkAccess(); err != nil {
+		return User{}, err
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -404,12 +427,18 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				video_transcoding = coalesce($11, video_transcoding),
 				audio_transcoding = coalesce($12, audio_transcoding),
 				content_downloading = coalesce($13, content_downloading),
-				personal_addons = coalesce($14, personal_addons)
+				personal_addons = coalesce($14, personal_addons),
+				max_playbacks = coalesce($15, max_playbacks),
+				max_bitrate = coalesce($16, max_bitrate),
+				live_tv = coalesce($17, live_tv),
+				sync_play = coalesce($18, sync_play),
+				remote_control = coalesce($19, remote_control)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
 			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
-			changes.PersonalAddons))
+			changes.PersonalAddons,
+			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

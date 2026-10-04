@@ -82,10 +82,10 @@ func (h *Handler) controllable(device accounts.Device) bool {
 
 // mayControl reports whether controller may send commands to the sessions
 // of owner. Controlling another user's apps takes Jellyfin's policy
-// EnableRemoteControlOfOtherUsers, which Polyfin grants administrators only
-// (see newUserDto).
+// EnableRemoteControlOfOtherUsers, the user's RemoteControl, which
+// administrators have unless it is taken away (see newUserDto).
 func mayControl(controller accounts.User, owner accounts.ID) bool {
-	return controller.ID == owner || controller.IsAdministrator
+	return controller.ID == owner || controller.RemoteControl
 }
 
 // remotePlay asks a session to play items, now or queued.

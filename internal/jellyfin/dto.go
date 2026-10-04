@@ -211,10 +211,10 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			MaxParentalRating:               user.Parental.MaxRating,
 			MaxParentalSubRating:            user.Parental.MaxSubRating,
 			BlockUnratedItems:               append([]string{}, user.Parental.BlockUnrated...),
-			EnableRemoteControlOfOtherUsers: user.IsAdministrator,
+			EnableRemoteControlOfOtherUsers: user.RemoteControl,
 			EnableSharedDeviceControl:       true,
 			EnableRemoteAccess:              true,
-			EnableLiveTvAccess:              true,
+			EnableLiveTvAccess:              user.LiveTv,
 			EnableMediaPlayback:             true,
 			// The user's own permissions; the server's switches apply on top.
 			EnableAudioPlaybackTranscoding:   user.AudioTranscoding,
@@ -237,7 +237,13 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			BlockedChannels:                  []string{},
 			AuthenticationProviderId:         "Jellyfin.Server.Implementations.Users.DefaultAuthenticationProvider",
 			PasswordResetProviderId:          "Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",
-			SyncPlayAccess:                   "CreateAndJoinGroups",
+			SyncPlayAccess:                   string(user.SyncPlay),
+			// Jellyfin counts signed-in sessions against MaxActiveSessions and
+			// limits remote clients only to RemoteClientBitrateLimit; Polyfin
+			// counts the devices playing and limits all of the user's playback
+			// (see Handler.playbackLimitReached and limitBitrate).
+			MaxActiveSessions:        user.MaxPlaybacks,
+			RemoteClientBitrateLimit: user.MaxBitrate,
 		},
 	}
 }
