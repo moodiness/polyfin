@@ -1,6 +1,7 @@
 package xmltv
 
 import (
+	"html"
 	"regexp"
 	"strings"
 	"unicode"
@@ -8,9 +9,10 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// countryPrefix is a country or language code that IPTV lists put before
-// a channel's name: "FR: ", "|FR| ", "[UK] ", "FR | ".
-var countryPrefix = regexp.MustCompile(`^\s*[\[(|]?\s*[A-Za-z]{2,3}\s*[\])|:]\s*`)
+// listPrefix is a code that IPTV lists put before a channel's name: a
+// country or language ("FR: ", "|FR| ", "[UK] ", "FR | "), or a group
+// ("ENF| ", "VO| ", "PLAY+| ").
+var listPrefix = regexp.MustCompile(`^\s*[\[(|]?\s*([A-Za-z][A-Za-z0-9+]{1,5})\s*[\])|:]\s*`)
 
 // qualityTags are the words that tell a stream's quality or encoding, not
 // the channel.
@@ -21,13 +23,34 @@ var qualityTags = map[string]bool{
 	"50fps": true, "60fps": true,
 }
 
-// NormalizeName folds a channel name into the form names are matched in:
-// without a country prefix, case, accents, punctuation, separators,
-// superscript and marker characters (such as ᴴᴰ, ⁴ᴷ or ★), nor quality
-// tags such as HD, FHD, UHD, 4K or SD. Words are joined, so "TF 1" is
-// "TF1". A name left with nothing is empty, and matches nothing.
-func NormalizeName(name string) string {
-	name = countryPrefix.ReplaceAllString(name, "")
+// Name is a channel name in the forms guides are matched by. Exact is the
+// name folded: without its list prefix, HTML entities decoded, without
+// case, accents, punctuation, separators, superscript and marker
+// characters (such as ᴴᴰ, ⁴ᴷ or ★), its words joined, so "ZEB 1" is "ZEB1".
+// Loose is Exact without the quality tags too, such as HD, FHD, UHD, 4K
+// or SD. A name left with nothing is empty, and matches nothing. Country
+// is the country its prefix names, if any (see Country).
+type Name struct {
+	Exact, Loose string
+	Country      string
+}
+
+// ParseName reads a channel name in the forms it is matched by. A group
+// prefix is the name when nothing would be left of it, as in "Zeb | HD";
+// a country prefix never is.
+func ParseName(name string) Name {
+	name = html.UnescapeString(name)
+	if prefix := listPrefix.FindStringSubmatch(name); prefix != nil {
+		parsed := foldName(name[len(prefix[0]):])
+		if parsed.Country = Country(prefix[1]); parsed.Country != "" || parsed.Loose != "" {
+			return parsed
+		}
+	}
+	return foldName(name)
+}
+
+// foldName folds a name without its prefix (see Name).
+func foldName(name string) Name {
 	var folded strings.Builder
 	for _, r := range name {
 		switch {
@@ -42,12 +65,12 @@ func NormalizeName(name string) string {
 			folded.WriteRune(r)
 		}
 	}
-	var words []string
-	var word strings.Builder
+	var exact, loose, word strings.Builder
 	flush := func() {
 		if word.Len() > 0 {
-			if w := word.String(); !qualityTags[w] {
-				words = append(words, w)
+			exact.WriteString(word.String())
+			if !qualityTags[word.String()] {
+				loose.WriteString(word.String())
 			}
 			word.Reset()
 		}
@@ -62,5 +85,63 @@ func NormalizeName(name string) string {
 		}
 	}
 	flush()
-	return strings.Join(words, "")
+	return Name{Exact: exact.String(), Loose: loose.String()}
+}
+
+// countries are the ISO 3166-1 alpha-2 country codes.
+var countries = func() map[string]bool {
+	codes := map[string]bool{}
+	for _, code := range strings.Fields(`ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bl bm bn bo bq br bs bt
+		bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg eh er es et fi fj fk fm fo fr ga gb
+		gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp
+		kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mf mg mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni
+		nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sj sk sl sm sn so sr ss st
+		sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug um us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw`) {
+		codes[code] = true
+	}
+	return codes
+}()
+
+// Country returns the country a code names, as a lower-case ISO 3166-1
+// alpha-2 code: "uk" is "gb", and a code that is not a country's, such as
+// "SP" or "ENF", names none.
+func Country(code string) string {
+	code = strings.ToLower(code)
+	if code == "uk" {
+		return "gb"
+	}
+	if countries[code] {
+		return code
+	}
+	return ""
+}
+
+// IDCountry returns the country an XMLTV channel identifier ends with, as
+// in "Name.fr", if any.
+func IDCountry(id string) string {
+	if i := strings.LastIndexByte(id, '.'); i >= 0 && len(id)-i == 3 {
+		return Country(id[i+1:])
+	}
+	return ""
+}
+
+// languageCountries maps languages, ISO 639-1, to the country whose guides
+// they suggest. Languages spoken in many countries alike, such as English,
+// suggest none.
+var languageCountries = map[string]string{
+	"fr": "fr", "de": "de", "es": "es", "it": "it", "nl": "nl", "pl": "pl", "pt": "pt",
+	"da": "dk", "sv": "se", "nb": "no", "nn": "no", "no": "no", "fi": "fi", "is": "is",
+	"cs": "cz", "sk": "sk", "hu": "hu", "ro": "ro", "bg": "bg", "hr": "hr", "sr": "rs", "sl": "si",
+	"el": "gr", "tr": "tr", "ru": "ru", "uk": "ua", "ja": "jp", "ko": "kr", "he": "il",
+}
+
+// LanguageCountry returns the country whose guides a language suggests:
+// the region of a tag such as "fr-CA", else the country where the
+// language is mainly spoken, if one is.
+func LanguageCountry(language string) string {
+	language, region, _ := strings.Cut(strings.ReplaceAll(language, "_", "-"), "-")
+	if country := Country(region); country != "" {
+		return country
+	}
+	return languageCountries[strings.ToLower(language)]
 }
