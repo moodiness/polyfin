@@ -10,6 +10,7 @@ import {
   queryClient,
   queryKeys,
   signOutUserDevice,
+  unblockUser,
   updateUser,
   type ParentalControl,
   type ParentalRating,
@@ -112,6 +113,8 @@ function UserRow({
             <RatingLimitBadge parentalControl={user.parentalControl} />
             {!user.transcoding && <Badge tone="muted">{t.users.noTranscoding}</Badge>}
             {!user.downloads && <Badge tone="muted">{t.users.noDownloads}</Badge>}
+            {!user.personalAddons && <Badge tone="muted">{t.users.noPersonalAddons}</Badge>}
+            {user.blockedUntil !== null && <BlockedBadge until={user.blockedUntil} />}
           </p>
           <p className="mt-1 text-sm text-muted">
             {t.users.lastSignIn} —{' '}
@@ -166,6 +169,19 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
   const rename = useUserPatch(user)
   const resetPassword = useUserPatch(user)
   const access = useUserPatch(user)
+  const unblock = useMutation({
+    mutationFn: () => unblockUser(user.id),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<User[]>(queryKeys.users, (old) =>
+        old?.map((item) => (item.id === updated.id ? updated : item)),
+      )
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+      }
+    },
+  })
   const remove = useMutation({
     mutationFn: () => deleteUser(user.id),
     onSuccess: () => {
@@ -271,8 +287,29 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
           checked={user.downloads}
           onChange={(downloads) => access.mutate({ downloads })}
         />
+        <Checkbox
+          label={t.users.canAddAddons}
+          help={t.users.canAddAddonsHelp}
+          checked={user.personalAddons}
+          onChange={(personalAddons) => access.mutate({ personalAddons })}
+        />
         {access.isError && <Notice kind="error">{errorMessage(t, access.error)}</Notice>}
         {access.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+        {user.blockedUntil !== null && (
+          <div className="space-y-2 rounded-lg border border-rose-400/40 bg-rose-500/5 p-3">
+            <p className="text-sm text-rose-100">{t.users.blockedHelp}</p>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={unblock.isPending}
+              onClick={() => unblock.mutate()}
+            >
+              {unblock.isPending ? t.users.unblocking : t.users.unblock}
+            </button>
+          </div>
+        )}
+        {unblock.isError && <Notice kind="error">{errorMessage(t, unblock.error)}</Notice>}
+        {unblock.isSuccess && <Notice kind="success">{t.users.unblocked}</Notice>}
       </fieldset>
 
       <ParentalControlForm user={user} />
@@ -347,6 +384,15 @@ function RatingLimitBadge({ parentalControl }: { parentalControl: ParentalContro
   const group = groups[selectedGroup(groups, parentalControl)]
   if (group === undefined) return null
   return <Badge tone="muted">{t.users.ratingLimit(group.name)}</Badge>
+}
+
+/** "Blocked until 14:05": the account refuses sign-ins until then, after too many wrong passwords. */
+function BlockedBadge({ until }: { until: string }) {
+  const { t, language } = useI18n()
+  const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(until),
+  )
+  return <Badge tone="danger">{t.users.blockedUntil(time)}</Badge>
 }
 
 const unratedMovie = 'Movie'

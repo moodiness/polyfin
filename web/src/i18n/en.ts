@@ -86,6 +86,12 @@ const en = {
     invalid_library:
       'A library refers to a catalog that no longer exists or cannot be browsed. Remove the libraries marked as no longer available, then save again.',
     invalid_library_name: 'Library names must be 1 to 64 characters long.',
+    invalid_login_attempts:
+      'Wrong passwords before an account is blocked must be 0, or a whole number from 3 to 20.',
+    invalid_inactive_device_days:
+      'Days before unused devices are signed out must be a whole number from 0 to 365.',
+    personal_addons_disabled:
+      'Your own addons are turned off by an administrator. They are kept, but you cannot add, refresh or turn on any.',
   },
   status: {
     title: 'Server status',
@@ -219,6 +225,16 @@ const en = {
       `Delete ${name}? Their devices are signed out and this cannot be undone.`,
     deleting: 'Deleting…',
     deleted: (name: string) => `${name} has been deleted.`,
+    canAddAddons: 'Can add their own addons',
+    canAddAddonsHelp:
+      'Lets this user add Stremio addons of their own on their My addons page. Without it, their addons are kept but not used.',
+    noPersonalAddons: 'No own addons',
+    blockedUntil: (time: string) => `Blocked until ${time}`,
+    blockedHelp:
+      'Too many wrong passwords were entered for this account: it cannot sign in until then, even with the right password.',
+    unblock: 'Unblock',
+    unblocking: 'Unblocking…',
+    unblocked: 'The account is unblocked.',
   },
   settings: {
     title: 'Settings',
@@ -275,6 +291,19 @@ const en = {
     catalogRefreshMinutes: 'Refresh catalogs every (minutes)',
     catalogRefreshMinutesHelp:
       'How long Polyfin keeps the catalog pages it reads from addons, the Live TV guide included, before reading them again. A longer time sends fewer requests to the addons, but new titles show up later. From 1 to 1,440 (one day); 10 by default.',
+    securityTitle: 'Security',
+    personalAddons: 'Allow users’ own addons',
+    personalAddonsHelp:
+      'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
+    loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
+    loginAttemptsHelp:
+      'After this many wrong passwords in a row, the account cannot sign in for 15 minutes, even with the right password. An administrator can unblock it sooner on the Users page. 0, or from 3 to 20.',
+    inactiveDeviceDays: 'Sign out devices unused for (days, 0 = never)',
+    inactiveDeviceDaysHelp:
+      'Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. From 0 to 365.',
+    detailedLog: 'Detailed log (to diagnose a problem)',
+    detailedLogHelp:
+      'Polyfin writes much more to its log, at once and without a restart. Turn it off once the problem is found.',
     saved: 'Settings saved.',
   },
   stremioTypes: {
@@ -388,6 +417,8 @@ const en = {
     preferenceSaved: 'Preference saved.',
     parentalControl:
       'Parental control applies to your account: your Jellyfin apps show the server’s addons and libraries only, as they give the ratings it relies on. Your own addons are kept but not used.',
+    personalAddonsOff:
+      'An administrator turned your own addons off: your Jellyfin apps show the server’s addons and libraries only. Your own addons are kept but not used.',
   },
   notFound: {
     title: 'Page not found',

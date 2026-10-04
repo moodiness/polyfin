@@ -139,6 +139,18 @@ func confined(r *http.Request) bool {
 	return !sessionFrom(r.Context()).User.IsAdministrator
 }
 
+// personalAddonsRefused answers 403 personal_addons_disabled and reports
+// true when scope is the caller's own addons and the server or the caller's
+// own permission turned them off: such addons are kept, and may be turned
+// off or removed, but not added, replaced, refreshed or turned on.
+func (h *handler) personalAddonsRefused(w http.ResponseWriter, r *http.Request, scope addons.Scope) bool {
+	if scope.Owner == nil || h.Accounts.Settings().PersonalAddonsAllowed(sessionFrom(r.Context()).User) {
+		return false
+	}
+	writeError(w, http.StatusForbidden, "personal_addons_disabled")
+	return true
+}
+
 // addonError answers the client-facing addon errors and reports whether err
 // was one of them.
 func addonError(w http.ResponseWriter, err error) bool {
@@ -195,7 +207,7 @@ func (h *handler) listAddons(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
-	if !ok {
+	if !ok || h.personalAddonsRefused(w, r, scope) {
 		return
 	}
 	var body struct {
@@ -228,6 +240,9 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	if (body.ManifestURL != nil || (body.Enabled != nil && *body.Enabled)) && h.personalAddonsRefused(w, r, scope) {
+		return
+	}
 	var addon addons.Addon
 	var err error
 	if body.ManifestURL != nil {
@@ -241,7 +256,7 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
-	if !ok {
+	if !ok || h.personalAddonsRefused(w, r, scope) {
 		return
 	}
 	id, ok := pathID(w, r, "id")
@@ -356,9 +371,13 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 // addonPreferencesJSON is whether a user sees the server's addons.
 // ParentalControl is set while the user's parental control hides titles:
 // they then see the server's addons, and only them, in their apps.
+// PersonalAddons is unset while the server or the user's own permission
+// turned their own addons off: they then see the server's addons, and only
+// them, too.
 type addonPreferencesJSON struct {
 	UseSharedAddons bool `json:"useSharedAddons"`
 	ParentalControl bool `json:"parentalControl"`
+	PersonalAddons  bool `json:"personalAddons"`
 }
 
 func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +388,8 @@ func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	restricted := user.Parental.Restricted()
-	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: uses || restricted, ParentalControl: restricted})
+	personal := h.Accounts.Settings().PersonalAddonsAllowed(user)
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: uses || restricted || !personal, ParentalControl: restricted, PersonalAddons: personal})
 }
 
 func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
@@ -390,5 +410,6 @@ func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: body.UseSharedAddons, ParentalControl: user.Parental.Restricted()})
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: body.UseSharedAddons, ParentalControl: user.Parental.Restricted(),
+		PersonalAddons: h.Accounts.Settings().PersonalAddonsAllowed(user)})
 }

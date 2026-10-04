@@ -20,3 +20,10 @@ func (s *Store) Conversions(user User) Conversions {
 func (s *Store) MayDownload(user User) bool {
 	return s.Settings().Downloads && user.ContentDownloading
 }
+
+// PersonalAddonsAllowed reports whether user may add and use their own
+// addons: their own permission allows it, and the server allows users' own
+// addons. Otherwise their addons are kept, but not used.
+func (settings Settings) PersonalAddonsAllowed(user User) bool {
+	return settings.PersonalAddons && user.PersonalAddons
+}

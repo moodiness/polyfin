@@ -51,3 +51,31 @@ func TestPermissionsCombineTheServersSwitchesAndTheUsers(t *testing.T) {
 		t.Errorf("settings after reopening: %+v", got)
 	}
 }
+
+func TestPersonalAddonsNeedTheServersSwitchAndTheUsers(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	user := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
+	if !user.PersonalAddons || !store.Settings().PersonalAddons || !store.Settings().PersonalAddonsAllowed(user) {
+		t.Fatalf("by default: user %v, server %v", user.PersonalAddons, store.Settings().PersonalAddons)
+	}
+	user, err := store.UpdateUser(ctx, user.ID, UserChanges{PersonalAddons: new(false)}, nil)
+	if err != nil || user.PersonalAddons || store.Settings().PersonalAddonsAllowed(user) {
+		t.Fatalf("user's permission off: %+v %v", user, err)
+	}
+	// Other changes keep it.
+	if user, err = store.UpdateUser(ctx, user.ID, UserChanges{IsHidden: new(true)}, nil); err != nil || user.PersonalAddons {
+		t.Errorf("after another change: %+v %v", user, err)
+	}
+	if user, err = store.UpdateUser(ctx, user.ID, UserChanges{PersonalAddons: new(true)}, nil); err != nil || !user.PersonalAddons {
+		t.Fatalf("user's permission back on: %+v %v", user, err)
+	}
+	settings := store.Settings()
+	settings.PersonalAddons = false
+	if _, err := store.UpdateSettings(ctx, settings); err != nil {
+		t.Fatal(err)
+	}
+	if store.Settings().PersonalAddonsAllowed(user) {
+		t.Error("allowed while the server's switch is off")
+	}
+}

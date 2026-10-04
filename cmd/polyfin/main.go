@@ -98,7 +98,10 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	// The level follows the settings' detailed log once they are loaded.
+	level := new(slog.LevelVar)
+	level.Set(cfg.LogLevel)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	adminApp, err := webui.Assets()
 	if err != nil {
 		return err
@@ -120,6 +123,7 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
+	store.FollowLogLevel(level, cfg.LogLevel)
 	var setupCode string
 	if required, err := store.SetupRequired(ctx); err != nil {
 		return err
@@ -205,6 +209,9 @@ func serve(ctx context.Context) error {
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
+	// Jellyfin's handler, created above, closes the sockets of the devices
+	// the sweep signs out.
+	go store.SweepInactiveDevices(ctx, logger)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)

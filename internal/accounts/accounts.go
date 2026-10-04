@@ -60,6 +60,14 @@ type User struct {
 	VideoTranscoding   bool
 	AudioTranscoding   bool
 	ContentDownloading bool
+	// PersonalAddons lets the user add and use their own addons, when the
+	// server allows users' own addons (see Settings.PersonalAddonsAllowed).
+	PersonalAddons bool
+	// InvalidLoginAttempts counts the user's wrong passwords in a row,
+	// while the server blocks accounts after Settings.LoginAttempts of them;
+	// BlockedUntil is when the last block ends (see Store.BlockedUntil).
+	InvalidLoginAttempts int
+	BlockedUntil         *time.Time
 }
 
 // NewUser describes an account to create.
@@ -82,6 +90,7 @@ type UserChanges struct {
 	VideoTranscoding   *bool
 	AudioTranscoding   *bool
 	ContentDownloading *bool
+	PersonalAddons     *bool
 }
 
 // Store is the accounts repository.
@@ -90,6 +99,10 @@ type Store struct {
 	settings atomic.Pointer[Settings]
 	// signedOut is told of the devices signed out.
 	signedOut atomic.Pointer[func(devices []ID)]
+	// now is the clock blocks and unused devices are measured by.
+	now func() time.Time
+	// logLevel follows the settings' DetailedLog (see FollowLogLevel).
+	logLevel atomic.Pointer[followedLevel]
 }
 
 // OnSignOut has f told of the devices signed out, once their tokens no
@@ -113,7 +126,7 @@ func qualifiedUserColumns(alias string) string {
 
 // Open returns a store backed by db and loads the server settings.
 func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
-	store := &Store{db: db}
+	store := &Store{db: db, now: time.Now}
 	settings, err := store.loadSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -123,14 +136,16 @@ func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
 }
 
 const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
-	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading"
+	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
+	"personal_addons, invalid_login_attempts, blocked_until"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
 	return []any{&user.ID, &user.Name, &user.IsAdministrator, &user.IsHidden, &user.IsDisabled,
 		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
 		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
-		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading}
+		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
+		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -202,13 +217,16 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 		settings = &Settings{}
 		return tx.QueryRow(ctx, `UPDATE settings SET language = $1
 			RETURNING server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit,
-				skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes`, language).
+				skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes,
+				personal_addons, login_attempts, inactive_device_days, detailed_log`, language).
 			Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 				&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-				&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes)
+				&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+				&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog)
 	})
 	if err == nil && settings != nil {
 		s.settings.Store(settings)
+		s.applyLogLevel()
 	}
 	return user, err
 }
@@ -254,6 +272,14 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 // Authenticate checks a name and password. The name is matched without
 // regard to case. A disabled account is reported only after its password is
 // verified, so the response does not reveal which names exist.
+//
+// While Settings.LoginAttempts is set, that many wrong passwords in a row
+// block the account for LoginBlock: every sign-in is then refused as a
+// wrong password is, the right password included, and a sign-in, a new
+// password or Unblock starts the count again. Jellyfin disables the account
+// instead, until an administrator enables it again; Polyfin only blocks it
+// for a while, so that the last administrator can never be locked out for
+// good.
 func (s *Store) Authenticate(ctx context.Context, name, password string) (User, error) {
 	var hash string
 	var user User
@@ -267,15 +293,28 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 	if err != nil {
 		return User{}, err
 	}
-	if len(password) > maxPasswordLength {
-		return User{}, ErrInvalidCredentials
+	ok := false
+	if len(password) <= maxPasswordLength {
+		if ok, err = verifyPassword(password, hash); err != nil {
+			return User{}, fmt.Errorf("user %s: %w", user.ID, err)
+		}
 	}
-	ok, err := verifyPassword(password, hash)
-	if err != nil {
-		return User{}, fmt.Errorf("user %s: %w", user.ID, err)
+	limit, now := s.Settings().LoginAttempts, s.now()
+	if limit > 0 && user.Blocked(now) {
+		return User{}, ErrInvalidCredentials
 	}
 	if !ok {
+		if limit > 0 {
+			if err := s.countWrongPassword(ctx, user.ID, limit, now); err != nil {
+				return User{}, err
+			}
+		}
 		return User{}, ErrInvalidCredentials
+	}
+	if user.InvalidLoginAttempts > 0 || user.BlockedUntil != nil {
+		if user, err = s.Unblock(ctx, user.ID); err != nil {
+			return User{}, err
+		}
 	}
 	if user.IsDisabled {
 		return User{}, ErrDisabled
@@ -347,6 +386,12 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				return err
 			}
 		}
+		if hash != nil {
+			// A new password starts the count of wrong ones again.
+			if _, err := tx.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1", id); err != nil {
+				return err
+			}
+		}
 		updated, err = scanUser(tx.QueryRow(ctx, `UPDATE users SET
 				name = coalesce($2, name),
 				password_hash = coalesce($3, password_hash),
@@ -358,11 +403,13 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END,
 				video_transcoding = coalesce($11, video_transcoding),
 				audio_transcoding = coalesce($12, audio_transcoding),
-				content_downloading = coalesce($13, content_downloading)
+				content_downloading = coalesce($13, content_downloading),
+				personal_addons = coalesce($14, personal_addons)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
-			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading))
+			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
+			changes.PersonalAddons))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

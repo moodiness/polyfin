@@ -159,10 +159,13 @@ func (v view) limit(src source) int {
 }
 
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
+	settings := s.settings()
 	// A user under parental control browses the server's addons only: their
 	// own addons could describe titles without the ratings that hide them.
+	// So does a user whose own addons the server or their own permission
+	// turned off: their addons are kept, but not used.
 	scopes := []addons.Scope{addons.Shared()}
-	if !user.Parental.Restricted() {
+	if !user.Parental.Restricted() && settings.PersonalAddonsAllowed(user) {
 		scopes = []addons.Scope{addons.Personal(user.ID)}
 		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
 			return view{}, err
@@ -170,7 +173,6 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 		}
 	}
-	settings := s.settings()
 	v := view{parental: user.Parental, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
 	var visible []addons.Library

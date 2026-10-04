@@ -25,6 +25,10 @@ export type User = {
   transcoding: boolean
   /** Whether the user may download titles. */
   downloads: boolean
+  /** Whether the user may add and use their own addons. */
+  personalAddons: boolean
+  /** When the block for wrong passwords ends; null when the account is not blocked. */
+  blockedUntil: string | null
 }
 
 /** Jellyfin parental control: `maxRating` null means no limit. */
@@ -84,11 +88,22 @@ export type Settings = {
   versionListMinutes: number
   /** Minutes catalog pages are kept. */
   catalogRefreshMinutes: number
+  /** Whether users may add and use their own addons. */
+  personalAddons: boolean
+  /** Wrong passwords in a row that block an account for 15 minutes; 0 never blocks. */
+  loginAttempts: number
+  /** Days unused after which a Jellyfin app is signed out; 0 never signs it out. */
+  inactiveDeviceDays: number
+  /** Logs in detail (debug level), to diagnose a problem. */
+  detailedLog: boolean
 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
 export const catalogLimitRange = { min: 100, max: 20000 }
 export const channelLimitRange = { min: 100, max: 50000 }
+/** The ranges the server accepts for Settings.loginAttempts (besides 0) and inactiveDeviceDays. */
+export const loginAttemptsRange = { min: 3, max: 20 }
+export const inactiveDeviceDaysRange = { min: 0, max: 365 }
 
 /** The ranges the server accepts for the content settings. */
 export const playedPercentRange = { min: 50, max: 100 }
@@ -112,6 +127,7 @@ export type UserPatch = Partial<{
   parentalControl: ParentalControl
   transcoding: boolean
   downloads: boolean
+  personalAddons: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -151,8 +167,16 @@ export type Library = {
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
 
-/** `parentalControl`: the user's parental control keeps them on the server's addons only. */
-export type AddonPreferences = { useSharedAddons: boolean; parentalControl: boolean }
+/**
+ * `parentalControl`: the user's parental control keeps them on the server's addons only.
+ * `personalAddons`: false while the server or the user's permission turns their own addons off;
+ * they are then kept but not used, and the server's addons are used.
+ */
+export type AddonPreferences = {
+  useSharedAddons: boolean
+  parentalControl: boolean
+  personalAddons: boolean
+}
 
 /** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
 export class ApiError extends Error {
@@ -257,6 +281,9 @@ export const fetchUserDevices = (id: string, signal?: AbortSignal) =>
 
 export const signOutUserDevice = (id: string, deviceId: string) =>
   request<void>('DELETE', `/users/${seg(id)}/devices/${seg(deviceId)}`)
+
+/** Ends the block of a user's account for wrong passwords. */
+export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(id)}/unblock`)
 
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
