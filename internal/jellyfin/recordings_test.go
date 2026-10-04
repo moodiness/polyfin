@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -527,5 +528,81 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	}
 	if status, _ := s.call(http.MethodGet, "/LiveTv/Recordings/"+recording.Id, app("tv", token), nil); status != http.StatusNotFound {
 		t.Errorf("a deleted recording: %d", status)
+	}
+}
+
+// Programmes fed by an XMLTV guide are scheduled like Native EPG ones:
+// timers, series timers matching their title on their channel at their
+// time of day, and the timers they show.
+func TestXMLTVProgrammesAreScheduled(t *testing.T) {
+	addon := newTVAddon(t, true, "")
+	s, _ := recordingServer(t, "ffprobe-not-installed", t.TempDir())
+	token, _ := recordingMember(t, s, addon.url, true)
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := func(d time.Duration) string { return now.Add(d).Format("20060102150405 -0700") }
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="two-x"><display-name>Two</display-name></channel>
+  <programme channel="two-x" start="%s" stop="%s"><title>Talk Show</title><sub-title>Pilot</sub-title></programme>
+  <programme channel="two-x" start="%s" stop="%s"><title>Talk Show</title></programme>
+  <programme channel="two-x" start="%s" stop="%s"><title>Talk Show</title></programme>
+</tv>`, at(time.Hour), at(2*time.Hour), at(5*time.Hour), at(6*time.Hour), at(25*time.Hour), at(26*time.Hour))
+	guide := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, body) }))
+	t.Cleanup(guide.Close)
+	libraries, err := s.addons.Libraries(t.Context(), addons.Shared())
+	if err != nil || len(libraries) != 1 {
+		t.Fatal(libraries, err)
+	}
+	key := addons.LibraryKey{AddonID: libraries[0].AddonID, CatalogType: "tv", CatalogID: "channels"}
+	if err := s.addons.SetGuide(t.Context(), addons.Shared(), key, guide.URL+"/epg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.library.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
+		t.Fatal(err)
+	}
+	var shows []BaseItemDto
+	var programs QueryResult
+	s.get(t, "/LiveTv/Programs", token, &programs)
+	for _, p := range programs.Items {
+		if p.Name == "Talk Show" {
+			shows = append(shows, p)
+		}
+	}
+	if len(shows) != 3 {
+		t.Fatalf("guide programmes: %+v", programs.Items)
+	}
+	defaults := timerDefaults(t, s, token, shows[0].Id)
+	if defaults["Name"] != "Talk Show" || defaults["ChannelId"] != *shows[0].ChannelId {
+		t.Errorf("defaults for a guide programme: %v", defaults)
+	}
+	if status, body := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), defaults); status != http.StatusNoContent {
+		t.Fatalf("a timer for a guide programme: %d %s", status, body)
+	}
+	var detail BaseItemDto
+	if s.get(t, "/LiveTv/Programs/"+shows[0].Id, token, &detail); detail.TimerId == "" || detail.EpisodeTitle != "Pilot" {
+		t.Errorf("a scheduled guide programme: %+v", detail)
+	}
+	defaults["RecordAnyTime"] = false
+	if status, body := s.call(http.MethodPost, "/LiveTv/SeriesTimers", app("tv", token), defaults); status != http.StatusNoContent {
+		t.Fatalf("a series timer for a guide programme: %d %s", status, body)
+	}
+	var timers struct{ Items []TimerInfoDto }
+	s.get(t, "/LiveTv/Timers", token, &timers)
+	var scheduled []string
+	for _, timer := range timers.Items {
+		if timer.SeriesTimerId == "" {
+			t.Errorf("a timer outside the series: %+v", timer)
+		}
+		scheduled = append(scheduled, timer.ProgramId)
+	}
+	// The one five hours later airs at another time of day.
+	if !slices.Equal(scheduled, []string{shows[0].Id, shows[2].Id}) {
+		t.Errorf("timers of the series: %v, programmes %s %s %s", scheduled, shows[0].Id, shows[1].Id, shows[2].Id)
+	}
+	s.get(t, "/LiveTv/Programs", token, &programs)
+	for _, p := range programs.Items {
+		if p.Id == shows[1].Id && (p.TimerId != "" || p.SeriesTimerId == "") || p.Id == shows[2].Id && p.TimerId == "" {
+			t.Errorf("a guide programme of the series: %+v", p)
+		}
 	}
 }

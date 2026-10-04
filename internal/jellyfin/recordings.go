@@ -1087,7 +1087,19 @@ func (h *Handler) liveRecordingFile(w http.ResponseWriter, r *http.Request) {
 		notFoundProblem(w)
 		return
 	}
+	const liveWaitForFile = 30 * time.Second
+	// FFmpeg creates the file once the stream opens: it is waited for
+	// while the recording goes on.
 	file, err := os.Open(part)
+	for wait := time.Now().Add(liveWaitForFile); errors.Is(err, os.ErrNotExist) && time.Now().Before(wait); file, err = os.Open(part) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-done:
+			wait = time.Time{}
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
 	if err != nil {
 		notFoundProblem(w)
 		return
