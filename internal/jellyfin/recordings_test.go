@@ -420,6 +420,8 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	folder := t.TempDir()
 	s, service := recordingServer(t, ffprobe, folder)
 	token, user := recordingMember(t, s, addonURL, true)
+	// Thumbnails are on, yet recordings get none.
+	s.setting(t, func(settings *accounts.Settings) { settings.Trickplay, settings.ChapterImages = true, true })
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { service.Run(ctx); close(done) }()
@@ -465,6 +467,9 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 		if recording.Status == "" {
 			break
 		}
+	}
+	if recording.Trickplay != nil {
+		t.Errorf("a recording with a Trickplay field: %+v", *recording.Trickplay)
 	}
 	if recording.Status != "" || recording.MediaSources == nil || len(*recording.MediaSources) != 1 || recording.CanDelete == nil || !*recording.CanDelete {
 		t.Fatalf("a finished recording: %+v", recording)
