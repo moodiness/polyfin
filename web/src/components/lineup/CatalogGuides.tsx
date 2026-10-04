@@ -55,13 +55,7 @@ export default function CatalogGuides({
   return (
     <div className="space-y-6">
       <Counts guides={guides.data} />
-      <GuideList
-        key={guides.data.guides.map((g) => g.id).join()}
-        scope={scope}
-        target={target}
-        guides={guides.data}
-        onChanged={onChanged}
-      />
+      <GuideList scope={scope} target={target} guides={guides.data} onChanged={onChanged} />
       <Automap scope={scope} target={target} onChanged={onChanged} />
     </div>
   )
@@ -110,6 +104,8 @@ function GuideList({
     entries.length !== initial.length ||
     entries.some((entry, i) => entry.kind === 'new' || entry.guide.id !== guides.guides[i].id)
   const settle = (answer: Guides) => {
+    // The list follows what the server answered: its downloads and the ids of new guides.
+    setEntries(answer.guides.map((guide) => ({ kind: 'kept', guide })))
     queryClient.setQueryData(queryKeys.catalogGuides(scope, target), answer)
     void queryClient.invalidateQueries({ queryKey: queryKeys.catalogGuides(scope, target) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.scope(scope) })
@@ -128,6 +124,7 @@ function GuideList({
     mutationFn: () => refreshCatalogGuides(scope, target),
     onSuccess: settle,
   })
+
   const busy = save.isPending || refresh.isPending
 
   function add(event: FormEvent<HTMLFormElement>) {

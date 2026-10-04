@@ -91,6 +91,7 @@ export function ExclusionPicker({
     gcTime: 10 * 60_000,
   })
   const number = (n: number) => n.toLocaleString(language)
+  const regionNames = new Intl.DisplayNames([language], { type: 'region' })
   const set = new Set(excluded)
   const needle = search.trim().toLocaleLowerCase(language)
   const categories = preview.data?.categories ?? []
@@ -202,7 +203,7 @@ export function ExclusionPicker({
                       className="size-4 shrink-0 accent-fin-3"
                     />
                     <span className="min-w-0 flex-1 truncate text-zinc-100">
-                      {categoryName(category.key, category.name, text)}
+                      {categoryName(category.key, category.name, text, regionNames)}
                     </span>
                     <span className="shrink-0 text-xs text-muted tabular-nums">
                       {text.channelCount(category.channels)}
@@ -218,14 +219,24 @@ export function ExclusionPicker({
   )
 }
 
-/** The name a preview category is shown under: entries without group, other countries. */
+/** The name a preview category is shown under: entries without group, countries by name. */
 function categoryName(
   key: string,
   name: string,
   text: { noGroup: string; otherCountries: string },
+  regionNames: Intl.DisplayNames,
 ): string {
   if (key === 'g:') return text.noGroup
   if (key === 'c:OTHER') return text.otherCountries
+  if (key.startsWith('c:')) {
+    const code = key.slice(2)
+    try {
+      const country = regionNames.of(code)
+      if (country && country !== code) return `${country} (${code})`
+    } catch {
+      // Not a region code the browser knows: shown as sent.
+    }
+  }
   return name
 }
 
