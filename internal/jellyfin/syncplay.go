@@ -360,28 +360,22 @@ func randomGUID() accounts.ID {
 }
 
 // syncPlayRoutes serves SyncPlay, with which apps watch together. Like
-// Jellyfin, most requests need one of the user's sessions to be in a group.
-// Jellyfin also lets administrators keep users from creating or joining
-// groups; Polyfin lets everyone do both, as Jellyfin's default policy does.
+// Jellyfin, most requests need one of the user's sessions to be in a group,
+// and the user's SyncPlay access decides who may create, list and join
+// groups (see syncPlayAllowed).
 func (h *Handler) syncPlayRoutes(rt *router) {
-	signedIn := func(method, pattern string, handler http.HandlerFunc) {
-		rt.handle(method, pattern, h.authenticated(handler))
+	signedIn := func(method, pattern string, need syncPlayNeed, handler http.HandlerFunc) {
+		rt.handle(method, pattern, h.authenticated(h.syncPlayAccess(need, handler)))
 	}
 	inGroup := func(pattern string, handler http.HandlerFunc) {
-		signedIn(http.MethodPost, pattern, func(w http.ResponseWriter, r *http.Request) {
-			if !h.syncPlay.isActive(callerFrom(r.Context()).User.ID) {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			handler(w, r)
-		})
+		signedIn(http.MethodPost, pattern, syncPlayInGroup, handler)
 	}
 	rt.handle(http.MethodGet, "/GetUtcTime", http.HandlerFunc(utcTime))
-	signedIn(http.MethodPost, "/SyncPlay/New", h.syncPlayNew)
-	signedIn(http.MethodPost, "/SyncPlay/Join", h.syncPlayJoin)
+	signedIn(http.MethodPost, "/SyncPlay/New", syncPlayCreate, h.syncPlayNew)
+	signedIn(http.MethodPost, "/SyncPlay/Join", syncPlayJoinGroups, h.syncPlayJoin)
 	inGroup("/SyncPlay/Leave", h.syncPlayLeave)
-	signedIn(http.MethodGet, "/SyncPlay/List", h.syncPlayGroups)
-	signedIn(http.MethodGet, "/SyncPlay/{groupId}", h.syncPlayGroup)
+	signedIn(http.MethodGet, "/SyncPlay/List", syncPlayJoinGroups, h.syncPlayGroups)
+	signedIn(http.MethodGet, "/SyncPlay/{groupId}", syncPlayJoinGroups, h.syncPlayGroup)
 	inGroup("/SyncPlay/SetNewQueue", h.syncPlayRequest(syncPlaySetNewQueue))
 	inGroup("/SyncPlay/SetPlaylistItem", h.syncPlayRequest(syncPlayEntry("SetPlaylistItem")))
 	inGroup("/SyncPlay/RemoveFromPlaylist", h.syncPlayRequest(syncPlayRemove))
@@ -399,7 +393,7 @@ func (h *Handler) syncPlayRoutes(rt *router) {
 	inGroup("/SyncPlay/SetRepeatMode", h.syncPlayRequest(syncPlayRepeat))
 	inGroup("/SyncPlay/SetShuffleMode", h.syncPlayRequest(syncPlayShuffle))
 	// A session out of any group may ping: it is then told so.
-	signedIn(http.MethodPost, "/SyncPlay/Ping", h.syncPlayRequest(syncPlayPing))
+	signedIn(http.MethodPost, "/SyncPlay/Ping", syncPlayAnyAccess, h.syncPlayRequest(syncPlayPing))
 }
 
 // utcTime gives the server's time, for apps to measure how far their

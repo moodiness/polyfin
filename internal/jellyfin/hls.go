@@ -202,6 +202,10 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
 		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
 			limit, _ := strconv.ParseInt(query(r, "videoBitrate"), 10, 64)
+			// Never above the user's bitrate limit, whatever the URL says.
+			if most := int64(user.MaxBitrate); most > 0 && (limit <= 0 || limit > most) {
+				limit = most
+			}
 			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, streams[i], h.Playback.Capabilities())
 		}
 	}
@@ -219,6 +223,13 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 			}
 		}
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
+	}
+	// PlaybackInfo copies no video above the user's bitrate limit: this
+	// guards URLs kept from before the limit was set, or made up.
+	if remux.ConvertVideo == nil && overUserLimit(int64(user.MaxBitrate), analysis.Bitrate) {
+		h.Logger.Info("A remux above the user's bitrate limit was refused")
+		processingError(w, http.StatusBadRequest)
+		return remuxRequest{}, false
 	}
 	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files, live: live}, true
 }

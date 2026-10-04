@@ -29,7 +29,23 @@ export type User = {
   personalAddons: boolean
   /** When the block for wrong passwords ends; null when the account is not blocked. */
   blockedUntil: string | null
+  /** How many of the user's other devices may be playing when one more starts; 0 for no limit. */
+  maxPlaybacks: number
+  /** Highest bitrate of the user's playback, in bits per second; 0 for no limit. */
+  maxBitrate: number
+  /** Whether the user can watch Live TV. */
+  liveTv: boolean
+  /** What the user may do in SyncPlay (watching together). */
+  syncPlay: SyncPlayAccess
+  /** Whether the user may control other users' apps. */
+  remoteControl: boolean
 }
+
+/** Jellyfin's SyncPlayUserAccessType. */
+export type SyncPlayAccess = 'CreateAndJoinGroups' | 'JoinGroups' | 'None'
+
+/** The range the server accepts for User.maxPlaybacks. */
+export const maxPlaybacksRange = { min: 0, max: 20 }
 
 /** Jellyfin parental control: `maxRating` null means no limit. */
 export type ParentalControl = {
@@ -128,6 +144,11 @@ export type UserPatch = Partial<{
   transcoding: boolean
   downloads: boolean
   personalAddons: boolean
+  maxPlaybacks: number
+  maxBitrate: number
+  liveTv: boolean
+  syncPlay: SyncPlayAccess
+  remoteControl: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */

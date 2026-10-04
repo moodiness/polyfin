@@ -293,7 +293,9 @@ func TestOnlyAdministratorsControlOtherUsersSessions(t *testing.T) {
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
 	bob := s.user("bob", nil)
-	administrator := s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	// Made an administrator after being created, the account keeps its own
+	// remote control permission, given here as an administrator has it.
+	administrator := s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator, c.RemoteControl = new(true), new(true) })
 	aliceTV := s.remoteApp(t, "alice", "tv", queryMediaControl, true)
 	bobTV := s.remoteApp(t, "bob", "tv", queryMediaControl, true)
 	console := s.remoteApp(t, "admin", "console", noMediaControl, false)

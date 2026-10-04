@@ -40,6 +40,14 @@ type policyUpdate struct {
 	EnableVideoPlaybackTranscoding bool
 	EnableAudioPlaybackTranscoding bool
 	EnableContentDownloading       bool
+	// The user's playback and access limits. Like Jellyfin's, a policy that
+	// leaves them out sets no limit, grants Live TV and SyncPlay, and denies
+	// controlling other users' apps.
+	MaxActiveSessions               int
+	RemoteClientBitrateLimit        int
+	EnableLiveTvAccess              bool
+	SyncPlayAccess                  syncPlayAccessValue
+	EnableRemoteControlOfOtherUsers bool
 }
 
 // updatePolicy sets a user's policy from an administrator's app: whether
@@ -65,7 +73,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	errs := bindErrors{}
 	id := errs.pathID(r, "userId")
-	policy := policyUpdate{EnableVideoPlaybackTranscoding: true, EnableAudioPlaybackTranscoding: true, EnableContentDownloading: true}
+	policy := policyUpdate{EnableVideoPlaybackTranscoding: true, EnableAudioPlaybackTranscoding: true, EnableContentDownloading: true,
+		EnableLiveTvAccess: true, SyncPlayAccess: syncPlayAccessValue{access: accounts.SyncPlayCreateAndJoin, known: true}}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		errs.add("", "A non-empty request body is required.")
 		errs.add("newPolicy", "The newPolicy field is required.")
@@ -77,6 +86,17 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		// its message also gives the position in the request.
 		path := fmt.Sprintf("$.BlockUnratedItems[%d]", i)
 		errs.add(path, "The JSON value could not be converted to Jellyfin.Data.Enums.UnratedItem. Path: "+path+".")
+		errs.add("newPolicy", "The newPolicy field is required.")
+	} else if !policy.SyncPlayAccess.known {
+		errs.add("$.SyncPlayAccess", "The JSON value could not be converted to Jellyfin.Database.Implementations.Enums.SyncPlayUserAccessType. Path: $.SyncPlayAccess.")
+		errs.add("newPolicy", "The newPolicy field is required.")
+	} else if policy.MaxActiveSessions > accounts.MaxMaxPlaybacks {
+		// Jellyfin takes any number; Polyfin's limit stops at 20, and says
+		// so as ASP.NET's range validation would.
+		errs.add("MaxActiveSessions", fmt.Sprintf("The field MaxActiveSessions must be between %d and %d.", accounts.MinMaxPlaybacks, accounts.MaxMaxPlaybacks))
+	} else if policy.RemoteClientBitrateLimit > accounts.MaxMaxBitrate {
+		// Jellyfin reads the limit as a 32-bit number.
+		errs.add("$.RemoteClientBitrateLimit", "The JSON value could not be converted to System.Int32. Path: $.RemoteClientBitrateLimit.")
 		errs.add("newPolicy", "The newPolicy field is required.")
 	}
 	if len(errs) > 0 {
@@ -108,6 +128,12 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		VideoTranscoding:   &policy.EnableVideoPlaybackTranscoding,
 		AudioTranscoding:   &policy.EnableAudioPlaybackTranscoding,
 		ContentDownloading: &policy.EnableContentDownloading,
+		// Jellyfin reads a limit of zero or less as none.
+		MaxPlaybacks:  new(max(policy.MaxActiveSessions, 0)),
+		MaxBitrate:    new(max(policy.RemoteClientBitrateLimit, 0)),
+		LiveTv:        &policy.EnableLiveTvAccess,
+		SyncPlay:      &policy.SyncPlayAccess.access,
+		RemoteControl: &policy.EnableRemoteControlOfOtherUsers,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):
@@ -121,4 +147,30 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 
 func unknownUnratedKind(kind string) bool {
 	return !slices.ContainsFunc(accounts.UnratedKinds, func(known string) bool { return strings.EqualFold(known, kind) })
+}
+
+// syncPlayAccessValue reads Jellyfin's SyncPlayUserAccessType as Jellyfin
+// reads its enumerations: a name, without regard to case, or its number.
+// known is false for anything else.
+type syncPlayAccessValue struct {
+	access accounts.SyncPlayAccess
+	known  bool
+}
+
+func (v *syncPlayAccessValue) UnmarshalJSON(data []byte) error {
+	*v = syncPlayAccessValue{}
+	var name string
+	if json.Unmarshal(data, &name) == nil {
+		for _, access := range accounts.SyncPlayAccesses {
+			if strings.EqualFold(name, string(access)) {
+				*v = syncPlayAccessValue{access: access, known: true}
+			}
+		}
+		return nil
+	}
+	var number int
+	if json.Unmarshal(data, &number) == nil && number >= 0 && number < len(accounts.SyncPlayAccesses) {
+		*v = syncPlayAccessValue{access: accounts.SyncPlayAccesses[number], known: true}
+	}
+	return nil
 }

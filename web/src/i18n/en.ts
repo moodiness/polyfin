@@ -74,6 +74,9 @@ const en = {
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
+    invalid_max_playbacks: 'Playbacks at once must be a whole number from 0 to 20.',
+    invalid_max_bitrate: 'Choose the maximum quality from the list.',
+    invalid_sync_play: 'Choose a watch together option from the list.',
     invalid_manifest_url:
       'Enter an addon manifest URL starting with https://, http:// or stremio:// and ending in /manifest.json.',
     addon_exists: 'This addon is already installed here.',
@@ -235,6 +238,31 @@ const en = {
     unblock: 'Unblock',
     unblocking: 'Unblocking…',
     unblocked: 'The account is unblocked.',
+    playbackAccessTitle: 'Playback and access',
+    maxPlaybacks: 'Playbacks at once (0 = no limit)',
+    maxPlaybacksHelp:
+      'How many of this user’s devices can play at the same time. They can still sign in on more devices.',
+    maxBitrate: 'Maximum quality',
+    maxBitrateHelp:
+      'Above it, the video is converted down when this user can use conversion; otherwise a lighter version plays.',
+    bitrateNoLimit: 'No limit',
+    bitrate4k: '40 Mbit/s (4K)',
+    bitrate1080High: '20 Mbit/s (1080p, high quality)',
+    bitrate1080: '10 Mbit/s (1080p)',
+    bitrate720: '4 Mbit/s (720p)',
+    bitrate480: '2 Mbit/s (480p)',
+    bitrateOther: (mbits: string) => `${mbits} Mbit/s`,
+    liveTv: 'Live TV',
+    liveTvHelp: 'Shows the Live TV channels to this user.',
+    syncPlay: 'Watch together',
+    syncPlayHelp: 'Playing the same title in step with others, in the Jellyfin apps that offer it.',
+    syncPlayCreateAndJoin: 'Create and join groups',
+    syncPlayJoin: 'Join only',
+    syncPlayNone: 'No',
+    remoteControl: 'Can control other users’ apps',
+    remoteControlHelp:
+      'Lets this user play, pause or send messages to the Jellyfin apps of other users. Everyone can control their own apps.',
+    savePlaybackAccess: 'Save playback and access',
   },
   settings: {
     title: 'Settings',

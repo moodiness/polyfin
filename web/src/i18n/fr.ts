@@ -83,6 +83,10 @@ const fr: Messages = {
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
       'Ce réglage du contrôle parental n’est pas pris en charge. Rechargez la page.',
+    invalid_max_playbacks:
+      'Le nombre de lectures en même temps doit être un nombre entier de 0 à 20.',
+    invalid_max_bitrate: 'Choisissez la qualité maximale dans la liste.',
+    invalid_sync_play: 'Choisissez une option de « Regarder ensemble » dans la liste.',
     invalid_manifest_url:
       'Saisissez l’URL du manifeste d’un addon, commençant par https://, http:// ou stremio:// et se terminant par /manifest.json.',
     addon_exists: 'Cet addon est déjà installé ici.',
@@ -252,6 +256,32 @@ const fr: Messages = {
     unblock: 'Débloquer',
     unblocking: 'Déblocage…',
     unblocked: 'Le compte est débloqué.',
+    playbackAccessTitle: 'Lecture et accès',
+    maxPlaybacks: 'Lectures en même temps (0 = pas de limite)',
+    maxPlaybacksHelp:
+      'Le nombre d’appareils de cet utilisateur qui peuvent lire en même temps. Il peut toujours se connecter sur d’autres appareils.',
+    maxBitrate: 'Qualité maximale',
+    maxBitrateHelp:
+      'Au-delà, la vidéo est convertie si cet utilisateur peut utiliser la conversion ; sinon, une version plus légère est lue.',
+    bitrateNoLimit: 'Pas de limite',
+    bitrate4k: '40 Mbit/s (4K)',
+    bitrate1080High: '20 Mbit/s (1080p, haute qualité)',
+    bitrate1080: '10 Mbit/s (1080p)',
+    bitrate720: '4 Mbit/s (720p)',
+    bitrate480: '2 Mbit/s (480p)',
+    bitrateOther: (mbits: string) => `${mbits} Mbit/s`,
+    liveTv: 'TV en direct',
+    liveTvHelp: 'Montre les chaînes de TV en direct à cet utilisateur.',
+    syncPlay: 'Regarder ensemble',
+    syncPlayHelp:
+      'Lire le même titre en même temps que d’autres, dans les applications Jellyfin qui le proposent.',
+    syncPlayCreateAndJoin: 'Créer et rejoindre des groupes',
+    syncPlayJoin: 'Rejoindre seulement',
+    syncPlayNone: 'Non',
+    remoteControl: 'Peut contrôler les applis des autres utilisateurs',
+    remoteControlHelp:
+      'Permet à cet utilisateur de lancer, mettre en pause ou envoyer des messages aux applications Jellyfin des autres utilisateurs. Chacun peut contrôler ses propres applications.',
+    savePlaybackAccess: 'Enregistrer la lecture et l’accès',
   },
   settings: {
     title: 'Paramètres',

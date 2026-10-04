@@ -202,7 +202,11 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 			switch {
 			case !l.Enabled || !active:
 			case LiveCatalog(l.Catalog.Type):
-				v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog})
+				// A user without Live TV has no channels, so none of them,
+				// nor their programmes, can be reached.
+				if user.LiveTv {
+					v.channels = append(v.channels, source{addon: entry, catalog: l.Catalog})
+				}
 			default:
 				visible = append(visible, l)
 				entries = append(entries, entry)

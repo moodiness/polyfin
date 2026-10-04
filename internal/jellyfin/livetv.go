@@ -29,8 +29,10 @@ const guideDays = 7
 // liveTvRoutes registers Jellyfin's Live TV API: the channels of the
 // users' live TV catalogs and the programmes of their addons' guides.
 func (h *Handler) liveTvRoutes(rt *router) {
+	// Every route but the players' requires Live TV access, as Jellyfin's
+	// LiveTvAccess policy does.
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
-		rt.handle(method, pattern, h.authenticated(handler))
+		rt.handle(method, pattern, h.authenticated(liveTvAccess(handler)))
 	}
 	signedIn(http.MethodGet, "/LiveTv/Info", h.liveTvInfo)
 	signedIn(http.MethodGet, "/LiveTv/GuideInfo", h.guideInfo)
@@ -628,6 +630,11 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		decision = playback.Decide(request.DeviceProfile, playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}, options)
 	}
 	if decision.HLS && !permitted(allowed, decision) {
+		return MediaSourceInfo{}, false
+	}
+	// Above the user's bitrate limit, a stream plays only converted down to
+	// it.
+	if beyondUserLimit(request, analysis.Bitrate, decision) {
 		return MediaSourceInfo{}, false
 	}
 	source.Container = cmp.Or(decision.Container, container)
