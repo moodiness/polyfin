@@ -112,8 +112,9 @@ type BaseItemDto struct {
 	ImageBlurHashes          map[string]map[string]string
 	ParentPrimaryImageItemId string `json:",omitempty"`
 	ParentPrimaryImageTag    string `json:",omitempty"`
-	// Chapters is always empty: Polyfin knows no chapters.
-	Chapters               *[]struct{} `json:",omitempty"`
+	// Chapters are those of the version the item plays first, once Polyfin
+	// analyzed it.
+	Chapters               *[]ChapterInfo `json:",omitempty"`
 	LocationType           string
 	MediaType              string
 	VideoType              string    `json:",omitempty"`
@@ -143,17 +144,20 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		return
 	}
 	var sources []MediaSourceInfo
+	var p playable
 	if detail {
-		p, err := h.playable(r.Context(), user, item)
+		var err error
+		p, err = h.playable(r.Context(), user, item)
 		if err != nil && r.Context().Err() == nil {
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)
-	} else if p := h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
+	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)
 	} else {
 		sources = []MediaSourceInfo{h.placeholderSource(r, item)}
 	}
+	h.setChapters(r.Context(), dto, p.ordered(opened))
 	dto.Id = opened.String()
 	dto.MediaSources = &sources
 	if detail {
@@ -322,6 +326,9 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	if detail || fields.has("People") {
 		dto.People = new(people(item.People))
 	}
+	if detail || fields.has("Chapters") {
+		dto.Chapters = &[]ChapterInfo{}
+	}
 	if (detail || fields.has("ParentId")) && item.ParentID != (accounts.ID{}) {
 		dto.ParentId = item.ParentID.String()
 	}
@@ -344,7 +351,6 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.Tags = &[]string{}
 		dto.LockedFields = &[]string{}
 		dto.LockData = new(false)
-		dto.Chapters = &[]struct{}{}
 		if item.Kind == library.KindLibrary {
 			// Jellyfin reports this date unset on libraries.
 			dto.DateLastMediaAdded = new(Time(time.Time{}))

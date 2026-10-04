@@ -1,5 +1,5 @@
 // Package media analyzes video sources with ffprobe: their container,
-// duration, bitrate and tracks.
+// duration, bitrate, tracks and chapters.
 package media
 
 import (
@@ -27,10 +27,20 @@ type Analysis struct {
 	// Bitrate is the overall bitrate in bits per second.
 	Bitrate int64    `json:"bitrate,omitempty"`
 	Streams []Stream `json:"streams"`
+	// Chapters are in the order of the file, which is by start.
+	Chapters []Chapter `json:"chapters,omitempty"`
 	// Remote marks a source ffprobe read over the network rather than from
 	// a file: Jellyfin describes the tracks of such sources a little
 	// differently.
 	Remote bool `json:"remote,omitempty"`
+}
+
+// Chapter is a chapter of a source, as its container marks it.
+type Chapter struct {
+	Start time.Duration `json:"start"`
+	End   time.Duration `json:"end"`
+	// Title is the chapter's name in the file, empty when it has none.
+	Title string `json:"title,omitempty"`
 }
 
 // Stream is a track of a source.
@@ -120,7 +130,7 @@ func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
 	command := exec.CommandContext(ctx, p.Path,
 		"-v", "error",
 		"-print_format", "json",
-		"-show_format", "-show_streams",
+		"-show_format", "-show_streams", "-show_chapters",
 		// Enough to find every track of a remote file without reading far.
 		"-probesize", "20M", "-analyzeduration", "10M",
 		"-reconnect", "1", "-reconnect_streamed", "1",
@@ -227,6 +237,13 @@ func Parse(data []byte) (Analysis, error) {
 		}
 		analysis.Streams = append(analysis.Streams, stream)
 	}
+	for _, c := range raw.Chapters {
+		analysis.Chapters = append(analysis.Chapters, Chapter{
+			Start: seconds(c.StartTime),
+			End:   seconds(c.EndTime),
+			Title: tag(c.Tags, "title"),
+		})
+	}
 	if !hasVideo {
 		return Analysis{}, fmt.Errorf("%w: no video track", ErrNotMedia)
 	}
@@ -284,6 +301,11 @@ type probeOutput struct {
 			DVBLSignalCompatibilityID int    `json:"dv_bl_signal_compatibility_id"`
 		} `json:"side_data_list"`
 	} `json:"streams"`
+	Chapters []struct {
+		StartTime string            `json:"start_time"`
+		EndTime   string            `json:"end_time"`
+		Tags      map[string]string `json:"tags"`
+	} `json:"chapters"`
 }
 
 // tag reads a tag whatever its letter case, as containers differ: Matroska

@@ -169,6 +169,11 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	// the user or managing the item.
 	dto := h.newItemDto(item, nil, true, userState{})
 	h.addMediaSources(r, user, &dto, item, playing.Item, false)
+	// The chapters are those of the version playing, which the app may
+	// have picked among the item's.
+	if source, err := accounts.ParseID(playing.MediaSourceID); err == nil && source != playing.Item {
+		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).ordered(source))
+	}
 	dto.MediaSources, dto.HasSubtitles, dto.People, dto.RemoteTrailers = nil, nil, nil, nil
 	dto.CanDelete, dto.CanDownload, dto.LockData, dto.LockedFields, dto.Tags = nil, nil, nil, nil, nil
 	dto.Etag, dto.SortName, dto.PlayAccess, dto.DisplayPreferencesId = "", "", "", ""

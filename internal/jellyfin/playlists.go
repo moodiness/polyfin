@@ -877,7 +877,7 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 			dto.Tags = &[]string{}
 			dto.LockedFields = &[]string{}
 			dto.LockData = new(false)
-			dto.Chapters = &[]struct{}{}
+			dto.Chapters = &[]ChapterInfo{}
 			dto.RecursiveItemCount = new(len(entries))
 			dto.CumulativeRunTimeTicks = new(int64(runtime / 100))
 			added := time.Time{}

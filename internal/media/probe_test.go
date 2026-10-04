@@ -2,6 +2,12 @@ package media
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -57,5 +63,58 @@ func TestParseRefusesWhatIsNotAVideo(t *testing.T) {
 		if _, err := Parse([]byte(output)); !errors.Is(err, ErrNotMedia) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// The clip Jellyfin's chapters were recorded from, as upstream ffprobe sees
+// it.
+func TestParseReadsChapters(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.1", "chapters", "probe.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis, err := Parse(probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Chapter{
+		{Start: 0, End: 2500400 * time.Microsecond, Title: "Opening"},
+		{Start: 2500400 * time.Microsecond, End: 5 * time.Second},
+		{Start: 5 * time.Second, End: 7500 * time.Millisecond, Title: "00:05:00.000"},
+		{Start: 7500 * time.Millisecond, End: 10 * time.Second, Title: "7"},
+	}
+	if !slices.Equal(analysis.Chapters, want) {
+		t.Errorf("chapters:\n got %+v\nwant %+v", analysis.Chapters, want)
+	}
+}
+
+// Probe asks ffprobe for the chapters of a source it reads over HTTP.
+func TestProbeFindsChapters(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	metadata := filepath.Join(dir, "chapters.txt")
+	if err := os.WriteFile(metadata, []byte(";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1000\ntitle=Intro\n"+
+		"[CHAPTER]\nTIMEBASE=1/1000\nSTART=1000\nEND=2000\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	clip := filepath.Join(dir, "clip.mkv")
+	command := exec.Command(ffmpeg, "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=10:duration=2",
+		"-i", metadata, "-map", "0:v", "-map_chapters", "1", "-c:v", "mpeg4", clip)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, output)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, clip) }))
+	defer server.Close()
+	prober := Prober{Path: filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), Timeout: time.Minute}
+	analysis, err := prober.Probe(t.Context(), server.URL+"/clip.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Chapter{{Start: 0, End: time.Second, Title: "Intro"}, {Start: time.Second, End: 2 * time.Second}}
+	if !slices.Equal(analysis.Chapters, want) {
+		t.Errorf("chapters:\n got %+v\nwant %+v", analysis.Chapters, want)
 	}
 }
