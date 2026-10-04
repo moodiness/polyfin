@@ -1,16 +1,21 @@
 package jellyfin
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // group sets a user's quality group.
@@ -55,6 +60,16 @@ func videoHeightOf(source MediaSourceInfo) int {
 	return 0
 }
 
+// indexed stores a keyframe index for the movie's second version, which
+// streaming it over HLS needs: its file is not a real MP4.
+func (p playbackSetup) indexed(t *testing.T) {
+	t.Helper()
+	index := binary.AppendVarint(binary.AppendVarint(nil, 0), 6_000_000)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_keyframes (version_id, keyframes) VALUES ($1, $2)", p.versions[1].ID, index); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // fetchStatus fetches the first bytes of a URL.
 func fetchStatus(t *testing.T, target string) int {
 	t.Helper()
@@ -64,11 +79,12 @@ func fetchStatus(t *testing.T, target string) int {
 
 // The movie's first version is 4K, its second 1080p: a group offers the
 // versions that fit, in their order, and when none fits, all of them,
-// converted down.
+// the closest to the group first, converted down.
 func TestQualityGroupsLeaveOutTallerVersions(t *testing.T) {
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
+	p.indexed(t)
 	chrome := p.profile(t, "jellyfin-web-chrome")
 	tall, fitting := p.versions[0].ID.String(), p.versions[1].ID.String()
 	etags := func(answer playbackAnswer) []string {
@@ -100,12 +116,12 @@ func TestQualityGroupsLeaveOutTallerVersions(t *testing.T) {
 		t.Errorf("details under 1080p: %+v", details.MediaSources)
 	}
 
-	// 720p: none fits, so both are kept, the first converted down to 720
-	// lines, as Jellyfin reports a resolution limit; the other is not
-	// offered as it is.
+	// 720p: none fits, so both are kept, the 1080p one first, converted
+	// down to 720 lines, as Jellyfin reports a resolution limit; the other
+	// is not offered as it is.
 	p.group(t, p.user, 720)
 	answer = p.ask(t, p.token, p.movie, chrome, nil)
-	if !slices.Equal(etags(answer), []string{tall, fitting}) {
+	if !slices.Equal(etags(answer), []string{fitting, tall}) {
 		t.Fatalf("720p: %+v", answer)
 	}
 	first, other := answer.MediaSources[0], answer.MediaSources[1]
@@ -115,6 +131,110 @@ func TestQualityGroupsLeaveOutTallerVersions(t *testing.T) {
 	}
 	if other.SupportsDirectPlay || other.SupportsDirectStream {
 		t.Errorf("720p, the other version offered as it is: %+v", other)
+	}
+}
+
+// threeHeightsAddon serves a movie with three versions, labeled 2160p,
+// 1080p and 720p in that order, each a real Matroska file.
+func threeHeightsAddon(t *testing.T) string {
+	t.Helper()
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		meta := stremio.Meta{ID: "tt3000", Type: "movie", Name: "Movie", Runtime: "2h"}
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "heights", Name: "Heights", Version: "1",
+				Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{meta}})
+		case path == "/meta/movie/tt3000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta})
+		case path == "/stream/movie/tt3000.json":
+			var streams []stremio.Stream
+			for _, label := range []string{"2160p", "1080p", "720p"} {
+				streams = append(streams, stremio.Stream{Name: "Source " + label, Description: "WEB-DL", URL: server.URL + "/files/" + label + ".mkv",
+					BehaviorHints: stremio.StreamBehavior{Filename: "Movie." + label + ".mkv"}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeFile(w, r, filepath.Join("..", "container", "testdata", "forced.mkv"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// When no version fits, the one converted is the closest to the group, so
+// as to read and decode no more than needed: by their labels before they
+// are analyzed, by their analyses after.
+func TestQualityGroupsConvertTheClosestVersionWhenNoneFits(t *testing.T) {
+	s := newTestServer(t, 10)
+	user := s.user("member", nil)
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), threeHeightsAddon(t), false); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var views, page QueryResult
+	s.get(t, "/UserViews", token, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+	if len(page.Items) != 1 {
+		t.Fatalf("items: %+v", page.Items)
+	}
+	movie := page.Items[0].Id
+	id, _ := accounts.ParseID(movie)
+	versions, err := s.library.Versions(t.Context(), user, id)
+	if err != nil || len(versions) != 3 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	want := []string{versions[2].ID.String(), versions[1].ID.String(), versions[0].ID.String()}
+	s.group(t, user, 480)
+
+	var details BaseItemDto
+	s.get(t, "/Users/"+user.ID.String()+"/Items/"+movie, token, &details)
+	var listed []string
+	for _, source := range *details.MediaSources {
+		listed = append(listed, source.ETag)
+	}
+	if !slices.Equal(listed, want) {
+		t.Errorf("details, by labels: %v, want 720p, 1080p, 2160p %v", listed, want)
+	}
+
+	info, err := os.Stat(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, height := range []int{2160, 1080, 720} {
+		analysis := media.Analysis{Format: "matroska,webm", Duration: 15008 * time.Millisecond, Size: info.Size(), Bitrate: 25_000, Remote: true,
+			Streams: []media.Stream{
+				{Index: 0, Type: "audio", Codec: "opus", Default: true, Channels: 1, SampleRate: 8000, ChannelLayout: "mono"},
+				{Index: 1, Type: "video", Codec: "h264", Profile: "High", Level: 10, Width: height * 16 / 9, Height: height,
+					FrameRate: 24, AverageRate: 24, PixelFormat: "yuv420p", BitDepth: 8},
+			}}
+		data, _ := json.Marshal(analysis)
+		if _, err := s.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", versions[i].ID, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	chrome, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer := s.ask(t, token, movie, chrome, nil)
+	var offered []string
+	for _, source := range answer.MediaSources {
+		offered = append(offered, source.ETag)
+	}
+	if !slices.Equal(offered, want) {
+		t.Fatalf("PlaybackInfo, by analyses: %v, want 720p, 1080p, 2160p %v", offered, want)
+	}
+	first := answer.MediaSources[0]
+	if first.SupportsDirectPlay || !strings.Contains(first.TranscodingUrl, "VideoResolutionNotSupported") ||
+		!strings.HasSuffix(first.TranscodingUrl, "&allowVideoStreamCopy=false") || videoHeightOf(first) != 480 {
+		t.Errorf("the 720p version: direct play %v, height %d, %s", first.SupportsDirectPlay, videoHeightOf(first), first.TranscodingUrl)
 	}
 }
 
@@ -162,8 +282,9 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
+	p.indexed(t)
 	chrome := p.profile(t, "jellyfin-web-chrome")
-	tall := p.versions[0].ID.String()
+	tall, closest := p.versions[0].ID.String(), p.versions[1].ID.String()
 	stream := func(version string) string {
 		return p.url + "/Videos/" + p.movie + "/stream?static=true&mediaSourceId=" + version + "&ApiKey=" + p.token
 	}
@@ -182,9 +303,9 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 		t.Errorf("stream under a 4K group: %d", status)
 	}
 
-	// Under 720p, both versions are taller: the first is converted down to
-	// the lower of the group and the server's cap, its video described at
-	// the size sent.
+	// Under 720p, both versions are taller: the 1080p one, the closer, is
+	// converted down to the lower of the group and the server's cap, its
+	// video described at the size sent.
 	for _, test := range []struct {
 		cap, height int
 		resolution  string
@@ -192,7 +313,7 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 		p.setting(t, func(settings *accounts.Settings) { settings.MaxConversionHeight = test.cap })
 		p.group(t, p.user, 720)
 		source := firstSource(t, p.ask(t, p.token, p.movie, chrome, nil))
-		if source.ETag != tall || source.SupportsDirectPlay || videoHeightOf(source) != test.height {
+		if source.ETag != closest || source.SupportsDirectPlay || videoHeightOf(source) != test.height {
 			t.Errorf("cap %d: height %d, %+v", test.cap, videoHeightOf(source), source)
 			continue
 		}
