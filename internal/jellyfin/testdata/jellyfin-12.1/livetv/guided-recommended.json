@@ -1,0 +1,31 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": "86f80cbd21fb6155f83c0e6fb2302f7c",
+      "ChannelName": "Fixture One",
+      "ChannelNumber": "7",
+      "EndDate": "2026-10-04T00:51:15.0000000Z",
+      "Id": "313af13d6d1f394f23a447b2a15c9726",
+      "ImageBlurHashes": {},
+      "ImageTags": {},
+      "IsNews": true,
+      "MediaType": "Video",
+      "Name": "Fixture News",
+      "RunTimeTicks": 72000000000,
+      "ServerId": "6fd928940fcf4c7c8d3ddb4a10bdf863",
+      "StartDate": "2026-10-03T22:51:15.0000000Z",
+      "Type": "Program",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "313af13d6d1f394f23a447b2a15c9726",
+        "Key": "313af13d-6d1f-394f-23a4-47b2a15c9726",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}

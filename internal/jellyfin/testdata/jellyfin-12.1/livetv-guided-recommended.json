@@ -1,0 +1,31 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": "",
+      "ChannelName": "",
+      "ChannelNumber": "",
+      "EndDate": "",
+      "Id": "",
+      "ImageBlurHashes": {},
+      "ImageTags": {},
+      "IsNews": false,
+      "MediaType": "",
+      "Name": "",
+      "RunTimeTicks": 0,
+      "ServerId": "",
+      "StartDate": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

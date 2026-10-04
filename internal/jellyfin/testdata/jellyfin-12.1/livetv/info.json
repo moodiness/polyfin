@@ -1,0 +1,16 @@
+{
+  "EnabledUsers": [
+    "21871bd985074b75b1332f466d84bf99",
+    "256c10434fa444b0b9257630f2659545"
+  ],
+  "IsEnabled": true,
+  "Services": [
+    {
+      "HasUpdateAvailable": false,
+      "IsVisible": false,
+      "Name": "Emby",
+      "Status": "Ok",
+      "Tuners": []
+    }
+  ]
+}
