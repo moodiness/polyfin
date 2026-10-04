@@ -80,6 +80,11 @@ func (e *StatusError) Unwrap() error { return e.Kind }
 // errWrongRange reports an answer for another range than the one asked.
 var errWrongRange = errors.New("unexpected range")
 
+// errOtherFile reports an answer whose size is not the file's, known from
+// an earlier answer: a short error page some hosts send with HTTP 200, or
+// a link now naming another file. Its body is not read as the file's.
+var errOtherFile = errors.New("an answer of another size than the file")
+
 // Answer describes what a source answered to make a request fail, for
 // logs: its status, the range ignored, an answer cut short, or none. Never
 // the source's URL.
@@ -94,6 +99,8 @@ func Answer(err error) string {
 		return "HTTP 206, another range than the one asked"
 	case errors.Is(err, errBroken):
 		return "an answer cut short"
+	case errors.Is(err, errOtherFile):
+		return "an answer of another size than the file"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "no answer in time"
 	case errors.Is(err, ErrUnavailable):
@@ -771,13 +778,30 @@ func (s *Source) connect(block int64) (*connection, error) {
 				response.Body.Close()
 				return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 			}
-			s.learn(total, response.Header.Get("Content-Type"))
+			if err := s.learn(total, response.Header.Get("Content-Type")); err != nil {
+				response.Body.Close()
+				if attempt >= attempts {
+					return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+				}
+				s.sleep(backoff(attempt, ""))
+				continue
+			}
 			return &connection{body: response.Body, next: block}, nil
 		case status == http.StatusOK:
 			// The body starts at the first byte whatever was asked: a source
 			// answering so past its start ignores ranges, and the blocks
-			// before the one asked are read through.
-			s.learn(response.ContentLength, response.Header.Get("Content-Type"))
+			// before the one asked are read through. A body of another size
+			// than the file is an error page, which some hosts send so when
+			// they refuse a request: the size of a file is never taken from
+			// it, which would cut the file short for every reader.
+			if err := s.learn(response.ContentLength, response.Header.Get("Content-Type")); err != nil {
+				response.Body.Close()
+				if attempt >= attempts {
+					return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+				}
+				s.sleep(backoff(attempt, ""))
+				continue
+			}
 			if offset > 0 {
 				s.mu.Lock()
 				s.rangeless = true
@@ -911,7 +935,9 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 	if !ok || start != off {
 		return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 	}
-	s.learn(total, response.Header.Get("Content-Type"))
+	if err := s.learn(total, response.Header.Get("Content-Type")); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
 	if total >= 0 && off+int64(n) > total {
 		n = int(max(0, total-off))
 	}
@@ -1011,7 +1037,9 @@ type multiRange struct {
 func (m *multiRange) read(response *http.Response) error {
 	switch response.StatusCode {
 	case http.StatusOK:
-		m.source.learn(response.ContentLength, response.Header.Get("Content-Type"))
+		if err := m.source.learn(response.ContentLength, response.Header.Get("Content-Type")); err != nil {
+			return fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
 		return fmt.Errorf("%w: HTTP 200", container.ErrMultiRangeUnsupported)
 	case http.StatusRequestedRangeNotSatisfiable:
 		m.source.unsatisfiable(response)
@@ -1065,7 +1093,9 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 	if !ok || end < start {
 		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
 	}
-	m.source.learn(total, "")
+	if err := m.source.learn(total, ""); err != nil {
+		return fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
 	// Ranges past the end of the file, which the part tells, have no part.
 	var covered []int
 	past := 0
@@ -1266,16 +1296,22 @@ func pause(ctx context.Context, d time.Duration) error {
 }
 
 // learn records what a response tells about the source: its total size,
-// when known, and its media type.
-func (s *Source) learn(total int64, contentType string) {
+// when known, and its media type. errOtherFile when the size is not the
+// one an earlier response told: the response is not the file's, and
+// nothing is recorded.
+func (s *Source) learn(total int64, contentType string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if total >= 0 && s.size >= 0 && total != s.size {
+		return fmt.Errorf("%w: %d bytes, not %d", errOtherFile, total, s.size)
+	}
 	if total >= 0 {
 		s.size = total
 	}
 	if s.contentType == "" {
 		s.contentType = contentType
 	}
+	return nil
 }
 
 func (s *Source) sleep(d time.Duration) {
