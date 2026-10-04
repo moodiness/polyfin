@@ -11,6 +11,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -142,7 +143,8 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	}
 	var serving []installed
 	for _, entry := range v.addons {
-		if entry.addon.Manifest.Serves("stream", t.metaType, t.id) {
+		// An IPTV source's channel is only its source's to play.
+		if entry.addon.Manifest.Serves("stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
 			serving = append(serving, entry)
 		}
 	}
@@ -239,7 +241,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		return Version{}, err
 	}
 	entry := installed{addon: addon, confined: old.Confined}
-	streams, err := s.client.Streams(ctx, addon.ManifestURL, old.Origin.Type, old.Origin.ID, old.Confined)
+	streams, err := s.fetchStreams(ctx, entry, old.Origin.Type, old.Origin.ID)
 	if err != nil {
 		return Version{}, err
 	}
@@ -282,7 +284,7 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 		return streams, nil
 	}
 	result, err, _ := s.flight.Do("streams "+key.addon.String()+" "+contentType+" "+id, func() (any, error) {
-		streams, err := s.client.Streams(ctx, entry.addon.ManifestURL, contentType, id, entry.confined)
+		streams, err := s.fetchStreams(ctx, entry, contentType, id)
 		if err != nil {
 			return nil, err
 		}
@@ -293,6 +295,18 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 		return nil, err
 	}
 	return result.([]stremio.Stream), nil
+}
+
+// fetchStreams asks an addon, or an IPTV source, for the streams of a
+// title.
+func (s *Service) fetchStreams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
+	if entry.addon.Stremio() {
+		return s.client.Streams(ctx, entry.addon.ManifestURL, contentType, id, entry.confined)
+	}
+	if s.iptv == nil {
+		return nil, nil
+	}
+	return s.iptv.Streams(ctx, entry.addon.ID, id)
 }
 
 // versionID identifies a stream of an item by its file when the addon names

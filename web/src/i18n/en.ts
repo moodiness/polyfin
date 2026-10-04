@@ -120,6 +120,15 @@ const en = {
     invalid_recording_retention_days:
       'Days to keep recordings must be a whole number from 0 to 3,650.',
     invalid_quality_group: 'Choose the quality group from the list.',
+    invalid_live_tv_refresh_hours:
+      'The refresh interval must be a whole number of hours from 1 to 168.',
+    invalid_source_name: 'Source names must be 1 to 64 characters long.',
+    invalid_source_address:
+      'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
+    invalid_channel_list:
+      'This address did not return a channel list. Check it, and that the account is still valid.',
+    channel_list_too_large: 'This channel list is too large (100 MB or 100,000 channels at most).',
+    iptv_login_refused: 'The IPTV server refused this username or password.',
   },
   status: {
     title: 'Server status',
@@ -459,6 +468,10 @@ const en = {
     recordingRetentionDays: 'Keep recordings for (days, 0 = forever)',
     recordingRetentionDaysHelp:
       'Recordings older than this are deleted. This is checked every day. From 0 to 3,650.',
+    liveTvTitle: 'Live TV',
+    liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
+    liveTvRefreshHoursHelp:
+      'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. From 1 to 168; 12 by default.',
   },
   stremioTypes: {
     movie: 'Movies',
@@ -561,7 +574,7 @@ const en = {
     saved: 'Libraries saved.',
     guideTitle: 'Programme guide (XMLTV)',
     guideHelp:
-      'Some providers publish their programme guide as an XMLTV file. Its programmes fill the channels the addon gives no guide for. The guide is fetched again every 12 hours.',
+      'Some providers publish their programme guide as an XMLTV file. Its programmes fill the channels the addon gives no guide for. The guide is downloaded again at the interval set under Settings › Live TV.',
     guideAfterSave: 'Save the libraries to add a programme guide to this catalog.',
     guideNone: 'No programme guide.',
     guideAddress: 'Guide address',
@@ -589,6 +602,7 @@ const en = {
       channels_unreachable:
         'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
     } as Record<string, string>,
+    guideNext: 'Next fetch',
   },
   myAddons: {
     title: 'My addons',
@@ -652,6 +666,60 @@ const en = {
     error: 'Error',
     count: (shown: number, total: number) => `The last ${shown} of ${total} events.`,
     autoRefresh: 'Refreshes automatically every 30 seconds.',
+  },
+  iptv: {
+    addTitle: 'Add an IPTV source',
+    addHelp:
+      'Import the channels of an M3U playlist or an Xtream Codes account directly. They appear in Live TV like a TV catalog, which you can order under Libraries. The list is downloaded again at the interval set under Settings › Live TV.',
+    name: 'Name',
+    kind: 'Kind',
+    kindM3u: 'M3U playlist',
+    kindXtream: 'Xtream Codes account',
+    playlistUrl: 'Playlist address',
+    playlistUrlHint:
+      'The M3U address your provider gives. It may contain your login: it is never shown in full.',
+    server: 'Server address',
+    serverHint: 'For example https://server:8080, as your provider gives it.',
+    username: 'Username',
+    password: 'Password',
+    keepHint: 'Leave empty to keep the current one.',
+    passwordKeepHint: 'Leave empty to keep the current password.',
+    providerGuide: 'Use the provider’s programme guide',
+    providerGuideHelp:
+      'Xtream Codes servers publish a guide for the account: it fills the channels’ programmes.',
+    guideUrl: 'Programme guide address (XMLTV, optional)',
+    guideUrlHint:
+      'Plain or compressed XMLTV file. You can also add or change it later under Libraries.',
+    add: 'Add the source',
+    adding: 'Downloading the list…',
+    added: (name: string, channels: number) =>
+      `${name} was added with ${channels === 1 ? '1 channel' : `${channels} channels`}.`,
+    address: 'Address',
+    channels: 'Channels',
+    channelCount: (count: number) => (count === 1 ? '1 channel' : `${count} channels`),
+    groupsShown: (shown: number, total: number) => `${shown} of ${total} groups shown`,
+    lastFetch: 'Last download',
+    nextFetch: 'Next download',
+    never: 'Never',
+    edit: 'Edit',
+    editLabel: (name: string) => `Edit ${name}`,
+    saved: 'Source saved.',
+    groups: 'Groups shown',
+    allGroups: 'All groups',
+    allGroupsHelp: 'Groups added to the list later are shown too.',
+    filterGroups: 'Filter the groups',
+    checkShown: 'Check the groups listed',
+    uncheckShown: 'Uncheck the groups listed',
+    noGroup: 'No group',
+    errors: {
+      unreachable:
+        'The last download failed: the server could not be reached. The previous channels are kept.',
+      private_network:
+        'The last download failed: this address is on a local network. Only administrators can use such addresses.',
+      too_large: 'The last download failed: the list is too large. The previous channels are kept.',
+      malformed:
+        'The last download failed: the server did not return a channel list, or refused the login. The previous channels are kept.',
+    } as Record<string, string>,
   },
 }
 

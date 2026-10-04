@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -26,6 +27,29 @@ type addonJSON struct {
 	Types        []string  `json:"types"`
 	CatalogCount int       `json:"catalogCount"`
 	RefreshedAt  time.Time `json:"refreshedAt"`
+	// Kind is "stremio" for a Stremio addon, "m3u" or "xtream" for an IPTV
+	// source, which Source then describes.
+	Kind   string      `json:"kind"`
+	Source *sourceJSON `json:"source"`
+}
+
+// sourceJSON describes an IPTV source: its address, redacted, as it holds
+// credentials; its list's groups, and those shown (null for all of them);
+// and how its list was last fetched, and when it is fetched again.
+type sourceJSON struct {
+	Address        string      `json:"address"`
+	Channels       int         `json:"channels"`
+	Groups         []groupJSON `json:"groups"`
+	IncludedGroups []string    `json:"includedGroups"`
+	CheckedAt      *time.Time  `json:"checkedAt"`
+	FetchedAt      *time.Time  `json:"fetchedAt"`
+	NextAt         *time.Time  `json:"nextAt"`
+	Error          string      `json:"error"`
+}
+
+type groupJSON struct {
+	Name     string `json:"name"`
+	Channels int    `json:"channels"`
 }
 
 func newAddonJSON(addon addons.Addon) addonJSON {
@@ -37,19 +61,43 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	if types == nil {
 		types = []string{}
 	}
+	manifestURL := stremio.RedactManifestURL(addon.ManifestURL)
+	if !addon.Stremio() {
+		manifestURL = iptv.Redact(addon.ManifestURL)
+	}
 	return addonJSON{
 		ID:           addon.ID.String(),
 		Name:         addon.Manifest.Name,
 		Version:      addon.Manifest.Version,
 		Description:  addon.Manifest.Description,
 		Logo:         logo,
-		ManifestURL:  stremio.RedactManifestURL(addon.ManifestURL),
+		ManifestURL:  manifestURL,
 		Enabled:      addon.Enabled,
 		Resources:    addon.Manifest.ResourceNames(),
 		Types:        types,
 		CatalogCount: len(addon.Manifest.Catalogs),
 		RefreshedAt:  addon.RefreshedAt,
+		Kind:         addon.Kind,
 	}
+}
+
+// addonJSON describes an addon, and an IPTV source's list.
+func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Addon) (addonJSON, error) {
+	result := newAddonJSON(addon)
+	if addon.Stremio() {
+		return result, nil
+	}
+	source, err := h.IPTV.Source(r.Context(), scope, addon.ID)
+	if err != nil {
+		return addonJSON{}, err
+	}
+	groups := make([]groupJSON, 0, len(source.Groups))
+	for _, group := range source.Groups {
+		groups = append(groups, groupJSON(group))
+	}
+	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, Groups: groups, IncludedGroups: source.Included,
+		CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt, NextAt: source.NextAt, Error: source.Error}
+	return result, nil
 }
 
 type libraryJSON struct {
@@ -78,14 +126,22 @@ type guideJSON struct {
 	Channels  int        `json:"channels"`
 	Matched   int        `json:"matched"`
 	Error     string     `json:"error"`
+	// NextAt is when the guide is fetched again: the settings'
+	// LiveTvRefreshHours after its last attempt, within the half hour the
+	// guides due are looked for.
+	NextAt *time.Time `json:"nextAt"`
 }
 
-func newGuideJSON(guide *addons.Guide) *guideJSON {
+func newGuideJSON(guide *addons.Guide, refreshHours int) *guideJSON {
 	if guide == nil {
 		return nil
 	}
-	return &guideJSON{URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt, FetchedAt: guide.FetchedAt,
+	result := &guideJSON{URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt, FetchedAt: guide.FetchedAt,
 		Channels: guide.Channels, Matched: guide.Matched, Error: guide.Error}
+	if guide.URL != "" && guide.CheckedAt != nil {
+		result.NextAt = new(guide.CheckedAt.Add(time.Duration(refreshHours) * time.Hour))
+	}
+	return result
 }
 
 // redactGuideURL keeps a guide address's scheme and host: its path, query
@@ -149,7 +205,7 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			AppName:     appNames[i],
 			Enabled:     l.Enabled,
 			Browsable:   l.Catalog.Browsable(),
-			Guide:       newGuideJSON(l.Guide),
+			Guide:       newGuideJSON(l.Guide, h.Accounts.Settings().LiveTvRefreshHours),
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -210,6 +266,12 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidLibrary, http.StatusBadRequest, "invalid_library"},
 		{addons.ErrInvalidLibraryName, http.StatusBadRequest, "invalid_library_name"},
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
+		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
+		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
+		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
+		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},
+		{iptv.ErrTooLarge, http.StatusUnprocessableEntity, "channel_list_too_large"},
+		{iptv.ErrLoginRefused, http.StatusUnprocessableEntity, "iptv_login_refused"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)
@@ -219,7 +281,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
-func (h *handler) answerAddon(w http.ResponseWriter, r *http.Request, status int, addon addons.Addon, err error) {
+func (h *handler) answerAddon(w http.ResponseWriter, r *http.Request, scope addons.Scope, status int, addon addons.Addon, err error) {
 	if addonError(w, err) {
 		return
 	}
@@ -227,7 +289,12 @@ func (h *handler) answerAddon(w http.ResponseWriter, r *http.Request, status int
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, status, newAddonJSON(addon))
+	result, err := h.addonJSON(r, scope, addon)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, status, result)
 }
 
 func (h *handler) listAddons(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +309,12 @@ func (h *handler) listAddons(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]addonJSON, 0, len(installed))
 	for _, addon := range installed {
-		result = append(result, newAddonJSON(addon))
+		described, err := h.addonJSON(r, scope, addon)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		result = append(result, described)
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -262,7 +334,7 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
 	}
-	h.answerAddon(w, r, http.StatusCreated, addon, err)
+	h.answerAddon(w, r, scope, http.StatusCreated, addon, err)
 }
 
 func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +368,7 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	if err == nil && body.Enabled != nil {
 		addon, err = h.Addons.SetEnabled(r.Context(), scope, id, *body.Enabled)
 	}
-	h.answerAddon(w, r, http.StatusOK, addon, err)
+	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 
 func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
@@ -308,8 +380,16 @@ func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// An IPTV source fetches its channel list again; how it went is in the
+	// answer.
+	if _, err := h.IPTV.Source(r.Context(), scope, id); err == nil {
+		err := h.IPTV.Refresh(context.WithoutCancel(r.Context()), scope, id, confined(r))
+		addon, findErr := h.Addons.Find(r.Context(), id)
+		h.answerAddon(w, r, scope, http.StatusOK, addon, errors.Join(err, findErr))
+		return
+	}
 	addon, err := h.Addons.Refresh(r.Context(), scope, id, confined(r))
-	h.answerAddon(w, r, http.StatusOK, addon, err)
+	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 
 func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {

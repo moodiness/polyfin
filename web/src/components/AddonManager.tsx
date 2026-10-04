@@ -27,6 +27,7 @@ import {
 } from '@/components/ui'
 import { errorMessage, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
+import { IptvAddForm, IptvSourceDetails, IptvSourceEditor } from '@/components/IptvSources'
 
 /**
  * Adding, changing, reordering or removing an addon can change the scope's libraries too, and a
@@ -42,7 +43,7 @@ function replaceCachedAddon(scope: Scope, updated: Addon) {
   )
 }
 
-/** Installs, orders, refreshes and removes the Stremio addons of one scope. */
+/** Installs, orders, refreshes and removes the Stremio addons and IPTV sources of one scope. */
 export default function AddonManager({ scope }: { scope: Scope }) {
   const { t } = useI18n()
   const addonsKey = queryKeys.addons(scope)
@@ -82,6 +83,9 @@ export default function AddonManager({ scope }: { scope: Scope }) {
     <div className="space-y-6">
       <Card title={t.addons.installTitle}>
         <InstallForm scope={scope} />
+      </Card>
+      <Card title={t.iptv.addTitle}>
+        <IptvAddForm scope={scope} />
       </Card>
       <Card title={scope === 'shared' ? t.addons.listTitleShared : t.addons.listTitleMine}>
         <div className="space-y-4">
@@ -187,6 +191,7 @@ function AddonRow({
   const replaceToggle = useRef<HTMLButtonElement>(null)
   const [replacing, setReplacing] = useState(false)
   const [manifestUrl, setManifestUrl] = useState('')
+  const [edited, setEdited] = useState(false)
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => updateAddon(scope, addon.id, { enabled }),
@@ -220,6 +225,7 @@ function AddonRow({
 
   function resetFeedback() {
     for (const action of actions) action.reset()
+    setEdited(false)
   }
 
   function closeReplace() {
@@ -233,6 +239,8 @@ function AddonRow({
     replace.mutate(manifestUrl.trim())
   }
 
+  const iptv = addon.source !== null
+
   return (
     <li className="p-4">
       <div className="flex gap-4">
@@ -240,18 +248,26 @@ function AddonRow({
         <div className="min-w-0 flex-1 space-y-2">
           <h3 className="flex flex-wrap items-center gap-2 font-medium text-white">
             <span className="break-words">{addon.name}</span>
-            {addon.version !== '' && <Badge tone="muted">{t.addons.version(addon.version)}</Badge>}
+            {!iptv && addon.version !== '' && (
+              <Badge tone="muted">{t.addons.version(addon.version)}</Badge>
+            )}
+            {iptv && (
+              <Badge tone="fin">
+                {addon.kind === 'xtream' ? t.iptv.kindXtream : t.iptv.kindM3u}
+              </Badge>
+            )}
             {!addon.enabled && <Badge tone="danger">{t.addons.off}</Badge>}
           </h3>
-          {addon.description !== '' && (
+          {!iptv && addon.description !== '' && (
             <p className="line-clamp-2 text-sm text-muted">{addon.description}</p>
           )}
           <dl className="grid gap-x-3 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
-            <dt className="text-muted">{t.addons.manifestUrl}</dt>
+            <dt className="text-muted">{iptv ? t.iptv.address : t.addons.manifestUrl}</dt>
             <dd className="font-mono text-xs break-all text-zinc-200 sm:self-center">
               {addon.manifestUrl}
             </dd>
-            {addon.resources.length > 0 && (
+            {addon.source !== null && <IptvSourceDetails source={addon.source} />}
+            {!iptv && addon.resources.length > 0 && (
               <>
                 <dt className="text-muted">{t.addons.provides}</dt>
                 <dd className="flex flex-wrap gap-1">
@@ -263,7 +279,7 @@ function AddonRow({
                 </dd>
               </>
             )}
-            {addon.types.length > 0 && (
+            {!iptv && addon.types.length > 0 && (
               <>
                 <dt className="text-muted">{t.addons.types}</dt>
                 <dd className="flex flex-wrap gap-1">
@@ -275,12 +291,16 @@ function AddonRow({
                 </dd>
               </>
             )}
-            <dt className="text-muted">{t.addons.catalogs}</dt>
-            <dd className="text-zinc-200">{t.addons.catalogCount(addon.catalogCount)}</dd>
-            <dt className="text-muted">{t.addons.lastRefresh}</dt>
-            <dd className="text-zinc-200">
-              <RelativeTime iso={addon.refreshedAt} />
-            </dd>
+            {!iptv && (
+              <>
+                <dt className="text-muted">{t.addons.catalogs}</dt>
+                <dd className="text-zinc-200">{t.addons.catalogCount(addon.catalogCount)}</dd>
+                <dt className="text-muted">{t.addons.lastRefresh}</dt>
+                <dd className="text-zinc-200">
+                  <RelativeTime iso={addon.refreshedAt} />
+                </dd>
+              </>
+            )}
           </dl>
         </div>
       </div>
@@ -312,7 +332,7 @@ function AddonRow({
             ref={replaceToggle}
             type="button"
             className={buttonSecondary}
-            aria-label={t.addons.replaceLabel(addon.name)}
+            aria-label={iptv ? t.iptv.editLabel(addon.name) : t.addons.replaceLabel(addon.name)}
             aria-expanded={replacing}
             aria-controls={replacing ? formId : undefined}
             onClick={() => {
@@ -321,7 +341,7 @@ function AddonRow({
               else setReplacing(true)
             }}
           >
-            {t.addons.replace}
+            {iptv ? t.iptv.edit : t.addons.replace}
           </button>
           <ConfirmButton
             label={t.addons.remove}
@@ -340,7 +360,20 @@ function AddonRow({
         </div>
       </div>
 
-      {replacing && (
+      {replacing && iptv && (
+        <IptvSourceEditor
+          scope={scope}
+          addon={addon}
+          id={formId}
+          onSaved={(updated) => {
+            replaceCachedAddon(scope, updated)
+            closeReplace()
+            setEdited(true)
+          }}
+          onCancel={closeReplace}
+        />
+      )}
+      {replacing && !iptv && (
         <form
           id={formId}
           onSubmit={submitReplace}
@@ -381,6 +414,7 @@ function AddonRow({
         {remove.isError && <Notice kind="error">{errorMessage(t, remove.error)}</Notice>}
         {refresh.isSuccess && <Notice kind="success">{t.addons.refreshed}</Notice>}
         {replace.isSuccess && <Notice kind="success">{t.addons.replaced}</Notice>}
+        {edited && <Notice kind="success">{t.iptv.saved}</Notice>}
       </div>
     </li>
   )

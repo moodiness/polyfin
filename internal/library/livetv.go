@@ -3,6 +3,7 @@ package library
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"sync"
@@ -31,7 +32,8 @@ func (s *Service) HasChannels(ctx context.Context, user accounts.User) (bool, er
 
 // Channels lists the user's live TV channels: those of their live TV
 // catalogs, in catalog order, each once. Stremio gives channels no number:
-// a channel is numbered by its place in the list.
+// a channel is numbered by its place in the list, unless its IPTV source
+// gives it one.
 func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -72,11 +74,15 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			if meta.Type == "" {
 				meta.Type = src.catalog.Type
 			}
-			item := channelItem(meta, len(items)+1)
+			number := len(items) + 1
+			if meta.ChannelNumber > 0 {
+				number = meta.ChannelNumber
+			}
+			item := channelItem(meta, number)
 			preview := meta
 			items = append(items, item)
 			records = append(records, record{ID: item.ID, Key: channelKey(meta.ID), Kind: KindChannel, Addon: &addon,
-				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: len(items), Confined: src.addon.confined})
+				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: number, Confined: src.addon.confined})
 		}
 	}
 	return items, records
@@ -100,12 +106,21 @@ func channelImages(meta stremio.Meta) Images {
 // channel describes a channel listed before, from what Polyfin remembers
 // of it, when the user still has the live TV catalog that listed it:
 // players ask for it with every segment, which must not list the catalogs
-// again.
-func (s *Service) channel(v view, r record) (Item, error) {
-	if r.Kind != KindChannel || r.Meta == nil || r.Addon == nil || !slices.ContainsFunc(v.channels, func(src source) bool {
-		return src.addon.addon.ID == *r.Addon && src.catalog.Type == r.CatalogType && src.catalog.ID == r.CatalogID
-	}) {
+// again. An IPTV source answers at once whether it still shows the
+// channel: its groups may have been chosen since.
+func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
+	index := slices.IndexFunc(v.channels, func(src source) bool {
+		return r.Addon != nil && src.addon.addon.ID == *r.Addon && src.catalog.Type == r.CatalogType && src.catalog.ID == r.CatalogID
+	})
+	if r.Kind != KindChannel || r.Meta == nil || index < 0 {
 		return Item{}, ErrNotFound
+	}
+	if src := v.channels[index]; !src.addon.addon.Stremio() {
+		if _, err := s.fetchMeta(ctx, src.addon, r.CatalogType, r.Meta.ID); errors.Is(err, stremio.ErrNotFound) {
+			return Item{}, ErrNotFound
+		} else if err != nil {
+			return Item{}, err
+		}
 	}
 	return channelItem(*r.Meta, r.Number), nil
 }
@@ -259,7 +274,7 @@ func (s *Service) program(ctx context.Context, v view, r record) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
-	channel, err := s.channel(v, stored)
+	channel, err := s.channel(ctx, v, stored)
 	if err != nil {
 		return Item{}, err
 	}

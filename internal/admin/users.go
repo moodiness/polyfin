@@ -307,6 +307,8 @@ type settingsJSON struct {
 	RecordingPostPadding   *int   `json:"recordingPostPadding"`
 	RecordingRetentionDays *int   `json:"recordingRetentionDays"`
 	RecordingsFolder       string `json:"recordingsFolder"`
+	// LiveTvRefreshHours keeps its current value when a PUT leaves it out.
+	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -346,6 +348,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingPrePadding:    &settings.RecordingPrePadding,
 		RecordingPostPadding:   &settings.RecordingPostPadding,
 		RecordingRetentionDays: &settings.RecordingRetentionDays,
+		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 	}
 }
 
@@ -719,6 +722,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingPrePadding:    valueOr(body.RecordingPrePadding, current.RecordingPrePadding),
 		RecordingPostPadding:   valueOr(body.RecordingPostPadding, current.RecordingPostPadding),
 		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
+		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 	})
 	if accountError(w, err) {
 		return

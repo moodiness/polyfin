@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
@@ -179,12 +180,14 @@ func serve(ctx context.Context) error {
 		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
 	}
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
+	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
+	lib.UseIPTV(channels)
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)
 	}
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
-	registerTasks(registry, store, activityLog, lib, logger)
+	registerTasks(registry, store, activityLog, lib, channels, logger)
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
@@ -221,6 +224,7 @@ func serve(ctx context.Context) error {
 				SetupCode:     setupCode,
 				Logger:        logger,
 				Guides:        lib,
+				IPTV:          channels,
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
 			}),
@@ -280,7 +284,8 @@ func serve(ctx context.Context) error {
 
 // registerTasks registers Polyfin's own periodic jobs, which Jellyfin apps
 // show as scheduled tasks.
-func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog *activity.Store, lib *library.Service, logger *slog.Logger) {
+func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog *activity.Store, lib *library.Service, channels *iptv.Service,
+	logger *slog.Logger) {
 	registry.Register(tasks.Task{
 		Key:      "SignOutInactiveDevices",
 		Category: tasks.CategoryMaintenance,
@@ -313,12 +318,18 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 		Key:      "RefreshLiveTvGuides",
 		Category: tasks.CategoryLiveTV,
 		Text: map[string]tasks.Text{
-			"en": {Name: "Refresh Live TV guides", Description: "Fetches the XMLTV guides of live TV catalogs not fetched for 12 hours; run by hand, fetches every guide now."},
-			"fr": {Name: "Actualiser les guides TV", Description: "Télécharge les guides XMLTV des catalogues de TV en direct qui ne l’ont pas été depuis 12 heures ; lancé à la main, télécharge tous les guides tout de suite."},
+			"en": {Name: "Refresh Live TV guides", Description: "Fetches the IPTV channel lists, then the XMLTV guides of live TV catalogs, not fetched for the hours set under Settings › Live TV; run by hand, fetches every list and guide now."},
+			"fr": {Name: "Actualiser les guides TV", Description: "Télécharge les listes de chaînes IPTV, puis les guides XMLTV des catalogues de TV en direct, qui ne l’ont pas été depuis le nombre d’heures choisi dans Paramètres › TV en direct ; lancé à la main, télécharge toutes les listes et tous les guides tout de suite."},
 		},
 		Interval: library.GuideCheck,
 		AtStart:  true,
-		Run:      func(ctx context.Context) error { return lib.RefreshGuides(ctx, tasks.ByHand(ctx)) },
+		Run: func(ctx context.Context) error {
+			// The guides are matched with the channels of the lists.
+			if err := channels.RefreshDue(ctx, tasks.ByHand(ctx)); err != nil {
+				return err
+			}
+			return lib.RefreshGuides(ctx, tasks.ByHand(ctx))
+		},
 	})
 	// Asking for ratings costs requests to addons: this runs only when an
 	// administrator starts it.

@@ -508,6 +508,11 @@ function GuidePanel({ scope, library, name }: { scope: Scope; library: Library; 
               </>
             )}
           </p>
+          {guide.nextAt !== null && (
+            <p className="text-xs text-muted">
+              {t.libraries.guideNext} <RelativeTime iso={guide.nextAt} />.
+            </p>
+          )}
           {guide.error !== '' && (
             <Notice kind="error">
               {Object.hasOwn(t.libraries.guideErrors, guide.error)
