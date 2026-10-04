@@ -29,15 +29,17 @@ func TestSettingsSecurity(t *testing.T) {
 		return status, saved
 	}
 	changed := map[string]any{"personalAddons": false, "loginAttempts": 5, "inactiveDeviceDays": 90, "detailedLog": true}
+	// Every other setting keeps its value: the stored settings are those
+	// before, with the base and the security settings saved.
+	want := api.store.Settings()
+	want.ServerName, want.QuickConnectEnabled, want.LegacyAuthorization, want.Language = "Polyfin", true, false, "en"
+	want.PersonalAddons, want.LoginAttempts, want.InactiveDeviceDays, want.DetailedLog = false, 5, 90, true
 	if status, saved := put(changed); status != http.StatusOK || saved["personalAddons"] != false || saved["loginAttempts"] != float64(5) ||
 		saved["inactiveDeviceDays"] != float64(90) || saved["detailedLog"] != true {
 		t.Fatalf("saving: %d %v", status, saved)
 	}
-	want := accounts.Settings{ServerName: "Polyfin", QuickConnectEnabled: true, Language: "en", Chapters: true, Transcoding: true, Downloads: true,
-		CatalogLimit: accounts.DefaultCatalogLimit, ChannelLimit: accounts.DefaultChannelLimit,
-		PersonalAddons: false, LoginAttempts: 5, InactiveDeviceDays: 90, DetailedLog: true}
 	if got := api.store.Settings(); got != want {
-		t.Errorf("stored: %+v", got)
+		t.Errorf("stored: %+v, want %+v", got, want)
 	}
 	// An admin app that does not know them keeps them, one by one too.
 	if status, saved := put(nil); status != http.StatusOK || saved["personalAddons"] != false || saved["loginAttempts"] != float64(5) ||
