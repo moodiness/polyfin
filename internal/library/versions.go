@@ -46,6 +46,10 @@ type Version struct {
 	// LabelHeight), 0 when they give none; its analysis, once there, is
 	// what counts.
 	Height int
+	// Expires is when the link stops working, zero when the addon does
+	// not say; Audio is what a music addon tells of a track's stream.
+	Expires time.Time
+	Audio   *AudioSource
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
@@ -102,6 +106,11 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		return target{}, view{}, ErrNotFound
 	}
 	switch {
+	case AudioKind(r.Kind) && r.Music != nil:
+		if !v.allowsMusic(r) {
+			return target{}, view{}, ErrNotFound
+		}
+		return target{item: id, kind: r.Kind, metaType: originEclipse, id: r.Music.ID}, v, nil
 	case r.Kind == KindMovie && r.Meta != nil:
 		meta := r.Meta
 		if full, ok := s.cachedMeta(r); ok {
@@ -140,6 +149,24 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
+	}
+	if AudioKind(t.kind) {
+		// A track has one version: where its addon streams it.
+		if version, ok := s.versions.Get(trackVersionID(id)); ok && version.fresh(s.now()) {
+			return []Version{version}, true, nil
+		}
+		if !fetch {
+			return nil, false, nil
+		}
+		r, err := s.load(ctx, id)
+		if err != nil {
+			return nil, false, err
+		}
+		version, err := s.trackVersion(ctx, v, r, false)
+		if err != nil {
+			return nil, false, err
+		}
+		return []Version{version}, true, nil
 	}
 	var serving []installed
 	for _, entry := range v.addons {
@@ -193,7 +220,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // first version, as Jellyfin apps name a single-version item's source after
 // the item.
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
-	if version, ok := s.versions.Get(id); ok && version.Item == item {
+	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) {
 		// A version remembered from another user's listing is no way around
 		// the user's parental control or blocked genres.
 		if user.Restricted() {
@@ -241,6 +268,15 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		return Version{}, err
 	}
 	entry := installed{addon: addon, confined: old.Confined}
+	if old.Origin.Type == originEclipse {
+		// A track's stream resource gives a fresh link, which is now the
+		// track's.
+		r, err := s.load(ctx, old.Item)
+		if err != nil || r.Music == nil || !addon.Eclipse() {
+			return Version{}, ErrNotFound
+		}
+		return s.resolveTrack(ctx, entry, r, true)
+	}
 	streams, err := s.fetchStreams(ctx, entry, old.Origin.Type, old.Origin.ID)
 	if err != nil {
 		return Version{}, err

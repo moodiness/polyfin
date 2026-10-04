@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -38,6 +39,13 @@ const (
 	// KindRecording is a Live TV recording, a file of Polyfin's own (see
 	// the recordings package), never listed by the library.
 	KindRecording Kind = "recording"
+	// The items of Eclipse music addons (see music.go): artists, albums,
+	// tracks, the tracks of audiobook addons, and the addons' playlists.
+	KindArtist        Kind = "artist"
+	KindAlbum         Kind = "album"
+	KindTrack         Kind = "track"
+	KindAudiobook     Kind = "audiobook"
+	KindMusicPlaylist Kind = "musicplaylist"
 )
 
 // Item is something a Jellyfin app can browse.
@@ -95,6 +103,24 @@ type Item struct {
 	// EpisodeTitle is the title of the episode a programme airs, when its
 	// guide gives one.
 	EpisodeTitle string
+	// Music: a track's album, by name and item, and its artwork; a track's
+	// or album's artists, and the artist of a track's album; whether it is
+	// explicit; and how many tracks an album or playlist holds, or albums
+	// an artist, when known. ISRC identifies a track's recording.
+	Album       string
+	AlbumID     accounts.ID
+	AlbumPoster string
+	Artists     []Credit
+	AlbumArtist *Credit
+	Explicit    bool
+	ChildCount  *int
+	ISRC        string
+}
+
+// Credit names an artist and the item that stands for them.
+type Credit struct {
+	ID   accounts.ID
+	Name string
 }
 
 // Contents describes the episodes under a series or season.
@@ -201,7 +227,9 @@ func titleKind(stremioType string) (Kind, bool) {
 	}
 }
 
-// collectionType maps a catalog type to the content of its library.
+// collectionType maps a catalog type to the content of its library. An
+// Eclipse addon's rows are music libraries, its audiobook rows aside (see
+// musicCollectionType).
 func collectionType(catalogType string) string {
 	switch catalogType {
 	case "movie", "anime.movie":
@@ -210,6 +238,8 @@ func collectionType(catalogType string) string {
 		return "tvshows"
 	case "collection":
 		return "boxsets"
+	case eclipse.TypeTrack, eclipse.TypeAlbum, eclipse.TypeArtist, eclipse.TypePlaylist:
+		return "music"
 	default:
 		return ""
 	}

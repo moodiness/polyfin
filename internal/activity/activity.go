@@ -202,6 +202,19 @@ func (s *Store) PlaybackStopped(ctx context.Context, user accounts.User, title, 
 		Type: "VideoPlaybackStopped", UserID: &user.ID, ItemID: &item})
 }
 
+// AudioStarted records that user started playing a track or an audiobook,
+// title, the item item, on device, as Jellyfin records audio.
+func (s *Store) AudioStarted(ctx context.Context, user accounts.User, title, item, device string) {
+	s.record(ctx, Entry{Name: s.phrase("%s is playing %s on %s", "%s écoute %s sur %s", user.Name, title, device),
+		Type: "AudioPlayback", UserID: &user.ID, ItemID: &item})
+}
+
+// AudioStopped records that user stopped playing a track or an audiobook.
+func (s *Store) AudioStopped(ctx context.Context, user accounts.User, title, item, device string) {
+	s.record(ctx, Entry{Name: s.phrase("%s has finished playing %s on %s", "%s a fini d'écouter %s sur %s", user.Name, title, device),
+		Type: "AudioPlaybackStopped", UserID: &user.ID, ItemID: &item})
+}
+
 // UserCreated records a new account.
 func (s *Store) UserCreated(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase("User %s was created", "Utilisateur %s créé", user.Name), Type: "UserCreated", UserID: &user.ID})

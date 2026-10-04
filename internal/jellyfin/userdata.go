@@ -96,7 +96,7 @@ func (s userState) of(item library.Item) UserItemData {
 	data := s.data[item.ID]
 	result.IsFavorite, result.Rating, result.Likes = data.Favorite, data.Rating, data.Likes()
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindRecording:
+	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindTrack, library.KindAudiobook:
 		result.PlaybackPositionTicks = int64(data.Position / 100)
 		result.PlayCount = data.PlayCount
 		result.Played = data.Played
@@ -231,8 +231,11 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 	var episodes []library.Item
 	var err error
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindRecording:
+	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindTrack, library.KindAudiobook:
 		return []library.Item{item}, nil
+	case library.KindAlbum, library.KindMusicPlaylist:
+		// As Jellyfin marks a folder's tracks.
+		return h.Library.Music(ctx, user, library.MusicQuery{Parent: item.ID})
 	case library.KindSeries:
 		episodes, err = h.Library.Episodes(ctx, user, item.ID, nil)
 	case library.KindSeason:
@@ -396,10 +399,12 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	}
 	h.recordPlayback(ctx, user, device, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
-	if event != playbackStopped && (positionKnown || event == playbackStarted) {
+	// Preparing the next episode and making thumbnails are for videos.
+	audio := library.AudioKind(item.Kind)
+	if !audio && event != playbackStopped && (positionKnown || event == playbackStarted) {
 		h.prepareNearTheEnd(user, deviceID, item, runtime, state.Position)
 	}
-	if event == playbackStarted {
+	if !audio && event == playbackStarted {
 		h.queueImages(ctx, user, deviceID, item, mediaSource)
 	}
 	now := time.Now().UTC()
@@ -409,6 +414,10 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 		switch {
 		case event == playbackStarted:
 			d.Start(now)
+		case positionKnown && item.Kind == library.KindTrack:
+			d.ReachSong(state.Position, runtime, thresholds)
+		case positionKnown && item.Kind == library.KindAudiobook:
+			d.ReachAudiobook(state.Position, runtime)
 		case positionKnown:
 			d.Reach(state.Position, runtime, thresholds)
 		case event == playbackStopped:

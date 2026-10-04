@@ -179,6 +179,8 @@ func New(options Options) *Handler {
 	signedIn(http.MethodPost, "/Sessions/Capabilities/Full", h.fullCapabilities)
 
 	h.browseRoutes(rt)
+	h.musicRoutes(rt)
+	h.audioRoutes(rt)
 	h.personRoutes(rt)
 	h.auxiliaryRoutes(rt)
 	h.liveTvRoutes(rt)

@@ -43,7 +43,7 @@ type MediaSourceInfo struct {
 	RequiresClosing                     bool
 	RequiresLooping                     bool
 	SupportsProbing                     bool
-	VideoType                           string
+	VideoType                           string `json:",omitempty"`
 	HasSegments                         bool
 	MediaStreams                        []playback.MediaStream
 	MediaAttachments                    []MediaAttachment

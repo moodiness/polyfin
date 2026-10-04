@@ -239,6 +239,8 @@ type Manager struct {
 	mu        sync.Mutex
 	encodings map[Key]*encoding
 	lives     map[Key]*live
+	// audios are the conversions of tracks into segments (see audio.go).
+	audios map[AudioKey]*audioEncoding
 	// recordings are the recordings running, by key, with the function
 	// stopping each.
 	recordings map[Key]context.CancelFunc
@@ -276,12 +278,14 @@ func (m *Manager) Close() {
 	m.mu.Unlock()
 	m.stopWhere(func(Key, *encoding) bool { return true })
 	m.stopLives(func(Key, *live) bool { return true })
+	m.stopAudios(func(AudioKey, *audioEncoding) bool { return true })
 }
 
 // Stop stops the encodings of a play session.
 func (m *Manager) Stop(session string) {
 	m.stopWhere(func(key Key, _ *encoding) bool { return key.Session == session })
 	m.stopLives(func(key Key, _ *live) bool { return key.Session == session })
+	m.stopAudios(func(key AudioKey, _ *audioEncoding) bool { return key.Session == session })
 }
 
 func (m *Manager) stopWhere(match func(Key, *encoding) bool) {
@@ -309,6 +313,7 @@ func (m *Manager) stopIdle() {
 		case <-ticker.C:
 			m.stopWhere(func(_ Key, e *encoding) bool { return e.idle() })
 			m.stopLives(func(_ Key, l *live) bool { return l.idle() })
+			m.stopAudios(func(_ AudioKey, e *audioEncoding) bool { return e.idle() })
 		}
 	}
 }

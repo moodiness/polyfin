@@ -44,8 +44,8 @@ func (h *Handler) appRoutes(rt *router) {
 	signedIn(http.MethodPost, "/Items/{itemId}/Refresh", h.refreshItem)
 }
 
-// SearchHint is Jellyfin's SearchHint for a movie, series, episode or
-// person; the fields of music and programmes are left out, as Jellyfin
+// SearchHint is Jellyfin's SearchHint for a movie, series, episode,
+// person, or music; the fields of programmes are left out, as Jellyfin
 // leaves out unset values.
 type SearchHint struct {
 	// ItemId repeats Id, for older apps.
@@ -66,6 +66,9 @@ type SearchHint struct {
 	MediaType               string
 	Series                  string `json:",omitempty"`
 	Status                  string `json:",omitempty"`
+	Album                   string `json:",omitempty"`
+	AlbumId                 string `json:",omitempty"`
+	AlbumArtist             string `json:",omitempty"`
 	Artists                 []string
 	ChannelId               *string  // null, as for every item outside a channel
 	PrimaryImageAspectRatio *float64 `json:",omitempty"`
@@ -132,6 +135,14 @@ func (h *Handler) searchHints(w http.ResponseWriter, r *http.Request) {
 			}
 			found = append(found, episodes...)
 		}
+		if kinds := musicSearchKinds(keep); len(kinds) > 0 {
+			music, err := h.Library.SearchMusic(r.Context(), user, term, kinds, count)
+			if err != nil {
+				h.browseError(w, r, err)
+				return
+			}
+			found = append(found, music...)
+		}
 	}
 	if people && keep(library.Item{Kind: library.KindPerson}) {
 		credited, _, err := h.Library.People(r.Context(), user, library.PeopleQuery{NameContains: term, Limit: count})
@@ -188,6 +199,18 @@ func (h *Handler) searchHint(item library.Item) SearchHint {
 		parent = item.SeriesID
 	case library.KindSeries:
 		hint.Status = item.Status
+	case library.KindTrack, library.KindAudiobook, library.KindAlbum:
+		hint.Album = item.Album
+		if item.AlbumID != (accounts.ID{}) {
+			hint.AlbumId = item.AlbumID.String()
+		}
+		if item.IndexNumber > 0 {
+			hint.IndexNumber = new(item.IndexNumber)
+		}
+		if item.AlbumArtist != nil {
+			hint.AlbumArtist = item.AlbumArtist.Name
+		}
+		hint.Artists = *creditNames(item.Artists)
 	}
 	if tag := library.ImageTag(item.Images.Thumb); tag != "" {
 		hint.ThumbImageTag, hint.ThumbImageItemId = tag, parent.String()

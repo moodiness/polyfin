@@ -45,6 +45,38 @@ func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
 	}
 }
 
+// AudiobookResume is how far into an audiobook a position must be to keep
+// a resume point, and how near its end to mark it played, as on a
+// Jellyfin server with its default configuration (MinAudiobookResume and
+// MaxAudiobookResume, in minutes).
+const AudiobookResume = 5 * time.Minute
+
+// ReachSong records the position a player reported in a song, which keeps
+// no resume point, as Jellyfin's songs do not: past the start, a song is
+// played as an item of its runtime would be (see Reach).
+func (d *Data) ReachSong(position, runtime time.Duration, thresholds Thresholds) {
+	d.Reach(position, runtime, thresholds)
+	d.Position = 0
+}
+
+// ReachAudiobook records the position a player reported in an audiobook,
+// with Jellyfin's thresholds for audiobooks, in time rather than percent:
+// nothing to resume in its first AudiobookResume, played in its last.
+func (d *Data) ReachAudiobook(position, runtime time.Duration) {
+	d.Runtime = runtime
+	switch {
+	case runtime <= 0:
+		d.Position = max(position, 0)
+	case position < AudiobookResume:
+		d.Position = 0
+	case runtime-position < AudiobookResume:
+		d.Position = 0
+		d.Played = true
+	default:
+		d.Position = position
+	}
+}
+
 // Finish records a stop reported without a position: the item was played
 // through, which counts as one more play.
 func (d *Data) Finish() {

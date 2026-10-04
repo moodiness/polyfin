@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/eclipse"
 )
 
 // words are the names Polyfin generates, in one server language.
@@ -16,13 +17,17 @@ type words struct {
 	movies      string
 	shows       string
 	collections string
+	// The content of music rows: songs, albums, artists and playlists.
+	songs, albums, artists, playlists string
 }
 
 var vocabulary = map[string]words{
 	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
-		movies: "Movies", shows: "Shows", collections: "Collections"},
+		movies: "Movies", shows: "Shows", collections: "Collections",
+		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists"},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
-		movies: "Films", shows: "Séries", collections: "Collections"},
+		movies: "Films", shows: "Séries", collections: "Collections",
+		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists"},
 }
 
 // vocabularyOf returns the words of a server language, English when the
@@ -54,8 +59,19 @@ func ChapterName(language string, number int) string {
 }
 
 // contentType names the content of a catalog type for a library name, as
-// collectionType groups them; other types are named as they are.
+// collectionType groups them, music rows by what they list; other types
+// are named as they are.
 func (w words) contentType(catalogType string) string {
+	switch catalogType {
+	case eclipse.TypeTrack:
+		return w.songs
+	case eclipse.TypeAlbum:
+		return w.albums
+	case eclipse.TypeArtist:
+		return w.artists
+	case eclipse.TypePlaylist:
+		return w.playlists
+	}
 	switch collectionType(catalogType) {
 	case "movies":
 		return w.movies
