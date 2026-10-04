@@ -126,11 +126,15 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 	h.signIn(w, r, user, c)
 }
 
+// logout signs the caller's device out. Its session ends, and leaves its
+// SyncPlay group, as with Jellyfin.
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
-	if err := h.Accounts.SignOutDevice(r.Context(), callerFrom(r.Context()).Token); err != nil {
+	c := callerFrom(r.Context())
+	if err := h.Accounts.SignOutDevice(r.Context(), c.Token); err != nil {
 		h.internalError(w, r, err)
 		return
 	}
+	h.syncPlay.sessionLeft(c.Device.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

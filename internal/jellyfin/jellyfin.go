@@ -73,6 +73,8 @@ type Handler struct {
 	configurations *cache.Cache[accounts.ID, UserConfiguration]
 	// sockets are the WebSockets apps keep open.
 	sockets *sockets
+	// syncPlay holds the groups apps watch together in.
+	syncPlay *syncPlay
 }
 
 // New returns the Jellyfin API handler.
@@ -86,6 +88,7 @@ func New(options Options) *Handler {
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
 	}
+	h.syncPlay = newSyncPlay(h.canPlay, h.deliverSyncPlay)
 	rt := &router{unmatched: newUnmatchedRequests(options.Logger)}
 	anonymous := func(method, pattern string, handler http.HandlerFunc) { rt.handle(method, pattern, handler) }
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -131,6 +134,7 @@ func New(options Options) *Handler {
 	h.localizationRoutes(rt)
 	signedIn(http.MethodGet, "/MediaSegments/{itemId}", h.mediaSegments)
 	h.playlistRoutes(rt)
+	h.syncPlayRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

@@ -42,7 +42,6 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	signedIn(http.MethodGet, "/LiveTv/Channels", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Studios", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Artists", h.emptyQueryResult)
-	signedIn(http.MethodGet, "/SyncPlay/List", h.syncPlayGroups)
 	// Jellyfin answers similar titles under each of these routes.
 	for _, similar := range []string{"/Items/{itemId}/Similar", "/Movies/{itemId}/Similar", "/Shows/{itemId}/Similar", "/Trailers/{itemId}/Similar"} {
 		signedIn(http.MethodGet, similar, h.similarItems)
@@ -996,10 +995,6 @@ func emptyPage(w http.ResponseWriter, r *http.Request, errs bindErrors) {
 
 func (h *Handler) emptyQueryResult(w http.ResponseWriter, r *http.Request) {
 	emptyPage(w, r, bindErrors{})
-}
-
-func (h *Handler) syncPlayGroups(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, []struct{}{})
 }
 
 // itemRequest binds the item of an /Items/{itemId}/… endpoint, with the
