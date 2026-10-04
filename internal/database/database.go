@@ -98,3 +98,14 @@ func Secret(ctx context.Context, db interface {
 	}
 	return secret, nil
 }
+
+// Size returns the bytes the database takes on disk.
+func Size(ctx context.Context, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) (int64, error) {
+	var size int64
+	if err := db.QueryRow(ctx, "SELECT pg_database_size(current_database())").Scan(&size); err != nil {
+		return 0, fmt.Errorf("read database size: %w", err)
+	}
+	return size, nil
+}

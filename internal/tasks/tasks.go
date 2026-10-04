@@ -105,6 +105,9 @@ type Info struct {
 	// Last is the last run that ended since the server started; nil when
 	// none did.
 	Last *Result
+	// Next is when the schedule runs the task next; nil for a task without
+	// interval, or before the registry starts.
+	Next *time.Time
 }
 
 // Registry runs the registered tasks.
@@ -122,6 +125,8 @@ type entry struct {
 	cancel context.CancelFunc
 	state  State
 	last   *Result
+	// next is when the ticker fires next, zero without one.
+	next time.Time
 }
 
 // New returns an empty registry.
@@ -174,6 +179,7 @@ func (r *Registry) schedule(e *entry) {
 	if e.Interval <= 0 {
 		return
 	}
+	e.next = time.Now().Add(e.Interval)
 	go func() {
 		ticker := time.NewTicker(e.Interval)
 		defer ticker.Stop()
@@ -181,8 +187,9 @@ func (r *Registry) schedule(e *entry) {
 			select {
 			case <-r.ctx.Done():
 				return
-			case <-ticker.C:
+			case at := <-ticker.C:
 				r.mu.Lock()
+				e.next = at.Add(e.Interval)
 				r.start(e, false)
 				r.mu.Unlock()
 			}
@@ -301,6 +308,9 @@ func (e *entry) info(language string) Info {
 	if e.last != nil {
 		last := *e.last
 		info.Last = &last
+	}
+	if !e.next.IsZero() {
+		info.Next = new(e.next)
 	}
 	return info
 }

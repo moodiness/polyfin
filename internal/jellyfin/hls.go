@@ -278,6 +278,9 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 	if !ok {
 		return
 	}
+	if reasons := query(r, "transcodeReasons"); reasons != "" {
+		h.reasons.Put(req.remux.Session, strings.Split(reasons, ","))
+	}
 	if req.live {
 		h.livePlaylist(w, r, req.remux, name)
 		return

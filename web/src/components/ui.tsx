@@ -3,17 +3,29 @@ import { useI18n } from '@/i18n'
 import { dateTime, relativeTime } from '@/format'
 
 export const buttonPrimary =
-  'inline-flex min-h-10 items-center justify-center rounded-lg bg-fin-2 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-fin-1 disabled:cursor-progress disabled:opacity-70'
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-fin-2 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-fin-1 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 export const buttonSecondary =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-70'
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 export const buttonDanger =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-progress disabled:opacity-70'
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 
-export function PageHeader({ title, description }: { title: string; description: string }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string
+  description: string
+  /** Controls shown beside the title on wide screens, below it on phones. */
+  actions?: ReactNode
+}) {
   return (
-    <div className="mb-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h1>
-      <p className="mt-2 text-muted">{description}</p>
+    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h1>
+        <p className="mt-2 max-w-prose text-muted">{description}</p>
+      </div>
+      {actions !== undefined && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
     </div>
   )
 }
@@ -126,17 +138,19 @@ export function Badge({
   tone,
   children,
 }: {
-  tone: 'fin' | 'muted' | 'danger'
+  tone: 'fin' | 'muted' | 'danger' | 'ok' | 'warning'
   children: ReactNode
 }) {
   const tones = {
     fin: 'border-fin-4/50 text-fin-5',
     muted: 'border-line text-muted',
     danger: 'border-rose-400/50 text-rose-300',
+    ok: 'border-emerald-400/40 text-emerald-300',
+    warning: 'border-amber-400/50 text-amber-200',
   }
   return (
     <span
-      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${tones[tone]}`}
     >
       {children}
     </span>

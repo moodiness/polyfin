@@ -332,6 +332,12 @@ func (s *Service) StopRemux(session string) {
 	s.segments.Stop(session)
 }
 
+// Encodings lists the remuxes and conversions under way, of files and
+// channels.
+func (s *Service) Encodings() []hls.Running {
+	return s.segments.Running()
+}
+
 // MayConvert reports whether user may have the video of version converted
 // now: the server converts that of fewer playbacks than its settings
 // allow, or already converts it for this user's playback of version.

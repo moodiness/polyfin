@@ -43,6 +43,7 @@ type Client struct {
 	userAgent string
 	trusted   *http.Client
 	confined  *http.Client
+	health    healthRecords
 }
 
 // NewClient returns a client identifying itself with the Polyfin version.
@@ -51,6 +52,7 @@ func NewClient(version string) *Client {
 		userAgent: "Polyfin/" + version,
 		trusted:   newHTTPClient(false),
 		confined:  newHTTPClient(true),
+		health:    healthRecords{byAddon: map[string]*Health{}},
 	}
 }
 
@@ -114,8 +116,9 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 	return response, nil
 }
 
-// get downloads a resource.
-func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte, error) {
+// get downloads a resource of the addon manifestURL installs, and records
+// how its answer went (see Health).
+func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
@@ -124,21 +127,27 @@ func (c *Client) get(ctx context.Context, target string, confined bool) ([]byte,
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", c.userAgent)
+	started := time.Now()
 	response, err := c.do(request, confined)
 	if err != nil {
+		c.health.record(ctx, manifestURL, started, failureOf(ctx, err))
 		return nil, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		c.health.record(ctx, manifestURL, started, failureOfStatus(response.StatusCode))
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnreachable, response.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
+		c.health.record(ctx, manifestURL, started, failureOf(ctx, err))
 		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
 	}
 	if len(body) > maxResponseBytes {
+		c.health.record(ctx, manifestURL, started, FailureInvalidResponse)
 		return nil, fmt.Errorf("%w: response larger than %d bytes", ErrInvalidResponse, maxResponseBytes)
 	}
+	c.health.record(ctx, manifestURL, started, "")
 	return body, nil
 }
 
@@ -163,7 +172,7 @@ func (c *Client) Open(ctx context.Context, method, target string, header http.He
 // Manifest downloads and validates an addon manifest. confined restricts
 // the request to public addresses.
 func (c *Client) Manifest(ctx context.Context, manifestURL string, confined bool) (Manifest, error) {
-	body, err := c.get(ctx, manifestURL, confined)
+	body, err := c.get(ctx, manifestURL, manifestURL, confined)
 	if errors.Is(err, ErrInvalidResponse) {
 		return Manifest{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
 	}

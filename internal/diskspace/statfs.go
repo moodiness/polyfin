@@ -1,6 +1,7 @@
 //go:build linux || darwin
 
-package jellyfin
+// Package diskspace measures the disks Polyfin's folders are on.
+package diskspace
 
 import (
 	"os"
@@ -8,9 +9,9 @@ import (
 	"syscall"
 )
 
-// diskSpace measures the disk path is on: the bytes free to Polyfin, the
+// Measure measures the disk path is on: the bytes free to Polyfin, the
 // bytes used, and the folder the disk is mounted on.
-func diskSpace(path string) (free, used int64, mount string, ok bool) {
+func Measure(path string) (free, used int64, mount string, ok bool) {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {
 		return 0, 0, "", false

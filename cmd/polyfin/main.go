@@ -102,6 +102,7 @@ func main() {
 }
 
 func serve(ctx context.Context) error {
+	started := time.Now()
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return err
@@ -216,6 +217,30 @@ func serve(ctx context.Context) error {
 	case cfg.WebDir != config.DefaultWebDir:
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
+	jellyfinAPI := jellyfin.New(jellyfin.Options{
+		ServerID:      serverID,
+		Accounts:      store,
+		QuickConnect:  quickConnect,
+		SignIns:       signIns,
+		WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
+		Library:       lib,
+		Stremio:       addonClient,
+		Playback:      player,
+		Preferences:   preferences.New(pool),
+		UserData:      userdata.New(pool),
+		Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
+		Playlists:     playlists.New(pool),
+		Collections:   collections.New(pool),
+		Thumbnails:    images,
+		Logger:        logger,
+		Activity:      activityLog,
+		Tasks:         registry,
+		Logs:          recent,
+		CacheDir:      cfg.CacheDir,
+		RecordingsDir: cfg.RecordingsDir,
+		FontsDir:      cfg.FontsDir,
+		Recordings:    recorder,
+	})
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
@@ -235,31 +260,23 @@ func serve(ctx context.Context) error {
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
 				WebClient:     webClient != nil,
-			}),
-			Jellyfin: jellyfin.New(jellyfin.Options{
-				ServerID:      serverID,
-				Accounts:      store,
-				QuickConnect:  quickConnect,
-				SignIns:       signIns,
-				WebSocketPort: listener.Addr().(*net.TCPAddr).Port,
-				Library:       lib,
-				Stremio:       addonClient,
-				Playback:      player,
-				Preferences:   preferences.New(pool),
-				UserData:      userdata.New(pool),
-				Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
-				Playlists:     playlists.New(pool),
-				Collections:   collections.New(pool),
-				Thumbnails:    images,
-				Logger:        logger,
-				Activity:      activityLog,
+				Sessions:      jellyfinAPI,
 				Tasks:         registry,
 				Logs:          recent,
-				CacheDir:      cfg.CacheDir,
-				RecordingsDir: cfg.RecordingsDir,
-				FontsDir:      cfg.FontsDir,
 				Recordings:    recorder,
+				Library:       lib,
+				Health: admin.HealthSources{
+					Addons:       addonClient,
+					Cache:        sources,
+					CacheDir:     cfg.CacheDir,
+					Encoder:      segments,
+					Thumbnails:   images,
+					DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
+					Started:      started,
+				},
+				Variables: config.Variables(os.Environ(), cfg),
 			}),
+			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
 			Logger:        logger,
