@@ -13,6 +13,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -59,6 +60,47 @@ var ErrUnavailable = errors.New("source unavailable")
 // (429, 502, 503 or 504) on a request that is not tried again. It is an
 // ErrUnavailable.
 var ErrSlowDown = fmt.Errorf("%w: the source asked to slow down", ErrUnavailable)
+
+// ErrExpired reports a link a source refused (401, 403, 404 or 410) on a
+// request that renews nothing: Once.Renew asks for a fresh one. It is an
+// ErrUnavailable.
+var ErrExpired = fmt.Errorf("%w: the link expired", ErrUnavailable)
+
+// StatusError is a source's answer with a status Polyfin does not read:
+// Kind is ErrUnavailable, ErrSlowDown or ErrExpired.
+type StatusError struct {
+	Status int
+	Kind   error
+}
+
+func (e *StatusError) Error() string { return fmt.Sprintf("%v: HTTP %d", e.Kind, e.Status) }
+
+func (e *StatusError) Unwrap() error { return e.Kind }
+
+// errWrongRange reports an answer for another range than the one asked.
+var errWrongRange = errors.New("unexpected range")
+
+// Answer describes what a source answered to make a request fail, for
+// logs: its status, the range ignored, an answer cut short, or none. Never
+// the source's URL.
+func Answer(err error) string {
+	var status *StatusError
+	switch {
+	case errors.As(err, &status):
+		return "HTTP " + strconv.Itoa(status.Status)
+	case errors.Is(err, ErrRangesIgnored):
+		return "HTTP 200, the range asked ignored"
+	case errors.Is(err, errWrongRange):
+		return "HTTP 206, another range than the one asked"
+	case errors.Is(err, errBroken):
+		return "an answer cut short"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "no answer in time"
+	case errors.Is(err, ErrUnavailable):
+		return "no answer"
+	}
+	return ""
+}
 
 // ErrRangesIgnored reports a source that answered without honoring the
 // range asked.
@@ -719,7 +761,7 @@ func (s *Source) connect(block int64) (*connection, error) {
 			start, _, total, ok := contentRange(response.Header.Get("Content-Range"))
 			if !ok || start != offset {
 				response.Body.Close()
-				return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
+				return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 			}
 			s.learn(total, response.Header.Get("Content-Type"))
 			return &connection{body: response.Body, next: block}, nil
@@ -799,6 +841,13 @@ func (o Once) FetchRanges(ctx context.Context, ranges []container.Range) ([][]by
 	return o.s.fetchRanges(ctx, ranges, true)
 }
 
+// Renew asks for a fresh link to the source, as an expired one is renewed
+// for playback; the next requests use it. ErrExpired when the source has
+// no way to renew it.
+func (o Once) Renew(ctx context.Context) error {
+	return o.s.renewLink(ctx)
+}
+
 // KnownSize is the source's size, when a request told it.
 func (o Once) KnownSize() (int64, bool) {
 	return o.s.knownSize()
@@ -852,7 +901,7 @@ var errBroken = errors.New("the connection broke")
 func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, error) {
 	start, _, total, ok := contentRange(response.Header.Get("Content-Range"))
 	if !ok || start != off {
-		return nil, fmt.Errorf("%w: unexpected range %q", ErrUnavailable, response.Header.Get("Content-Range"))
+		return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 	}
 	s.learn(total, response.Header.Get("Content-Type"))
 	if total >= 0 && off+int64(n) > total {
@@ -1080,6 +1129,11 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 				return ctx.Err()
 			}
 			if attempt >= tries {
+				// Not the request's URL, which may hold credentials.
+				var urlErr *url.Error
+				if errors.As(err, &urlErr) {
+					err = urlErr.Err
+				}
 				return fmt.Errorf("%w: %v", ErrUnavailable, err)
 			}
 			s.holdOff(backoff(attempt, ""))
@@ -1099,21 +1153,19 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 			case attempt >= tries:
 				return err
 			}
-		case (status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone) &&
-			renew != nil && !renewed:
+		case expiredStatus(status) && renew != nil && !renewed:
 			response.Body.Close()
 			cancel()
 			renewed = true
-			fresh, err := renew(ctx)
-			if err != nil {
+			if err := s.renewLink(ctx); err != nil {
 				return fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrUnavailable, status, err)
 			}
-			s.mu.Lock()
-			s.location = fresh
-			s.mu.Unlock()
-			s.cache.logger.Debug("A source link was renewed", "source", s.id)
 			attempt = 0
 			continue
+		case once && expiredStatus(status) && renew != nil:
+			response.Body.Close()
+			cancel()
+			return &StatusError{Status: status, Kind: ErrExpired}
 		case (status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable ||
 			status == http.StatusGatewayTimeout) && attempt < tries:
 			response.Body.Close()
@@ -1123,14 +1175,39 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 			status == http.StatusGatewayTimeout:
 			response.Body.Close()
 			cancel()
-			return fmt.Errorf("%w: HTTP %d", ErrSlowDown, status)
+			return &StatusError{Status: status, Kind: ErrSlowDown}
 		default:
 			response.Body.Close()
 			cancel()
-			return fmt.Errorf("%w: HTTP %d", ErrUnavailable, status)
+			return &StatusError{Status: status, Kind: ErrUnavailable}
 		}
 		s.holdOff(backoff(attempt, retryAfter))
 	}
+}
+
+// expiredStatus reports whether a status tells that a link expired.
+func expiredStatus(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound || status == http.StatusGone
+}
+
+// renewLink asks for a fresh link to the source, which the next requests
+// use. ErrExpired when the source has no way to renew it.
+func (s *Source) renewLink(ctx context.Context) error {
+	s.mu.Lock()
+	renew := s.renew
+	s.mu.Unlock()
+	if renew == nil {
+		return ErrExpired
+	}
+	fresh, err := renew(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.location = fresh
+	s.mu.Unlock()
+	s.cache.logger.Debug("A source link was renewed", "source", s.id)
+	return nil
 }
 
 // unsatisfiable records the size a 416 answer tells, and closes it.
