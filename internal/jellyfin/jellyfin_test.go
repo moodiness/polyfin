@@ -34,6 +34,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -103,6 +104,15 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
 	ring := logs.NewRing(logs.Capacity)
+	images := thumbnails.New(thumbnails.Options{
+		DB:       pool,
+		FFmpeg:   ffmpeg,
+		Settings: store.Settings,
+		Open:     func(v library.Version) thumbnails.Source { return player.OpenSource(v) },
+		Analyzed: player.Analyzed,
+		Logger:   logger,
+	})
+	t.Cleanup(images.Close)
 	handler := New(Options{
 		ServerID:      testServerID,
 		Accounts:      store,
@@ -116,6 +126,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		UserData:      userdata.New(pool),
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
+		Thumbnails:    images,
 		Logger:        logger,
 		Activity:      activityLog,
 		Tasks:         registry,

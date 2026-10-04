@@ -125,6 +125,34 @@ const (
 // heights of usual video.
 var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
 
+// ErrInvalidTrickplayInterval reports a TrickplayInterval outside
+// [MinTrickplayInterval, MaxTrickplayInterval].
+var ErrInvalidTrickplayInterval = errors.New("invalid trickplay interval")
+
+// ErrInvalidTrickplayWidth reports a TrickplayWidth that is not one of
+// TrickplayWidths.
+var ErrInvalidTrickplayWidth = errors.New("invalid trickplay width")
+
+// ErrInvalidThumbnailStorage reports a ThumbnailStorageGB outside
+// [MinThumbnailStorageGB, MaxThumbnailStorageGB].
+var ErrInvalidThumbnailStorage = errors.New("invalid thumbnail storage")
+
+// The bounds and defaults of Settings.TrickplayInterval, in seconds,
+// TrickplayWidth, in pixels, and ThumbnailStorageGB. The interval and
+// width default to Jellyfin's.
+const (
+	MinTrickplayInterval      = 5
+	MaxTrickplayInterval      = 60
+	DefaultTrickplayInterval  = 10
+	DefaultTrickplayWidth     = 320
+	MinThumbnailStorageGB     = 1
+	MaxThumbnailStorageGB     = 50
+	DefaultThumbnailStorageGB = 2
+)
+
+// TrickplayWidths are the widths Settings.TrickplayWidth takes.
+var TrickplayWidths = []int{240, 320, 480}
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -213,16 +241,29 @@ type Settings struct {
 	// at most, keeping its shape, one of ConversionHeights; 0 keeps the
 	// original's.
 	MaxConversionHeight int
+	// Trickplay makes scrubbing thumbnails of the versions played, one
+	// every TrickplayInterval seconds, TrickplayWidth pixels wide, and
+	// ChapterImages an image of each of their chapters. Both read keyframes
+	// from the sources, in the background, so both start turned off.
+	Trickplay         bool
+	TrickplayInterval int
+	TrickplayWidth    int
+	ChapterImages     bool
+	// ThumbnailStorageGB bounds the space the thumbnails and chapter
+	// images of every version take: past it, the versions used longest ago
+	// lose theirs.
+	ThumbnailStorageGB int
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
 			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
-			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight)
+			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
+			&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB)
 	return settings, err
 }
 
@@ -280,6 +321,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !slices.Contains(ConversionHeights, settings.MaxConversionHeight) {
 		return Settings{}, ErrInvalidMaxConversionHeight
 	}
+	if settings.TrickplayInterval < MinTrickplayInterval || settings.TrickplayInterval > MaxTrickplayInterval {
+		return Settings{}, ErrInvalidTrickplayInterval
+	}
+	if !slices.Contains(TrickplayWidths, settings.TrickplayWidth) {
+		return Settings{}, ErrInvalidTrickplayWidth
+	}
+	if settings.ThumbnailStorageGB < MinThumbnailStorageGB || settings.ThumbnailStorageGB > MaxThumbnailStorageGB {
+		return Settings{}, ErrInvalidThumbnailStorage
+	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
 		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
@@ -288,12 +338,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
 		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
 		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
 		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog,
-		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight)
+		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight,
+		settings.Trickplay, settings.TrickplayInterval, settings.TrickplayWidth, settings.ChapterImages, settings.ThumbnailStorageGB)
 	if err != nil {
 		return Settings{}, err
 	}

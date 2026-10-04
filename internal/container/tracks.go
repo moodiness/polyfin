@@ -25,6 +25,9 @@ type Track struct {
 	// TrackEntry reads, and they are not encrypted, and stored as they are,
 	// compressed with zlib or with their common header stripped.
 	Decodable bool
+	// Video is the data of the TrackEntry's Video element, as stored: the
+	// size of a video track's frames and the shape they are shown in.
+	Video []byte
 }
 
 // contentEncoding is a ContentEncoding of a track: a transformation its
@@ -111,6 +114,8 @@ func parseTrack(entry []byte, budget *int64) (Track, []contentEncoding, error) {
 			track.CodecID = text(data)
 		case idCodecPrivate:
 			private = data
+		case idVideo:
+			track.Video = data
 		case idContentEncodings:
 			encodings = data
 		}

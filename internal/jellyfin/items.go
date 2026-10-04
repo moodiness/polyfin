@@ -151,8 +151,9 @@ type BaseItemDto struct {
 	HasSubtitles *bool                   `json:",omitempty"`
 	Width        *int                    `json:",omitempty"`
 	Height       *int                    `json:",omitempty"`
-	// Trickplay is always empty: Polyfin makes no trickplay images.
-	Trickplay *struct{} `json:",omitempty"`
+	// Trickplay holds the scrubbing thumbnails of its versions, by media
+	// source and width.
+	Trickplay *map[string]map[int]TrickplayInfo `json:",omitempty"`
 }
 
 // addMediaSources describes a movie's or episode's versions in its DTO, as
@@ -190,7 +191,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	dto.Id = opened.String()
 	dto.MediaSources = &sources
 	if detail {
-		dto.Trickplay = &struct{}{}
+		dto.Trickplay = h.trickplayManifest(r.Context(), item.ID)
 	}
 	if len(sources) == 0 {
 		dto.MediaStreams = &[]playback.MediaStream{}

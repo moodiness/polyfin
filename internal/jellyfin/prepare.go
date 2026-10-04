@@ -202,6 +202,10 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, item library.Item, runti
 		}
 		if versions := p.ordered(next.ID); len(versions) > 0 {
 			h.analyzeAhead(ctx, versions[0])
+			// Its images too, in the background, as its play would ask.
+			if h.Thumbnails != nil {
+				h.Thumbnails.Queue(versions[0])
+			}
 		}
 	})
 }

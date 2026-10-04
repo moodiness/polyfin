@@ -158,6 +158,16 @@ export type Settings = {
   maxConversions: number
   /** Height converted video is scaled down to at most, 0 to keep the original's. */
   maxConversionHeight: number
+  /** Makes scrubbing thumbnails of the versions played, from their keyframes, in the background. */
+  trickplay: boolean
+  /** Seconds between two scrubbing thumbnails. */
+  trickplayInterval: number
+  /** Width of the scrubbing thumbnails, in pixels. */
+  trickplayWidth: number
+  /** Makes an image of each chapter of the versions played, from their keyframes. */
+  chapterImages: boolean
+  /** GB the thumbnails and chapter images take at most; past it, those used longest ago are dropped. */
+  thumbnailStorageGB: number
 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
@@ -179,6 +189,10 @@ export const versionAttemptsRange = { min: 1, max: 10 }
 export const maxConversionsRange = { min: 0, max: 32 }
 /** The values the server accepts for Settings.maxConversionHeight, 0 keeping the original height. */
 export const conversionHeights = [0, 480, 720, 1080, 1440, 2160]
+/** The ranges and values the server accepts for the thumbnail settings. */
+export const trickplayIntervalRange = { min: 5, max: 60 }
+export const trickplayWidths = [240, 320, 480]
+export const thumbnailStorageRange = { min: 1, max: 50 }
 
 export type NewUser = {
   name: string

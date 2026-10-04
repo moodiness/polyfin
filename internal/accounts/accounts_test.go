@@ -106,6 +106,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	want.PlayedPercent, want.ResumePercent = DefaultPlayedPercent, DefaultResumePercent
 	want.VersionListMinutes, want.CatalogRefreshMinutes = DefaultVersionListMinutes, DefaultCatalogRefreshMinutes
 	want.AnalysisTimeout, want.VersionAttempts, want.PreferDirectPlay, want.MaxConversions, want.MaxConversionHeight = 30, 5, true, 4, 720
+	want.Trickplay, want.TrickplayInterval, want.TrickplayWidth, want.ChapterImages, want.ThumbnailStorageGB = true, 20, 480, true, 7
 	if _, err := store.UpdateSettings(ctx, want); err != nil {
 		t.Fatal(err)
 	}

@@ -63,6 +63,8 @@ const (
 	idFileData            = 0x465C
 	idVoid                = 0xEC
 	idCRC32               = 0xBF
+	idVideo               = 0xE0
+	idReferenceBlock      = 0xFB
 )
 
 const (

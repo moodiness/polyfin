@@ -37,6 +37,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/userdata"
 	webui "github.com/moodiness/polyfin/web"
 )
@@ -185,6 +186,17 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	defer player.Close()
+	images := thumbnails.New(thumbnails.Options{
+		DB:          pool,
+		FFmpeg:      cfg.FFmpeg,
+		Hardware:    segments.Hardware(),
+		ToneMapping: segments.HasFilters("zscale", "tonemap"),
+		Settings:    store.Settings,
+		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v) },
+		Analyzed:    player.Analyzed,
+		Logger:      logger,
+	})
+	defer images.Close()
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
@@ -216,6 +228,7 @@ func serve(ctx context.Context) error {
 				Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
 				Playlists:     playlists.New(pool),
 				Collections:   collections.New(pool),
+				Thumbnails:    images,
 				Logger:        logger,
 				Activity:      activityLog,
 				Tasks:         registry,

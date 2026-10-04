@@ -34,17 +34,28 @@ type box struct {
 // readMP4 returns the presentation times of the sync samples of the first
 // video track, from the sample tables in moov.
 func readMP4(f *file) ([]time.Duration, error) {
+	t, movieTimescale, err := mp4Video(f)
+	if err != nil {
+		return nil, err
+	}
+	_, times, err := t.syncSamples(f, movieTimescale)
+	return times, err
+}
+
+// mp4Video returns the first video track of an MP4 file, from moov, and
+// the movie's timescale.
+func mp4Video(f *file) (track, uint32, error) {
 	// moov is at the start of files made for streaming, else after mdat,
 	// which is skipped by its size.
 	var moov box
 	found := false
 	for pos, walked := int64(0), 0; pos < f.size && !found; walked++ {
 		if walked == maxTopLevel {
-			return nil, ErrNoIndex
+			return track{}, 0, ErrNoIndex
 		}
 		b, err := f.box(pos, f.size)
 		if err != nil {
-			return nil, err
+			return track{}, 0, err
 		}
 		switch b.typ {
 		case "moov":
@@ -52,12 +63,12 @@ func readMP4(f *file) ([]time.Duration, error) {
 		case "moof":
 			// Samples in fragments are described next to them, all over
 			// the file.
-			return nil, ErrNoIndex
+			return track{}, 0, ErrNoIndex
 		}
 		pos = b.end
 	}
 	if !found {
-		return nil, ErrNoIndex
+		return track{}, 0, ErrNoIndex
 	}
 
 	var movieTimescale uint32
@@ -79,18 +90,18 @@ func readMP4(f *file) ([]time.Duration, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return track{}, 0, err
 	}
 	for _, trak := range traks {
 		t, err := readTrak(f, trak)
 		if err != nil {
-			return nil, err
+			return track{}, 0, err
 		}
 		if t.handler == "vide" {
-			return t.syncTimes(f, movieTimescale)
+			return t, movieTimescale, nil
 		}
 	}
-	return nil, ErrNoIndex
+	return track{}, 0, ErrNoIndex
 }
 
 // track is what a trak box tells of its track, its sample tables left in
@@ -151,11 +162,12 @@ func readTrak(f *file, trak box) (track, error) {
 	return t, err
 }
 
-// syncTimes returns the presentation times of the track's sync samples,
-// shifted by its edit list.
-func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error) {
+// syncSamples returns the sync samples of the track, numbered from 0, and
+// their presentation times, shifted by its edit list: those before the
+// first the edit list keeps are left out.
+func (t track) syncSamples(f *file, movieTimescale uint32) ([]uint64, []time.Duration, error) {
 	if !t.hasStbl {
-		return nil, ErrNoIndex
+		return nil, nil, ErrNoIndex
 	}
 	var stts, ctts, stss []byte
 	hasStss := false
@@ -173,19 +185,19 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if stts == nil {
-		return nil, ErrNoIndex
+		return nil, nil, ErrNoIndex
 	}
 	timeToSample, err := table(stts, "stts", 8)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var offsets []byte
 	if ctts != nil {
 		if offsets, err = table(ctts, "ctts", 8); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -198,7 +210,7 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 	if hasStss {
 		numbers, err := table(stss, "stss", 4)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		syncs = make([]uint64, 0, len(numbers)/4)
 		for entry := range slices.Chunk(numbers, 4) {
@@ -210,7 +222,7 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 		syncs = slices.Compact(syncs)
 	} else {
 		if total > maxKeyframes {
-			return nil, fmt.Errorf("%d samples, all sync: %w", total, errInvalid)
+			return nil, nil, fmt.Errorf("%d samples, all sync: %w", total, errInvalid)
 		}
 		syncs = make([]uint64, total)
 		for i := range syncs {
@@ -224,14 +236,14 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 	for _, sample := range syncs {
 		dts, err := decode.decodeTime(sample)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		presented = append(presented, dts+composition.offset(sample))
 	}
 
 	edit, err := readEdits(t.elst)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var shift int64
 	if edit.shows {
@@ -240,7 +252,7 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 		// samples from the last sync sample not after that media time,
 		// which a decoder needs, giving those before negative times.
 		if shift, err = firstPresented(timeToSample, offsets, edit.media); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		first := 0
 		for i, pts := range presented {
@@ -248,12 +260,12 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 				first = i
 			}
 		}
-		presented = presented[first:]
+		presented, syncs = presented[first:], syncs[first:]
 	}
 	var delay time.Duration
 	if edit.empty > 0 {
 		if delay, err = duration(edit.empty, movieTimescale); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -261,11 +273,11 @@ func (t track) syncTimes(f *file, movieTimescale uint32) ([]time.Duration, error
 	for _, pts := range presented {
 		d, err := duration(pts-shift, t.timescale)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		times = append(times, d+delay)
 	}
-	return times, nil
+	return syncs, times, nil
 }
 
 // edit is the start of an edit list, as FFmpeg applies it: media is the

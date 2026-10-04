@@ -399,6 +399,9 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	if event != playbackStopped && (positionKnown || event == playbackStarted) {
 		h.prepareNearTheEnd(user, item, runtime, state.Position)
 	}
+	if event == playbackStarted {
+		h.queueImages(ctx, user, item, mediaSource)
+	}
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()
 	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}

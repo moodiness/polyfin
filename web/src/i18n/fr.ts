@@ -124,6 +124,11 @@ const fr: Messages = {
       'Saisissez une adresse de guide commençant par https:// ou http://, de 4 096 caractères au plus.',
     invalid_app:
       'Le nom de l’application doit comporter de 1 à 64 caractères, sans caractères spéciaux.',
+    invalid_trickplay_interval:
+      'Le temps entre deux miniatures doit être un nombre entier de secondes de 5 à 60.',
+    invalid_trickplay_width: 'Choisissez la largeur des miniatures dans la liste.',
+    invalid_thumbnail_storage_gb:
+      'La place pour les images doit être un nombre entier de Go de 1 à 50.',
   },
   status: {
     title: 'État du serveur',
@@ -436,6 +441,25 @@ const fr: Messages = {
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
     saved: 'Paramètres enregistrés.',
+    thumbnailsTitle: 'Miniatures',
+    thumbnailsHelp:
+      'Des images tirées des titres eux-mêmes, après leur lecture. Pour les faire, Polyfin lit de petits morceaux du fichier à la source, en arrière-plan, au plus 2 demandes par seconde : une image toutes les quelques secondes de vidéo, jamais le fichier entier. Désactivé par défaut.',
+    trickplay: 'Miniatures quand on avance dans un titre',
+    trickplayHelp:
+      'Les applications montrent une petite image du moment visé dans la barre de lecture. Polyfin les fait après le début de la lecture d’un titre, et pour l’épisode suivant quand la lecture est préparée à l’avance. Un film de 2 heures a ses images en quelques minutes.',
+    trickplayInterval: 'Une miniature toutes les (secondes)',
+    trickplayIntervalHelp:
+      'Polyfin lit une image à la source toutes les tant de secondes de vidéo. Un nombre plus petit donne des images plus précises, mais lit plus à la source et prend plus de place. De 5 à 60 ; 10 par défaut, comme Jellyfin.',
+    trickplayWidth: 'Largeur des miniatures',
+    trickplayWidthHelp:
+      'Des miniatures plus larges sont plus nettes sur un grand écran, mais prennent plus de place. Un changement fait de nouvelles miniatures à la prochaine lecture d’un titre.',
+    pixels: (width: number) => `${width} pixels`,
+    chapterImages: 'Images des chapitres',
+    chapterImagesHelp:
+      'Les applications montrent une image pour chaque chapitre d’un titre, dans sa liste de scènes. Polyfin lit une image par chapitre, après le début de la lecture du titre.',
+    thumbnailStorage: 'Place pour les images (Go)',
+    thumbnailStorageHelp:
+      'Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De 1 à 50 ; 2 par défaut.',
   },
   stremioTypes: {
     movie: 'Films',

@@ -282,6 +282,13 @@ type settingsJSON struct {
 	PreferDirectPlay    *bool `json:"preferDirectPlay"`
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
+	// The thumbnail settings keep their current values when a PUT leaves
+	// them out.
+	Trickplay          *bool `json:"trickplay"`
+	TrickplayInterval  *int  `json:"trickplayInterval"`
+	TrickplayWidth     *int  `json:"trickplayWidth"`
+	ChapterImages      *bool `json:"chapterImages"`
+	ThumbnailStorageGB *int  `json:"thumbnailStorageGB"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -312,6 +319,11 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		PreferDirectPlay:      &settings.PreferDirectPlay,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
+		Trickplay:             &settings.Trickplay,
+		TrickplayInterval:     &settings.TrickplayInterval,
+		TrickplayWidth:        &settings.TrickplayWidth,
+		ChapterImages:         &settings.ChapterImages,
+		ThumbnailStorageGB:    &settings.ThumbnailStorageGB,
 	}
 }
 
@@ -663,6 +675,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
+		Trickplay:             valueOr(body.Trickplay, current.Trickplay),
+		TrickplayInterval:     valueOr(body.TrickplayInterval, current.TrickplayInterval),
+		TrickplayWidth:        valueOr(body.TrickplayWidth, current.TrickplayWidth),
+		ChapterImages:         valueOr(body.ChapterImages, current.ChapterImages),
+		ThumbnailStorageGB:    valueOr(body.ThumbnailStorageGB, current.ThumbnailStorageGB),
 	})
 	if accountError(w, err) {
 		return

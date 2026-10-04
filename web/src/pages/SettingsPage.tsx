@@ -15,6 +15,9 @@ import {
   queryKeys,
   resumePercentRange,
   saveSettings,
+  thumbnailStorageRange,
+  trickplayIntervalRange,
+  trickplayWidths,
   versionAttemptsRange,
   versionListMinutesRange,
   type Settings,
@@ -60,6 +63,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const contentId = useId()
   const securityId = useId()
   const heightId = useId()
+  const thumbnailsId = useId()
+  const trickplayWidthId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -324,6 +329,69 @@ function SettingsForm({ initial }: { initial: Settings }) {
               step={1}
               value={form.catalogRefreshMinutes || ''}
               onValue={(value) => update({ catalogRefreshMinutes: Math.trunc(Number(value)) })}
+              required
+            />
+          </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={thumbnailsId}>
+            <h2 id={thumbnailsId} className="text-sm font-semibold text-white">
+              {t.settings.thumbnailsTitle}
+            </h2>
+            <p className="text-sm text-muted">{t.settings.thumbnailsHelp}</p>
+            <Checkbox
+              label={t.settings.trickplay}
+              help={t.settings.trickplayHelp}
+              checked={form.trickplay}
+              onChange={(trickplay) => update({ trickplay })}
+            />
+            <TextField
+              label={t.settings.trickplayInterval}
+              hint={t.settings.trickplayIntervalHelp}
+              type="number"
+              inputMode="numeric"
+              min={trickplayIntervalRange.min}
+              max={trickplayIntervalRange.max}
+              step={1}
+              value={form.trickplayInterval || ''}
+              onValue={(value) => update({ trickplayInterval: Math.trunc(Number(value)) })}
+              required
+            />
+            <div>
+              <label htmlFor={trickplayWidthId} className="block text-sm font-medium text-zinc-200">
+                {t.settings.trickplayWidth}
+              </label>
+              <select
+                id={trickplayWidthId}
+                value={form.trickplayWidth}
+                onChange={(event) => update({ trickplayWidth: Number(event.target.value) })}
+                aria-describedby={`${trickplayWidthId}-hint`}
+                className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+              >
+                {trickplayWidths.map((width) => (
+                  <option key={width} value={width}>
+                    {t.settings.pixels(width)}
+                  </option>
+                ))}
+              </select>
+              <p id={`${trickplayWidthId}-hint`} className="mt-1 text-xs text-muted">
+                {t.settings.trickplayWidthHelp}
+              </p>
+            </div>
+            <Checkbox
+              label={t.settings.chapterImages}
+              help={t.settings.chapterImagesHelp}
+              checked={form.chapterImages}
+              onChange={(chapterImages) => update({ chapterImages })}
+            />
+            <TextField
+              label={t.settings.thumbnailStorage}
+              hint={t.settings.thumbnailStorageHelp}
+              type="number"
+              inputMode="numeric"
+              min={thumbnailStorageRange.min}
+              max={thumbnailStorageRange.max}
+              step={1}
+              value={form.thumbnailStorageGB || ''}
+              onValue={(value) => update({ thumbnailStorageGB: Math.trunc(Number(value)) })}
               required
             />
           </section>
