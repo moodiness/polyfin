@@ -22,7 +22,7 @@ import (
 // Allowed PG, Unrated none) and a TV-MA series, with streams. Its catalog
 // rows carry no rating, as AIOMetadata's do. Ann Lee plays in Allowed and
 // Restricted, both dramas, Rex Only in Restricted alone; a people search
-// finds Ann Lee's.
+// finds Ann Lee's. Restricted and Show are also crime titles.
 func ratingsAddon(t *testing.T) string {
 	t.Helper()
 	var server *httptest.Server
@@ -34,9 +34,9 @@ func ratingsAddon(t *testing.T) string {
 		case "tt1":
 			m.Genres, m.Extras.Cast = []string{"Drama"}, []stremio.CastMember{{Name: "Ann Lee"}}
 		case "tt2":
-			m.Genres, m.Extras.Cast = []string{"Drama"}, []stremio.CastMember{{Name: "Ann Lee"}, {Name: "Rex Only"}}
+			m.Genres, m.Extras.Cast = []string{"Drama", "Crime"}, []stremio.CastMember{{Name: "Ann Lee"}, {Name: "Rex Only"}}
 		case "tt4":
-			m.Type = "series"
+			m.Type, m.Genres = "series", []string{"Crime"}
 			m.Videos = []stremio.Video{{ID: "tt4:1:1", Title: "Pilot", Season: 1, Episode: 1, Released: "2020-01-01T00:00:00Z"}}
 		}
 		return m
