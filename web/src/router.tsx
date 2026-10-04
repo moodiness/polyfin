@@ -10,13 +10,16 @@ import { useI18n } from '@/i18n'
 import AccountPage from '@/pages/AccountPage'
 import AddonsPage from '@/pages/AddonsPage'
 import ApiKeysPage from '@/pages/ApiKeysPage'
+import HealthPage from '@/pages/HealthPage'
 import LibrariesPage from '@/pages/LibrariesPage'
 import LoginPage from '@/pages/LoginPage'
+import LogsPage from '@/pages/LogsPage'
 import MyAddonsPage from '@/pages/MyAddonsPage'
+import OverviewPage from '@/pages/OverviewPage'
 import QuickConnectPage from '@/pages/QuickConnectPage'
+import SchedulePage from '@/pages/SchedulePage'
 import SettingsPage from '@/pages/SettingsPage'
 import SetupPage from '@/pages/SetupPage'
-import StatusPage from '@/pages/StatusPage'
 import UsersPage from '@/pages/UsersPage'
 
 /**
@@ -120,8 +123,8 @@ export const router = createBrowserRouter(
     {
       element: <SessionGate />,
       children: [
-        { index: true, element: <StatusPage /> },
-        // Reached once setup or sign-in is done: continue to the status page.
+        { index: true, element: <OverviewPage /> },
+        // Reached once setup or sign-in is done: continue to the overview.
         { path: 'setup', element: <Navigate to="/" replace /> },
         { path: 'login', element: <Navigate to="/" replace /> },
         { path: 'quick-connect', element: <QuickConnectPage /> },
@@ -130,6 +133,9 @@ export const router = createBrowserRouter(
         {
           element: <AdminOnly />,
           children: [
+            { path: 'schedule', element: <SchedulePage /> },
+            { path: 'health', element: <HealthPage /> },
+            { path: 'logs', element: <LogsPage /> },
             { path: 'users', element: <UsersPage /> },
             { path: 'addons', element: <AddonsPage /> },
             { path: 'libraries', element: <LibrariesPage /> },

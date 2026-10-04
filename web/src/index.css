@@ -9,10 +9,13 @@
   --color-fin-5: #22d3ee;
   --color-ink: #08080e;
   --color-surface: #11111a;
+  /* A raised surface: the active navigation item, rows inside cards. */
+  --color-surface-2: #181826;
   --color-line: #262635;
   --color-muted: #a3a3b8;
 
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Menlo, monospace;
 }
 
 /* The fin palette from base to tip, used sparingly for accents. */
@@ -33,6 +36,13 @@
     background-color: var(--color-ink);
     color: var(--color-zinc-100);
     -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   :focus-visible {

@@ -8,6 +8,8 @@ export type Status = {
   serverId: string
   database: 'ready' | 'unavailable'
   setupRequired: boolean
+  /** Whether the server serves the web player at /web/; absent from servers without it. */
+  webClient?: boolean
 }
 
 export type SessionUser = { id: string; name: string; isAdministrator: boolean }
@@ -577,9 +579,215 @@ export const createApiKey = (app: string) => request<NewApiKey>('POST', '/api-ke
 
 export const deleteApiKey = (id: string) => request<void>('DELETE', `/api-keys/${seg(id)}`)
 
-/** The latest `limit` (1 to 100) entries of the server's activity, newest first. */
-export const fetchActivity = (limit: number, signal?: AbortSignal) =>
-  request<ActivityPage>('GET', `/activity?limit=${limit}`, undefined, signal)
+/** Which entries of the activity log to list: `limit` (1 to 100) from `start`, newest first. */
+export type ActivityQuery = {
+  limit: number
+  start?: number
+  /** Entry types kept; empty keeps all. */
+  types?: readonly string[]
+  /** Severities kept; empty keeps all. */
+  severities?: readonly ActivityEntry['severity'][]
+}
+
+export function fetchActivity(query: ActivityQuery, signal?: AbortSignal) {
+  const params = new URLSearchParams({ limit: String(query.limit) })
+  if (query.start) params.set('start', String(query.start))
+  if (query.types?.length) params.set('type', query.types.join(','))
+  if (query.severities?.length) params.set('severity', query.severities.join(','))
+  return request<ActivityPage>('GET', `/activity?${params}`, undefined, signal)
+}
+
+/** A video's size, codecs and bitrate (bits per second); 0 or empty when not known. */
+export type StreamInfo = {
+  width: number
+  height: number
+  videoCodec: string
+  audioCodec: string
+  bitrate: number
+}
+
+/** How a playback reaches its app; `stream` is HLS whose encoding is idle, so details are unknown. */
+export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
+
+/** A device playing, as the dashboard shows it. */
+export type LiveSession = {
+  id: string
+  user: { id: string; name: string; imageTag: string | null; qualityGroup: number }
+  device: { name: string; app: string; appVersion: string; address: string }
+  /** Whether the app takes commands: stopping and messages. */
+  controllable: boolean
+  item: {
+    id: string
+    kind: 'movie' | 'episode' | 'channel' | 'recording' | string
+    name: string
+    seriesName: string
+    season: number
+    episode: number
+    year: number
+    /** Seconds, 0 when unknown. */
+    runtime: number
+    posterId: string
+  } | null
+  /** Seconds. */
+  position: number
+  paused: boolean
+  startedAt: string
+  playMethod: string
+  delivery: Delivery
+  /** Jellyfin's TranscodeReasons. */
+  reasons: string[]
+  source: StreamInfo | null
+  sent: StreamInfo | null
+  video: {
+    encoder: string
+    /** GPU method (cuda, vaapi); empty for the CPU. */
+    hardware: string
+    width: number
+    height: number
+    bitrate: number
+    toneMap: boolean
+    burnSubtitles: boolean
+  } | null
+  audio: { codec: string; channels: number; bitrate: number } | null
+}
+
+export const fetchLiveSessions = (signal?: AbortSignal) =>
+  request<LiveSession[]>('GET', '/sessions', undefined, signal)
+
+export const stopLiveSession = (id: string) => request<void>('POST', `/sessions/${seg(id)}/stop`)
+
+/** Shows a message on the session's app, for `timeout` seconds or until dismissed when 0. */
+export const messageLiveSession = (id: string, message: { text: string; timeout: number }) =>
+  request<void>('POST', `/sessions/${seg(id)}/message`, message)
+
+export type TaskResult = {
+  start: string
+  end: string
+  status: 'Completed' | 'Failed' | 'Cancelled'
+  error: string
+}
+
+/** A scheduled task; `interval` is in seconds, 0 for a task run by hand only. */
+export type Task = {
+  id: string
+  key: string
+  name: string
+  description: string
+  category: string
+  interval: number
+  state: 'Idle' | 'Running' | 'Cancelling'
+  last: TaskResult | null
+  next: string | null
+}
+
+export const fetchTasks = (language: Language, signal?: AbortSignal) =>
+  request<Task[]>('GET', `/tasks?language=${seg(language)}`, undefined, signal)
+
+export const runTask = (id: string) => request<void>('POST', `/tasks/${seg(id)}/run`)
+
+export const stopTask = (id: string) => request<void>('POST', `/tasks/${seg(id)}/stop`)
+
+/** A Live TV recording scheduled or under way; it runs from `from` to `until`, padding included. */
+export type Timer = {
+  id: string
+  name: string
+  channel: string
+  userId: string
+  userName: string
+  start: string
+  end: string
+  from: string
+  until: string
+  status: 'New' | 'InProgress' | 'Error' | string
+  series: boolean
+}
+
+export const fetchTimers = (signal?: AbortSignal) =>
+  request<{ available: boolean; timers: Timer[] }>('GET', '/timers', undefined, signal)
+
+/** How the requests made to one of the server's addons went since the server started. */
+export type AddonHealth = {
+  id: string
+  name: string
+  enabled: boolean
+  refreshedAt: string
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  /** Code of the last failure; empty after a success. */
+  failure: string
+  /** Milliseconds, of the last answer. */
+  responseTime: number
+  requests: number
+  failures: number
+}
+
+export type Health = {
+  checkedAt: string
+  process: {
+    version: string
+    goVersion: string
+    startedAt: string
+    memory: number
+    heap: number
+    goroutines: number
+  }
+  database: { reachable: boolean; size: number | null }
+  cache: { used: number; limit: number; sources: number } | null
+  disks: {
+    folder: 'cache' | 'recordings'
+    path: string
+    free: number
+    used: number
+    mount: string
+  }[]
+  transcoder: {
+    hardware: { method: string; device: string; encoders: string[]; toneMapping: boolean } | null
+    encoders: string[]
+    conversions: number
+    limit: number
+    remuxes: number
+    maxHeight: number
+    enabled: boolean
+  } | null
+  thumbnails: {
+    enabled: boolean
+    waiting: number
+    queueLength: number
+    working: boolean
+    pausedHosts: { host: string; until: string }[]
+  } | null
+  addons: AddonHealth[]
+}
+
+export const fetchHealth = (signal?: AbortSignal) =>
+  request<Health>('GET', '/health', undefined, signal)
+
+/** Asks an addon for its manifest once; allowed once a minute per addon. */
+export const checkAddon = (id: string) =>
+  request<AddonHealth>('POST', `/health/addons/${seg(id)}/check`)
+
+/** The log lines written after the first `after`, and the `after` of the next call. */
+export const fetchLogLines = (after: number, limit: number, signal?: AbortSignal) =>
+  request<{ lines: string[]; next: number }>(
+    'GET',
+    `/logs?after=${after}&limit=${limit}`,
+    undefined,
+    signal,
+  )
+
+export const logDownloadUrl = `${apiBase}/logs/download`
+
+/** A POLYFIN_ environment variable; `value` is empty when `hidden`, and the default when not `set`. */
+export type Variable = {
+  name: string
+  value: string
+  set: boolean
+  hidden: boolean
+  known: boolean
+}
+
+export const fetchVariables = (signal?: AbortSignal) =>
+  request<Variable[]>('GET', '/variables', undefined, signal)
 
 export const queryKeys = {
   status: ['status'] as const,
@@ -598,7 +806,12 @@ export const queryKeys = {
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,
-  activity: (limit: number) => ['activity', limit] as const,
+  activity: (query: ActivityQuery) => ['activity', query] as const,
+  liveSessions: ['live-sessions'] as const,
+  tasks: (language: Language) => ['tasks', language] as const,
+  timers: ['timers'] as const,
+  health: ['health'] as const,
+  variables: ['variables'] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */
