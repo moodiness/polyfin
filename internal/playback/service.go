@@ -161,6 +161,12 @@ func locationOf(version library.Version) source.Location {
 	return source.Location{URL: version.URL, Headers: version.Headers, Confined: version.Confined}
 }
 
+// OpenSource opens a version's source as playback reads it, through the
+// shared cache, renewing its link when it expires. The caller releases it.
+func (s *Service) OpenSource(version library.Version) *source.Source {
+	return s.open(version)
+}
+
 // Signer returns the service's grant signer.
 func (s *Service) Signer() Signer {
 	return s.signer

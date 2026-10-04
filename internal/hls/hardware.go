@@ -157,3 +157,16 @@ func (hw *Hardware) output() string {
 	}
 	return "format=yuv420p"
 }
+
+// DecodeInputs are FFmpeg's input options decoding on hw, nil for none,
+// into memory, for work that only decodes, such as thumbnails: a codec the
+// GPU cannot decode is left to FFmpeg's own decoder.
+func (hw *Hardware) DecodeInputs() []string {
+	switch {
+	case hw == nil:
+		return nil
+	case hw.Method == "vaapi":
+		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
+	}
+	return []string{"-hwaccel", "cuda"}
+}
