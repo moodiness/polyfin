@@ -128,8 +128,8 @@ export default function Mappings({
                     <p className="pl-12 font-mono text-xs break-all text-muted">{item.guideId}</p>
                   )}
                 </div>
-                <div className="min-w-0 space-y-2">
-                  <p className="text-sm">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 text-sm">
                     <MappingText mapping={item.mapping} />
                   </p>
                   <MappingControls

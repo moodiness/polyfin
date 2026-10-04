@@ -70,7 +70,7 @@ export function MappingControls({
   })
   const busy = set.isPending || clear.isPending
   return (
-    <div className="space-y-2">
+    <div className="contents">
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
@@ -106,16 +106,22 @@ export function MappingControls({
         )}
       </div>
       {(set.isError || clear.isError) && (
-        <Notice kind="error">{errorMessage(t, set.error ?? clear.error)}</Notice>
+        <div className="w-full">
+          <Notice kind="error">{errorMessage(t, set.error ?? clear.error)}</Notice>
+        </div>
       )}
       {picking && (
-        <GuidePicker
-          scope={scope}
-          target={target}
-          channelName={channelName}
-          onPick={(channel) => set.mutate({ guideId: channel.guideId, guideChannelId: channel.id })}
-          onCancel={() => setPicking(false)}
-        />
+        <div className="w-full">
+          <GuidePicker
+            scope={scope}
+            target={target}
+            channelName={channelName}
+            onPick={(channel) =>
+              set.mutate({ guideId: channel.guideId, guideChannelId: channel.id })
+            }
+            onCancel={() => setPicking(false)}
+          />
+        </div>
       )}
     </div>
   )

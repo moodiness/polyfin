@@ -52,6 +52,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
   const [editing, setEditing] = useState<LineupChannel | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [dragged, setDragged] = useState<number | null>(null)
+  const [keywordOpen, setKeywordOpen] = useState(false)
   const ids = { search: useId(), category: useId() }
   const q = useDebounced(search.trim())
   const filters: ChannelFilters = {
@@ -114,8 +115,29 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
 
   return (
     <div className="space-y-6">
-      <Panel title={text.title} description={reorder ? text.reorderHelp : text.help}>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">
+      {keywordOpen && (
+        <KeywordBulk
+          scope={scope}
+          id={id}
+          category={category}
+          onClose={() => setKeywordOpen(false)}
+        />
+      )}
+      <Panel
+        title={text.title}
+        description={reorder ? text.reorderHelp : text.help}
+        actions={
+          <button
+            type="button"
+            className={buttonSecondary}
+            aria-expanded={keywordOpen}
+            onClick={() => setKeywordOpen((open) => !open)}
+          >
+            {t.lineup.keyword.title}
+          </button>
+        }
+      >
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,3fr)]">
           <div className="relative">
             <label htmlFor={ids.search} className="mb-1.5 block text-xs font-medium text-muted">
               {text.search}
@@ -154,27 +176,29 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               ))}
             </select>
           </div>
-          <TristateSelect
-            label={text.enabledFilter}
-            value={enabled}
-            yes={text.on}
-            no={text.off}
-            onChange={(value) => refilter(() => setEnabled(value))}
-          />
-          <TristateSelect
-            label={text.shownFilter}
-            value={shown}
-            yes={text.shown}
-            no={text.hidden}
-            onChange={(value) => refilter(() => setShown(value))}
-          />
-          <TristateSelect
-            label={text.mappedFilter}
-            value={mapped}
-            yes={text.mapped}
-            no={text.unmapped}
-            onChange={(value) => refilter(() => setMapped(value))}
-          />
+          <div className="grid grid-cols-3 gap-2">
+            <TristateSelect
+              label={text.enabledFilter}
+              value={enabled}
+              yes={text.on}
+              no={text.off}
+              onChange={(value) => refilter(() => setEnabled(value))}
+            />
+            <TristateSelect
+              label={text.shownFilter}
+              value={shown}
+              yes={text.shown}
+              no={text.hidden}
+              onChange={(value) => refilter(() => setShown(value))}
+            />
+            <TristateSelect
+              label={text.mappedFilter}
+              value={mapped}
+              yes={text.mapped}
+              no={text.unmapped}
+              onChange={(value) => refilter(() => setMapped(value))}
+            />
+          </div>
         </div>
 
         <div className="mt-4 flex min-h-10 flex-wrap items-center justify-between gap-3 border-y border-line py-2">
@@ -197,6 +221,18 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             />
             {text.selectPage}
           </label>
+          {selected.size === 0 && channels.data !== undefined && (
+            <Pager
+              offset={offset}
+              limit={pageSize}
+              total={channels.data.total}
+              busy={channels.isFetching}
+              onOffset={(next) => {
+                setOffset(next)
+                setSelected(new Set())
+              }}
+            />
+          )}
           {selected.size > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-zinc-100 tabular-nums">
@@ -300,7 +336,6 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           </div>
         )}
       </Panel>
-      <KeywordBulk scope={scope} id={id} category={category} />
       <SidePanel
         open={editing !== null}
         title={editing ? t.lineup.editor.title(editing.name) : ''}
@@ -491,7 +526,17 @@ function ChannelRow({
 }
 
 /** Turns on or off every channel matching a keyword, after counting them. */
-function KeywordBulk({ scope, id, category }: { scope: Scope; id: string; category: string }) {
+function KeywordBulk({
+  scope,
+  id,
+  category,
+  onClose,
+}: {
+  scope: Scope
+  id: string
+  category: string
+  onClose: () => void
+}) {
   const { language, t } = useI18n()
   const text = t.lineup.keyword
   const inputId = useId()
@@ -518,7 +563,15 @@ function KeywordBulk({ scope, id, category }: { scope: Scope; id: string; catego
   }
 
   return (
-    <Panel title={text.title} description={text.help}>
+    <Panel
+      title={text.title}
+      description={text.help}
+      actions={
+        <button type="button" className={buttonSecondary} onClick={onClose}>
+          {t.lineup.close}
+        </button>
+      }
+    >
       <form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <label htmlFor={inputId} className="mb-1.5 block text-xs font-medium text-muted">
@@ -528,6 +581,7 @@ function KeywordBulk({ scope, id, category }: { scope: Scope; id: string; catego
             id={inputId}
             value={keyword}
             autoComplete="off"
+            autoFocus
             onChange={(event) => {
               count.reset()
               apply.reset()

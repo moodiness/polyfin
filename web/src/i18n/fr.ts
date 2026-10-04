@@ -1344,7 +1344,7 @@ const fr: Messages = {
       ok: 'Téléchargé',
       failing: 'En échec',
       notYet: 'Pas encore téléchargé',
-      fetched: 'Téléchargé',
+      fetched: 'Dernier téléchargement',
       contents: (channels: string, programmes: string) =>
         `${channels} chaînes, ${programmes} programmes`,
       next: 'Prochain téléchargement',

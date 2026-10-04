@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -51,6 +51,13 @@ export default function LineupPage() {
   })
   const addon = addons.data?.find((item) => item.id === id && item.source !== null)
   const back = scope === 'shared' ? '/addons' : '/my-addons'
+  const tabs = useRef<HTMLElement>(null)
+  // On a phone the sections scroll sideways: the one open stays in view.
+  useEffect(() => {
+    tabs.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [section])
 
   if (scope === null || section === null || (addons.isSuccess && addon === undefined)) {
     return (
@@ -77,7 +84,11 @@ export default function LineupPage() {
         title={addon ? t.lineup.title(addon.name) : t.lineup.titleLoading}
         description={t.lineup.description}
       />
-      <nav aria-label={t.lineup.sectionsLabel} className="-mx-4 mb-6 overflow-x-auto px-4">
+      <nav
+        ref={tabs}
+        aria-label={t.lineup.sectionsLabel}
+        className="-mx-4 mb-6 overflow-x-auto px-4"
+      >
         <ul className="flex gap-1 border-b border-line text-sm whitespace-nowrap">
           {lineupSections.map((name) => (
             <li key={name}>

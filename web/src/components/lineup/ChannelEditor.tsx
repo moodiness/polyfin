@@ -417,20 +417,22 @@ function Guide({ scope, id, channel }: { scope: Scope; id: string; channel: Line
           <MappingText mapping={channel.mapping} />
         </dd>
       </dl>
-      <MappingControls
-        scope={scope}
-        target={iptvCatalog(id)}
-        channelId={channel.id}
-        channelName={channel.name}
-        mapping={channel.mapping}
-        onChanged={(item) => {
-          setChanged(t.lineup.mapping.changed(channel.name, mappingWords(t, item)))
-          queryClient.setQueryData<LineupChannel>(key, (old) =>
-            old ? { ...old, mapping: item.mapping } : old,
-          )
-          invalidateLineup(scope, id)
-        }}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <MappingControls
+          scope={scope}
+          target={iptvCatalog(id)}
+          channelId={channel.id}
+          channelName={channel.name}
+          mapping={channel.mapping}
+          onChanged={(item) => {
+            setChanged(t.lineup.mapping.changed(channel.name, mappingWords(t, item)))
+            queryClient.setQueryData<LineupChannel>(key, (old) =>
+              old ? { ...old, mapping: item.mapping } : old,
+            )
+            invalidateLineup(scope, id)
+          }}
+        />
+      </div>
       <p aria-live="polite" className="text-xs text-emerald-300 empty:hidden">
         {changed}
       </p>

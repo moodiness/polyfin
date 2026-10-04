@@ -1305,7 +1305,7 @@ const en = {
       ok: 'Downloaded',
       failing: 'Failing',
       notYet: 'Not downloaded yet',
-      fetched: 'Downloaded',
+      fetched: 'Last download',
       contents: (channels: string, programmes: string) =>
         `${channels} channels, ${programmes} programmes`,
       next: 'Next download',
