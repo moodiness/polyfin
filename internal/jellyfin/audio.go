@@ -81,8 +81,15 @@ func (h *Handler) describeAudio(ctx context.Context, version library.Version) (d
 		codec, profile := audioCodec(a.Codec)
 		container := audioContainer(a.Container, a.Manifest)
 		stream := media.Stream{Index: 0, Type: "audio", Codec: codec, Profile: profile, SampleRate: a.SampleRate, BitDepth: a.BitDepth}
+		source := playback.AudioSource{Container: container, Codec: codec, Profile: profile, SampleRate: a.SampleRate, BitDepth: a.BitDepth}
+		// The reply gives no bitrate: a lossless stream's is taken at most
+		// that of its samples in stereo, so that a bitrate limit converts it
+		// rather than letting it through. A lossy stream's stays unknown.
+		if losslessCodec(codec) && a.SampleRate > 0 && a.BitDepth > 0 {
+			source.Bitrate = int64(a.SampleRate) * int64(a.BitDepth) * 2
+		}
 		return describedAudio{
-			source:   playback.AudioSource{Container: container, Codec: codec, Profile: profile, SampleRate: a.SampleRate, BitDepth: a.BitDepth},
+			source:   source,
 			analysis: media.Analysis{Format: container, Duration: version.Runtime, Streams: []media.Stream{stream}, Remote: true},
 		}, nil
 	}

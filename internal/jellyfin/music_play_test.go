@@ -142,6 +142,15 @@ func TestUniversalAudioPlaysAsItIsOrConverted(t *testing.T) {
 	if response.StatusCode != http.StatusOK || !bytes.Contains(body, []byte("#EXT-X-STREAM-INF")) || !bytes.Contains(body, []byte("audioCodec=aac")) {
 		t.Fatalf("HLS: %d %s", response.StatusCode, body)
 	}
+	// Above the user's bitrate limit, the lossless song converts though
+	// the app takes it as it is: its bitrate is that of its samples.
+	s.store.UpdateUser(t.Context(), mustUser(t, s, "listener").ID, accounts.UserChanges{MaxBitrate: new(320_000)}, nil)
+	response, body = universal(url.Values{"Container": {"opus,mp3|mp3,flac,webma"}, "TranscodingContainer": {"mp4"},
+		"TranscodingProtocol": {"hls"}, "AudioCodec": {"aac"}})
+	if response.StatusCode != http.StatusOK || !bytes.Contains(body, []byte("audioBitrate=320000")) {
+		t.Fatalf("above the limit: %d %s", response.StatusCode, body)
+	}
+	s.store.UpdateUser(t.Context(), mustUser(t, s, "listener").ID, accounts.UserChanges{MaxBitrate: new(0)}, nil)
 	// Or a progressive MP3 stream.
 	response, body = universal(url.Values{"Container": {"opus"}, "TranscodingContainer": {"mp3"}, "TranscodingProtocol": {"http"},
 		"AudioCodec": {"mp3"}})
