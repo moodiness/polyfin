@@ -58,6 +58,9 @@ type policyUpdate struct {
 	EnableAllFolders bool
 	EnabledFolders   []string
 	AccessSchedules  []scheduleUpdate
+	// The user's permission to manage collections. Like Jellyfin's, a
+	// policy that leaves it out denies it.
+	EnableCollectionManagement bool
 }
 
 // scheduleUpdate is an AccessSchedule as apps post it. jellyfin-web sends
@@ -232,6 +235,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		// The server's libraries the user does not see, and their hours.
 		HiddenLibraries: &hidden,
 		AccessSchedules: &schedules,
+		// The user's permission to manage collections.
+		CollectionManagement: &policy.EnableCollectionManagement,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):

@@ -45,6 +45,8 @@ export type User = {
   blockedGenres: string[]
   /** When not empty, the only hours the user may use the server in (server time). */
   accessSchedules: AccessSchedule[]
+  /** Whether the user may create, change and delete the collections every user sees. */
+  collectionManagement: boolean
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
@@ -197,6 +199,7 @@ export type UserPatch = Partial<{
   hiddenLibraries: string[]
   blockedGenres: string[]
   accessSchedules: AccessSchedule[]
+  collectionManagement: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */

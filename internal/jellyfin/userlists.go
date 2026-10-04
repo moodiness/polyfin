@@ -430,11 +430,16 @@ func stateFilterOf(r *http.Request) (stateFilter, bool) {
 // keeps reports whether the user's state lets the filter keep item: all
 // conditions must hold.
 func (f stateFilter) keeps(item library.Item, state userState) bool {
-	data := state.of(item)
+	return f.keepsData(state.of(item), state.resumable(item))
+}
+
+// keepsData reports whether what the user did with an item, data, and
+// whether they can resume it let the filter keep the item.
+func (f stateFilter) keepsData(data UserItemData, resumable bool) bool {
 	likes := data.Likes != nil && *data.Likes
 	return (!f.favorite || data.IsFavorite) && (!f.notFavorite || !data.IsFavorite) &&
 		(!f.played || data.Played) && (!f.unplayed || !data.Played) &&
-		(!f.resumable || state.resumable(item)) && (!f.likes || likes) && (!f.dislikes || !likes) &&
+		(!f.resumable || resumable) && (!f.likes || likes) && (!f.dislikes || !likes) &&
 		(!f.favoriteOrLikes || data.IsFavorite || likes)
 }
 

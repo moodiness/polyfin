@@ -48,6 +48,9 @@ type userJSON struct {
 	HiddenLibraries []string             `json:"hiddenLibraries"`
 	BlockedGenres   []string             `json:"blockedGenres"`
 	AccessSchedules []accessScheduleJSON `json:"accessSchedules"`
+	// CollectionManagement lets the user create, change and delete the
+	// collections every user sees.
+	CollectionManagement bool `json:"collectionManagement"`
 }
 
 // accessScheduleJSON is a span of hours on a day, one of Jellyfin's
@@ -98,6 +101,8 @@ func newUserJSON(user accounts.User) userJSON {
 		HiddenLibraries: idStrings(user.HiddenLibraries),
 		BlockedGenres:   append([]string{}, user.BlockedGenres...),
 		AccessSchedules: schedulesJSON(user.AccessSchedules),
+		// The user's permission to manage collections.
+		CollectionManagement: user.CollectionManagement,
 	}
 }
 
@@ -434,6 +439,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		HiddenLibraries *[]string             `json:"hiddenLibraries"`
 		BlockedGenres   *[]string             `json:"blockedGenres"`
 		AccessSchedules *[]accessScheduleJSON `json:"accessSchedules"`
+		// CollectionManagement lets the user manage collections.
+		CollectionManagement *bool `json:"collectionManagement"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -459,6 +466,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		SyncPlay:           body.SyncPlay,
 		RemoteControl:      body.RemoteControl,
 		BlockedGenres:      body.BlockedGenres,
+		// The user's permission to manage collections.
+		CollectionManagement: body.CollectionManagement,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -53,7 +54,9 @@ type Options struct {
 	Segments *mediasegments.Service
 	// Playlists stores the playlists users make.
 	Playlists *playlists.Store
-	Logger    *slog.Logger
+	// Collections stores the collections users make.
+	Collections *collections.Store
+	Logger      *slog.Logger
 }
 
 // Handler serves the Jellyfin API.
@@ -148,6 +151,7 @@ func New(options Options) *Handler {
 	signedIn(http.MethodGet, "/MediaSegments/{itemId}", h.mediaSegments)
 	h.playlistRoutes(rt)
 	h.syncPlayRoutes(rt)
+	h.collectionRoutes(rt)
 
 	h.routes = cors(rt)
 	return h

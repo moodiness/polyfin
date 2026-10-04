@@ -644,8 +644,9 @@ func (h *Handler) unsharePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteItem deletes a playlist, which its owner or an administrator may
-// do. Titles come from addons and are never deleted: like Jellyfin for a
-// user who may not delete an item, Polyfin answers 401.
+// do, or a collection (see deleteCollection). Titles come from addons and
+// are never deleted: like Jellyfin for a user who may not delete an item,
+// Polyfin answers 401.
 func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")
@@ -654,6 +655,9 @@ func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := callerFrom(r.Context()).User
+	if h.deleteCollection(w, r, user, id) {
+		return
+	}
 	p, err := h.Playlists.Get(r.Context(), id)
 	switch {
 	case err == nil && p.Visible(user.ID):

@@ -228,6 +228,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			IsAdministrator:                 user.IsAdministrator,
 			IsHidden:                        user.IsHidden,
 			IsDisabled:                      user.IsDisabled,
+			EnableCollectionManagement:      user.CollectionManagement,
 			BlockedTags:                     []string{},
 			AllowedTags:                     []string{},
 			EnableUserPreferenceAccess:      true,

@@ -299,6 +299,12 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
           checked={user.personalAddons}
           onChange={(personalAddons) => access.mutate({ personalAddons })}
         />
+        <Checkbox
+          label={t.users.canManageCollections}
+          help={t.users.canManageCollectionsHelp}
+          checked={user.collectionManagement}
+          onChange={(collectionManagement) => access.mutate({ collectionManagement })}
+        />
         {access.isError && <Notice kind="error">{errorMessage(t, access.error)}</Notice>}
         {access.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
         {user.blockedUntil !== null && (

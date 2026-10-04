@@ -335,6 +335,9 @@ const fr: Messages = {
       Weekday: 'En semaine (du lundi au vendredi)',
       Weekend: 'Le week-end',
     },
+    canManageCollections: 'Peut gérer les collections',
+    canManageCollectionsHelp:
+      'Permet à cet utilisateur de créer des collections de titres dans les applications Jellyfin, d’y ajouter ou d’en retirer des titres, et de les supprimer. Tous les utilisateurs voient les collections, chacun avec seulement les titres qu’il a le droit de voir.',
   },
   settings: {
     title: 'Paramètres',

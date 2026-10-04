@@ -177,6 +177,9 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		items, err = h.addPlaylistsView(r, user, items)
 	}
+	if err == nil {
+		items, err = h.addCollectionsView(r, user, items)
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -302,6 +305,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.playlistListing(w, r, user, parent, hasParent, start, limit) {
+		return
+	}
+	if h.collectionListing(w, r, user, parent, hasParent, start, limit) {
 		return
 	}
 	if h.channelListing(w, r, user, parent, hasParent, start, limit) {
@@ -471,6 +477,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) && h.describePlaylist(w, r, user, id) {
 		return
 	}
+	if errors.Is(err, library.ErrNotFound) && h.describeCollection(w, r, user, id) {
+		return
+	}
 	if errors.Is(err, library.ErrNotFound) && id == liveTvViewID && h.describeLiveTvView(w, r, user) {
 		return
 	}
@@ -509,6 +518,9 @@ func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
 		id = owner
 	}
 	folders, err := h.Library.Ancestors(r.Context(), user, id)
+	if errors.Is(err, library.ErrNotFound) && h.collectionAncestors(w, r, user, id) {
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
