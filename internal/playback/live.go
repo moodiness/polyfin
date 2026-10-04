@@ -41,7 +41,7 @@ func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (med
 	result, err, _ := s.flight.Do("live "+version.ID.String(), func() (any, error) {
 		target, release := s.loopback.registerLive(version)
 		defer release()
-		analysis, err := s.prober.ProbeLive(context.WithoutCancel(ctx), target)
+		analysis, err := s.ffprobe().ProbeLive(context.WithoutCancel(ctx), target)
 		if err != nil {
 			s.failures.Put(version.ID, err)
 			return nil, err

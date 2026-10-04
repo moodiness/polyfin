@@ -169,7 +169,7 @@ func serve(ctx context.Context) error {
 		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
 	}
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
-	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger)
+	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
 	}

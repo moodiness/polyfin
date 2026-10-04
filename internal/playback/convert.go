@@ -118,13 +118,14 @@ const toneMappedHeight = 720
 // codecs, as a comma-separated list, within limit bits per second when it
 // is positive: the first of H.264 and HEVC the profile takes and FFmpeg
 // encodes, on the GPU when it encodes that codec, at the height the limit
-// allows, never larger than the source, converted to SDR and deinterlaced
-// as needed. HDR is tone mapped on that GPU when it can, Dolby Vision with
-// no base layer other players read (profile 5) included, else on the
-// processor. It is nil when the profile takes neither codec, and for HDR
-// that cannot be converted: on the processor, without FFmpeg's filters, or
-// Dolby Vision with no base layer other players read.
-func ConvertVideo(codecs string, limit int64, video MediaStream, can Capabilities) *VideoConversion {
+// allows, never larger than the source nor, when it is positive, than
+// maxHeight, the bitrate being that height's, converted to SDR and
+// deinterlaced as needed. HDR is tone mapped on that GPU when it can,
+// Dolby Vision with no base layer other players read (profile 5) included,
+// else on the processor. It is nil when the profile takes neither codec,
+// and for HDR that cannot be converted: on the processor, without FFmpeg's
+// filters, or Dolby Vision with no base layer other players read.
+func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, can Capabilities) *VideoConversion {
 	conversion := &VideoConversion{}
 	for _, candidate := range videoEncoders {
 		if !listHas(codecs, candidate.codec) {
@@ -153,6 +154,10 @@ func ConvertVideo(codecs string, limit int64, video MediaStream, can Capabilitie
 			tallest = toneMappedHeight
 		}
 		conversion.ToneMap = true
+	}
+	// A source no taller than maxHeight converts as without it.
+	if maxHeight > 0 && (video.Height == nil || *video.Height > maxHeight) {
+		tallest = min(tallest, maxHeight)
 	}
 	conversion.Deinterlace = video.IsInterlaced
 	rung := rungs[len(rungs)-1]

@@ -571,10 +571,10 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
 	requested, asked := parseGUID(request.MediaSourceId)
 	allowed := h.Accounts.Conversions(user)
-	attempts := 0
+	attempts, tries := 0, h.Accounts.Settings().VersionAttempts
 	for i, version := range versions {
 		id := sourceID(opened, version, i == 0)
-		if asked && id != requested || attempts >= maxAttempts {
+		if asked && id != requested || attempts >= tries {
 			continue
 		}
 		attempts++
@@ -586,9 +586,14 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		manifest := playback.Manifest(analysis)
 		relay := mustRelay(r, version) || manifest && (webApp(r) || !h.Playback.Redirectable(r.Context(), version))
 		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
-		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, allowed)
+		permits := h.convertible(allowed, user, version)
+		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, permits)
 		if !ok {
-			h.Logger.Info("A channel's stream would need a conversion the user may not have", "addon", version.Addon)
+			if permits != allowed {
+				h.Logger.Info("A channel's stream would need its video converted while the server converts as many as it may", "addon", version.Addon)
+			} else {
+				h.Logger.Info("A channel's stream would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
+			}
 			continue
 		}
 		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{source}, PlaySessionId: session})

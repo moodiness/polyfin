@@ -150,6 +150,14 @@ type settingsJSON struct {
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
+	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, MaxConversions
+	// and MaxConversionHeight keep their current values when a PUT leaves
+	// them out.
+	AnalysisTimeout     *int  `json:"analysisTimeout"`
+	VersionAttempts     *int  `json:"versionAttempts"`
+	PreferDirectPlay    *bool `json:"preferDirectPlay"`
+	MaxConversions      *int  `json:"maxConversions"`
+	MaxConversionHeight *int  `json:"maxConversionHeight"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -175,6 +183,11 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LoginAttempts:         &settings.LoginAttempts,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
 		DetailedLog:           &settings.DetailedLog,
+		AnalysisTimeout:       &settings.AnalysisTimeout,
+		VersionAttempts:       &settings.VersionAttempts,
+		PreferDirectPlay:      &settings.PreferDirectPlay,
+		MaxConversions:        &settings.MaxConversions,
+		MaxConversionHeight:   &settings.MaxConversionHeight,
 	}
 }
 
@@ -474,6 +487,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
 		DetailedLog:           valueOr(body.DetailedLog, current.DetailedLog),
+		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
+		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
+		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
+		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
+		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
 	})
 	if accountError(w, err) {
 		return

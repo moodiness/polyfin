@@ -71,6 +71,11 @@ const en = {
       'The time version lists are kept must be a whole number of minutes from 1 to 360.',
     invalid_catalog_refresh_minutes:
       'The catalog refresh time must be a whole number of minutes from 1 to 1,440.',
+    invalid_analysis_timeout:
+      'The time to analyze a version must be a whole number of seconds from 5 to 120.',
+    invalid_version_attempts: 'Versions tried must be a whole number from 1 to 10.',
+    invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
+    invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
@@ -293,6 +298,23 @@ const en = {
     downloads: 'Downloads',
     downloadsHelp:
       'Lets users save titles in Jellyfin apps to watch offline. When off, nobody can download, whatever their own permission.',
+    analysisTimeout: 'Maximum time to analyze a version',
+    analysisTimeoutHelp:
+      'Before a first play, Polyfin analyzes the file or the channel to know how to play it. If the source does not answer within this many seconds, Polyfin gives up on that version and moves on to the next one. A lower number moves on sooner, but may give up on slow sources that would have worked. From 5 to 120 seconds; 45 by default.',
+    versionAttempts: 'Versions tried when one does not work',
+    versionAttemptsHelp:
+      'When an app plays a title without choosing a version, Polyfin tries the versions in order until one works, but analyzes no more than this many. Versions already analyzed are tried too, as they cost nothing. A higher number finds a working version more often, but a title that does not play takes longer to say so. From 1 to 10; 3 by default.',
+    preferDirectPlay: 'Prefer versions the app plays without conversion',
+    preferDirectPlayHelp:
+      'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    maxConversions: 'Video conversions at once (0 = no limit)',
+    maxConversionsHelp:
+      'Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From 0 to 32; 0 by default.',
+    maxConversionHeight: 'Maximum quality of converted video',
+    maxConversionHeightHelp:
+      'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. Polyfin never converts above 1080p, so higher choices change nothing for now.',
+    conversionHeightOriginal: 'Original',
+    conversionHeight: (height: number) => `${height}p`,
     catalogsTitle: 'Catalogs',
     catalogLimit: 'Titles read per movie and series catalog',
     catalogLimitHelp:

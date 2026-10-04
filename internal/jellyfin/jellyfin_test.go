@@ -87,7 +87,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		t.Fatal(err)
 	}
 	t.Cleanup(segments.Close)
-	player, err := playback.New(pool, client, ffprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger)
+	player, err := playback.New(pool, client, ffprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		t.Fatal(err)
 	}

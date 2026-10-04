@@ -79,6 +79,13 @@ const fr: Messages = {
       'La durée de conservation des listes de versions doit être un nombre entier de minutes de 1 à 360.',
     invalid_catalog_refresh_minutes:
       'Le délai de rafraîchissement des catalogues doit être un nombre entier de minutes de 1 à 1 440.',
+    invalid_analysis_timeout:
+      'Le temps pour analyser une version doit être un nombre entier de secondes de 5 à 120.',
+    invalid_version_attempts:
+      'Le nombre de versions essayées doit être un nombre entier de 1 à 10.',
+    invalid_max_conversions:
+      'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
+    invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',
     parental_control:
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
@@ -313,6 +320,23 @@ const fr: Messages = {
     downloads: 'Téléchargements',
     downloadsHelp:
       'Permet aux utilisateurs d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion. Si cette option est désactivée, personne ne peut télécharger, quelle que soit son autorisation personnelle.',
+    analysisTimeout: 'Temps max pour analyser une version',
+    analysisTimeoutHelp:
+      'Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. De 5 à 120 secondes ; 45 par défaut.',
+    versionAttempts: 'Versions essayées quand une ne marche pas',
+    versionAttemptsHelp:
+      'Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De 1 à 10 ; 3 par défaut.',
+    preferDirectPlay: 'Préférer les versions lues sans conversion',
+    preferDirectPlayHelp:
+      'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+    maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
+    maxConversionsHelp:
+      'Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De 0 à 32 ; 0 par défaut.',
+    maxConversionHeight: 'Qualité max des vidéos converties',
+    maxConversionHeightHelp:
+      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. Polyfin ne convertit jamais au-delà de 1080p : les choix plus élevés ne changent rien pour l’instant.',
+    conversionHeightOriginal: 'Originale',
+    conversionHeight: (height: number) => `${height}p`,
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
     catalogLimitHelp:

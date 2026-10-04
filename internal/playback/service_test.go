@@ -80,7 +80,11 @@ func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewe
 		t.Fatal(err)
 	}
 	t.Cleanup(segments.Close)
-	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), sources, segments, renew, logger)
+	store, err := accounts.Open(t.Context(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(pool, opener, ffprobe, NewSigner([]byte("test secret")), sources, segments, renew, logger, store.Settings)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +234,7 @@ func TestAnalysesAreKept(t *testing.T) {
 		t.Fatalf("second analysis ran ffprobe again: %d runs, %v", runs(), err)
 	}
 	// Another process finds it in the database.
-	other, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
+	other, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger, s.settings)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +259,7 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Polyfin, once restarted, finds it in the database.
-	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger)
+	restarted, err := New(s.db, &fakeSource{}, path, s.signer, s.sources, s.segments, nil, s.logger, s.settings)
 	if err != nil {
 		t.Fatal(err)
 	}

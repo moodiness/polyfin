@@ -41,9 +41,9 @@ const (
 	serverLives = 16
 )
 
-// ErrBusy reports a live encoding refused because the server runs as many
-// as it may.
-var ErrBusy = errors.New("too many live encodings")
+// ErrBusy reports an encoding refused because the server runs as many as
+// it may: live encodings, or playbacks whose video is converted.
+var ErrBusy = errors.New("too many encodings")
 
 // liveFile matches the files of a live encoding a player may fetch.
 var liveFile = regexp.MustCompile(`^(\d+\.(ts|mp4)|init\.mp4)$`)
@@ -107,10 +107,17 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 		switch {
 		case mine >= userLives:
 			replaced = oldest
-			delete(m.lives, oldest.key)
 		case len(m.lives) >= serverLives:
 			m.mu.Unlock()
 			return nil, ErrBusy
+		}
+		// Nor does one converting the video of a playback past the limit.
+		if !m.admits(key, replaced) {
+			m.mu.Unlock()
+			return nil, ErrBusy
+		}
+		if replaced != nil {
+			delete(m.lives, replaced.key)
 		}
 		now := time.Now()
 		l = &live{m: m, key: key, dir: filepath.Join(m.dir, "live-"+key.name()), used: now, created: now}

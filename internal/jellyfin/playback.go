@@ -18,10 +18,6 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
-// maxAttempts bounds how many versions PlaybackInfo analyzes before giving
-// up, when the app did not choose one.
-const maxAttempts = 3
-
 func (h *Handler) playbackRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
 		rt.handle(method, pattern, h.authenticated(handler))
@@ -306,10 +302,11 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	versions := p.ordered(opened)
 	allowed := h.Accounts.Conversions(user)
+	settings := h.Accounts.Settings()
 
 	// The candidates: the version the app asked for, else every version.
-	// Of the latter, the first maxAttempts may be analyzed now; the others
-	// are tried only when analyzed before, which costs nothing.
+	// Of the latter, the first VersionAttempts may be analyzed now; the
+	// others are tried only when analyzed before, which costs nothing.
 	candidates := make([]int, 0, len(versions))
 	if request.MediaSourceId != "" {
 		requested, _ := parseGUID(request.MediaSourceId)
@@ -327,11 +324,19 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			candidates = append(candidates, i)
 		}
 	}
+	// The first candidate that plays on the app is chosen. With
+	// PreferDirectPlay, and no version asked for, the candidates are gone
+	// through until one plays without conversion, as it is or repackaged
+	// with its tracks copied, the first that plays at all being chosen
+	// when none does. Jellyfin 12.1 keeps the version opened first however
+	// it plays: the setting departs from it, and is off by default.
+	prefer := settings.PreferDirectPlay && request.MediaSourceId == ""
+	var chosen, first *decided
 	unreadable := map[int]bool{}
 	for n, i := range candidates {
 		version := versions[i]
 		var analysis media.Analysis
-		if request.MediaSourceId == "" && n >= maxAttempts {
+		if request.MediaSourceId == "" && n >= settings.VersionAttempts {
 			var known bool
 			if analysis, known = h.Playback.Analyzed(r.Context(), version.ID); !known {
 				continue
@@ -344,36 +349,53 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
-		decided, ok := h.decidedSource(r, p, version, sourceID(opened, version, i == 0), analysis, request, session, allowed)
+		permits := h.convertible(allowed, user, version)
+		d, ok := h.decide(r, p, i, version, sourceID(opened, version, i == 0), analysis, request, permits)
 		if !ok {
-			h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
+			if permits != allowed {
+				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
+			} else {
+				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit", "addon", version.Addon)
+			}
 			continue
 		}
-		sources := []MediaSourceInfo{decided}
-		// An app that asks for no version gets every version, as from
-		// Jellyfin: some, such as Strand, list them for the user to pick.
-		// The one decided comes first, which apps play unless the user picks
-		// another; the others are described as item details describe them,
-		// and decided when an app asks for one. Those found unreadable just
-		// now are left out.
-		if request.MediaSourceId == "" {
-			for j, other := range versions {
-				if j != i && !unreadable[j] {
-					described := h.describedSource(r, p, other, sourceID(opened, other, j == 0))
-					// A version known to be above the user's limit is not
-					// offered as it is.
-					if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) {
-						described.SupportsDirectPlay, described.SupportsDirectStream = false, false
-					}
-					sources = append(sources, described)
-				}
-			}
+		if first == nil {
+			first = &d
 		}
-		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: sources, PlaySessionId: session})
+		if !prefer || h.unconverted(r.Context(), d, request) {
+			chosen = &d
+			break
+		}
+	}
+	if chosen == nil {
+		chosen = first
+	}
+	if chosen == nil {
+		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
 		return
 	}
-	writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
+	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
+	sources := []MediaSourceInfo{h.decidedSource(r, p, *chosen, request, session)}
+	// An app that asks for no version gets every version, as from
+	// Jellyfin: some, such as Strand, list them for the user to pick.
+	// The one decided comes first, which apps play unless the user picks
+	// another; the others are described as item details describe them,
+	// and decided when an app asks for one. Those found unreadable just
+	// now are left out.
+	if request.MediaSourceId == "" {
+		for j, other := range versions {
+			if j != chosen.index && !unreadable[j] {
+				described := h.describedSource(r, p, other, sourceID(opened, other, j == 0))
+				// A version known to be above the user's limit is not
+				// offered as it is.
+				if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) {
+					described.SupportsDirectPlay, described.SupportsDirectStream = false, false
+				}
+				sources = append(sources, described)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: sources, PlaySessionId: session})
 }
 
 type playbackInfoResponse struct {
@@ -442,12 +464,40 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	return true
 }
 
-// decidedSource describes the version an app is about to play, with the
-// decision for its device profile; session is the play session a remux
-// belongs to. Only the conversions allowed are planned: it reports false
-// when the version would need another to play on the app.
-func (h *Handler) decidedSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis,
-	request playbackInfoRequest, session string, allowed accounts.Conversions) (MediaSourceInfo, bool) {
+// decided is a version with the decision for the app's device profile:
+// index is its place among the title's versions, id the media source it
+// is, and source its description so far.
+type decided struct {
+	index    int
+	version  library.Version
+	id       accounts.ID
+	analysis media.Analysis
+	source   MediaSourceInfo
+	decision playback.Decision
+}
+
+// unconverted reports whether the app plays a version without conversion:
+// as it is, or repackaged with its tracks copied, which needs its keyframe
+// index. A version above the user's bitrate limit never does: decide
+// refuses it unless its video is converted down to the limit.
+func (h *Handler) unconverted(ctx context.Context, d decided, request playbackInfoRequest) bool {
+	switch {
+	case beyondUserLimit(request, d.analysis.Bitrate, d.decision):
+		return false
+	case d.decision.DirectPlay:
+		return true
+	case !d.decision.HLS || d.decision.Video != nil || d.decision.Audio != nil:
+		return false
+	}
+	_, err := h.Playback.Plan(ctx, d.version)
+	return err == nil
+}
+
+// decide decides how the version at index plays on the app, for its device
+// profile. Only the conversions allowed are planned: it reports false when
+// the version would need another to play on the app.
+func (h *Handler) decide(r *http.Request, p playable, index int, version library.Version, id accounts.ID, analysis media.Analysis,
+	request playbackInfoRequest, allowed accounts.Conversions) (decided, bool) {
 	source := h.baseSource(r, p, version, id, analysis, true)
 	streams := source.MediaStreams
 	options := playback.Options{
@@ -510,13 +560,23 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		}
 	}
 	if decision.HLS && !permitted(allowed, decision) {
-		return MediaSourceInfo{}, false
+		return decided{}, false
 	}
 	// Above the user's bitrate limit, a version plays only converted down to
-	// it; else the next version is tried.
+	// it; else the next version is tried. PreferDirectPlay thus never takes
+	// such a version for one that plays without conversion.
 	if beyondUserLimit(request, analysis.Bitrate, decision) {
-		return MediaSourceInfo{}, false
+		return decided{}, false
 	}
+	return decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}, true
+}
+
+// decidedSource describes the version an app is about to play, with the
+// decision for its device profile; session is the play session a remux
+// belongs to.
+func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request playbackInfoRequest, session string) MediaSourceInfo {
+	version, id, analysis, source, decision := d.version, d.id, d.analysis, d.source, d.decision
+	streams := source.MediaStreams
 	// Streaming over HLS needs the keyframe index: a version without one
 	// is not offered for it.
 	streamed := decision.HLS
@@ -563,7 +623,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, version library.Ver
 		attachment := &source.MediaAttachments[i]
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
 	}
-	return source, true
+	return source
 }
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
@@ -642,6 +702,18 @@ func burnable(streams []playback.MediaStream, analysis media.Analysis, index int
 // and of the audio, are among those allowed. Copying needs none.
 func permitted(allowed accounts.Conversions, decision playback.Decision) bool {
 	return (decision.Video == nil || allowed.Video) && (decision.Audio == nil || allowed.Audio)
+}
+
+// convertible takes the conversion of video out of the conversions allowed
+// while the server converts the video of as many playbacks as the settings
+// allow: PlaybackInfo then plans none for version, as when it is not
+// allowed. The user's own playback of version, which apps start again to
+// switch tracks, counts already.
+func (h *Handler) convertible(allowed accounts.Conversions, user accounts.User, version library.Version) accounts.Conversions {
+	if allowed.Video && !h.Playback.MayConvert(user.ID, version.ID) {
+		allowed.Video = false
+	}
+	return allowed
 }
 
 // streamAccess finds who a media request plays for. Players send no
