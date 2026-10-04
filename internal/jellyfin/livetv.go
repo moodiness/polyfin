@@ -649,12 +649,12 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 		return
 	}
 	if !playback.Manifest(analysis) {
-		err = h.Playback.Serve(w, r, version, relay, "")
+		err = h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay})
 	} else if relay {
 		grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: true})
 		err = h.Playback.ServeLive(w, r, version, "", h.liveLink(r, channel.ID, grant))
 	} else {
-		err = h.Playback.Serve(w, r, version, false, "")
+		err = h.Playback.Serve(w, r, version, playback.Delivery{})
 	}
 	if err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("A channel's stream could not be served", "addon", version.Addon, "error", err)
