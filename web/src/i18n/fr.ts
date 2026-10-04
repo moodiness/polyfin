@@ -1131,7 +1131,6 @@ const fr: Messages = {
     offStep: (step: string) => `Utilisez un multiple de ${step}.`,
     resetDefaults: 'Remettre les valeurs par défaut',
     saved: 'Réglages enregistrés. L’addon les reçoit dès sa prochaine requête.',
-    notTracked: 'Polyfin n’enregistre les réponses que des addons Stremio.',
   },
 }
 

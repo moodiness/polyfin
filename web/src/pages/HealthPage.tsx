@@ -125,8 +125,10 @@ function Addons({ health, addons }: { health: Health; addons: Addon[] | undefine
     mutationFn: checkAddon,
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
   })
-  // The server records the answers of Stremio addons only: music addons are listed without them.
-  const musicAddons = (addons ?? []).filter((addon) => addon.kind === 'eclipse')
+  // Music addons' answers are recorded like the others': their row carries their badge.
+  const music = new Map(
+    (addons ?? []).filter((addon) => addon.music !== null).map((addon) => [addon.id, addon.music]),
+  )
 
   return (
     <Panel id="addons" title={text.addonsTitle} description={text.addonsHelp}>
@@ -135,19 +137,23 @@ function Addons({ health, addons }: { health: Health; addons: Addon[] | undefine
           <Notice kind="error">{errorMessage(t, check.error)}</Notice>
         </div>
       )}
-      {health.addons.length === 0 && musicAddons.length === 0 ? (
+      {health.addons.length === 0 ? (
         <Empty>{text.noAddons}</Empty>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
           {health.addons.map((addon) => {
             const [tone, status] = addonTone(addon)
+            const musicOf = music.get(addon.id)
             return (
               <li
                 key={addon.id}
                 className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_auto] md:items-center"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-white">{addon.name}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                    <span className="truncate">{addon.name}</span>
+                    {musicOf && <MusicBadge music={musicOf} />}
+                  </p>
                   <p className="text-xs">
                     <StatusText tone={tone}>
                       {text.addonStatus[status]}
@@ -188,30 +194,6 @@ function Addons({ health, addons }: { health: Health; addons: Addon[] | undefine
               </li>
             )
           })}
-          {musicAddons.map((addon) => (
-            <li
-              key={addon.id}
-              className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_auto] md:items-center"
-            >
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-2 font-medium text-white">
-                  <span className="truncate">{addon.name}</span>
-                  {addon.music !== null && <MusicBadge music={addon.music} />}
-                </p>
-                <p className="text-xs">
-                  <StatusText tone="muted">
-                    {addon.enabled ? t.addons.enabled : text.addonStatus.off}
-                  </StatusText>
-                </p>
-              </div>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
-                <Fact label={t.addons.lastRefresh}>
-                  <RelativeTime iso={addon.refreshedAt} />
-                </Fact>
-                <p className="col-span-full text-muted">{t.music.notTracked}</p>
-              </dl>
-            </li>
-          ))}
         </ul>
       )}
     </Panel>

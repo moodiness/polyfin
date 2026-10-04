@@ -1098,7 +1098,6 @@ const en = {
     offStep: (step: string) => `Use a multiple of ${step}.`,
     resetDefaults: 'Use the defaults',
     saved: 'Settings saved. The addon receives them from its next request.',
-    notTracked: 'Polyfin records the answers of Stremio addons only.',
   },
 }
 
