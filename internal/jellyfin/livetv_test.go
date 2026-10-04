@@ -313,6 +313,24 @@ func livePlaybackInfo(t *testing.T, s testServer, token, channel, profile string
 	return info.MediaSources[0]
 }
 
+// Channels have no rating: a user under parental control lists and opens
+// them as everyone does, from the server's TV catalogs.
+func TestChannelsStayWithUsersUnderParentalControl(t *testing.T) {
+	addon := newTVAddon(t, true, "")
+	s, _, _ := tuned(t, addon)
+	s.user("child", func(c *accounts.UserChanges) {
+		c.Parental = &accounts.ParentalControl{MaxRating: new(13), BlockUnrated: []string{"Movie", "Series"}}
+	})
+	token := s.signIn("child", "tablet")
+	var channels QueryResult
+	if status := s.get(t, "/LiveTv/Channels", token, &channels); status != http.StatusOK || channels.TotalRecordCount != 2 {
+		t.Fatalf("channels of a user under parental control: %d %+v", status, channels)
+	}
+	if status, body := s.call(http.MethodGet, "/LiveTv/Channels/"+channels.Items[0].Id, app("tablet", token), nil); status != http.StatusOK {
+		t.Errorf("a channel opened by a user under parental control: %d %s", status, body)
+	}
+}
+
 func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
