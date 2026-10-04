@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -17,6 +18,11 @@ import (
 // providers are the user's subtitle addons, whose subtitles it already lists
 // as external streams of every version of the title: a search shows them,
 // and downloading one changes nothing.
+//
+// Jellyfin keeps these routes to users who may manage subtitles (see
+// subtitleUploadRoutes). Polyfin serves them to every user, as before that
+// permission existed: they list only what every version already offers.
+// Apps show the search only to users who have the permission.
 
 func (h *Handler) remoteSubtitleRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -93,6 +99,8 @@ func (h *Handler) searchRemoteSubtitles(w http.ResponseWriter, r *http.Request) 
 		h.browseError(w, r, err)
 		return
 	}
+	// The files users added are the title's already, and no provider's.
+	files = slices.DeleteFunc(files, func(file library.ExternalSubtitle) bool { return file.Uploaded })
 	// The streams the files become give the language and the name players
 	// show for them.
 	streams := playback.ExternalStreams(playable{subtitles: files}.externals(), h.Accounts.Settings().Language)
@@ -174,7 +182,7 @@ func (h *Handler) remoteSubtitle(ctx context.Context, user accounts.User, item, 
 		return library.ExternalSubtitle{}, err
 	}
 	for _, file := range files {
-		if file.ID == subtitle {
+		if file.ID == subtitle && !file.Uploaded {
 			return file, nil
 		}
 	}

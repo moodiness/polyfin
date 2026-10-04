@@ -195,6 +195,7 @@ type UserDto struct {
 	Name                      string
 	ServerId                  string
 	Id                        string
+	PrimaryImageTag           string `json:",omitempty"`
 	HasPassword               bool
 	HasConfiguredPassword     bool
 	HasConfiguredEasyPassword bool
@@ -210,6 +211,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 		Name:                  user.Name,
 		ServerId:              serverID,
 		Id:                    user.ID.String(),
+		PrimaryImageTag:       user.ImageTag,
 		HasPassword:           true,
 		HasConfiguredPassword: true,
 		LastLoginDate:         optionalTime(user.LastLoginAt),
@@ -217,13 +219,13 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 		// The configuration the user saved is filled in by userDto.
 		Configuration: defaultUserConfiguration(),
 		// Capabilities Polyfin does not offer (deleting content, managing
-		// collections, lyrics or live TV) are reported as denied. Every user
-		// may manage subtitles, as apps offer their subtitle search, which
-		// lists the addons' subtitles, only to users allowed to. Jellyfin's
-		// tags are not genres: titles in Polyfin have none, so none are
-		// blocked or allowed; the genres a user blocks are Polyfin's own
-		// setting. libraryAccess lists the server's libraries the user sees
-		// when they hide some.
+		// collections, lyrics or live TV) are reported as denied. Managing
+		// subtitles is the user's own permission: apps offer adding
+		// subtitle files, and their subtitle search, only to users who have
+		// it. Jellyfin's tags are not genres: titles in Polyfin have none,
+		// so none are blocked or allowed; the genres a user blocks are
+		// Polyfin's own setting. libraryAccess lists the server's libraries
+		// the user sees when they hide some.
 		Policy: UserPolicy{
 			IsAdministrator:                 user.IsAdministrator,
 			IsHidden:                        user.IsHidden,
@@ -247,7 +249,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			EnablePlaybackRemuxing:           true,
 			EnableContentDeletionFromFolders: []string{},
 			EnableContentDownloading:         user.ContentDownloading,
-			EnableSubtitleManagement:         true,
+			EnableSubtitleManagement:         user.SubtitleManagement,
 			EnableSyncTranscoding:            true,
 			EnableMediaConversion:            true,
 			EnabledDevices:                   []string{},
@@ -318,6 +320,11 @@ type SessionInfo struct {
 	HasCustomDeviceName   bool
 	ServerId              string
 	SupportedCommands     []string
+	// UserPrimaryImageTag is the tag of the user's profile picture;
+	// NowViewingItem, the item the app last reported showing (see
+	// Handler.reportViewing).
+	UserPrimaryImageTag string       `json:",omitempty"`
+	NowViewingItem      *BaseItemDto `json:",omitempty"`
 }
 
 // newSessionInfo describes a device's session. Like Jellyfin, it reports
@@ -350,6 +357,7 @@ func newSessionInfo(device accounts.Device, user accounts.User, serverID string,
 		NowPlayingQueue:       []struct{}{},
 		ServerId:              serverID,
 		SupportedCommands:     capabilities.SupportedCommands,
+		UserPrimaryImageTag:   user.ImageTag,
 	}
 }
 

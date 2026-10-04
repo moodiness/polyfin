@@ -15,15 +15,18 @@ import (
 // Vision, HDR10+, Atmos or DTS:X tracks, nor DVD or DVB subtitles.
 
 // ExternalSubtitle is a subtitle file offered beside the video (by an
-// addon), listed before the container's tracks.
+// addon, or added by a user), listed before the container's tracks.
 type ExternalSubtitle struct {
 	// Language is as the addon gives it: ISO 639-2/B or /T, ISO 639-1, or
 	// an English or French name.
 	Language string
 	// Title is optional.
 	Title string
-	// Codec is "subrip" or "webvtt".
+	// Codec is "subrip", "webvtt", "ass" or "ssa".
 	Codec string
+	// Forced and HearingImpaired are the flags a user gave a file they
+	// added.
+	Forced, HearingImpaired bool
 }
 
 // MediaStreams describes an analyzed version's tracks as Jellyfin does: the
@@ -167,6 +170,8 @@ func appendExternals(streams []MediaStream, externals []ExternalSubtitle, w *wor
 			Type:                   "Subtitle",
 			Index:                  i,
 			IsExternal:             true,
+			IsForced:               external.Forced,
+			IsHearingImpaired:      external.HearingImpaired,
 			IsTextSubtitleStream:   true,
 			SupportsExternalStream: true,
 		}

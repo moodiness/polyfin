@@ -58,6 +58,14 @@ FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b197847
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates
 
+# DejaVu, the fallback fonts apps load to render subtitles whose own fonts
+# are missing, for Latin, Greek and Cyrillic. Fonts are the same on every
+# platform, so they are installed natively.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS fonts
+# hadolint ignore=DL3008
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends fonts-dejavu-core
+
 # The same Debian on both platforms. amd64 adds libva and the VA drivers of
 # AMD and Intel GPUs, Intel's from non-free, and what NVIDIA's Vulkan driver
 # loads besides itself (the Vulkan loader, EGL, X11's extension library),
@@ -81,6 +89,7 @@ FROM runtime-${TARGETARCH}
 COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /usr/share/fonts/truetype/dejavu/
 COPY --from=build /polyfin /polyfin
 # Parts of the files being read. A volume, so that it stays writable in a
 # read-only container; Polyfin empties it when it starts.

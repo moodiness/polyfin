@@ -61,6 +61,9 @@ type policyUpdate struct {
 	// The user's permission to manage collections. Like Jellyfin's, a
 	// policy that leaves it out denies it.
 	EnableCollectionManagement bool
+	// Whether the user may add subtitle files to titles; like Jellyfin's,
+	// a policy that leaves it out denies it.
+	EnableSubtitleManagement bool
 }
 
 // scheduleUpdate is an AccessSchedule as apps post it. jellyfin-web sends
@@ -139,10 +142,10 @@ func (h *Handler) hiddenLibraries(ctx context.Context, policy policyUpdate, enab
 
 // updatePolicy sets a user's policy from an administrator's app: whether
 // the user is an administrator, hidden or disabled, their parental control,
-// whether they may have video or audio converted and download, the
-// server's libraries they see and their allowed hours. Like Jellyfin, the
-// policy replaces the stored one whole, and disabling a user signs out
-// their devices but the one that asked.
+// whether they may have video or audio converted, download and manage
+// subtitles, the server's libraries they see and their allowed hours. Like
+// Jellyfin, the policy replaces the stored one whole, and disabling a user
+// signs out their devices but the one that asked.
 func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	caller := callerFrom(r.Context())
 	// Jellyfin checks the caller's rights before reading the request.
@@ -237,6 +240,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		AccessSchedules: &schedules,
 		// The user's permission to manage collections.
 		CollectionManagement: &policy.EnableCollectionManagement,
+		// Subtitles.
+		SubtitleManagement: &policy.EnableSubtitleManagement,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):

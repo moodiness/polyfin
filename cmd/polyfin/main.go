@@ -224,6 +224,7 @@ func serve(ctx context.Context) error {
 				// Recordings are configured by POLYFIN_RECORDINGS_DIR, read
 				// here until the configuration knows it.
 				RecordingsDir: os.Getenv("POLYFIN_RECORDINGS_DIR"),
+				FontsDir:      cfg.FontsDir,
 			}),
 			Logger: logger,
 		}),

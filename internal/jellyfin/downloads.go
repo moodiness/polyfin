@@ -25,6 +25,21 @@ import (
 // all remote, and download as its streams play. Jellyfin also refuses HEAD
 // here, which Polyfin answers as it answers GET, as on its other routes.
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
+	h.serveFile(w, r, true)
+}
+
+// itemFile serves a version as /Items/{itemId}/File does: as the download
+// route does, under the same permissions, but to be read rather than
+// saved, without a file name. Jellyfin serves any signed-in user the file
+// on its disk; Polyfin's files are the addons' streams, which the download
+// permissions guard.
+func (h *Handler) itemFile(w http.ResponseWriter, r *http.Request) {
+	h.serveFile(w, r, false)
+}
+
+// serveFile serves the version a request names, as a file to save when
+// attachment is set.
+func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment bool) {
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	if !ok {
 		validationProblem(w, map[string][]string{"itemId": {notValid(r.PathValue("itemId"))}})
@@ -75,7 +90,9 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 		// source too: relay instead of redirecting it.
 		Relay:       grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token="),
 		ContentType: mimeTypes[containerOfName(name)],
-		Attachment:  name,
+	}
+	if attachment {
+		delivery.Attachment = name
 	}
 	if err := h.Playback.Serve(w, r, version, delivery); err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("A download could not be served", "addon", version.Addon, "error", err)

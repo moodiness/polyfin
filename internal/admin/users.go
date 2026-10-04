@@ -55,6 +55,11 @@ type userJSON struct {
 	// forgotten password screen, while it is valid, null otherwise: their
 	// password becomes the PIN once they enter it.
 	PasswordResetPin *passwordResetPinJSON `json:"passwordResetPin"`
+	// SubtitleManagement lets the user add subtitle files to titles from
+	// their apps; ImageTag identifies their profile picture, served at
+	// /UserImage, null without one.
+	SubtitleManagement bool    `json:"subtitleManagement"`
+	ImageTag           *string `json:"imageTag"`
 }
 
 type passwordResetPinJSON struct {
@@ -137,7 +142,18 @@ func newUserJSON(user accounts.User) userJSON {
 		AccessSchedules: schedulesJSON(user.AccessSchedules),
 		// The user's permission to manage collections.
 		CollectionManagement: user.CollectionManagement,
+		// Subtitles and the profile picture.
+		SubtitleManagement: user.SubtitleManagement,
+		ImageTag:           imageTag(user),
 	}
+}
+
+// imageTag is the tag of user's profile picture, nil without one.
+func imageTag(user accounts.User) *string {
+	if user.ImageTag == "" {
+		return nil
+	}
+	return &user.ImageTag
 }
 
 // blockedUntil is when the block of user's account ends, nil when it is not
@@ -481,6 +497,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		AccessSchedules *[]accessScheduleJSON `json:"accessSchedules"`
 		// CollectionManagement lets the user manage collections.
 		CollectionManagement *bool `json:"collectionManagement"`
+		// SubtitleManagement, see userJSON.
+		SubtitleManagement *bool `json:"subtitleManagement"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -508,6 +526,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		BlockedGenres:      body.BlockedGenres,
 		// The user's permission to manage collections.
 		CollectionManagement: body.CollectionManagement,
+		SubtitleManagement:   body.SubtitleManagement,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}

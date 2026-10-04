@@ -49,7 +49,8 @@ type Origin struct {
 	Type, ID string
 }
 
-// ExternalSubtitle is a subtitle file an addon offers for an item.
+// ExternalSubtitle is a subtitle file offered for an item: by an addon, or
+// added by a user (see UploadSubtitle).
 type ExternalSubtitle struct {
 	ID accounts.ID
 	// Language is the addon's code, usually ISO 639-2 ("fre").
@@ -57,6 +58,12 @@ type ExternalSubtitle struct {
 	URL      string
 	Addon    string
 	Confined bool
+	// Uploaded is set for a file a user added, whose text Polyfin keeps
+	// (see UploadedSubtitleText), in Format, with its flags.
+	Uploaded        bool
+	Format          string
+	Forced          bool
+	HearingImpaired bool
 }
 
 // target is what to ask addons for: a title or an episode.
@@ -303,8 +310,8 @@ func versionName(stream stremio.Stream) string {
 	return strings.Join(parts, " · ")
 }
 
-// Subtitles lists the subtitle files the user's addons offer for a movie or
-// an episode, in addon order.
+// Subtitles lists the subtitle files users added to a movie or an episode,
+// then those the user's addons offer for it, in addon order.
 func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts.ID) ([]ExternalSubtitle, error) {
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
@@ -337,7 +344,10 @@ func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts
 		})
 	}
 	wg.Wait()
-	var result []ExternalSubtitle
+	result, err := s.uploaded(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[accounts.ID]bool{}
 	for i, subtitles := range lists {
 		for _, subtitle := range subtitles {

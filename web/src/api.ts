@@ -49,6 +49,10 @@ export type User = {
   collectionManagement: boolean
   /** The PIN asked for from a Jellyfin app's "Forgot password" screen; null when none is active. */
   passwordResetPin: PasswordResetPin | null
+  /** Whether the user may add subtitle files to titles from their apps. */
+  subtitleManagement: boolean
+  /** Identifies the user's profile picture, served at /UserImage; null without one. */
+  imageTag: string | null
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
@@ -202,6 +206,7 @@ export type UserPatch = Partial<{
   blockedGenres: string[]
   accessSchedules: AccessSchedule[]
   collectionManagement: boolean
+  subtitleManagement: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */

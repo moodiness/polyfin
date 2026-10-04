@@ -31,6 +31,15 @@ func TestLoadAcceptsExplicitSettings(t *testing.T) {
 	}
 }
 
+func TestFontsComeFromTheSystemFolderUnlessSet(t *testing.T) {
+	for value, want := range map[string]string{"": "/usr/share/fonts", " /fonts ": "/fonts"} {
+		cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin", "POLYFIN_FONTS_DIR": value}))
+		if err != nil || cfg.FontsDir != want {
+			t.Errorf("POLYFIN_FONTS_DIR %q: %q, %v", value, cfg.FontsDir, err)
+		}
+	}
+}
+
 func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 	_, err := Load(env(map[string]string{
 		"POLYFIN_LISTEN":     "8096",
