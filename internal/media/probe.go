@@ -130,8 +130,9 @@ func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
 }
 
 // LiveOptions are the options FFmpeg and ffprobe read a live HLS stream
-// with: segments of any name, as some live sources name them oddly.
-var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL", "-extension_picky", "0"}
+// with: segments of any name, as some live sources name them oddly. The
+// demuxer still checks that each segment's content matches its name.
+var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL"}
 
 // ProbeLive analyzes a live stream at url, an HLS playlist or an endless
 // stream, reading a few seconds of it, as Jellyfin analyzes live TV.

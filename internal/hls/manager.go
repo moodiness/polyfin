@@ -209,6 +209,8 @@ type Key struct {
 	Session string
 	Audio   int
 	Format  Format
+	// User is who plays, which bounds the live encodings each user runs.
+	User string
 }
 
 func (k Key) name() string {

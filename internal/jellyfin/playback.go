@@ -162,7 +162,7 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 		RepeatMode:          playing.RepeatMode,
 		PlaybackOrder:       playing.PlaybackOrder,
 	}
-	item, err := h.title(r.Context(), user, playing.Item)
+	item, err := h.played(r.Context(), user, playing.Item)
 	if err != nil {
 		return
 	}

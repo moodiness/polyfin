@@ -224,6 +224,9 @@ func (h *Handler) channelListing(w http.ResponseWriter, r *http.Request, user ac
 	}
 	from, to := bounds(len(channels), start, limit)
 	dtos, err := h.dtos(r, user, channels[from:to], requestedFields(r), nil)
+	if err == nil {
+		h.addCurrentPrograms(r, user, dtos, requestedFields(r))
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
@@ -274,6 +277,25 @@ func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
 		dtos = append(dtos, dto)
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(channels), StartIndex: start})
+}
+
+// addCurrentPrograms adds to the DTOs of channels the programme each airs
+// now, as Jellyfin describes every channel.
+func (h *Handler) addCurrentPrograms(r *http.Request, user accounts.User, dtos []BaseItemDto, fields fieldSet) {
+	if !slices.ContainsFunc(dtos, func(dto BaseItemDto) bool { return dto.Type == "TvChannel" }) {
+		return
+	}
+	airing, err := h.airing(r, user)
+	if err != nil && r.Context().Err() == nil {
+		h.Logger.Warn("The programmes airing now could not be listed", "error", err)
+	}
+	for i := range dtos {
+		if id, ok := parseGUID(dtos[i].Id); ok && dtos[i].Type == "TvChannel" {
+			if program, ok := airing[id]; ok {
+				dtos[i].CurrentProgram = new(h.newItemDto(program, fields, false, userState{}))
+			}
+		}
+	}
 }
 
 // airing maps each channel to the programme it airs now.
@@ -413,6 +435,13 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		}
 		if q.MaxStartDate != nil {
 			to = time.Time(*q.MaxStartDate).Add(time.Nanosecond)
+		}
+		// What airs now, or has aired, needs no guide of the days ahead.
+		switch {
+		case q.IsAiring != nil && *q.IsAiring:
+			from, to = now, now.Add(time.Second)
+		case q.HasAired != nil && *q.HasAired && to.After(now):
+			to = now
 		}
 		programs, err := h.Library.Programs(r.Context(), user, from, to)
 		if err != nil {

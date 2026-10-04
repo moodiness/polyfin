@@ -34,7 +34,16 @@ const (
 	liveWait     = time.Minute
 	livePlaylist = "live.m3u8"
 	liveInit     = "init.mp4"
+	// userLives is how many channels one user plays at once through
+	// FFmpeg, as many as a household's screens; serverLives, how many the
+	// server runs in all.
+	userLives   = 4
+	serverLives = 16
 )
+
+// ErrBusy reports a live encoding refused because the server runs as many
+// as it may.
+var ErrBusy = errors.New("too many live encodings")
 
 // liveFile matches the files of a live encoding a player may fetch.
 var liveFile = regexp.MustCompile(`^(\d+\.(ts|mp4)|init\.mp4)$`)
@@ -55,6 +64,8 @@ type live struct {
 	run  *liveRun
 	next int
 	used time.Time
+	// created orders a user's live encodings, the oldest replaced first.
+	created time.Time
 	// stopped is set once the encoding is stopped for good.
 	stopped bool
 }
@@ -78,11 +89,37 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 		return nil, ErrStopped
 	}
 	l := m.lives[key]
+	var replaced *live
 	if l == nil {
-		l = &live{m: m, key: key, dir: filepath.Join(m.dir, "live-"+key.name()), used: time.Now()}
+		// Each live encoding reads its source as it comes, until the app
+		// leaves: a user's newest replaces their oldest past userLives, and
+		// none starts past serverLives.
+		var oldest *live
+		mine := 0
+		for k, other := range m.lives {
+			if k.User == key.User {
+				mine++
+				if oldest == nil || other.created.Before(oldest.created) {
+					oldest = other
+				}
+			}
+		}
+		switch {
+		case mine >= userLives:
+			replaced = oldest
+			delete(m.lives, oldest.key)
+		case len(m.lives) >= serverLives:
+			m.mu.Unlock()
+			return nil, ErrBusy
+		}
+		now := time.Now()
+		l = &live{m: m, key: key, dir: filepath.Join(m.dir, "live-"+key.name()), used: now, created: now}
 		m.lives[key] = l
 	}
 	m.mu.Unlock()
+	if replaced != nil {
+		replaced.stop()
+	}
 	run, err := l.ensure(ctx, open)
 	if err != nil {
 		return nil, err

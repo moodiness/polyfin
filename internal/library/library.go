@@ -801,7 +801,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		}
 		return Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}}, nil
 	case KindChannel:
-		return s.channel(ctx, v, id)
+		return s.channel(v, r)
 	case KindProgram:
 		return s.program(ctx, v, r)
 	default:
@@ -1104,10 +1104,11 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	case r.Kind == KindChannel && r.Meta != nil:
 		images = channelImages(*r.Meta)
 	case r.Kind == KindProgram && r.Video != nil:
+		// The guide that listed the programme may come from another addon
+		// than its channel: either one confines its artwork.
 		images.Primary = r.Video.Thumbnail
-		if channel, err := s.load(ctx, itemID(channelKey(r.Channel))); err == nil {
-			confined = channel.Confined
-		}
+		channel, err := s.load(ctx, itemID(channelKey(r.Channel)))
+		confined = r.Confined || err != nil || channel.Confined
 	case r.Meta != nil:
 		var item Item
 		fromMeta(&item, *r.Meta)

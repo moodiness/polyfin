@@ -76,7 +76,7 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			preview := meta
 			items = append(items, item)
 			records = append(records, record{ID: item.ID, Key: channelKey(meta.ID), Kind: KindChannel, Addon: &addon,
-				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Confined: src.addon.confined})
+				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: len(items), Confined: src.addon.confined})
 		}
 	}
 	return items, records
@@ -97,14 +97,17 @@ func channelImages(meta stremio.Meta) Images {
 	return Images{Primary: cmp.Or(meta.Poster, meta.Logo), Backdrop: meta.Background}
 }
 
-// channel finds one of the user's channels.
-func (s *Service) channel(ctx context.Context, v view, id accounts.ID) (Item, error) {
-	channels, _ := s.channels(ctx, v)
-	i := slices.IndexFunc(channels, func(c Item) bool { return c.ID == id })
-	if i < 0 {
+// channel describes a channel listed before, from what Polyfin remembers
+// of it, when the user still has the live TV catalog that listed it:
+// players ask for it with every segment, which must not list the catalogs
+// again.
+func (s *Service) channel(v view, r record) (Item, error) {
+	if r.Kind != KindChannel || r.Meta == nil || r.Addon == nil || !slices.ContainsFunc(v.channels, func(src source) bool {
+		return src.addon.addon.ID == *r.Addon && src.catalog.Type == r.CatalogType && src.catalog.ID == r.CatalogID
+	}) {
 		return Item{}, ErrNotFound
 	}
-	return channels[i], nil
+	return channelItem(*r.Meta, r.Number), nil
 }
 
 // Programs lists the programmes of the user's channels that overlap
@@ -170,7 +173,7 @@ func (s *Service) Programs(ctx context.Context, user accounts.User, from, to tim
 					seen[program.ID] = true
 					programs = append(programs, program)
 					records = append(records, record{ID: program.ID, Key: programKey(channel.StremioID, programmeID(video)), Kind: KindProgram,
-						Parent: &channel.ID, Channel: channel.StremioID, Video: &video})
+						Parent: &channel.ID, Channel: channel.StremioID, Video: &video, Confined: src.addon.confined})
 				}
 			}
 			return nil
@@ -230,7 +233,11 @@ func (s *Service) program(ctx context.Context, v view, r record) (Item, error) {
 	if r.Video == nil {
 		return Item{}, ErrNotFound
 	}
-	channel, err := s.channel(ctx, v, itemID(channelKey(r.Channel)))
+	stored, err := s.load(ctx, itemID(channelKey(r.Channel)))
+	if err != nil {
+		return Item{}, err
+	}
+	channel, err := s.channel(v, stored)
 	if err != nil {
 		return Item{}, err
 	}

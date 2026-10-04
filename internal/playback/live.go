@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/hls"
@@ -71,9 +71,10 @@ func (s *Service) Redirectable(ctx context.Context, version library.Version) boo
 // the address asked, the version's own when empty. The addresses an HLS
 // playlist names are rewritten by link, so that the player fetches them
 // through Polyfin too, with the headers the source needs and within its
-// confinement; other files are relayed as they come. When the source does
-// not answer, the player receives a 502 and the error is returned for
-// logging.
+// confinement; a playlist naming an address that cannot be rewritten is
+// refused. Other files are relayed as they come, byte ranges included, as
+// EXT-X-BYTERANGE asks them. When the source does not answer, the player
+// receives a 502 and the error is returned for logging.
 func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(string) string) error {
 	if target == "" {
 		target = version.URL
@@ -82,38 +83,54 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 	for name, value := range version.Headers {
 		header.Set(name, value)
 	}
+	for _, name := range forwardedRequest {
+		if value := r.Header.Get(name); value != "" {
+			header.Set(name, value)
+		}
+	}
 	response, err := s.opener.Open(r.Context(), http.MethodGet, target, header, version.Confined)
 	if err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+	switch response.StatusCode {
+	case http.StatusOK, http.StatusPartialContent, http.StatusRequestedRangeNotSatisfiable:
+	default:
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, response.StatusCode)
 	}
 	body := bufio.NewReaderSize(response.Body, 64<<10)
-	if playlist(response, body) {
+	// A playlist is rewritten however the source answered, a part of it
+	// included: FFmpeg asks for its playlists from their first byte.
+	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable && playlist(response, body) {
 		data, err := io.ReadAll(io.LimitReader(body, maxPlaylist))
-		if err != nil {
-			http.Error(w, "source unavailable", http.StatusBadGateway)
-			return err
+		if response.StatusCode == http.StatusPartialContent && !strings.HasPrefix(response.Header.Get("Content-Range"), "bytes 0-") {
+			err = fmt.Errorf("%w: a part of a playlist", ErrUnsafePlaylist)
 		}
 		base, _ := url.Parse(target)
 		if response.Request != nil {
 			base = response.Request.URL
 		}
+		var rewritten []byte
+		if err == nil {
+			rewritten, err = rewritePlaylist(data, base, link)
+		}
+		if err != nil {
+			http.Error(w, "source unavailable", http.StatusBadGateway)
+			return err
+		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		w.Header().Set("Cache-Control", "no-cache")
-		_, err = w.Write(rewritePlaylist(data, base, link))
+		_, err = w.Write(rewritten)
 		return err
 	}
-	for _, name := range []string{"Content-Type", "Content-Length"} {
+	for _, name := range forwardedResponse {
 		if value := response.Header.Get(name); value != "" {
 			w.Header().Set(name, value)
 		}
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(response.StatusCode)
 	buffer := copyBuffers.Get().(*[256 << 10]byte)
 	defer copyBuffers.Put(buffer)
 	_, err = io.CopyBuffer(w, body, buffer[:])
@@ -131,36 +148,97 @@ func playlist(response *http.Response, body *bufio.Reader) bool {
 	return bytes.HasPrefix(bytes.TrimPrefix(start, []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
 }
 
-// uriAttribute is the address a playlist tag names: keys, initialization
-// segments, renditions and the like.
-var uriAttribute = regexp.MustCompile(`URI="([^"]*)"`)
+// ErrUnsafePlaylist reports a playlist naming an address Polyfin cannot
+// relay, which FFmpeg would otherwise fetch itself, past the confinement.
+var ErrUnsafePlaylist = errors.New("the playlist names an address that cannot be relayed")
 
 // rewritePlaylist names every address of a playlist by link, resolved
-// against base, the playlist's own. Addresses other than HTTP ones, such
-// as a DRM system's key identifiers, stay as they are.
-func rewritePlaylist(data []byte, base *url.URL, link func(string) string) []byte {
-	rewrite := func(ref string) string {
-		target, err := base.Parse(strings.TrimSpace(ref))
-		if err != nil || target.Scheme != "http" && target.Scheme != "https" {
-			return ref
+// against base, the playlist's own. It reads the playlist as FFmpeg's HLS
+// demuxer does, which reads it through Polyfin too: a line ends at a
+// carriage return, a line feed or a NUL, and a tag's URI attribute may be
+// quoted or not. Inline data: addresses stay as they are; any other address
+// that is not HTTP, or does not parse, refuses the playlist, as FFmpeg
+// would fetch it itself.
+func rewritePlaylist(data []byte, base *url.URL, link func(string) string) ([]byte, error) {
+	rewrite := func(ref string) (string, error) {
+		ref = strings.TrimSpace(ref)
+		if strings.HasPrefix(strings.ToLower(ref), "data:") {
+			return ref, nil
 		}
-		return link(target.String())
+		target, err := base.Parse(ref)
+		if err != nil || target.Scheme != "http" && target.Scheme != "https" || target.Host == "" {
+			return "", fmt.Errorf("%w: %q", ErrUnsafePlaylist, ref)
+		}
+		return link(target.String()), nil
 	}
 	var out bytes.Buffer
-	for line := range strings.Lines(string(data)) {
-		line = strings.TrimRight(line, "\r\n")
+	lines := strings.FieldsFunc(string(data), func(r rune) bool { return r == '\r' || r == '\n' || r == 0 })
+	for _, line := range lines {
+		var err error
 		switch {
 		case strings.HasPrefix(line, "#"):
-			line = uriAttribute.ReplaceAllStringFunc(line, func(attribute string) string {
-				return `URI="` + rewrite(attribute[len(`URI="`):len(attribute)-1]) + `"`
-			})
+			line, err = rewriteAttributes(line, rewrite)
 		case strings.TrimSpace(line) != "":
-			line = rewrite(line)
+			line, err = rewrite(line)
+		}
+		if err != nil {
+			return nil, err
 		}
 		out.WriteString(line)
 		out.WriteByte('\n')
 	}
-	return out.Bytes()
+	return out.Bytes(), nil
+}
+
+// rewriteAttributes rewrites the URI attributes of a tag's attribute list,
+// read as FFmpeg reads one: KEY=VALUE pairs apart by commas, each value
+// within double quotes or up to the next comma. The URI is written quoted.
+func rewriteAttributes(line string, rewrite func(string) (string, error)) (string, error) {
+	colon := strings.IndexByte(line, ':')
+	if colon < 0 {
+		return line, nil
+	}
+	var out strings.Builder
+	out.WriteString(line[:colon+1])
+	rest := line[colon+1:]
+	for rest != "" {
+		skipped := len(rest) - len(strings.TrimLeft(rest, " \t,"))
+		out.WriteString(rest[:skipped])
+		rest = rest[skipped:]
+		equal := strings.IndexByte(rest, '=')
+		if equal < 0 {
+			out.WriteString(rest)
+			break
+		}
+		key := rest[:equal]
+		rest = rest[equal+1:]
+		var value, raw string
+		if strings.HasPrefix(rest, `"`) {
+			end := strings.IndexByte(rest[1:], '"')
+			if end < 0 {
+				end = len(rest) - 1
+				value, raw, rest = rest[1:], rest, ""
+			} else {
+				value, raw, rest = rest[1:end+1], rest[:end+2], rest[end+2:]
+			}
+		} else {
+			end := strings.IndexByte(rest, ',')
+			if end < 0 {
+				end = len(rest)
+			}
+			value, raw, rest = rest[:end], rest[:end], rest[end:]
+		}
+		out.WriteString(key + "=")
+		if strings.EqualFold(strings.TrimSpace(key), "URI") {
+			rewritten, err := rewrite(value)
+			if err != nil {
+				return "", err
+			}
+			raw = `"` + rewritten + `"`
+		}
+		out.WriteString(raw)
+	}
+	return out.String(), nil
 }
 
 // FileName is the last path segment of an address, which players and

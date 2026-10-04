@@ -185,7 +185,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
 	}
-	remux := playback.Remux{Session: session, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
+	remux := playback.Remux{Session: session, User: user.ID, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions.
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
@@ -407,6 +407,8 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 	case r.Context().Err() != nil:
 	case errors.Is(err, hls.ErrNotFound), errors.Is(err, hls.ErrStopped), errors.Is(err, playback.ErrNotRemuxable):
 		processingError(w, http.StatusNotFound)
+	case errors.Is(err, hls.ErrBusy):
+		processingError(w, http.StatusServiceUnavailable)
 	default:
 		h.Logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusInternalServerError)

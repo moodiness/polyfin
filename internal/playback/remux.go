@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
@@ -27,6 +28,8 @@ var ErrNotRemuxable = errors.New("the version cannot be remuxed")
 type Remux struct {
 	// Session is the play session it belongs to.
 	Session string
+	// User is who plays it.
+	User    accounts.ID
 	Version library.Version
 	// Audio is the audio track, as an index among the version's streams
 	// (ffprobe's); -1 plays none.
@@ -330,7 +333,7 @@ func (s *Service) StopRemux(session string) {
 }
 
 func (r Remux) key() hls.Key {
-	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format}
+	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String()}
 }
 
 // remuxOpener reads the version through the source cache, which keeps

@@ -63,7 +63,7 @@ func newTVAddon(t *testing.T, guide bool, dir string) *tvAddon {
 		case path == "/live/one.m3u8" && dir == "":
 			_, _ = io.WriteString(w, "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:7\n#EXTINF:2,\nseg7.ts\n")
 		case path == "/live/seg7.ts" && dir == "":
-			_, _ = io.WriteString(w, "segment bytes")
+			http.ServeContent(w, r, "seg7.ts", time.Time{}, strings.NewReader("segment bytes"))
 		case strings.HasPrefix(path, "/live/") && dir != "":
 			http.ServeFile(w, r, filepath.Join(dir, strings.TrimPrefix(path, "/live/")))
 		default:
@@ -176,6 +176,17 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 	compareLive(t, "livetv-channel", body)
 	_, body = s.call(http.MethodGet, "/Items?recursive=true&includeItemTypes=TvChannel", app("tv", token), nil)
 	compareLive(t, "livetv-channel-items", body)
+	// The player's details of a channel, and listings of channels, carry
+	// what it airs now, as Jellyfin's do.
+	var listed QueryResult
+	var detail BaseItemDto
+	if json.Unmarshal(body, &listed) != nil || len(listed.Items) != 2 || listed.Items[0].CurrentProgram == nil {
+		t.Errorf("channel items without their current programme: %s", body)
+	}
+	_, body = s.call(http.MethodGet, "/Items/"+one.Id, app("tv", token), nil)
+	if json.Unmarshal(body, &detail) != nil || detail.CurrentProgram == nil || detail.CurrentProgram.Name != "Now" {
+		t.Errorf("channel details without their current programme: %s", body)
+	}
 
 	minEnd := url.QueryEscape(time.Now().UTC().Format(time.RFC3339))
 	status, body = s.call(http.MethodGet, "/LiveTv/Programs?channelIds="+one.Id+"&MinEndDate="+minEnd+"&SortBy=StartDate&EnableImages=false&EnableUserData=false", app("tv", token), nil)
@@ -202,6 +213,21 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 		t.Fatalf("programme: %d %s", status, body)
 	}
 	compareLive(t, "livetv-program", body)
+}
+
+// The On Now rows ask what airs now: only today's guide is read for it,
+// not the week ahead.
+func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
+	addon := newTVAddon(t, true, "")
+	s, token, _ := tuned(t, addon)
+	var programs QueryResult
+	s.get(t, "/LiveTv/Programs/Recommended?IsAiring=true", token, &programs)
+	if len(programs.Items) != 1 || programs.Items[0].Name != "Now" {
+		t.Fatalf("airing now: %+v", programs.Items)
+	}
+	if n := addon.guides.Load(); n > 2 {
+		t.Errorf("%d guide pages read for what airs now", n)
+	}
 }
 
 // TestGuideAnswersAsJellyfinWithoutData checks the answers of a live TV
@@ -325,10 +351,45 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 	if response.StatusCode != http.StatusOK || string(bytes) != "segment bytes" {
 		t.Errorf("relayed segment: %d %q", response.StatusCode, bytes)
 	}
+	// Parts of a file, as EXT-X-BYTERANGE asks them, are relayed as parts.
+	request, _ := http.NewRequest(http.MethodGet, segment, nil)
+	request.Header.Set("Range", "bytes=0-6")
+	if response, err := http.DefaultClient.Do(request); err != nil {
+		t.Error(err)
+	} else {
+		part, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusPartialContent || string(part) != "segment" || response.Header.Get("Content-Range") != "bytes 0-6/13" {
+			t.Errorf("relayed byte range: %d %q %v", response.StatusCode, part, response.Header)
+		}
+	}
 	// A link Polyfin did not sign relays nothing.
 	forged := strings.Replace(segment, "target=", "target=aHR0cDovL2V4YW1wbGUuY29tLw", 1)
 	if response, err := http.Get(forged); err != nil || response.StatusCode != http.StatusUnauthorized {
 		t.Errorf("forged link: %v %v", response, err)
+	}
+
+	// A playing channel appears in the device's session.
+	report := map[string]any{"ItemId": channel, "MediaSourceId": source.Id, "PlayMethod": "DirectPlay"}
+	if status, body := s.call(http.MethodPost, "/Sessions/Playing", app("tv", token), report); status != http.StatusNoContent {
+		t.Fatalf("playback report: %d %s", status, body)
+	}
+	var sessions []SessionInfo
+	s.get(t, "/Sessions", token, &sessions)
+	if len(sessions) != 1 || sessions[0].NowPlayingItem == nil || sessions[0].NowPlayingItem.Type != "TvChannel" {
+		t.Errorf("sessions while a channel plays: %+v", sessions)
+	}
+
+	// A channel plays only while the user has the live TV catalog that
+	// lists it.
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := s.call(http.MethodPost, "/Items/"+channel+"/PlaybackInfo", app("tv", token), map[string]any{}); status != http.StatusNotFound {
+		t.Errorf("PlaybackInfo of a channel whose catalog was removed: %d", status)
+	}
+	if response, err := http.Get(segment); err != nil || response.StatusCode != http.StatusNotFound {
+		t.Errorf("a segment of a channel whose catalog was removed: %v %v", response, err)
 	}
 }
 
