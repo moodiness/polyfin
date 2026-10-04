@@ -34,6 +34,8 @@ type fakeAddon struct {
 	// short shortens the page at a skip by that many items, as addons that
 	// filter their catalogs do.
 	short map[int]int
+	// metaGate, when set, holds every meta request until it is closed.
+	metaGate chan struct{}
 
 	mu       sync.Mutex
 	requests []string
@@ -77,6 +79,13 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		to = max(from, to-a.short[skip])
 		_ = json.NewEncoder(w).Encode(map[string]any{"metas": items[from:to]})
 	case parts[0] == "meta" && len(parts) == 3:
+		if a.metaGate != nil {
+			select {
+			case <-a.metaGate:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		id, _ := url.PathUnescape(parts[2])
 		meta, ok := a.metas[parts[1]+"/"+id]
 		if !ok {

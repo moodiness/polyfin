@@ -1028,3 +1028,80 @@ PY
 docker run --rm --network "$network" python:3.13-alpine python3 -c "$syncplay_recorder" "$container" "$syncplay_inputs" |
 	jq --sort-keys . >"$out/syncplay-session.json"
 echo "SyncPlay session written to $out/syncplay-session.json"
+# Parental control. The ratings list as is, then a restricted user's answers,
+# unscrubbed, in parental/: the test titles get ratings of their own (Big
+# Buck Bunny R, Sintel PG, Tears of Steel none, the series TV-MA) and a
+# "child" user is limited to PG-13 with unrated movies blocked, by a policy
+# posted as Jellyfin's dashboard posts it (the whole policy, changed).
+parental_out="$out/parental"
+mkdir -p "$parental_out"
+get /Localization/ParentalRatings | jq . >"$parental_out/parental-ratings.json"
+rate() {
+	local item
+	item=$(get "/Users/$user/Items/$1" | jq --compact-output --arg rating "$2" '.OfficialRating = $rating | .LockData = true')
+	post "$base/Items/$1" --header "Authorization: $signed" --data "$item"
+}
+rate "$movie" R
+rate "$sintel" PG
+rate "$tears" ''
+rate "$series" TV-MA
+post "$base/Items/$series/Refresh?metadataRefreshMode=Default&replaceAllMetadata=false&recursive=true" \
+	--header "Authorization: $signed"
+await 'the library scan' idle
+child=$(post "$base/Users/New" --header "Authorization: $signed" --data '{"Name":"child","Password":"child-password"}' |
+	jq --exit-status --raw-output .Id)
+child_client='MediaBrowser Client="Polyfin fixtures", Device="Fixtures", DeviceId="polyfin-fixtures-child", Version="1.0.0"'
+child_signed="$child_client, Token=\"$(post "$base/Users/AuthenticateByName" --header "Authorization: $child_client" \
+	--data '{"Username":"child","Pw":"child-password"}' | jq --exit-status --raw-output .AccessToken)\""
+pg13=$(get /Localization/ParentalRatings | jq --compact-output '.[] | select(.Name == "PG-13") | .RatingScore')
+policy=$(get "/Users/$child" | jq --compact-output --argjson limit "$pg13" \
+	'.Policy | .MaxParentalRating = $limit.score | .MaxParentalSubRating = $limit.subScore | .BlockUnratedItems = ["Movie"]')
+# Answers by key: status, and the body when the request failed, or the
+# names of the items a listing returns.
+parental_answers='{}'
+parental() {
+	local key=$1 method=$2 path=$3 authorization=$4 response code body
+	response=$(curl --silent --show-error --request "$method" --header "Authorization: $authorization" \
+		--header 'Content-Type: application/json' --write-out '\n%{http_code}' "${@:5}" "$base$path")
+	code=${response##*$'\n'}
+	body=${response%$'\n'*}
+	parental_answers=$(jq --compact-output --arg key "$key" --argjson code "$code" --arg body "$body" '
+		($body | fromjson? // $body) as $json
+		| .[$key] = {status: $code}
+			+ (if $code >= 400 and $body != "" then {body: $json}
+				elif ($json | type) == "object" and ($json | has("Items")) then {names: [$json.Items[].Name]}
+				elif ($json | type) == "array" then {names: [$json[].Name]}
+				else {} end)' <<<"$parental_answers")
+	PARENTAL_BODY=$body
+}
+parental PolicyAsMember POST "/Users/$child/Policy" "$viewer_signed" --data "$policy"
+parental PolicyEmptyBody POST "/Users/$child/Policy" "$signed"
+parental PolicyUnknownKind POST "/Users/$child/Policy" "$signed" \
+	--data "$(jq --compact-output '.BlockUnratedItems = ["Film"]' <<<"$policy")"
+parental PolicyUnknownUser POST "/Users/0123456789abcdef0123456789abcdef/Policy" "$signed" --data "$policy"
+parental PolicyDisableAdministrator POST "/Users/$user/Policy" "$signed" \
+	--data "$(get "/Users/$user" | jq --compact-output '.Policy | .IsDisabled = true')"
+parental PolicyLastAdministrator POST "/Users/$user/Policy" "$signed" \
+	--data "$(get "/Users/$user" | jq --compact-output '.Policy | .IsAdministrator = false')"
+parental Policy POST "/Users/$child/Policy" "$signed" --data "$policy"
+parental ChildUser GET "/Users/$child" "$signed"
+save user-restricted <<<"$PARENTAL_BODY"
+jq '.Policy | {MaxParentalRating, MaxParentalSubRating, BlockUnratedItems}' <<<"$PARENTAL_BODY" >"$parental_out/policy.json"
+cget() { parental "$1" GET "$2" "$child_signed"; }
+cget MovieRestricted "/Users/$child/Items/$movie"
+cget MovieAllowed "/Users/$child/Items/$sintel"
+cget MovieUnrated "/Users/$child/Items/$tears"
+cget SeriesRestricted "/Users/$child/Items/$series"
+cget SeasonRestricted "/Users/$child/Items/$season"
+cget EpisodeRestricted "/Users/$child/Items/$episode"
+cget SeasonsRestricted "/Shows/$series/Seasons?userId=$child"
+cget EpisodesRestricted "/Shows/$series/Episodes?userId=$child"
+cget Movies "/Items?userId=$child&parentId=$movies&includeItemTypes=Movie&recursive=true&sortBy=SortName"
+cget Shows "/Items?userId=$child&parentId=$shows&includeItemTypes=Series&recursive=true"
+cget Search "/Items?userId=$child&recursive=true&searchTerm=buck&includeItemTypes=Movie"
+cget Latest "/Items/Latest?userId=$child&parentId=$movies"
+parental PlaybackInfoRestricted POST "/Items/$movie/PlaybackInfo?userId=$child" "$child_signed" --data '{}'
+parental FavoriteRestricted POST "/UserFavoriteItems/$movie?userId=$child" "$child_signed"
+parental Unrestricted GET "/Users/$user/Items/$movie" "$signed"
+jq --sort-keys . <<<"$parental_answers" >"$parental_out/answers.json"
+echo "Parental control fixtures written to $parental_out"

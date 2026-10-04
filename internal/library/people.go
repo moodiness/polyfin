@@ -221,7 +221,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	seen := map[accounts.ID]bool{}
 	more := false
 	if len(sources) > 0 && count > 0 {
-		titles, total, err := s.merged(ctx, sources, 0, count)
+		titles, total, err := s.merged(ctx, v, sources, 0, count)
 		if ctx.Err() != nil {
 			return Page{}, ctx.Err()
 		}
