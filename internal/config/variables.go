@@ -58,6 +58,7 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_SEGMENTS":       segments,
 		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
 		"POLYFIN_RECORDINGS_DIR": cfg.RecordingsDir,
+		"POLYFIN_WEB_DIR":        cfg.WebDir,
 	}
 	names := make([]string, 0, len(effective)+len(set))
 	for name := range effective {
