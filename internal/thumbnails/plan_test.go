@@ -4,8 +4,6 @@ import (
 	"slices"
 	"testing"
 	"time"
-
-	"github.com/moodiness/polyfin/internal/media"
 )
 
 func secondsOf(values ...float64) []time.Duration {
@@ -16,45 +14,59 @@ func secondsOf(values ...float64) []time.Duration {
 	return durations
 }
 
-// Each thumbnail, one every interval from the start, shows the keyframe
-// nearest its time, the earlier of two as near; a keyframe several show
-// is read once.
-func TestPlanThumbnails(t *testing.T) {
-	keyframes := secondsOf(0, 1.3, 4, 6, 14, 30)
-	s := planThumbnails(keyframes, 31*time.Second, 5*time.Second, 1000)
-	// 0, 5, 10, 15, 20, 25, 30 s: 0, 4 (as near as 6), 6, 14, 14, 30, 30.
-	if want := []int{0, 2, 3, 4, 5}; !slices.Equal(s.keyframes, want) {
-		t.Errorf("keyframes read %v, want %v", s.keyframes, want)
+// The keyframes read are those nearest times spread over the runtime,
+// each once, coarse to fine: however many the budget lets through, they
+// cover the whole runtime.
+func TestChooseKeyframes(t *testing.T) {
+	keyframes := make([]time.Duration, 3600)
+	for i := range keyframes {
+		keyframes[i] = time.Duration(i) * time.Second
 	}
-	if want := []int{0, 1, 2, 3, 3, 4, 4}; !slices.Equal(s.images, want) {
-		t.Errorf("thumbnails show %v, want %v", s.images, want)
+	order := chooseKeyframes(keyframes, spread(time.Hour, 57))
+	if len(order) != 57 {
+		t.Fatalf("%d keyframes chosen", len(order))
 	}
-	// A version needing more keyframes than allowed shows each on a few
-	// thumbnails in a row.
-	dense := make([]time.Duration, 3600)
-	for i := range dense {
-		dense[i] = time.Duration(i) * time.Second
+	sorted := slices.Sorted(slices.Values(order))
+	if sorted[0] > 40 || sorted[56] < 3560 || len(slices.Compact(slices.Clone(sorted))) != 57 {
+		t.Errorf("chosen %v", sorted)
 	}
-	s = planThumbnails(dense, time.Hour, 5*time.Second, 100)
-	if len(s.images) != 720 || len(s.keyframes) > 100 {
-		t.Errorf("%d thumbnails from %d keyframes", len(s.images), len(s.keyframes))
+	// Any first few read span the hour: the first 8 leave no gap above a
+	// quarter of it.
+	first := slices.Sorted(slices.Values(order[:8]))
+	if first[0] > 600 || first[7] < 3000 {
+		t.Errorf("the first keyframes read %v", first)
 	}
-	if s.images[0] != 0 || s.images[7] != 0 || s.images[8] != 1 {
-		t.Errorf("thumbnails show %v", s.images[:10])
+	for i := 1; i < len(first); i++ {
+		if first[i]-first[i-1] > 900 {
+			t.Errorf("the first keyframes read %v leave a gap", first)
+		}
+	}
+	// Sparse keyframes are read once each.
+	if got := chooseKeyframes(secondsOf(0, 100), spread(time.Minute, 20)); !slices.Equal(got, []int{0, 1}) {
+		t.Errorf("sparse: %v", got)
+	}
+	if got := coarseToFine(5); !slices.Equal(got, []int{0, 4, 2, 1, 3}) {
+		t.Errorf("coarse to fine: %v", got)
+	}
+}
+
+// Every thumbnail shows the keyframe read nearest its time, the earlier
+// of two as near, whatever the order they were read in.
+func TestShownCoversEveryThumbnail(t *testing.T) {
+	read := secondsOf(30, 0, 14, 6)
+	asked := make([]time.Duration, 8)
+	for i := range asked {
+		asked[i] = time.Duration(i) * 5 * time.Second
+	}
+	// 0, 5, 10, 15, 20, 25, 30, 35 s: 0, 6, 6 (as near as 14), 14, 14,
+	// 30, 30, 30 s, at their place in read.
+	if got, want := shown(read, asked), []int{1, 3, 3, 2, 2, 0, 0, 0}; !slices.Equal(got, want) {
+		t.Errorf("shown %v, want %v", got, want)
 	}
 	if got := thumbnailCount(10*time.Second, 10*time.Second); got != 1 {
 		t.Errorf("%d thumbnails for 10 s", got)
 	}
-}
-
-// Each chapter's image shows the keyframe nearest its start.
-func TestPlanChapters(t *testing.T) {
-	keyframes := secondsOf(0, 2, 9, 20)
-	s := planChapters(keyframes, []media.Chapter{{Start: 0}, {Start: 8 * time.Second}, {Start: 10 * time.Second}, {Start: 30 * time.Second}})
-	if !slices.Equal(s.keyframes, []int{0, 2, 3}) || !slices.Equal(s.images, []int{0, 1, 1, 2}) {
-		t.Errorf("keyframes %v, images %v", s.keyframes, s.images)
-	}
-	if got := union([]int{0, 3, 5}, []int{1, 3}); !slices.Equal(got, []int{0, 1, 3, 5}) {
-		t.Errorf("union %v", got)
+	if got := thumbnailCount(24*time.Minute, 10*time.Second); got != 144 {
+		t.Errorf("%d thumbnails for 24 minutes", got)
 	}
 }

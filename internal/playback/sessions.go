@@ -112,6 +112,17 @@ func (s *Sessions) Playing(device accounts.ID) (NowPlaying, bool) {
 	return result, true
 }
 
+// All returns what every device plays, by device, as last reported.
+func (s *Sessions) All() map[accounts.ID]NowPlaying {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all := make(map[accounts.ID]NowPlaying, len(s.devices))
+	for device, playing := range s.devices {
+		all[device] = *playing
+	}
+	return all
+}
+
 // withDefaults completes a report with what the previous one said.
 func withDefaults(state, previous PlayState) PlayState {
 	if state.Item == (accounts.ID{}) {

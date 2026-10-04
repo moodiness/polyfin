@@ -469,9 +469,10 @@ func sampleRanges(samples []uint64, stsz, stsc, stco []byte, wide bool) ([]Range
 	return result, nil
 }
 
-// ReadFrames reads the keyframes numbered by indexes, ascending, in the
-// order of Keyframes, through f, and passes each frame to fn in turn, as a
-// decoder takes it: a Matroska frame with its content encodings undone.
+// ReadFrames reads the keyframes numbered by indexes, in the order of
+// Keyframes, through f, in the order indexes gives, and passes each frame
+// to fn in turn, as a decoder takes it: a Matroska frame with its content
+// encodings undone.
 // An MP4 keyframe takes one request; a Matroska one, whose size its index
 // does not give, one or rarely two. When f is also a RangeFetcher, several
 // keyframes are read with each request.
@@ -496,6 +497,9 @@ func (v *Video) ReadFrames(ctx context.Context, f Fetcher, indexes []int, fn fun
 		if err != nil {
 			return err
 		}
+		// A source found not to serve several ranges at once answered the
+		// first alone: the others are read one at a time.
+		batch = batch[:len(data)]
 		for i, place := range batch {
 			index := indexes[i]
 			frame, err := r.frame(ctx, v.frames[index], data[i], place.Off)
@@ -549,13 +553,16 @@ func (r *frameReader) first(place frameAt) Range {
 }
 
 // fetchBatch reads ranges with one request when the source serves
-// several at once, else with one each.
+// several at once, else with one each. A source found not to now has the
+// first range alone read, so that a reader running out of requests has the
+// keyframes read so far.
 func (r *frameReader) fetchBatch(ctx context.Context, ranges []Range) ([][]byte, error) {
 	if rf, ok := r.f.(RangeFetcher); ok && r.ranges && len(ranges) > 1 {
 		data, err := rf.FetchRanges(ctx, ranges)
 		switch {
 		case errors.Is(err, ErrMultiRangeUnsupported):
 			r.ranges = false
+			ranges = ranges[:1]
 		case err != nil:
 			return nil, err
 		case len(data) != len(ranges):

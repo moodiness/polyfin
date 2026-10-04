@@ -58,13 +58,17 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 		h.sessions.Progress(c.Device.ID, c.User.ID, state)
 	case playbackStopped:
 		h.sessions.Stop(c.Device.ID)
+		// Images waiting for this playback may start.
+		if h.Thumbnails != nil {
+			h.Thumbnails.Wake()
+		}
 		if state.PlaySessionID != "" {
 			h.Playback.StopRemux(state.PlaySessionID)
 		}
 	}
 	// The report has arrived: it is recorded even when the app hangs up
 	// right after sending it, as when it closes once playback stops.
-	h.track(context.WithoutCancel(r.Context()), c.User, c.Device.DeviceName, event, state, positionKnown, before)
+	h.track(context.WithoutCancel(r.Context()), c.User, c.Device.DeviceName, c.Device.ID, event, state, positionKnown, before)
 }
 
 func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {
@@ -177,7 +181,8 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	dto.MediaSources, dto.HasSubtitles, dto.People, dto.RemoteTrailers = nil, nil, nil, nil
 	dto.CanDelete, dto.CanDownload, dto.LockData, dto.LockedFields, dto.Tags = nil, nil, nil, nil, nil
 	dto.Etag, dto.SortName, dto.PlayAccess, dto.DisplayPreferencesId = "", "", "", ""
-	dto.UserData, dto.Trickplay = UserItemData{}, h.trickplayManifest(r.Context(), item.ID)
+	dto.UserData = UserItemData{}
+	dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).ordered(playing.Item), playing.Item)
 	info.NowPlayingItem = &dto
 }
 

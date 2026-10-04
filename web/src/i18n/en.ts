@@ -430,20 +430,20 @@ const en = {
     saved: 'Settings saved.',
     thumbnailsTitle: 'Thumbnails',
     thumbnailsHelp:
-      'Images made from the titles themselves, after they are played. To make them, Polyfin reads small parts of the file from the source, in the background, at most 2 requests a second: one image every few seconds of video, never the whole file. Off by default.',
+      'Images made from the titles themselves, after they are watched. To make them, Polyfin reads small parts of the file from the source, at a gentle pace, once nobody is playing from that source: at most 60 requests per title, one every 3 seconds, and 120 an hour per source, never the whole file. A source that asks Polyfin to slow down gets no request for images for 2 hours. Off by default.',
     trickplay: 'Thumbnails when moving through a title',
     trickplayHelp:
-      'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them after a title starts playing, and for the next episode when playback is prepared in advance. A 2-hour movie takes a few minutes to get its images.',
+      'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them once a title has been watched, and for the next episode when playback is prepared in advance. Long movies get coarser thumbnails: a few minutes apart rather than a few seconds.',
     trickplayInterval: 'One thumbnail every (seconds)',
     trickplayIntervalHelp:
-      'Polyfin reads one image from the source every this many seconds of video. A lower number shows more precise images, but reads more from the source and takes more space. From 5 to 60; 10 by default, like Jellyfin.',
+      'How often the playback bar changes image. Polyfin reads at most 60 images per title, so on long titles the same image covers several steps. From 5 to 60; 10 by default, like Jellyfin.',
     trickplayWidth: 'Thumbnail width',
     trickplayWidthHelp:
       'Wider thumbnails look sharper on large screens, but take more space. Changing it makes new thumbnails the next time a title is played.',
     pixels: (width: number) => `${width} pixels`,
     chapterImages: 'Chapter images',
     chapterImagesHelp:
-      'Apps show an image for each chapter of a title, in its list of scenes. Polyfin reads one image per chapter, after the title starts playing.',
+      'Apps show an image for each chapter of a title, in its list of scenes. Polyfin uses the image it read nearest each chapter’s start, from the same reads as the thumbnails, once the title has been watched.',
     thumbnailStorage: 'Space for images (GB)',
     thumbnailStorageHelp:
       'Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From 1 to 50; 2 by default.',

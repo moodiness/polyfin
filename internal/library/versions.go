@@ -220,6 +220,13 @@ func (s *Service) VersionOwner(id accounts.ID) (accounts.ID, bool) {
 	return version.Item, ok
 }
 
+// KnownVersion returns a version listed earlier, by its identifier,
+// without asking addons; for the server's own bookkeeping, not for users,
+// whose access it does not check.
+func (s *Service) KnownVersion(id accounts.ID) (Version, bool) {
+	return s.versions.Get(id)
+}
+
 // Renew asks the addon that listed a version for its streams again and
 // returns the same file with the link the addon gives now, for links that
 // expired. Every listing of the version uses the new link afterwards.

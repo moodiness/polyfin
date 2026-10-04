@@ -108,9 +108,12 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 		DB:       pool,
 		FFmpeg:   ffmpeg,
 		Settings: store.Settings,
-		Open:     func(v library.Version) thumbnails.Source { return player.OpenSource(v) },
+		Open:     func(v library.Version) thumbnails.Source { return player.OpenSource(v).Once() },
 		Analyzed: player.Analyzed,
-		Logger:   logger,
+		// Paced for tests: a request every 10 ms.
+		Pace:   10 * time.Millisecond,
+		Poll:   10 * time.Millisecond,
+		Logger: logger,
 	})
 	t.Cleanup(images.Close)
 	options := Options{

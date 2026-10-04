@@ -792,3 +792,57 @@ func TestSubtitleBlocksThroughSources(t *testing.T) {
 		})
 	}
 }
+
+// Read once, a source asking to slow down, or failing, is asked nothing
+// more: the request fails at once, with ErrSlowDown, nor is an expired
+// link renewed and asked again. Fetch keeps its retries.
+func TestOnceNeverRetries(t *testing.T) {
+	o, server := newOrigin(t, blockSize)
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	once := s.Once()
+	for _, tc := range []struct {
+		name  string
+		set   func()
+		fetch func() error
+	}{
+		{"429", func() { o.busy, o.retryAfter = 100, "0" }, func() error { _, err := once.Fetch(t.Context(), 10, 20); return err }},
+		{"5xx", func() { o.busy, o.failing = 0, 100 }, func() error { _, err := once.Fetch(t.Context(), 10, 20); return err }},
+		{"429 for ranges", func() { o.busy, o.failing = 100, 0 }, func() error {
+			_, err := once.FetchRanges(t.Context(), []container.Range{{Off: 0, N: 10}, {Off: 100, N: 10}})
+			return err
+		}},
+	} {
+		tc.set()
+		before := o.requests.Load()
+		started := time.Now()
+		if err := tc.fetch(); !errors.Is(err, ErrSlowDown) || !errors.Is(err, ErrUnavailable) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if n := o.requests.Load() - before; n != 1 || time.Since(started) > 400*time.Millisecond {
+			t.Errorf("%s: %d requests in %v", tc.name, n, time.Since(started))
+		}
+	}
+	o.busy, o.failing = 0, 0
+	if got, err := once.Fetch(t.Context(), 10, 20); err != nil || !bytes.Equal(got, o.data[10:30]) {
+		t.Errorf("once, answered: %d bytes, %v", len(got), err)
+	}
+	// Playback's reads still retry.
+	o.busy, o.retryAfter = 1, "0"
+	before := o.requests.Load()
+	if _, err := s.Fetch(t.Context(), 10, 20); err != nil || o.requests.Load()-before != 2 {
+		t.Errorf("Fetch: %v after %d requests", err, o.requests.Load()-before)
+	}
+	// An expired link is not renewed and asked again.
+	o.expired["/old"] = true
+	renewed := false
+	old := newCache(t, 1<<30).Open(accounts.ID{2}, Location{URL: server.URL + "/old"}, func(context.Context) (Location, error) {
+		renewed = true
+		return Location{URL: server.URL + "/file"}, nil
+	})
+	defer old.Release()
+	before = o.requests.Load()
+	if _, err := old.Once().Fetch(t.Context(), 0, 10); err == nil || renewed || o.requests.Load()-before != 1 {
+		t.Errorf("expired: %v, renewed %v, %d requests", err, renewed, o.requests.Load()-before)
+	}
+}

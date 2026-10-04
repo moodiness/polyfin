@@ -29,35 +29,84 @@ type TrickplayInfo struct {
 }
 
 // trickplayManifest is the Trickplay field of a movie's or episode's DTO:
-// the thumbnails of its versions, by media source and width, as Jellyfin
-// lists them; empty when there are none, or when the settings turn them
-// off.
-func (h *Handler) trickplayManifest(ctx context.Context, item accounts.ID) *map[string]map[int]TrickplayInfo {
+// the thumbnails of the versions the user is offered, by media source and
+// width, as Jellyfin lists them, keyed as the item's MediaSources name
+// them: versions, in their order, the first under the identifier the item
+// was opened with (see sourceID). Apps look a playing source's thumbnails
+// up by its identifier. When the versions are not known, as in listings
+// before the title opened, the thumbnails are keyed by version, those
+// taller than the user's quality group left out while one fits. Empty when
+// there are none, or when the settings turn them off.
+func (h *Handler) trickplayManifest(ctx context.Context, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) *map[string]map[int]TrickplayInfo {
 	manifest := map[string]map[int]TrickplayInfo{}
 	if h.Thumbnails == nil {
 		return &manifest
 	}
-	sets, err := h.Thumbnails.Manifest(ctx, item)
+	sets, err := h.Thumbnails.Manifest(ctx, item.ID)
 	if err != nil {
 		if ctx.Err() == nil {
 			h.Logger.Warn("The thumbnails of a title could not be listed", "error", err)
 		}
 		return &manifest
 	}
-	for version, widths := range sets {
+	describe := func(widths map[int]thumbnails.Info) map[int]TrickplayInfo {
 		described := map[int]TrickplayInfo{}
 		for width, info := range widths {
 			described[width] = TrickplayInfo(info)
 		}
-		manifest[version.String()] = described
+		return described
+	}
+	if len(versions) > 0 {
+		for i, version := range versions {
+			if widths, ok := sets[version.ID]; ok {
+				manifest[sourceID(opened, version, i == 0).String()] = describe(widths)
+			}
+		}
+		return &manifest
+	}
+	fitting := map[accounts.ID]bool{}
+	for version := range sets {
+		if analysis, ok := h.Playback.Analyzed(ctx, version); !ok || user.FitsGroup(videoHeight(analysis)) {
+			fitting[version] = true
+		}
+	}
+	for version, widths := range sets {
+		if fitting[version] || len(fitting) == 0 {
+			manifest[version.String()] = describe(widths)
+		}
 	}
 	return &manifest
 }
 
+// trickplayVersion is the version whose thumbnails a request reads: the
+// media source it names, else the version the item was opened as. The
+// title's own identifier names the version it plays first for the user,
+// as its first media source carries it: the first of its versions known,
+// those taller than their quality group left out; zero when none is known,
+// for the title's version whose thumbnails were used last.
+func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item library.Item, opened, mediaSource accounts.ID) accounts.ID {
+	named := mediaSource
+	if named == (accounts.ID{}) {
+		named = opened
+	}
+	if named != item.ID {
+		return named
+	}
+	if versions := h.cachedPlayable(ctx, user, item).versions; len(versions) > 0 {
+		return versions[0].ID
+	}
+	if user.QualityGroup > 0 {
+		if first := h.firstWorkingVersion(ctx, user, item); first != item.ID {
+			return first
+		}
+	}
+	return accounts.ID{}
+}
+
 // queueImages asks, in the background, for the thumbnails and chapter
-// images of the version a playback started with, when the settings turn
-// them on.
-func (h *Handler) queueImages(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
+// images of the version a playback on device started with, when the
+// settings turn them on: they are made once it stopped.
+func (h *Handler) queueImages(ctx context.Context, user accounts.User, device accounts.ID, item library.Item, mediaSource string) {
 	// Recordings are Polyfin's own files, which may be deleted at any time:
 	// they get no thumbnails or chapter images.
 	if h.Thumbnails == nil || item.Kind == library.KindRecording {
@@ -79,7 +128,30 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, item libr
 	if err != nil {
 		return
 	}
-	h.Thumbnails.Queue(version)
+	h.Thumbnails.Queue(version, device)
+}
+
+// playingStale is how long a playback no report came for still counts as
+// under way: apps report every few seconds, and some never report a stop.
+const playingStale = 5 * time.Minute
+
+// thumbnailPlaybacks lists the playbacks under way for the thumbnails,
+// which wait for them, with the URL of their version when it is known.
+func (h *Handler) thumbnailPlaybacks() []thumbnails.Playing {
+	var playing []thumbnails.Playing
+	for device, now := range h.sessions.All() {
+		if time.Since(now.CheckedIn) > playingStale {
+			continue
+		}
+		p := thumbnails.Playing{Device: device}
+		if id, ok := parseGUID(now.MediaSourceID); ok {
+			if version, known := h.Library.KnownVersion(id); known {
+				p.URL = version.URL
+			}
+		}
+		playing = append(playing, p)
+	}
+	return playing
 }
 
 // trickplayFile serves a title's thumbnails at a width:
@@ -127,14 +199,12 @@ func (h *Handler) trickplayFile(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	if mediaSource == (accounts.ID{}) && opened != item.ID {
-		mediaSource = opened
-	}
 	if h.Thumbnails == nil {
 		notFoundProblem(w)
 		return
 	}
-	version, info, err := h.Thumbnails.Trickplay(r.Context(), item.ID, mediaSource, width)
+	named := h.trickplayVersion(r.Context(), user, item, opened, mediaSource)
+	version, info, err := h.Thumbnails.Trickplay(r.Context(), item.ID, named, width)
 	switch {
 	case errors.Is(err, thumbnails.ErrNotFound):
 		notFoundProblem(w)
