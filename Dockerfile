@@ -24,6 +24,21 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin \
 	&& mkdir /cache
 
+# jellyfin-web 12.1, the web client of the Jellyfin version Polyfin speaks.
+# Its two pins are here, to change together when the client is updated
+# (and the version in third_party/jellyfin-web/NOTICE with them):
+# - its built files, taken unmodified from the official Jellyfin image,
+#   pinned by the digest of its multi-platform index: the very files
+#   Jellyfin 12.1 serves, with no Node.js build to reproduce. They are the
+#   same on every platform, so the builder's are taken;
+# - its source code (GPL-2.0), which the release workflow attaches to every
+#   Polyfin release; no image build reads it.
+FROM --platform=$BUILDPLATFORM jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e AS jellyfin-web
+
+FROM scratch AS jellyfin-web-source
+ADD --checksum=sha256:359095593e55593b4460b125fa6df22a09993bd8e6455779e5c53fff5dd7b3c9 \
+	https://github.com/jellyfin/jellyfin-web/archive/refs/tags/v12.1.tar.gz /jellyfin-web-12.1-source.tar.gz
+
 # FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
 # time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
 # the last build of a month, kept for two years. The shared build keeps
@@ -90,6 +105,11 @@ COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /usr/share/fonts/truetype/dejavu/
+# jellyfin-web, a separate GPL-2.0 program, unmodified, in the folder
+# POLYFIN_WEB_DIR names by default; its license, and a notice saying where
+# its source is, in the usual documentation folder.
+COPY --from=jellyfin-web /jellyfin/jellyfin-web/ /usr/share/polyfin/jellyfin-web/
+COPY third_party/jellyfin-web/LICENSE third_party/jellyfin-web/NOTICE /usr/share/doc/jellyfin-web/
 COPY --from=build /polyfin /polyfin
 # Parts of the files being read. A volume, so that it stays writable in a
 # read-only container; Polyfin empties it when it starts.

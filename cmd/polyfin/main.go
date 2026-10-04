@@ -209,6 +209,13 @@ func serve(ctx context.Context) error {
 		logger.Info("Live TV recording is on", "folder", cfg.RecordingsDir)
 		registerRecordingTasks(registry, recorder)
 	}
+	webClient := server.WebClientFiles(cfg.WebDir)
+	switch {
+	case webClient != nil:
+		logger.Info("The web client is served at /web/", "folder", cfg.WebDir)
+	case cfg.WebDir != config.DefaultWebDir:
+		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
+	}
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database: pool,
@@ -227,6 +234,7 @@ func serve(ctx context.Context) error {
 				IPTV:          channels,
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
+				WebClient:     webClient != nil,
 			}),
 			Jellyfin: jellyfin.New(jellyfin.Options{
 				ServerID:      serverID,
@@ -252,7 +260,9 @@ func serve(ctx context.Context) error {
 				FontsDir:      cfg.FontsDir,
 				Recordings:    recorder,
 			}),
-			Logger: logger,
+			Web:           webClient,
+			SetupRequired: store.SetupRequired,
+			Logger:        logger,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

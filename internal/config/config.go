@@ -48,11 +48,17 @@ type Config struct {
 	// RecordingsDir is the folder Live TV recordings are written to; empty
 	// leaves recording off.
 	RecordingsDir string
+	// WebDir is the folder of jellyfin-web, the web client served at
+	// /web/. A folder without its index.html leaves the web client off.
+	WebDir string
 }
 
 // defaultFontsDir is the system font folder, which the Docker image fills
 // with DejaVu.
 const defaultFontsDir = "/usr/share/fonts"
+
+// DefaultWebDir is the folder the Docker image puts jellyfin-web in.
+const DefaultWebDir = "/usr/share/polyfin/jellyfin-web"
 
 // defaultCacheSize is 10 GB: a few movies, read again for seeks and
 // restarts without downloading them again.
@@ -74,6 +80,10 @@ func Load(getenv func(string) string) (Config, error) {
 		Acceleration: strings.ToLower(strings.TrimSpace(getenv("POLYFIN_HWACCEL"))),
 		VAAPIDevice:  strings.TrimSpace(getenv("POLYFIN_VAAPI_DEVICE")),
 		FontsDir:     strings.TrimSpace(getenv("POLYFIN_FONTS_DIR")),
+		WebDir:       strings.TrimSpace(getenv("POLYFIN_WEB_DIR")),
+	}
+	if cfg.WebDir == "" {
+		cfg.WebDir = DefaultWebDir
 	}
 	if cfg.FontsDir == "" {
 		cfg.FontsDir = defaultFontsDir

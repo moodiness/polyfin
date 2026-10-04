@@ -188,6 +188,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Fetch the source of the jellyfin-web the image ships
+        # GPL-2.0 section 3: the source goes with every release. The
+        # Dockerfile pins it, beside the image jellyfin-web is taken from.
+        run: docker buildx build --target jellyfin-web-source --output type=local,dest="$RUNNER_TEMP/jellyfin-web-source" .
       - name: Create release with generated notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -204,5 +212,5 @@ jobs:
           fi
           gh release create "$TAG" --verify-tag --generate-notes \
             --title "Polyfin ${VERSION}" \
-            --notes "Image: \`${IMAGE}:${VERSION}\` (linux/amd64, linux/arm64), digest \`${DIGEST}\`." \
-            "${flags[@]}"
+            --notes "Image: \`${IMAGE}:${VERSION}\` (linux/amd64, linux/arm64), digest \`${DIGEST}\`. It includes jellyfin-web, unmodified, under the GPL-2.0: its complete source is attached." \
+            "${flags[@]}" "$RUNNER_TEMP"/jellyfin-web-source/*.tar.gz

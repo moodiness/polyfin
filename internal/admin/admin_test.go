@@ -164,6 +164,27 @@ func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
 	}
 }
 
+// The admin app links to the web client only when Polyfin serves one.
+func TestStatusTellsWhetherTheWebClientIsServed(t *testing.T) {
+	pool := testdb.New(t)
+	if err := database.Migrate(t.Context(), pool); err != nil {
+		t.Fatal(err)
+	}
+	store, err := accounts.Open(t.Context(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, served := range []bool{false, true} {
+		h := New(Options{Database: pinger{}, Accounts: store, WebClient: served, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		recorder := httptest.NewRecorder()
+		h.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/status", nil))
+		var status map[string]any
+		if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil || status["webClient"] != served {
+			t.Errorf("web client served %v: status %d %s", served, recorder.Code, recorder.Body)
+		}
+	}
+}
+
 func TestSetupIgnoresLanguagesTheServerDoesNotSpeak(t *testing.T) {
 	api := newTestAPI(t, 10)
 	account := map[string]string{"name": "admin", "password": "correct horse", "setupCode": setupCode, "language": "de"}

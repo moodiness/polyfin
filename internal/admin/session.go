@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -112,6 +113,7 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		"serverId":      h.ServerID,
 		"database":      database,
 		"setupRequired": setupRequired,
+		"webClient":     h.WebClient,
 	})
 }
 
@@ -200,6 +202,81 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	h.SignIns.Succeed(key)
 	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
 	h.startSession(w, r, http.StatusOK, user)
+}
+
+// signInWithJellyfin opens an admin session for the administrator a Jellyfin
+// app is signed in as, so that jellyfin-web's Dashboard, which leads to the
+// admin app, needs no second sign-in. The access token comes only in the
+// Authorization header, as Jellyfin apps send it (MediaBrowser
+// Token="…"), never in a cookie or the URL. Only a signed-in device's token
+// counts: API keys have no user. The administrator must be allowed to sign in
+// now, as with a password: not disabled (their devices are then signed
+// out), not blocked after wrong passwords, within their allowed hours.
+//
+// A token that is no device's counts as a wrong password does toward the
+// client's failed attempts; the token of someone who may not have a session
+// is no wrong guess and counts toward nothing. Neither is written to the
+// activity log, as the admin app tries the token of whoever opens it.
+func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
+	key := throttle.ClientKey(r)
+	if h.throttled(w, key) {
+		return
+	}
+	token := mediaBrowserToken(r.Header.Get("Authorization"))
+	if token == "" {
+		writeError(w, http.StatusUnauthorized, "invalid_credentials")
+		return
+	}
+	_, user, err := h.Accounts.DeviceByToken(r.Context(), token, clientAddress(r))
+	if errors.Is(err, accounts.ErrNotFound) {
+		h.SignIns.Fail(key)
+		writeError(w, http.StatusUnauthorized, "invalid_credentials")
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	now := h.now()
+	switch {
+	case !user.IsAdministrator || h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now):
+		writeError(w, http.StatusUnauthorized, "invalid_credentials")
+		return
+	case !user.AllowedAt(now):
+		writeError(w, http.StatusForbidden, "outside_allowed_hours")
+		return
+	}
+	h.SignIns.Succeed(key)
+	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
+	h.startSession(w, r, http.StatusOK, user)
+}
+
+// mediaBrowserToken reads the Token parameter of an Authorization header in
+// Jellyfin's MediaBrowser scheme: comma-separated key=value pairs, keys in
+// any case, values quoted or not.
+func mediaBrowserToken(header string) string {
+	scheme, params, _ := strings.Cut(strings.TrimSpace(header), " ")
+	if !strings.EqualFold(scheme, "MediaBrowser") {
+		return ""
+	}
+	for params != "" {
+		params = strings.TrimLeft(params, " ,")
+		key, rest, found := strings.Cut(params, "=")
+		if !found {
+			return ""
+		}
+		rest = strings.TrimLeft(rest, " ")
+		var value string
+		if quoted, ok := strings.CutPrefix(rest, `"`); ok {
+			value, params, _ = strings.Cut(quoted, `"`)
+		} else {
+			value, params, _ = strings.Cut(rest, ",")
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "Token") {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (h *handler) session(w http.ResponseWriter, r *http.Request) {
