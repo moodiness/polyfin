@@ -73,6 +73,22 @@ type UserChanges struct {
 type Store struct {
 	db       *pgxpool.Pool
 	settings atomic.Pointer[Settings]
+	// signedOut is told of the devices signed out.
+	signedOut atomic.Pointer[func(devices []ID)]
+}
+
+// OnSignOut has f told of the devices signed out, once their tokens no
+// longer work: signed out by their app, revoked by an administrator, or
+// signed out with the rest of their account by a password change, or by
+// the account being disabled or deleted.
+func (s *Store) OnSignOut(f func(devices []ID)) {
+	s.signedOut.Store(&f)
+}
+
+func (s *Store) notifySignOut(devices []ID) {
+	if f := s.signedOut.Load(); f != nil && len(devices) > 0 {
+		(*f)(devices)
+	}
 }
 
 // qualifiedUserColumns prefixes userColumns with a table alias for joins.
@@ -275,6 +291,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 		hash = &hashed
 	}
 	var updated User
+	var signedOut []ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
 			return err
@@ -305,10 +322,13 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			return err
 		}
 		if hash != nil || (updated.IsDisabled && !current.IsDisabled) {
-			return signOutEverywhere(ctx, tx, id, keep)
+			signedOut, err = signOutEverywhere(ctx, tx, id, keep)
 		}
-		return nil
+		return err
 	})
+	if err == nil {
+		s.notifySignOut(signedOut)
+	}
 	return updated, err
 }
 
@@ -346,7 +366,8 @@ func (s *Store) changePassword(ctx context.Context, id ID, current, next string,
 
 // DeleteUser removes an account with its devices and sessions.
 func (s *Store) DeleteUser(ctx context.Context, id ID) error {
-	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+	var signedOut []ID
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
 			return err
 		}
@@ -359,9 +380,18 @@ func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 				return err
 			}
 		}
+		// The devices would go with the account; they are listed first, to
+		// be told signed out.
+		if signedOut, err = deletedDevices(tx.Query(ctx, "DELETE FROM devices WHERE user_id = $1 RETURNING id", id)); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 		return err
 	})
+	if err == nil {
+		s.notifySignOut(signedOut)
+	}
+	return err
 }
 
 func requireAnotherAdministrator(ctx context.Context, tx pgx.Tx, except ID) error {
@@ -378,11 +408,12 @@ func requireAnotherAdministrator(ctx context.Context, tx pgx.Tx, except ID) erro
 	return nil
 }
 
-func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM devices WHERE user_id = $1 AND id IS DISTINCT FROM $2", user, keep.device); err != nil {
-		return err
+func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) ([]ID, error) {
+	devices, err := deletedDevices(tx.Query(ctx, "DELETE FROM devices WHERE user_id = $1 AND id IS DISTINCT FROM $2 RETURNING id", user, keep.device))
+	if err != nil {
+		return nil, err
 	}
-	_, err := tx.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		"DELETE FROM admin_sessions WHERE user_id = $1 AND token_hash IS DISTINCT FROM $2", user, keep.adminSession)
-	return err
+	return devices, err
 }

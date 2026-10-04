@@ -1,8 +1,10 @@
 package accounts
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -237,6 +239,65 @@ func TestNewPasswordSignsOutEverywhereExceptTheCurrentSession(t *testing.T) {
 	if _, err := store.Authenticate(ctx, "alice", "battery staple"); err != nil {
 		t.Errorf("new password refused: %v", err)
 	}
+}
+
+// Every way a device can be signed out tells of it, once, with the
+// devices it signed out only.
+func TestSignedOutDevicesAreToldOf(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	var told [][]ID
+	store.OnSignOut(func(devices []ID) { told = append(told, devices) })
+	expect := func(what string, want ...Device) {
+		t.Helper()
+		ids := make([]ID, 0, len(want))
+		for _, d := range want {
+			ids = append(ids, d.ID)
+		}
+		slices.SortFunc(ids, func(a, b ID) int { return bytes.Compare(a[:], b[:]) })
+		if len(told) != 1 {
+			t.Fatalf("%s: told %d times", what, len(told))
+		}
+		got := slices.SortedFunc(slices.Values(told[0]), func(a, b ID) int { return bytes.Compare(a[:], b[:]) })
+		if !slices.Equal(got, ids) {
+			t.Errorf("%s: told of %v, want %v", what, got, ids)
+		}
+		told = nil
+	}
+	alice := mustCreate(t, store, NewUser{Name: "alice", Password: "correct horse"})
+	bob := mustCreate(t, store, NewUser{Name: "bob", Password: "correct horse"})
+	tvToken, tv, _ := store.SignInDevice(ctx, alice.ID, device("tv"))
+	_, phone, _ := store.SignInDevice(ctx, alice.ID, device("phone"))
+	_, tablet, _ := store.SignInDevice(ctx, alice.ID, device("tablet"))
+	_, bobTV, _ := store.SignInDevice(ctx, bob.ID, device("tv"))
+
+	if err := store.SignOutDevice(ctx, tvToken); err != nil {
+		t.Fatal(err)
+	}
+	expect("signing out", tv)
+	if err := store.RevokeDevice(ctx, bob.ID, phone.ID); !errors.Is(err, ErrNotFound) || told != nil {
+		t.Fatalf("revoking another user's device: %v, told of %v", err, told)
+	}
+	if err := store.RevokeDevice(ctx, alice.ID, phone.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect("revoking", phone)
+	_, phone, _ = store.SignInDevice(ctx, alice.ID, device("phone"))
+	if err := store.ChangePasswordFromDevice(ctx, alice.ID, "correct horse", "battery staple", phone.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect("changing the password from the phone", tablet)
+	if _, err := store.UpdateUser(ctx, alice.ID, UserChanges{IsHidden: new(true)}, nil); err != nil || told != nil {
+		t.Fatalf("hiding: %v, told of %v", err, told)
+	}
+	if _, err := store.UpdateUser(ctx, alice.ID, UserChanges{IsDisabled: new(true)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	expect("disabling", phone)
+	if err := store.DeleteUser(ctx, bob.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect("deleting", bobTV)
 }
 
 func TestAdminSessionsExpireAndRenew(t *testing.T) {
