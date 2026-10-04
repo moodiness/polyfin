@@ -1,7 +1,9 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -42,21 +44,35 @@ func (h *Handler) versionHeight(ctx context.Context, version library.Version) in
 // inGroup leaves out of versions those taller than the user's quality
 // group, keeping the order of the others, while at least one fits or has
 // an unknown height. When none does, all are kept rather than offering
-// nothing: they play converted down to the group.
+// nothing, closest to the group first, as they play converted down to it:
+// converting a taller one reads and decodes more for the same picture.
+// Versions of the same height keep their order, and unknown heights,
+// which never occur here as they count as fitting, would come last.
 func (h *Handler) inGroup(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
 	if user.QualityGroup == 0 {
 		return versions
 	}
 	fitting := make([]library.Version, 0, len(versions))
+	heights := make(map[accounts.ID]int, len(versions))
 	for _, version := range versions {
-		if user.FitsGroup(h.versionHeight(ctx, version)) {
+		height := h.versionHeight(ctx, version)
+		heights[version.ID] = height
+		if user.FitsGroup(height) {
 			fitting = append(fitting, version)
 		}
 	}
-	if len(fitting) == 0 {
-		return versions
+	if len(fitting) > 0 {
+		return fitting
 	}
-	return fitting
+	closest := slices.Clone(versions)
+	slices.SortStableFunc(closest, func(a, b library.Version) int {
+		x, y := heights[a.ID], heights[b.ID]
+		if x == 0 || y == 0 {
+			return cmp.Compare(y, x)
+		}
+		return cmp.Compare(x, y)
+	})
+	return closest
 }
 
 // limitHeight keeps in request the user's quality group, the tallest
