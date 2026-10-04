@@ -22,6 +22,7 @@ const en = {
     signedInAs: (name: string) => `Signed in as ${name}`,
     signOut: 'Sign out',
     signingOut: 'Signing out…',
+    apiKeys: 'API keys',
   },
   common: {
     loading: 'Loading…',
@@ -109,6 +110,7 @@ const en = {
       'This account cannot be used at this time. Try again during its allowed hours.',
     invalid_guide_url:
       'Enter a guide address starting with https:// or http://, of at most 4,096 characters.',
+    invalid_app: 'The app name must be 1 to 64 characters long, without special characters.',
   },
   status: {
     title: 'Server status',
@@ -317,6 +319,10 @@ const en = {
     canManageCollections: 'Can manage collections',
     canManageCollectionsHelp:
       'Lets this user create collections of titles in Jellyfin apps, add titles to them or take titles out, and delete them. Every user sees the collections, each with only the titles they may see.',
+    resetPinRequested: 'Password reset requested: PIN',
+    resetPinValidUntil: (time: string) => `, valid until ${time}`,
+    resetPinHelp:
+      'Give this PIN to the user: they sign in with it, and it becomes their new password.',
   },
   settings: {
     title: 'Settings',
@@ -564,6 +570,39 @@ const en = {
   },
   footer: {
     sourceCode: 'Source code on GitHub',
+  },
+  apiKeys: {
+    title: 'API keys',
+    description:
+      'Keys let tools and apps, such as request managers or scripts, use the Jellyfin API of this server with administrator rights. Anyone who has a key has these rights: keep keys private and revoke the ones you no longer use.',
+    listTitle: 'Keys',
+    empty: 'No API key yet.',
+    created: 'Created',
+    lastUsed: 'Last used',
+    createTitle: 'Create a key',
+    app: 'App name',
+    appHint: 'Who will use this key, to recognize it later. 1 to 64 characters.',
+    create: 'Create key',
+    creating: 'Creating…',
+    newKeyTitle: (app: string) => `Key for ${app}`,
+    newKeyNotice: 'Copy this key now: it will not be shown again.',
+    copy: 'Copy',
+    copied: 'Copied.',
+    copyFailed: 'The key could not be copied. Select it and copy it by hand.',
+    done: 'I have copied it',
+    revoke: 'Revoke',
+    revoking: 'Revoking…',
+    revokeConfirm: (app: string) =>
+      `Revoke the key for ${app}? Tools and apps using it will stop working. This cannot be undone.`,
+    revoked: (app: string) => `The key for ${app} has been revoked.`,
+  },
+  activity: {
+    title: 'Recent activity',
+    empty: 'No activity yet.',
+    warning: 'Warning',
+    error: 'Error',
+    count: (shown: number, total: number) => `The last ${shown} of ${total} events.`,
+    autoRefresh: 'Refreshes automatically every 30 seconds.',
   },
 }
 

@@ -39,15 +39,18 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // namedConfiguration answers a named part of the server configuration for
-// any signed-in user, as Jellyfin does. Apps read the encoding part only:
-// jellyfin-web, before rendering ASS subtitles, which it skips when this
-// fails. Any other key is unknown.
+// any signed-in user, as Jellyfin does: encoding, which jellyfin-web reads
+// before rendering ASS subtitles, and skips them when this fails, and
+// branding, the same as /Branding/Configuration. Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
-	if !strings.EqualFold(r.PathValue("key"), "encoding") {
+	switch key := r.PathValue("key"); {
+	case strings.EqualFold(key, "encoding"):
+		writeJSON(w, http.StatusOK, encodingOptions)
+	case strings.EqualFold(key, "branding"):
+		writeJSON(w, http.StatusOK, BrandingOptions{})
+	default:
 		processingError(w, http.StatusNotFound)
-		return
 	}
-	writeJSON(w, http.StatusOK, encodingOptions)
 }
 
 // EncodingOptions is Jellyfin's encoding configuration, in its order.

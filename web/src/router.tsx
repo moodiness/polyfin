@@ -9,6 +9,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import AccountPage from '@/pages/AccountPage'
 import AddonsPage from '@/pages/AddonsPage'
+import ApiKeysPage from '@/pages/ApiKeysPage'
 import LibrariesPage from '@/pages/LibrariesPage'
 import LoginPage from '@/pages/LoginPage'
 import MyAddonsPage from '@/pages/MyAddonsPage'
@@ -133,6 +134,7 @@ export const router = createBrowserRouter(
             { path: 'addons', element: <AddonsPage /> },
             { path: 'libraries', element: <LibrariesPage /> },
             { path: 'settings', element: <SettingsPage /> },
+            { path: 'api-keys', element: <ApiKeysPage /> },
           ],
         },
         { path: '*', element: <NotFoundPage /> },

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -179,5 +180,84 @@ func (s *Store) SetCapabilities(ctx context.Context, device ID, capabilities Cap
 		return err
 	}
 	_, err = s.db.Exec(ctx, "UPDATE devices SET capabilities = $2 WHERE id = $1", device, encoded)
+	return err
+}
+
+// ListedDevice is a signed-in device as administrators see it: with the
+// name of its user and the name an administrator gave its device
+// identifier, nil when none.
+type ListedDevice struct {
+	Device
+	UserName   string
+	CustomName *string
+}
+
+// DeviceOptions are what an administrator set for a device identifier, as
+// Jellyfin's DeviceOptions; ID numbers them in the order they were made.
+type DeviceOptions struct {
+	ID         int
+	DeviceID   string
+	CustomName *string
+}
+
+// maxDeviceNameLength bounds the names administrators give devices.
+const maxDeviceNameLength = 256
+
+// ErrInvalidDeviceName reports a device name longer than
+// maxDeviceNameLength, or a device identifier that is empty or as long.
+var ErrInvalidDeviceName = errors.New("invalid device name")
+
+// AllDevices lists every signed-in device of every user, or those of
+// deviceID when it is not empty, most recently active first.
+func (s *Store) AllDevices(ctx context.Context, deviceID string) ([]ListedDevice, error) {
+	rows, err := s.db.Query(ctx, "SELECT "+deviceColumns+`, u.name, o.custom_name
+		FROM devices d JOIN users u ON u.id = d.user_id LEFT JOIN device_options o ON o.device_id = d.device_id
+		WHERE $1 = '' OR d.device_id = $1
+		ORDER BY d.last_activity_at DESC, d.device_id, d.id`, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ListedDevice, error) {
+		var listed ListedDevice
+		device, err := scanDevice(row, &listed.UserName, &listed.CustomName)
+		listed.Device = device
+		return listed, err
+	})
+}
+
+// SignOutDeviceID signs out every user signed in on a device identifier,
+// through the same path as any other sign-out, and returns how many.
+func (s *Store) SignOutDeviceID(ctx context.Context, deviceID string) (int, error) {
+	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE device_id = $1 RETURNING id", deviceID))
+	if err != nil {
+		return 0, err
+	}
+	s.notifySignOut(devices)
+	return len(devices), nil
+}
+
+// DeviceOptions returns what an administrator set for a device identifier;
+// ErrNotFound when nothing was ever set.
+func (s *Store) DeviceOptions(ctx context.Context, deviceID string) (DeviceOptions, error) {
+	options := DeviceOptions{DeviceID: deviceID}
+	err := s.db.QueryRow(ctx, "SELECT id, custom_name FROM device_options WHERE device_id = $1", deviceID).
+		Scan(&options.ID, &options.CustomName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return DeviceOptions{}, ErrNotFound
+	}
+	return options, err
+}
+
+// SetDeviceName names a device identifier for administrators; nil or an
+// empty name removes the name.
+func (s *Store) SetDeviceName(ctx context.Context, deviceID string, name *string) error {
+	if name != nil && *name == "" {
+		name = nil
+	}
+	if deviceID == "" || len(deviceID) > maxDeviceNameLength || name != nil && utf8.RuneCountInString(*name) > maxDeviceNameLength {
+		return ErrInvalidDeviceName
+	}
+	_, err := s.db.Exec(ctx, `INSERT INTO device_options (device_id, custom_name) VALUES ($1, $2)
+		ON CONFLICT (device_id) DO UPDATE SET custom_name = excluded.custom_name`, deviceID, name)
 	return err
 }

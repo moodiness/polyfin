@@ -2,10 +2,10 @@ package userdata
 
 import "time"
 
-// minResumeDuration is the runtime under which an item is played as soon
+// MinResumeDuration is the runtime under which an item is played as soon
 // as it is past its start, as on a Jellyfin server with its default
 // configuration (MinResumeDurationSeconds).
-const minResumeDuration = 5 * time.Minute
+const MinResumeDuration = 5 * time.Minute
 
 // Thresholds are how far into an item, in percent of its runtime, a
 // position must be to keep a resume point (Resume) and to mark it played
@@ -37,7 +37,7 @@ func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
 	switch {
 	case percent < float64(thresholds.Resume):
 		d.Position = 0
-	case percent > float64(thresholds.Played) || runtime < minResumeDuration:
+	case percent > float64(thresholds.Played) || runtime < MinResumeDuration:
 		d.Position = 0
 		d.Played = true
 	default:

@@ -64,7 +64,7 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 	}
 	// The report has arrived: it is recorded even when the app hangs up
 	// right after sending it, as when it closes once playback stops.
-	h.track(context.WithoutCancel(r.Context()), c.User, event, state, positionKnown, before)
+	h.track(context.WithoutCancel(r.Context()), c.User, c.Device.DeviceName, event, state, positionKnown, before)
 }
 
 func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {

@@ -1,0 +1,18 @@
+{
+  "Items": [
+    {
+      "AccessToken": "<redacted>",
+      "AppName": "Seerr",
+      "AppVersion": "",
+      "DateCreated": "2026-10-04T10:00:57.8245873Z",
+      "DateLastActivity": "0001-01-01T00:00:00.0000000Z",
+      "DeviceId": "",
+      "DeviceName": "",
+      "Id": 0,
+      "IsActive": false,
+      "UserId": "00000000000000000000000000000000"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}

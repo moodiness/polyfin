@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -431,4 +433,54 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 		}
 	}
 	return found, pending
+}
+
+// refreshBatch bounds the titles one RefreshRatings asks about.
+const refreshBatch = 500
+
+// RefreshRatings asks the server's addons again for the ratings and genres
+// kept for titles once they are old enough to be asked again, the oldest
+// first and at most refreshBatch of them, one at a time within the lookups
+// listings share, and returns how many were asked. Listings do the same
+// for the titles they list; this does it ahead, when an administrator
+// starts it.
+func (s *Service) RefreshRatings(ctx context.Context) (int, error) {
+	rows, err := s.db.Query(ctx, `SELECT id FROM items
+		WHERE data ? 'rating' AND data ? 'ratedAt' AND (data->>'ratedAt')::timestamptz <
+			CASE WHEN data->>'rating' = '' THEN $1::timestamptz ELSE $2::timestamptz END
+		ORDER BY (data->>'ratedAt')::timestamptz LIMIT $3`,
+		s.now().Add(-unratedTTL), s.now().Add(-ratedTTL), refreshBatch)
+	if err != nil {
+		return 0, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+	if err != nil {
+		return 0, err
+	}
+	records, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil {
+		return 0, err
+	}
+	asked := 0
+	for _, r := range records {
+		if !v.rates(r) {
+			continue
+		}
+		select {
+		case s.ratingLookups <- struct{}{}:
+		case <-ctx.Done():
+			return asked, ctx.Err()
+		}
+		lookup, cancel := context.WithTimeout(ctx, ratingLookupTime)
+		// describe keeps the rating and genres it finds.
+		s.describe(lookup, v, r, true)
+		cancel()
+		<-s.ratingLookups
+		asked++
+	}
+	return asked, ctx.Err()
 }

@@ -82,7 +82,7 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		// The administrator's own devices belong to another account: every
 		// device of the user is signed out.
 		_, err := h.Accounts.UpdateUser(r.Context(), id, accounts.UserChanges{Password: &body.NewPw}, nil)
-		h.passwordChanged(w, r, err)
+		h.passwordChanged(w, r, id, err)
 		return
 	}
 	// Unlike Jellyfin, an administrator changing their own password must
@@ -102,11 +102,12 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// The current password was right, even when the new one is refused.
 	h.SignIns.Succeed(key)
-	h.passwordChanged(w, r, err)
+	h.passwordChanged(w, r, id, err)
 }
 
-// passwordChanged answers a password change that passed authorization.
-func (h *Handler) passwordChanged(w http.ResponseWriter, r *http.Request, err error) {
+// passwordChanged answers a password change of the user id that passed
+// authorization, and records it.
+func (h *Handler) passwordChanged(w http.ResponseWriter, r *http.Request, id accounts.ID, err error) {
 	switch {
 	case errors.Is(err, accounts.ErrInvalidPassword):
 		validationProblem(w, map[string][]string{"NewPw": {"The new password must have at least 8 characters and at most 256 bytes."}})
@@ -115,6 +116,9 @@ func (h *Handler) passwordChanged(w http.ResponseWriter, r *http.Request, err er
 	case err != nil:
 		h.internalError(w, r, err)
 	default:
+		if user, err := h.Accounts.User(r.Context(), id); err == nil {
+			h.Activity.PasswordChanged(r.Context(), user)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

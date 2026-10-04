@@ -166,9 +166,10 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	// addons only: their own addons could describe titles without the
 	// ratings or genres that hide them. So does a user whose own addons the
 	// server or their own permission turned off: their addons are kept, but
-	// not used.
+	// not used. A request without a user, made with an API key, browses the
+	// server's addons too.
 	scopes := []addons.Scope{addons.Shared()}
-	if !user.Restricted() && settings.PersonalAddonsAllowed(user) {
+	if !user.Restricted() && user.ID != (accounts.ID{}) && settings.PersonalAddonsAllowed(user) {
 		scopes = []addons.Scope{addons.Personal(user.ID)}
 		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
 			return view{}, err

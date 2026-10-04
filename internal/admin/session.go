@@ -182,6 +182,9 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, accounts.ErrInvalidCredentials) {
 		h.SignIns.Fail(key)
 	}
+	if errors.Is(err, accounts.ErrInvalidCredentials) || errors.Is(err, accounts.ErrDisabled) {
+		h.Activity.SignInFailed(r.Context(), body.Name, clientAddress(r))
+	}
 	if accountError(w, err) {
 		return
 	}
@@ -195,6 +198,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.SignIns.Succeed(key)
+	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
 	h.startSession(w, r, http.StatusOK, user)
 }
 

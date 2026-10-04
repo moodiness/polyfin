@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -51,6 +52,9 @@ type Options struct {
 	Now func() time.Time
 	// Guides fetches the XMLTV guides of live TV catalogs.
 	Guides GuideRefresher
+	// Activity records what administrators change for the activity log;
+	// nil records nothing.
+	Activity *activity.Store
 }
 
 type handler struct {
@@ -88,6 +92,10 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
+	mux.Handle("GET /admin/api/api-keys", h.administrator(h.apiKeys))
+	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
+	mux.Handle("DELETE /admin/api/api-keys/{id}", h.administrator(h.revokeAPIKey))
+	mux.Handle("GET /admin/api/activity", h.administrator(h.recentActivity))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))

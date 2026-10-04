@@ -24,6 +24,7 @@ const fr: Messages = {
     signedInAs: (name: string) => `Connecté en tant que ${name}`,
     signOut: 'Se déconnecter',
     signingOut: 'Déconnexion…',
+    apiKeys: 'Clés d’API',
   },
   common: {
     loading: 'Chargement…',
@@ -121,6 +122,8 @@ const fr: Messages = {
       'Ce compte ne peut pas être utilisé à cette heure-ci. Réessayez pendant ses horaires autorisés.',
     invalid_guide_url:
       'Saisissez une adresse de guide commençant par https:// ou http://, de 4 096 caractères au plus.',
+    invalid_app:
+      'Le nom de l’application doit comporter de 1 à 64 caractères, sans caractères spéciaux.',
   },
   status: {
     title: 'État du serveur',
@@ -338,6 +341,10 @@ const fr: Messages = {
     canManageCollections: 'Peut gérer les collections',
     canManageCollectionsHelp:
       'Permet à cet utilisateur de créer des collections de titres dans les applications Jellyfin, d’y ajouter ou d’en retirer des titres, et de les supprimer. Tous les utilisateurs voient les collections, chacun avec seulement les titres qu’il a le droit de voir.',
+    resetPinRequested: 'Réinitialisation du mot de passe demandée : code',
+    resetPinValidUntil: (time: string) => `, valable jusqu’à ${time}`,
+    resetPinHelp:
+      'Donnez ce code à l’utilisateur : il se connecte avec, et ce code devient son nouveau mot de passe.',
   },
   settings: {
     title: 'Paramètres',
@@ -591,6 +598,39 @@ const fr: Messages = {
   },
   footer: {
     sourceCode: 'Code source sur GitHub',
+  },
+  apiKeys: {
+    title: 'Clés d’API',
+    description:
+      'Les clés permettent à des outils et applications, comme des gestionnaires de demandes ou des scripts, d’utiliser l’API Jellyfin de ce serveur avec les droits d’administrateur. Toute personne qui a une clé a ces droits : gardez vos clés secrètes et révoquez celles que vous n’utilisez plus.',
+    listTitle: 'Clés',
+    empty: 'Aucune clé d’API pour l’instant.',
+    created: 'Créée',
+    lastUsed: 'Dernière utilisation',
+    createTitle: 'Créer une clé',
+    app: 'Nom de l’application',
+    appHint: 'Qui va utiliser cette clé, pour la reconnaître plus tard. De 1 à 64 caractères.',
+    create: 'Créer la clé',
+    creating: 'Création…',
+    newKeyTitle: (app: string) => `Clé pour ${app}`,
+    newKeyNotice: 'Copiez cette clé maintenant : elle ne sera plus affichée.',
+    copy: 'Copier',
+    copied: 'Copiée.',
+    copyFailed: 'Impossible de copier la clé. Sélectionnez-la et copiez-la vous-même.',
+    done: 'Je l’ai copiée',
+    revoke: 'Révoquer',
+    revoking: 'Révocation…',
+    revokeConfirm: (app: string) =>
+      `Révoquer la clé pour ${app} ? Les outils et applications qui l’utilisent ne fonctionneront plus. Impossible de revenir en arrière.`,
+    revoked: (app: string) => `La clé pour ${app} a été révoquée.`,
+  },
+  activity: {
+    title: 'Activité récente',
+    empty: 'Aucune activité pour l’instant.',
+    warning: 'Avertissement',
+    error: 'Erreur',
+    count: (shown: number, total: number) => `Les ${shown} derniers événements sur ${total}.`,
+    autoRefresh: 'Actualisation automatique toutes les 30 secondes.',
   },
 }
 

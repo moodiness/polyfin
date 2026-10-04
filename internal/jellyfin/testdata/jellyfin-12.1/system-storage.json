@@ -1,0 +1,50 @@
+{
+  "CacheFolder": {
+    "DeviceId": "/cache",
+    "FreeSpace": 771383386112,
+    "Path": "/cache",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  },
+  "ImageCacheFolder": {
+    "FreeSpace": -1,
+    "Path": "/cache/images",
+    "UsedSpace": -1
+  },
+  "InternalMetadataFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 771383386112,
+    "Path": "/config/metadata",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  },
+  "Libraries": [],
+  "LogFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 771383386112,
+    "Path": "/config/log",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  },
+  "ProgramDataFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 771383386112,
+    "Path": "/config",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  },
+  "TranscodingTempFolder": {
+    "DeviceId": "/cache",
+    "FreeSpace": 771383386112,
+    "Path": "/cache/transcodes",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  },
+  "WebFolder": {
+    "DeviceId": "/",
+    "FreeSpace": 771383386112,
+    "Path": "/jellyfin/jellyfin-web",
+    "StorageType": "Fixed",
+    "UsedSpace": 206512738304
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
 	"github.com/moodiness/polyfin/internal/collections"
@@ -24,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
@@ -32,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/userdata"
 	webui "github.com/moodiness/polyfin/web"
@@ -100,9 +104,12 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	// The level follows the settings' detailed log once they are loaded.
+	// The recent lines are also kept, redacted, for administrators to read
+	// from Jellyfin apps.
 	level := new(slog.LevelVar)
 	level.Set(cfg.LogLevel)
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	recent := logs.NewRing(logs.Capacity)
+	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, recent), &slog.HandlerOptions{Level: level}))
 	adminApp, err := webui.Assets()
 	if err != nil {
 		return err
@@ -170,6 +177,9 @@ func serve(ctx context.Context) error {
 		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
 	}
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
+	activityLog := activity.New(pool, store.Settings, logger)
+	registry := tasks.New(logger)
+	registerTasks(registry, store, activityLog, lib, logger)
 	player, err := playback.New(pool, addonClient, cfg.FFprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		return err
@@ -190,6 +200,7 @@ func serve(ctx context.Context) error {
 				SetupCode:    setupCode,
 				Logger:       logger,
 				Guides:       lib,
+				Activity:     activityLog,
 			}),
 			Jellyfin: jellyfin.New(jellyfin.Options{
 				ServerID:      serverID,
@@ -206,6 +217,13 @@ func serve(ctx context.Context) error {
 				Playlists:     playlists.New(pool),
 				Collections:   collections.New(pool),
 				Logger:        logger,
+				Activity:      activityLog,
+				Tasks:         registry,
+				Logs:          recent,
+				CacheDir:      cfg.CacheDir,
+				// Recordings are configured by POLYFIN_RECORDINGS_DIR, read
+				// here until the configuration knows it.
+				RecordingsDir: os.Getenv("POLYFIN_RECORDINGS_DIR"),
 			}),
 			Logger: logger,
 		}),
@@ -213,9 +231,8 @@ func serve(ctx context.Context) error {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
 	// Jellyfin's handler, created above, closes the sockets of the devices
-	// the sweep signs out.
-	go store.SweepInactiveDevices(ctx, logger)
-	go lib.KeepGuidesFresh(ctx)
+	// the device sweep signs out. The guides due are fetched at start too.
+	registry.Start(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
@@ -233,4 +250,63 @@ func serve(ctx context.Context) error {
 		return httpServer.Close()
 	}
 	return nil
+}
+
+// registerTasks registers Polyfin's own periodic jobs, which Jellyfin apps
+// show as scheduled tasks.
+func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog *activity.Store, lib *library.Service, logger *slog.Logger) {
+	registry.Register(tasks.Task{
+		Key:      "SignOutInactiveDevices",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Sign out unused devices", Description: "Signs out the Jellyfin apps left unused for the number of days the settings choose."},
+			"fr": {Name: "Déconnecter les appareils inutilisés", Description: "Déconnecte les applis Jellyfin restées inutilisées pendant le nombre de jours choisi dans les paramètres."},
+		},
+		Interval: accounts.DeviceSweepInterval,
+		AtStart:  true,
+		Run:      func(ctx context.Context) error { return store.SweepInactiveDevices(ctx, logger) },
+	})
+	registry.Register(tasks.Task{
+		Key:      "CleanActivityLog",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Clean the activity log", Description: "Deletes the activity log entries older than 30 days."},
+			"fr": {Name: "Nettoyer le journal d’activité", Description: "Supprime les entrées du journal d’activité de plus de 30 jours."},
+		},
+		Interval: activity.SweepInterval,
+		AtStart:  true,
+		Run: func(ctx context.Context) error {
+			deleted, err := activityLog.Sweep(ctx)
+			if deleted > 0 {
+				logger.Info("Deleted old activity log entries", "entries", deleted)
+			}
+			return err
+		},
+	})
+	registry.Register(tasks.Task{
+		Key:      "RefreshLiveTvGuides",
+		Category: tasks.CategoryLiveTV,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Refresh Live TV guides", Description: "Fetches the XMLTV guides of live TV catalogs not fetched for 12 hours; run by hand, fetches every guide now."},
+			"fr": {Name: "Actualiser les guides TV", Description: "Télécharge les guides XMLTV des catalogues de TV en direct qui ne l’ont pas été depuis 12 heures ; lancé à la main, télécharge tous les guides tout de suite."},
+		},
+		Interval: library.GuideCheck,
+		AtStart:  true,
+		Run:      func(ctx context.Context) error { return lib.RefreshGuides(ctx, tasks.ByHand(ctx)) },
+	})
+	// Asking for ratings costs requests to addons: this runs only when an
+	// administrator starts it.
+	registry.Register(tasks.Task{
+		Key:      "RefreshRatings",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Refresh ratings", Description: "Asks the server's addons again for the ratings and genres of titles last asked long ago, which parental control and blocked genres use."},
+			"fr": {Name: "Actualiser les classifications", Description: "Redemande aux addons du serveur les classifications et les genres des titres demandés il y a longtemps, qui servent au contrôle parental et aux genres bloqués."},
+		},
+		Run: func(ctx context.Context) error {
+			asked, err := lib.RefreshRatings(ctx)
+			logger.Info("Ratings refreshed", "titles", asked)
+			return err
+		},
+	})
 }

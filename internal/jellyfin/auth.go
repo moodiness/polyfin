@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net"
@@ -112,6 +113,10 @@ type caller struct {
 	User   accounts.User
 	Device accounts.Device
 	Token  string
+	// APIKey is set for a request made with an API key, which Jellyfin
+	// serves with administrator rights and no user: User is then keyUser,
+	// and Device the server itself, under the key's app name.
+	APIKey *accounts.APIKey
 }
 
 type callerKey struct{}
@@ -121,8 +126,16 @@ func callerFrom(ctx context.Context) caller {
 	return value
 }
 
-// signedInCaller is the user and device of the access token r carries. ok
-// is false when r carries none, or none of an enabled user.
+// keyUser is the user of API key requests: an administrator without
+// identifier, allowed everything, at any hour. Endpoints that act for a
+// user act for the one the request names by userId, as Jellyfin's do (see
+// targetUser); without one, they browse the server's libraries as no one.
+var keyUser = accounts.User{IsAdministrator: true, VideoTranscoding: true, AudioTranscoding: true, ContentDownloading: true,
+	LiveTv: true, SyncPlay: accounts.SyncPlayCreateAndJoin, RemoteControl: true}
+
+// signedInCaller is the user and device of the access token r carries, or
+// the API key it carries. ok is false when r carries none, or none of an
+// enabled user.
 func (h *Handler) signedInCaller(r *http.Request) (c caller, ok bool, err error) {
 	credentials := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	if credentials.Token == "" {
@@ -130,12 +143,36 @@ func (h *Handler) signedInCaller(r *http.Request) (c caller, ok bool, err error)
 	}
 	device, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, remoteAddress(r))
 	if errors.Is(err, accounts.ErrNotFound) {
-		return caller{}, false, nil
+		return h.keyCaller(r, credentials)
 	}
 	if err != nil {
 		return caller{}, false, err
 	}
 	return caller{User: user, Device: device, Token: credentials.Token}, true, nil
+}
+
+// keyCaller resolves an API key. Like Jellyfin, the request comes from the
+// device, app version and device name the app sent, else from the server
+// itself, and the app is the key's.
+func (h *Handler) keyCaller(r *http.Request, c credentials) (caller, bool, error) {
+	key, err := h.Accounts.APIKeyByToken(r.Context(), c.Token)
+	if errors.Is(err, accounts.ErrNotFound) {
+		return caller{}, false, nil
+	}
+	if err != nil {
+		return caller{}, false, err
+	}
+	device := accounts.Device{
+		DeviceInfo: accounts.DeviceInfo{
+			DeviceID:      cmp.Or(c.DeviceID, h.ServerID),
+			DeviceName:    cmp.Or(c.Device, h.Accounts.Settings().ServerName),
+			Client:        key.App,
+			ClientVersion: cmp.Or(c.Version, Version),
+			RemoteAddress: remoteAddress(r),
+		},
+		Capabilities: accounts.DefaultCapabilities(),
+	}
+	return caller{User: keyUser, Device: device, Token: c.Token, APIKey: &key}, true, nil
 }
 
 // authenticated serves next only for a valid access token of an enabled
