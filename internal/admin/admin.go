@@ -81,6 +81,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
+	mux.HandleFunc("POST /admin/api/session/jellyfin", h.signInWithJellyfin)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))

@@ -1,5 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import type { Language } from '@/i18n'
+import { takeWebClientToken } from '@/webClientSession'
 
 export type Status = {
   name: string
@@ -405,8 +406,9 @@ export async function request<T>(
   path: string,
   body?: unknown,
   signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' }
+  const headers: Record<string, string> = { Accept: 'application/json', ...extraHeaders }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${apiBase}${path}`, {
     method,
@@ -444,13 +446,32 @@ export const setup = async (body: {
 export const signIn = async (body: { name: string; password: string }) =>
   (await request<{ user: SessionUser }>('POST', '/session', body)).user
 
-/** Returns the signed-in user, or null when there is no valid session. */
+/**
+ * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
+ * sign-in on this server is tried first: it opens a session for an administrator.
+ */
 export async function fetchSession(signal?: AbortSignal): Promise<SessionUser | null> {
   try {
     return (await request<{ user: SessionUser }>('GET', '/session', undefined, signal)).user
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return null
-    throw error
+    if (!(error instanceof ApiError && error.status === 401)) throw error
+  }
+  const token = takeWebClientToken(queryClient.getQueryData<Status>(queryKeys.status)?.serverId)
+  if (token === null) return null
+  try {
+    const authorization = { Authorization: `MediaBrowser Token="${token}"` }
+    return (
+      await request<{ user: SessionUser }>(
+        'POST',
+        '/session/jellyfin',
+        undefined,
+        signal,
+        authorization,
+      )
+    ).user
+  } catch {
+    // Refused or unreachable: the sign-in page it is.
+    return null
   }
 }
 
