@@ -49,7 +49,7 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 	group.SetLimit(catalogFetches)
 	for i, src := range v.channels {
 		group.Go(func() error {
-			metas, _, err := s.window(ctx, v, src, 0, maxCrawl)
+			metas, _, err := s.window(ctx, v, src, 0, v.limit(src))
 			if err != nil && ctx.Err() == nil {
 				s.logger.Warn("A live TV catalog could not be listed", "catalog", src.catalog.ID, "error", err)
 			}
@@ -153,7 +153,7 @@ func (s *Service) Programs(ctx context.Context, user accounts.User, from, to tim
 	group.SetLimit(catalogFetches)
 	for _, src := range guides {
 		group.Go(func() error {
-			metas, _, err := s.window(ctx, v, src, 0, maxCrawl)
+			metas, _, err := s.window(ctx, v, src, 0, v.limit(src))
 			if err != nil && ctx.Err() == nil {
 				s.logger.Warn("A live TV guide could not be read", "catalog", src.catalog.ID, "date", src.date, "error", err)
 			}

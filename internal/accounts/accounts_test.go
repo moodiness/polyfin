@@ -93,10 +93,16 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if got := store.Settings(); got.Language != "en" || !got.Chapters || got.PrepareAhead {
-		t.Errorf("defaults: language %q, chapters %v, prepare ahead %v", got.Language, got.Chapters, got.PrepareAhead)
+	if got := store.Settings(); got.Language != "en" || !got.Chapters || got.PrepareAhead ||
+		got.CatalogLimit != DefaultCatalogLimit || got.ChannelLimit != DefaultChannelLimit {
+		t.Errorf("defaults: language %q, chapters %v, prepare ahead %v, catalog limit %d, channel limit %d",
+			got.Language, got.Chapters, got.PrepareAhead, got.CatalogLimit, got.ChannelLimit)
 	}
-	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr", Chapters: false, PrepareAhead: true}
+	if DefaultCatalogLimit != 2000 || DefaultChannelLimit != 10000 {
+		t.Errorf("default limits: %d and %d", DefaultCatalogLimit, DefaultChannelLimit)
+	}
+	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr", Chapters: false, PrepareAhead: true,
+		CatalogLimit: 5000, ChannelLimit: 30000}
 	if _, err := store.UpdateSettings(ctx, want); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +125,45 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	}
 }
 
+func TestSettingsKeepCatalogLimitsInRange(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	for _, tc := range []struct {
+		catalog, channel int
+		err              error
+	}{
+		{MinCatalogLimit - 1, DefaultChannelLimit, ErrInvalidCatalogLimit},
+		{MaxCatalogLimit + 1, DefaultChannelLimit, ErrInvalidCatalogLimit},
+		{0, DefaultChannelLimit, ErrInvalidCatalogLimit},
+		{DefaultCatalogLimit, MinChannelLimit - 1, ErrInvalidChannelLimit},
+		{DefaultCatalogLimit, MaxChannelLimit + 1, ErrInvalidChannelLimit},
+		{DefaultCatalogLimit, -1, ErrInvalidChannelLimit},
+	} {
+		changed := store.Settings()
+		changed.CatalogLimit, changed.ChannelLimit = tc.catalog, tc.channel
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, tc.err) {
+			t.Errorf("limits %d and %d: got %v, want %v", tc.catalog, tc.channel, err, tc.err)
+		}
+	}
+	if got := store.Settings(); got.CatalogLimit != DefaultCatalogLimit || got.ChannelLimit != DefaultChannelLimit {
+		t.Errorf("a refused update changed the limits: %d and %d", got.CatalogLimit, got.ChannelLimit)
+	}
+	for _, limits := range [][2]int{{MinCatalogLimit, MinChannelLimit}, {MaxCatalogLimit, MaxChannelLimit}} {
+		changed := store.Settings()
+		changed.CatalogLimit, changed.ChannelLimit = limits[0], limits[1]
+		if _, err := store.UpdateSettings(ctx, changed); err != nil {
+			t.Fatalf("limits %v: %v", limits, err)
+		}
+		reopened, err := Open(ctx, store.db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := reopened.Settings(); got.CatalogLimit != limits[0] || got.ChannelLimit != limits[1] {
+			t.Errorf("limits %v after reopening: %d and %d", limits, got.CatalogLimit, got.ChannelLimit)
+		}
+	}
+}
+
 func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
 	for _, tc := range []struct{ given, want string }{{"fr", "fr"}, {"en", "en"}, {"de", "en"}, {"", "en"}} {
 		store := newStore(t)
@@ -131,6 +176,9 @@ func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
 		}
 		if cached, stored := store.Settings().Language, reopened.Settings().Language; cached != tc.want || stored != tc.want {
 			t.Errorf("setup in %q: language %q (stored %q), want %q", tc.given, cached, stored, tc.want)
+		}
+		if cached, stored := store.Settings(), reopened.Settings(); cached != stored || cached.CatalogLimit != DefaultCatalogLimit {
+			t.Errorf("setup in %q: settings %+v, stored %+v", tc.given, cached, stored)
 		}
 	}
 	// A refused setup changes nothing.

@@ -68,7 +68,15 @@ export type Settings = {
   transcoding: boolean
   /** Whether users allowed to download may do so. */
   downloads: boolean
+  /** Items read at most from one film or series catalog (any catalog but a Live TV one). */
+  catalogLimit: number
+  /** Items read at most from one Live TV catalog: its channels, or one day of its guide. */
+  channelLimit: number
 }
+
+/** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
+export const catalogLimitRange = { min: 100, max: 20000 }
+export const channelLimitRange = { min: 100, max: 50000 }
 
 export type NewUser = {
   name: string

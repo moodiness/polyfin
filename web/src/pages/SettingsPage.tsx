@@ -1,6 +1,14 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { fetchSettings, queryClient, queryKeys, saveSettings, type Settings } from '@/api'
+import {
+  catalogLimitRange,
+  channelLimitRange,
+  fetchSettings,
+  queryClient,
+  queryKeys,
+  saveSettings,
+  type Settings,
+} from '@/api'
 import {
   buttonPrimary,
   Card,
@@ -38,6 +46,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const { t } = useI18n()
   const languageId = useId()
   const playbackId = useId()
+  const catalogsId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -143,6 +152,35 @@ function SettingsForm({ initial }: { initial: Settings }) {
               help={t.settings.downloadsHelp}
               checked={form.downloads}
               onChange={(downloads) => update({ downloads })}
+            />
+          </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={catalogsId}>
+            <h2 id={catalogsId} className="text-sm font-semibold text-white">
+              {t.settings.catalogsTitle}
+            </h2>
+            <TextField
+              label={t.settings.catalogLimit}
+              hint={t.settings.catalogLimitHelp}
+              type="number"
+              inputMode="numeric"
+              min={catalogLimitRange.min}
+              max={catalogLimitRange.max}
+              step={1}
+              value={form.catalogLimit || ''}
+              onValue={(value) => update({ catalogLimit: Math.trunc(Number(value)) })}
+              required
+            />
+            <TextField
+              label={t.settings.channelLimit}
+              hint={t.settings.channelLimitHelp}
+              type="number"
+              inputMode="numeric"
+              min={channelLimitRange.min}
+              max={channelLimitRange.max}
+              step={1}
+              value={form.channelLimit || ''}
+              onValue={(value) => update({ channelLimit: Math.trunc(Number(value)) })}
+              required
             />
           </section>
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
