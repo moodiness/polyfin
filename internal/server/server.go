@@ -34,7 +34,13 @@ type Options struct {
 	AdminAPI http.Handler
 	// Jellyfin serves every path not owned by Polyfin itself.
 	Jellyfin http.Handler
-	Logger   *slog.Logger
+	// Web holds the files of jellyfin-web, the web client served at /web/;
+	// nil serves none.
+	Web fs.FS
+	// SetupRequired reports whether no administrator exists yet. Needed
+	// with Web only.
+	SetupRequired func(context.Context) (bool, error)
+	Logger        *slog.Logger
 }
 
 // New returns the handler serving every Polyfin route.
@@ -50,13 +56,33 @@ func New(options Options) http.Handler {
 		}
 		writeText(w, http.StatusOK, "ok")
 	})
+	// Once Polyfin is set up, its web client is the place to go, as on
+	// Jellyfin; before, or without one, the admin app is.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, adminPrefix, http.StatusFound)
+		target := adminPrefix
+		if options.Web != nil && setUp(r.Context(), options.SetupRequired) {
+			target = webPrefix
+		}
+		http.Redirect(w, r, target, http.StatusFound)
 	})
 	mux.Handle("/admin/api/", options.AdminAPI)
 	// No method in the pattern: it would conflict with "/admin/api/", which
 	// must answer every method. adminApp restricts methods itself.
 	mux.Handle("/admin/", adminApp(options.Admin, options.Logger))
+	if options.Web != nil {
+		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {
+			return setUp(ctx, options.SetupRequired)
+		}, options.Jellyfin, options.Logger))
+		// Permanently, as Jellyfin does; the mux's own redirect is a 307.
+		mux.HandleFunc("/web", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, webPrefix, http.StatusMovedPermanently)
+		})
+		// Jellyfin sends robots.txt to the web client's, which keeps search
+		// engines away.
+		mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, webPrefix+"robots.txt", http.StatusFound)
+		})
+	}
 	mux.Handle("/", options.Jellyfin)
 
 	return securityHeaders(mux)
@@ -66,6 +92,15 @@ func databaseReady(ctx context.Context, db Pinger) bool {
 	ctx, cancel := context.WithTimeout(ctx, readyWait)
 	defer cancel()
 	return db.Ping(ctx) == nil
+}
+
+// setUp reports whether an administrator exists; an unreachable database
+// counts as not set up, so that the admin app tells why.
+func setUp(ctx context.Context, setupRequired func(context.Context) (bool, error)) bool {
+	ctx, cancel := context.WithTimeout(ctx, readyWait)
+	defer cancel()
+	required, err := setupRequired(ctx)
+	return err == nil && !required
 }
 
 // adminApp serves the single-page application. Paths without a file
@@ -113,6 +148,11 @@ func serveIndex(w http.ResponseWriter, files fs.FS, logger *slog.Logger) {
 	_, _ = w.Write(page)
 }
 
+// securityHeaders sets the headers every answer gets, and the admin app's
+// Content-Security-Policy. jellyfin-web at /web/ gets no such policy, as
+// from Jellyfin, which sends none: the admin app's would break it, as it
+// needs inline styles, blob: workers and media, WebAssembly, images and
+// frames from elsewhere (trailers), and pages that frame it.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()

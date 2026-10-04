@@ -40,6 +40,15 @@ func TestFontsComeFromTheSystemFolderUnlessSet(t *testing.T) {
 	}
 }
 
+func TestWebClientComesFromTheImageFolderUnlessSet(t *testing.T) {
+	for value, want := range map[string]string{"": DefaultWebDir, " /srv/jellyfin-web ": "/srv/jellyfin-web"} {
+		cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin", "POLYFIN_WEB_DIR": value}))
+		if err != nil || cfg.WebDir != want {
+			t.Errorf("POLYFIN_WEB_DIR %q: %q, %v", value, cfg.WebDir, err)
+		}
+	}
+}
+
 func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 	_, err := Load(env(map[string]string{
 		"POLYFIN_LISTEN":     "8096",

@@ -104,7 +104,10 @@ func TestPathsReachTheirOwner(t *testing.T) {
 		"/admin/api/missing":  "admin api",
 		"/Users/Me":           "jellyfin",
 		"/System/Info/Public": "jellyfin",
-		"/web/index.html":     "jellyfin",
+		// Without a web client, as before it.
+		"/web/index.html": "jellyfin",
+		"/web":            "jellyfin",
+		"/robots.txt":     "jellyfin",
 	} {
 		if got := get(h, target).Body.String(); got != want {
 			t.Errorf("%s served by %q, want %q", target, got, want)
