@@ -1,14 +1,17 @@
 package jellyfin
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 )
 
 // imageCacheBytes bounds the memory used by recently relayed artwork.
@@ -65,6 +68,10 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
+	if strings.EqualFold(r.PathValue("imageType"), "Chapter") {
+		h.chapterImage(w, r, id)
+		return
+	}
 	if index := r.PathValue("imageIndex"); index != "" && index != "0" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -117,4 +124,35 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(image.body)
 	}
+}
+
+// chapterImage serves the image of a chapter, by its index: of the version
+// the item was opened as, or of the title's version whose image has the
+// tag asked, else of the one used last. Like artwork, chapter images are
+// served without credentials, as Jellyfin serves them: apps load them
+// with none, by the tags of the items users can open.
+func (h *Handler) chapterImage(w http.ResponseWriter, r *http.Request, id accounts.ID) {
+	index, err := strconv.Atoi(r.PathValue("imageIndex"))
+	if err != nil || index < 0 || h.Thumbnails == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	image, err := h.Thumbnails.ChapterImageOf(r.Context(), id, index, query(r, "tag"))
+	switch {
+	case errors.Is(err, thumbnails.ErrNotFound):
+		w.WriteHeader(http.StatusNotFound)
+		return
+	case err != nil:
+		h.internalError(w, r, err)
+		return
+	}
+	if r.Header.Get("If-None-Match") == `"`+image.Tag+`"` {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	header := w.Header()
+	header.Set("Content-Type", "image/jpeg")
+	header.Set("ETag", `"`+image.Tag+`"`)
+	header.Set("Cache-Control", "public, max-age=604800")
+	http.ServeContent(w, r, "", image.Made, bytes.NewReader(image.Data))
 }

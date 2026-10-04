@@ -10,13 +10,15 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 )
 
-// ChapterInfo is a chapter of a video, as Jellyfin describes it. Polyfin
-// makes no chapter images: Jellyfin then leaves out the image's path and
-// tag, and dates it at its unset date.
+// ChapterInfo is a chapter of a video, as Jellyfin describes it. A chapter
+// without an image, as all are while chapter images are turned off, has
+// no tag, and its image's date is Jellyfin's unset date. Polyfin keeps the
+// images in its database: their path, which Jellyfin gives, is left out.
 type ChapterInfo struct {
 	StartPositionTicks int64
 	Name               string
 	ImageDateModified  Time
+	ImageTag           string `json:",omitempty"`
 }
 
 // setChapters fills the chapters of an item that asked for them with those
@@ -25,7 +27,8 @@ type ChapterInfo struct {
 // first play, so the chapters of a version never played are not known yet.
 // With chapters turned off in the settings, the item keeps the empty list
 // its caller set; analyses keep their chapters, which show again as soon as
-// they are turned back on.
+// they are turned back on. The chapters whose image was made carry its
+// tag.
 func (h *Handler) setChapters(ctx context.Context, dto *BaseItemDto, versions []library.Version) {
 	if dto.Chapters == nil || !h.Accounts.Settings().Chapters {
 		return
@@ -34,6 +37,17 @@ func (h *Handler) setChapters(ctx context.Context, dto *BaseItemDto, versions []
 	if len(versions) > 0 {
 		if analysis, ok := h.Playback.Analyzed(ctx, versions[0].ID); ok {
 			chapters = chapterInfos(analysis.Chapters, h.Accounts.Settings().Language)
+		}
+	}
+	if len(chapters) > 0 && h.Thumbnails != nil {
+		images, err := h.Thumbnails.ChapterImages(ctx, versions[0].ID)
+		if err != nil && ctx.Err() == nil {
+			h.Logger.Warn("The chapter images of a version could not be listed", "error", err)
+		}
+		for i, image := range images {
+			if i < len(chapters) {
+				chapters[i].ImageTag, chapters[i].ImageDateModified = image.Tag, Time(image.Made)
+			}
 		}
 	}
 	dto.Chapters = &chapters

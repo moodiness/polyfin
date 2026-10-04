@@ -135,6 +135,9 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		// never asks addons for streams.
 		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, path)
 	}
+	if fields.has("Trickplay") && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+		dto.Trickplay = h.trickplayManifest(r.Context(), item.ID)
+	}
 	return dto
 }
 

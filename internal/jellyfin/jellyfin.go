@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -76,6 +77,9 @@ type Options struct {
 	// FontsDir holds the fonts apps load to render subtitles whose own
 	// fonts are missing; empty or missing, it offers none.
 	FontsDir string
+	// Thumbnails makes and keeps the scrubbing thumbnails and chapter
+	// images of the versions played; nil makes none.
+	Thumbnails *thumbnails.Service
 }
 
 // Handler serves the Jellyfin API.
@@ -181,6 +185,7 @@ func New(options Options) *Handler {
 	h.userImageRoutes(rt)
 	h.appRoutes(rt)
 	h.subtitleUploadRoutes(rt)
+	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 
 	h.routes = cors(rt)
 	return h
