@@ -6,6 +6,7 @@ import {
   deleteUser,
   fetchParentalRatings,
   fetchUserDevices,
+  fetchUserContentChoices,
   fetchUsers,
   queryClient,
   queryKeys,
@@ -16,6 +17,9 @@ import {
   type ParentalControl,
   type ParentalRating,
   type User,
+  type AccessSchedule,
+  type ScheduleDay,
+  scheduleDays,
   type UserPatch,
   type SyncPlayAccess,
 } from '@/api'
@@ -317,6 +321,9 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
       <PlaybackAccessForm user={user} />
 
       <ParentalControlForm user={user} />
+      <VisibleLibrariesForm user={user} />
+      <BlockedGenresForm user={user} />
+      <AllowedHoursForm user={user} />
 
       <section className="lg:col-span-2">
         <h4 className="mb-2 text-sm font-semibold text-white">{t.users.devicesTitle}</h4>
@@ -678,6 +685,260 @@ function PlaybackAccessForm({ user }: { user: User }) {
       <button type="submit" className={buttonSecondary} disabled={save.isPending}>
         {save.isPending ? t.common.saving : t.users.savePlaybackAccess}
       </button>
+    </form>
+  )
+}
+
+function VisibleLibrariesForm({ user }: { user: User }) {
+  const { t } = useI18n()
+  const choices = useQuery({
+    queryKey: queryKeys.userContentChoices,
+    queryFn: ({ signal }) => fetchUserContentChoices(signal),
+  })
+  const save = useUserPatch(user)
+  const [hidden, setHidden] = useState(user.hiddenLibraries)
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const libraries = choices.data?.libraries ?? []
+    // Libraries removed from the server since are dropped.
+    save.mutate({ hiddenLibraries: hidden.filter((id) => libraries.some((l) => l.id === id)) })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
+      <h4 className="text-sm font-semibold text-white">{t.users.visibleLibrariesTitle}</h4>
+      <p className="text-xs text-muted">{t.users.visibleLibrariesHelp}</p>
+      {choices.isPending ? (
+        <Loading />
+      ) : choices.isError ? (
+        <Notice kind="error">{errorMessage(t, choices.error)}</Notice>
+      ) : choices.data.libraries.length === 0 ? (
+        <p className="text-sm text-muted">{t.users.noServerLibraries}</p>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {choices.data.libraries.map((library) => (
+            <Checkbox
+              key={library.id}
+              label={library.name}
+              checked={!hidden.includes(library.id)}
+              onChange={(shown) => {
+                save.reset()
+                setHidden(
+                  shown ? hidden.filter((id) => id !== library.id) : [...hidden, library.id],
+                )
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
+      {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+      <button
+        type="submit"
+        className={buttonSecondary}
+        disabled={save.isPending || !choices.isSuccess}
+      >
+        {save.isPending ? t.common.saving : t.users.saveVisibleLibraries}
+      </button>
+    </form>
+  )
+}
+function BlockedGenresForm({ user }: { user: User }) {
+  const { t } = useI18n()
+  const listId = useId()
+  const choices = useQuery({
+    queryKey: queryKeys.userContentChoices,
+    queryFn: ({ signal }) => fetchUserContentChoices(signal),
+  })
+  const save = useUserPatch(user)
+  const [genres, setGenres] = useState(user.blockedGenres)
+  const [typed, setTyped] = useState('')
+
+  function add() {
+    const genre = typed.trim()
+    save.reset()
+    setTyped('')
+    if (genre !== '' && !genres.some((g) => g.toLowerCase() === genre.toLowerCase())) {
+      setGenres([...genres, genre])
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    save.mutate({ blockedGenres: genres })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
+      <h4 className="text-sm font-semibold text-white">{t.users.blockedGenresTitle}</h4>
+      <p className="text-xs text-muted">{t.users.blockedGenresHelp}</p>
+      {genres.length === 0 ? (
+        <p className="text-sm text-muted">{t.users.noBlockedGenres}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2">
+          {genres.map((genre) => (
+            <li
+              key={genre}
+              className="flex items-center gap-2 rounded-full border border-line px-3 py-1 text-sm text-zinc-100"
+            >
+              {genre}
+              <button
+                type="button"
+                aria-label={t.users.removeGenre(genre)}
+                title={t.users.removeGenre(genre)}
+                onClick={() => {
+                  save.reset()
+                  setGenres(genres.filter((g) => g !== genre))
+                }}
+                className="text-muted hover:text-white"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="w-full sm:max-w-xs">
+          <TextField
+            label={t.users.genre}
+            hint={t.users.genreHint}
+            value={typed}
+            onValue={setTyped}
+            list={listId}
+            maxLength={100}
+            autoComplete="off"
+            onKeyDown={(event) => {
+              // Enter adds the genre rather than saving the list.
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                add()
+              }
+            }}
+          />
+        </div>
+        <button type="button" className={`${buttonSecondary} sm:mt-7`} onClick={add}>
+          {t.users.addGenre}
+        </button>
+        <datalist id={listId}>
+          {(choices.data?.genres ?? []).map((genre) => (
+            <option key={genre} value={genre} />
+          ))}
+        </datalist>
+      </div>
+      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
+      {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+      <button type="submit" className={buttonSecondary} disabled={save.isPending}>
+        {save.isPending ? t.common.saving : t.users.saveBlockedGenres}
+      </button>
+    </form>
+  )
+}
+
+/** Every half hour from 00:00 to 24:00, as jellyfin-web offers them. */
+const halfHours = Array.from({ length: 49 }, (_, i) => i / 2)
+
+/** "09:30" for 9.5: hours count from midnight and may have fractions. */
+function hourLabel(hour: number) {
+  const minutes = Math.round(hour * 60)
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
+const hourSelectClass = 'mt-1 block rounded-lg border border-line bg-ink px-3 py-2 text-white'
+
+function AllowedHoursForm({ user }: { user: User }) {
+  const { t } = useI18n()
+  const save = useUserPatch(user)
+  const [schedules, setSchedules] = useState<AccessSchedule[]>(user.accessSchedules)
+  const misordered = schedules.some((s) => s.startHour >= s.endHour)
+
+  function change(index: number, changed: Partial<AccessSchedule>) {
+    save.reset()
+    setSchedules(schedules.map((s, i) => (i === index ? { ...s, ...changed } : s)))
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!misordered) save.mutate({ accessSchedules: schedules })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
+      <h4 className="text-sm font-semibold text-white">{t.users.allowedHoursTitle}</h4>
+      <p className="text-xs text-muted">{t.users.allowedHoursHelp}</p>
+      {schedules.length === 0 ? (
+        <p className="text-sm text-muted">{t.users.noAllowedHours}</p>
+      ) : (
+        <ul className="space-y-2">
+          {schedules.map((schedule, index) => (
+            // Rows have no identity of their own; they are edited in place.
+            <li key={index} className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-muted">
+                {t.users.day}
+                <select
+                  value={schedule.day}
+                  onChange={(event) => change(index, { day: event.target.value as ScheduleDay })}
+                  className={hourSelectClass}
+                >
+                  {scheduleDays.map((day) => (
+                    <option key={day} value={day}>
+                      {t.users.days[day]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(['startHour', 'endHour'] as const).map((field) => (
+                <label key={field} className="text-xs text-muted">
+                  {field === 'startHour' ? t.users.from : t.users.to}
+                  <select
+                    value={schedule[field]}
+                    onChange={(event) => change(index, { [field]: Number(event.target.value) })}
+                    className={hourSelectClass}
+                  >
+                    {(halfHours.includes(schedule[field])
+                      ? halfHours
+                      : [...halfHours, schedule[field]].sort((a, b) => a - b)
+                    ).map((hour) => (
+                      <option key={hour} value={hour}>
+                        {hourLabel(hour)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <button
+                type="button"
+                className={buttonSecondary}
+                onClick={() => {
+                  save.reset()
+                  setSchedules(schedules.filter((_, i) => i !== index))
+                }}
+              >
+                {t.users.removeHours}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        className={buttonSecondary}
+        onClick={() => {
+          save.reset()
+          setSchedules([...schedules, { day: 'Everyday', startHour: 8, endHour: 20 }])
+        }}
+      >
+        {t.users.addHours}
+      </button>
+      {misordered && <Notice kind="error">{t.users.hoursOrder}</Notice>}
+      {save.isError && <Notice kind="error">{errorMessage(t, save.error)}</Notice>}
+      {save.isSuccess && <Notice kind="success">{t.users.updated}</Notice>}
+      <div>
+        <button type="submit" className={buttonSecondary} disabled={save.isPending || misordered}>
+          {save.isPending ? t.common.saving : t.users.saveAllowedHours}
+        </button>
+      </div>
     </form>
   )
 }

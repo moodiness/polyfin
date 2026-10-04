@@ -87,6 +87,13 @@ func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, err
 	if limit := h.Accounts.Settings().LoginAttempts; limit > 0 {
 		dto.Policy.LoginAttemptsBeforeLockout = limit
 	}
+	if len(user.HiddenLibraries) > 0 {
+		libraries, err := h.Library.ServerLibraries(ctx)
+		if err != nil {
+			return UserDto{}, err
+		}
+		libraryAccess(&dto.Policy, user, libraries)
+	}
 	return dto, nil
 }
 

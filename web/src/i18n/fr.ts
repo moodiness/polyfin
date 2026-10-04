@@ -112,6 +112,13 @@ const fr: Messages = {
       'Le nombre de jours avant de déconnecter les appareils inutilisés doit être un nombre entier de 0 à 365.',
     personal_addons_disabled:
       'Un administrateur a désactivé vos propres addons. Ils sont conservés, mais vous ne pouvez pas en ajouter, ni les actualiser, ni les activer.',
+    invalid_hidden_libraries: 'La liste des bibliothèques a changé entre-temps. Rechargez la page.',
+    invalid_blocked_genres:
+      'Un genre doit comporter de 1 à 100 caractères, et 100 genres au plus peuvent être bloqués.',
+    invalid_access_schedules:
+      'Les horaires vont de 00:00 à 24:00, et chaque fin doit venir après son début (50 lignes au plus).',
+    outside_allowed_hours:
+      'Ce compte ne peut pas être utilisé à cette heure-ci. Réessayez pendant ses horaires autorisés.',
   },
   status: {
     title: 'État du serveur',
@@ -289,6 +296,43 @@ const fr: Messages = {
     remoteControlHelp:
       'Permet à cet utilisateur de lancer, mettre en pause ou envoyer des messages aux applications Jellyfin des autres utilisateurs. Chacun peut contrôler ses propres applications.',
     savePlaybackAccess: 'Enregistrer la lecture et l’accès',
+    visibleLibrariesTitle: 'Bibliothèques visibles',
+    visibleLibrariesHelp:
+      'Les bibliothèques du serveur que les applications de cet utilisateur affichent. Les bibliothèques ajoutées plus tard sont affichées. Ce choix ne bloque aucun titre : on peut toujours les trouver dans d’autres bibliothèques, par la recherche ou par un lien. Pour bloquer des titres, utilisez le contrôle parental ou les genres bloqués.',
+    noServerLibraries: 'Le serveur n’a pas encore de bibliothèque.',
+    saveVisibleLibraries: 'Enregistrer les bibliothèques visibles',
+    blockedGenresTitle: 'Genres bloqués',
+    blockedGenresHelp:
+      'Les titres de l’un de ces genres sont masqués partout pour cet utilisateur, comme ceux qui dépassent la limite du contrôle parental.',
+    genre: 'Genre',
+    genreHint: 'Choisissez un genre des bibliothèques du serveur, ou tapez-en un.',
+    addGenre: 'Ajouter',
+    removeGenre: (genre: string) => `Retirer ${genre}`,
+    noBlockedGenres: 'Aucun genre n’est bloqué.',
+    saveBlockedGenres: 'Enregistrer les genres bloqués',
+    allowedHoursTitle: 'Horaires autorisés',
+    allowedHoursHelp:
+      'Si des horaires sont définis, cet utilisateur ne peut se connecter et utiliser le serveur que pendant ces horaires, à l’heure du serveur. En dehors, ses applications sont refusées.',
+    noAllowedHours: 'Aucun horaire : cet utilisateur peut utiliser le serveur à toute heure.',
+    day: 'Jour',
+    from: 'De',
+    to: 'À',
+    addHours: 'Ajouter un horaire',
+    removeHours: 'Retirer',
+    hoursOrder: 'Chaque heure de fin doit venir après son heure de début.',
+    saveAllowedHours: 'Enregistrer les horaires autorisés',
+    days: {
+      Sunday: 'Dimanche',
+      Monday: 'Lundi',
+      Tuesday: 'Mardi',
+      Wednesday: 'Mercredi',
+      Thursday: 'Jeudi',
+      Friday: 'Vendredi',
+      Saturday: 'Samedi',
+      Everyday: 'Tous les jours',
+      Weekday: 'En semaine (du lundi au vendredi)',
+      Weekend: 'Le week-end',
+    },
   },
   settings: {
     title: 'Paramètres',

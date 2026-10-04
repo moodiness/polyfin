@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -28,10 +29,22 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visible := []UserDto{}
+	var libraries []library.ServerLibrary
 	for _, user := range users {
-		if !user.IsHidden && !user.IsDisabled {
-			visible = append(visible, newUserDto(user, h.ServerID))
+		if user.IsHidden || user.IsDisabled {
+			continue
 		}
+		dto := newUserDto(user, h.ServerID)
+		if len(user.HiddenLibraries) > 0 {
+			if libraries == nil {
+				if libraries, err = h.Library.ServerLibraries(r.Context()); err != nil {
+					h.internalError(w, r, err)
+					return
+				}
+			}
+			libraryAccess(&dto.Policy, user, libraries)
+		}
+		visible = append(visible, dto)
 	}
 	writeJSON(w, http.StatusOK, visible)
 }
@@ -69,6 +82,13 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.SignIns.Succeed(key)
+	// Like Jellyfin, a user outside their allowed hours, administrators
+	// included, cannot sign in. Quick Connect, which Jellyfin does not check
+	// here, signs them in, and their requests are then refused.
+	if !user.AllowedAt(h.now()) {
+		processingError(w, http.StatusForbidden)
+		return
+	}
 	h.signIn(w, r, user, c)
 }
 

@@ -182,8 +182,8 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
 	if version, ok := s.versions.Get(id); ok && version.Item == item {
 		// A version remembered from another user's listing is no way around
-		// the user's parental control.
-		if user.Parental.Restricted() {
+		// the user's parental control or blocked genres.
+		if user.Restricted() {
 			if _, _, err := s.target(ctx, user, item); err != nil {
 				return Version{}, err
 			}

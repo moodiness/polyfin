@@ -78,6 +78,16 @@ type User struct {
 	LiveTv        bool
 	SyncPlay      SyncPlayAccess
 	RemoteControl bool
+	// HiddenLibraries are the server's libraries the user's apps do not
+	// show; libraries added later show. Their titles stay reachable from
+	// elsewhere: this chooses libraries, it hides no title.
+	HiddenLibraries []ID
+	// BlockedGenres hides the titles of any of these genres, compared
+	// without regard to case, like parental control (see Restricted).
+	BlockedGenres []string
+	// AccessSchedules are the hours the user may use the server in; none
+	// allows every hour (see AllowedAt).
+	AccessSchedules []AccessSchedule
 }
 
 // NewUser describes an account to create.
@@ -107,6 +117,10 @@ type UserChanges struct {
 	LiveTv        *bool
 	SyncPlay      *SyncPlayAccess
 	RemoteControl *bool
+	// The user's content settings, see User.
+	HiddenLibraries *[]ID
+	BlockedGenres   *[]string
+	AccessSchedules *[]AccessSchedule
 }
 
 // Store is the accounts repository.
@@ -154,7 +168,8 @@ func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
 const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
 	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
 	"personal_addons, invalid_login_attempts, blocked_until, " +
-	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control"
+	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
+	"hidden_libraries, blocked_genres, access_schedules"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -163,7 +178,8 @@ func (user *User) fields() []any {
 		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
 		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
 		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
-		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl}
+		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
+		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -380,6 +396,26 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 	if err := changes.checkAccess(); err != nil {
 		return User{}, err
 	}
+	var hidden *[]ID
+	if changes.HiddenLibraries != nil {
+		hidden = new(normalizedLibraries(*changes.HiddenLibraries))
+	}
+	var genres *[]string
+	if changes.BlockedGenres != nil {
+		normalized, err := normalizedGenres(*changes.BlockedGenres)
+		if err != nil {
+			return User{}, err
+		}
+		genres = &normalized
+	}
+	var schedules *[]AccessSchedule
+	if changes.AccessSchedules != nil {
+		normalized, err := normalizedSchedules(*changes.AccessSchedules)
+		if err != nil {
+			return User{}, err
+		}
+		schedules = &normalized
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -434,13 +470,17 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				max_bitrate = coalesce($16, max_bitrate),
 				live_tv = coalesce($17, live_tv),
 				sync_play = coalesce($18, sync_play),
-				remote_control = coalesce($19, remote_control)
+				remote_control = coalesce($19, remote_control),
+				hidden_libraries = coalesce($20, hidden_libraries),
+				blocked_genres = coalesce($21, blocked_genres),
+				access_schedules = coalesce($22::jsonb, access_schedules)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
 			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
 			changes.PersonalAddons,
-			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl))
+			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
+			hidden, genres, schedules))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

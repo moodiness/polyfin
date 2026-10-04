@@ -369,8 +369,9 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 }
 
 // addonPreferencesJSON is whether a user sees the server's addons.
-// ParentalControl is set while the user's parental control hides titles:
-// they then see the server's addons, and only them, in their apps.
+// ParentalControl is set while the user's parental control or blocked
+// genres hide titles: they then see the server's addons, and only them, in
+// their apps.
 // PersonalAddons is unset while the server or the user's own permission
 // turned their own addons off: they then see the server's addons, and only
 // them, too.
@@ -387,7 +388,7 @@ func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	restricted := user.Parental.Restricted()
+	restricted := user.Restricted()
 	personal := h.Accounts.Settings().PersonalAddonsAllowed(user)
 	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: uses || restricted || !personal, ParentalControl: restricted, PersonalAddons: personal})
 }
@@ -400,9 +401,9 @@ func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := sessionFrom(r.Context()).User
-	// The server's addons give the ratings parental control hides titles
-	// by.
-	if user.Parental.Restricted() && !body.UseSharedAddons {
+	// The server's addons give the ratings and genres that parental control
+	// and blocked genres hide titles by.
+	if user.Restricted() && !body.UseSharedAddons {
 		writeError(w, http.StatusConflict, "parental_control")
 		return
 	}
@@ -410,6 +411,6 @@ func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: body.UseSharedAddons, ParentalControl: user.Parental.Restricted(),
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: body.UseSharedAddons, ParentalControl: user.Restricted(),
 		PersonalAddons: h.Accounts.Settings().PersonalAddonsAllowed(user)})
 }

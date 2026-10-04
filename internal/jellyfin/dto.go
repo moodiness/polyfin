@@ -136,7 +136,7 @@ type UserPolicy struct {
 	BlockedTags                      []string
 	AllowedTags                      []string
 	EnableUserPreferenceAccess       bool
-	AccessSchedules                  []struct{}
+	AccessSchedules                  []AccessSchedule
 	BlockUnratedItems                []string
 	EnableRemoteControlOfOtherUsers  bool
 	EnableSharedDeviceControl        bool
@@ -171,6 +171,26 @@ type UserPolicy struct {
 	SyncPlayAccess                   string
 }
 
+// AccessSchedule is Jellyfin's AccessSchedule, hours a user may use the
+// server in. Id numbers the user's schedules from 1: Polyfin keeps them
+// with the user, without identifiers of their own.
+type AccessSchedule struct {
+	Id        int
+	UserId    string
+	DayOfWeek string
+	StartHour float64
+	EndHour   float64
+}
+
+func accessSchedules(user accounts.User) []AccessSchedule {
+	result := make([]AccessSchedule, 0, len(user.AccessSchedules))
+	for i, schedule := range user.AccessSchedules {
+		result = append(result, AccessSchedule{Id: i + 1, UserId: user.ID.String(), DayOfWeek: schedule.Day,
+			StartHour: schedule.StartHour, EndHour: schedule.EndHour})
+	}
+	return result
+}
+
 type UserDto struct {
 	Name                      string
 	ServerId                  string
@@ -199,7 +219,11 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 		// Capabilities Polyfin does not offer (deleting content, managing
 		// collections, lyrics or live TV) are reported as denied. Every user
 		// may manage subtitles, as apps offer their subtitle search, which
-		// lists the addons' subtitles, only to users allowed to.
+		// lists the addons' subtitles, only to users allowed to. Jellyfin's
+		// tags are not genres: titles in Polyfin have none, so none are
+		// blocked or allowed; the genres a user blocks are Polyfin's own
+		// setting. libraryAccess lists the server's libraries the user sees
+		// when they hide some.
 		Policy: UserPolicy{
 			IsAdministrator:                 user.IsAdministrator,
 			IsHidden:                        user.IsHidden,
@@ -207,7 +231,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			BlockedTags:                     []string{},
 			AllowedTags:                     []string{},
 			EnableUserPreferenceAccess:      true,
-			AccessSchedules:                 []struct{}{},
+			AccessSchedules:                 accessSchedules(user),
 			MaxParentalRating:               user.Parental.MaxRating,
 			MaxParentalSubRating:            user.Parental.MaxSubRating,
 			BlockUnratedItems:               append([]string{}, user.Parental.BlockUnrated...),
@@ -230,7 +254,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			EnabledChannels:                  []string{},
 			EnableAllChannels:                true,
 			EnabledFolders:                   []string{},
-			EnableAllFolders:                 true,
+			EnableAllFolders:                 len(user.HiddenLibraries) == 0,
 			LoginAttemptsBeforeLockout:       -1,
 			EnablePublicSharing:              true,
 			BlockedMediaFolders:              []string{},

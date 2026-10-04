@@ -150,7 +150,8 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		return remuxRequest{}, false
 	}
 	user, err := h.Accounts.User(r.Context(), grant.User)
-	if err != nil || user.IsDisabled {
+	// Like Jellyfin's HLS endpoints, the user's allowed hours apply.
+	if err != nil || user.IsDisabled || h.outsideHours(user) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return remuxRequest{}, false
 	}

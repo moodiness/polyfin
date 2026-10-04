@@ -77,6 +77,8 @@ type Handler struct {
 	syncPlay *syncPlay
 	// preparations bounds the preparations of playback made ahead of it.
 	preparations *preparations
+	// now tells the time users' allowed hours are checked against.
+	now func() time.Time
 }
 
 // New returns the Jellyfin API handler.
@@ -90,6 +92,7 @@ func New(options Options) *Handler {
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
 		preparations:   newPreparations(),
+		now:            time.Now,
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	options.Accounts.OnSignOut(h.signedOut)
@@ -98,9 +101,13 @@ func New(options Options) *Handler {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
 		rt.handle(method, pattern, h.authenticated(handler))
 	}
+	// Like Jellyfin, these answer a user outside their allowed hours too.
+	signedInAnyHour := func(method, pattern string, handler http.HandlerFunc) {
+		rt.handle(method, pattern, h.authenticatedAnyHour(handler))
+	}
 
 	anonymous(http.MethodGet, "/System/Info/Public", h.publicSystemInfo)
-	signedIn(http.MethodGet, "/System/Info", h.systemInfo)
+	signedInAnyHour(http.MethodGet, "/System/Info", h.systemInfo)
 	signedIn(http.MethodGet, "/System/Configuration/{key}", h.namedConfiguration)
 	anonymous(http.MethodGet, "/System/Ping", h.ping)
 	anonymous(http.MethodPost, "/System/Ping", h.ping)
@@ -114,7 +121,7 @@ func New(options Options) *Handler {
 	anonymous(http.MethodPost, "/Users/AuthenticateWithQuickConnect", h.authenticateWithQuickConnect)
 	signedIn(http.MethodGet, "/Users/Me", h.currentUser)
 	signedIn(http.MethodGet, "/Users", h.users)
-	signedIn(http.MethodGet, "/Users/{userId}", h.user)
+	signedInAnyHour(http.MethodGet, "/Users/{userId}", h.user)
 	signedIn(http.MethodPost, "/Users/Password", h.changePassword)
 	signedIn(http.MethodPost, "/Users/{userId}/Password", h.changePassword)
 	signedIn(http.MethodPost, "/Users/{userId}/Policy", h.updatePolicy)

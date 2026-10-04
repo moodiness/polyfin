@@ -46,22 +46,29 @@ type Options struct {
 	// in the server log at startup while no administrator exists.
 	SetupCode string
 	Logger    *slog.Logger
+	// Now tells the time users' allowed hours are checked against; nil
+	// means the system clock.
+	Now func() time.Time
 }
 
 type handler struct {
 	Options
+	now func() time.Time
 }
 
 // New returns the handler of every /admin/api/ route.
 func New(options Options) http.Handler {
-	h := &handler{Options: options}
+	h := &handler{Options: options, now: time.Now}
+	if options.Now != nil {
+		h.now = options.Now
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
 
-	mux.Handle("GET /admin/api/session", h.signedIn(h.session))
-	mux.Handle("DELETE /admin/api/session", h.signedIn(h.signOut))
+	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
+	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
 	mux.Handle("PUT /admin/api/account/password", h.signedIn(h.changePassword))
 	mux.Handle("GET /admin/api/account/devices", h.signedIn(h.ownDevices))
 	mux.Handle("DELETE /admin/api/account/devices/{id}", h.signedIn(h.revokeOwnDevice))
@@ -78,6 +85,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
+	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
@@ -188,6 +196,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},
 		{accounts.ErrInvalidSyncPlay, http.StatusBadRequest, "invalid_sync_play"},
+		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
+		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
 		{accounts.ErrSetupComplete, http.StatusConflict, "setup_complete"},

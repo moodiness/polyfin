@@ -3,9 +3,12 @@ package admin
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 )
@@ -39,6 +42,20 @@ type userJSON struct {
 	LiveTv        bool   `json:"liveTv"`
 	SyncPlay      string `json:"syncPlay"`
 	RemoteControl bool   `json:"remoteControl"`
+	// HiddenLibraries are the identifiers of the server's libraries the
+	// user's apps do not show; BlockedGenres, the genres whose titles are
+	// hidden; AccessSchedules, the hours the user may use the server in.
+	HiddenLibraries []string             `json:"hiddenLibraries"`
+	BlockedGenres   []string             `json:"blockedGenres"`
+	AccessSchedules []accessScheduleJSON `json:"accessSchedules"`
+}
+
+// accessScheduleJSON is a span of hours on a day, one of Jellyfin's
+// DynamicDayOfWeek names (accounts.ScheduleDays).
+type accessScheduleJSON struct {
+	Day       string  `json:"day"`
+	StartHour float64 `json:"startHour"`
+	EndHour   float64 `json:"endHour"`
 }
 
 // parentalControlJSON is a user's parental control: the highest rating
@@ -77,6 +94,10 @@ func newUserJSON(user accounts.User) userJSON {
 		LiveTv:        user.LiveTv,
 		SyncPlay:      string(user.SyncPlay),
 		RemoteControl: user.RemoteControl,
+		// The user's content settings.
+		HiddenLibraries: idStrings(user.HiddenLibraries),
+		BlockedGenres:   append([]string{}, user.BlockedGenres...),
+		AccessSchedules: schedulesJSON(user.AccessSchedules),
 	}
 }
 
@@ -87,6 +108,54 @@ func blockedUntil(user accounts.User) *time.Time {
 		return nil
 	}
 	return user.BlockedUntil
+}
+
+func idStrings(ids []accounts.ID) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, id.String())
+	}
+	return result
+}
+
+func schedulesJSON(schedules []accounts.AccessSchedule) []accessScheduleJSON {
+	result := make([]accessScheduleJSON, 0, len(schedules))
+	for _, s := range schedules {
+		result = append(result, accessScheduleJSON{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
+	}
+	return result
+}
+
+// libraryChoiceJSON is one of the server's libraries a user may see.
+type libraryChoiceJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// userContentChoices lists what the admin app offers for a user's content:
+// the server's libraries, in order, and the genres the server's libraries
+// can be narrowed to, which name their genre pages, sorted.
+func (h *handler) userContentChoices(w http.ResponseWriter, r *http.Request) {
+	libraries, err := library.ServerLibraries(r.Context(), h.Addons, h.Accounts.Settings().Language)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	result := struct {
+		Libraries []libraryChoiceJSON `json:"libraries"`
+		Genres    []string            `json:"genres"`
+	}{Libraries: []libraryChoiceJSON{}, Genres: []string{}}
+	for _, l := range libraries {
+		result.Libraries = append(result.Libraries, libraryChoiceJSON{ID: l.ID.String(), Name: l.Name})
+		for _, genre := range l.Genres {
+			genre = strings.TrimSpace(genre)
+			if genre != "" && !slices.ContainsFunc(result.Genres, func(known string) bool { return strings.EqualFold(known, genre) }) {
+				result.Genres = append(result.Genres, genre)
+			}
+		}
+	}
+	slices.SortFunc(result.Genres, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	writeJSON(w, http.StatusOK, result)
 }
 
 // ratingJSON is a rating the admin app offers as a user's limit.
@@ -361,6 +430,10 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		LiveTv        *bool                    `json:"liveTv"`
 		SyncPlay      *accounts.SyncPlayAccess `json:"syncPlay"`
 		RemoteControl *bool                    `json:"remoteControl"`
+		// The user's content settings; see userJSON.
+		HiddenLibraries *[]string             `json:"hiddenLibraries"`
+		BlockedGenres   *[]string             `json:"blockedGenres"`
+		AccessSchedules *[]accessScheduleJSON `json:"accessSchedules"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -385,9 +458,29 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		LiveTv:             body.LiveTv,
 		SyncPlay:           body.SyncPlay,
 		RemoteControl:      body.RemoteControl,
+		BlockedGenres:      body.BlockedGenres,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
+	}
+	if body.HiddenLibraries != nil {
+		hidden := make([]accounts.ID, 0, len(*body.HiddenLibraries))
+		for _, raw := range *body.HiddenLibraries {
+			id, err := accounts.ParseID(raw)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_hidden_libraries")
+				return
+			}
+			hidden = append(hidden, id)
+		}
+		changes.HiddenLibraries = &hidden
+	}
+	if body.AccessSchedules != nil {
+		schedules := make([]accounts.AccessSchedule, 0, len(*body.AccessSchedules))
+		for _, s := range *body.AccessSchedules {
+			schedules = append(schedules, accounts.AccessSchedule{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
+		}
+		changes.AccessSchedules = &schedules
 	}
 	user, err := h.Accounts.UpdateUser(r.Context(), id, changes, keep)
 	if accountError(w, err) {

@@ -44,8 +44,20 @@ func clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: cookiePath, MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 }
 
-// signedIn serves next only for a valid session of an enabled user.
+// signedIn serves next only for a valid session of an enabled user, within
+// their allowed hours unless they are an administrator, as Jellyfin serves
+// its own apps.
 func (h *handler) signedIn(next http.HandlerFunc) http.Handler {
+	return h.requireSession(next, true)
+}
+
+// signedInAnyHour is signedIn whatever the user's allowed hours, so that
+// the app still shows who is signed in and signs them out.
+func (h *handler) signedInAnyHour(next http.HandlerFunc) http.Handler {
+	return h.requireSession(next, false)
+}
+
+func (h *handler) requireSession(next http.HandlerFunc, hours bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(cookieName)
 		if err != nil || cookie.Value == "" {
@@ -64,6 +76,10 @@ func (h *handler) signedIn(next http.HandlerFunc) http.Handler {
 		}
 		if session.Renewed {
 			setCookie(w, r, cookie.Value, session.ExpiresAt)
+		}
+		if hours && !session.User.IsAdministrator && !session.User.AllowedAt(h.now()) {
+			writeError(w, http.StatusForbidden, "outside_allowed_hours")
+			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), sessionKey{}, session)))
 	})
@@ -167,6 +183,11 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		h.SignIns.Fail(key)
 	}
 	if accountError(w, err) {
+		return
+	}
+	if err == nil && !user.AllowedAt(h.now()) {
+		// Like Jellyfin's sign-in, administrators included.
+		writeError(w, http.StatusForbidden, "outside_allowed_hours")
 		return
 	}
 	if err != nil {

@@ -246,6 +246,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if hasParent && h.hiddenLibrary(w, r, user, parent) {
+		return
+	}
 	names, valid := nameFilterOf(r)
 	if !valid {
 		processingError(w, http.StatusBadRequest)
@@ -341,6 +344,26 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: page.Total, StartIndex: start})
+}
+
+// hiddenLibrary answers a listing of one of the server's libraries the
+// user does not see as Jellyfin answers one of a folder the user may not
+// access: 401, naming them both. It reports whether it answered.
+func (h *Handler) hiddenLibrary(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID) bool {
+	if !slices.Contains(user.HiddenLibraries, parent) {
+		return false
+	}
+	libraries, err := h.Library.ServerLibraries(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	i := slices.IndexFunc(libraries, func(l library.ServerLibrary) bool { return l.ID == parent })
+	if i < 0 {
+		return false
+	}
+	writeJSON(w, http.StatusUnauthorized, user.Name+" is not permitted to access Library "+libraries[i].Name+".")
+	return true
 }
 
 // genreFilter returns the genre option of a library's catalog a listing is

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +33,9 @@ type testAPI struct {
 	url          string
 	store        *accounts.Store
 	quickConnect *quickconnect.Store
+	// clock, once set, is the time users' allowed hours are checked
+	// against.
+	clock *atomic.Pointer[time.Time]
 }
 
 func newTestAPI(t *testing.T, failures int) testAPI {
@@ -45,6 +49,7 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 		t.Fatal(err)
 	}
 	quickConnect := quickconnect.New()
+	clock := new(atomic.Pointer[time.Time])
 	server := httptest.NewServer(New(Options{
 		Version:      "1.2.3",
 		ServerID:     "0123456789abcdef0123456789abcdef",
@@ -55,9 +60,15 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 		SignIns:      throttle.New(failures, time.Minute),
 		SetupCode:    setupCode,
 		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Now: func() time.Time {
+			if at := clock.Load(); at != nil {
+				return *at
+			}
+			return time.Now()
+		},
 	}))
 	t.Cleanup(server.Close)
-	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect}
+	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect, clock: clock}
 }
 
 // browser is a client with its own cookie jar.
