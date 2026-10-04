@@ -62,8 +62,8 @@ func newTestServer(t *testing.T, failures int) testServer {
 }
 
 // newProbingServer is a test server whose analyses run the ffprobe at
-// ffprobe.
-func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
+// ffprobe. configure, if any, completes the handler's options.
+func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...func(*Options, *pgxpool.Pool)) testServer {
 	t.Helper()
 	pool := testdb.New(t)
 	if err := database.Migrate(t.Context(), pool); err != nil {
@@ -113,7 +113,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		Logger:   logger,
 	})
 	t.Cleanup(images.Close)
-	handler := New(Options{
+	options := Options{
 		ServerID:      testServerID,
 		Accounts:      store,
 		QuickConnect:  quickconnect.New(),
@@ -132,7 +132,11 @@ func newProbingServer(t *testing.T, failures int, ffprobe string) testServer {
 		Tasks:         registry,
 		Logs:          ring,
 		CacheDir:      t.TempDir(),
-	})
+	}
+	for _, c := range configure {
+		c(&options, pool)
+	}
+	handler := New(options)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler,
