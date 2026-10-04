@@ -111,6 +111,20 @@ func TestAdministrationAnswersMatchJellyfinAndNeedAnAdministrator(t *testing.T) 
 	matchesFixture(t, "pin-redeem", body, shapeRules{})
 }
 
+// jellyfin-web's dashboard asks the plugins' pages for its menu: there are
+// none, as on a Jellyfin server without plugins, and only administrators
+// may ask.
+func TestNoPluginConfigurationPages(t *testing.T) {
+	s, admin, member := administrated(t)
+	path := "/web/ConfigurationPages?enableInMainMenu=true"
+	if status, body := s.call(http.MethodGet, path, admin, nil); status != http.StatusOK || strings.TrimSpace(string(body)) != "[]" {
+		t.Errorf("for an administrator: %d %s", status, body)
+	}
+	if status, body := s.call(http.MethodGet, path, member, nil); status != http.StatusForbidden || len(body) != 0 {
+		t.Errorf("for a member: %d %q", status, body)
+	}
+}
+
 func TestAPIKeysActAsAnAdministratorUntilRevoked(t *testing.T) {
 	s, admin, _ := administrated(t)
 	if status, body := s.call(http.MethodPost, "/Auth/Keys", admin, nil); status != http.StatusBadRequest || !strings.Contains(string(body), `"app"`) {
