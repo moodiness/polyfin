@@ -398,9 +398,9 @@ var errTrackFile = errors.New("the blocks of the subtitle track do not make a fi
 var errTrackRequests = errors.New("reading the subtitle track would take its host too many requests")
 
 // trackRequests bounds the requests of a track read. A host that serves
-// several ranges at once is asked by batches: a film's track, a few
+// several ranges at once is asked by batches: a movie's track, a few
 // thousand blocks, takes a few dozen. One that serves a range at a time
-// would take a request for nearly every block, hundreds for a film, which
+// would take a request for nearly every block, hundreds for a movie, which
 // providers answer with 429 and which slows the video they serve too:
 // such a track is left to remuxes, unless it has few blocks.
 var trackRequests = 64

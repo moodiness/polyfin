@@ -243,7 +243,7 @@ const en = {
     downloadsHelp:
       'Lets users save titles in Jellyfin apps to watch offline. When off, nobody can download, whatever their own permission.',
     catalogsTitle: 'Catalogs',
-    catalogLimit: 'Titles read per film and series catalog',
+    catalogLimit: 'Titles read per movie and series catalog',
     catalogLimitHelp:
       'Some catalogs are nearly endless, so Polyfin stops reading a catalog after this many titles. A higher number shows more titles, but lists load more slowly and the addon gets more requests. From 100 to 20,000; 2,000 by default.',
     channelLimit: 'Channels read per Live TV catalog',

@@ -282,7 +282,7 @@ func TestParentalControlMatchesJellyfin(t *testing.T) {
 		"Latest":             "/Items/Latest?userId=" + childID + "&parentId=" + ids["Top"],
 	} {
 		status, body := s.call(http.MethodGet, request, childApp, nil)
-		// Jellyfin's titles were named after its test films.
+		// Jellyfin's titles were named after its test movies.
 		if names := answers[key].Names; len(names) > 0 {
 			answers[key] = parentalAnswer{Status: answers[key].Status, Names: []string{"Allowed"}}
 		}

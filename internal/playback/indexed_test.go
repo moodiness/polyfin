@@ -235,7 +235,7 @@ func TestTrackReadsWaitForTheirOwnHostOnly(t *testing.T) {
 
 // A track read stops at its share of requests, and the track is not
 // offered again: a host that serves one range at a time would take a
-// request for nearly every block, hundreds for a film. Here the share
+// request for nearly every block, hundreds for a movie. Here the share
 // leaves only the check of a Cluster.
 func TestTrackReadsStopAtTheirShareOfRequests(t *testing.T) {
 	share := trackRequests

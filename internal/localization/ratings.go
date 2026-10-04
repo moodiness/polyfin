@@ -24,7 +24,7 @@ type Rating struct {
 }
 
 // Ratings returns the ratings apps offer as a user's limit, as Jellyfin
-// lists those of its default metadata country: the US film ratings of the
+// lists those of its default metadata country: the US movie ratings of the
 // Motion Picture Association and the TV Parental Guidelines, which are the
 // ratings addons give (AIOMetadata's certification is always the US one),
 // then the ages and grades every system shares past them. The unrated
@@ -141,7 +141,7 @@ var ratings = func() []Rating {
 // then the names of other systems that are not plain ages.
 var scores = func() map[string]Score {
 	result := map[string]Score{
-		// France: films and television for all; the CNC also writes "tous
+		// France: movies and television for all; the CNC also writes "tous
 		// publics" out.
 		"tp":           {Score: 0},
 		"tous publics": {Score: 0},

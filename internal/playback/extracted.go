@@ -18,7 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
-// maxExtractedCues bounds the cues kept of one track: films have a few
+// maxExtractedCues bounds the cues kept of one track: movies have a few
 // thousand, karaoke effects in ASS a few tens of thousands.
 const maxExtractedCues = 50_000
 

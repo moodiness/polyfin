@@ -44,7 +44,7 @@ type Config struct {
 	Segments []string
 }
 
-// defaultCacheSize is 10 GB: a few films, read again for seeks and
+// defaultCacheSize is 10 GB: a few movies, read again for seeks and
 // restarts without downloading them again.
 const defaultCacheSize = 10_000_000_000
 

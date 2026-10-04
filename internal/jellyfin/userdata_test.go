@@ -271,16 +271,16 @@ func airingAddon(t *testing.T) string {
 			{ID: "tt0202:1:1", Title: "Charlie tomorrow", Season: 1, Episode: 1, Released: at(day)},
 		}},
 	}
-	film := stremio.Meta{ID: "tt0300", Type: "movie", Name: "Film", Released: "2020-04-10T00:00:00.000Z"}
+	movie := stremio.Meta{ID: "tt0300", Type: "movie", Name: "Feature", Released: "2020-04-10T00:00:00.000Z"}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.EscapedPath()
 		switch {
 		case path == "/manifest.json":
 			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "airing", Name: "Airing", Version: "1", Types: []string{"movie", "series"},
 				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
-				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "films", Name: "Films"}, {Type: "series", ID: "tonight", Name: "Tonight"}}})
-		case strings.HasPrefix(path, "/catalog/movie/films"):
-			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{film}})
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "movies", Name: "Movies"}, {Type: "series", ID: "tonight", Name: "Tonight"}}})
+		case strings.HasPrefix(path, "/catalog/movie/movies"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
 		case strings.HasPrefix(path, "/catalog/series/tonight"):
 			previews := make([]stremio.Meta, 0, len(shows))
 			for _, show := range shows {
@@ -289,7 +289,7 @@ func airingAddon(t *testing.T) string {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": previews})
 		case path == "/meta/movie/tt0300.json":
-			_ = json.NewEncoder(w).Encode(map[string]any{"meta": film})
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
 		case strings.HasPrefix(path, "/meta/series/"):
 			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/series/"), ".json")
 			for _, show := range shows {
@@ -315,7 +315,7 @@ func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
-		{AddonID: addon.ID, CatalogType: "movie", CatalogID: "films"},
+		{AddonID: addon.ID, CatalogType: "movie", CatalogID: "movies"},
 		{AddonID: addon.ID, CatalogType: "series", CatalogID: "tonight"},
 	}); err != nil {
 		t.Fatal(err)
@@ -359,7 +359,7 @@ func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 	// A favorite series counts without being watched; a favorite movie is
 	// no series. Episodes of the same date come in series order.
 	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+series["Alpha"])
-	s.get(t, "/Items?ParentId="+tr.views["Films"], token, &page)
+	s.get(t, "/Items?ParentId="+tr.views["Movies"], token, &page)
 	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+page.Items[0].Id)
 	all := named("Bravo hours ago", "Bravo special", "Bravo tomorrow", "Alpha next week", "Bravo next week")
 	if got := upcoming(""); !slices.Equal(got, all) {
@@ -369,7 +369,7 @@ func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 	if got := upcoming("parentId=" + tr.views["Tonight"]); !slices.Equal(got, all) {
 		t.Errorf("in the series library: %v", got)
 	}
-	for _, parent := range []string{tr.views["Films"], series["Bravo"]} {
+	for _, parent := range []string{tr.views["Movies"], series["Bravo"]} {
 		if got := upcoming("parentId=" + parent); len(got) != 0 {
 			t.Errorf("under %s: %v", parent, got)
 		}

@@ -275,8 +275,8 @@ func TestCollectionsCanGroupCollections(t *testing.T) {
 		},
 		metas: map[string]stremio.Meta{
 			"collection/col:comedy": {ID: "col:comedy", Type: "collection", Name: "Comedy",
-				Collection: &stremio.Collection{Items: []stremio.Meta{{ID: "col:comedy:films", Type: "collection", Name: "Films"}}}},
-			"collection/col:comedy:films": {ID: "col:comedy:films", Type: "collection", Name: "Films",
+				Collection: &stremio.Collection{Items: []stremio.Meta{{ID: "col:comedy:movies", Type: "collection", Name: "Movies"}}}},
+			"collection/col:comedy:movies": {ID: "col:comedy:movies", Type: "collection", Name: "Movies",
 				Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: "popular", Genre: "Comedy"}}}},
 		},
 	}
@@ -285,7 +285,7 @@ func TestCollectionsCanGroupCollections(t *testing.T) {
 	page, _ := e.service.Children(t.Context(), e.member, genres.ID, 0, 10, "")
 	comedy := page.Items[0]
 	page, err := e.service.Children(t.Context(), e.member, comedy.ID, 0, 10, "")
-	if err != nil || len(page.Items) != 1 || page.Items[0].Kind != KindCollection || page.Items[0].Name != "Films" || page.Total != 1 {
+	if err != nil || len(page.Items) != 1 || page.Items[0].Kind != KindCollection || page.Items[0].Name != "Movies" || page.Total != 1 {
 		t.Fatalf("collection of collections: %+v %v", page, err)
 	}
 	page, _ = e.service.Children(t.Context(), e.member, page.Items[0].ID, 0, 10, "")
@@ -293,7 +293,7 @@ func TestCollectionsCanGroupCollections(t *testing.T) {
 		t.Fatalf("nested collection: %v", got)
 	}
 	ancestors, _ := e.service.Ancestors(t.Context(), e.member, page.Items[0].ID)
-	if got := names(ancestors); !slices.Equal(got, []string{"Films", "Comedy", "Genres"}) {
+	if got := names(ancestors); !slices.Equal(got, []string{"Movies", "Comedy", "Genres"}) {
 		t.Errorf("ancestors: %v", got)
 	}
 }

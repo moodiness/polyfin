@@ -68,7 +68,7 @@ export type Settings = {
   transcoding: boolean
   /** Whether users allowed to download may do so. */
   downloads: boolean
-  /** Items read at most from one film or series catalog (any catalog but a Live TV one). */
+  /** Items read at most from one movie or series catalog (any catalog but a Live TV one). */
   catalogLimit: number
   /** Items read at most from one Live TV catalog: its channels, or one day of its guide. */
   channelLimit: number
