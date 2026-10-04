@@ -237,28 +237,50 @@ func (h *Handler) command(w http.ResponseWriter, r *http.Request, kind string, d
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	target, err := h.Accounts.Device(r.Context(), id)
+	_, err := h.deliver(r.Context(), callerFrom(r.Context()).User, id, kind, data)
 	switch {
 	case errors.Is(err, accounts.ErrNotFound):
 		processingError(w, http.StatusNotFound)
 		return
+	case errors.Is(err, ErrControlRefused):
+		processingError(w, http.StatusForbidden)
+		return
 	case err != nil:
 		h.internalError(w, r, err)
 		return
-	case !mayControl(callerFrom(r.Context()).User, target.UserID):
-		processingError(w, http.StatusForbidden)
-		return
-	}
-	if conn := h.sockets.latest(target.ID); conn != nil && target.Capabilities.SupportsMediaControl {
-		// The command was accepted: it goes out even if the app sending it
-		// hangs up, within the time a write to an app is given.
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), socketWrite)
-		defer cancel()
-		if err := conn.Write(ctx, websocket.MessageText, socketPayload(kind, data)); err != nil {
-			h.Logger.Debug("A command could not reach an app", "kind", kind, "error", err)
-		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ErrControlRefused reports a session of another user the caller may not
+// control.
+var ErrControlRefused = errors.New("this user may not control the session")
+
+// deliver sends a message to a session, on the socket its device opened
+// last, from by, and reports whether it could be sent: a session without a
+// socket or declared media control takes none. An unknown session is
+// accounts.ErrNotFound; one by may not control, ErrControlRefused, before
+// anything is sent.
+func (h *Handler) deliver(ctx context.Context, by accounts.User, session accounts.ID, kind string, data any) (bool, error) {
+	target, err := h.Accounts.Device(ctx, session)
+	if err != nil {
+		return false, err
+	}
+	if !mayControl(by, target.UserID) {
+		return false, ErrControlRefused
+	}
+	conn := h.sockets.latest(target.ID)
+	if conn == nil || !target.Capabilities.SupportsMediaControl {
+		return false, nil
+	}
+	// The command was accepted: it goes out even if the app sending it
+	// hangs up, within the time a write to an app is given.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), socketWrite)
+	defer cancel()
+	if err := conn.Write(ctx, websocket.MessageText, socketPayload(kind, data)); err != nil {
+		h.Logger.Debug("A command could not reach an app", "kind", kind, "error", err)
+	}
+	return true, nil
 }
 
 // requiredBody decodes the JSON body Jellyfin binds as its required

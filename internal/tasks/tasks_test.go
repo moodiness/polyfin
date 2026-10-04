@@ -79,3 +79,23 @@ func TestATaskRunsOnceAtATimeAndStopsWhenCancelled(t *testing.T) {
 		t.Errorf("runs %d, last %+v", runs.Load(), info.Last)
 	}
 }
+
+func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
+	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	registry.Register(Task{Key: "Hourly", Interval: time.Hour, Text: map[string]Text{"en": {Name: "Hourly"}},
+		Run: func(context.Context) error { return nil }})
+	registry.Register(Task{Key: "ByHand", Text: map[string]Text{"en": {Name: "By hand"}},
+		Run: func(context.Context) error { return nil }})
+	if info, _ := registry.Task(ID("Hourly"), "en"); info.Next != nil {
+		t.Errorf("next run before the registry starts: %v", info.Next)
+	}
+	before := time.Now()
+	registry.Start(t.Context())
+	hourly, _ := registry.Task(ID("Hourly"), "en")
+	if hourly.Next == nil || hourly.Next.Before(before.Add(time.Hour)) || hourly.Next.After(time.Now().Add(time.Hour)) {
+		t.Errorf("next run of an hourly task: %v", hourly.Next)
+	}
+	if manual, _ := registry.Task(ID("ByHand"), "en"); manual.Next != nil {
+		t.Errorf("next run of a task without schedule: %v", manual.Next)
+	}
+}

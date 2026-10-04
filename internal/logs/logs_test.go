@@ -37,3 +37,29 @@ func TestRingKeepsTheLastLinesWithinItsCapacity(t *testing.T) {
 		t.Errorf("long line: %q", got)
 	}
 }
+
+func TestSinceFollowsTheNewLinesRedacted(t *testing.T) {
+	ring := NewRing(1 << 10)
+	_, _ = ring.Write([]byte("one\ntwo password=hunter2\n"))
+	lines, next := ring.Since(0, 0)
+	if strings.Join(lines, "|") != "one|two password=<redacted>" || next != 2 {
+		t.Fatalf("first read: %q %d", lines, next)
+	}
+	if lines, again := ring.Since(next, 0); len(lines) != 0 || again != 2 {
+		t.Errorf("nothing new: %q %d", lines, again)
+	}
+	_, _ = ring.Write([]byte("three\nfour\nfive\n"))
+	if lines, next := ring.Since(next, 2); strings.Join(lines, "|") != "four|five" || next != 5 {
+		t.Errorf("newest within the limit: %q %d", lines, next)
+	}
+	// A reader from before a restart reads everything kept.
+	if lines, _ := ring.Since(99, 0); len(lines) != 5 {
+		t.Errorf("after a restart: %q", lines)
+	}
+	// Lines dropped from the ring are skipped.
+	small := NewRing(12)
+	_, _ = small.Write([]byte("aaaa\nbbbb\ncccc\n"))
+	if lines, next := small.Since(1, 0); strings.Join(lines, "|") != "bbbb|cccc" || next != 3 {
+		t.Errorf("dropped lines: %q %d", lines, next)
+	}
+}

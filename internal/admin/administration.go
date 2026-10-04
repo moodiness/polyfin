@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -105,10 +106,12 @@ const (
 	maxActivityLimit     = 100
 )
 
-// recentActivity lists the latest entries of the activity log.
+// recentActivity lists the latest entries of the activity log: from start
+// on, of the types and severities listed, comma-separated, when given.
 func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	limit := defaultActivityLimit
-	if raw := r.URL.Query().Get("limit"); raw != "" {
+	if raw := query.Get("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value < 1 || value > maxActivityLimit {
 			writeError(w, http.StatusBadRequest, "invalid_limit")
@@ -116,7 +119,17 @@ func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = value
 	}
-	page, err := h.Activity.Entries(r.Context(), activity.Query{Limit: limit})
+	start := 0
+	if raw := query.Get("start"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		start = value
+	}
+	page, err := h.Activity.Entries(r.Context(), activity.Query{Start: start, Limit: limit, Types: commaList(query.Get("type")),
+		Severities: commaList(query.Get("severity"))})
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -131,4 +144,15 @@ func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 		items = append(items, entry)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": page.Total})
+}
+
+// commaList splits a comma-separated parameter, nil when empty.
+func commaList(raw string) []string {
+	var values []string
+	for value := range strings.SplitSeq(raw, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }

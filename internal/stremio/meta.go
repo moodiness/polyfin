@@ -225,7 +225,7 @@ func extraPath(extra []ExtraValue) string {
 // Catalog lists one page of a catalog.
 func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogID string, extra []ExtraValue, confined bool) ([]Meta, error) {
 	target := BaseURL(manifestURL) + "/catalog/" + encodeComponent(catalogType) + "/" + encodeComponent(catalogID) + extraPath(extra)
-	body, err := c.get(ctx, target+".json", confined)
+	body, err := c.get(ctx, manifestURL, target+".json", confined)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func unmarshal(data []byte, v any) error {
 
 // Meta returns the complete description of a title.
 func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, confined bool) (Meta, error) {
-	body, err := c.get(ctx, BaseURL(manifestURL)+"/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json", confined)
+	body, err := c.get(ctx, manifestURL, BaseURL(manifestURL)+"/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json", confined)
 	if err != nil {
 		return Meta{}, err
 	}

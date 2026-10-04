@@ -202,6 +202,14 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 	return s
 }
 
+// Usage tells the bytes the cache keeps on disk, the sources open, and its
+// limit (POLYFIN_CACHE_SIZE).
+func (c *Cache) Usage() (used int64, sources int, limit int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.used, len(c.sources), c.limit
+}
+
 // Close stops reading every source and removes their blocks.
 func (c *Cache) Close() error {
 	c.mu.Lock()

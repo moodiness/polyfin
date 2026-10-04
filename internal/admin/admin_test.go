@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -41,7 +43,15 @@ type testAPI struct {
 	clock *atomic.Pointer[time.Time]
 }
 
-func newTestAPI(t *testing.T, failures int) testAPI {
+// testDeps are what a test completing the options may use.
+type testDeps struct {
+	pool   *pgxpool.Pool
+	client *stremio.Client
+	addons *addons.Store
+}
+
+// newTestAPI serves the admin API; configure, if any, completes its options.
+func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps)) testAPI {
 	t.Helper()
 	pool := testdb.New(t)
 	if err := database.Migrate(t.Context(), pool); err != nil {
@@ -59,7 +69,7 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	lib.UseIPTV(channels)
-	server := httptest.NewServer(New(Options{
+	options := Options{
 		Version:      "1.2.3",
 		ServerID:     "0123456789abcdef0123456789abcdef",
 		Database:     pinger{},
@@ -78,7 +88,11 @@ func newTestAPI(t *testing.T, failures int) testAPI {
 		},
 		Guides: lib,
 		IPTV:   channels,
-	}))
+	}
+	for _, c := range configure {
+		c(&options, testDeps{pool: pool, client: client, addons: addonStore})
+	}
+	server := httptest.NewServer(New(options))
 	t.Cleanup(server.Close)
 	return testAPI{t: t, url: server.URL, store: store, quickConnect: quickConnect, clock: clock}
 }

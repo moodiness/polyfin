@@ -114,6 +114,9 @@ type Handler struct {
 	newKeys newKeys
 	// viewing remembers the item each device last reported showing.
 	viewing *cache.Cache[accounts.ID, accounts.ID]
+	// reasons remembers why each play session streamed over HLS, Jellyfin's
+	// TranscodeReasons, for the admin dashboard.
+	reasons *cache.Cache[string, []string]
 }
 
 // New returns the Jellyfin API handler.
@@ -129,6 +132,7 @@ func New(options Options) *Handler {
 		preparations:   newPreparations(),
 		now:            time.Now,
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
+		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	options.Accounts.OnSignOut(h.signedOut)

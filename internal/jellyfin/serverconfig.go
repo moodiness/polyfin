@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
+	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -331,7 +332,7 @@ func folderStorage(path string) FolderStorageDto {
 	if path == "" {
 		return folder
 	}
-	if free, used, mount, ok := diskSpace(path); ok {
+	if free, used, mount, ok := diskspace.Measure(path); ok {
 		folder.FreeSpace, folder.UsedSpace, folder.StorageType, folder.DeviceId = free, used, "Fixed", mount
 	}
 	return folder

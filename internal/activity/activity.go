@@ -102,6 +102,11 @@ type Query struct {
 	// HasUserID keeps the entries about a user when true, the others when
 	// false; nil keeps both.
 	HasUserID *bool
+	// Types and Severities keep the entries of these types and severities;
+	// empty keeps all. Jellyfin's query has neither: the admin app uses
+	// them.
+	Types      []string
+	Severities []string
 }
 
 // Page is the entries a query selected, newest first, with how many it
@@ -124,9 +129,17 @@ func (s *Store) Entries(ctx context.Context, q Query) (Page, error) {
 	if q.Limit > 0 {
 		limit = &q.Limit
 	}
-	const where = "WHERE ($1::timestamptz IS NULL OR date >= $1) AND ($2::boolean IS NULL OR (user_id IS NOT NULL) = $2)"
+	var types, severities []string
+	if len(q.Types) > 0 {
+		types = q.Types
+	}
+	if len(q.Severities) > 0 {
+		severities = q.Severities
+	}
+	const where = `WHERE ($1::timestamptz IS NULL OR date >= $1) AND ($2::boolean IS NULL OR (user_id IS NOT NULL) = $2)
+		AND ($3::text[] IS NULL OR type = ANY($3)) AND ($4::text[] IS NULL OR severity = ANY($4))`
 	rows, err := s.db.Query(ctx, `SELECT id, name, overview, short_overview, type, item_id, user_id, date, severity
-		FROM activity_log `+where+` ORDER BY date DESC, id DESC OFFSET $3 LIMIT $4`, minDate, q.HasUserID, max(q.Start, 0), limit)
+		FROM activity_log `+where+` ORDER BY date DESC, id DESC OFFSET $5 LIMIT $6`, minDate, q.HasUserID, types, severities, max(q.Start, 0), limit)
 	if err != nil {
 		return Page{}, err
 	}
@@ -135,7 +148,7 @@ func (s *Store) Entries(ctx context.Context, q Query) (Page, error) {
 		return Page{}, err
 	}
 	page := Page{Entries: append([]Entry{}, entries...)}
-	err = s.db.QueryRow(ctx, "SELECT count(*) FROM activity_log "+where, minDate, q.HasUserID).Scan(&page.Total)
+	err = s.db.QueryRow(ctx, "SELECT count(*) FROM activity_log "+where, minDate, q.HasUserID, types, severities).Scan(&page.Total)
 	return page, err
 }
 

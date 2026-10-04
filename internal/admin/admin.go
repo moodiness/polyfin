@@ -18,8 +18,12 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -64,11 +68,29 @@ type Options struct {
 	IPTV *iptv.Service
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
+	// Sessions are the playbacks under way, which the dashboard shows and
+	// stops; nil shows none.
+	Sessions Sessions
+	// Tasks are the server's periodic jobs; nil shows none.
+	Tasks *tasks.Registry
+	// Logs keeps the recent log lines, redacted; nil keeps none.
+	Logs *logs.Ring
+	// Recordings schedules Live TV recordings; nil records nothing.
+	Recordings *recordings.Service
+	// Library names the channels of recordings.
+	Library ItemReader
+	// Health are what the health page reads.
+	Health HealthSources
+	// Variables are the POLYFIN_ environment variables in effect,
+	// without secrets.
+	Variables []config.Variable
 }
 
 type handler struct {
 	Options
 	now func() time.Time
+	// checks spaces the checks of addons asked by hand.
+	checks addonChecks
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -76,6 +98,9 @@ func New(options Options) http.Handler {
 	h := &handler{Options: options, now: time.Now}
 	if options.Now != nil {
 		h.now = options.Now
+	}
+	if h.Health.Started.IsZero() {
+		h.Health.Started = time.Now()
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
@@ -106,6 +131,18 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
 	mux.Handle("DELETE /admin/api/api-keys/{id}", h.administrator(h.revokeAPIKey))
 	mux.Handle("GET /admin/api/activity", h.administrator(h.recentActivity))
+	mux.Handle("GET /admin/api/sessions", h.administrator(h.liveSessions))
+	mux.Handle("POST /admin/api/sessions/{id}/stop", h.administrator(h.stopSession))
+	mux.Handle("POST /admin/api/sessions/{id}/message", h.administrator(h.messageSession))
+	mux.Handle("GET /admin/api/tasks", h.administrator(h.scheduledTasks))
+	mux.Handle("POST /admin/api/tasks/{id}/run", h.administrator(h.runTask))
+	mux.Handle("POST /admin/api/tasks/{id}/stop", h.administrator(h.stopTask))
+	mux.Handle("GET /admin/api/timers", h.administrator(h.timers))
+	mux.Handle("GET /admin/api/health", h.administrator(h.health))
+	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
+	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
+	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
+	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
@@ -187,6 +224,12 @@ func decode(w http.ResponseWriter, r *http.Request, into any) bool {
 }
 
 func (h *handler) internalError(w http.ResponseWriter, r *http.Request, err error) {
+	// The admin app leaving a page cancels the requests it polls with:
+	// nothing failed, and nobody reads the answer.
+	if r.Context().Err() != nil {
+		h.Logger.Debug("The admin app abandoned a request", "method", r.Method, "path", r.URL.Path)
+		return
+	}
 	h.Logger.Error("Admin API request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 	writeError(w, http.StatusInternalServerError, "internal")
 }

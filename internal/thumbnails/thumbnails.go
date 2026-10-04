@@ -107,6 +107,8 @@ type Service struct {
 
 	mu   sync.Mutex
 	jobs []job
+	// working is set while the images of a version are made.
+	working bool
 	// playing lists the playbacks under way: images wait for them.
 	playing func() []Playing
 
@@ -215,7 +217,9 @@ func (s *Service) run(ctx context.Context) {
 	defer timer.Stop()
 	for {
 		if j, ok := s.next(); ok {
+			s.setWorking(true)
 			s.generate(ctx, j)
+			s.setWorking(false)
 			continue
 		}
 		timer.Reset(s.Poll)

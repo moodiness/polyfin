@@ -22,8 +22,10 @@ type Ring struct {
 	capacity int
 	lines    [][]byte
 	// head is the index of the oldest line in lines.
-	head     int
-	size     int
+	head int
+	size int
+	// written counts the lines ever written, which numbers them.
+	written  uint64
 	created  time.Time
 	modified time.Time
 	now      func() time.Time
@@ -47,6 +49,7 @@ func (r *Ring) Write(p []byte) (int, error) {
 		}
 		r.lines = append(r.lines, redacted)
 		r.size += len(redacted)
+		r.written++
 		for r.size > r.capacity {
 			r.size -= len(r.lines[r.head])
 			r.lines[r.head] = nil
@@ -68,6 +71,36 @@ func (r *Ring) Contents() []byte {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return bytes.Join(r.lines[r.head:], nil)
+}
+
+// Since returns the lines kept among those written after the first after
+// lines, oldest first and without their line ends, keeping the newest when
+// there are more than limit, with the number of lines written so far: the
+// after of the next call, which then returns only newer lines. An after
+// past that number, from before the server started again, counts from 0.
+func (r *Ring) Since(after uint64, limit int) (lines []string, next uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	kept := r.lines[r.head:]
+	if after > r.written {
+		after = 0
+	}
+	first := uint64(0)
+	if r.written > uint64(len(kept)) {
+		first = r.written - uint64(len(kept))
+	}
+	from := 0
+	if after > first {
+		from = int(after - first)
+	}
+	if limit > 0 && len(kept)-from > limit {
+		from = len(kept) - limit
+	}
+	lines = make([]string, 0, len(kept)-from)
+	for _, line := range kept[from:] {
+		lines = append(lines, string(line[:len(line)-1]))
+	}
+	return lines, r.written
 }
 
 // Stat tells when the ring was made and last written, and the bytes it
