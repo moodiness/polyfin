@@ -209,6 +209,45 @@ func TestRouterLogsWhatItDoesNotServe(t *testing.T) {
 	}
 }
 
+// Go accepts request lines and headers of about a megabyte: what an
+// unmatched request keeps and logs stays short whatever it sends.
+func TestRouterLogsLongRequestsShort(t *testing.T) {
+	var output bytes.Buffer
+	unmatched := newUnmatchedRequests(slog.New(slog.NewJSONHandler(&output, nil)))
+	rt := &router{unmatched: unmatched}
+	long := strings.Repeat("a", maxLogged-1) + "é" + strings.Repeat("b", 1<<20)
+	for i := range 3 {
+		r := httptest.NewRequest(http.MethodGet, "/"+long+fmt.Sprint(i), nil)
+		r.Method = "M" + long
+		r.Header.Set("Authorization", `MediaBrowser Client="`+long+`", Version="`+long+`"`)
+		rt.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if output.Len() > 4*maxLogged+1000 {
+		t.Fatalf("logged %d bytes", output.Len())
+	}
+	var line struct{ Method, Path, Client, Version string }
+	if err := json.Unmarshal(bytes.SplitN(output.Bytes(), []byte("\n"), 2)[0], &line); err != nil {
+		t.Fatal(err)
+	}
+	if want := "/" + strings.Repeat("a", maxLogged-1) + "…"; line.Path != want {
+		t.Errorf("path %q, want %q", line.Path, want)
+	}
+	// The client's and version's cut falls inside "é", which is dropped
+	// whole.
+	if line.Client != strings.Repeat("a", maxLogged-1)+"…" || line.Version != line.Client || len(line.Method) > maxLogged+len("…") {
+		t.Errorf("logged %+v", line)
+	}
+	// Paths that differ only past the cut are one shape.
+	if len(unmatched.logged) != 1 {
+		t.Errorf("remembers %d shapes", len(unmatched.logged))
+	}
+	for key := range unmatched.logged {
+		if len(key) > 2*(maxLogged+len("…"))+1 {
+			t.Errorf("remembers a key of %d bytes", len(key))
+		}
+	}
+}
+
 func TestPathShape(t *testing.T) {
 	for path, want := range map[string]string{
 		"/Items/0123456789ABCDEF0123456789abcdef/Images/Primary/0": "/Items/{id}/Images/Primary/{id}",

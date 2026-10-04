@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // router matches Jellyfin routes the way Jellyfin does: path segments
@@ -112,6 +113,10 @@ const (
 	// within the hour, others go unlogged until some expire: past that
 	// many, the requests come from a scanner, not from apps.
 	maxUnmatched = 1000
+	// maxLogged bounds each value kept and logged. Go accepts request lines
+	// and headers of about a megabyte; no endpoint, method or app name is
+	// that long, and a thousand such paths would hold a gigabyte.
+	maxLogged = 256
 )
 
 func newUnmatchedRequests(logger *slog.Logger) *unmatchedRequests {
@@ -123,10 +128,11 @@ func (u *unmatchedRequests) report(r *http.Request, status int) {
 		return
 	}
 	// The path alone: query strings carry tokens and search terms.
-	path := pathShape(r.URL.Path)
+	path := truncate(pathShape(r.URL.Path))
+	method := truncate(r.Method)
 	// Jellyfin matches paths without regard to case, so apps spelling the
 	// same endpoint differently are one shape.
-	key := r.Method + " " + strings.ToLower(path)
+	key := method + " " + strings.ToLower(path)
 	now := u.now()
 	u.mu.Lock()
 	if at, ok := u.logged[key]; ok && now.Sub(at) < unmatchedInterval {
@@ -148,7 +154,20 @@ func (u *unmatchedRequests) report(r *http.Request, status int) {
 	u.mu.Unlock()
 	app := readCredentials(r, true)
 	u.logger.Info("An app asked for something Polyfin does not serve",
-		"method", r.Method, "path", path, "status", status, "client", app.Client, "version", app.Version)
+		"method", method, "path", path, "status", status, "client", truncate(app.Client), "version", truncate(app.Version))
+}
+
+// truncate keeps the first maxLogged bytes of s, without splitting a
+// character, marking what it cut.
+func truncate(s string) string {
+	if len(s) <= maxLogged {
+		return s
+	}
+	end := maxLogged
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return s[:end] + "…"
 }
 
 // pathShape replaces the identifiers in a path with {id}, so that requests
