@@ -54,6 +54,9 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.Accounts.Authenticate(r.Context(), body.Username, body.Pw)
 	switch {
+	// An account blocked for wrong passwords answers as a wrong password
+	// does, the right password included. Jellyfin, which disables such an
+	// account instead, answers 403 to its right password.
 	case errors.Is(err, accounts.ErrInvalidCredentials):
 		h.SignIns.Fail(key)
 		processingError(w, http.StatusUnauthorized)

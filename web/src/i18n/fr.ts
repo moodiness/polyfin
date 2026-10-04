@@ -95,6 +95,12 @@ const fr: Messages = {
     invalid_library:
       'Une bibliothèque fait référence à un catalogue qui n’existe plus ou ne peut pas être parcouru. Retirez les bibliothèques signalées comme plus disponibles, puis enregistrez à nouveau.',
     invalid_library_name: 'Le nom d’une bibliothèque doit comporter de 1 à 64 caractères.',
+    invalid_login_attempts:
+      'Le nombre de mots de passe faux avant blocage doit être 0, ou un nombre entier de 3 à 20.',
+    invalid_inactive_device_days:
+      'Le nombre de jours avant de déconnecter les appareils inutilisés doit être un nombre entier de 0 à 365.',
+    personal_addons_disabled:
+      'Un administrateur a désactivé vos propres addons. Ils sont conservés, mais vous ne pouvez pas en ajouter, ni les actualiser, ni les activer.',
   },
   status: {
     title: 'État du serveur',
@@ -236,6 +242,16 @@ const fr: Messages = {
       `Supprimer ${name} ? Ses appareils seront déconnectés et cette action est irréversible.`,
     deleting: 'Suppression…',
     deleted: (name: string) => `${name} a été supprimé.`,
+    canAddAddons: 'Peut ajouter ses propres addons',
+    canAddAddonsHelp:
+      'Cet utilisateur peut ajouter ses propres addons Stremio depuis sa page Mes addons. Sinon, ses addons sont conservés mais pas utilisés.',
+    noPersonalAddons: 'Sans addons personnels',
+    blockedUntil: (time: string) => `Bloqué jusqu’à ${time}`,
+    blockedHelp:
+      'Trop de mots de passe faux ont été saisis pour ce compte : il ne peut pas se connecter avant cette heure, même avec le bon mot de passe.',
+    unblock: 'Débloquer',
+    unblocking: 'Déblocage…',
+    unblocked: 'Le compte est débloqué.',
   },
   settings: {
     title: 'Paramètres',
@@ -293,6 +309,19 @@ const fr: Messages = {
     catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
     catalogRefreshMinutesHelp:
       'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',
+    securityTitle: 'Sécurité',
+    personalAddons: 'Autoriser les addons personnels des utilisateurs',
+    personalAddonsHelp:
+      'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
+    loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
+    loginAttemptsHelp:
+      'Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de 3 à 20.',
+    inactiveDeviceDays: 'Déconnecter les appareils inutilisés depuis (jours, 0 = jamais)',
+    inactiveDeviceDaysHelp:
+      'Les applications Jellyfin qui n’ont pas servi depuis ce nombre de jours sont déconnectées et doivent se reconnecter. La vérification a lieu toutes les heures. La connexion à cette page d’administration n’est pas concernée. De 0 à 365.',
+    detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
+    detailedLogHelp:
+      'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
     saved: 'Paramètres enregistrés.',
   },
   stremioTypes: {
@@ -410,6 +439,8 @@ const fr: Messages = {
     preferenceSaved: 'Préférence enregistrée.',
     parentalControl:
       'Le contrôle parental s’applique à votre compte : vos applications Jellyfin n’affichent que les addons et bibliothèques du serveur, qui donnent les classifications sur lesquelles il s’appuie. Vos propres addons sont conservés mais pas utilisés.',
+    personalAddonsOff:
+      'Un administrateur a désactivé vos propres addons : vos applications Jellyfin n’affichent que les addons et bibliothèques du serveur. Vos propres addons sont conservés mais pas utilisés.',
   },
   notFound: {
     title: 'Page introuvable',

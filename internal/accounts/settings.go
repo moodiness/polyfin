@@ -71,6 +71,24 @@ const (
 	DefaultCatalogRefreshMinutes = 10
 )
 
+// ErrInvalidLoginAttempts reports a LoginAttempts other than 0 outside
+// [MinLoginAttempts, MaxLoginAttempts].
+var ErrInvalidLoginAttempts = errors.New("invalid login attempts")
+
+// ErrInvalidInactiveDeviceDays reports an InactiveDeviceDays outside [0,
+// MaxInactiveDeviceDays].
+var ErrInvalidInactiveDeviceDays = errors.New("invalid inactive device days")
+
+// The bounds and defaults of Settings.LoginAttempts and InactiveDeviceDays;
+// 0, their default, turns them off.
+const (
+	MinLoginAttempts          = 3
+	MaxLoginAttempts          = 20
+	DefaultLoginAttempts      = 0
+	MaxInactiveDeviceDays     = 365
+	DefaultInactiveDeviceDays = 0
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -128,14 +146,27 @@ type Settings struct {
 	VersionListMinutes int
 	// CatalogRefreshMinutes is how long catalog pages are kept.
 	CatalogRefreshMinutes int
+	// PersonalAddons lets users add and use their own addons, those their
+	// own permission allows to (see PersonalAddonsAllowed).
+	PersonalAddons bool
+	// LoginAttempts is how many wrong passwords in a row block an account
+	// for LoginBlock; 0 never blocks.
+	LoginAttempts int
+	// InactiveDeviceDays is after how many days unused a Jellyfin app is
+	// signed out; 0 never signs it out.
+	InactiveDeviceDays int
+	// DetailedLog logs at the debug level, whatever the configured level
+	// (see FollowLogLevel).
+	DetailedLog bool
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes FROM settings").
+	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log FROM settings").
 		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes)
+			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog)
 	return settings, err
 }
 
@@ -175,15 +206,30 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.CatalogRefreshMinutes < MinCatalogRefreshMinutes || settings.CatalogRefreshMinutes > MaxCatalogRefreshMinutes {
 		return Settings{}, ErrInvalidCatalogRefreshMinutes
 	}
+	if settings.LoginAttempts != 0 && (settings.LoginAttempts < MinLoginAttempts || settings.LoginAttempts > MaxLoginAttempts) {
+		return Settings{}, ErrInvalidLoginAttempts
+	}
+	if settings.InactiveDeviceDays < 0 || settings.InactiveDeviceDays > MaxInactiveDeviceDays {
+		return Settings{}, ErrInvalidInactiveDeviceDays
+	}
+	if settings.LoginAttempts == 0 {
+		// Without a limit, no account stays blocked, nor keeps counting.
+		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
+			"WHERE invalid_login_attempts <> 0 OR blocked_until IS NOT NULL"); err != nil {
+			return Settings{}, err
+		}
+	}
 	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16",
+		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20",
 		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
 		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
-		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes)
+		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
+		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog)
 	if err != nil {
 		return Settings{}, err
 	}
 	s.settings.Store(&settings)
+	s.applyLogLevel()
 	return settings, nil
 }
 

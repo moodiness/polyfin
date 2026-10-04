@@ -73,7 +73,9 @@ func (h *Handler) userConfiguration(ctx context.Context, user accounts.ID) (User
 	return configuration, nil
 }
 
-// userDto describes user with the configuration they saved.
+// userDto describes user with the configuration they saved, and their
+// count of wrong passwords with the server's limit, -1 when there is none.
+// The public list of users, which anyone may read, leaves those out.
 func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, error) {
 	configuration, err := h.userConfiguration(ctx, user.ID)
 	if err != nil {
@@ -81,6 +83,10 @@ func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, err
 	}
 	dto := newUserDto(user, h.ServerID)
 	dto.Configuration = configuration
+	dto.Policy.InvalidLoginAttemptCount = user.InvalidLoginAttempts
+	if limit := h.Accounts.Settings().LoginAttempts; limit > 0 {
+		dto.Policy.LoginAttemptsBeforeLockout = limit
+	}
 	return dto, nil
 }
 

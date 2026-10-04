@@ -23,6 +23,11 @@ const (
 // policyUpdate is the part of Jellyfin's UserPolicy Polyfin keeps. Apps
 // post the whole policy, as they read it from the user; the capabilities
 // Polyfin does not offer are left as they are reported.
+//
+// LoginAttemptsBeforeLockout and InvalidLoginAttemptCount are left out on
+// purpose: Polyfin sets the limit for the whole server, from the admin
+// interface, and keeps the count itself, which a sign-in, a new password
+// or the admin interface's Unblock starts again.
 type policyUpdate struct {
 	IsAdministrator      bool
 	IsHidden             bool

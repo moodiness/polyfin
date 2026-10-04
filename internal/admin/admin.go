@@ -77,6 +77,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
+	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
@@ -177,6 +178,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrResumeNotBelowPlayed, http.StatusBadRequest, "resume_not_below_played"},
 		{accounts.ErrInvalidVersionListMinutes, http.StatusBadRequest, "invalid_version_list_minutes"},
 		{accounts.ErrInvalidCatalogRefreshMinutes, http.StatusBadRequest, "invalid_catalog_refresh_minutes"},
+		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
+		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},

@@ -24,6 +24,11 @@ type userJSON struct {
 	// converted; Downloads, when they may download.
 	Transcoding bool `json:"transcoding"`
 	Downloads   bool `json:"downloads"`
+	// PersonalAddons is set when the user may add and use their own addons.
+	PersonalAddons bool `json:"personalAddons"`
+	// BlockedUntil is when the block of the account for wrong passwords
+	// ends, null when it is not blocked.
+	BlockedUntil *time.Time `json:"blockedUntil"`
 }
 
 // parentalControlJSON is a user's parental control: the highest rating
@@ -53,7 +58,19 @@ func newUserJSON(user accounts.User) userJSON {
 		},
 		Transcoding: user.VideoTranscoding && user.AudioTranscoding,
 		Downloads:   user.ContentDownloading,
+		// Whether the user may have their own addons, and their block.
+		PersonalAddons: user.PersonalAddons,
+		BlockedUntil:   blockedUntil(user),
 	}
+}
+
+// blockedUntil is when the block of user's account ends, nil when it is not
+// blocked.
+func blockedUntil(user accounts.User) *time.Time {
+	if !user.Blocked(time.Now()) {
+		return nil
+	}
+	return user.BlockedUntil
 }
 
 // ratingJSON is a rating the admin app offers as a user's limit.
@@ -111,6 +128,12 @@ type settingsJSON struct {
 	ResumePercent         *int  `json:"resumePercent"`
 	VersionListMinutes    *int  `json:"versionListMinutes"`
 	CatalogRefreshMinutes *int  `json:"catalogRefreshMinutes"`
+	// The security settings keep their current values when a PUT leaves
+	// them out, too.
+	PersonalAddons     *bool `json:"personalAddons"`
+	LoginAttempts      *int  `json:"loginAttempts"`
+	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
+	DetailedLog        *bool `json:"detailedLog"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -132,6 +155,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ResumePercent:         &settings.ResumePercent,
 		VersionListMinutes:    &settings.VersionListMinutes,
 		CatalogRefreshMinutes: &settings.CatalogRefreshMinutes,
+		PersonalAddons:        &settings.PersonalAddons,
+		LoginAttempts:         &settings.LoginAttempts,
+		InactiveDeviceDays:    &settings.InactiveDeviceDays,
+		DetailedLog:           &settings.DetailedLog,
 	}
 }
 
@@ -297,6 +324,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		// Transcoding sets both video and audio conversion.
 		Transcoding *bool `json:"transcoding"`
 		Downloads   *bool `json:"downloads"`
+		// PersonalAddons lets the user add and use their own addons.
+		PersonalAddons *bool `json:"personalAddons"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -315,6 +344,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		VideoTranscoding:   body.Transcoding,
 		AudioTranscoding:   body.Transcoding,
 		ContentDownloading: body.Downloads,
+		PersonalAddons:     body.PersonalAddons,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -368,6 +398,23 @@ func (h *handler) revokeUserDevice(w http.ResponseWriter, r *http.Request) {
 	h.revokeDevice(w, r, id, "deviceId")
 }
 
+// unblockUser ends the block of a user's account for wrong passwords.
+func (h *handler) unblockUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	user, err := h.Accounts.Unblock(r.Context(), id)
+	if accountError(w, err) {
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newUserJSON(user))
+}
+
 func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, newSettingsJSON(h.Accounts.Settings()))
 }
@@ -396,6 +443,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
 		VersionListMinutes:    valueOr(body.VersionListMinutes, current.VersionListMinutes),
 		CatalogRefreshMinutes: valueOr(body.CatalogRefreshMinutes, current.CatalogRefreshMinutes),
+		PersonalAddons:        valueOr(body.PersonalAddons, current.PersonalAddons),
+		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
+		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
+		DetailedLog:           valueOr(body.DetailedLog, current.DetailedLog),
 	})
 	if accountError(w, err) {
 		return

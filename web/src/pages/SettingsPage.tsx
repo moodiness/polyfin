@@ -5,6 +5,8 @@ import {
   catalogRefreshMinutesRange,
   channelLimitRange,
   fetchSettings,
+  inactiveDeviceDaysRange,
+  loginAttemptsRange,
   playedPercentRange,
   queryClient,
   queryKeys,
@@ -52,6 +54,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const playbackId = useId()
   const catalogsId = useId()
   const contentId = useId()
+  const securityId = useId()
   const [form, setForm] = useState(initial)
 
   const mutation = useMutation({
@@ -254,6 +257,47 @@ function SettingsForm({ initial }: { initial: Settings }) {
               required
             />
           </section>
+          <section className="space-y-4 border-t border-line pt-6" aria-labelledby={securityId}>
+            <h2 id={securityId} className="text-sm font-semibold text-white">
+              {t.settings.securityTitle}
+            </h2>
+            <Checkbox
+              label={t.settings.personalAddons}
+              help={t.settings.personalAddonsHelp}
+              checked={form.personalAddons}
+              onChange={(personalAddons) => update({ personalAddons })}
+            />
+            <TextField
+              label={t.settings.loginAttempts}
+              hint={t.settings.loginAttemptsHelp}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={loginAttemptsRange.max}
+              step={1}
+              value={wholeNumberField(form.loginAttempts)}
+              onValue={(value) => update({ loginAttempts: wholeNumber(value) })}
+              required
+            />
+            <TextField
+              label={t.settings.inactiveDeviceDays}
+              hint={t.settings.inactiveDeviceDaysHelp}
+              type="number"
+              inputMode="numeric"
+              min={inactiveDeviceDaysRange.min}
+              max={inactiveDeviceDaysRange.max}
+              step={1}
+              value={wholeNumberField(form.inactiveDeviceDays)}
+              onValue={(value) => update({ inactiveDeviceDays: wholeNumber(value) })}
+              required
+            />
+            <Checkbox
+              label={t.settings.detailedLog}
+              help={t.settings.detailedLogHelp}
+              checked={form.detailedLog}
+              onChange={(detailedLog) => update({ detailedLog })}
+            />
+          </section>
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
           {mutation.isSuccess && <Notice kind="success">{t.settings.saved}</Notice>}
           <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>
@@ -263,4 +307,17 @@ function SettingsForm({ initial }: { initial: Settings }) {
       </Card>
     </form>
   )
+}
+
+/**
+ * A whole number typed in a field where 0 is a valid value: an empty field is -1, which the server
+ * refuses, rather than 0, which would turn the setting off without the user typing it.
+ */
+function wholeNumber(value: string): number {
+  return value.trim() === '' ? -1 : Math.trunc(Number(value))
+}
+
+/** The text of a field holding a whole number; -1 (see wholeNumber) shows as empty. */
+function wholeNumberField(value: number): number | '' {
+  return value < 0 ? '' : value
 }

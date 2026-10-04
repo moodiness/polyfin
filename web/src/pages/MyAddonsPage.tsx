@@ -39,6 +39,9 @@ function SharedAddonsSwitch() {
   // The server's addons give the ratings parental control hides titles by.
   if (preferences.data.parentalControl)
     return <p className="text-sm text-zinc-300">{t.myAddons.parentalControl}</p>
+  // The server or the user's own permission turned their own addons off.
+  if (!preferences.data.personalAddons)
+    return <p className="text-sm text-zinc-300">{t.myAddons.personalAddonsOff}</p>
 
   return (
     <div className="space-y-3">
