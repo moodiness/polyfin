@@ -270,6 +270,28 @@ const (
 	MaxLoginDisclaimerBytes = 8 << 10
 )
 
+// ErrInvalidPublicMetaDBKey reports a Settings.PublicMetaDBKey that is not
+// a valid key (see ValidPublicMetaDBKey).
+var ErrInvalidPublicMetaDBKey = errors.New("invalid PublicMetaDB key")
+
+// MaxPublicMetaDBKeyBytes is the longest Settings.PublicMetaDBKey.
+const MaxPublicMetaDBKeyBytes = 256
+
+// ValidPublicMetaDBKey reports whether key may be a PublicMetaDB key: at
+// most MaxPublicMetaDBKeyBytes of printable ASCII. Empty is valid, for no
+// key.
+func ValidPublicMetaDBKey(key string) bool {
+	if len(key) > MaxPublicMetaDBKeyBytes {
+		return false
+	}
+	for i := range len(key) {
+		if key[i] < ' ' || key[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -314,6 +336,10 @@ type Settings struct {
 	// SkipButtons finds the parts of titles apps offer to skip (intro,
 	// recap, credits) in the segment databases; off, titles have none.
 	SkipButtons bool
+	// PublicMetaDBKey is the API key the server asks PublicMetaDB for
+	// segments with; empty, PublicMetaDB is not asked. It is a secret:
+	// never shown, never logged.
+	PublicMetaDBKey string
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
@@ -449,7 +475,7 @@ func validWebText(text string, max int) bool {
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, " +
-	"skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"skip_buttons, publicmetadb_key, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -473,7 +499,7 @@ var updateSettingsQuery = func() string {
 func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-		&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
@@ -525,6 +551,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.CatalogRefreshMinutes < MinCatalogRefreshMinutes || settings.CatalogRefreshMinutes > MaxCatalogRefreshMinutes {
 		return Settings{}, ErrInvalidCatalogRefreshMinutes
+	}
+	if !ValidPublicMetaDBKey(settings.PublicMetaDBKey) {
+		return Settings{}, ErrInvalidPublicMetaDBKey
 	}
 	if settings.LoginAttempts != 0 && (settings.LoginAttempts < MinLoginAttempts || settings.LoginAttempts > MaxLoginAttempts) {
 		return Settings{}, ErrInvalidLoginAttempts

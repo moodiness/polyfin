@@ -40,7 +40,8 @@ type Config struct {
 	// /dev/dri/renderD128; empty tries each in turn.
 	VAAPIDevice string
 	// Segments are the databases asked where titles' intros and credits
-	// are, theintrodb and introdb, the preferred first; empty asks none.
+	// are, of theintrodb, introdb and publicmetadb, the preferred first;
+	// empty asks none.
 	Segments []string
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
 	// with the folders within.
@@ -165,21 +166,25 @@ func checkWritableDir(dir string) error {
 	return os.Remove(file.Name())
 }
 
+// segmentDatabases are the segment databases POLYFIN_SEGMENTS names, in the
+// default order of preference.
+var segmentDatabases = []string{"theintrodb", "introdb", "publicmetadb"}
+
 // parseSegments reads the segment databases, in order of preference: by
-// default both, TheIntroDB first; none for neither.
+// default all of them, TheIntroDB first; none for none.
 func parseSegments(text string) ([]string, error) {
 	text = strings.ToLower(strings.TrimSpace(text))
 	switch text {
 	case "":
-		return []string{"theintrodb", "introdb"}, nil
+		return slices.Clone(segmentDatabases), nil
 	case "none":
 		return nil, nil
 	}
 	var names []string
 	for name := range strings.SplitSeq(text, ",") {
 		name = strings.TrimSpace(name)
-		if name != "theintrodb" && name != "introdb" {
-			return nil, fmt.Errorf("%q is not a list of theintrodb and introdb, or none", text)
+		if !slices.Contains(segmentDatabases, name) {
+			return nil, fmt.Errorf("%q is not a list of theintrodb, introdb and publicmetadb, or none", text)
 		}
 		if !slices.Contains(names, name) {
 			names = append(names, name)

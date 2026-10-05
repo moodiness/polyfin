@@ -43,7 +43,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		"POLYFIN_CACHE_SIZE":     {Value: "20GB", Set: true, Known: true},
 		"POLYFIN_LISTEN":         {Value: ":8096", Known: true},
 		"POLYFIN_HWACCEL":        {Value: "auto", Known: true},
-		"POLYFIN_SEGMENTS":       {Value: "theintrodb,introdb", Known: true},
+		"POLYFIN_SEGMENTS":       {Value: "theintrodb,introdb,publicmetadb", Known: true},
 		"POLYFIN_API_TOKEN":      {Set: true, Hidden: true},
 		"POLYFIN_ADMIN_PASSWORD": {Set: true, Hidden: true},
 		"POLYFIN_EXTRA_FEED":     {Value: "https://feeds.example/…", Set: true},

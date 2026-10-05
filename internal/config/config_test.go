@@ -69,10 +69,11 @@ func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 
 func TestSegmentDatabasesKeepTheOrderOfPreference(t *testing.T) {
 	for text, want := range map[string][]string{
-		"":                       {"theintrodb", "introdb"},
-		" IntroDB , theintrodb ": {"introdb", "theintrodb"},
-		"introdb,introdb":        {"introdb"},
-		"none":                   nil,
+		"":                                  {"theintrodb", "introdb", "publicmetadb"},
+		" IntroDB , theintrodb ":            {"introdb", "theintrodb"},
+		"PublicMetaDB,introdb,publicmetadb": {"publicmetadb", "introdb"},
+		"introdb,introdb":                   {"introdb"},
+		"none":                              nil,
 	} {
 		cfg, err := Load(env(map[string]string{"POLYFIN_DATABASE_URL": "postgresql://polyfin@db/polyfin", "POLYFIN_SEGMENTS": text}))
 		if err != nil || !slices.Equal(cfg.Segments, want) {

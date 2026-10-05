@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,33 +18,49 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb"
 )
 
-// reply is a database's answer: a status and a JSON body.
+// reply is a database's answer: a status, a JSON body and, if any, a
+// Retry-After header.
 type reply struct {
-	status int
-	body   string
+	status     int
+	body       string
+	retryAfter string
 }
 
-// databases stands in for TheIntroDB (/media) and IntroDB (/segments): it
-// answers each with the reply set for it, and records what each was asked.
+// The paths the fake databases answer on.
+const (
+	theIntroDBPath   = "/media"
+	introDBPath      = "/segments"
+	publicMetaDBPath = "/api/external/skips"
+)
+
+// databases stands in for TheIntroDB (/media), IntroDB (/segments) and
+// PublicMetaDB (/api/external/skips): it answers each with the reply set
+// for it, and records what each was asked and with which Authorization
+// header.
 type databases struct {
 	mu      sync.Mutex
 	replies map[string]reply
 	asked   map[string][]url.Values
+	auth    map[string][]string
 	url     string
 }
 
 func newDatabases(t *testing.T) *databases {
 	t.Helper()
-	d := &databases{replies: map[string]reply{}, asked: map[string][]url.Values{}}
+	d := &databases{replies: map[string]reply{}, asked: map[string][]url.Values{}, auth: map[string][]string{}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d.mu.Lock()
 		d.asked[r.URL.Path] = append(d.asked[r.URL.Path], r.URL.Query())
+		d.auth[r.URL.Path] = append(d.auth[r.URL.Path], r.Header.Get("Authorization"))
 		answer, ok := d.replies[r.URL.Path]
 		d.mu.Unlock()
 		if !ok {
 			answer = reply{status: http.StatusNotFound, body: `{"error":"media not found"}`}
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if answer.retryAfter != "" {
+			w.Header().Set("Retry-After", answer.retryAfter)
+		}
 		w.WriteHeader(answer.status)
 		_, _ = io.WriteString(w, answer.body)
 	}))
@@ -54,7 +72,14 @@ func newDatabases(t *testing.T) *databases {
 func (d *databases) reply(path string, status int, body string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.replies[path] = reply{status, body}
+	d.replies[path] = reply{status: status, body: body}
+}
+
+// limit makes the database at path answer 429 with a Retry-After.
+func (d *databases) limit(path, retryAfter string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.replies[path] = reply{status: http.StatusTooManyRequests, body: `{"error":"Too Many Requests"}`, retryAfter: retryAfter}
 }
 
 // calls returns how many times each database was asked: TheIntroDB, then
@@ -62,7 +87,15 @@ func (d *databases) reply(path string, status int, body string) {
 func (d *databases) calls() (theIntroDB, introDB int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return len(d.asked["/media"]), len(d.asked["/segments"])
+	return len(d.asked[theIntroDBPath]), len(d.asked[introDBPath])
+}
+
+// publicMetaDB returns the Authorization headers PublicMetaDB was asked
+// with, one a request.
+func (d *databases) publicMetaDB() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.auth[publicMetaDBPath])
 }
 
 func (d *databases) last(path string) url.Values {
@@ -91,10 +124,15 @@ func service(t *testing.T, d *databases, names ...string) (*Service, *clock) {
 	for _, name := range names {
 		sources = append(sources, Source{Name: name, URL: d.url})
 	}
-	s := New(pool, sources, "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s := New(pool, sources, "test", slog.New(slog.NewTextHandler(io.Discard, nil)), func() accounts.Settings { return accounts.Settings{} })
 	c := &clock{now: time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)}
 	s.now = func() time.Time { return c.now }
 	return s, c
+}
+
+// useKey saves key as the server's PublicMetaDB key, empty for none.
+func useKey(s *Service, key string) {
+	s.settings = func() accounts.Settings { return accounts.Settings{PublicMetaDBKey: key} }
 }
 
 var episode = Title{Item: accounts.ID{1}, IMDb: "tt0903747", TMDB: "1396", Season: 1, Episode: 2, Runtime: time.Hour}
@@ -284,5 +322,243 @@ func TestNothingIsAskedWithoutDatabasesOrIdentifiers(t *testing.T) {
 	s.Segments(t.Context(), Title{Item: accounts.ID{5}, TMDB: "550"})
 	if a, b := d.calls(); a != 1 || b != 0 {
 		t.Errorf("asked %d and %d times", a, b)
+	}
+}
+
+const goodKey = "pm-Good4mN2pQrS7tUvWx3yZaB4cD5eF6gH7iJ8kL9mN0oP1qR2sT3uV4wXyZ5aB"
+
+// episodeRecords are PublicMetaDB's records for the episode, one a contributor
+// and release. The physical release's gives every segment; of the streaming
+// releases', s2 and s1 give three (s2 the more recent), s3 one, and s0 none.
+var episodeRecords = []string{
+	`{"id":"p1","tmdb_id":1396,"media_type":"tv","season":1,"episode":2,"source":"physical","created":"2026-01-01T00:00:00Z",
+		"intro_start_ms":1000,"intro_end_ms":2000,"credits_start_ms":3000000,"credits_end_ms":3100000,
+		"recap_start_ms":0,"recap_end_ms":500,"preview_start_ms":3500000,"preview_end_ms":3550000}`,
+	`{"id":"s2","tmdb_id":1396,"media_type":"tv","season":1,"episode":2,"source":"streaming","created":"2025-06-01T00:00:00Z",
+		"intro_start_ms":15000,"intro_end_ms":62000,"credits_start_ms":null,"credits_end_ms":null,
+		"recap_start_ms":0,"recap_end_ms":15000,"preview_start_ms":3540000,"preview_end_ms":3570000}`,
+	`{"id":"s3","tmdb_id":1396,"media_type":"tv","season":1,"episode":2,"source":"streaming","created":"2026-02-01T00:00:00Z",
+		"intro_start_ms":20000,"intro_end_ms":50000,"credits_start_ms":null,"credits_end_ms":null,
+		"recap_start_ms":null,"recap_end_ms":null,"preview_start_ms":null,"preview_end_ms":null}`,
+	`{"id":"s1","tmdb_id":1396,"media_type":"tv","season":1,"episode":2,"source":"streaming","created":"2024-01-01T00:00:00Z",
+		"intro_start_ms":10000,"intro_end_ms":40000,"credits_start_ms":null,"credits_end_ms":null,
+		"recap_start_ms":0,"recap_end_ms":10000,"preview_start_ms":3500000,"preview_end_ms":3560000}`,
+	`{"id":"s0","tmdb_id":1396,"media_type":"tv","season":1,"episode":2,"source":"streaming","created":"2026-09-01T00:00:00Z",
+		"intro_start_ms":null,"intro_end_ms":null,"credits_start_ms":null,"credits_end_ms":null,
+		"recap_start_ms":null,"recap_end_ms":null,"preview_start_ms":null,"preview_end_ms":null}`,
+}
+
+// skipPage is PublicMetaDB's answer listing records.
+func skipPage(records ...string) string {
+	return `{"items":[` + strings.Join(records, ",") + `],"total":` + strconv.Itoa(len(records)) + `,"page":1,"perPage":200,"totalPages":1}`
+}
+
+func TestPublicMetaDBJoinsTheOtherDatabasesByPreference(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"tmdb_id":1396,"type":"tv","season":1,"episode":2,
+		"intro":[{"start_ms":null,"end_ms":30500}],"recap":[{"start_ms":null,"end_ms":0}],
+		"credits":[{"start_ms":3431000,"end_ms":null}],"preview":[{"start_ms":0,"end_ms":null}]}`)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+
+	s, _ := service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
+	useKey(s, goodKey)
+	// TheIntroDB's intro and credits are preferred; PublicMetaDB brings
+	// the recap and the preview TheIntroDB says there are none of, from
+	// the fullest record of a streaming release.
+	want := []Segment{
+		{Type: Recap, Start: 0, End: at(15)},
+		{Type: Intro, Start: 0, End: at(30.5)},
+		{Type: Outro, Start: at(3431), End: time.Hour},
+		{Type: Preview, Start: at(3540), End: at(3570)},
+	}
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	if q := d.last(publicMetaDBPath); q.Get("tmdb_id") != "1396" || q.Get("media_type") != "tv" || q.Get("season") != "1" || q.Get("episode") != "2" {
+		t.Errorf("PublicMetaDB was asked %v", q)
+	}
+	if auth := d.publicMetaDB(); !slices.Equal(auth, []string{"Bearer " + goodKey}) {
+		t.Errorf("PublicMetaDB was asked with %q", auth)
+	}
+
+	// Preferring PublicMetaDB, its intro wins too; its record has no
+	// credits, which TheIntroDB keeps giving. The records listed in
+	// another order give the same segments.
+	reversed := slices.Clone(episodeRecords)
+	slices.Reverse(reversed)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(reversed...))
+	s, _ = service(t, d, PublicMetaDB, TheIntroDB, IntroDB)
+	useKey(s, goodKey)
+	want = []Segment{
+		{Type: Recap, Start: 0, End: at(15)},
+		{Type: Intro, Start: at(15), End: at(62)},
+		{Type: Outro, Start: at(3431), End: time.Hour},
+		{Type: Preview, Start: at(3540), End: at(3570)},
+	}
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+		t.Errorf("preferring PublicMetaDB: got %+v, want %+v", got, want)
+	}
+}
+
+func TestPublicMetaDBIsAskedOnlyWithAKey(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+	s, _ := service(t, d, TheIntroDB, PublicMetaDB)
+	theIntroDBOnly := []Segment{{Type: Intro, Start: 0, End: at(30.5)}}
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, theIntroDBOnly) {
+		t.Errorf("without a key: got %+v", got)
+	}
+	if auth := d.publicMetaDB(); len(auth) != 0 {
+		t.Fatalf("PublicMetaDB was asked without a key: %q", auth)
+	}
+	// The title's answers were kept before the key was saved: PublicMetaDB
+	// was not asked, which is not that it found nothing. It is asked once
+	// a key is saved, without TheIntroDB being asked again.
+	useKey(s, goodKey)
+	withPublicMetaDB := []Segment{
+		{Type: Recap, Start: 0, End: at(15)},
+		{Type: Intro, Start: 0, End: at(30.5)},
+		{Type: Preview, Start: at(3540), End: at(3570)},
+	}
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, withPublicMetaDB) {
+		t.Errorf("once a key is saved: got %+v, want %+v", got, withPublicMetaDB)
+	}
+	s.Segments(t.Context(), episode)
+	if a, _ := d.calls(); a != 1 || !slices.Equal(d.publicMetaDB(), []string{"Bearer " + goodKey}) {
+		t.Errorf("asked TheIntroDB %d times, PublicMetaDB with %q", a, d.publicMetaDB())
+	}
+	// Once the key is removed, PublicMetaDB's segments go and it is not
+	// asked; saved again, they come back from what it answered.
+	useKey(s, "")
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, theIntroDBOnly) {
+		t.Errorf("key removed: got %+v", got)
+	}
+	useKey(s, goodKey)
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, withPublicMetaDB) || len(d.publicMetaDB()) != 1 {
+		t.Errorf("key saved again: got %+v, PublicMetaDB asked %d times", got, len(d.publicMetaDB()))
+	}
+}
+
+func TestPublicMetaDBKnowsTitlesByTMDBIdentifier(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(`{"id":"m1","tmdb_id":550,"media_type":"movie","source":"streaming",
+		"created":"2025-01-01T00:00:00Z","intro_start_ms":null,"intro_end_ms":null,
+		"credits_start_ms":7900000,"credits_end_ms":8300000,"recap_start_ms":null,"recap_end_ms":null,
+		"preview_start_ms":null,"preview_end_ms":null}`))
+	s, _ := service(t, d, IntroDB, PublicMetaDB)
+	useKey(s, goodKey)
+	movie := Title{Item: accounts.ID{2}, IMDb: "tt0137523", TMDB: "550"}
+	if got, want := s.Segments(t.Context(), movie), []Segment{{Type: Outro, Start: at(7900), End: at(8300)}}; !slices.Equal(got, want) {
+		t.Errorf("movie: got %+v, want %+v", got, want)
+	}
+	if q := d.last(publicMetaDBPath); q.Get("tmdb_id") != "550" || q.Get("media_type") != "movie" || q.Has("season") || q.Has("episode") {
+		t.Errorf("PublicMetaDB was asked %v", q)
+	}
+	// Without a TMDB identifier, only IntroDB is asked.
+	s.Segments(t.Context(), Title{Item: accounts.ID{3}, IMDb: "tt0903747", Season: 1, Episode: 1})
+	if _, b := d.calls(); b != 2 || len(d.publicMetaDB()) != 1 {
+		t.Errorf("asked IntroDB %d times and PublicMetaDB %d times", b, len(d.publicMetaDB()))
+	}
+}
+
+func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(publicMetaDBPath, http.StatusUnauthorized, `{"error":"Invalid or missing API key"}`)
+	s, c := service(t, d, PublicMetaDB)
+	var log strings.Builder
+	s.logger = slog.New(slog.NewTextHandler(&log, nil))
+	const refused = "pm-Refused00000000000000000000000000000000000000000000000000000"
+	useKey(s, refused)
+	titles := []Title{
+		episode,
+		{Item: accounts.ID{2}, TMDB: "550"},
+		{Item: accounts.ID{3}, TMDB: "1396", Season: 1, Episode: 3},
+	}
+	for _, title := range titles {
+		s.Segments(t.Context(), title)
+	}
+	c.advance(48 * time.Hour)
+	s.Segments(t.Context(), episode)
+	if asked := len(d.publicMetaDB()); asked != 1 {
+		t.Errorf("a refused key was asked with %d times", asked)
+	}
+	if warnings := strings.Count(log.String(), "level=WARN"); warnings != 1 {
+		t.Errorf("%d warnings for a refused key", warnings)
+	}
+	// Another key is asked with, once, and refused (403) in turn.
+	d.reply(publicMetaDBPath, http.StatusForbidden, `{"error":"Forbidden"}`)
+	useKey(s, goodKey+"2")
+	for _, title := range titles {
+		s.Segments(t.Context(), title)
+	}
+	if asked := len(d.publicMetaDB()); asked != 2 {
+		t.Errorf("with a second key: asked %d times", asked)
+	}
+	// A key PublicMetaDB accepts asks about every title: those it refused
+	// to answer were not asked.
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+	useKey(s, goodKey)
+	if got := s.Segments(t.Context(), episode); len(got) != 3 {
+		t.Errorf("with an accepted key: %+v", got)
+	}
+	if auth := d.publicMetaDB(); len(auth) != 3 || auth[2] != "Bearer "+goodKey {
+		t.Errorf("asked with %q", auth)
+	}
+	// A key refused, then accepted by the check of the settings, as once
+	// PublicMetaDB allows it again, is asked with.
+	const restored = "pm-Restored0000000000000000000000000000000000000000000000000000"
+	d.reply(publicMetaDBPath, http.StatusUnauthorized, `{"error":"Invalid or missing API key"}`)
+	useKey(s, restored)
+	s.Segments(t.Context(), titles[1])
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage())
+	if err := s.CheckPublicMetaDBKey(t.Context(), restored); err != nil {
+		t.Fatal(err)
+	}
+	s.Segments(t.Context(), titles[1])
+	if auth := d.publicMetaDB(); len(auth) != 6 || auth[5] != "Bearer "+restored {
+		t.Errorf("after the check: %d requests", len(auth))
+	}
+	if strings.Contains(log.String(), refused) || strings.Contains(log.String(), goodKey) {
+		t.Error("a key was logged")
+	}
+}
+
+func TestARateLimitHoldsForEveryTitle(t *testing.T) {
+	d := newDatabases(t)
+	d.limit(publicMetaDBPath, "120")
+	s, c := service(t, d, TheIntroDB, PublicMetaDB)
+	useKey(s, goodKey)
+	movie := Title{Item: accounts.ID{2}, TMDB: "550"}
+	s.Segments(t.Context(), episode)
+	s.Segments(t.Context(), movie)
+	if asked := len(d.publicMetaDB()); asked != 1 {
+		t.Errorf("during the rate limit: asked %d times", asked)
+	}
+	// The other database is not held back.
+	if a, _ := d.calls(); a != 2 {
+		t.Errorf("TheIntroDB asked %d times", a)
+	}
+	// After Retry-After, the titles not asked yet are; the one refused is
+	// asked again an hour later, as after any failure.
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+	c.advance(3 * time.Minute)
+	s.Segments(t.Context(), movie)
+	s.Segments(t.Context(), episode)
+	if asked := len(d.publicMetaDB()); asked != 2 {
+		t.Errorf("after the rate limit: asked %d times", asked)
+	}
+	c.advance(time.Hour)
+	if got := s.Segments(t.Context(), episode); len(got) != 3 || len(d.publicMetaDB()) != 3 {
+		t.Errorf("an hour later: %+v, asked %d times", got, len(d.publicMetaDB()))
+	}
+	// Retry-After may be a date.
+	d.limit(publicMetaDBPath, c.now.Add(10*time.Minute).Format(http.TimeFormat))
+	s.Segments(t.Context(), Title{Item: accounts.ID{3}, TMDB: "1396", Season: 2, Episode: 1})
+	s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2})
+	c.advance(11 * time.Minute)
+	s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2})
+	if asked := len(d.publicMetaDB()); asked != 5 {
+		t.Errorf("with a date: asked %d times", asked)
 	}
 }
