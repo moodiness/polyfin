@@ -194,8 +194,22 @@ func (n *flexInt) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// idsJSON are a title's identifiers as the services give them; MDBList's
-// playback names them imdbid, tmdbid and tvdbid.
+// flexFloat decodes a number given as a number, a numeric string, as
+// MDBList gives a resume point's progress, or null.
+type flexFloat float64
+
+func (n *flexFloat) UnmarshalJSON(data []byte) error {
+	text := strings.Trim(string(bytes.TrimSpace(data)), `"`)
+	value, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		value = 0
+	}
+	*n = flexFloat(value)
+	return nil
+}
+
+// idsJSON are a title's identifiers as the services give them, under their
+// usual names or spelled imdbid, tmdbid and tvdbid.
 type idsJSON struct {
 	IMDb   string  `json:"imdb"`
 	TMDB   flexInt `json:"tmdb"`
@@ -237,11 +251,14 @@ func date(text string) *time.Time {
 	return nil
 }
 
-// playbackJSON is a resume point of Trakt, Simkl or MDBList.
+// playbackJSON is a resume point of Trakt, Simkl or MDBList. MDBList gives
+// its progress as a string, and the runtime, in minutes, beside the title
+// rather than in it.
 type playbackJSON struct {
-	Progress float64 `json:"progress"`
-	PausedAt string  `json:"paused_at"`
-	Type     string  `json:"type"`
+	Progress flexFloat `json:"progress"`
+	PausedAt string    `json:"paused_at"`
+	Type     string    `json:"type"`
+	Runtime  flexInt   `json:"runtime"`
 	Movie    *struct {
 		Runtime flexInt `json:"runtime"`
 		IDs     idsJSON `json:"ids"`
@@ -267,14 +284,14 @@ func (h *watchHistory) addPlayback(body []byte) error {
 		if at == nil {
 			continue
 		}
-		entry := resumeEntry{percent: item.Progress, at: *at}
+		entry := resumeEntry{percent: float64(item.Progress), at: *at}
 		switch {
 		case item.Type == "movie" && item.Movie != nil:
 			entry.ref = item.Movie.IDs.ref(false, 0, 0)
-			entry.runtime = time.Duration(item.Movie.Runtime) * time.Minute
+			entry.runtime = time.Duration(cmpOr(item.Movie.Runtime, item.Runtime)) * time.Minute
 		case item.Type == "episode" && item.Episode != nil && item.Show != nil:
 			entry.ref = item.Show.IDs.ref(true, item.Episode.Season, item.Episode.Number)
-			entry.runtime = time.Duration(item.Episode.Runtime) * time.Minute
+			entry.runtime = time.Duration(cmpOr(item.Episode.Runtime, item.Runtime)) * time.Minute
 		default:
 			continue
 		}

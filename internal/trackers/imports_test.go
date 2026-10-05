@@ -267,6 +267,40 @@ func TestImportsMergeWithoutLosingAnything(t *testing.T) {
 	h.noWrites(t)
 }
 
+// MDBList gives a resume point's progress as a string, and its runtime, in
+// minutes, beside the title rather than in it, as its API answers today.
+func TestMDBListResumePointsAsTheServiceGivesThem(t *testing.T) {
+	h := newHarness(t)
+	user := h.user(t, "gina")
+	h.connected(t, user, MDBList, "mdblist-gina")
+	movie := library.TitleRef{IMDb: "tt0000101"}
+	episode := library.TitleRef{Episode: true, IMDb: "tt0000102", Season: 1, Number: 1}
+	h.f.reply("GET", "/mdblist/sync/last_activities", http.StatusOK, `{"watched_at":"2026-10-02T00:00:00Z","episode_watched_at":"2026-10-02T00:00:00Z"}`)
+	h.f.reply("GET", "/mdblist/sync/watched", http.StatusOK,
+		`{"movies":[],"shows":[],"seasons":[],"episodes":[],"pagination":{"offset":0,"limit":1000,"has_more":false}}`)
+	h.f.reply("GET", "/mdblist/sync/playback", http.StatusOK, `[
+		{"id":1,"progress":"15.46","progress_at_update":"15.46","updated_at":"2026-10-05T11:22:45.000Z","updated_at_ts":1,
+		 "expires_at":"2026-11-04T11:22:45.000Z","runtime":60,"paused_at":"2026-10-05T11:22:45.000Z","is_manual":false,"type":"episode",
+		 "movie":null,"episode":{"season":1,"number":1,"title":"Pilot","ids":{"tmdb":11,"tvdb":12}},
+		 "show":{"title":"Show","year":2025,"ids":{"imdb":"tt0000102","tmdb":13,"trakt":14,"tvdb":15,"mdblist":"m1"}}},
+		{"id":2,"progress":"36.97","progress_at_update":"36.97","updated_at":"2026-10-05T11:22:38.000Z","updated_at_ts":2,
+		 "expires_at":"2026-11-04T11:22:38.000Z","runtime":155,"paused_at":"2026-10-05T11:22:38.000Z","is_manual":false,"type":"movie",
+		 "movie":{"title":"Movie","year":2021,"ids":{"imdb":"tt0000101","tmdb":21,"trakt":22,"mdblist":"m2"}},"episode":null,"show":null}]`)
+
+	if result := h.turnOn(t, user, MDBList); result.Resumed != 2 || result.Problem != "" {
+		t.Fatalf("result: %+v", result)
+	}
+	got := h.data(t, user, movie, episode)
+	// 36.97% of 155 minutes, and 15.46% of 60 minutes.
+	if d := got[0]; d.Runtime != 155*time.Minute || d.Position < 57*time.Minute || d.Position > 58*time.Minute {
+		t.Errorf("movie: %+v", d)
+	}
+	if d := got[1]; d.Runtime != 60*time.Minute || d.Position < 9*time.Minute || d.Position > 10*time.Minute {
+		t.Errorf("episode: %+v", d)
+	}
+	h.noWrites(t)
+}
+
 func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "dave")
