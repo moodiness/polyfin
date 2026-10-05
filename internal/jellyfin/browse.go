@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -516,7 +517,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := h.Library.Item(r.Context(), user, id)
+	// An app opening an item asks an IPTV title's details (see
+	// iptv.Opening): listings never do.
+	item, err := h.Library.Item(iptv.Opening(r.Context()), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps open a version as an item by its media source id.
 		item, err = h.title(r.Context(), user, id)

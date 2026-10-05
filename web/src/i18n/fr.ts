@@ -806,6 +806,8 @@ const fr: Messages = {
     name: 'Nom dans les applications',
     appName: (name: string) => `Affichée dans les applications sous le nom « ${name} ».`,
     liveTv: 'Ses chaînes apparaissent dans la TV en direct des applications Jellyfin.',
+    iptvVod: 'D’une source IPTV.',
+    iptvVodLink: 'Ses options d’import',
     addonOff: 'Addon désactivé',
     missing: 'Plus disponible',
     remove: 'Retirer',
@@ -935,8 +937,6 @@ const fr: Messages = {
       'Fichier XMLTV, compressé ou non. Vous pouvez aussi l’ajouter ou le changer plus tard dans Bibliothèques.',
     add: 'Ajouter la source',
     adding: 'Téléchargement de la liste…',
-    added: (name: string, channels: number) =>
-      `${name} a été ajoutée avec ${channels <= 1 ? `${channels} chaîne` : `${channels} chaînes`}.`,
     address: 'Adresse',
     channels: 'Chaînes',
     channelCount: (count: number) => (count <= 1 ? `${count} chaîne` : `${count} chaînes`),
@@ -1113,6 +1113,7 @@ const fr: Messages = {
         `Les listes de chaînes IPTV et les guides des programmes, ceux du serveur comme ceux des utilisateurs, sont téléchargés à nouveau toutes les ${hours} h (Paramètres › TV en direct), par la tâche « Actualiser les guides TV ».`,
       noRefreshes: 'Aucune source IPTV ni guide des programmes.',
       channelList: 'Liste de chaînes',
+      iptvLists: 'Listes de chaînes, films et séries',
       guide: 'Guide des programmes',
       due: 'À la prochaine vérification',
       lastDownload: 'Dernier téléchargement',
@@ -1273,11 +1274,11 @@ const fr: Messages = {
     },
   },
   lineup: {
-    open: 'Grille',
-    title: (name: string) => `${name} : grille des chaînes`,
-    titleLoading: 'Grille des chaînes',
+    open: 'Ouvrir la source',
+    title: (name: string) => `${name} : source IPTV`,
+    titleLoading: 'Source IPTV',
     description:
-      'Choisissez les catégories et les chaînes que montrent les applis Jellyfin, dans quel ordre et sous quels noms, et le guide des programmes de chaque chaîne.',
+      'Ce que cette source importe et comment les applis Jellyfin l’affichent : ses chaînes de TV en direct, avec leur ordre, leurs noms et leurs guides des programmes, et ses films et séries.',
     notFound: 'Cette source IPTV n’existe pas, ou vous ne pouvez pas la gérer.',
     backShared: 'Retour aux addons',
     backMine: 'Retour à mes addons',
@@ -1291,7 +1292,8 @@ const fr: Messages = {
       mapping: 'Correspondance des guides',
     },
     close: 'Fermer',
-    editorHint: 'Les catégories, chaînes, numéros et guides se règlent sur la page de la grille.',
+    editorHint:
+      'Ce qu’il faut importer, les catégories, chaînes, numéros et guides se règlent sur la page de la source.',
     pager: {
       label: 'Pages',
       range: (from: string, to: string, total: string) => `${from} à ${to} sur ${total}`,
@@ -1301,11 +1303,15 @@ const fr: Messages = {
     add: {
       steps: 'Étapes',
       stepAccount: 'Compte',
-      stepCategories: 'Catégories et options',
-      next: 'Suivant : choisir les catégories',
+      stepCategories: 'À importer',
+      next: 'Suivant : choisir quoi importer',
       back: 'Retour au compte',
       import: 'Importer',
       importing: 'Import…',
+      added: (name: string, parts: string[]) => `${name} a été ajoutée : ${parts.join(', ')}.`,
+      channels: (count: string) => `${count} chaînes`,
+      movies: (count: string) => `${count} films`,
+      series: (count: string) => `${count} séries`,
     },
     summary: {
       categories: 'Catégories activées',
@@ -1316,18 +1322,26 @@ const fr: Messages = {
       shownOf: (shown: string, total: string) => `${shown} affichées sur ${total}`,
       mapped: 'Avec un guide',
       unmapped: (count: string) => `${count} sans`,
-      entries: 'Entrées du fournisseur',
-      listTitle: 'Liste des chaînes',
+      entries: 'Entrées en direct',
+      listTitle: 'Listes',
       refreshHelp:
-        'Télécharge la liste à nouveau, puis met à jour la grille et la correspondance des guides. Vos modifications sont gardées pour chaque chaîne encore dans la liste.',
+        'Télécharge les listes à nouveau (la liste en direct, et celles des films et séries quand ils sont importés), puis met à jour la grille, la correspondance des guides et les bibliothèques. Vos modifications sont gardées pour chaque chaîne encore dans la liste.',
       refresh: 'Télécharger à nouveau',
       refreshing: 'Téléchargement…',
-      refreshed: 'La liste a été téléchargée à nouveau et la grille mise à jour.',
+      refreshed: 'Les listes ont été téléchargées à nouveau et la source mise à jour.',
+      vodTitle: 'Films et séries',
+      movies: 'Films importés',
+      series: 'Séries importées',
+      titlesOf: (total: string, categories: string) =>
+        `sur ${total}, dans ${categories} catégories`,
+      episodes: 'Épisodes connus',
+      episodesHelp: 'Xtream : lus à l’ouverture',
+      vodShort: (movies: string, series: string) => `${movies} films et ${series} séries importés`,
       lastAttempt: 'Dernière tentative',
     },
     options: {
       title: 'Options d’import',
-      help: 'Enregistrer reconstruit la grille à partir de la liste déjà téléchargée, sans la télécharger à nouveau. Les noms, l’ordre, les déplacements, les numéros, les chaînes activées et la correspondance des guides sont gardés pour chaque chaîne encore présente.',
+      help: 'Enregistrer reconstruit la grille et les bibliothèques à partir des listes déjà téléchargées ; seul un type de titres tout juste activé est téléchargé. Les noms, l’ordre, les déplacements, les numéros, les chaînes activées et la correspondance des guides sont gardés pour chaque chaîne encore présente.',
       categoriesMode: 'Catégories',
       categoriesModeHelp:
         'Les groupes du fournisseur, ou une catégorie par pays trouvé dans les noms.',
@@ -1347,7 +1361,70 @@ const fr: Messages = {
         'Les chaînes qui apparaissent quand la liste est téléchargée à nouveau arrivent activées. Sinon, elles arrivent désactivées pour que vous les passiez en revue.',
       save: 'Enregistrer et reconstruire',
       saving: 'Reconstruction…',
-      saved: 'Options enregistrées. La grille a été reconstruite.',
+      saved: 'Options enregistrées. La source a été reconstruite.',
+    },
+    content: {
+      title: 'À importer',
+      help: 'Choisissez ce que cette source apporte aux applis Jellyfin. Vous pourrez le changer plus tard depuis la page de la source.',
+      liveTv: 'Chaînes de TV en direct',
+      liveTvHelp:
+        'Les chaînes en direct, avec leurs catégories, leurs numéros et leurs guides des programmes.',
+      movies: 'Films',
+      moviesHelp: 'Les films à la demande du fournisseur, dans des bibliothèques de films.',
+      series: 'Séries',
+      seriesHelp: 'Les séries à la demande du fournisseur, avec leurs saisons et leurs épisodes.',
+      none: 'Choisissez au moins un élément.',
+      liveTitle: 'TV en direct',
+      vodTitle: 'Films et séries',
+      liveOffWarning:
+        'Désactiver la TV en direct retire sa bibliothèque et ses guides (il faudra ajouter les guides à nouveau). Les catégories, les chaînes et vos modifications sont gardées pour le jour où vous la réactivez.',
+      liveOff: 'Les chaînes de TV en direct ne sont pas importées de cette source.',
+      liveOffAction: 'Le changer dans les options d’import',
+      liveGroup: 'TV en direct',
+      notImported: 'Non importées',
+    },
+    vod: {
+      libraries: 'Bibliothèques',
+      librariesHelp:
+        'Une bibliothèque Films et une bibliothèque Séries, la catégorie de chaque titre devenant son genre ; ou une bibliothèque par catégorie du fournisseur. Avec beaucoup de catégories, cela fait beaucoup de bibliothèques : vous choisissez celles que montrent les applis Jellyfin dans Bibliothèques.',
+      librariesType: 'Une par type : Films, Séries',
+      librariesCategory: 'Une par catégorie du fournisseur',
+      enrichment: 'Décrire les titres avec les addons de métadonnées',
+      enrichmentHelp:
+        'Quand un film ou une série a un identifiant TMDB ou IMDb, l’ouvrir demande à l’addon de métadonnées du serveur sa description, ses images et sa classification : une requête par titre, la première fois qu’il est ouvert, puis gardée. Sinon, les titres n’affichent que ce que donne le fournisseur, sans classification : les utilisateurs qui bloquent les titres non classés ne les voient pas.',
+    },
+    vodExclusions: {
+      title: 'Catégories à importer',
+      help: 'Les catégories décochées ne sont pas importées. Une catégorie ajoutée plus tard par le fournisseur est importée.',
+      by: 'Afficher',
+      byMovie: 'Films',
+      bySeries: 'Séries',
+      search: 'Chercher une catégorie',
+      includeAll: 'Tout inclure',
+      excludeAll: 'Tout exclure',
+      includeListed: 'Inclure celles affichées',
+      excludeListed: 'Exclure celles affichées',
+      keptInView: (kept: string, total: string) =>
+        `Dans cette vue, ${kept} titres importés sur ${total}`,
+      excludedKeys: (movies: number, series: number) =>
+        [
+          movies > 0
+            ? movies === 1
+              ? '1 catégorie de films'
+              : `${movies} catégories de films`
+            : '',
+          series > 0
+            ? series === 1
+              ? '1 catégorie de séries'
+              : `${series} catégories de séries`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' et ') + ' exclues',
+      titleCount: (count: number) => (count === 1 ? '1 titre' : `${count} titres`),
+      noCategory: 'Sans catégorie',
+      noMatch: 'Aucune catégorie ne correspond.',
+      tooMany: 'Au plus 5 000 catégories peuvent être exclues.',
     },
     exclusions: {
       title: 'Catégories à importer',

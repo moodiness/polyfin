@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -84,6 +85,9 @@ type Service struct {
 // stream requests addons answer over HTTP (see package iptv).
 type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
+	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, genre, search string) ([]stremio.Meta, error)
+	CatalogWindow(ctx context.Context, source accounts.ID, catalogType, catalogID, genre, search string, start, count int) ([]stremio.Meta, int, error)
+	Enrichment(ctx context.Context, source accounts.ID) bool
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
 	MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
@@ -196,10 +200,14 @@ type view struct {
 
 // limit is how many items one read of src's catalog fetches at most: the
 // channel limit for a live TV catalog, the catalog limit for any other.
-// Some catalogs are nearly endless.
+// Some catalogs are nearly endless; an IPTV source's movies and series
+// are a stored list, read whole.
 func (v view) limit(src source) int {
-	if LiveCatalog(src.catalog.Type) {
+	switch {
+	case LiveCatalog(src.catalog.Type):
 		return v.channelLimit
+	case src.addon.addon.IPTV():
+		return math.MaxInt32
 	}
 	return v.catalogLimit
 }
@@ -417,10 +425,16 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // page fetches the catalog page starting at skip, sharing concurrent and
 // recent requests.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
-	// An IPTV source's catalog is one page, which it remembers itself
-	// until its list changes.
+	// An IPTV source's live TV catalog is one page, which it remembers
+	// itself until its list changes; its movie and series catalogs read
+	// pages from its stored lists.
 	if src.addon.addon.IPTV() {
-		if skip > 0 || src.genre != "" || src.search != "" || src.date != "" || s.iptv == nil {
+		switch {
+		case s.iptv == nil || src.date != "":
+			return nil, nil
+		case !LiveCatalog(src.catalog.Type):
+			return s.iptv.Catalog(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, skip, src.genre, src.search)
+		case skip > 0 || src.genre != "" || src.search != "":
 			return nil, nil
 		}
 		return s.iptv.Channels(ctx, src.addon.addon.ID)
@@ -460,6 +474,12 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // wait for their rating: it reports that more may follow, which apps ask
 // for later, once the ratings are known.
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
+	// An IPTV source's movies and series are paged and counted from its
+	// stored lists, whole, but for a restricted user, whose listing leaves
+	// hidden titles out as it reads.
+	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.restricted() && src.date == "" {
+		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
+	}
 	var collected []stremio.Meta
 	seen := map[string]bool{}
 	received, size := 0, 0
@@ -810,6 +830,12 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 
 // meta returns an addon's complete description of a title, cached.
 func (s *Service) meta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
+	// An IPTV source describes its titles from its database, with details
+	// once a title was opened: it is not cached here, lest a listing's
+	// description hide the details.
+	if addon.addon.IPTV() {
+		return s.fetchMeta(ctx, addon, metaType, id)
+	}
 	key := metaKey{addon.addon.ID, metaType, id}
 	if meta, ok := s.metas.Get(key); ok {
 		return meta, nil
@@ -872,6 +898,9 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		}
 		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
+			if candidate.addon.IPTV() {
+				meta = s.enrich(ctx, v, candidate, meta, shared)
+			}
 			if candidate.shared {
 				s.learnTraits(ctx, r, meta)
 			}
@@ -1029,6 +1058,8 @@ func deref(id *accounts.ID) accounts.ID {
 
 // series returns a series item and its complete metadata, with videos.
 func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, error) {
+	// A series' seasons and episodes need its details: they open it.
+	ctx = iptv.Opening(ctx)
 	r, err := s.load(ctx, id)
 	if err != nil || r.Kind != KindSeries {
 		return Item{}, stremio.Meta{}, ErrNotFound

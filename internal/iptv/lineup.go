@@ -766,11 +766,30 @@ type PreviewCategory struct {
 	Excluded bool
 }
 
-// Preview kinds.
+// Preview kinds: the list's groups or countries, for the line-up's
+// exclusions; the categories of its movies or series, for VODExcluded.
 const (
 	PreviewGroups    = "group"
 	PreviewCountries = "country"
+	PreviewMovies    = "movie"
+	PreviewSeries    = "series"
 )
+
+// ValidPreview reports whether by is a preview kind.
+func ValidPreview(by string) bool {
+	return by == PreviewGroups || by == PreviewCountries || by == PreviewMovies || by == PreviewSeries
+}
+
+// previewPart is the part of a list a preview of kind by needs.
+func previewPart(by string) parts {
+	switch by {
+	case PreviewMovies:
+		return parts{movies: true}
+	case PreviewSeries:
+		return parts{series: true}
+	}
+	return livePart
+}
 
 // preview groups entries by group or by country, those whose name or key
 // holds q, in import order.
@@ -813,43 +832,94 @@ func preview(entries []storedEntry, by, q string, excluded []string) []PreviewCa
 	return result
 }
 
-// Preview groups a source's stored list by group or by country, without
-// downloading it. It reports how many entries the list has.
+// Preview groups a source's list by group or by country, from its stored
+// list, or the categories of its movies or series: from what is stored,
+// downloading only the list of an Xtream type not imported yet (kept for a
+// few minutes, as PreviewAccount keeps it). It reports how many entries,
+// or titles, there are.
 func (s *Service) Preview(ctx context.Context, scope addons.Scope, source accounts.ID, by, q string) (int, []PreviewCategory, error) {
-	if by != PreviewGroups && by != PreviewCountries {
+	if !ValidPreview(by) {
 		return 0, nil, ErrInvalidOptions
 	}
 	if err := s.owned(ctx, scope, source); err != nil {
-		return 0, nil, err
-	}
-	entries, err := loadEntries(ctx, s.db, source)
-	if err != nil {
 		return 0, nil, err
 	}
 	options, err := loadOptions(ctx, s.db, source)
 	if err != nil {
 		return 0, nil, err
 	}
+	if by == PreviewMovies || by == PreviewSeries {
+		titles, err := s.previewedTitles(ctx, source, by, options)
+		if err != nil {
+			return 0, nil, err
+		}
+		return len(titles), previewTitles(titles, by, q, options.VODExcluded), nil
+	}
+	entries, err := loadEntries(ctx, s.db, source)
+	if err != nil {
+		return 0, nil, err
+	}
+	entries = lineupEntries(entries, options)
 	return len(entries), preview(entries, by, q, options.Excluded), nil
 }
 
+// previewedTitles are a source's titles of a type, for a preview.
+func (s *Service) previewedTitles(ctx context.Context, source accounts.ID, typ string, o Options) ([]Title, error) {
+	var kind, address string
+	var confined bool
+	if err := s.db.QueryRow(ctx, `SELECT a.kind, a.manifest_url, a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false)
+		FROM addons a LEFT JOIN users u ON u.id = a.owner_id WHERE a.id = $1`, source).Scan(&kind, &address, &confined); err != nil {
+		return nil, err
+	}
+	on := typ == typeMovie && o.Movies || typ == typeSeries && o.Series
+	switch {
+	case kind != addons.KindXtream:
+		entryKind := KindMovie
+		if typ == typeSeries {
+			entryKind = KindEpisode
+		}
+		entries, err := loadVODEntries(ctx, s.db, source, entryKind)
+		if err != nil {
+			return nil, err
+		}
+		if typ == typeMovie {
+			return m3uMovies(entries), nil
+		}
+		titles, _ := m3uSeries(entries)
+		return titles, nil
+	case on:
+		return storedTitles(ctx, s.db, source, typ)
+	default:
+		list, err := s.fetchCached(ctx, accountOf(kind, address), confined, previewPart(typ), true)
+		if err != nil {
+			return nil, err
+		}
+		return titlesOf(list, typ), nil
+	}
+}
+
 // PreviewAccount downloads an account's list and groups it by group or by
-// country, storing nothing but, for a few minutes, the list in memory:
-// previewing it again or adding the source takes it.
+// country, or the categories of its movies or series, storing nothing but,
+// for a few minutes, the list in memory: previewing it again or adding the
+// source takes it.
 func (s *Service) PreviewAccount(ctx context.Context, account Account, by, q string, confined bool) (int, []PreviewCategory, error) {
-	if by != PreviewGroups && by != PreviewCountries {
+	if !ValidPreview(by) {
 		return 0, nil, ErrInvalidOptions
 	}
 	address, err := account.address()
 	if err != nil {
 		return 0, nil, err
 	}
-	fetched, err := s.fetchCached(ctx, accountOf(account.Kind, address), confined, true)
+	list, err := s.fetchCached(ctx, accountOf(account.Kind, address), confined, previewPart(by), true)
 	if err != nil {
 		return 0, nil, err
 	}
-	entries := make([]storedEntry, len(fetched))
-	for i, e := range fetched {
+	if by == PreviewMovies || by == PreviewSeries {
+		titles := titlesOf(list, by)
+		return len(titles), previewTitles(titles, by, q, nil), nil
+	}
+	entries := make([]storedEntry, len(list.entries))
+	for i, e := range list.entries {
 		entries[i] = storedEntry{Name: e.Name, Group: e.Group}
 	}
 	return len(entries), preview(entries, by, q, nil), nil

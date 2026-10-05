@@ -329,6 +329,17 @@ function LibraryForm({
                               {t.music.libraryHelp[musicContent.get(library.addonId) ?? 'music']}
                             </p>
                           )}
+                          {iptvAddons.has(library.addonId) && (
+                            <p className="mt-1 text-xs text-muted">
+                              {t.libraries.iptvVod}{' '}
+                              <Link
+                                to={lineupPath(scope, library.addonId, 'options')}
+                                className="font-medium text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5"
+                              >
+                                {t.libraries.iptvVodLink}
+                              </Link>
+                            </p>
+                          )}
                         </>
                       )}
                     </div>

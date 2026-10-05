@@ -570,6 +570,20 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 				}
 			}
 		}
+		// Over HLS, a version is cut into segments: on its keyframes, or,
+		// for a file without an index such as MPEG-TS, every few seconds,
+		// which only converted video allows (see hls.NewGridPlan). Such a
+		// version is not offered to a user who may not have it converted,
+		// rather than offered and failing.
+		if decision.HLS {
+			if plan, err := h.Playback.Plan(r.Context(), version); err == nil && plan.Grid() && decision.Video == nil {
+				converted := options
+				converted.ConvertVideo = true
+				if decision = playback.Decide(request.DeviceProfile, described, converted); !decision.HLS || decision.Video == nil {
+					return decided{}, false
+				}
+			}
+		}
 	} else {
 		if audio != nil {
 			decision.AudioStreamIndex = *audio

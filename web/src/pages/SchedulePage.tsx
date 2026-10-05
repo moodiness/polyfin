@@ -253,7 +253,11 @@ function Refreshes() {
         key: `iptv-${addon.id}`,
         name: addon.name,
         owner: addon.owner,
-        kind: text.channelList,
+        // A source importing movies or series downloads their lists on the same schedule.
+        kind:
+          addon.source?.options.movies || addon.source?.options.series
+            ? text.iptvLists
+            : text.channelList,
         last: addon.source?.fetchedAt ?? null,
         next: addon.source?.nextAt ?? null,
       })),

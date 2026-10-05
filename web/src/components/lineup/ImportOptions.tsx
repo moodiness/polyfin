@@ -1,16 +1,161 @@
 import { useId, useState } from 'react'
 import { useQuery, type QueryKey } from '@tanstack/react-query'
-import { excludedKeysLimit, type IptvOptions, type Preview } from '@/api'
+import { excludedKeysLimit, type IptvOptions, type Preview, type PreviewBy } from '@/api'
 import { icons } from '@/components/icons'
 import { Segmented, SelectField, smallField } from '@/components/lineup/shared'
 import { Checkbox, Loading, Notice } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import type { Messages } from '@/i18n/en'
 
-export type By = 'group' | 'country'
+/**
+ * Everything a source imports and how, in the order an administrator decides it: what to import,
+ * then the Live TV options and the movies and series options of what is on. `load` reads a preview.
+ */
+export function SourceOptions({
+  value,
+  onChange,
+  queryKey,
+  load,
+  saved,
+}: {
+  value: IptvOptions
+  onChange: (patch: Partial<IptvOptions>) => void
+  queryKey: QueryKey
+  load: (by: PreviewBy, signal: AbortSignal) => Promise<Preview>
+  /** The options saved, for a source already added: warns before Live TV is turned off. */
+  saved?: IptvOptions
+}) {
+  const { t } = useI18n()
+  const text = t.lineup.content
+  const vodTypes = (['movie', 'series'] as const).filter((type) =>
+    type === 'movie' ? value.movies : value.series,
+  )
+  return (
+    <div className="space-y-6">
+      <ContentFields value={value} onChange={onChange} />
+      {saved?.liveTv && !value.liveTv && <Notice kind="error">{text.liveOffWarning}</Notice>}
+      {value.liveTv && (
+        <section className="space-y-5 border-t border-line pt-5">
+          <h3 className="text-base font-semibold text-white">{text.liveTitle}</h3>
+          <ExclusionPicker
+            mode="live"
+            queryKey={queryKey}
+            load={load}
+            excluded={value.excluded}
+            onChange={(excluded) => onChange({ excluded })}
+          />
+          <OptionsFields value={value} onChange={onChange} />
+        </section>
+      )}
+      {vodTypes.length > 0 && (
+        <section className="space-y-5 border-t border-line pt-5">
+          <h3 className="text-base font-semibold text-white">{text.vodTitle}</h3>
+          <ExclusionPicker
+            mode="vod"
+            types={vodTypes}
+            queryKey={queryKey}
+            load={load}
+            excluded={value.vodExcluded}
+            onChange={(vodExcluded) => onChange({ vodExcluded })}
+          />
+          <VodFields value={value} onChange={onChange} />
+        </section>
+      )}
+    </div>
+  )
+}
 
-/** How the list becomes a line-up: the options besides the exclusions. */
-export function OptionsFields({
+/** Whether the options can be saved: something is imported, and within the server's limits. */
+export function optionsValid(value: IptvOptions): boolean {
+  return (
+    (value.liveTv || value.movies || value.series) &&
+    value.excluded.length <= excludedKeysLimit &&
+    value.vodExcluded.length <= excludedKeysLimit
+  )
+}
+
+/** What a source imports: its live channels, its movies, its series. */
+function ContentFields({
+  value,
+  onChange,
+}: {
+  value: IptvOptions
+  onChange: (patch: Partial<IptvOptions>) => void
+}) {
+  const { t } = useI18n()
+  const text = t.lineup.content
+  const noneId = useId()
+  const none = !value.liveTv && !value.movies && !value.series
+  return (
+    <fieldset className="space-y-3" aria-describedby={none ? noneId : undefined}>
+      <legend className="text-sm font-medium text-zinc-200">{text.title}</legend>
+      <p className="text-xs text-muted">{text.help}</p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Checkbox
+          label={text.liveTv}
+          help={text.liveTvHelp}
+          checked={value.liveTv}
+          onChange={(liveTv) => onChange({ liveTv })}
+        />
+        <Checkbox
+          label={text.movies}
+          help={text.moviesHelp}
+          checked={value.movies}
+          onChange={(movies) => onChange({ movies })}
+        />
+        <Checkbox
+          label={text.series}
+          help={text.seriesHelp}
+          checked={value.series}
+          onChange={(series) => onChange({ series })}
+        />
+      </div>
+      {none && (
+        <p id={noneId} role="alert" className="text-sm text-rose-300">
+          {text.none}
+        </p>
+      )}
+    </fieldset>
+  )
+}
+
+/** How movies and series become libraries, and whether they are described by metadata addons. */
+function VodFields({
+  value,
+  onChange,
+}: {
+  value: IptvOptions
+  onChange: (patch: Partial<IptvOptions>) => void
+}) {
+  const { t } = useI18n()
+  const text = t.lineup.vod
+  return (
+    <div className="grid gap-5 md:grid-cols-2">
+      <SelectField
+        label={text.libraries}
+        hint={text.librariesHelp}
+        value={value.vodLibraries}
+        options={[
+          { value: 'type', label: text.librariesType },
+          { value: 'category', label: text.librariesCategory },
+        ]}
+        onChange={(vodLibraries) => onChange({ vodLibraries })}
+      />
+      <div className="md:pt-6">
+        <Checkbox
+          label={text.enrichment}
+          help={text.enrichmentHelp}
+          checked={value.enrichment}
+          onChange={(enrichment) => onChange({ enrichment })}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** How the live list becomes a line-up: the options besides the exclusions. */
+function OptionsFields({
   value,
   onChange,
 }: {
@@ -64,23 +209,40 @@ export function OptionsFields({
 }
 
 /**
- * The categories of a list, by group or by country, each ticked when its entries are imported. The
- * preview is read once per view and filtered here: a new account's list is downloaded for it.
+ * The categories of a list, each ticked when its entries are imported: live entries by group or by
+ * country, or the titles of each VOD type. The preview is read once per view and filtered here: a new
+ * account's list is downloaded for it.
  */
-export function ExclusionPicker({
+function ExclusionPicker({
+  mode,
+  types = [],
   queryKey,
   load,
   excluded,
   onChange,
 }: {
+  mode: 'live' | 'vod'
+  /** The VOD types imported, whose categories are shown. */
+  types?: readonly ('movie' | 'series')[]
   queryKey: QueryKey
-  load: (by: By, signal: AbortSignal) => Promise<Preview>
+  load: (by: PreviewBy, signal: AbortSignal) => Promise<Preview>
   excluded: string[]
   onChange: (excluded: string[]) => void
 }) {
   const { language, t } = useI18n()
-  const text = t.lineup.exclusions
-  const [by, setBy] = useState<By>('group')
+  const live = t.lineup.exclusions
+  const vod = t.lineup.vodExclusions
+  const text = mode === 'live' ? live : vod
+  const views: { value: PreviewBy; label: string }[] =
+    mode === 'live'
+      ? [
+          { value: 'group', label: live.byGroup },
+          { value: 'country', label: live.byCountry },
+        ]
+      : types.map((type) => ({ value: type, label: type === 'movie' ? vod.byMovie : vod.bySeries }))
+  const [chosen, setBy] = useState<PreviewBy>(views[0].value)
+  // A type turned off leaves its view: the first one left is shown.
+  const by = views.some((view) => view.value === chosen) ? chosen : views[0].value
   const [search, setSearch] = useState('')
   const searchId = useId()
   const preview = useQuery({
@@ -104,8 +266,16 @@ export function ExclusionPicker({
             c.key.toLocaleLowerCase(language).includes(needle),
         )
   const kept = categories.reduce((sum, c) => sum + (set.has(c.key) ? 0 : c.channels), 0)
-  const groups = excluded.filter((key) => key.startsWith('g:')).length
-  const countries = excluded.filter((key) => key.startsWith('c:')).length
+  // Keys left out, of each kind: groups and countries, or movie and series categories.
+  const [first, second] = (mode === 'live' ? ['g:', 'c:'] : ['movie:', 'series:']).map(
+    (prefix) => excluded.filter((key) => key.startsWith(prefix)).length,
+  )
+  const summary =
+    first + second === 0
+      ? ''
+      : mode === 'live'
+        ? live.excludedKeys(first, second)
+        : vod.excludedKeys(first, second)
 
   function apply(keys: string[], exclude: boolean) {
     const next = new Set(excluded)
@@ -121,15 +291,9 @@ export function ExclusionPicker({
       <legend className="text-sm font-medium text-zinc-200">{text.title}</legend>
       <p className="text-xs text-muted">{text.help}</p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <Segmented
-          label={text.by}
-          value={by}
-          options={[
-            { value: 'group', label: text.byGroup },
-            { value: 'country', label: text.byCountry },
-          ]}
-          onChange={setBy}
-        />
+        {views.length > 1 && (
+          <Segmented label={text.by} value={by} options={views} onChange={setBy} />
+        )}
         <div className="relative flex-1">
           <label htmlFor={searchId} className="mb-1.5 block text-xs font-medium text-muted">
             {text.search}
@@ -154,7 +318,7 @@ export function ExclusionPicker({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p aria-live="polite" className="text-xs text-muted tabular-nums">
               {text.keptInView(number(kept), number(preview.data.total))}
-              {(groups > 0 || countries > 0) && ` · ${text.excludedKeys(groups, countries)}`}
+              {summary !== '' && ` · ${summary}`}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -203,10 +367,12 @@ export function ExclusionPicker({
                       className="size-4 shrink-0 accent-fin-3"
                     />
                     <span className="min-w-0 flex-1 truncate text-zinc-100">
-                      {categoryName(category.key, category.name, text, regionNames)}
+                      {categoryName(category.key, category.name, t, regionNames)}
                     </span>
                     <span className="shrink-0 text-xs text-muted tabular-nums">
-                      {text.channelCount(category.channels)}
+                      {mode === 'live'
+                        ? live.channelCount(category.channels)
+                        : vod.titleCount(category.channels)}
                     </span>
                   </label>
                 </li>
@@ -219,15 +385,16 @@ export function ExclusionPicker({
   )
 }
 
-/** The name a preview category is shown under: entries without group, countries by name. */
+/** The name a preview category is shown under: entries without category, countries by name. */
 function categoryName(
   key: string,
   name: string,
-  text: { noGroup: string; otherCountries: string },
+  t: Messages,
   regionNames: Intl.DisplayNames,
 ): string {
-  if (key === 'g:') return text.noGroup
-  if (key === 'c:OTHER') return text.otherCountries
+  if (key === 'g:') return t.lineup.exclusions.noGroup
+  if (key === 'c:OTHER') return t.lineup.exclusions.otherCountries
+  if (key === 'movie:' || key === 'series:') return t.lineup.vodExclusions.noCategory
   if (key.startsWith('c:')) {
     const code = key.slice(2)
     try {

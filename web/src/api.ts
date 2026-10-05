@@ -428,6 +428,8 @@ export type IptvSource = {
   channels: number
   options: IptvOptions
   lineup: LineupCounts
+  /** The movies and series of the provider's lists; zeros while neither is imported. */
+  vod: VodCounts
   checkedAt: string | null
   fetchedAt: string | null
   nextAt: string | null
@@ -447,6 +449,29 @@ export type IptvOptions = {
   newChannels: boolean
   /** A channel without a fixed number takes the provider's number, or its place. */
   numbering: 'provider' | 'sequential'
+  /** What is imported: the live channels, the movies, the series; at least one. */
+  liveTv: boolean
+  movies: boolean
+  series: boolean
+  /** VOD preview keys (`movie:<category>`, `series:<category>`) whose titles are not imported. */
+  vodExcluded: string[]
+  /** One library per type, or one per provider category. */
+  vodLibraries: 'type' | 'category'
+  /** Whether titles with a TMDB or IMDb id are described by the server's metadata addons. */
+  enrichment: boolean
+}
+
+export type VodCounts = {
+  /** Titles in the provider's lists, before exclusions. */
+  movies: number
+  series: number
+  /** Episodes known: for Xtream, those of the series opened so far. */
+  episodes: number
+  /** Titles imported: their type on, their category not left out. */
+  shownMovies: number
+  shownSeries: number
+  movieCategories: number
+  seriesCategories: number
 }
 
 export const defaultIptvOptions: IptvOptions = {
@@ -455,6 +480,12 @@ export const defaultIptvOptions: IptvOptions = {
   excluded: [],
   newChannels: true,
   numbering: 'provider',
+  liveTv: true,
+  movies: false,
+  series: false,
+  vodExcluded: [],
+  vodLibraries: 'type',
+  enrichment: true,
 }
 
 /** The limits the server accepts for IptvOptions.excluded. */
@@ -471,7 +502,10 @@ export type LineupCounts = {
   unmapped: number
 }
 
-/** A category of a source's list, before import: a group or a country. */
+/** What a preview counts: live entries by group or country, or the titles of a VOD type. */
+export type PreviewBy = 'group' | 'country' | 'movie' | 'series'
+
+/** A category of a source's list, before import: a group, a country, or a VOD category. */
 export type PreviewCategory = { key: string; name: string; channels: number; excluded: boolean }
 
 export type Preview = { total: number; categories: PreviewCategory[] }
@@ -899,17 +933,12 @@ const sourcePath = (scope: Scope, id: string) => `${scopePath(scope)}/iptv/${seg
 export const previewNewSource = (
   scope: Scope,
   account: IptvAccount,
-  by: 'group' | 'country',
+  by: PreviewBy,
   signal?: AbortSignal,
 ) => request<Preview>('POST', `${scopePath(scope)}/iptv/preview`, { ...account, by, q: '' }, signal)
 
 /** Counts a source's categories from its stored list; `excluded` follows its options. */
-export const previewSource = (
-  scope: Scope,
-  id: string,
-  by: 'group' | 'country',
-  signal?: AbortSignal,
-) =>
+export const previewSource = (scope: Scope, id: string, by: PreviewBy, signal?: AbortSignal) =>
   request<Preview>('GET', `${sourcePath(scope, id)}/preview?${params({ by })}`, undefined, signal)
 
 export const fetchLineupCategories = (scope: Scope, id: string, signal?: AbortSignal) =>

@@ -48,14 +48,32 @@ type sourceJSON struct {
 	Error     string      `json:"error"`
 	Options   optionsJSON `json:"options"`
 	Lineup    lineupJSON  `json:"lineup"`
+	VOD       vodJSON     `json:"vod"`
 }
 
 type optionsJSON struct {
-	Categories  string   `json:"categories"`
-	Channels    string   `json:"channels"`
-	Excluded    []string `json:"excluded"`
-	NewChannels bool     `json:"newChannels"`
-	Numbering   string   `json:"numbering"`
+	Categories   string   `json:"categories"`
+	Channels     string   `json:"channels"`
+	Excluded     []string `json:"excluded"`
+	NewChannels  bool     `json:"newChannels"`
+	Numbering    string   `json:"numbering"`
+	LiveTv       bool     `json:"liveTv"`
+	Movies       bool     `json:"movies"`
+	Series       bool     `json:"series"`
+	VODExcluded  []string `json:"vodExcluded"`
+	VODLibraries string   `json:"vodLibraries"`
+	Enrichment   bool     `json:"enrichment"`
+}
+
+// vodJSON counts an IPTV source's movies and series (see iptv.VODCounts).
+type vodJSON struct {
+	Movies           int `json:"movies"`
+	Series           int `json:"series"`
+	Episodes         int `json:"episodes"`
+	ShownMovies      int `json:"shownMovies"`
+	ShownSeries      int `json:"shownSeries"`
+	MovieCategories  int `json:"movieCategories"`
+	SeriesCategories int `json:"seriesCategories"`
 }
 
 type lineupJSON struct {
@@ -111,12 +129,14 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 	if err != nil {
 		return addonJSON{}, err
 	}
-	o, n := source.Options, source.Lineup
+	o, n, vod := source.Options, source.Lineup, source.VOD
 	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt,
 		NextAt: source.NextAt, Error: source.Error,
-		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering},
+		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering,
+			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment},
 		Lineup: lineupJSON{Categories: n.Categories, EnabledCategories: n.EnabledCategories, Channels: n.Channels, EnabledChannels: n.EnabledChannels,
-			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped}}
+			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped},
+		VOD: vodJSON(vod)}
 	return result, nil
 }
 

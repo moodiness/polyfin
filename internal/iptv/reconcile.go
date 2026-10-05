@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,11 +30,27 @@ func randomKey() string {
 	return hex.EncodeToString(b[:])
 }
 
+// optionColumns are the columns of iptv_sources that store Options, in the
+// order of Options.fields.
+const optionColumns = "category_mode, channel_mode, excluded, new_channels, numbering, live_tv, movies, series, vod_excluded, vod_libraries, enrichment"
+
+// fields are pointers to the options' fields, in the order of
+// optionColumns.
+func (o *Options) fields() []any {
+	return []any{&o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering, &o.LiveTv, &o.Movies, &o.Series, &o.VODExcluded,
+		&o.VODLibraries, &o.Enrichment}
+}
+
+// values are the options' values, in the order of optionColumns.
+func (o Options) values() []any {
+	return []any{o.Categories, o.Channels, o.Excluded, o.NewChannels, o.Numbering, o.LiveTv, o.Movies, o.Series, o.VODExcluded, o.VODLibraries,
+		o.Enrichment}
+}
+
 // loadOptions reads a source's import options.
 func loadOptions(ctx context.Context, db queryer, source accounts.ID) (Options, error) {
 	var o Options
-	err := db.QueryRow(ctx, "SELECT category_mode, channel_mode, excluded, new_channels, numbering FROM iptv_sources WHERE addon_id = $1", source).
-		Scan(&o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering)
+	err := db.QueryRow(ctx, "SELECT "+optionColumns+" FROM iptv_sources WHERE addon_id = $1", source).Scan(o.fields()...)
 	return o, err
 }
 
@@ -44,14 +61,14 @@ type queryer interface {
 
 // loadEntries reads a source's stored list in order.
 func loadEntries(ctx context.Context, db queryer, source accounts.ID) ([]storedEntry, error) {
-	rows, err := db.Query(ctx, `SELECT key, name, logo, group_title, guide_id, coalesce(number, 0) FROM iptv_entries
+	rows, err := db.Query(ctx, `SELECT key, name, logo, group_title, guide_id, coalesce(number, 0), kind FROM iptv_entries
 		WHERE addon_id = $1 ORDER BY position`, source)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (storedEntry, error) {
 		var e storedEntry
-		err := row.Scan(&e.Key, &e.Name, &e.Logo, &e.Group, &e.GuideID, &e.Number)
+		err := row.Scan(&e.Key, &e.Name, &e.Logo, &e.Group, &e.GuideID, &e.Number, &e.Kind)
 		return e, err
 	})
 }
@@ -61,26 +78,61 @@ type existingChannel struct {
 	name    *string
 }
 
-// reconcile makes a source's line-up follow its stored list and options,
-// in tx, keeping the administrator's edits (see the package's line-up
-// rules): provider categories by key, channels by key or, failing that,
-// by any of their former streams, streams by entry. Rows the list no
-// longer derives are deleted, with the guide mappings of their channels.
+// reconcile makes a source follow its stored lists and options, in tx:
+// its line-up while it imports live channels, then its titles and its
+// catalogs.
 func reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time) error {
-	var first bool
-	var included []string
-	if err := tx.QueryRow(ctx, "SELECT lineup_at IS NULL, included_groups FROM iptv_sources WHERE addon_id = $1 FOR UPDATE", source).
-		Scan(&first, &included); err != nil {
+	var kind, name string
+	if err := tx.QueryRow(ctx, "SELECT kind, manifest->>'name' FROM addons WHERE id = $1", source).Scan(&kind, &name); err != nil {
 		return err
 	}
 	options, err := loadOptions(ctx, tx, source)
 	if err != nil {
 		return err
 	}
+	// While live channels are not imported, the line-up keeps its edits
+	// for when they are again.
+	if options.LiveTv {
+		if err := reconcileLineup(ctx, tx, source, at, options); err != nil {
+			return err
+		}
+	} else if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET lineup_at = $2, included_groups = NULL WHERE addon_id = $1", source, at); err != nil {
+		return err
+	}
+	if err := reconcileVOD(ctx, tx, source, kind, options); err != nil {
+		return err
+	}
+	return syncManifest(ctx, tx, source, kind, name, options)
+}
+
+// lineupEntries are the entries that become channels: live ones, and the
+// movies and episodes of an M3U playlist while their type is not imported,
+// as before movies and series; at most maxChannels.
+func lineupEntries(entries []storedEntry, o Options) []storedEntry {
+	kept := slices.DeleteFunc(entries, func(e storedEntry) bool {
+		return e.Kind == KindMovie && o.Movies || e.Kind == KindEpisode && o.Series
+	})
+	return kept[:min(len(kept), maxChannels)]
+}
+
+// reconcileLineup makes a source's line-up follow its stored list and
+// options, in tx, keeping the administrator's edits (see the package's
+// line-up rules): provider categories by key, channels by key or, failing
+// that, by any of their former streams, streams by entry. Rows the list
+// no longer derives are deleted, with the guide mappings of their
+// channels.
+func reconcileLineup(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time, options Options) error {
+	var first bool
+	var included []string
+	if err := tx.QueryRow(ctx, "SELECT lineup_at IS NULL, included_groups FROM iptv_sources WHERE addon_id = $1 FOR UPDATE", source).
+		Scan(&first, &included); err != nil {
+		return err
+	}
 	entries, err := loadEntries(ctx, tx, source)
 	if err != nil {
 		return err
 	}
+	entries = lineupEntries(entries, options)
 	categories, channels := derive(entries, options)
 
 	// Categories: new ones come last, enabled, but for the groups the

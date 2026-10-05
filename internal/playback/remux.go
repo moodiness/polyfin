@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -45,7 +46,9 @@ type Remux struct {
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
-// index on first use.
+// index on first use. An MPEG-TS file, which has no index, is cut every
+// few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
+// Jellyfin plays such files, with FFmpeg reading it from the time asked.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	analysis, err := s.Analyze(ctx, version)
 	if err != nil {
@@ -55,10 +58,18 @@ func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, 
 		return hls.Plan{}, ErrNotRemuxable
 	}
 	times, err := s.keyframes(ctx, version, analysis)
+	if errors.Is(err, container.ErrNoIndex) && transportStream(analysis) {
+		return hls.NewGridPlan(analysis.Duration), nil
+	}
 	if err != nil {
 		return hls.Plan{}, err
 	}
 	return hls.NewPlan(times, analysis.Duration), nil
+}
+
+// transportStream reports whether an analysis is of an MPEG-TS file.
+func transportStream(analysis media.Analysis) bool {
+	return slices.Contains(strings.Split(analysis.Format, ","), "mpegts")
 }
 
 // keyframes returns a version's keyframe times: remembered, saved, or read
@@ -358,6 +369,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if err != nil {
 			return hls.Remux{}, nil, err
 		}
+		if plan.Grid() && remux.ConvertVideo == nil {
+			return hls.Remux{}, nil, fmt.Errorf("%w: its video can only be cut converted", ErrNotRemuxable)
+		}
 		analysis, err := s.Analyze(ctx, remux.Version)
 		if err != nil {
 			return hls.Remux{}, nil, err
@@ -378,6 +392,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		}
 		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
 			Subtitles: streams, Extracted: x}
+		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
+			r.ADTS = true
+		}
 		remux.convert(&r, video, TuningOf(s.settings()))
 		return r, release, nil
 	}

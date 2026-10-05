@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query'
 import {
   addIptvSource,
   defaultIptvOptions,
-  excludedKeysLimit,
   previewNewSource,
   queryClient,
   queryKeys,
@@ -16,7 +15,7 @@ import {
   type IptvSourcePatch,
   type Scope,
 } from '@/api'
-import { ExclusionPicker, OptionsFields } from '@/components/lineup/ImportOptions'
+import { optionsValid, SourceOptions } from '@/components/lineup/ImportOptions'
 import {
   buttonPrimary,
   buttonSecondary,
@@ -27,6 +26,7 @@ import {
 } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import type { Messages } from '@/i18n/en'
 import { lineupPath } from '@/components/lineup/common'
 import { fieldClass } from '@/components/lineup/shared'
 
@@ -105,7 +105,7 @@ const emptyAccount = { url: '', server: '', username: '', password: '' }
  * account, with its guide), then which categories to import and how, from a preview of its list.
  */
 export function IptvAddForm({ scope }: { scope: Scope }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const kindId = useId()
   const [step, setStep] = useState<'account' | 'categories'>('account')
   const [name, setName] = useState('')
@@ -157,7 +157,7 @@ export function IptvAddForm({ scope }: { scope: Scope }) {
     mutation.reset()
     change()
     setPreviewOf((n) => n + 1)
-    setOptions((current) => ({ ...current, excluded: [] }))
+    setOptions((current) => ({ ...current, excluded: [], vodExcluded: [] }))
   }
 
   return (
@@ -236,9 +236,12 @@ export function IptvAddForm({ scope }: { scope: Scope }) {
               spellCheck={false}
             />
           )}
-          {mutation.isSuccess && (
+          {mutation.isSuccess && mutation.data.source !== null && (
             <Notice kind="success">
-              {t.iptv.added(mutation.data.name, mutation.data.source?.lineup.channels ?? 0)}
+              {t.lineup.add.added(
+                mutation.data.name,
+                addedParts(t, language, mutation.data.source),
+              )}
             </Notice>
           )}
           <button
@@ -254,22 +257,21 @@ export function IptvAddForm({ scope }: { scope: Scope }) {
         </form>
       ) : (
         <div className="space-y-5">
-          <ExclusionPicker
+          <SourceOptions
+            value={options}
+            onChange={(patch) => {
+              mutation.reset()
+              setOptions((current) => ({ ...current, ...patch }))
+            }}
             queryKey={['iptv-preview', scope, previewOf]}
             load={(by, signal) => previewNewSource(scope, accountJSON, by, signal)}
-            excluded={options.excluded}
-            onChange={(excluded) => setOptions((current) => ({ ...current, excluded }))}
-          />
-          <OptionsFields
-            value={options}
-            onChange={(patch) => setOptions((current) => ({ ...current, ...patch }))}
           />
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className={buttonPrimary}
-              disabled={mutation.isPending || options.excluded.length > excludedKeysLimit}
+              disabled={mutation.isPending || !optionsValid(options)}
               onClick={() => mutation.mutate()}
             >
               {mutation.isPending ? t.lineup.add.importing : t.lineup.add.import}
@@ -289,7 +291,18 @@ export function IptvAddForm({ scope }: { scope: Scope }) {
   )
 }
 
-/** How a source's list was fetched and what its line-up shows, as rows of the addon's list. */
+/** What a source just added brings: its channels, movies and series, as imported. */
+function addedParts(t: Messages, language: string, source: IptvSource): string[] {
+  const text = t.lineup.add
+  const number = (n: number) => n.toLocaleString(language)
+  return [
+    source.options.liveTv ? text.channels(number(source.lineup.channels)) : '',
+    source.options.movies ? text.movies(number(source.vod.shownMovies)) : '',
+    source.options.series ? text.series(number(source.vod.shownSeries)) : '',
+  ].filter(Boolean)
+}
+
+/** How a source's lists were fetched and what it imports, as rows of the addon's list. */
 export function IptvSourceDetails({
   scope,
   id,
@@ -305,10 +318,12 @@ export function IptvSourceDetails({
     <>
       <dt className="text-muted">{t.iptv.channels}</dt>
       <dd className="text-zinc-200">
-        {t.lineup.summary.shownOf(
-          number(source.lineup.shownChannels),
-          number(source.lineup.channels),
-        )}
+        {source.options.liveTv
+          ? t.lineup.summary.shownOf(
+              number(source.lineup.shownChannels),
+              number(source.lineup.channels),
+            )
+          : t.lineup.content.notImported}
         {' · '}
         <Link
           to={lineupPath(scope, id)}
@@ -317,6 +332,17 @@ export function IptvSourceDetails({
           {t.lineup.open}
         </Link>
       </dd>
+      {(source.options.movies || source.options.series) && (
+        <>
+          <dt className="text-muted">{t.lineup.summary.vodTitle}</dt>
+          <dd className="text-zinc-200">
+            {t.lineup.summary.vodShort(
+              number(source.vod.shownMovies),
+              number(source.vod.shownSeries),
+            )}
+          </dd>
+        </>
+      )}
       <dt className="text-muted">{t.iptv.lastFetch}</dt>
       <dd className="text-zinc-200">
         {source.fetchedAt === null ? t.iptv.never : <RelativeTime iso={source.fetchedAt} />}

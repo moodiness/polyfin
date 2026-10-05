@@ -27,7 +27,27 @@ const (
 type Plan struct {
 	starts   []time.Duration
 	duration time.Duration
+	// grid marks a plan cut every targetDuration, not on keyframes (see
+	// NewGridPlan).
+	grid bool
 }
+
+// NewGridPlan cuts a version lasting duration, whose keyframes are not
+// known, such as an MPEG-TS file, every targetDuration. Only converted
+// video, whose keyframes the encoder places at each segment's start, can
+// be cut so: FFmpeg starts on an earlier keyframe, and what comes before
+// the segment is left out (see encoding.take).
+func NewGridPlan(duration time.Duration) Plan {
+	starts := []time.Duration{0}
+	for at := targetDuration; at <= duration-shortestTail; at += targetDuration {
+		starts = append(starts, at)
+	}
+	return Plan{starts: starts, duration: duration, grid: true}
+}
+
+// Grid reports whether the plan is cut every targetDuration rather than
+// on the version's keyframes: its segments need the video converted.
+func (p Plan) Grid() bool { return p.grid }
 
 // NewPlan cuts a version lasting duration into segments starting on its
 // keyframes, about targetDuration long. The first segment starts at zero,
