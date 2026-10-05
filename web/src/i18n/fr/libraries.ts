@@ -62,6 +62,29 @@ const libraries: typeof en = {
       channels_unreachable:
         'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
     },
+    loading: 'Chargement des bibliothèques…',
+    listLabel: 'Bibliothèques, dans l’ordre des applications',
+    columnCatalog: 'Catalogue',
+    shownEmptyTitle: 'Aucune bibliothèque pour l’instant',
+    shownEmptyHow:
+      'Ajoutez des catalogues depuis la liste ci-dessous : chacun devient une bibliothèque.',
+    noAddonsTitle: 'Aucun catalogue pour l’instant',
+    addSource: 'Ajouter une source',
+    defaultTitle: 'Comment les premières bibliothèques sont choisies',
+    availableLabel: (addon: string) => `Catalogues de ${addon}`,
+    music: {
+      library: {
+        music: 'Bibliothèque musicale',
+        audiobook: 'Bibliothèque de livres',
+        podcast: 'Bibliothèque musicale',
+      },
+      help: {
+        music: 'Ses éléments apparaissent dans la musique des applis Jellyfin.',
+        audiobook:
+          'Ses livres audio apparaissent dans une bibliothèque de livres des applis Jellyfin.',
+        podcast: 'Ses épisodes apparaissent dans la musique des applis Jellyfin.',
+      },
+    },
   },
 }
 
