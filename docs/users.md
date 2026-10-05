@@ -215,7 +215,7 @@ While at least one version fits the group or has an unknown height:
 
 When every version is taller, all are kept rather than none, the closest to the group first (720p before 1080p before 4K; versions of the same height keep their order). That way the least is read and decoded.
 
-- The version played is converted down to the group, or to **Maximum quality of converted video** when that is lower, and to 1080p at most, as every conversion is. See [Transcoding](transcoding.md).
+- The version played is converted down to the group, or to **Maximum quality of converted video** when that is lower, and to 1080p at most when the processor converts (4K on a GPU), as every conversion is. See [Transcoding](transcoding.md).
 - A version that fits plays as it is, or remuxed, as before.
 - A taller version is never sent at full size.
 - A user who may not have video converted (their **Can use conversion** permission, or the server's **Conversion** switch, off) is refused taller versions, as other conversions are refused (`NoCompatibleStream`).

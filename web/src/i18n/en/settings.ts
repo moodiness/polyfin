@@ -58,7 +58,7 @@ const settings = {
       'Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From 0 to 32; 0 by default.',
     maxConversionHeight: 'Maximum quality of converted video',
     maxConversionHeightHelp:
-      'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. Polyfin never converts above 1080p, so higher choices change nothing for now.',
+      'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p.',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
     conversion: {

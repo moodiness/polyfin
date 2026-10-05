@@ -11,7 +11,7 @@ Polyfin picks the lightest way an app can play a file:
 - **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
 - **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. See [Subtitles](subtitles.md).
 
-Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available. Otherwise it converts on the processor. For how apps choose between versions of a title, see [Playback](playback.md).
+Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
 
 ## Turning conversion and downloads on or off
 
@@ -62,7 +62,7 @@ The container runs as user 65532. When the render nodes in `/dev/dri` are not op
 
 When HDR video is converted to SDR, Polyfin tone maps it:
 
-- **On an NVIDIA GPU:** up to 1080p, Dolby Vision profile 5 included.
+- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included.
 - **Elsewhere:** on the processor, up to 720p, without Dolby Vision profile 5.
 
 You can turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).

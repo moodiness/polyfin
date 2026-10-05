@@ -62,7 +62,7 @@ const settings: typeof en = {
       'Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De 0 à 32 ; 0 par défaut.',
     maxConversionHeight: 'Qualité max des vidéos converties',
     maxConversionHeightHelp:
-      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. Polyfin ne convertit jamais au-delà de 1080p : les choix plus élevés ne changent rien pour l’instant.',
+      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p.',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
     conversion: {
