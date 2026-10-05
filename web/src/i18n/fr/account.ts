@@ -3,19 +3,23 @@ import type en from '../en/account'
 const account: typeof en = {
   account: {
     title: 'Mon compte',
-    description:
-      'Gérez votre mot de passe, les applications connectées avec votre compte et les services qui suivent ce que vous regardez.',
-    passwordTitle: 'Changer de mot de passe',
+    signedInAs: 'Connecté en tant que ',
+    sectionsLabel: 'Sections du compte',
+    sections: { tracking: 'Suivi', devices: 'Appareils', password: 'Mot de passe' },
+    devicesHelp:
+      'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',
     currentPassword: 'Mot de passe actuel',
     newPassword: 'Nouveau mot de passe',
     confirmPassword: 'Confirmer le nouveau mot de passe',
+    changePassword: 'Changer le mot de passe',
+    changingPassword: 'Modification…',
     passwordChanged: 'Votre mot de passe a été modifié.',
-    devicesTitle: 'Mes appareils',
     tracking: {
       title: 'Suivi',
       description:
         'Connectez les services qui gardent la trace de ce que vous regardez. Polyfin indique à chaque service connecté les films et les épisodes que vous regardez dans vos applications Jellyfin.',
+      loading: 'Chargement des services de suivi…',
       status: {
         connected: 'Connecté',
         notConnected: 'Non connecté',
@@ -47,21 +51,26 @@ const account: typeof en = {
       codeLabel: 'Code à saisir',
       openSite: (site: string) => `Ouvrir ${site}`,
       waiting: 'Cette page se met à jour toute seule une fois le code saisi.',
-      expires: 'Le code expire ',
+      expires: (when: string) => `Le code expire ${when}.`,
       codeEnded:
         'Le code a expiré ou a été refusé avant d’être saisi. Obtenez un nouveau code pour réessayer.',
-      account: 'Compte',
-      connectedAt: 'Connecté le',
-      lastSent: 'Dernier envoi',
-      nothingSent: 'Rien d’envoyé pour l’instant',
+      connectedAs: 'Connecté en tant que ',
+      connectedWithKey: 'Connecté avec votre clé d’API',
+      connected: 'Connecté',
+      connectedOn: (date: string) => ` le ${date}`,
+      lastSent: ', dernier envoi ',
+      nothingSent: ', rien d’envoyé pour l’instant',
+      connectedToast: (name: string) => `${name} est connecté.`,
+      disconnectedToast: (name: string) => `${name} est déconnecté.`,
       problemReconnect: (name: string) =>
         `${name} n’accepte plus cette connexion, donc plus rien ne lui est envoyé. Reconnectez-vous pour reprendre l’envoi de ce que vous regardez.`,
       problemUnreachable: (name: string) =>
         `${name} n’a pas pu être joint ces derniers temps. Polyfin réessaie, et envoie ce que vous avez regardé dès qu’il répond.`,
       disconnect: 'Déconnecter',
       disconnecting: 'Déconnexion…',
-      disconnectConfirm: (name: string) =>
-        `Déconnecter ${name} ? Polyfin cesse de lui indiquer ce que vous regardez. Ce qu’il a déjà reste sur ${name}.`,
+      disconnectTitle: (name: string) => `Déconnecter ${name} ?`,
+      disconnectBody: (name: string) =>
+        `Polyfin cesse de lui indiquer ce que vous regardez. Ce qu’il a déjà reste sur ${name}.`,
       invalidKey: (name: string) =>
         `${name} n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte ${name}.`,
       serviceUnreachable: (name: string) =>
