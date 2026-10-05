@@ -1020,13 +1020,13 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			return Item{}, err
 		}
 		if r.Kind == KindSeason {
-			for _, season := range seasons(series, meta, s.words(), s.now()) {
+			for _, season := range seasons(series, meta, seasonPosters(meta), s.words(), s.now()) {
 				if season.ID == id {
 					return season, nil
 				}
 			}
 		} else {
-			for _, episode := range episodes(series, meta, nil, s.words(), s.now()) {
+			for _, episode := range episodes(series, meta, seasonPosters(meta), nil, s.words(), s.now()) {
 				if episode.ID == id {
 					return episode, nil
 				}
@@ -1085,12 +1085,39 @@ func seasonNumbers(meta stremio.Meta) []int {
 	return numbers
 }
 
-// seasonPoster returns a season's own artwork, if the addon has one.
-func seasonPoster(meta stremio.Meta, number int) string {
+// seasonPosters maps a series' season numbers to the seasons' own artwork,
+// for those the addon gives one: by number, or in its list of season
+// posters, which names no season. Metadata addons build that list from
+// their database's seasons in order, specials (season 0) included or not,
+// one image or null each. It is read only when it matches the seasons the
+// videos name: as many, mapped in order of number, or one fewer while
+// there are specials, mapped to the seasons but those. Any other length
+// tells seasons the videos do not have, or lack ones they have, and which
+// would be which cannot be told: the list is then left unread rather than
+// show a season another's poster.
+func seasonPosters(meta stremio.Meta) map[int]string {
 	if meta.Extras == nil {
-		return ""
+		return nil
 	}
-	return meta.Extras.SeasonPosterByNumber[strconv.Itoa(number)]
+	posters := map[int]string{}
+	numbers := seasonNumbers(meta)
+	listed := meta.Extras.SeasonPosters
+	if specials := slices.Index(numbers, 0); len(listed) == len(numbers)-1 && specials >= 0 {
+		numbers = slices.Delete(numbers, specials, specials+1)
+	}
+	if len(listed) == len(numbers) {
+		for i, number := range numbers {
+			if listed[i] != "" {
+				posters[number] = listed[i]
+			}
+		}
+	}
+	for number, poster := range meta.Extras.SeasonPosterByNumber {
+		if n, err := strconv.Atoi(number); err == nil && poster != "" {
+			posters[n] = poster
+		}
+	}
+	return posters
 }
 
 // contents describes the episodes of a series, or of one season when
@@ -1119,7 +1146,9 @@ func contents(meta stremio.Meta, season *int, now time.Time) *Contents {
 	return c
 }
 
-func seasons(series Item, meta stremio.Meta, w words, now time.Time) []Item {
+// seasons lists a series' seasons; posters are their own artwork (see
+// seasonPosters).
+func seasons(series Item, meta stremio.Meta, posters map[int]string, w words, now time.Time) []Item {
 	var result []Item
 	for _, number := range seasonNumbers(meta) {
 		item := Item{
@@ -1137,7 +1166,7 @@ func seasons(series Item, meta stremio.Meta, w words, now time.Time) []Item {
 			StremioType:  meta.Type,
 			StremioID:    meta.ID,
 		}
-		if poster := seasonPoster(meta, number); poster != "" {
+		if poster := posters[number]; poster != "" {
 			item.Images.Primary = poster
 		}
 		for _, video := range meta.Videos {
@@ -1154,7 +1183,7 @@ func seasons(series Item, meta stremio.Meta, w words, now time.Time) []Item {
 	return result
 }
 
-func episodes(series Item, meta stremio.Meta, season *int, w words, now time.Time) []Item {
+func episodes(series Item, meta stremio.Meta, posters map[int]string, season *int, w words, now time.Time) []Item {
 	var result []Item
 	for _, video := range meta.Videos {
 		number := int(video.Season)
@@ -1175,7 +1204,7 @@ func episodes(series Item, meta stremio.Meta, season *int, w words, now time.Tim
 			SeriesPoster:      series.Images.Primary,
 			SeasonID:          itemID(seasonKey(meta.ID, number)),
 			SeasonName:        w.seasonName(number),
-			SeasonPoster:      seasonPoster(meta, number),
+			SeasonPoster:      posters[number],
 			IndexNumber:       video.EpisodeNumber(),
 			ParentIndexNumber: number,
 			Available:         released(video, now),
@@ -1209,11 +1238,12 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 	if err != nil {
 		return nil, err
 	}
-	result := seasons(series, meta, s.words(), s.now())
+	posters := seasonPosters(meta)
+	result := seasons(series, meta, posters, s.words(), s.now())
 	records := make([]record, 0, len(result))
 	for _, season := range result {
 		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason,
-			Parent: &series.ID, SeriesID: meta.ID, Season: season.IndexNumber})
+			Parent: &series.ID, SeriesID: meta.ID, Season: season.IndexNumber, Poster: posters[season.IndexNumber]})
 	}
 	return s.overridden(result), s.save(ctx, records)
 }
@@ -1240,11 +1270,12 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 			return nil, ErrSeasonNotFound
 		}
 	}
-	result := episodes(series, meta, season, s.words(), s.now())
+	posters := seasonPosters(meta)
+	result := episodes(series, meta, posters, season, s.words(), s.now())
 	records := make([]record, 0, len(result)+len(seasonNumbers(meta)))
 	for _, number := range seasonNumbers(meta) {
 		records = append(records, record{ID: itemID(seasonKey(meta.ID, number)), Key: seasonKey(meta.ID, number), Kind: KindSeason,
-			Parent: &series.ID, SeriesID: meta.ID, Season: number})
+			Parent: &series.ID, SeriesID: meta.ID, Season: number, Poster: posters[number]})
 	}
 	videos := make(map[string]stremio.Video, len(meta.Videos))
 	for _, video := range meta.Videos {
@@ -1435,10 +1466,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 				setImage(&images, imageType, url)
 			}
 		}
-		if full, ok := s.cachedMeta(series); ok && full.Extras != nil {
-			if poster := full.Extras.SeasonPosterByNumber[strconv.Itoa(r.Season)]; poster != "" {
-				images.Primary = poster
-			}
+		// The season's own artwork is read from its series' complete
+		// metadata while it is cached, else as its last listing recorded
+		// it: the image apps were given its tag for, without asking the
+		// addon again.
+		poster := r.Poster
+		if full, ok := s.cachedMeta(series); ok {
+			poster = seasonPosters(full)[r.Season]
+		}
+		if poster != "" {
+			images.Primary = poster
 		}
 		confined = series.Confined
 	}
