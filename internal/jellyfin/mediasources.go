@@ -124,24 +124,20 @@ func (p playable) externals() []playback.ExternalSubtitle {
 	return result
 }
 
-// ordered puts the version an item was opened as first; an item opened by
-// its own identifier keeps the addons' order.
-func (p playable) ordered(opened accounts.ID) []library.Version {
-	i := slices.IndexFunc(p.versions, func(v library.Version) bool { return v.ID == opened })
-	if i <= 0 {
-		return p.versions
-	}
-	versions := make([]library.Version, 0, len(p.versions))
-	versions = append(versions, p.versions[i])
-	versions = append(versions, p.versions[:i]...)
-	return append(versions, p.versions[i+1:]...)
+// openedIndex is the index, among versions, of the version an item opened
+// as opened stands for: the version of that identifier, else the first,
+// for the title's own identifier or a version no longer listed.
+func openedIndex(opened accounts.ID, versions []library.Version) int {
+	return max(slices.IndexFunc(versions, func(v library.Version) bool { return v.ID == opened }), 0)
 }
 
-// sourceID names a version as a media source. The first version takes the
-// identifier the item was opened with, as Jellyfin names a single version
-// after its item and apps look for the source carrying the item's id.
-func sourceID(opened accounts.ID, version library.Version, first bool) accounts.ID {
-	if first {
+// sourceID names a version as a media source: the version the item was
+// opened as (see openedIndex) carries the identifier it was opened with,
+// as Jellyfin names a single version after its item and apps look for the
+// source carrying the item's id; the others carry their own. A title
+// opened by its own identifier thus names its first version after itself.
+func sourceID(opened accounts.ID, version library.Version, stands bool) accounts.ID {
+	if stands {
 		return opened
 	}
 	return version.ID
@@ -149,12 +145,15 @@ func sourceID(opened accounts.ID, version library.Version, first bool) accounts.
 
 // mediaSources describes an item's versions for item details and listings,
 // where Jellyfin evaluates no device profile: every version is playable.
-// opened is the identifier the item was asked by.
+// opened is the identifier the item was asked by. The versions keep their
+// order whatever version the item was opened as: Jellyfin 12.1 puts the
+// source of a version opened as an item first, which jellyfin-web's version
+// menu, opening the version picked, shows as the list reordering itself.
 func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) []MediaSourceInfo {
-	versions := p.ordered(opened)
-	sources := make([]MediaSourceInfo, len(versions))
-	for i, version := range versions {
-		sources[i] = h.describedSource(r, p, version, sourceID(opened, version, i == 0))
+	at := openedIndex(opened, p.versions)
+	sources := make([]MediaSourceInfo, len(p.versions))
+	for i, version := range p.versions {
+		sources[i] = h.describedSource(r, p, version, sourceID(opened, version, i == at))
 	}
 	return sources
 }

@@ -26,9 +26,10 @@ func (h *Handler) lineupSources(r *http.Request, user accounts.User, item librar
 	}
 	versions = h.inGroup(r.Context(), user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 	sources := make([]MediaSourceInfo, 0, len(versions))
+	at := openedIndex(opened, versions)
 	for i, version := range versions {
 		source := channelPlaceholder(item)
-		source.Id, source.Name, source.ETag = sourceID(opened, version, i == 0).String(), version.Name, version.ID.String()
+		source.Id, source.Name, source.ETag = sourceID(opened, version, i == at).String(), version.Name, version.ID.String()
 		sources = append(sources, source)
 	}
 	return sources

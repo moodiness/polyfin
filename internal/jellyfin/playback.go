@@ -176,13 +176,13 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	// The chapters are those of the version playing, which the app may
 	// have picked among the item's.
 	if source, err := accounts.ParseID(playing.MediaSourceID); err == nil && source != playing.Item {
-		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).ordered(source))
+		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions, source)
 	}
 	dto.MediaSources, dto.HasSubtitles, dto.People, dto.RemoteTrailers = nil, nil, nil, nil
 	dto.CanDelete, dto.CanDownload, dto.LockData, dto.LockedFields, dto.Tags = nil, nil, nil, nil, nil
 	dto.Etag, dto.SortName, dto.PlayAccess, dto.DisplayPreferencesId = "", "", "", ""
 	dto.UserData = UserItemData{}
-	dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).ordered(playing.Item), playing.Item)
+	dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).versions, playing.Item)
 	info.NowPlayingItem = &dto
 }
 
@@ -317,18 +317,21 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	versions := p.ordered(opened)
+	versions := p.versions
+	at := openedIndex(opened, versions)
 	allowed := h.Accounts.Conversions(user)
 	settings := h.Accounts.Settings()
 
-	// The candidates: the version the app asked for, else every version.
-	// Of the latter, the first VersionAttempts may be analyzed now; the
-	// others are tried only when analyzed before, which costs nothing.
+	// The candidates: the version the app asked for, else every version,
+	// the one the item was opened as first (see openedIndex), then the
+	// others in order. Of the latter, the first VersionAttempts may be
+	// analyzed now; the others are tried only when analyzed before, which
+	// costs nothing.
 	candidates := make([]int, 0, len(versions))
 	if request.MediaSourceId != "" {
 		requested, _ := parseGUID(request.MediaSourceId)
 		for i, version := range versions {
-			if sourceID(opened, version, i == 0) == requested {
+			if sourceID(opened, version, i == at) == requested {
 				candidates = append(candidates, i)
 			}
 		}
@@ -336,9 +339,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
 			return
 		}
-	} else {
+	} else if len(versions) > 0 {
+		candidates = append(candidates, at)
 		for i := range versions {
-			candidates = append(candidates, i)
+			if i != at {
+				candidates = append(candidates, i)
+			}
 		}
 	}
 	// The first candidate that plays on the app is chosen. With
@@ -367,7 +373,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		permits := h.convertible(allowed, user, version)
-		d, ok := h.decide(r, p, i, version, sourceID(opened, version, i == 0), analysis, request, permits)
+		d, ok := h.decide(r, p, i, version, sourceID(opened, version, i == at), analysis, request, permits)
 		if !ok {
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
@@ -392,24 +398,42 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
-	sources := []MediaSourceInfo{h.decidedSource(r, p, *chosen, request, session)}
-	// An app that asks for no version gets every version, as from
-	// Jellyfin: some, such as Strand, list them for the user to pick.
-	// The one decided comes first, which apps play unless the user picks
-	// another; the others are described as item details describe them,
-	// and decided when an app asks for one. Those found unreadable just
-	// now are left out.
-	if request.MediaSourceId == "" {
-		for j, other := range versions {
-			if j != chosen.index && !unreadable[j] {
-				described := h.describedSource(r, p, other, sourceID(opened, other, j == 0))
-				// A version known to be above the user's limit, or taller
-				// than their quality group, is not offered as it is.
-				if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) || !user.FitsGroup(h.versionHeight(r.Context(), other)) {
-					described.SupportsDirectPlay, described.SupportsDirectStream = false, false
-				}
-				sources = append(sources, described)
+	chosenSource := h.decidedSource(r, p, *chosen, request, session)
+	if request.MediaSourceId != "" {
+		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{chosenSource}, PlaySessionId: session})
+		return
+	}
+	// An app that asks for no version gets the versions, as from Jellyfin:
+	// some, such as Strand, list them for the user to pick. They keep the
+	// order item details give them, which neither a pick nor a play
+	// changes. The candidates passed over before the one chosen, tried in
+	// vain or skipped, are left out, as are those found unreadable just
+	// now: for a title opened by its own identifier, the first source is
+	// then the one chosen, which apps play unless the user picks another.
+	// The one chosen is described as decided; the others as item details
+	// describe them, and decided when an app asks for one. Jellyfin 12.1
+	// lists every version and puts the source of a version opened as an
+	// item first; Polyfin never moves one.
+	passed := map[int]bool{}
+	for _, i := range candidates {
+		if i == chosen.index {
+			break
+		}
+		passed[i] = true
+	}
+	sources := make([]MediaSourceInfo, 0, len(versions))
+	for j, other := range versions {
+		switch {
+		case j == chosen.index:
+			sources = append(sources, chosenSource)
+		case !passed[j] && !unreadable[j]:
+			described := h.describedSource(r, p, other, sourceID(opened, other, j == at))
+			// A version known to be above the user's limit, or taller than
+			// their quality group, is not offered as it is.
+			if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) || !user.FitsGroup(h.versionHeight(r.Context(), other)) {
+				described.SupportsDirectPlay, described.SupportsDirectStream = false, false
 			}
+			sources = append(sources, described)
 		}
 	}
 	writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: sources, PlaySessionId: session})

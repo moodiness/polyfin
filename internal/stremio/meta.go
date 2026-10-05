@@ -70,6 +70,24 @@ func (n *Names) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Posters decodes a list of image URLs whose places matter: an element
+// that is not a string, such as null for an image missing, is kept as an
+// empty string. Any other value is left out rather than failing the title.
+type Posters []string
+
+func (p *Posters) UnmarshalJSON(data []byte) error {
+	*p = nil
+	var elements []json.RawMessage
+	if json.Unmarshal(data, &elements) != nil {
+		return nil
+	}
+	*p = make(Posters, len(elements))
+	for i, element := range elements {
+		_ = json.Unmarshal(element, &(*p)[i])
+	}
+	return nil
+}
+
 // Meta describes a title, as returned by catalogs (a preview) and by the
 // meta resource (complete).
 type Meta struct {
@@ -166,10 +184,13 @@ type CollectionSource struct {
 	Genre     string `json:"genre,omitempty"`
 }
 
-// Extras are details some metadata addons add.
+// Extras are details some metadata addons add. SeasonPosters holds a
+// series' season posters in the order of its seasons, without their
+// numbers (see library.seasonPosters).
 type Extras struct {
 	Cast                 []CastMember      `json:"cast,omitempty"`
 	SeasonPosterByNumber map[string]string `json:"seasonPosterByNumber,omitempty"`
+	SeasonPosters        Posters           `json:"seasonPosters,omitempty"`
 	// Certification is a title's age rating, the US one for AIOMetadata;
 	// CertificationLocal is that of the country of the addon's language,
 	// or the US one again when that country has none.

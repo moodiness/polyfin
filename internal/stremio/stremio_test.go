@@ -140,3 +140,33 @@ func TestLooselyTypedTitles(t *testing.T) {
 		t.Errorf("meta: %v %+v", err, meta)
 	}
 }
+
+// Season posters come in the order of the seasons, a missing one as null:
+// an element that is not an image keeps its place, so that the others stay
+// with their seasons.
+func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/meta/series/tt1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt1", "type": "series", "name": "Show",
+				"app_extras": {"seasonPosters": ["https://images.example/1.jpg", null, 7, "https://images.example/4.jpg"]}}}`))
+		case "/meta/series/tt2.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt2", "type": "series", "name": "Other",
+				"app_extras": {"seasonPosters": "https://images.example/1.jpg", "certification": "TV-14"}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer addon.Close()
+	client := NewClient("test")
+	meta, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt1", false)
+	if err != nil || meta.Extras == nil ||
+		!slices.Equal(meta.Extras.SeasonPosters, Posters{"https://images.example/1.jpg", "", "", "https://images.example/4.jpg"}) {
+		t.Errorf("posters: %v %+v", err, meta.Extras)
+	}
+	// Anything but a list is left out, and the rest read.
+	other, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt2", false)
+	if err != nil || other.Name != "Other" || other.Extras == nil || other.Extras.SeasonPosters != nil || other.Extras.Certification != "TV-14" {
+		t.Errorf("not a list: %v %+v", err, other.Extras)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 )
@@ -22,25 +23,27 @@ type ChapterInfo struct {
 }
 
 // setChapters fills the chapters of an item that asked for them with those
-// of the version it plays first: the version it was opened as, else the
-// addons' first. Polyfin reads chapters when it analyzes a version, on its
-// first play, so the chapters of a version never played are not known yet.
-// With chapters turned off in the settings, the item keeps the empty list
-// its caller set; analyses keep their chapters, which show again as soon as
-// they are turned back on. The chapters whose image was made carry its
-// tag.
-func (h *Handler) setChapters(ctx context.Context, dto *BaseItemDto, versions []library.Version) {
+// of the version it plays first: the version it was opened as (see
+// openedIndex), else the addons' first. Polyfin reads chapters when it
+// analyzes a version, on its first play, so the chapters of a version never
+// played are not known yet. With chapters turned off in the settings, the
+// item keeps the empty list its caller set; analyses keep their chapters,
+// which show again as soon as they are turned back on. The chapters whose
+// image was made carry its tag.
+func (h *Handler) setChapters(ctx context.Context, dto *BaseItemDto, versions []library.Version, opened accounts.ID) {
 	if dto.Chapters == nil || !h.Accounts.Settings().Chapters {
 		return
 	}
 	chapters := []ChapterInfo{}
+	var version library.Version
 	if len(versions) > 0 {
-		if analysis, ok := h.Playback.Analyzed(ctx, versions[0].ID); ok {
+		version = versions[openedIndex(opened, versions)]
+		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
 			chapters = chapterInfos(analysis.Chapters, h.Accounts.Settings().Language)
 		}
 	}
 	if len(chapters) > 0 && h.Thumbnails != nil {
-		images, err := h.Thumbnails.ChapterImages(ctx, versions[0].ID)
+		images, err := h.Thumbnails.ChapterImages(ctx, version.ID)
 		if err != nil && ctx.Err() == nil {
 			h.Logger.Warn("The chapter images of a version could not be listed", "error", err)
 		}

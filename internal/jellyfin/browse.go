@@ -128,16 +128,16 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		}
 	} else if dto.Chapters != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) && h.Accounts.Settings().Chapters {
 		// Only what is known: a listing never asks addons for streams.
-		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions)
+		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
 	}
 	if path := fields.has("Path"); (path || fields.has("CanDownload")) &&
 		(item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
 		// Only what is known, as MediaSources in the same listing: a listing
 		// never asks addons for streams.
-		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, path)
+		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID, path)
 	}
 	if fields.has("Trickplay") && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
-		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).ordered(item.ID), item.ID)
+		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
 	}
 	return dto
 }

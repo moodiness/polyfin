@@ -632,8 +632,9 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 	requested, asked := parseGUID(request.MediaSourceId)
 	allowed := h.Accounts.Conversions(user)
 	attempts, tries := 0, h.Accounts.Settings().VersionAttempts
+	at := openedIndex(opened, versions)
 	for i, version := range versions {
-		id := sourceID(opened, version, i == 0)
+		id := sourceID(opened, version, i == at)
 		if asked && id != requested || attempts >= tries {
 			continue
 		}

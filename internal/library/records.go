@@ -28,8 +28,11 @@ type record struct {
 	// Meta is the preview of a title or collection.
 	Meta *stremio.Meta `json:"meta,omitempty"`
 	// SeriesID is the Stremio ID of the series of a season or episode.
+	// Poster is a season's own artwork when it was last listed (see
+	// seasonPosters).
 	SeriesID string         `json:"seriesId,omitempty"`
 	Season   int            `json:"season,omitempty"`
+	Poster   string         `json:"poster,omitempty"`
 	Video    *stremio.Video `json:"video,omitempty"`
 	// Channel is the Stremio ID of a programme's channel; Number, a
 	// channel's number when it was last listed.
