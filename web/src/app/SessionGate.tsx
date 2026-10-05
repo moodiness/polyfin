@@ -2,9 +2,9 @@ import { HouseIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { fetchSession, fetchStatus, queryKeys } from '@/api'
-import StatusPanel from '@/components/StatusPanel'
 import LoginRoute from '@/features/auth/LoginRoute'
 import SetupRoute from '@/features/auth/SetupRoute'
+import { ServerStatus } from '@/features/home/ServerStatus'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { ButtonLink, InlineError, Spinner } from '@/ui'
@@ -43,7 +43,7 @@ export function SessionGate() {
   })
 
   if (status.data === undefined) {
-    return <PublicShell>{status.error === null ? <Loading /> : <StatusPanel />}</PublicShell>
+    return <PublicShell>{status.error === null ? <Loading /> : <ServerStatus />}</PublicShell>
   }
   if (setupRequired) {
     return (
