@@ -33,7 +33,7 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 - **Now playing**, updated every 3 seconds. For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes.
 - **To look at**: the problems Health found, with a link to it.
 - **Server state**: version, database, cache and graphics card.
-- **Recent activity**, the activity log, which you can filter by kind and search.
+- **Recent activity**, the activity log, which you can filter by kind and search. Its list scrolls in its own box and loads older events as you reach its end.
 
 ### Stopping a playback or sending a message
 

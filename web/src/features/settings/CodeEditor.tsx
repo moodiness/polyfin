@@ -10,7 +10,9 @@ const indent = '  '
 /**
  * A monospace text area for code, with line numbers beside it. Tab inserts spaces; after Escape,
  * Tab leaves the field as usual, so that the keyboard never gets stuck in it. Shows the size the
- * server counts, in bytes, against its limit, and the server's error under it.
+ * server counts, in bytes, against its limit, and the server's error under it. The box keeps the
+ * height of `rows` lines whatever the text's length (its handle resizes it) and scrolls inside,
+ * the line numbers following the text.
  */
 export default function CodeEditor({
   label,
@@ -18,7 +20,7 @@ export default function CodeEditor({
   value,
   onValue,
   maxBytes,
-  rows = 14,
+  rows = 19,
   error,
   children,
 }: {
@@ -38,8 +40,7 @@ export default function CodeEditor({
   const released = useRef(false)
   const bytes = useMemo(() => encoder.encode(value).length, [value])
   const lines = useMemo(() => {
-    let count = 1
-    for (const character of value) if (character === '\n') count++
+    const count = value.split('\n').length
     return Array.from({ length: count }, (_, index) => index + 1).join('\n')
   }, [value])
   const tooLarge = bytes > maxBytes
@@ -73,22 +74,25 @@ export default function CodeEditor({
       </p>
       {children}
       <div
+        // Line height 20px, 20px of padding, 12px for a horizontal scrollbar.
+        style={{ height: rows * 20 + 32 }}
         className={cx(
-          'flex overflow-hidden rounded-field border bg-s2 font-mono text-small leading-5 transition-colors duration-160 ease-nuit has-[textarea:focus-visible]:border-link',
+          'flex min-h-24 resize-y overflow-hidden rounded-field border bg-s2 font-mono text-small leading-5 transition-colors duration-160 ease-nuit has-[textarea:focus-visible]:border-link',
           error || tooLarge ? 'border-danger' : 'border-line-2',
         )}
       >
         <pre
           ref={gutter}
           aria-hidden="true"
-          className="figures m-0 shrink-0 overflow-hidden border-r border-line px-2 py-2.5 text-right text-ink-3 select-none"
+          // Its bottom padding outlasts the text area's horizontal scrollbar, so the last numbers
+          // can scroll as far as the last lines.
+          className="figures m-0 shrink-0 overflow-hidden border-r border-line px-2 pt-2.5 pb-8 text-right text-ink-3 select-none"
         >
           {lines}
         </pre>
         <textarea
           id={id}
           value={value}
-          rows={rows}
           wrap="off"
           spellCheck={false}
           autoCapitalize="off"
@@ -100,7 +104,7 @@ export default function CodeEditor({
           }}
           aria-describedby={`${id}-help ${id}-size${error ? ` ${id}-error` : ''}`}
           aria-invalid={tooLarge || error ? true : undefined}
-          className="block min-w-0 flex-1 resize-y bg-transparent px-3 py-2.5 text-ink outline-none"
+          className="block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2.5 text-ink outline-none scrollbar-thin"
         />
       </div>
       <p

@@ -20,7 +20,14 @@ import {
   type LiveSession,
   type StreamInfo,
 } from '@/api'
-import { errorMessage, formatBitrate, formatClock, formatSpan, relativeTime } from '@/format'
+import {
+  errorMessage,
+  formatBitrate,
+  formatClock,
+  formatEpisode,
+  formatSpan,
+  relativeTime,
+} from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
   Avatar,
@@ -179,7 +186,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
 
   const subtitle =
     item?.kind === 'episode'
-      ? `${live.episode(item.season, item.episode)}${item.seriesName ? ` · ${item.name}` : ''}`
+      ? `${formatEpisode(item.season, item.episode)}${item.seriesName ? ` · ${item.name}` : ''}`
       : item?.kind === 'movie'
         ? live.movie(item.year)
         : item && !isChannel && item.year > 0

@@ -40,7 +40,7 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 ## Music addons
 
-Eclipse music addons install like Stremio addons, with the **Music addon** tab of **Add a source**: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest address or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Music addon addresses are redacted like manifest addresses.
+Eclipse music addons install like Stremio addons, with the **Eclipse addon** tab of **Add a source**: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest address or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Eclipse addon addresses are redacted like manifest addresses. The sources list names their kind **Eclipse**, in its filter and on their badge, and **System › Health** marks their row with the same badge.
 
 ### Music addon settings
 

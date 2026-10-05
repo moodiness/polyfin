@@ -19,6 +19,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import {
+  Badge,
   Block,
   Button,
   EmptyState,
@@ -35,7 +36,6 @@ import {
   type StatusTone,
   RelativeTime,
 } from '@/ui'
-import { MusicBadge } from '@/features/sources/AddonSettings'
 import { lineupPath } from '@/features/iptv/lineup'
 import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
@@ -184,11 +184,9 @@ function Addons({ health, sources }: { health: Health; sources: Sources | undefi
     mutationFn: checkAddon,
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
   })
-  // Music addons' answers are recorded like the others': their row carries their badge.
-  const music = new Map(
-    (sources?.addons ?? [])
-      .filter((addon) => addon.music !== null)
-      .map((addon) => [addon.id, addon.music]),
+  // Eclipse addons' answers are recorded like the others': their row carries the kind's badge.
+  const eclipse = new Set(
+    (sources?.addons ?? []).filter((addon) => addon.music !== null).map((addon) => addon.id),
   )
 
   return (
@@ -206,7 +204,7 @@ function Addons({ health, sources }: { health: Health; sources: Sources | undefi
           <RowList aria-label={text.addonsTitle}>
             {health.addons.map((addon) => {
               const [tone, status] = addonTone(addon)
-              const musicOf = music.get(addon.id)
+              const isEclipse = eclipse.has(addon.id)
               const checking = check.isPending && check.variables === addon.id
               return (
                 <Row
@@ -216,7 +214,7 @@ function Addons({ health, sources }: { health: Health; sources: Sources | undefi
                   title={addon.name}
                   titleAside={
                     <span className="flex shrink-0 items-center gap-1.5">
-                      {musicOf && <MusicBadge music={musicOf} />}
+                      {isEclipse && <Badge tone="accent">{t.sources.tag.eclipse}</Badge>}
                       <OwnerChip owner={addon.owner} />
                     </span>
                   }

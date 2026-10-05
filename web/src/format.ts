@@ -82,6 +82,11 @@ export function formatBitrate(bitsPerSecond: number, language: string): string {
   return `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(bitsPerSecond / 1000)} kbps`
 }
 
+/** A season and an episode, short and the same in every language: "S01 · E03", specials "S00". */
+export function formatEpisode(season: number, episode: number): string {
+  return `S${String(season).padStart(2, '0')} · E${String(episode).padStart(2, '0')}`
+}
+
 /** A position or length in seconds as a clock, "1:02:03" or "2:03". */
 export function formatClock(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds))

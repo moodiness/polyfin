@@ -180,6 +180,13 @@
   }
 }
 
+/* A thin, quiet scrollbar for a box that scrolls inside the page. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-s4) transparent;
+  scrollbar-gutter: stable;
+}
+
 @layer base {
   html {
     color-scheme: dark;

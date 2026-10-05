@@ -3,14 +3,14 @@ import type en from '../en/sources'
 const sources: typeof en = {
   sources: {
     title: 'Sources',
-    lede: 'Addons Stremio, musique et IPTV, réunis dans une seule liste. Les sources du serveur servent à tous ; celles d’un membre ne servent qu’à lui.',
+    lede: 'Addons Stremio, addons Eclipse et sources IPTV, réunis dans une seule liste. Les sources du serveur servent à tous ; celles d’un membre ne servent qu’à lui.',
     add: 'Ajouter une source',
     listLabel: 'Sources',
     listNote: 'Les sources personnelles des membres ne servent qu’à leur propriétaire.',
     loading: 'Chargement des sources',
     kindFilter: 'Filtrer par type',
     all: 'Toutes',
-    kinds: { stremio: 'Stremio', eclipse: 'Musique', iptv: 'IPTV' },
+    kinds: { stremio: 'Stremio', eclipse: 'Eclipse', iptv: 'IPTV' },
     owner: 'Propriétaire',
     everyOwner: 'Tous les propriétaires',
     server: 'Le serveur',
@@ -19,15 +19,15 @@ const sources: typeof en = {
     clearFilters: 'Effacer les filtres',
     emptyTitle: 'Aucune source pour l’instant',
     emptyShared:
-      'Ajoutez un addon Stremio, un addon de musique ou une source IPTV : il servira à tous les utilisateurs de ce serveur.',
+      'Ajoutez un addon Stremio, un addon Eclipse ou une source IPTV : il servira à tous les utilisateurs de ce serveur.',
     emptyMine:
-      'Ajoutez un addon Stremio, un addon de musique ou une source IPTV : il ne servira qu’à vous, après ceux du serveur.',
+      'Ajoutez un addon Stremio, un addon Eclipse ou une source IPTV : il ne servira qu’à vous, après ceux du serveur.',
     noMatchTitle: 'Aucune source ne correspond',
     noMatch: 'Changez le type, le propriétaire ou la recherche.',
     tag: { stremio: 'Stremio', eclipse: 'Eclipse', m3u: 'M3U', xtream: 'Xtream' },
     kindName: {
       stremio: 'Addon Stremio',
-      eclipse: 'Addon de musique',
+      eclipse: 'Addon Eclipse',
       m3u: 'Playlist M3U',
       xtream: 'Compte Xtream Codes',
     },
@@ -106,7 +106,7 @@ const sources: typeof en = {
   sourceAdd: {
     title: 'Ajouter une source',
     kind: 'Type de source',
-    kinds: { stremio: 'Addon Stremio', music: 'Addon de musique', iptv: 'Source IPTV' },
+    kinds: { stremio: 'Addon Stremio', music: 'Addon Eclipse', iptv: 'Source IPTV' },
     stremioHelp:
       'Un addon Stremio apporte des catalogues, des métadonnées et des flux. Collez son lien d’installation.',
     musicHelp:
@@ -150,7 +150,7 @@ const sources: typeof en = {
     series: (count: string) => `${count} séries`,
   },
   mySources: {
-    lede: 'Ajoutez vos propres sources Stremio, musique et IPTV et choisissez quels catalogues apparaissent comme bibliothèques dans vos applications Jellyfin.',
+    lede: 'Ajoutez vos propres sources Stremio, Eclipse et IPTV et choisissez quels catalogues apparaissent comme bibliothèques dans vos applications Jellyfin.',
     preferenceTitle: 'Les sources du serveur',
     useShared: 'Utiliser les sources du serveur',
     useSharedHelp:
