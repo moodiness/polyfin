@@ -77,7 +77,10 @@ type episodeEntry struct {
 }
 
 var (
-	trailingYear = regexp.MustCompile(`\s*(?:[\(\[]\s*((?:18|19|20)\d{2})\s*[\)\]]|[-–—]\s*((?:18|19|20)\d{2}))\s*$`)
+	// languagePrefix is the language or country code lists write before
+	// titles, as in "EN - Name", "|EN| Name" or "[MULTI] Name".
+	languagePrefix = regexp.MustCompile(`^\s*(?:\|\|?\s*[A-Z]{2,5}\s*\|\|?|\[\s*[A-Z]{2,5}\s*\]|[A-Z]{2,3}\s*(?:-|–|—|:|\|))\s*`)
+	trailingYear   = regexp.MustCompile(`\s*(?:[\(\[]\s*((?:18|19|20)\d{2})\s*[\)\]]|[-–—]\s*((?:18|19|20)\d{2}))\s*$`)
 	// episodePatterns find an episode's season and episode numbers in its
 	// name, and the series name before them.
 	episodePatterns = []*regexp.Regexp{
@@ -132,9 +135,9 @@ func (e *Entry) classify() {
 	e.Kind = KindMovie
 }
 
-// titleName is a provider title name shown: without its country prefix,
-// quality markers and tags, and the year written after it, which it
-// returns.
+// titleName is a provider title name shown: without its language or
+// country prefix, quality markers and tags, and the year written after it,
+// which it returns.
 func titleName(raw string) (string, int) {
 	base := extraTags.ReplaceAllString(raw, " ")
 	for _, q := range qualities {
@@ -149,6 +152,9 @@ func titleName(raw string) (string, int) {
 		}
 		year, _ = strconv.Atoi(base[match[group]:match[group+1]])
 		base = base[:match[0]]
+	}
+	if stripped := languagePrefix.ReplaceAllString(base, ""); stripped != "" {
+		base = stripped
 	}
 	return cleanName(base), year
 }
