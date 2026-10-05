@@ -12,10 +12,10 @@ export function useDebounced<T>(value: T, delay = 300): T {
 }
 
 export const fieldClass =
-  'mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white placeholder:text-zinc-500'
+  'mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white placeholder:text-zinc-500'
 
 export const smallField =
-  'block min-h-9 w-full rounded-lg border border-line bg-ink px-3 py-1.5 text-sm text-white placeholder:text-zinc-500'
+  'block min-h-9 w-full rounded-lg border border-line bg-bg px-3 py-1.5 text-sm text-white placeholder:text-zinc-500'
 
 /** A set of exclusive choices, shown as a row of pressed buttons, labelled as one group. */
 export function Segmented<T extends string>({
@@ -43,7 +43,7 @@ export function Segmented<T extends string>({
       <div
         role="radiogroup"
         aria-labelledby={labelId}
-        className="inline-flex flex-wrap gap-1 rounded-lg border border-line bg-ink p-0.5"
+        className="inline-flex flex-wrap gap-1 rounded-lg border border-line bg-bg p-0.5"
       >
         {options.map((option) => (
           <button
@@ -158,7 +158,7 @@ export function Pager({
 }
 
 const pagerButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-ink px-3 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line'
+  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line'
 
 /** A switch: a checkbox drawn as a toggle, labelled for screen readers when its label is hidden. */
 export function Switch({
@@ -219,7 +219,7 @@ export function SidePanel({
         onClose()
       }}
       onClick={(event) => event.target === event.currentTarget && onClose()}
-      className="m-0 ml-auto h-dvh max-h-dvh w-full max-w-xl border-l border-line bg-ink p-0 text-zinc-100 backdrop:bg-black/60 sm:w-[min(36rem,100vw)]"
+      className="m-0 ml-auto h-dvh max-h-dvh w-full max-w-xl border-l border-line bg-bg p-0 text-zinc-100 backdrop:bg-black/60 sm:w-[min(36rem,100vw)]"
     >
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">

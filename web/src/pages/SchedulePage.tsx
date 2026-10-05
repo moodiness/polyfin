@@ -22,10 +22,7 @@ export default function SchedulePage() {
   const { t } = useI18n()
   return (
     <>
-      <PageHeader
-        title={t.dashboard.schedule.title}
-        description={t.dashboard.schedule.description}
-      />
+      <PageHeader title={t.system.schedule.title} description={t.system.schedule.description} />
       <div className="space-y-6">
         <Tasks />
         <div className="grid gap-6 xl:grid-cols-2">
@@ -39,7 +36,7 @@ export default function SchedulePage() {
 
 function Tasks() {
   const { language, t } = useI18n()
-  const text = t.dashboard.schedule
+  const text = t.system.schedule
   const tasks = useQuery({
     queryKey: queryKeys.tasks(language),
     queryFn: ({ signal }) => fetchTasks(language, signal),
@@ -158,7 +155,7 @@ function Tasks() {
 
 function LastRun({ task }: { task: Task }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.schedule
+  const text = t.system.schedule
   if (task.state !== 'Idle') {
     return (
       <StatusText tone="active">
@@ -186,7 +183,7 @@ function LastRun({ task }: { task: Task }) {
 
 function Timers() {
   const { language, t } = useI18n()
-  const text = t.dashboard.schedule
+  const text = t.system.schedule
   const timers = useQuery({
     queryKey: queryKeys.timers,
     queryFn: ({ signal }) => fetchTimers(signal),
@@ -238,7 +235,7 @@ function Timers() {
 /** When the server's IPTV lists and guides are downloaded again. */
 function Refreshes() {
   const { t } = useI18n()
-  const text = t.dashboard.schedule
+  const text = t.system.schedule
   // The server's IPTV sources and guides, then each user's own.
   const sources = useQuery({
     queryKey: queryKeys.sources,

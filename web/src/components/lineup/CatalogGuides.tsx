@@ -245,7 +245,7 @@ function GuideList({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <p className={`text-sm ${dirty ? 'text-amber-200' : 'text-muted'}`}>
-            {dirty ? t.dashboard.settings.unsaved : t.dashboard.settings.upToDate}
+            {dirty ? t.settingsPage.unsaved : t.settingsPage.upToDate}
           </p>
           <div className="flex gap-2">
             <button
@@ -360,4 +360,4 @@ function Automap({
 }
 
 const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4'
+  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4'

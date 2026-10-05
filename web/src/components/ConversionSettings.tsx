@@ -424,7 +424,7 @@ function Codes({ names }: { names: string[] }) {
     return <span className="text-muted">{t.settings.conversion.none}</span>
   }
   return names.map((name) => (
-    <code key={name} className="rounded bg-ink px-1.5 py-0.5 font-mono text-xs text-fin-5">
+    <code key={name} className="rounded bg-bg px-1.5 py-0.5 font-mono text-xs text-fin-5">
       {name}
     </code>
   ))

@@ -12,7 +12,7 @@ import {
 import { Badge, buttonPrimary, buttonSecondary, Checkbox, Notice, TextField } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 /** The badge of an Eclipse addon: what its tracks are. */
 export function MusicBadge({ music }: { music: AddonMusic }) {
@@ -132,7 +132,7 @@ export function AddonSettingsPanel({
   }
 
   return (
-    <section aria-labelledby={titleId} className="mt-4 rounded-xl border border-line bg-ink/60 p-4">
+    <section aria-labelledby={titleId} className="mt-4 rounded-xl border border-line bg-bg/60 p-4">
       <h3 id={titleId} className="font-semibold text-white">
         {t.music.settingsTitle}
       </h3>
@@ -214,7 +214,7 @@ function SettingField({
           value={value}
           onChange={(event) => onValue(event.target.value)}
           aria-describedby={`${id}-hint`}
-          className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+          className="mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white"
         >
           {setting.options.map((option) => (
             <option key={option.value} value={option.value}>

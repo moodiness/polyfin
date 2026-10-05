@@ -6,7 +6,7 @@ import { Segmented, SelectField, smallField } from '@/components/lineup/shared'
 import { Checkbox, Loading, Notice } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 /**
  * Everything a source imports and how, in the order an administrator decides it: what to import,
@@ -408,4 +408,4 @@ function categoryName(
 }
 
 const chip =
-  'inline-flex min-h-8 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4'
+  'inline-flex min-h-8 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4'

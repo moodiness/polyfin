@@ -439,4 +439,4 @@ function CategoryRow({
 }
 
 const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'
+  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'

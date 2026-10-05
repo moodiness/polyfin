@@ -7,7 +7,7 @@ import { useI18n } from '@/i18n'
 /** How the database backups go: the last run, the last backup made, and when the next one is. */
 export default function BackupStatus({ backup }: { backup: Backup }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health.backup
+  const text = t.system.health.backup
   const made = backup.madeAt
   return (
     <div className="space-y-3">

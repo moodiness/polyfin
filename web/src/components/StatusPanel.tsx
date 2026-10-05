@@ -32,7 +32,7 @@ export default function StatusPanel() {
       type="button"
       onClick={() => void refetch()}
       disabled={isFetching}
-      className="rounded-lg border border-line bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-70"
+      className="rounded-lg border border-line bg-bg px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-70"
     >
       {isFetching ? t.status.retrying : t.status.retry}
     </button>
@@ -92,7 +92,7 @@ export default function StatusPanel() {
             </span>
           </StatusRow>
         </dl>
-        <div className="border-t border-line bg-ink/40 px-5 py-3 text-xs text-muted">
+        <div className="border-t border-line bg-bg/40 px-5 py-3 text-xs text-muted">
           <p>{t.status.updatedAt(timeFormat.format(dataUpdatedAt))}</p>
           <p className="mt-0.5">{t.status.autoRefresh}</p>
         </div>

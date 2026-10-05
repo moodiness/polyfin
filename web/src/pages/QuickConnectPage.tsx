@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { approveQuickConnect, lookupQuickConnect, queryClient, queryKeys } from '@/api'
-import { useSessionUser } from '@/components/session'
+import { useSessionUser } from '@/app/session'
 import {
   buttonPrimary,
   buttonSecondary,

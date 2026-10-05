@@ -45,7 +45,7 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
 }
 
 const fieldClass =
-  'mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white placeholder:text-zinc-500'
+  'mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white placeholder:text-zinc-500'
 
 /**
  * Chooses which catalogs of a scope's addons are libraries in Jellyfin apps, in which order and
@@ -503,7 +503,7 @@ function GuideSummary({
     catalogId: library.catalogId,
   }
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ink/40 p-3 text-sm">
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-bg/40 p-3 text-sm">
       <div className="min-w-0 space-y-0.5">
         <p className="text-zinc-200">
           {guides.length === 0 ? t.libraries.guideNone : t.lineup.library.guides(guides.length)}

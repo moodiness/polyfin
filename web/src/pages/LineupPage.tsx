@@ -47,10 +47,11 @@ const liveSections: ReadonlySet<LineupSection> = new Set([
  * One IPTV source: what it imports, its Live TV line-up (categories, channels, guides) and its movies
  * and series, section by section.
  */
-export default function LineupPage() {
+export default function LineupPage({ scope: fixedScope }: { scope?: Scope }) {
   const { t } = useI18n()
   const params = useParams()
-  const scope = routeScope(params.scope)
+  // `/me/sources/:id` names no scope: its route gives it.
+  const scope = fixedScope ?? routeScope(params.scope)
   const id = params.id ?? ''
   const section = (lineupSections as readonly string[]).includes(params.section ?? 'summary')
     ? ((params.section ?? 'summary') as LineupSection)
@@ -64,7 +65,7 @@ export default function LineupPage() {
   const source = addon?.source as IptvSource | undefined
   // Until the source is read, every section is offered: the URL may name any of them.
   const liveTv = source?.options.liveTv ?? true
-  const back = scope === 'shared' ? '/addons' : '/my-addons'
+  const back = scope === 'shared' ? '/sources' : '/me/sources'
   const tabs = useRef<HTMLElement>(null)
   // On a phone the sections scroll sideways: the one open stays in view.
   useEffect(() => {
@@ -235,7 +236,7 @@ function Summary({ scope, addon, source }: { scope: Scope; addon: Addon; source:
                 value={number(vod.shownMovies)}
                 detail={text.titlesOf(number(vod.movies), number(vod.movieCategories))}
                 tone={vod.shownMovies > 0 ? 'active' : undefined}
-                to={scope === 'shared' ? '/libraries' : '/my-addons'}
+                to={scope === 'shared' ? '/libraries' : '/me/sources'}
               />
             )}
             {series && (
@@ -244,7 +245,7 @@ function Summary({ scope, addon, source }: { scope: Scope; addon: Addon; source:
                 value={number(vod.shownSeries)}
                 detail={text.titlesOf(number(vod.series), number(vod.seriesCategories))}
                 tone={vod.shownSeries > 0 ? 'active' : undefined}
-                to={scope === 'shared' ? '/libraries' : '/my-addons'}
+                to={scope === 'shared' ? '/libraries' : '/me/sources'}
               />
             )}
             {series && (
@@ -335,7 +336,7 @@ function Options({ scope, id, source }: { scope: Scope; id: string; source: Iptv
           {save.isSuccess && !dirty && <Notice kind="success">{text.saved}</Notice>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p aria-live="polite" className={`text-sm ${dirty ? 'text-amber-200' : 'text-muted'}`}>
-              {dirty ? t.dashboard.settings.unsaved : t.dashboard.settings.upToDate}
+              {dirty ? t.settingsPage.unsaved : t.settingsPage.upToDate}
             </p>
             <div className="flex gap-2">
               <button

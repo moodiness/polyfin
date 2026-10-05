@@ -19,11 +19,11 @@ import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/compo
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 export default function HealthPage() {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const { health, sources, tasks } = useHealthData()
   const problems = findProblems(t, language, health.data, sources.data, tasks.data)
   const location = useLocation()
@@ -115,9 +115,7 @@ export default function HealthPage() {
   )
 }
 
-function addonTone(
-  addon: AddonHealth,
-): [Tone, keyof Messages['dashboard']['health']['addonStatus']] {
+function addonTone(addon: AddonHealth): [Tone, keyof Messages['system']['health']['addonStatus']] {
   if (!addon.enabled) return ['muted', 'off']
   if (addon.requests === 0) return ['muted', 'unknown']
   return addon.failure === '' ? ['ok', 'ok'] : ['warning', 'failing']
@@ -125,7 +123,7 @@ function addonTone(
 
 function Addons({ health, sources }: { health: Health; sources: Sources | undefined }) {
   const { t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const check = useMutation({
     mutationFn: checkAddon,
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.health }),
@@ -219,7 +217,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 function Iptv({ sources: all }: { sources: Sources | undefined }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const sources = (all?.addons ?? []).filter((addon) => addon.source !== null)
   return (
     <Panel id="iptv" title={text.iptvTitle}>
@@ -243,7 +241,7 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
                   ) : source.fetchedAt ? (
                     <StatusText tone="ok">{text.ok}</StatusText>
                   ) : (
-                    <StatusText tone="muted">{t.dashboard.schedule.notYet}</StatusText>
+                    <StatusText tone="muted">{t.system.schedule.notYet}</StatusText>
                   )}
                 </div>
                 <p className="text-xs text-muted">
@@ -307,7 +305,7 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
 
 function Guides({ sources }: { sources: Sources | undefined }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const catalogs = (sources?.guides ?? []).filter((library) => (library.guides ?? []).length > 0)
   return (
     <Panel id="guides" title={text.guidesTitle}>
@@ -338,7 +336,7 @@ function Guides({ sources }: { sources: Sources | undefined }) {
                   ) : fetched ? (
                     <StatusText tone="ok">{text.ok}</StatusText>
                   ) : (
-                    <StatusText tone="muted">{t.dashboard.schedule.notYet}</StatusText>
+                    <StatusText tone="muted">{t.system.schedule.notYet}</StatusText>
                   )}
                 </div>
                 <p className="text-xs text-muted">
@@ -373,7 +371,7 @@ function Guides({ sources }: { sources: Sources | undefined }) {
 
 function Transcoder({ health }: { health: Health }) {
   const { t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const transcoder = health.transcoder
   if (transcoder === null) return null
   const hardware = transcoder.hardware
@@ -434,7 +432,7 @@ function Transcoder({ health }: { health: Health }) {
 
 function Storage({ health }: { health: Health }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   return (
     <>
       <Panel id="database" title={text.databaseTitle}>
@@ -512,7 +510,7 @@ function Storage({ health }: { health: Health }) {
 
 function Secrets({ health }: { health: Health }) {
   const { t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const secrets = health.secrets
   if (secrets === null) return null
   return (
@@ -549,7 +547,7 @@ function Secrets({ health }: { health: Health }) {
 
 function Backups({ health }: { health: Health }) {
   const { t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   return (
     <Panel id="backups" title={text.backupTitle}>
       {health.backup === null ? (
@@ -563,7 +561,7 @@ function Backups({ health }: { health: Health }) {
 
 function Thumbnails({ health }: { health: Health }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const thumbnails = health.thumbnails
   if (thumbnails === null) return null
   const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
@@ -613,7 +611,7 @@ function Thumbnails({ health }: { health: Health }) {
 
 function Process({ health }: { health: Health }) {
   const { language, t } = useI18n()
-  const text = t.dashboard.health
+  const text = t.system.health
   const process = health.process
   return (
     <Panel id="process" title={text.processTitle}>

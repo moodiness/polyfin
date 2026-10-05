@@ -66,7 +66,7 @@ export default function CodeEditor({
         {label}
       </label>
       {children}
-      <div className="mt-1.5 flex overflow-hidden rounded-lg border border-line bg-ink font-mono text-[13px] leading-5 has-[textarea:focus-visible]:border-fin-4">
+      <div className="mt-1.5 flex overflow-hidden rounded-lg border border-line bg-bg font-mono text-[13px] leading-5 has-[textarea:focus-visible]:border-fin-4">
         <pre
           ref={gutter}
           aria-hidden="true"

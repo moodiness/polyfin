@@ -11,7 +11,7 @@ import {
 } from '@/api'
 import { formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 /** Something an administrator should look at, linking to where it is described. */
 export type Problem = { tone: 'error' | 'warning'; text: string; to: string }
@@ -52,7 +52,7 @@ export function useHealthData() {
 
 /** A row's name, followed by whose it is when it is a user's own. */
 export function ownedName(t: Messages, name: string, owner: Owner): string {
-  return owner === null ? name : `${name} (${t.dashboard.health.owner.user(owner.name)})`
+  return owner === null ? name : `${name} (${t.system.health.owner.user(owner.name)})`
 }
 
 /** The name of a stored secret the key cannot decrypt: a server setting or a user's connection. */
@@ -60,7 +60,7 @@ export function unreadableName(
   t: Messages,
   secret: NonNullable<Health['secrets']>['unreadable'][number],
 ): string {
-  const text = t.dashboard.health
+  const text = t.system.health
   return secret.setting !== null
     ? text.secretNames[secret.setting]
     : text.connectionOf(serviceNames[secret.service ?? 'trakt'], secret.user ?? '')
@@ -82,21 +82,18 @@ export function findProblems(
   sources: Sources | undefined,
   tasks: Task[] | undefined,
 ): Problem[] {
-  const text = t.dashboard.health.problems
+  const text = t.system.health.problems
   const problems: Problem[] = []
   if (health !== undefined) {
     if (!health.database.reachable) {
-      problems.push({ tone: 'error', text: text.database, to: '/health#database' })
+      problems.push({ tone: 'error', text: text.database, to: '/system/health#database' })
     }
     for (const disk of health.disks) {
       if (lowOnSpace(disk)) {
         problems.push({
           tone: 'warning',
-          text: text.disk(
-            t.dashboard.health.folders[disk.folder],
-            formatBytes(disk.free, language),
-          ),
-          to: '/health#disks',
+          text: text.disk(t.system.health.folders[disk.folder], formatBytes(disk.free, language)),
+          to: '/system/health#disks',
         })
       }
     }
@@ -106,18 +103,26 @@ export function findProblems(
           tone: 'warning',
           text: text.addon(
             ownedName(t, addon.name, addon.owner),
-            t.dashboard.health.failures[addon.failure] ?? addon.failure,
+            t.system.health.failures[addon.failure] ?? addon.failure,
           ),
-          to: '/health#addons',
+          to: '/system/health#addons',
         })
       }
     }
     const transcoder = health.transcoder
     if (transcoder && transcoder.limit > 0 && transcoder.conversions >= transcoder.limit) {
-      problems.push({ tone: 'warning', text: text.conversionsFull, to: '/health#transcoder' })
+      problems.push({
+        tone: 'warning',
+        text: text.conversionsFull,
+        to: '/system/health#transcoder',
+      })
     }
     for (const paused of health.thumbnails?.pausedHosts ?? []) {
-      problems.push({ tone: 'warning', text: text.paused(paused.host), to: '/health#thumbnails' })
+      problems.push({
+        tone: 'warning',
+        text: text.paused(paused.host),
+        to: '/system/health#thumbnails',
+      })
     }
     const secrets = health.secrets
     if (secrets !== null && secrets.unreadable.length > 0) {
@@ -126,18 +131,18 @@ export function findProblems(
         text: text.unreadableSecrets(
           secrets.unreadable.map((secret) => unreadableName(t, secret)).join(', '),
         ),
-        to: '/health#secrets',
+        to: '/system/health#secrets',
       })
     }
     if (secrets !== null && !secrets.encrypted && secrets.plaintext > 0) {
-      problems.push({ tone: 'warning', text: text.plaintextSecrets, to: '/health#secrets' })
+      problems.push({ tone: 'warning', text: text.plaintextSecrets, to: '/system/health#secrets' })
     }
     const backup = health.backup
     if (backup?.problem) {
       problems.push(
         backup.error !== ''
-          ? { tone: 'error', text: text.backupFailed, to: '/health#backups' }
-          : { tone: 'warning', text: text.backupStale, to: '/health#backups' },
+          ? { tone: 'error', text: text.backupFailed, to: '/system/health#backups' }
+          : { tone: 'warning', text: text.backupStale, to: '/system/health#backups' },
       )
     }
   }
@@ -146,7 +151,7 @@ export function findProblems(
       problems.push({
         tone: 'warning',
         text: text.iptv(ownedName(t, addon.name, addon.owner)),
-        to: '/health#iptv',
+        to: '/system/health#iptv',
       })
     }
   }
@@ -155,7 +160,7 @@ export function findProblems(
       problems.push({
         tone: 'warning',
         text: text.guide(ownedName(t, library.name ?? library.catalogName, library.owner)),
-        to: '/health#guides',
+        to: '/system/health#guides',
       })
     }
   }
@@ -163,7 +168,7 @@ export function findProblems(
     // A failed backup is told above, with what failed.
     if (task.key === 'BackUpDatabase' && health?.backup?.error) continue
     if (task.last?.status === 'Failed') {
-      problems.push({ tone: 'warning', text: text.task(task.name), to: '/schedule' })
+      problems.push({ tone: 'warning', text: text.task(task.name), to: '/system/schedule' })
     }
   }
   return problems.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'error' ? -1 : 1))

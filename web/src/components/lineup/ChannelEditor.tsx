@@ -356,7 +356,7 @@ function Streams({
           if (url.trim() !== '') add.mutate()
         }}
         noValidate
-        className="space-y-3 rounded-lg border border-line bg-ink/40 p-3"
+        className="space-y-3 rounded-lg border border-line bg-bg/40 p-3"
       >
         <h4 className="text-sm font-medium text-zinc-200">{text.addTitle}</h4>
         <TextField
@@ -443,4 +443,4 @@ function Guide({ scope, id, channel }: { scope: Scope; id: string; channel: Line
 const linkButton =
   'text-xs font-medium text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5'
 const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-50'

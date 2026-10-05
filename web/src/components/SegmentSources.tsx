@@ -61,7 +61,7 @@ export default function SegmentSources({
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <ol className="mt-1.5 divide-y divide-line rounded-lg border border-line bg-ink">
+      <ol className="mt-1.5 divide-y divide-line rounded-lg border border-line bg-bg">
         {order.map((source, index) => (
           <li key={source} className="flex items-center gap-3 px-3 py-2">
             <span className="w-5 text-right text-sm text-muted tabular-nums" aria-hidden="true">

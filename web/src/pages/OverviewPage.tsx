@@ -4,7 +4,7 @@ import LiveSessions from '@/components/LiveSessions'
 import { Stat } from '@/components/panels'
 import { findProblems, useHealthData } from '@/components/problems'
 import RecentActivity from '@/components/RecentActivity'
-import { useSessionUser } from '@/components/session'
+import { useSessionUser } from '@/app/session'
 import StatusPanel from '@/components/StatusPanel'
 import { PageHeader } from '@/components/ui'
 import { formatSpan } from '@/format'
@@ -72,7 +72,7 @@ function Figures() {
         detail={
           transcoder ? text.conversionsOf(transcoder.conversions, transcoder.limit) : undefined
         }
-        to="/health#transcoder"
+        to="/system/health#transcoder"
       />
       <Stat
         label={text.uptime}
@@ -85,7 +85,7 @@ function Figures() {
             : '–'
         }
         detail={health.data ? `Polyfin ${health.data.process.version}` : undefined}
-        to="/health#process"
+        to="/system/health#process"
       />
       <Stat
         label={text.problems}
@@ -94,7 +94,7 @@ function Figures() {
         tone={
           problems.length === 0 ? (health.data ? 'ok' : undefined) : errors ? 'error' : 'warning'
         }
-        to="/health"
+        to="/system/health"
       />
     </div>
   )
