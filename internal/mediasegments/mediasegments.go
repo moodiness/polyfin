@@ -156,6 +156,12 @@ func New(db *pgxpool.Pool, sources []Source, version string, logger *slog.Logger
 		now: time.Now, refused: map[string]string{}, limited: map[string]time.Time{}}
 }
 
+// Asks reports whether a segment database is asked at all; a nil service
+// asks none.
+func (s *Service) Asks() bool {
+	return s != nil && len(s.sources) > 0
+}
+
 // Order returns the order of preference of every segment database: saved
 // when it is not empty, else that of the sources asked followed by the
 // others; and off, the databases not asked whatever the order, in the

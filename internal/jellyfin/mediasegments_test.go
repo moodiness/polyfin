@@ -302,6 +302,48 @@ func TestSkipButtonsSettingTurnsSegmentsOff(t *testing.T) {
 	}
 }
 
+// jellyfin-web asks for the segments of the version it plays, by the
+// version's identifier, only when the version says it has some.
+func TestVersionsSayTheyHaveSegments(t *testing.T) {
+	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
+	sources := func() []MediaSourceInfo {
+		t.Helper()
+		var movie BaseItemDto
+		if status := p.get(t, "/Items/"+p.movie, p.token, &movie); status != http.StatusOK || movie.MediaSources == nil || len(*movie.MediaSources) != 2 {
+			t.Fatalf("movie: %d %+v", status, movie.MediaSources)
+		}
+		return *movie.MediaSources
+	}
+	for _, source := range sources() {
+		if !source.HasSegments {
+			t.Errorf("version %s says it has no segments", source.Id)
+		}
+	}
+	if got := spans(p.segments(t, "/MediaSegments/"+sources()[1].Id)); len(got) != 3 {
+		t.Errorf("by a version: %v", got)
+	}
+	p.setting(t, func(s *accounts.Settings) { s.SkipButtons = false })
+	for _, source := range sources() {
+		if source.HasSegments {
+			t.Errorf("switched off, version %s says it has segments", source.Id)
+		}
+	}
+}
+
+// Without a segment database asked, no version says it has segments.
+func TestVersionsWithoutSegmentDatabases(t *testing.T) {
+	p := skipping(t)
+	var movie BaseItemDto
+	if status := p.get(t, "/Items/"+p.movie, p.token, &movie); status != http.StatusOK || movie.MediaSources == nil {
+		t.Fatalf("movie: %d", status)
+	}
+	for _, source := range *movie.MediaSources {
+		if source.HasSegments {
+			t.Errorf("version %s says it has segments", source.Id)
+		}
+	}
+}
+
 // TestMediaSegmentsMatchJellyfin compares the answers with the one
 // recorded from Jellyfin 12.1, which had no segments, and the segments
 // with the fields of Jellyfin's MediaSegmentDto.
