@@ -87,8 +87,9 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 			}
 			return time.Now()
 		},
-		Guides: lib,
-		IPTV:   channels,
+		Guides:        lib,
+		IPTV:          channels,
+		LibraryImages: lib,
 	}
 	for _, c := range configure {
 		c(&options, testDeps{pool: pool, client: client, addons: addonStore})

@@ -38,6 +38,23 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 - Versions are Jellyfin media sources.
 
+### Library images
+
+Under **Content › Libraries**, each library shows a small image at the start of its row. Select it to choose, under **Image in apps**, the image Jellyfin apps show on the library's tile:
+
+- **None**: no image, as before. This is the default.
+- **Automatic**: Polyfin takes it from the catalog's first page: the first backdrop, as library tiles are wide, else the first wide poster, else the first poster. A music library takes the first artwork of its row. A catalog without any shows no image. Users under parental control or blocking genres are not shown it, since it may come from a title hidden from them.
+- **Custom**: **Upload an image**, or paste an address under **Or an image address**, which Polyfin downloads once. The picture follows the rules of [Edit images](#edit-images): a JPEG, PNG or WebP picture of up to 10 MB, kept in the database. Only administrators can use local network addresses. **Remove the image** deletes it, and the library shows none.
+
+Image changes are saved at once, apart from the list's **Save**. A catalog just added to the list gets its image once the list is saved. Live TV catalogs make no library tile, so they have no image. Users choose the images of their own libraries the same way under **My sources**.
+
+A library image uploaded with jellyfin-web's **Edit images** is its custom image too. Choosing **None** or **Automatic** deletes it.
+
+**For app developers:**
+
+- The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
+- The automatic image is looked up again with the catalog's pages, after **Refresh catalogs every (minutes)**. Its tag changes with the title it comes from.
+
 ## Music addons
 
 Eclipse music addons install like Stremio addons, with the **Eclipse addon** tab of **Add a source**: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest address or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Eclipse addon addresses are redacted like manifest addresses. The sources list names their kind **Eclipse**, in its filter and on their badge, and **System › Health** marks their row with the same badge.

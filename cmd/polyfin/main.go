@@ -291,6 +291,7 @@ func serve(ctx context.Context) error {
 				Logs:          recent,
 				Recordings:    recorder,
 				Library:       lib,
+				LibraryImages: lib,
 				Health: admin.HealthSources{
 					Addons:       addonClient,
 					Cache:        sources,

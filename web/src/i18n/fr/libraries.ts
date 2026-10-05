@@ -71,6 +71,44 @@ const libraries: typeof en = {
         podcast: 'Ses épisodes apparaissent dans la musique des applis Jellyfin.',
       },
     },
+    image: {
+      label: 'Image dans les applications',
+      edit: (name: string, state: string) => `Image de ${name} : ${state}`,
+      choices: {
+        none: 'Aucune',
+        automatic: 'Automatique',
+        custom: 'Personnalisée',
+      },
+      help: {
+        none: 'Les applications affichent cette bibliothèque sans image, comme avant.',
+        automatic:
+          'Polyfin la prend dans le catalogue : l’arrière-plan d’un de ses premiers titres, sinon une affiche.',
+        custom:
+          'Une image que vous envoyez, ou que Polyfin télécharge une fois depuis une adresse. Les images larges en 16:9 conviennent le mieux aux vignettes des bibliothèques. JPEG, PNG ou WebP, 10 Mo au plus.',
+      },
+      parental:
+        'Les utilisateurs sous contrôle parental ou qui bloquent des genres ne la voient pas.',
+      notFound:
+        'Rien trouvé dans ce catalogue pour l’instant : les applications n’affichent pas d’image.',
+      noImage: 'Aucune image',
+      upload: 'Envoyer une image',
+      uploadAnother: 'Envoyer une autre image',
+      address: 'Ou une adresse d’image',
+      addressHelp: 'Polyfin la télécharge une fois et en garde une copie.',
+      useAddress: 'Utiliser cette adresse',
+      remove: 'Retirer l’image',
+      removeTitle: (name: string) => `Retirer l’image de ${name} ?`,
+      removeToNone:
+        'L’image envoyée est supprimée. Les applications affichent cette bibliothèque sans image.',
+      removeToAutomatic:
+        'L’image envoyée est supprimée. Les applications affichent l’image trouvée dans le catalogue.',
+      removeConfirm: 'Retirer',
+      saved: 'Image enregistrée.',
+      removed: 'Image retirée.',
+      atOnce: 'Les changements d’image sont enregistrés aussitôt.',
+      afterSave: 'Enregistrez d’abord les bibliothèques, puis choisissez l’image de celle-ci.',
+      close: (name: string) => `Fermer l’image de ${name}`,
+    },
   },
 }
 

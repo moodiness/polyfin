@@ -54,6 +54,7 @@ import {
   useToast,
   MoveButtons,
 } from '@/ui'
+import { LibraryImageEditor, LibraryThumb, LiveTvThumb } from './LibraryImage'
 
 /** Above this many libraries the home screen of Jellyfin apps gets heavy; the server default. */
 const recommendedLibraries = 20
@@ -78,9 +79,19 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
 /** 52 px between the blocks of the editor (44 on a phone), as PageLayout spaces a page's. */
 const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
 
-/** The columns of a library row: position, catalog, name in apps, buttons. */
+/** The columns of a library row: position, image and catalog, name in apps, buttons. */
 const rowGrid =
   'grid grid-cols-[22px_minmax(0,1fr)_auto] gap-x-4 md:grid-cols-[22px_minmax(0,1fr)_minmax(0,300px)_auto]'
+
+/**
+ * A list too long for the page scrolls in its own box, about 480 px tall, with a thin scrollbar,
+ * so the blocks below and the save bar stay close.
+ */
+const scrollBox =
+  'max-h-[480px] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
+
+/** Above this many libraries, the list of those shown scrolls in its box. */
+const boxedLibraries = 10
 
 /**
  * Chooses which catalogs of a scope's addons are libraries in Jellyfin apps, in which order and
@@ -138,9 +149,12 @@ function LibrariesSkeleton() {
           )}
         >
           <Skeleton className="h-3 w-3" />
-          <span className="flex flex-col gap-2">
-            <Skeleton className="h-3.5 w-2/5" />
-            <Skeleton className="h-3 w-1/4" />
+          <span className="flex gap-3.5">
+            <Skeleton className="aspect-video w-14 shrink-0 sm:w-[72px]" />
+            <span className="flex flex-1 flex-col gap-2 pt-1">
+              <Skeleton className="h-3.5 w-2/5" />
+              <Skeleton className="h-3 w-1/4" />
+            </span>
           </span>
           <Skeleton className="hidden h-[34px] w-full md:block" />
           <Skeleton className="h-7 w-24" />
@@ -166,17 +180,34 @@ function LibraryForm({
   const [query, setQuery] = useState('')
   const [type, setType] = useState('')
   const [announcement, setAnnouncement] = useState('')
+  // The entry whose image editor is open, below its row.
+  const [imageOpen, setImageOpen] = useState<string | null>(null)
   // Element ids to try, in order, once the next render is committed (the focused row may be gone).
   const focusAfterRender = useRef<string[]>([])
+  // The row to bring into view in its box once the next render is committed, after a move.
+  const scrollAfterRender = useRef<string | null>(null)
+  // The box of available catalogs, back at its top when the filter changes.
+  const availableBox = useRef<HTMLDivElement>(null)
+  function filterBy(change: () => void) {
+    change()
+    availableBox.current?.scrollTo({ top: 0 })
+  }
 
   useEffect(() => {
+    const row = scrollAfterRender.current
+    if (row !== null) {
+      scrollAfterRender.current = null
+      document.getElementById(row)?.scrollIntoView({ block: 'nearest' })
+    }
     const candidates = focusAfterRender.current
     if (candidates.length === 0) return
     focusAfterRender.current = []
     for (const id of candidates) {
       const element = document.getElementById(id)
       if (element !== null) {
-        element.focus()
+        // The filter's id is on its field, whose label names the input inside.
+        const target = element instanceof HTMLDivElement ? element.querySelector('input') : element
+        target?.focus()
         return
       }
     }
@@ -243,6 +274,9 @@ function LibraryForm({
   const ids = {
     remove: (key: string) => `${baseId}-remove-${key}`,
     add: (key: string) => `${baseId}-add-${key}`,
+    row: (key: string) => `${baseId}-row-${key}`,
+    image: (key: string) => `${baseId}-image-${key}`,
+    thumb: (key: string) => `${baseId}-thumb-${key}`,
     filter: `${baseId}-filter`,
   }
 
@@ -260,6 +294,7 @@ function LibraryForm({
     const next = [...entries]
     const [moved] = next.splice(from, 1)
     next.splice(to, 0, moved)
+    scrollAfterRender.current = ids.row(moved.key)
     edit(next)
     setAnnouncement(t.common.moved(displayName(moved), to + 1, next.length))
   }
@@ -271,6 +306,7 @@ function LibraryForm({
   function remove(index: number) {
     const removed = entries[index]
     const next = entries.filter((_, i) => i !== index)
+    if (imageOpen === removed.key) setImageOpen(null)
     focusAfterRender.current = [
       ...(index < next.length ? [ids.remove(next[index].key)] : []),
       ...(index > 0 ? [ids.remove(next[index - 1].key)] : []),
@@ -356,7 +392,10 @@ function LibraryForm({
               <span>{t.libraries.name}</span>
               <span />
             </div>
-            <ol aria-label={t.libraries.listLabel}>
+            <ol
+              aria-label={t.libraries.listLabel}
+              className={cx(entries.length > boxedLibraries && scrollBox)}
+            >
               {entries.map((entry, index) => {
                 const library = byKey.get(entry.key) ?? entry.library
                 const missing = !(byKey.get(entry.key)?.browsable ?? false)
@@ -369,9 +408,12 @@ function LibraryForm({
                 const renamed = appName !== null && appName !== name
                 const music = musicContent.get(library.addonId)
                 const iptv = iptvAddons.has(library.addonId)
+                const tv = isTvCatalog(library)
+                const imageShown = !tv && imageOpen === entry.key
                 return (
                   <li
                     key={entry.key}
+                    id={ids.row(entry.key)}
                     className={cx(
                       rowGrid,
                       'items-start gap-y-3 px-[18px] py-3.5 not-first:border-t not-first:border-line max-sm:px-4',
@@ -383,26 +425,40 @@ function LibraryForm({
                     >
                       {index + 1}
                     </span>
-                    <div className="min-w-0">
-                      <p id={titleId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-[14.5px] font-medium break-words text-ink">
-                          {library.catalogName}
-                        </span>
-                        <Badge tone="accent">
-                          {stremioLabel(t.stremioTypes, library.catalogType)}
-                        </Badge>
-                        <MusicKind content={music} />
-                      </p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-3">
-                        <span className="break-words">{library.addonName}</span>
-                        {offAddons.has(library.addonId) && (
-                          <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
-                        )}
-                        {missing && <StatusPill tone="danger">{t.libraries.missing}</StatusPill>}
-                      </p>
+                    <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
+                      {tv ? (
+                        <LiveTvThumb />
+                      ) : (
+                        <LibraryThumb
+                          id={ids.thumb(entry.key)}
+                          library={library}
+                          name={name}
+                          open={imageShown}
+                          controls={ids.image(entry.key)}
+                          onToggle={() => setImageOpen(imageShown ? null : entry.key)}
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p id={titleId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[14.5px] font-medium break-words text-ink">
+                            {library.catalogName}
+                          </span>
+                          <Badge tone="accent">
+                            {stremioLabel(t.stremioTypes, library.catalogType)}
+                          </Badge>
+                          <MusicKind content={music} />
+                        </p>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-3">
+                          <span className="break-words">{library.addonName}</span>
+                          {offAddons.has(library.addonId) && (
+                            <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
+                          )}
+                          {missing && <StatusPill tone="danger">{t.libraries.missing}</StatusPill>}
+                        </p>
+                      </div>
                     </div>
                     <div className="col-span-2 col-start-2 row-start-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
-                      {isTvCatalog(library) ? (
+                      {tv ? (
                         <TvSummary scope={scope} library={library} name={name} iptv={iptv} />
                       ) : (
                         <>
@@ -462,6 +518,20 @@ function LibraryForm({
                         onClick={() => remove(index)}
                       />
                     </div>
+                    {imageShown && (
+                      <div className="col-span-full row-start-3 min-w-0 md:col-span-3 md:col-start-2 md:row-start-2">
+                        <LibraryImageEditor
+                          id={ids.image(entry.key)}
+                          scope={scope}
+                          library={library}
+                          name={name}
+                          onClose={() => {
+                            setImageOpen(null)
+                            focusAfterRender.current = [ids.thumb(entry.key)]
+                          }}
+                        />
+                      </div>
+                    )}
                   </li>
                 )
               })}
@@ -487,22 +557,23 @@ function LibraryForm({
           <EmptyState icon={SquaresFourIcon} title={t.libraries.availableEmpty} />
         ) : (
           <>
-            <div className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <Field label={t.libraries.filter}>
-                <TextInput
-                  id={ids.filter}
-                  type="search"
-                  icon={MagnifyingGlassIcon}
-                  value={query}
-                  onValue={setQuery}
-                  placeholder={t.libraries.filterPlaceholder}
-                  autoComplete="off"
-                />
-              </Field>
+            <div className="mb-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <div id={ids.filter}>
+                <Field label={t.libraries.filter}>
+                  <TextInput
+                    type="search"
+                    icon={MagnifyingGlassIcon}
+                    value={query}
+                    onValue={(value) => filterBy(() => setQuery(value))}
+                    placeholder={t.libraries.filterPlaceholder}
+                    autoComplete="off"
+                  />
+                </Field>
+              </div>
               <Field label={t.libraries.type}>
                 <Select
                   value={type}
-                  onValue={setType}
+                  onValue={(value) => filterBy(() => setType(value))}
                   options={[
                     { value: '', label: t.libraries.allTypes },
                     ...types.map((value) => ({
@@ -518,21 +589,32 @@ function LibraryForm({
                 {t.libraries.noMatch}
               </p>
             ) : (
-              <div className="space-y-6">
+              <div
+                ref={availableBox}
+                className={cx('scroll-pt-12 rounded-panel border border-line-2 bg-s1', scrollBox)}
+              >
                 {[...groups].map(([addonId, items]) => {
                   const headingId = `${baseId}-addon-${addonId}`
                   return (
-                    <section key={addonId} aria-labelledby={headingId}>
+                    <section
+                      key={addonId}
+                      aria-labelledby={headingId}
+                      className="not-first:border-t not-first:border-line-2"
+                    >
                       <h3
                         id={headingId}
-                        className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-control font-semibold text-ink"
+                        className="sticky top-0 z-[1] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-s1/95 px-[18px] py-2.5 text-control font-semibold text-ink backdrop-blur-[14px] max-sm:px-4"
                       >
                         <span className="break-words">{items[0].addonName}</span>
                         {offAddons.has(addonId) && (
                           <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
                         )}
                       </h3>
-                      <RowList aria-label={t.libraries.availableLabel(items[0].addonName)}>
+                      <RowList
+                        variant="plain"
+                        className="px-[18px] max-sm:px-4"
+                        aria-label={t.libraries.availableLabel(items[0].addonName)}
+                      >
                         {items.map((library) => (
                           <AvailableRow
                             key={catalogKey(library)}

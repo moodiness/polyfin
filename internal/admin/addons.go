@@ -152,6 +152,14 @@ type libraryJSON struct {
 	AppName   *string `json:"appName"`
 	Enabled   bool    `json:"enabled"`
 	Browsable bool    `json:"browsable"`
+	// ItemID is the library's item in Jellyfin apps, null for a catalog
+	// that is not an enabled library. Image is how it finds the image apps
+	// show on its tile: "none", "automatic", or "custom" when one was
+	// uploaded for it; ImageTag tags that image, served as the item's
+	// Primary image, null when it shows none.
+	ItemID   *string `json:"itemId"`
+	Image    string  `json:"image"`
+	ImageTag *string `json:"imageTag"`
 	// Guide is the first XMLTV guide of an enabled live TV catalog (an
 	// empty address when it has none), with the catalog's channels and
 	// those mapped; Guides are all of them. Both are null for any other
@@ -279,9 +287,17 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 	for i, name := range library.LibraryNames(shown, h.Accounts.Settings().Language)[first:] {
 		appNames[positions[i]] = &name
 	}
+	var images []library.LibraryImage
+	if h.LibraryImages != nil {
+		var err error
+		if images, err = h.LibraryImages.LibraryImages(r.Context(), scope, confined(r), libraries); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
 	result := make([]libraryJSON, 0, len(libraries))
 	for i, l := range libraries {
-		result = append(result, libraryJSON{
+		entry := libraryJSON{
 			AddonID:     l.AddonID.String(),
 			AddonName:   l.AddonName,
 			CatalogType: l.Catalog.Type,
@@ -291,9 +307,20 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			AppName:     appNames[i],
 			Enabled:     l.Enabled,
 			Browsable:   l.Catalog.Browsable(),
+			Image:       l.Image,
 			Guide:       newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
 			Guides:      newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
-		})
+		}
+		if images != nil && images[i].ID != (accounts.ID{}) {
+			entry.ItemID = new(images[i].ID.String())
+			if images[i].Uploaded {
+				entry.Image = "custom"
+			}
+			if images[i].URL != "" {
+				entry.ImageTag = new(library.ImageTag(images[i].URL))
+			}
+		}
+		result = append(result, entry)
 	}
 	writeJSON(w, http.StatusOK, result)
 }
