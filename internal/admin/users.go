@@ -365,6 +365,12 @@ type settingsJSON struct {
 	TraktClientSecret    *string `json:"traktClientSecret,omitempty"`
 	TraktClientSecretSet bool    `json:"traktClientSecretSet"`
 	SimklClientID        *string `json:"simklClientId"`
+	// BackupHour and BackupsKept keep their current values when a PUT
+	// leaves them out. BackupFolder is the folder backups are written to,
+	// empty when they are off; a PUT cannot change it.
+	BackupHour   *int   `json:"backupHour"`
+	BackupsKept  *int   `json:"backupsKept"`
+	BackupFolder string `json:"backupFolder"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -435,6 +441,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TraktClientID:        &settings.TraktClientID,
 		TraktClientSecretSet: settings.TraktClientSecret != "",
 		SimklClientID:        &settings.SimklClientID,
+
+		BackupHour:  &settings.BackupHour,
+		BackupsKept: &settings.BackupsKept,
 	}
 }
 
@@ -766,6 +775,7 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	body.SegmentOrder, body.SegmentSourcesOff = h.Segments.Order(settings.SegmentOrder)
 	body.SegmentOrderDefault, _ = h.Segments.Order(nil)
 	body.RecordingsFolder = h.RecordingsDir
+	body.BackupFolder = h.Backups.Dir()
 	body.ConversionHardware = conversionHardwareJSON{Default: h.Acceleration, Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
@@ -881,6 +891,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),
 		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),
 		SimklClientID:     valueOr(body.SimklClientID, current.SimklClientID),
+
+		BackupHour:  valueOr(body.BackupHour, current.BackupHour),
+		BackupsKept: valueOr(body.BackupsKept, current.BackupsKept),
 	})
 	if accountError(w, err) {
 		return

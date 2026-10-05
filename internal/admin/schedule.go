@@ -18,8 +18,11 @@ type taskJSON struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Category    string `json:"category"`
-	// Interval is in seconds, 0 for a task run by hand only.
+	// Interval is in seconds, 0 for a task run by hand only or daily.
 	Interval int64 `json:"interval"`
+	// Daily is the hour of the server's time zone a daily task runs at,
+	// null for other tasks.
+	Daily *int `json:"daily"`
 	// State is Idle, Running or Cancelling.
 	State string          `json:"state"`
 	Last  *taskResultJSON `json:"last"`
@@ -52,7 +55,7 @@ func (h *handler) scheduledTasks(w http.ResponseWriter, r *http.Request) {
 
 func newTaskJSON(info tasks.Info) taskJSON {
 	result := taskJSON{ID: info.ID, Key: info.Key, Name: info.Name, Description: info.Description, Category: info.Category,
-		Interval: int64(info.Interval.Seconds()), State: string(info.State), Next: info.Next}
+		Interval: int64(info.Interval.Seconds()), Daily: info.Daily, State: string(info.State), Next: info.Next}
 	if info.Last != nil {
 		result.Last = &taskResultJSON{Start: info.Last.Start, End: info.Last.End, Status: string(info.Last.Status), Error: info.Last.Error}
 	}

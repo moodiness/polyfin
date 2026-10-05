@@ -173,6 +173,8 @@ const en = {
       'The Trakt client ID and secret must be at most 256 characters, without spaces or special characters. Copy them again from your Trakt app.',
     invalid_simkl_app:
       'The Simkl client ID must be at most 256 characters, without spaces or special characters. Copy it again from your Simkl app.',
+    invalid_backup_hour: 'Choose the hour of the backups from the list.',
+    invalid_backups_kept: 'The number of backups kept must be a whole number from 1 to 90.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
@@ -813,6 +815,15 @@ const en = {
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp:
       'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. From 1 to 168; 12 by default.',
+    backupsFolder: (folder: string) => `Backups of the database are saved in ${folder}.`,
+    backupsOff:
+      'Backups are off. Set POLYFIN_BACKUP_DIR to a folder on the container, mounted from the server, then restart Polyfin to turn them on.',
+    backupHour: 'Back up every day at',
+    backupHourHelp: 'In the server’s time zone. 4:00 AM by default.',
+    backupsKept: 'Backups to keep',
+    backupsKeptHelp:
+      'After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From 1 to 90; 7 by default.',
+    lastBackup: 'Last backup',
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
@@ -1189,6 +1200,7 @@ const en = {
       notRunYet: 'Not run since the server started',
       byHandOnly: 'Run by hand only',
       every: (span: string) => `Interval: ${span}`,
+      daily: (time: string) => `Every day at ${time}, server time`,
       took: (span: string) => `took ${span}`,
       results: {
         Completed: 'Completed',
@@ -1244,6 +1256,8 @@ const en = {
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         task: (name: string) => `The task “${name}” failed.`,
+        backupFailed: 'The last database backup failed.',
+        backupStale: 'The last database backup is more than two days old.',
         conversionsFull: 'Video conversions are at their limit: new ones wait or play otherwise.',
         unreadableSecrets: (names: string) =>
           `Stored keys cannot be decrypted with POLYFIN_SECRET_KEY and count as not set: ${names}. Set the key they were encrypted with again, or enter them again.`,
@@ -1301,11 +1315,15 @@ const en = {
       cacheUse: (used: string, limit: string) => `${used} of ${limit}`,
       sourcesOpen: 'Files open',
       disksTitle: 'Disk space',
-      folders: { cache: 'cache', recordings: 'recordings' } as Record<string, string>,
-      folderTitle: { cache: 'Cache folder', recordings: 'Recordings folder' } as Record<
+      folders: { cache: 'cache', recordings: 'recordings', backups: 'backups' } as Record<
         string,
         string
       >,
+      folderTitle: {
+        cache: 'Cache folder',
+        recordings: 'Recordings folder',
+        backups: 'Backups folder',
+      } as Record<string, string>,
       free: (free: string) => `${free} free`,
       notMeasured: 'Cannot be measured here.',
       thumbnailsTitle: 'Thumbnails',
@@ -1316,6 +1334,19 @@ const en = {
       pausedHosts: 'Paused sources',
       noPausedHosts: 'No source is paused.',
       until: (time: string) => `until ${time}`,
+      backupTitle: 'Backups',
+      backupOff: 'Backups are off. Set POLYFIN_BACKUP_DIR on the container to turn them on.',
+      backup: {
+        result: 'Last run',
+        none: 'No backup yet',
+        succeeded: 'Succeeded',
+        failed: 'Failed',
+        made: 'Last backup made',
+        file: 'File',
+        size: 'Size',
+        next: 'Next backup',
+        runHint: 'Run “Back up the database” on the Schedule page to back up now.',
+      },
       processTitle: 'Polyfin',
       version: 'Version',
       uptime: 'Running for',
@@ -1382,6 +1413,7 @@ const en = {
         recordings: 'Recordings',
         diagnostics: 'Diagnostics',
         webPlayer: 'Web player',
+        backups: 'Backups',
         variables: 'Environment variables',
       },
       variablesHelp:

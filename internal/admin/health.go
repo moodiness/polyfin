@@ -52,6 +52,8 @@ type healthJSON struct {
 	Addons     []addonHealthJSON    `json:"addons"`
 	// Secrets is how the stored keys and tokens stand, null when unknown.
 	Secrets *secretsHealthJSON `json:"secrets"`
+	// Backup is how the database backups go, null when they are off.
+	Backup *backupJSON `json:"backup"`
 }
 
 type processJSON struct {
@@ -78,7 +80,7 @@ type cacheJSON struct {
 }
 
 // diskJSON is the disk one of the server's folders is on: Folder is
-// "cache" or "recordings".
+// "cache", "recordings" or "backups".
 type diskJSON struct {
 	Folder string `json:"folder"`
 	Path   string `json:"path"`
@@ -176,7 +178,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		used, sources, limit := h.Health.Cache.Usage()
 		result.Cache = &cacheJSON{Used: used, Limit: limit, Sources: sources}
 	}
-	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.RecordingsDir}} {
+	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.RecordingsDir}, {"backups", h.Backups.Dir()}} {
 		if folder.path == "" {
 			continue
 		}
@@ -185,6 +187,16 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			disk.Free, disk.Used, disk.Mount = free, used, mount
 		}
 		result.Disks = append(result.Disks, disk)
+	}
+	if result.Database.Reachable {
+		backup, err := h.backupStatus(ctx)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		result.Backup = backup
+	} else if h.Backups.Available() {
+		result.Backup = &backupJSON{Folder: h.Backups.Dir()}
 	}
 
 	settings := h.Accounts.Settings()

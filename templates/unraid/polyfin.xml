@@ -18,6 +18,8 @@ FIRST RUN: open the container log and copy the one-time setup code, then open th
 &#xD;
 GPU (optional): Polyfin converts video on the first GPU that works and logs which one. NVIDIA: install the Nvidia Driver plugin, add --runtime=nvidia to Extra Parameters, and set NVIDIA_VISIBLE_DEVICES to the GPU's UUID or all. AMD or Intel: add --device=/dev/dri to Extra Parameters.&#xD;
 &#xD;
+BACKUPS (optional): to back the database up every day, set Backups folder to a folder of the server, such as /mnt/user/appdata/polyfin/backups, writable by UID 65532 (chown 65532:65532 it in the terminal), and Backups folder in the container to /backups. The hour and the number kept are in the admin page under Settings, Backups.&#xD;
+&#xD;
 Polyfin hosts no content and ships with no addons or catalogues: you choose and configure your own sources. Do not forward its HTTP port to the internet.</Overview>
   <Category>MediaServer:Video</Category>
   <WebUI>http://[IP]:[PORT:8096]/web/</WebUI>
@@ -39,4 +41,6 @@ Polyfin hosts no content and ships with no addons or catalogues: you choose and 
   <Config Name="NVIDIA capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,video,utility,graphics" Mode="" Description="NVIDIA driver libraries the container gets. Video decoding and encoding need video; tone mapping HDR on the GPU needs graphics." Type="Variable" Display="advanced" Required="false" Mask="false">compute,video,utility,graphics</Config>
   <Config Name="Recordings folder" Target="/recordings" Default="" Mode="rw" Description="Folder on the server Live TV recordings are written to. Leave empty to keep recording off." Type="Path" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Recordings folder in the container" Target="POLYFIN_RECORDINGS_DIR" Default="" Mode="" Description="Set it to /recordings, with a recordings folder above, to turn Live TV recording on. Leave empty to keep it off." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Backups folder" Target="/backups" Default="" Mode="rw" Description="Folder on the server daily database backups are written to, writable by UID 65532. Leave empty to keep backups off." Type="Path" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Backups folder in the container" Target="POLYFIN_BACKUP_DIR" Default="" Mode="" Description="Set it to /backups, with a backups folder above, to back the database up every day. Leave empty to keep backups off." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>

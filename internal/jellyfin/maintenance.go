@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
@@ -130,10 +131,12 @@ type TaskResult struct {
 	ErrorMessage string `json:",omitempty"`
 }
 
-// TaskTriggerInfo is what runs a task: at startup, or every IntervalTicks.
+// TaskTriggerInfo is what runs a task: at startup, every IntervalTicks, or
+// every day at TimeOfDayTicks.
 type TaskTriggerInfo struct {
-	Type          string
-	IntervalTicks int64 `json:",omitempty"`
+	Type           string
+	IntervalTicks  int64 `json:",omitempty"`
+	TimeOfDayTicks int64 `json:",omitempty"`
 }
 
 func newTaskInfo(info tasks.Info) TaskInfo {
@@ -144,6 +147,9 @@ func newTaskInfo(info tasks.Info) TaskInfo {
 	}
 	if info.Interval > 0 {
 		task.Triggers = append(task.Triggers, TaskTriggerInfo{Type: "IntervalTrigger", IntervalTicks: int64(info.Interval / 100)})
+	}
+	if info.Daily != nil {
+		task.Triggers = append(task.Triggers, TaskTriggerInfo{Type: "DailyTrigger", TimeOfDayTicks: int64(time.Duration(*info.Daily) * time.Hour / 100)})
 	}
 	if last := info.Last; last != nil {
 		task.LastExecutionResult = &TaskResult{StartTimeUtc: Time(last.Start), EndTimeUtc: Time(last.End), Status: last.Status,

@@ -81,6 +81,32 @@ FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b197847
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends fonts-dejavu-core
 
+# pg_dump of PostgreSQL 18, which backs the database up (POLYFIN_BACKUP_DIR):
+# Debian's is 17's, which refuses to dump an 18 server. It is taken, with
+# its libpq and the libraries libpq loads that the final stage lacks, from
+# the official image compose.yaml runs, pinned by the digest of its
+# multi-platform index (the two digests change together): the target
+# platform's files, copied, nothing run. Both images are the same Debian.
+FROM postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 AS postgres
+
+# The libraries go in the folder of the target platform, which a native
+# stage names: copies follow links, so each is copied by the name it is
+# loaded by. Their copyright notices go with them.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS pg-dump
+ARG TARGETARCH
+COPY --from=postgres /usr/lib/postgresql/18/bin/pg_dump /pg-dump/usr/local/bin/pg_dump
+COPY --from=postgres /usr/lib/*-linux-gnu/libpq.so.5 /usr/lib/*-linux-gnu/libldap.so.2 /usr/lib/*-linux-gnu/liblber.so.2 \
+	/usr/lib/*-linux-gnu/libsasl2.so.2 /usr/lib/*-linux-gnu/libgssapi_krb5.so.2 /usr/lib/*-linux-gnu/libkrb5.so.3 \
+	/usr/lib/*-linux-gnu/libk5crypto.so.3 /usr/lib/*-linux-gnu/libkrb5support.so.0 /usr/lib/*-linux-gnu/libkeyutils.so.1 \
+	/usr/lib/*-linux-gnu/libcom_err.so.2 /libraries/
+COPY --from=postgres /usr/share/doc/ /doc/
+RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarch64-linux-gnu ;; *) exit 1 ;; esac \
+	&& mkdir -p "/pg-dump/usr/lib/$triplet" /pg-dump/usr/share/doc \
+	&& mv /libraries/* "/pg-dump/usr/lib/$triplet/" \
+	&& for package in postgresql-client-18 libpq5 libldap2 libsasl2-2 libgssapi-krb5-2 libkrb5-3 libk5crypto3 libkrb5support0 libkeyutils1 libcom-err2; do \
+		mkdir "/pg-dump/usr/share/doc/$package" && cp "/doc/$package/copyright" "/pg-dump/usr/share/doc/$package/"; \
+	done
+
 # The same Debian on both platforms. amd64 adds libva and the VA drivers of
 # AMD and Intel GPUs, Intel's from non-free, and what NVIDIA's Vulkan driver
 # loads besides itself (the Vulkan loader, EGL, X11's extension library),
@@ -105,6 +131,7 @@ COPY --from=ffmpeg /bin/ffmpeg /bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /usr/share/fonts/truetype/dejavu/
+COPY --from=pg-dump /pg-dump/ /
 # jellyfin-web, a separate GPL-2.0 program, unmodified, in the folder
 # POLYFIN_WEB_DIR names by default; its license, and a notice saying where
 # its source is, in the usual documentation folder.

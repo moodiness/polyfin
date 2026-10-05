@@ -188,6 +188,9 @@ const fr: Messages = {
       'Le client ID et le client secret Trakt doivent faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-les de nouveau depuis votre application Trakt.',
     invalid_simkl_app:
       'Le client ID Simkl doit faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-le de nouveau depuis votre application Simkl.',
+    invalid_backup_hour: 'Choisissez l’heure des sauvegardes dans la liste.',
+    invalid_backups_kept:
+      'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
@@ -848,6 +851,16 @@ const fr: Messages = {
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp:
       'À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. De 1 à 168 ; 12 par défaut.',
+    backupsFolder: (folder: string) =>
+      `Les sauvegardes de la base de données sont enregistrées dans ${folder}.`,
+    backupsOff:
+      'Les sauvegardes sont désactivées. Indiquez dans POLYFIN_BACKUP_DIR un dossier du conteneur, monté depuis le serveur, puis redémarrez Polyfin pour les activer.',
+    backupHour: 'Sauvegarder chaque jour à',
+    backupHourHelp: 'Dans le fuseau horaire du serveur. 4:00 par défaut.',
+    backupsKept: 'Sauvegardes à conserver',
+    backupsKeptHelp:
+      'Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De 1 à 90 ; 7 par défaut.',
+    lastBackup: 'Dernière sauvegarde',
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
@@ -1231,6 +1244,7 @@ const fr: Messages = {
       notRunYet: 'Pas encore lancée depuis le démarrage du serveur',
       byHandOnly: 'Lancée à la main seulement',
       every: (span: string) => `Intervalle : ${span}`,
+      daily: (time: string) => `Chaque jour à ${time}, heure du serveur`,
       took: (span: string) => `en ${span}`,
       results: {
         Completed: 'Terminée',
@@ -1288,6 +1302,8 @@ const fr: Messages = {
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,
         task: (name: string) => `La tâche « ${name} » a échoué.`,
+        backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
+        backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
         conversionsFull:
           'Les conversions vidéo sont à leur limite : les nouvelles attendent ou sont lues autrement.',
         unreadableSecrets: (names: string) =>
@@ -1346,8 +1362,12 @@ const fr: Messages = {
       cacheUse: (used: string, limit: string) => `${used} sur ${limit}`,
       sourcesOpen: 'Fichiers ouverts',
       disksTitle: 'Espace disque',
-      folders: { cache: 'du cache', recordings: 'des enregistrements' },
-      folderTitle: { cache: 'Dossier du cache', recordings: 'Dossier des enregistrements' },
+      folders: { cache: 'du cache', recordings: 'des enregistrements', backups: 'des sauvegardes' },
+      folderTitle: {
+        cache: 'Dossier du cache',
+        recordings: 'Dossier des enregistrements',
+        backups: 'Dossier des sauvegardes',
+      },
       free: (free: string) => `${free} libres`,
       notMeasured: 'Impossible à mesurer ici.',
       thumbnailsTitle: 'Miniatures',
@@ -1359,6 +1379,21 @@ const fr: Messages = {
       pausedHosts: 'Sources en pause',
       noPausedHosts: 'Aucune source en pause.',
       until: (time: string) => `jusqu’à ${time}`,
+      backupTitle: 'Sauvegardes',
+      backupOff:
+        'Les sauvegardes sont désactivées. Définissez POLYFIN_BACKUP_DIR sur le conteneur pour les activer.',
+      backup: {
+        result: 'Dernière exécution',
+        none: 'Aucune sauvegarde pour l’instant',
+        succeeded: 'Réussie',
+        failed: 'Échec',
+        made: 'Dernière sauvegarde faite',
+        file: 'Fichier',
+        size: 'Taille',
+        next: 'Prochaine sauvegarde',
+        runHint:
+          'Lancez « Sauvegarder la base de données » sur la page Planning pour sauvegarder tout de suite.',
+      },
       processTitle: 'Polyfin',
       version: 'Version',
       uptime: 'En marche depuis',
@@ -1426,6 +1461,7 @@ const fr: Messages = {
         recordings: 'Enregistrements',
         diagnostics: 'Diagnostic',
         webPlayer: 'Lecteur web',
+        backups: 'Sauvegardes',
         variables: 'Variables d’environnement',
       },
       variablesHelp:

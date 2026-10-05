@@ -255,6 +255,12 @@ export type Settings = {
   traktClientSecret?: string
   /** Simkl app users connect through. */
   simklClientId: string
+  /** Hour of the server's time zone the database is backed up at every day, 0 to 23. */
+  backupHour: number
+  /** How many of the newest database backups are kept. */
+  backupsKept: number
+  /** Folder backups are written to (read-only); empty when backups are off. */
+  backupFolder: string
 }
 
 /** The largest custom CSS and script, and login disclaimer, the server accepts, in bytes. */
@@ -267,6 +273,9 @@ export const liveTvRefreshHoursRange = { min: 1, max: 168 }
 /** The ranges the server accepts for the recording settings, padding in minutes here. */
 export const recordingPaddingMinutesRange = { min: 0, max: 60 }
 export const recordingRetentionDaysRange = { min: 0, max: 3650 }
+
+/** The range the server accepts for Settings.backupsKept. */
+export const backupsKeptRange = { min: 1, max: 90 }
 
 /** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
 export const catalogLimitRange = { min: 100, max: 20000 }
@@ -1345,7 +1354,10 @@ export type TaskResult = {
   error: string
 }
 
-/** A scheduled task; `interval` is in seconds, 0 for a task run by hand only. */
+/**
+ * A scheduled task; `interval` is in seconds, 0 for a task run by hand only or daily, and `daily`
+ * the hour of the server's time zone a daily task runs at.
+ */
 export type Task = {
   id: string
   key: string
@@ -1353,6 +1365,7 @@ export type Task = {
   description: string
   category: string
   interval: number
+  daily: number | null
   state: 'Idle' | 'Running' | 'Cancelling'
   last: TaskResult | null
   next: string | null
@@ -1416,7 +1429,7 @@ export type Health = {
   database: { reachable: boolean; size: number | null }
   cache: { used: number; limit: number; sources: number } | null
   disks: {
-    folder: 'cache' | 'recordings'
+    folder: 'cache' | 'recordings' | 'backups'
     path: string
     free: number
     used: number
@@ -1452,7 +1465,28 @@ export type Health = {
       user: string | null
     }[]
   } | null
+  /** How the database backups go; null when they are off. */
+  backup: Backup | null
 }
+
+/** How the database backups go; `folder` is empty when they are off. */
+export type Backup = {
+  folder: string
+  /** When the next backup is made. */
+  next: string | null
+  /** When the last run started; `error` is why it failed, empty after a success. */
+  ranAt: string | null
+  error: string
+  /** When the last backup made started, its file in the folder and its size in bytes. */
+  madeAt: string | null
+  file: string
+  size: number
+  /** Whether the last run failed or the last backup is older than two days. */
+  problem: boolean
+}
+
+export const fetchBackup = (signal?: AbortSignal) =>
+  request<Backup>('GET', '/backup', undefined, signal)
 
 /** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */
 export type Sources = {
@@ -1522,6 +1556,7 @@ export const queryKeys = {
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
   health: ['health'] as const,
+  backup: ['backup'] as const,
   sources: ['sources'] as const,
   variables: ['variables'] as const,
 }

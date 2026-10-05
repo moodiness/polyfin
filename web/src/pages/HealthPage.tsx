@@ -9,6 +9,7 @@ import {
   type Health,
   type Sources,
 } from '@/api'
+import BackupStatus from '@/components/BackupStatus'
 import { icons } from '@/components/icons'
 import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/components/panels'
 import { MusicBadge } from '@/components/AddonSettings'
@@ -103,6 +104,7 @@ export default function HealthPage() {
           <div className="grid gap-6 lg:grid-cols-2 2xl:grid-cols-3">
             <Transcoder health={health.data} />
             <Storage health={health.data} />
+            <Backups health={health.data} />
             <Thumbnails health={health.data} />
             <Process health={health.data} />
             <Secrets health={health.data} />
@@ -541,6 +543,20 @@ function Secrets({ health }: { health: Health }) {
           },
         ]}
       />
+    </Panel>
+  )
+}
+
+function Backups({ health }: { health: Health }) {
+  const { t } = useI18n()
+  const text = t.dashboard.health
+  return (
+    <Panel id="backups" title={text.backupTitle}>
+      {health.backup === null ? (
+        <p className="text-sm text-muted">{text.backupOff}</p>
+      ) : (
+        <BackupStatus backup={health.backup} />
+      )}
     </Panel>
   )
 }

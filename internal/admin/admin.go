@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/logs"
@@ -102,6 +103,9 @@ type Options struct {
 	// Trackers connects users' accounts on tracking services; nil offers
 	// none.
 	Trackers *trackers.Service
+	// Backups backs the database up into POLYFIN_BACKUP_DIR; nil, or one
+	// without a folder, makes none.
+	Backups *backup.Service
 }
 
 type handler struct {
@@ -168,6 +172,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/sources", h.administrator(h.sources))
 	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
+	mux.Handle("GET /admin/api/backup", h.administrator(h.backup))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
@@ -342,6 +347,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
 		{accounts.ErrInvalidTraktApp, http.StatusBadRequest, "invalid_trakt_app"},
 		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
+		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
+		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},

@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
+	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
@@ -216,6 +217,14 @@ func serve(ctx context.Context) error {
 		logger.Info("Live TV recording is on", "folder", cfg.RecordingsDir)
 		registerRecordingTasks(registry, recorder)
 	}
+	backups := backup.New(backup.Config{Dir: cfg.BackupDir, DatabaseURL: cfg.DatabaseURL, DB: pool, Settings: store.Settings, Logger: logger})
+	if backups.Available() {
+		logger.Info("Database backups are on", "folder", cfg.BackupDir)
+		if _, err := exec.LookPath(backups.PgDump()); err != nil {
+			logger.Warn("pg_dump was not found: database backups fail until it is installed", "pg_dump", backups.PgDump())
+		}
+		registerBackupTask(registry, backups)
+	}
 	webClient := server.WebClientFiles(cfg.WebDir)
 	switch {
 	case webClient != nil:
@@ -295,6 +304,7 @@ func serve(ctx context.Context) error {
 				},
 				Variables: config.Variables(os.Environ(), cfg),
 				Trackers:  tracking,
+				Backups:   backups,
 			}),
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
@@ -423,5 +433,20 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 		Interval: recordings.SeriesRefreshInterval,
 		AtStart:  true,
 		Run:      recorder.RefreshSeriesTimers,
+	})
+}
+
+// registerBackupTask registers the daily database backup, when backups
+// are on.
+func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
+	registry.Register(tasks.Task{
+		Key:      "BackUpDatabase",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Back up the database", Description: "Copies the database into POLYFIN_BACKUP_DIR every day at the hour set under Settings › Backups, and deletes the oldest copies past the number kept."},
+			"fr": {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans POLYFIN_BACKUP_DIR chaque jour à l’heure choisie dans Paramètres › Sauvegardes, et supprime les plus anciennes copies au-delà du nombre conservé."},
+		},
+		Daily: backups.Hour,
+		Run:   backups.Run,
 	})
 }

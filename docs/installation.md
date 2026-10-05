@@ -35,6 +35,25 @@ See [Configuration](configuration.md) for every setting, and the [`.env.example`
 
 `POLYFIN_VERSION` in `.env` pins a release, such as `0.1.0`. The value `latest` follows stable releases.
 
+### Back up the database
+
+Everything Polyfin keeps, from accounts and watch history to settings, addons and IPTV line-ups, is in its PostgreSQL database. To back it up every day, mount a folder of the server and name it in `POLYFIN_BACKUP_DIR`. In `compose.yaml`, uncomment the two lines of the `polyfin` service:
+
+```yaml
+    environment:
+      POLYFIN_BACKUP_DIR: /backups
+    volumes:
+      - ./backups:/backups
+```
+
+Create the folder before starting, writable by the container's user (UID 65532):
+
+```sh
+mkdir backups && sudo chown 65532:65532 backups
+```
+
+See [Backups](backups.md) for the schedule, the number kept, and how to restore one.
+
 ### Build from source
 
 To build the image from source instead of pulling it, run:
@@ -57,6 +76,8 @@ To add the template:
 
 2. Choose **Polyfin** under **Docker › Add Container › Template**.
 3. Optionally but preferably, fill **Secret key** with the output of `openssl rand -base64 32`, run in Unraid's terminal, so that the keys and tokens Polyfin stores are encrypted. Keep a copy with your backups.
+
+To back up the database every day, set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, and **Backups folder in the container** to `/backups`. The container's user, UID 65532, must be able to write to the folder: create it first in Unraid's terminal with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`. See [Backups](backups.md).
 
 ## GPU
 

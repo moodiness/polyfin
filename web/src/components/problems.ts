@@ -132,6 +132,14 @@ export function findProblems(
     if (secrets !== null && !secrets.encrypted && secrets.plaintext > 0) {
       problems.push({ tone: 'warning', text: text.plaintextSecrets, to: '/health#secrets' })
     }
+    const backup = health.backup
+    if (backup?.problem) {
+      problems.push(
+        backup.error !== ''
+          ? { tone: 'error', text: text.backupFailed, to: '/health#backups' }
+          : { tone: 'warning', text: text.backupStale, to: '/health#backups' },
+      )
+    }
   }
   for (const addon of sources?.addons ?? []) {
     if (addon.enabled && addon.source !== null && addon.source.error !== '') {
@@ -152,6 +160,8 @@ export function findProblems(
     }
   }
   for (const task of tasks ?? []) {
+    // A failed backup is told above, with what failed.
+    if (task.key === 'BackUpDatabase' && health?.backup?.error) continue
     if (task.last?.status === 'Failed') {
       problems.push({ tone: 'warning', text: text.task(task.name), to: '/schedule' })
     }

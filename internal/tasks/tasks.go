@@ -12,11 +12,12 @@
 //	})
 //
 // Key identifies the task for good: its Jellyfin identifier derives from
-// it. Interval runs it periodically, AtStart once when the registry starts;
-// a task with neither runs only when an administrator starts it. Run gets
-// a context that ends when the task is cancelled or the server stops; its
-// error is reported as the task's failure. A task never runs twice at once:
-// a run due while one goes on is skipped.
+// it. Interval runs it periodically, Daily every day at an hour, AtStart
+// once when the registry starts; a task with none runs only when an
+// administrator starts it. Run gets a context that ends when the task is
+// cancelled or the server stops; its error is reported as the task's
+// failure. A task never runs twice at once: a run due while one goes on is
+// skipped.
 package tasks
 
 import (
@@ -61,6 +62,11 @@ type Task struct {
 	Text map[string]Text
 	// Interval runs the task that often; 0 never runs it on a timer.
 	Interval time.Duration
+	// Daily, when set, runs the task every day at the hour of the server's
+	// time zone it returns, 0 to 23. It is asked again every minute, so
+	// that a new hour applies without a restart. A task has an Interval or
+	// Daily, not both.
+	Daily func() int
 	// AtStart runs the task once when the registry starts.
 	AtStart bool
 	Run     func(ctx context.Context) error
@@ -100,13 +106,15 @@ type Info struct {
 	Description string
 	Category    string
 	Interval    time.Duration
-	AtStart     bool
-	State       State
+	// Daily is the hour a daily task runs at, nil for other tasks.
+	Daily   *int
+	AtStart bool
+	State   State
 	// Last is the last run that ended since the server started; nil when
 	// none did.
 	Last *Result
 	// Next is when the schedule runs the task next; nil for a task without
-	// interval, or before the registry starts.
+	// interval or daily hour, or before the registry starts.
 	Next *time.Time
 }
 
@@ -117,6 +125,10 @@ type Registry struct {
 	tasks  []*entry
 	// ctx is the registry's context once started; nil before.
 	ctx context.Context
+	// now is the clock daily tasks are scheduled by, and dailyCheck how
+	// often their hour is asked again.
+	now        func() time.Time
+	dailyCheck time.Duration
 }
 
 type entry struct {
@@ -125,13 +137,14 @@ type entry struct {
 	cancel context.CancelFunc
 	state  State
 	last   *Result
-	// next is when the ticker fires next, zero without one.
+	// next is when the ticker or the daily schedule fires next, zero
+	// without one.
 	next time.Time
 }
 
 // New returns an empty registry.
 func New(logger *slog.Logger) *Registry {
-	return &Registry{logger: logger}
+	return &Registry{logger: logger, now: time.Now, dailyCheck: time.Minute}
 }
 
 // ID is the Jellyfin identifier of the task key names: 32 hexadecimal
@@ -142,11 +155,15 @@ func ID(key string) string {
 }
 
 // Register adds a task; one registered after Start is scheduled at once.
-// It panics on a task without Key, English text or Run, or with a Key
-// already registered: registrations are made by code at startup.
+// It panics on a task without Key, English text or Run, with both an
+// Interval and Daily, or with a Key already registered: registrations are
+// made by code at startup.
 func (r *Registry) Register(task Task) {
 	if task.Key == "" || task.Text["en"].Name == "" || task.Run == nil {
 		panic("tasks: a task needs a key, an English name and a run")
+	}
+	if task.Interval > 0 && task.Daily != nil {
+		panic("tasks: " + task.Key + " has both an interval and a daily hour")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -171,10 +188,16 @@ func (r *Registry) Start(ctx context.Context) {
 	}
 }
 
-// schedule runs e at start and on its interval; r.mu is held.
+// schedule runs e at start and on its interval or daily hour; r.mu is
+// held.
 func (r *Registry) schedule(e *entry) {
 	if e.AtStart {
 		r.start(e, false)
+	}
+	if e.Daily != nil {
+		e.next = NextDaily(r.now(), e.Daily())
+		go r.daily(e, e.next)
+		return
 	}
 	if e.Interval <= 0 {
 		return
@@ -195,6 +218,42 @@ func (r *Registry) schedule(e *entry) {
 			}
 		}
 	}()
+}
+
+// daily runs e every day at the hour e.Daily gives, next the first time,
+// until the registry's context ends. It wakes at the next run, or sooner
+// to ask the hour again: an hour changed to one already past today runs
+// tomorrow.
+func (r *Registry) daily(e *entry, next time.Time) {
+	for {
+		timer := time.NewTimer(min(next.Sub(r.now()), r.dailyCheck))
+		select {
+		case <-r.ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		checked := r.now()
+		r.mu.Lock()
+		if !checked.Before(next) {
+			r.start(e, false)
+		}
+		next = NextDaily(checked, e.Daily())
+		e.next = next
+		r.mu.Unlock()
+	}
+}
+
+// NextDaily is the first time after after that is hour o'clock in after's
+// time zone. A day whose hour is skipped by a change to daylight saving
+// time runs at the time the zone gives it instead.
+func NextDaily(after time.Time, hour int) time.Time {
+	year, month, day := after.Date()
+	next := time.Date(year, month, day, hour, 0, 0, 0, after.Location())
+	if !next.After(after) {
+		next = time.Date(year, month, day+1, hour, 0, 0, 0, after.Location())
+	}
+	return next
 }
 
 // start runs e unless it is running, byHand when an administrator asked;
@@ -238,7 +297,7 @@ func (r *Registry) Tasks(language string) []Info {
 	r.mu.Lock()
 	infos := make([]Info, 0, len(r.tasks))
 	for _, e := range r.tasks {
-		infos = append(infos, e.info(language))
+		infos = append(infos, e.info(language, r.now()))
 	}
 	r.mu.Unlock()
 	slices.SortFunc(infos, func(a, b Info) int { return strings.Compare(a.Name, b.Name) })
@@ -250,7 +309,7 @@ func (r *Registry) Task(id, language string) (Info, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if e := r.find(id); e != nil {
-		return e.info(language), true
+		return e.info(language, r.now()), true
 	}
 	return Info{}, false
 }
@@ -294,7 +353,9 @@ func (r *Registry) find(id string) *entry {
 	return nil
 }
 
-func (e *entry) info(language string) Info {
+// info describes e at now. A daily task's next run is that of its hour at
+// now, which a new hour changes at once.
+func (e *entry) info(language string, now time.Time) Info {
 	text, ok := e.Text[language]
 	if !ok {
 		text = e.Text["en"]
@@ -309,7 +370,14 @@ func (e *entry) info(language string) Info {
 		last := *e.last
 		info.Last = &last
 	}
-	if !e.next.IsZero() {
+	switch {
+	case e.Daily != nil:
+		hour := e.Daily()
+		info.Daily = &hour
+		if !e.next.IsZero() {
+			info.Next = new(NextDaily(now, hour))
+		}
+	case !e.next.IsZero():
 		info.Next = new(e.next)
 	}
 	return info

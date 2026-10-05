@@ -7,15 +7,17 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react'
-import { useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   analysisTimeoutRange,
   ApiError,
+  backupsKeptRange,
   catalogLimitRange,
   catalogRefreshMinutesRange,
   channelLimitRange,
   customCodeMaxBytes,
+  fetchBackup,
   fetchSettings,
   fetchStatus,
   fetchVariables,
@@ -38,6 +40,7 @@ import {
   versionListMinutesRange,
   type Settings,
 } from '@/api'
+import BackupStatus from '@/components/BackupStatus'
 import CodeEditor from '@/components/CodeEditor'
 import ConversionSettings from '@/components/ConversionSettings'
 import { icons } from '@/components/icons'
@@ -57,11 +60,12 @@ import {
   searchable,
   SettingsGroup,
   SecretField,
+  SelectField,
   Setting,
   wholeNumber,
   wholeNumberField,
 } from '@/components/settings'
-import { errorMessage } from '@/format'
+import { errorMessage, formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
@@ -81,6 +85,7 @@ const sectionIds = [
   'recordings',
   'diagnostics',
   'webPlayer',
+  'backups',
   'variables',
 ] as const
 type SectionId = (typeof sectionIds)[number]
@@ -224,7 +229,7 @@ export default function SettingsPage() {
 }
 
 function SettingsForm({ initial }: { initial: Settings }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const s = t.settings
   const sections = t.dashboard.settings.sections
   const languageId = useId()
@@ -857,6 +862,45 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </Setting>
       </Section>
 
+      <Section
+        id="backups"
+        title={sections.backups}
+        description={form.backupFolder ? s.backupsFolder(form.backupFolder) : s.backupsOff}
+      >
+        <Setting text={[s.backupHour, s.backupHourHelp]}>
+          <SelectField
+            label={s.backupHour}
+            hint={s.backupHourHelp}
+            value={form.backupHour}
+            options={Array.from({ length: 24 }, (_, hour) => ({
+              value: hour,
+              label: formatHour(hour, language),
+            }))}
+            onValue={(backupHour) => update({ backupHour })}
+          />
+        </Setting>
+        <Setting text={[s.backupsKept, s.backupsKeptHelp]}>
+          <TextField
+            label={s.backupsKept}
+            hint={s.backupsKeptHelp}
+            type="number"
+            inputMode="numeric"
+            min={backupsKeptRange.min}
+            max={backupsKeptRange.max}
+            step={1}
+            value={wholeNumberField(form.backupsKept)}
+            onValue={(value) => update({ backupsKept: wholeNumber(value) })}
+            error={fieldError(['invalid_backups_kept'])}
+            required
+          />
+        </Setting>
+        {form.backupFolder !== '' && (
+          <Setting text={[s.lastBackup, t.dashboard.health.backup.runHint]}>
+            <LastBackup />
+          </Setting>
+        )}
+      </Section>
+
       <div className="sticky bottom-0 z-10 -mx-1 rounded-t-2xl border border-b-0 border-line bg-ink/95 px-4 py-3 backdrop-blur">
         <div className="space-y-3">
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
@@ -872,6 +916,33 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </div>
       </div>
     </form>
+  )
+}
+
+/** How the last backup went, refreshed every 10 seconds. */
+function LastBackup() {
+  const { t } = useI18n()
+  const backup = useQuery({
+    queryKey: queryKeys.backup,
+    queryFn: ({ signal }) => fetchBackup(signal),
+    refetchInterval: 10_000,
+  })
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-medium text-zinc-200">{t.settings.lastBackup}</h3>
+      {backup.isPending ? (
+        <Skeleton rows={1} label={t.common.loading} />
+      ) : backup.isError ? (
+        <Notice kind="error">{errorMessage(t, backup.error)}</Notice>
+      ) : (
+        <BackupStatus backup={backup.data} />
+      )}
+      <p className="mt-3 text-xs text-muted">
+        <Link to="/schedule" className="underline underline-offset-4 hover:text-white">
+          {t.dashboard.health.backup.runHint}
+        </Link>
+      </p>
+    </div>
   )
 }
 
