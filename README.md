@@ -43,7 +43,7 @@ So whether a title plays directly or is transcoded decides how much bandwidth th
 
 ## Compatible clients
 
-Polyfin targets the apps that connect to a Jellyfin server, including Infuse, Swiftfin, Findroid, Streamyfin, Nuvio, Strand, the official Jellyfin apps and Kodi. See [Jellyfin compatibility](docs/jellyfin-compatibility.md).
+Polyfin targets the apps that connect to a Jellyfin server, including Infuse, Swiftfin, Findroid, Streamyfin, Nuvio, Strand, Odin, the official Jellyfin apps and Kodi. See [Jellyfin compatibility](docs/jellyfin-compatibility.md).
 
 ## Quick start (Docker)
 

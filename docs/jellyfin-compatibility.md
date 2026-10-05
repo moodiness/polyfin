@@ -12,6 +12,7 @@ Polyfin targets the apps that connect to a Jellyfin server, including:
 - Streamyfin
 - Nuvio
 - Strand
+- Odin
 - Official Jellyfin apps
 - Kodi
 
