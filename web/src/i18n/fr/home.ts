@@ -170,7 +170,7 @@ const home: typeof en = {
         recordings: 'Enregistrements',
       },
       search: 'Chercher dans les événements affichés',
-      more: 'Afficher plus',
+      listLabel: 'Derniers événements',
       noMatch: 'Aucun événement ne correspond.',
       noMatchHelp: 'Choisissez un autre filtre ou videz la recherche.',
       count: (shown: number, total: number) => `${shown} événements sur ${total}.`,

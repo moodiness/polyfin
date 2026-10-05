@@ -167,7 +167,7 @@ const home = {
         recordings: 'Recordings',
       },
       search: 'Search the events shown',
-      more: 'Show more',
+      listLabel: 'Latest events',
       noMatch: 'No event matches.',
       noMatchHelp: 'Choose another filter or clear the search.',
       count: (shown: number, total: number) => `${shown} of ${total} events.`,

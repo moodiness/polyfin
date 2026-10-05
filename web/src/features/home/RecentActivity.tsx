@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   GearIcon,
   InfoIcon,
@@ -21,12 +21,12 @@ import { dateTime, errorMessage, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Block,
-  Button,
   cx,
   EmptyState,
   InlineError,
   Segmented,
   Skeleton,
+  Spinner,
   StatusPill,
   TextInput,
   TextLink,
@@ -93,6 +93,24 @@ export function RecentActivity() {
           .includes(needle),
       )
     : entries
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = activity
+  const boxRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  // The next page loads by itself once the end of the box comes near. Observing again after
+  // each page makes a sentinel that is still in view (a short or filtered list) load the next.
+  useEffect(() => {
+    const root = boxRef.current
+    const sentinel = sentinelRef.current
+    if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return
+    const observer = new IntersectionObserver(
+      ([seen]) => {
+        if (seen?.isIntersecting) void fetchNextPage()
+      },
+      { root, rootMargin: '0px 0px 160px 0px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, shown.length])
 
   return (
     <Block
@@ -153,27 +171,35 @@ export function RecentActivity() {
           </EmptyState>
         )
       ) : (
-        <ol>
-          {shown.map((entry) => (
-            <ActivityRow key={entry.id} entry={entry} />
-          ))}
-        </ol>
-      )}
-      {activity.data !== undefined && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-small text-ink-3">
-          <p>
-            {text.count(entries.length, total)} {text.autoRefresh}
-          </p>
-          {activity.hasNextPage && (
-            <Button
-              size="sm"
-              loading={activity.isFetchingNextPage}
-              onClick={() => void activity.fetchNextPage()}
-            >
-              {text.more}
-            </Button>
+        <div
+          ref={boxRef}
+          tabIndex={0}
+          role="region"
+          aria-label={text.listLabel}
+          aria-busy={isFetchingNextPage}
+          className="-mx-2 max-h-[420px] overflow-y-auto overscroll-contain rounded-[10px] px-2 scrollbar-thin sm:max-h-[520px]"
+        >
+          <ol>
+            {shown.map((entry) => (
+              <ActivityRow key={entry.id} entry={entry} />
+            ))}
+          </ol>
+          {hasNextPage && (
+            <div ref={sentinelRef} className="flex h-12 items-center justify-center text-ink-3">
+              {isFetchingNextPage && (
+                <span role="status" className="flex items-center gap-2 text-small">
+                  <Spinner />
+                  {t.common.loading}
+                </span>
+              )}
+            </div>
           )}
         </div>
+      )}
+      {activity.data !== undefined && (
+        <p className="mt-3 border-t border-line pt-3 text-small text-ink-3">
+          {text.count(entries.length, total)} {text.autoRefresh}
+        </p>
       )}
     </Block>
   )
