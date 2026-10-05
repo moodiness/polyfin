@@ -2,6 +2,7 @@ package stremio
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -143,7 +144,8 @@ func TestLooselyTypedTitles(t *testing.T) {
 
 // Season posters come in the order of the seasons, a missing one as null:
 // an element that is not an image keeps its place, so that the others stay
-// with their seasons.
+// with their seasons. Keyed by season number instead, they keep their
+// numbers, and a poster the addon also gives by number keeps that one.
 func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -153,6 +155,11 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 		case "/meta/series/tt2.json":
 			_, _ = w.Write([]byte(`{"meta": {"id": "tt2", "type": "series", "name": "Other",
 				"app_extras": {"seasonPosters": "https://images.example/1.jpg", "certification": "TV-14"}}}`))
+		case "/meta/series/tt3.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt3", "type": "series", "name": "Keyed",
+				"app_extras": {"seasonPosters": {"0": "https://images.example/s0.jpg", "1": "https://images.example/s1.jpg",
+					"2": null, "3": 7, "x": "https://images.example/x.jpg"},
+					"seasonPosterByNumber": {"1": "https://images.example/one.jpg"}}}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -168,5 +175,10 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 	other, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt2", false)
 	if err != nil || other.Name != "Other" || other.Extras == nil || other.Extras.SeasonPosters != nil || other.Extras.Certification != "TV-14" {
 		t.Errorf("not a list: %v %+v", err, other.Extras)
+	}
+	keyed, err := client.Meta(t.Context(), addon.URL+"/manifest.json", "series", "tt3", false)
+	want := map[string]string{"0": "https://images.example/s0.jpg", "1": "https://images.example/one.jpg"}
+	if err != nil || keyed.Extras == nil || keyed.Extras.SeasonPosters != nil || !maps.Equal(keyed.Extras.SeasonPosterByNumber, want) {
+		t.Errorf("keyed by season number: %v %+v", err, keyed.Extras)
 	}
 }
