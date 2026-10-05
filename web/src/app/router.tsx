@@ -9,12 +9,12 @@ import AccountRoute from '@/features/account/AccountRoute'
 import NotFoundRoute from '@/features/home/NotFoundRoute'
 import HomeRoute from '@/features/home/HomeRoute'
 import QuickConnectRoute from '@/features/home/QuickConnectRoute'
-import IptvSourceRoute from '@/features/iptv/IptvSourceRoute'
 import LibrariesRoute from '@/features/libraries/LibrariesRoute'
 import CatalogGuidesRoute from '@/features/livetv/CatalogGuidesRoute'
 import LiveTvRoute from '@/features/livetv/LiveTvRoute'
 import SettingsRoute from '@/features/settings/SettingsRoute'
 import MySourcesRoute from '@/features/sources/MySourcesRoute'
+import SourceRoute from '@/features/sources/SourceRoute'
 import SourcesRoute from '@/features/sources/SourcesRoute'
 import ApiKeysRoute from '@/features/system/ApiKeysRoute'
 import HealthRoute from '@/features/system/HealthRoute'
@@ -99,14 +99,14 @@ export const router = createBrowserRouter(
         // Every user's own pages.
         { path: 'me/account', element: <AccountRoute /> },
         { path: 'me/sources', element: <MySourcesRoute /> },
-        { path: 'me/sources/:id/:section?', element: <IptvSourceRoute scope="me" /> },
+        { path: 'me/sources/:id/:section?', element: <SourceRoute scope="me" /> },
         { path: 'me/quick-connect', element: <QuickConnectRoute /> },
 
         // Content, with its tabs. A source or catalog may be a user's own: the API checks which.
         {
           element: <SectionTabs section="content" />,
           children: [
-            { path: 'sources/:scope/:id/:section?', element: <IptvSourceRoute /> },
+            { path: 'sources/:scope/:id/:section?', element: <SourceRoute /> },
             {
               path: 'live-tv/guides/:scope/:addonId/:catalogId/:section?',
               element: <CatalogGuidesRoute />,
