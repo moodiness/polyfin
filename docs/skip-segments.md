@@ -17,6 +17,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 **For app developers:**
 
 - Turned off, `/MediaSegments/{id}` lists none.
+- Turned on, with a database asked, the media sources of movies and episodes say `HasSegments: true`. jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's.
 
 ## The three databases
 
