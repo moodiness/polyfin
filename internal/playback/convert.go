@@ -214,12 +214,20 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 			break
 		}
 	}
-	height, width := rung.height, 0
-	if video.Height != nil && video.Width != nil && *video.Height > 0 {
-		height = min(height, *video.Height)
-		width = *video.Width * height / *video.Height
-	} else {
-		width = height * 16 / 9
+	// The rung's frame is 16:9, as 1080p's 1920×1080, its width rounded up
+	// so that a 16:9 source fills it. A wider source fits its width, as in
+	// Jellyfin: a film in 2.40:1 becomes 1920×800 rather than 2586×1080,
+	// which no 1080p level holds and an NVIDIA GPU refuses to encode.
+	height, width := rung.height, (rung.height*16+8)/9
+	if video.Height != nil && video.Width != nil && *video.Height > 0 && *video.Width > 0 {
+		w, h := *video.Width, *video.Height
+		if w*height > width*h {
+			width = min(width, w)
+			height = h * width / w
+		} else {
+			height = min(height, h)
+			width = w * height / h
+		}
 	}
 	// Encoders take even sizes.
 	conversion.Width, conversion.Height = width/2*2, height/2*2
@@ -234,23 +242,60 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 	return conversion
 }
 
-// Level is the codec level a conversion declares, for video of a frame
-// rate: H.264 4.1, or 4.2 above 30 frames a second, which cover 1080p;
-// HEVC 4.1.
-func (v *VideoConversion) Level(rate float64) string {
-	if v.Codec == "h264" && rate > 30 {
-		return "4.2"
+// levels are the codec levels a conversion may declare, lowest first, in
+// tenths (41 is 4.1), with the largest frame and the most samples a second
+// each holds: macroblocks for H.264 (ITU-T H.264, table A-1), luma samples
+// for HEVC (ITU-T H.265, table A.8, main tier). Conversions are 1080p at
+// most, which 5.2 holds up to 250 frames a second; every encoder Polyfin
+// uses takes these levels' names.
+var levels = map[string][]struct {
+	tenths        int
+	frame, second int64
+}{
+	"h264": {{41, 8_192, 245_760}, {42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600}},
+	"hevc": {{41, 2_228_224, 133_693_440}, {50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520}},
+}
+
+// level is the codec level a conversion declares for video of a frame
+// rate, in tenths: the lowest that holds its frame and its samples a
+// second, and never below H.264 4.1 (4.2 above 30 frames a second) or HEVC
+// 4.1. An NVIDIA GPU refuses to encode at a level too low for the video.
+func (v *VideoConversion) level(rate float64) int {
+	frame := int64(v.Width) * int64(v.Height)
+	least := 41
+	if v.Codec == "h264" {
+		frame = int64((v.Width+15)/16) * int64((v.Height+15)/16)
+		if rate > 30 {
+			least = 42
+		}
 	}
-	return "4.1"
+	highest := least
+	for _, l := range levels[v.Codec] {
+		if l.tenths >= least && frame <= l.frame && float64(frame)*rate <= float64(l.second) {
+			return l.tenths
+		}
+		highest = l.tenths
+	}
+	return highest
+}
+
+// Level is the codec level a conversion declares for video of a frame
+// rate, as FFmpeg's encoders take it: "4.1", "5".
+func (v *VideoConversion) Level(rate float64) string {
+	tenths := v.level(rate)
+	if tenths%10 == 0 {
+		return strconv.Itoa(tenths / 10)
+	}
+	return strconv.Itoa(tenths/10) + "." + strconv.Itoa(tenths%10)
 }
 
 // CodecString is the RFC 6381 codec string of a conversion's video: H.264
 // High or HEVC Main at its level.
 func (v *VideoConversion) CodecString(rate float64) string {
-	level := v.Level(rate)
+	tenths := v.level(rate)
 	if v.Codec == "hevc" {
 		// HEVC levels count in thirtieths: 4.1 is 123.
-		return "hvc1.1.6.L" + strconv.Itoa(int(level[0]-'0')*30+int(level[2]-'0')*3) + ".B0"
+		return "hvc1.1.6.L" + strconv.Itoa(tenths*3) + ".B0"
 	}
-	return "avc1.6400" + strings.ToUpper(strconv.FormatInt(int64((level[0]-'0')*10+(level[2]-'0')), 16))
+	return "avc1.6400" + strings.ToUpper(strconv.FormatInt(int64(tenths), 16))
 }

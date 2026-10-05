@@ -390,7 +390,9 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{"never larger than the source", "h264", 0, video(1280, 720, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 10_000_000}},
 		{"never more than the source's bitrate", "h264", 0, video(1920, 1080, 4_000_000, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 4_000_000}},
 		{"a low limit", "h264", 1_000_000, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 852, Height: 480, Bitrate: 1_000_000}},
-		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 864, Height: 360, Bitrate: 300_000, Deinterlace: true}},
+		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 640, Height: 266, Bitrate: 300_000, Deinterlace: true}},
+		// A film in 2.40:1 fits 1080p's 16:9 frame by its width.
+		{"a wide film", "h264", 0, video(3832, 1600, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 800, Bitrate: 10_000_000}},
 		{"HDR tone mapped at 720p at most", "h264", 0, MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)},
 			&VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}},
 		{"HEVC only", "hevc,mpeg4", 0, video(1920, 1080, 0, false), &VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
@@ -408,6 +410,24 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	} {
 		if c.got != c.want {
 			t.Errorf("codec string %s, want %s", c.got, c.want)
+		}
+	}
+	// The level declared holds the frame and its rate: an NVIDIA GPU
+	// refuses to encode at a lower one.
+	for _, c := range []struct {
+		conversion          VideoConversion
+		rate                float64
+		level, codecsString string
+	}{
+		{VideoConversion{Codec: "h264", Width: 1920, Height: 1080}, 23.976, "4.1", "avc1.640029"},
+		{VideoConversion{Codec: "h264", Width: 1920, Height: 1080}, 50, "4.2", "avc1.64002A"},
+		{VideoConversion{Codec: "h264", Width: 1920, Height: 1080}, 120, "5.1", "avc1.640033"},
+		{VideoConversion{Codec: "h264", Width: 2586, Height: 1080}, 23.976, "5", "avc1.640032"},
+		{VideoConversion{Codec: "hevc", Width: 1920, Height: 1080}, 59.94, "4.1", "hvc1.1.6.L123.B0"},
+		{VideoConversion{Codec: "hevc", Width: 1920, Height: 1080}, 120, "5", "hvc1.1.6.L150.B0"},
+	} {
+		if level, codecs := c.conversion.Level(c.rate), c.conversion.CodecString(c.rate); level != c.level || codecs != c.codecsString {
+			t.Errorf("%dx%d %s at %v: level %s, %s; want %s, %s", c.conversion.Width, c.conversion.Height, c.conversion.Codec, c.rate, level, codecs, c.level, c.codecsString)
 		}
 	}
 }

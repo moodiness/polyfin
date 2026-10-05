@@ -316,8 +316,8 @@ func TestConversionsAtOnceAreLimited(t *testing.T) {
 	}
 }
 
-// Converted video is scaled down to the height cap, keeping its shape;
-// copied video keeps its size.
+// Converted video is scaled down to fit the height cap's 16:9 frame,
+// keeping its shape; copied video keeps its size.
 func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
@@ -349,10 +349,10 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 		t.Errorf("converted without a cap:\n%s", playlist)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.MaxConversionHeight = 480 })
-	// 480 lines at the bitrate of 480p, 2 Mb/s, at most 3 Mb/s with the
-	// audio's allowance.
+	// 854 × 480 at most, at the bitrate of 480p, 2 Mb/s, at most 3 Mb/s
+	// with the audio's allowance.
 	target, playlist := master(video)
-	if !strings.Contains(playlist, "BANDWIDTH=3640000,") || !strings.Contains(playlist, "RESOLUTION=1152x480") {
+	if !strings.Contains(playlist, "BANDWIDTH=3640000,") || !strings.Contains(playlist, "RESOLUTION=854x354") {
 		t.Errorf("converted under 480 lines:\n%s", playlist)
 	}
 	if _, playlist := master(copied); !strings.Contains(playlist, "RESOLUTION=1920x800") {
@@ -367,7 +367,7 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 	}
 	out, _ := exec.Command(filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), "-v", "error", "-select_streams", "v",
 		"-show_entries", "stream=width,height", "-of", "csv=p=0", path).Output()
-	if got := strings.TrimSpace(string(out)); status != http.StatusOK || got != "1152,480" {
+	if got := strings.TrimSpace(string(out)); status != http.StatusOK || got != "854,354" {
 		t.Errorf("segment: %d, video %q", status, got)
 	}
 }
