@@ -24,6 +24,9 @@ const system = {
     revokeConfirm: (app: string) =>
       `Revoke the key for ${app}? Tools and apps using it will stop working. This cannot be undone.`,
     revoked: (app: string) => `The key for ${app} has been revoked.`,
+    emptyHint: 'Create one below for each tool or app, so each can be revoked on its own.',
+    revokeTitle: 'Revoke this key?',
+    revokeLabel: (app: string) => `Revoke the key for ${app}`,
   },
   system: {
     schedule: {
@@ -70,6 +73,13 @@ const system = {
       lastDownload: 'Last download',
       nextDownload: 'Next download',
       notYet: 'Not yet',
+      noTasks: 'No task.',
+      noTasksHint: 'The server lists its tasks here once it has started.',
+      recordingsHint: 'Recordings scheduled from an app or from the guide appear here.',
+      refreshesHint:
+        'Add an IPTV source under Content › Sources, or a programme guide to a TV catalog, and their downloads appear here.',
+      backupsTitle: 'Database backups',
+      backUpNow: 'Back up now',
     },
     health: {
       title: 'Health',
@@ -204,6 +214,11 @@ const system = {
         traktClientSecret: 'Trakt client secret',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
+      noAddonsHint: 'Add a Stremio addon under Content › Sources.',
+      noIptvHint: 'Add an IPTV account under Content › Sources.',
+      noGuides: 'No programme guide.',
+      noGuidesHint: 'Add a programme guide to a TV catalog under Content › Live TV.',
+      serverTitle: 'Server',
     },
     logs: {
       title: 'Logs',
@@ -228,6 +243,9 @@ const system = {
       paused: 'Paused: the lines written meanwhile appear when you follow again.',
       detailedHint: 'Debug lines appear once “Detailed log” is on, under Settings › Diagnostics.',
       region: 'Server log',
+      emptyHint: 'Lines appear here as the server writes them.',
+      noMatchHint: 'Choose another level or change the search.',
+      filters: 'Filter the log',
     },
   },
 }
