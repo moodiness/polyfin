@@ -2,19 +2,23 @@
 const account = {
   account: {
     title: 'My account',
-    description:
-      'Manage your password, the apps signed in with your account, and the services that track what you watch.',
-    passwordTitle: 'Change password',
+    signedInAs: 'Signed in as ',
+    sectionsLabel: 'Account sections',
+    sections: { tracking: 'Tracking', devices: 'Devices', password: 'Password' },
+    devicesHelp:
+      'The apps signed in with your account. A device you sign out asks for your password the next time it opens.',
     passwordHelp: 'Changing your password signs out all your Jellyfin devices.',
     currentPassword: 'Current password',
     newPassword: 'New password',
     confirmPassword: 'Confirm new password',
+    changePassword: 'Change password',
+    changingPassword: 'Changing…',
     passwordChanged: 'Your password has been changed.',
-    devicesTitle: 'My devices',
     tracking: {
       title: 'Tracking',
       description:
         'Connect the services that keep track of what you watch. Polyfin tells each connected service the movies and episodes you watch in your Jellyfin apps.',
+      loading: 'Loading tracking services…',
       status: {
         connected: 'Connected',
         notConnected: 'Not connected',
@@ -45,21 +49,26 @@ const account = {
       codeLabel: 'Code to enter',
       openSite: (site: string) => `Open ${site}`,
       waiting: 'This page updates by itself once you have entered it.',
-      expires: 'The code expires ',
+      expires: (when: string) => `The code expires ${when}.`,
       codeEnded:
         'The code expired or was refused before it was entered. Get a new code to try again.',
-      account: 'Account',
-      connectedAt: 'Connected on',
-      lastSent: 'Last sent',
-      nothingSent: 'Nothing sent yet',
+      connectedAs: 'Connected as ',
+      connectedWithKey: 'Connected with your API key',
+      connected: 'Connected',
+      connectedOn: (date: string) => ` on ${date}`,
+      lastSent: ', last sent ',
+      nothingSent: ', nothing sent yet',
+      connectedToast: (name: string) => `${name} connected.`,
+      disconnectedToast: (name: string) => `${name} disconnected.`,
       problemReconnect: (name: string) =>
         `${name} no longer accepts this connection, so nothing is sent to it. Connect again to start sending what you watch.`,
       problemUnreachable: (name: string) =>
         `${name} could not be reached lately. Polyfin keeps trying, and sends what you watched once it answers.`,
       disconnect: 'Disconnect',
       disconnecting: 'Disconnecting…',
-      disconnectConfirm: (name: string) =>
-        `Disconnect ${name}? Polyfin stops telling it what you watch. What it already has stays on ${name}.`,
+      disconnectTitle: (name: string) => `Disconnect ${name}?`,
+      disconnectBody: (name: string) =>
+        `Polyfin stops telling it what you watch. What it already has stays on ${name}.`,
       invalidKey: (name: string) =>
         `${name} did not accept this key. Copy it again from your ${name} account.`,
       serviceUnreachable: (name: string) =>
