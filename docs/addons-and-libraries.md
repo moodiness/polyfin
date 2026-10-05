@@ -12,7 +12,7 @@ Polyfin gets its content from Stremio addons. Each addon has a role:
 
 ### Server addons
 
-To share an addon with every user, paste its manifest URL (from the addon's configure page) under **Addons**. Then pick under **Libraries** which of its catalogs become libraries in Jellyfin apps.
+To share an addon with every user, paste its manifest URL (from the addon's configure page) under **Content › Sources**. Then pick under **Libraries** which of its catalogs become libraries in Jellyfin apps.
 
 - When an addon offers collection catalogs, those are enabled first.
 - Otherwise its first 20 movie, series and TV catalogs are enabled.
@@ -22,7 +22,7 @@ Only administrators can install addons hosted on a local network address.
 
 ### Personal addons
 
-Each user can add their own addons and libraries under **My addons**. Users can also turn the server's addons off for themselves.
+Each user can add their own addons and libraries under **My sources**. Users can also turn the server's addons off for themselves.
 
 ### Manifest URLs
 
@@ -38,11 +38,11 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 ## Music addons
 
-Eclipse music addons install like Stremio addons: under **Addons** for the server, or under **My addons** for a user's own. You can add one by its manifest URL or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Music addon addresses are redacted like manifest URLs.
+Eclipse music addons install like Stremio addons: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest URL or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Music addon addresses are redacted like manifest URLs.
 
 ### Music addon settings
 
-Change the settings an addon declares (pickers, switches, texts and numbers) with its **Settings** button under **Addons** or **My addons**.
+Change the settings an addon declares (pickers, switches, texts and numbers) with its **Settings** button under **Content › Sources** or **My sources**.
 
 - Each setting holds one value.
 - A per-network setting keeps its Wi-Fi default.
