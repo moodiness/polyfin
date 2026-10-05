@@ -1,12 +1,13 @@
 import { CaretRightIcon, PlusIcon, UsersIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { fetchUsers, queryKeys, type User } from '@/api'
+import { fetchUsers, queryKeys, userImageUrl, type User } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
+  Avatar,
   Badge,
   Block,
   Button,
@@ -19,7 +20,7 @@ import {
   RelativeTime,
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
-import { clockTime, UserAvatar, useRestrictions } from './shared'
+import { clockTime, useRestrictions } from './shared'
 
 /** `/users`: every account, each opening its page, and the button to create one. */
 export default function UsersList() {
@@ -72,7 +73,7 @@ function UserRow({ user }: { user: User }) {
   return (
     <Row
       to={`/users/${user.id}`}
-      leading={<UserAvatar user={user} />}
+      leading={<Avatar name={user.name} image={userImageUrl(user)} size="lg" />}
       title={user.name}
       titleAside={
         <>

@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
-import { fetchStatus, queryKeys, type SessionUser } from '@/api'
+import { fetchStatus, queryKeys, userImageUrl, type SessionUser } from '@/api'
 import { languages, useI18n } from '@/i18n'
 import {
   Avatar,
@@ -127,13 +127,13 @@ function AccountMenu({ user }: { user: SessionUser }) {
           aria-label={t.nav.accountOf(user.name)}
           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-field pr-1.5 pl-1 text-ink-3 transition-colors duration-160 ease-nuit hover:bg-s2 aria-expanded:bg-s2"
         >
-          <Avatar name={user.name} />
+          <Avatar name={user.name} image={userImageUrl(user)} />
           <CaretDownIcon size={14} aria-hidden="true" />
         </button>
       )}
     >
       <MenuHeader>
-        <Avatar name={user.name} />
+        <Avatar name={user.name} image={userImageUrl(user)} />
         <div className="min-w-0">
           <p className="truncate text-body font-semibold text-ink">{user.name}</p>
           <p className="text-[12.5px] text-ink-3">

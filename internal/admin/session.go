@@ -15,10 +15,13 @@ type sessionUser struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
 	IsAdministrator bool   `json:"isAdministrator"`
+	// ImageTag identifies the user's profile picture, served at /UserImage,
+	// null without one: the admin app shows it on the account button.
+	ImageTag *string `json:"imageTag"`
 }
 
 func newSessionUser(user accounts.User) sessionUser {
-	return sessionUser{ID: user.ID.String(), Name: user.Name, IsAdministrator: user.IsAdministrator}
+	return sessionUser{ID: user.ID.String(), Name: user.Name, IsAdministrator: user.IsAdministrator, ImageTag: imageTag(user)}
 }
 
 type sessionKey struct{}

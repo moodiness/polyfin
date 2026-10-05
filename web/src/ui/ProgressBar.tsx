@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cx } from './cx'
 
 export type ProgressVariant = 'accent' | 'brand' | 'neutral' | 'warn' | 'danger'
@@ -68,34 +69,51 @@ export function ProgressBar({
 }
 
 /**
- * A user's initial in a rounded square: the account button, a member in a row, who is playing.
- * Decorative by default, as the name is written beside it; give `label` when it stands alone.
+ * A user's profile picture, or their initial in a rounded square when they have none or it fails
+ * to load: the account button, a member in a row, who is playing. Decorative by default, as the
+ * name is written beside it; give `label` when it stands alone.
  */
 export function Avatar({
   name,
+  image,
   size = 'md',
   label,
   className,
 }: {
   name: string
+  /** The address of the profile picture (`userImageUrl`); the initial stands in without one. */
+  image?: string
   /** `sm` 22 px (inline, in rows), `md` 28 px (top bar), `lg` 40 px (a user's page). */
   size?: 'sm' | 'md' | 'lg'
   label?: string
   className?: string
 }) {
+  // A picture that failed is not tried again until its address changes.
+  const [failed, setFailed] = useState<string | undefined>(undefined)
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? '?'
+  const box = cx(
+    'shrink-0 border border-line-2',
+    size === 'sm' && 'size-[22px] rounded-[7px] text-[11px]',
+    size === 'md' && 'size-7 rounded-[9px] text-[12.5px]',
+    size === 'lg' && 'size-10 rounded-row text-[15px]',
+    className,
+  )
+  if (image !== undefined && failed !== image) {
+    return (
+      <img
+        src={image}
+        alt={label ?? ''}
+        onError={() => setFailed(image)}
+        className={cx(box, 'bg-s4 object-cover')}
+      />
+    )
+  }
   return (
     <span
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className={cx(
-        'inline-grid shrink-0 place-items-center border border-line-2 bg-s4 font-semibold text-ink',
-        size === 'sm' && 'size-[22px] rounded-[7px] text-[11px]',
-        size === 'md' && 'size-7 rounded-[9px] text-[12.5px]',
-        size === 'lg' && 'size-10 rounded-row text-[15px]',
-        className,
-      )}
+      className={cx(box, 'inline-grid place-items-center bg-s4 font-semibold text-ink')}
     >
       {initial}
     </span>

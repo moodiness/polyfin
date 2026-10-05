@@ -23,6 +23,7 @@ import {
   queryKeys,
   signOutUserDevice,
   unblockUser,
+  userImageUrl,
   type User,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -30,6 +31,7 @@ import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
+  Avatar,
   Badge,
   Button,
   ButtonLink,
@@ -54,7 +56,6 @@ import {
   refreshIfGone,
   storeUser,
   SwitchRow,
-  UserAvatar,
   useRestrictions,
   useSectionInView,
   useUserPatch,
@@ -180,7 +181,7 @@ function UserPage({ user }: { user: User }) {
 
   const lede = (
     <span className="flex flex-wrap items-center gap-2">
-      <UserAvatar user={user} size="md" />
+      <Avatar name={user.name} image={userImageUrl(user)} size="md" />
       {user.id === self.id && <Badge>{t.users.you}</Badge>}
       <Badge tone={user.isAdministrator ? 'accent' : 'neutral'}>
         {user.isAdministrator ? t.users.administrator : t.users.member}
