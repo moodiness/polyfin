@@ -336,7 +336,7 @@ function LibraryForm({
                                 to={lineupPath(scope, library.addonId, 'options')}
                                 className="font-medium text-fin-5 underline decoration-fin-5/40 underline-offset-4 hover:decoration-fin-5"
                               >
-                                {t.lineup.content.liveOffAction}
+                                {t.libraries.iptvVodLink}
                               </Link>
                             </p>
                           )}

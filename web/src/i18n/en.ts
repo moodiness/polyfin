@@ -775,8 +775,8 @@ const en = {
     name: 'Name in apps',
     appName: (name: string) => `Shown in apps as “${name}”.`,
     liveTv: 'Its channels appear in Live TV in Jellyfin apps.',
-    iptvVod:
-      'Movies or series of an IPTV source: which ones, and one library per type or per category, are set on the source.',
+    iptvVod: 'From an IPTV source.',
+    iptvVodLink: 'Its import options',
     addonOff: 'Addon turned off',
     missing: 'No longer available',
     remove: 'Remove',
@@ -1295,7 +1295,7 @@ const en = {
       series: 'Series imported',
       titlesOf: (total: string, categories: string) => `of ${total}, in ${categories} categories`,
       episodes: 'Episodes known',
-      episodesHelp: 'Xtream: those of the series opened so far.',
+      episodesHelp: 'Xtream: read as series open',
       vodShort: (movies: string, series: string) =>
         `${movies} movies and ${series} series imported`,
       lastAttempt: 'Last attempt',
@@ -1345,7 +1345,7 @@ const en = {
     vod: {
       libraries: 'Libraries',
       librariesHelp:
-        'One Movies library and one Series library, each title’s category becoming its genre; or one library per provider category. You choose which ones Jellyfin apps show under Libraries.',
+        'One Movies library and one Series library, each title’s category becoming its genre; or one library per provider category. With many categories, that makes many libraries: you choose which ones Jellyfin apps show under Libraries.',
       librariesType: 'One per type: Movies, Series',
       librariesCategory: 'One per provider category',
       enrichment: 'Describe titles with the metadata addons',

@@ -806,8 +806,8 @@ const fr: Messages = {
     name: 'Nom dans les applications',
     appName: (name: string) => `Affichée dans les applications sous le nom « ${name} ».`,
     liveTv: 'Ses chaînes apparaissent dans la TV en direct des applications Jellyfin.',
-    iptvVod:
-      'Films ou séries d’une source IPTV : lesquels, et une bibliothèque par type ou par catégorie, se règlent sur la source.',
+    iptvVod: 'D’une source IPTV.',
+    iptvVodLink: 'Ses options d’import',
     addonOff: 'Addon désactivé',
     missing: 'Plus disponible',
     remove: 'Retirer',
@@ -1335,7 +1335,7 @@ const fr: Messages = {
       titlesOf: (total: string, categories: string) =>
         `sur ${total}, dans ${categories} catégories`,
       episodes: 'Épisodes connus',
-      episodesHelp: 'Xtream : ceux des séries ouvertes jusqu’ici.',
+      episodesHelp: 'Xtream : lus à l’ouverture',
       vodShort: (movies: string, series: string) => `${movies} films et ${series} séries importés`,
       lastAttempt: 'Dernière tentative',
     },
@@ -1386,7 +1386,7 @@ const fr: Messages = {
     vod: {
       libraries: 'Bibliothèques',
       librariesHelp:
-        'Une bibliothèque Films et une bibliothèque Séries, la catégorie de chaque titre devenant son genre ; ou une bibliothèque par catégorie du fournisseur. Vous choisissez celles que montrent les applis Jellyfin dans Bibliothèques.',
+        'Une bibliothèque Films et une bibliothèque Séries, la catégorie de chaque titre devenant son genre ; ou une bibliothèque par catégorie du fournisseur. Avec beaucoup de catégories, cela fait beaucoup de bibliothèques : vous choisissez celles que montrent les applis Jellyfin dans Bibliothèques.',
       librariesType: 'Une par type : Films, Séries',
       librariesCategory: 'Une par catégorie du fournisseur',
       enrichment: 'Décrire les titres avec les addons de métadonnées',
