@@ -56,6 +56,27 @@ const libraries = {
       channels_unreachable:
         'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
     } as Record<string, string>,
+    loading: 'Loading libraries…',
+    listLabel: 'Libraries, in the order apps show them',
+    columnCatalog: 'Catalog',
+    shownEmptyTitle: 'No library yet',
+    shownEmptyHow: 'Add catalogs from the list below: each one becomes a library.',
+    noAddonsTitle: 'No catalog yet',
+    addSource: 'Add a source',
+    defaultTitle: 'How the first libraries are chosen',
+    availableLabel: (addon: string) => `Catalogs of ${addon}`,
+    music: {
+      library: {
+        music: 'Music library',
+        audiobook: 'Books library',
+        podcast: 'Music library',
+      } as Record<string, string>,
+      help: {
+        music: 'Its items appear in the music view of Jellyfin apps.',
+        audiobook: 'Its audiobooks appear in a books library of Jellyfin apps.',
+        podcast: 'Its episodes appear in the music view of Jellyfin apps.',
+      } as Record<string, string>,
+    },
   },
 }
 

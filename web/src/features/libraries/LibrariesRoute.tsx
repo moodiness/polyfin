@@ -1,10 +1,13 @@
-import LibrariesPage from '@/pages/LibrariesPage'
+import { PageLayout } from '@/app/PageLayout'
+import { useI18n } from '@/i18n'
+import LibraryEditor from './LibraryEditor'
 
-/**
- * `/libraries`: which catalogs are libraries in Jellyfin apps, and in which order.
- * Temporary: renders the page from before « Nuit » inside the new shell, until the libraries area
- * replaces it.
- */
+/** `/libraries`: which catalogs of the server's addons are libraries in Jellyfin apps, in order. */
 export default function LibrariesRoute() {
-  return <LibrariesPage />
+  const { t } = useI18n()
+  return (
+    <PageLayout title={t.libraries.title} lede={t.libraries.description}>
+      <LibraryEditor scope="shared" />
+    </PageLayout>
+  )
 }
