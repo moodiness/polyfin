@@ -99,3 +99,89 @@ func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
 		t.Errorf("next run of a task without schedule: %v", manual.Next)
 	}
 }
+
+// A daily task runs when the clock reaches its hour, and tells the next
+// day's run; an hour changed to one already past today runs tomorrow,
+// without running now.
+func TestADailyTaskRunsAtItsHour(t *testing.T) {
+	zone := time.FixedZone("Server", 2*60*60)
+	// The registry's clock is 50 ms before 04:00 when the test starts.
+	start, fake := time.Now(), time.Date(2026, 10, 5, 3, 59, 59, 950_000_000, zone)
+	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	registry.now = func() time.Time { return fake.Add(time.Since(start)) }
+	registry.dailyCheck = 10 * time.Millisecond
+	var hour atomic.Int32
+	hour.Store(4)
+	var runs atomic.Int32
+	var ranAt atomic.Value
+	registry.Register(Task{Key: "Backup", Daily: func() int { return int(hour.Load()) }, Text: map[string]Text{"en": {Name: "Back up"}},
+		Run: func(context.Context) error {
+			ranAt.Store(registry.now())
+			runs.Add(1)
+			return nil
+		}})
+	registry.Start(t.Context())
+	if info, _ := registry.Task(ID("Backup"), "en"); info.Daily == nil || *info.Daily != 4 || info.Interval != 0 || info.Next == nil ||
+		!info.Next.Equal(time.Date(2026, 10, 5, 4, 0, 0, 0, zone)) {
+		t.Fatalf("before the hour: %+v", info)
+	}
+	if runs.Load() != 0 {
+		t.Fatal("the task ran before its hour")
+	}
+	waitFor(t, func() bool { return runs.Load() == 1 })
+	if at := ranAt.Load().(time.Time); at.Hour() != 4 || at.Minute() != 0 {
+		t.Errorf("ran at %v", at)
+	}
+	waitFor(t, func() bool {
+		info, _ := registry.Task(ID("Backup"), "en")
+		return info.Next != nil && info.Next.Equal(time.Date(2026, 10, 6, 4, 0, 0, 0, zone))
+	})
+
+	hour.Store(5)
+	waitFor(t, func() bool {
+		info, _ := registry.Task(ID("Backup"), "en")
+		return info.Next != nil && info.Next.Equal(time.Date(2026, 10, 5, 5, 0, 0, 0, zone)) && *info.Daily == 5
+	})
+	hour.Store(3)
+	waitFor(t, func() bool {
+		info, _ := registry.Task(ID("Backup"), "en")
+		return info.Next != nil && info.Next.Equal(time.Date(2026, 10, 6, 3, 0, 0, 0, zone))
+	})
+	time.Sleep(5 * registry.dailyCheck)
+	if runs.Load() != 1 {
+		t.Errorf("runs after the hour changed: %d", runs.Load())
+	}
+}
+
+func TestNextDaily(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		after time.Time
+		hour  int
+		want  time.Time
+	}{
+		{time.Date(2026, 10, 5, 3, 0, 0, 0, paris), 4, time.Date(2026, 10, 5, 4, 0, 0, 0, paris)},
+		{time.Date(2026, 10, 5, 4, 0, 0, 0, paris), 4, time.Date(2026, 10, 6, 4, 0, 0, 0, paris)},
+		{time.Date(2026, 10, 5, 23, 30, 0, 0, paris), 0, time.Date(2026, 10, 6, 0, 0, 0, 0, paris)},
+		{time.Date(2026, 12, 31, 23, 0, 0, 0, paris), 4, time.Date(2027, 1, 1, 4, 0, 0, 0, paris)},
+		// 02:00 does not exist on the day summer time starts.
+		{time.Date(2026, 3, 28, 12, 0, 0, 0, paris), 2, time.Date(2026, 3, 29, 3, 0, 0, 0, paris)},
+	} {
+		if got := NextDaily(test.after, test.hour); !got.Equal(test.want) {
+			t.Errorf("after %v at %d: %v, want %v", test.after, test.hour, got, test.want)
+		}
+	}
+}
+
+func TestATaskCannotHaveAnIntervalAndADailyHour(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("no panic")
+		}
+	}()
+	New(slog.New(slog.NewTextHandler(io.Discard, nil))).Register(Task{Key: "Both", Interval: time.Hour, Daily: func() int { return 4 },
+		Text: map[string]Text{"en": {Name: "Both"}}, Run: func(context.Context) error { return nil }})
+}
