@@ -59,6 +59,8 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
 		"POLYFIN_RECORDINGS_DIR": cfg.RecordingsDir,
 		"POLYFIN_WEB_DIR":        cfg.WebDir,
+		// A secret, never shown: secretName hides it.
+		"POLYFIN_SECRET_KEY": "",
 	}
 	names := make([]string, 0, len(effective)+len(set))
 	for name := range effective {

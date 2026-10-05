@@ -18,13 +18,10 @@ type Titles interface {
 	Resolve(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, error)
 }
 
-var (
-	// ErrNotConnected reports a service the user did not connect.
-	ErrNotConnected = errors.New("tracking service not connected")
-	// ErrImportOff reports an import asked of a service whose history is
-	// not imported.
-	ErrImportOff = errors.New("watch history import is off")
-)
+// ErrImportOff reports an import asked of a service whose history is not
+// imported. ErrNotConnected (see connections.go) reports a service the
+// user did not connect.
+var ErrImportOff = errors.New("watch history import is off")
 
 // ProblemRateLimited is a last import the service kept asking to wait
 // for longer than an import waits.

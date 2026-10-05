@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -112,6 +113,9 @@ type Options struct {
 	// Settings returns the server's settings, which hold the apps
 	// registered with Trakt and Simkl.
 	Settings func() accounts.Settings
+	// Secrets seals the tokens and API keys of the connections in the
+	// database, and opens them; nil stores them as they are.
+	Secrets *secrets.Box
 	// Version is Polyfin's, which the services are told.
 	Version string
 	Logger  *slog.Logger
@@ -194,6 +198,7 @@ const maxIntake = 256
 type Service struct {
 	db        *pgxpool.Pool
 	settings  func() accounts.Settings
+	box       *secrets.Box
 	version   string
 	logger    *slog.Logger
 	urls      map[string]string
@@ -245,6 +250,7 @@ func New(options Options) *Service {
 	return &Service{
 		db:          options.DB,
 		settings:    options.Settings,
+		box:         options.Secrets,
 		version:     options.Version,
 		logger:      options.Logger,
 		urls:        urls,

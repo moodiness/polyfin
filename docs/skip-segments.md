@@ -51,7 +51,7 @@ PublicMetaDB is asked only with an API key. Create one on PublicMetaDB under **S
 | **PublicMetaDB key** | **Settings › Content** | Empty | API key PublicMetaDB is asked with. Without one, PublicMetaDB is not asked. |
 
 - Polyfin checks the key with PublicMetaDB before saving it. It refuses a key PublicMetaDB refuses, or cannot be asked about.
-- The key is never shown again (the page only tells that one is saved), nor logged.
+- The key is never logged, and never sent back with the settings. It shows as dots; administrators can show it again with its eye (see [Showing a saved key](administration.md#showing-a-saved-key)). With `POLYFIN_SECRET_KEY` set, it is stored encrypted (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 - An empty field removes the key.
 - Saving, changing or removing the key applies at once, without a restart.
 - Titles asked about before a key was saved are asked again once one is.
@@ -82,7 +82,7 @@ TheIntroDB's answers ignore a key they do not know. So Polyfin checks the key be
 - It is refused when TheIntroDB refuses the key.
 - It is not saved either when TheIntroDB cannot be asked, or answers otherwise.
 
-The key is kept secret and applied at once, like PublicMetaDB's. Should TheIntroDB refuse it later, Polyfin logs it once and keeps asking TheIntroDB without it until another key is saved.
+The key is kept secret, shown and stored like PublicMetaDB's, and applied at once. Should TheIntroDB refuse it later, Polyfin logs it once and keeps asking TheIntroDB without it until another key is saved.
 
 ## Caching
 

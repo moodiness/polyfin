@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/secrets"
 )
 
 // maxKey is the longest API key accepted, in bytes.
@@ -22,44 +23,57 @@ const maxKey = 256
 // watch.
 const simklScope = "media:read media:write"
 
-// connection is a user's connection to a service.
+// connection is a user's connection to a service, its token and refresh
+// token opened.
 type connection struct {
 	token, refresh string
-	expires        *time.Time
-	account        *string
-	connectedAt    time.Time
-	lastSent       *time.Time
-	problem        string
+	// stored is the token as the database holds it, sealed or not.
+	stored      string
+	expires     *time.Time
+	account     *string
+	connectedAt time.Time
+	lastSent    *time.Time
+	problem     string
 }
 
 const connectionColumns = "token, refresh_token, expires_at, account, connected_at, last_sent_at, coalesce(problem, '')"
 
-func scanConnection(row pgx.Row) (connection, error) {
+// scanConnection reads a connection and opens its tokens:
+// secrets.ErrUnreadable when the key cannot.
+func (s *Service) scanConnection(row pgx.Row) (connection, error) {
 	var c connection
-	err := row.Scan(&c.token, &c.refresh, &c.expires, &c.account, &c.connectedAt, &c.lastSent, &c.problem)
+	if err := row.Scan(&c.stored, &c.refresh, &c.expires, &c.account, &c.connectedAt, &c.lastSent, &c.problem); err != nil {
+		return c, err
+	}
+	var err error
+	if c.token, err = s.box.Open(c.stored); err == nil {
+		c.refresh, err = s.box.Open(c.refresh)
+	}
 	return c, err
 }
 
 // connection loads the connection of user to service, and reports whether
-// there is one.
+// there is one. A connection whose tokens the key cannot open counts as
+// none: nothing is sent with it until the user connects again or the key
+// is corrected.
 func (s *Service) connection(ctx context.Context, user accounts.ID, service string) (connection, bool, error) {
-	c, err := scanConnection(s.db.QueryRow(ctx, "SELECT "+connectionColumns+" FROM tracking_connections WHERE user_id = $1 AND service = $2",
+	c, err := s.scanConnection(s.db.QueryRow(ctx, "SELECT "+connectionColumns+" FROM tracking_connections WHERE user_id = $1 AND service = $2",
 		user, service))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return c, false, nil
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, secrets.ErrUnreadable) {
+		return connection{}, false, nil
 	}
 	return c, err == nil, err
 }
 
-// connect saves a new connection of user to service, in place of the
-// one there was and what it left to send.
+// connect saves a new connection of user to service, its tokens sealed, in
+// place of the one there was and what it left to send.
 func (s *Service) connect(ctx context.Context, user accounts.ID, service string, c connection) error {
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "DELETE FROM tracking_connections WHERE user_id = $1 AND service = $2", user, service); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO tracking_connections (user_id, service, token, refresh_token, expires_at, account, connected_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`, user, service, c.token, c.refresh, c.expires, c.account, c.connectedAt)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`, user, service, s.box.Seal(c.token), s.box.Seal(c.refresh), c.expires, c.account, c.connectedAt)
 		return err
 	})
 	if err != nil {
@@ -68,6 +82,27 @@ func (s *Service) connect(ctx context.Context, user accounts.ID, service string,
 	s.clearLane(laneKey{user, service})
 	s.logger.Info("A user connected a tracking service", "user_id", user.String(), "service", service)
 	return nil
+}
+
+// ErrNotConnected reports a service the user has no connection to, or
+// none the key can open.
+var ErrNotConnected = errors.New("tracking service not connected")
+
+// Key returns the API key user connected a key service with, for them to
+// read it again. Code services' tokens are never handed out:
+// ErrUnknownService.
+func (s *Service) Key(ctx context.Context, user accounts.ID, service string) (string, error) {
+	if !known(service) || ByCode(service) {
+		return "", ErrUnknownService
+	}
+	c, ok, err := s.connection(ctx, user, service)
+	switch {
+	case err != nil:
+		return "", err
+	case !ok:
+		return "", ErrNotConnected
+	}
+	return c.token, nil
 }
 
 // Status is how a user's connection to a service stands.
@@ -487,9 +522,15 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, service stri
 	if err != nil {
 		return err
 	}
+	// Tokens the key cannot open are forgotten without being revoked.
+	token, err = s.box.Open(token)
+	if err == nil {
+		refresh, err = s.box.Open(refresh)
+	}
+	revocable := err == nil
 	s.clearLane(key)
 	s.logger.Info("A user disconnected a tracking service", "user_id", user.String(), "service", service)
-	if ByCode(service) {
+	if ByCode(service) && revocable {
 		s.mu.Lock()
 		s.spawn(func() { s.revoke(service, token, refresh) })
 		s.mu.Unlock()
@@ -549,7 +590,11 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 	switch {
 	case err != nil:
 		return c, err
-	case !ok || c.problem == ProblemReconnect:
+	case !ok:
+		// Disconnected meanwhile, or tokens the key cannot open, which
+		// are not the service's refusal.
+		return c, ErrNotConnected
+	case c.problem == ProblemReconnect:
 		return c, errTokenRefused
 	}
 	stale := refusedToken != "" && c.token == refusedToken
@@ -585,7 +630,8 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 		t.RefreshToken = c.refresh
 	}
 	if _, err := s.db.Exec(ctx, `UPDATE tracking_connections SET token = $4, refresh_token = $5, expires_at = $6
-		WHERE user_id = $1 AND service = $2 AND token = $3`, key.user, key.service, c.token, t.AccessToken, t.RefreshToken, s.expiry(t)); err != nil {
+		WHERE user_id = $1 AND service = $2 AND token = $3`, key.user, key.service, c.stored,
+		s.box.Seal(t.AccessToken), s.box.Seal(t.RefreshToken), s.expiry(t)); err != nil {
 		return c, err
 	}
 	c.token, c.refresh, c.expires = t.AccessToken, t.RefreshToken, s.expiry(t)

@@ -136,6 +136,7 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/account/tracking/{service}", h.signedIn(h.disconnectTracking))
 	mux.Handle("PATCH /admin/api/account/tracking/{service}", h.signedIn(h.setTrackingImport))
 	mux.Handle("POST /admin/api/account/tracking/{service}/import", h.signedIn(h.importTracking))
+	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
@@ -148,6 +149,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
+	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
 	mux.Handle("GET /admin/api/api-keys", h.administrator(h.apiKeys))

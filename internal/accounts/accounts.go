@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -15,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/moodiness/polyfin/internal/secrets"
 )
 
 var (
@@ -156,6 +159,21 @@ type Store struct {
 	now func() time.Time
 	// logLevel follows the settings' DetailedLog (see FollowLogLevel).
 	logLevel atomic.Pointer[followedLevel]
+	// box seals the secrets of the settings; nil stores them as they are.
+	box *secrets.Box
+	// secretsMu guards unreadable, the secrets of the settings the box
+	// cannot open, as they are stored, by name.
+	secretsMu  sync.Mutex
+	unreadable map[string]string
+}
+
+// Option completes a store.
+type Option func(*Store)
+
+// Sealing has the store seal the secrets of the settings with box, and
+// open those sealed; without it, they are stored as they are.
+func Sealing(box *secrets.Box) Option {
+	return func(s *Store) { s.box = box }
 }
 
 // OnSignOut has f told of the devices signed out, once their tokens no
@@ -178,8 +196,11 @@ func qualifiedUserColumns(alias string) string {
 }
 
 // Open returns a store backed by db and loads the server settings.
-func Open(ctx context.Context, db *pgxpool.Pool) (*Store, error) {
+func Open(ctx context.Context, db *pgxpool.Pool, options ...Option) (*Store, error) {
 	store := &Store{db: db, now: time.Now}
+	for _, option := range options {
+		option(store)
+	}
 	settings, err := store.loadSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -277,6 +298,7 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 		return tx.QueryRow(ctx, "UPDATE settings SET language = $1 RETURNING "+settingsColumns, language).Scan(settings.fields()...)
 	})
 	if err == nil && settings != nil {
+		s.openSecrets(settings)
 		s.settings.Store(settings)
 		s.applyLogLevel()
 	}

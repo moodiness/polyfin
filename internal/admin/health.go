@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
@@ -34,6 +35,10 @@ type HealthSources struct {
 	DatabaseSize func(context.Context) (int64, error)
 	// Started is when the server started.
 	Started time.Time
+	// SecretKey tells whether POLYFIN_SECRET_KEY is set, and Secrets reads
+	// how the stored secrets stand with it.
+	SecretKey bool
+	Secrets   func(context.Context) (secrets.Report, error)
 }
 
 type healthJSON struct {
@@ -45,6 +50,8 @@ type healthJSON struct {
 	Transcoder *transcoderJSON      `json:"transcoder"`
 	Thumbnails *thumbnailHealthJSON `json:"thumbnails"`
 	Addons     []addonHealthJSON    `json:"addons"`
+	// Secrets is how the stored keys and tokens stand, null when unknown.
+	Secrets *secretsHealthJSON `json:"secrets"`
 }
 
 type processJSON struct {
@@ -230,6 +237,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			result.Addons = append(result.Addons, h.addonHealth(addon, scope.Owner))
 		}
 	}
+	result.Secrets = h.secretsHealth(r.Context())
 	writeJSON(w, http.StatusOK, result)
 }
 

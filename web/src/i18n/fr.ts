@@ -72,6 +72,9 @@ const fr: Messages = {
     account_disabled: 'Ce compte est désactivé. Demandez à un administrateur de le réactiver.',
     wrong_password: 'Votre mot de passe actuel est incorrect.',
     not_found: 'Cet élément n’existe plus. La liste a été actualisée.',
+    not_set:
+      'Aucune valeur enregistrée : elle a été supprimée, ou ne peut pas être déchiffrée avec POLYFIN_SECRET_KEY. Rechargez la page.',
+    not_revealable: 'Cette connexion n’a pas de clé à afficher.',
     unknown_code: 'Aucun appareil n’attend avec ce code. Il a peut-être expiré ou été mal saisi.',
     quick_connect_disabled: 'Quick Connect est désactivé sur ce serveur.',
     name_taken: 'Ce nom est déjà utilisé par un autre utilisateur.',
@@ -314,6 +317,8 @@ const fr: Messages = {
         `Connectez votre compte ${name} : Polyfin vous donne un code à saisir sur le site de ${name}.`,
       keyIntro: (name: string) => `Connectez votre compte ${name} avec votre clé d’API ${name}.`,
       keyLabel: (name: string) => `Clé d’API ${name}`,
+      savedKeyHelp:
+        'Vous seul pouvez l’afficher. Pour utiliser une autre clé, déconnectez-vous, puis connectez-vous de nouveau.',
       keyHelp: {
         mdblist: 'Elle se trouve sur mdblist.com, dans Preferences, sous API key.',
         publicmetadb: 'Elle se trouve dans votre compte PublicMetaDB.',
@@ -544,6 +549,9 @@ const fr: Messages = {
       remove: 'Supprimer',
       keep: 'Garder la valeur',
       removeHint: 'Enregistrez pour la supprimer, ou choisissez « Garder la valeur ».',
+      show: 'Afficher la clé',
+      hide: 'Masquer la clé',
+      savedHidden: 'Clé enregistrée, masquée',
     },
     tracking: {
       description:
@@ -1282,6 +1290,10 @@ const fr: Messages = {
         task: (name: string) => `La tâche « ${name} » a échoué.`,
         conversionsFull:
           'Les conversions vidéo sont à leur limite : les nouvelles attendent ou sont lues autrement.',
+        unreadableSecrets: (names: string) =>
+          `Des clés enregistrées ne peuvent pas être déchiffrées avec POLYFIN_SECRET_KEY et comptent comme absentes : ${names}. Redonnez la clé avec laquelle elles ont été chiffrées, ou saisissez-les de nouveau.`,
+        plaintextSecrets:
+          'Les clés et jetons sont enregistrés sans chiffrement. Définissez POLYFIN_SECRET_KEY pour les chiffrer.',
       },
       addonsTitle: 'Addons',
       addonsHelp:
@@ -1353,6 +1365,21 @@ const fr: Messages = {
       memory: 'Mémoire',
       heap: 'Utilisée',
       goroutines: 'Goroutines',
+      secretsTitle: 'Clés enregistrées',
+      secretsHelp:
+        'Les clés du serveur, et les jetons et clés de suivi des utilisateurs, chiffrés dans la base de données avec POLYFIN_SECRET_KEY (openssl rand -base64 32).',
+      encryption: 'Chiffrement',
+      encrypted: 'Activé',
+      notEncrypted: 'Désactivé : POLYFIN_SECRET_KEY n’est pas définie',
+      storedPlain: 'Enregistrées sans chiffrement',
+      unreadable: 'Impossibles à déchiffrer',
+      noneUnreadable: 'Aucune',
+      secretNames: {
+        publicMetaDbKey: 'Clé PublicMetaDB',
+        theIntroDbKey: 'Clé TheIntroDB',
+        traktClientSecret: 'Client secret Trakt',
+      },
+      connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
     },
     logs: {
       title: 'Journal',

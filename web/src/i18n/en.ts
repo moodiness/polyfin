@@ -69,6 +69,9 @@ const en = {
     account_disabled: 'This account is disabled. Ask an administrator to enable it.',
     wrong_password: 'Your current password is incorrect.',
     not_found: 'This item no longer exists. The list has been refreshed.',
+    not_set:
+      'Nothing is saved: it was removed, or it cannot be decrypted with POLYFIN_SECRET_KEY. Reload the page.',
+    not_revealable: 'This connection holds no key to show.',
     unknown_code: 'No device is waiting with this code. It may have expired or been mistyped.',
     quick_connect_disabled: 'Quick Connect is turned off on this server.',
     name_taken: 'This name is already used by another user.',
@@ -295,6 +298,7 @@ const en = {
         `Connect your ${name} account: Polyfin gives you a code to enter on the ${name} site.`,
       keyIntro: (name: string) => `Connect your ${name} account with your ${name} API key.`,
       keyLabel: (name: string) => `${name} API key`,
+      savedKeyHelp: 'Only you can show it. To use another key, disconnect, then connect again.',
       keyHelp: {
         mdblist: 'Find it on mdblist.com, in Preferences, under API key.',
         publicmetadb: 'Find it in your PublicMetaDB account.',
@@ -518,6 +522,9 @@ const en = {
       remove: 'Remove',
       keep: 'Keep it',
       removeHint: 'Save to remove it, or choose Keep it.',
+      show: 'Show key',
+      hide: 'Hide key',
+      savedHidden: 'Saved key, hidden',
     },
     tracking: {
       description:
@@ -1238,6 +1245,10 @@ const en = {
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         task: (name: string) => `The task “${name}” failed.`,
         conversionsFull: 'Video conversions are at their limit: new ones wait or play otherwise.',
+        unreadableSecrets: (names: string) =>
+          `Stored keys cannot be decrypted with POLYFIN_SECRET_KEY and count as not set: ${names}. Set the key they were encrypted with again, or enter them again.`,
+        plaintextSecrets:
+          'Keys and tokens are stored unencrypted. Set POLYFIN_SECRET_KEY to encrypt them.',
       },
       addonsTitle: 'Addons',
       addonsHelp:
@@ -1311,6 +1322,21 @@ const en = {
       memory: 'Memory',
       heap: 'In use',
       goroutines: 'Goroutines',
+      secretsTitle: 'Stored keys',
+      secretsHelp:
+        'The server’s keys and the users’ tracking tokens and keys, encrypted in the database with POLYFIN_SECRET_KEY (openssl rand -base64 32).',
+      encryption: 'Encryption',
+      encrypted: 'On',
+      notEncrypted: 'Off: POLYFIN_SECRET_KEY is not set',
+      storedPlain: 'Stored unencrypted',
+      unreadable: 'Cannot be decrypted',
+      noneUnreadable: 'None',
+      secretNames: {
+        publicMetaDbKey: 'PublicMetaDB key',
+        theIntroDbKey: 'TheIntroDB key',
+        traktClientSecret: 'Trakt client secret',
+      },
+      connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
     },
     logs: {
       title: 'Logs',

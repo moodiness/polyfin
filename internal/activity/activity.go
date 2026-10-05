@@ -243,6 +243,32 @@ func (s *Store) SettingsSaved(ctx context.Context, administrator string) {
 		Type: "ServerConfigurationUpdated"})
 }
 
+// secretNames name the secrets that can be revealed, in English and
+// French: the server's, by their admin API name, and the users' own API
+// keys, by service.
+var secretNames = map[string][2]string{
+	"publicMetaDbKey":   {"the PublicMetaDB key", "la clé PublicMetaDB"},
+	"theIntroDbKey":     {"the TheIntroDB key", "la clé TheIntroDB"},
+	"traktClientSecret": {"the Trakt client secret", "le client secret Trakt"},
+	"mdblist":           {"their MDBList API key", "sa clé d’API MDBList"},
+	"publicmetadb":      {"their PublicMetaDB API key", "sa clé d’API PublicMetaDB"},
+}
+
+// SecretRevealed records that user had a stored secret shown, by its name
+// in secretNames, never its value: one of the server's, or, own, their
+// own API key.
+func (s *Store) SecretRevealed(ctx context.Context, user accounts.User, secret string, own bool) {
+	name, ok := secretNames[secret]
+	if !ok {
+		name = [2]string{secret, secret}
+	}
+	entry := Entry{Name: s.phrase("%s revealed %s", "%s a affiché %s", user.Name, s.phrase(name[0], name[1])), Type: "SecretRevealed"}
+	if own {
+		entry.UserID = &user.ID
+	}
+	s.record(ctx, entry)
+}
+
 // AddonInstalled records that by installed the addon name at version,
 // for the server or for themselves.
 func (s *Store) AddonInstalled(ctx context.Context, by accounts.User, name, version string, shared bool) {

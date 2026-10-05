@@ -29,6 +29,7 @@ import {
   queryClient,
   queryKeys,
   resumePercentRange,
+  revealServerSecret,
   saveSettings,
   thumbnailStorageRange,
   trickplayIntervalRange,
@@ -457,6 +458,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
             value={form.publicMetaDbKey}
             onValue={(publicMetaDbKey) => update({ publicMetaDbKey })}
             error={fieldError(['invalid_publicmetadb_key', 'publicmetadb_unreachable'])}
+            reveal={() => revealServerSecret('publicMetaDbKey')}
           />
         </Setting>
         <Setting text={[s.theIntroDbKey, s.theIntroDbKeyHelp, 'TheIntroDB']}>
@@ -467,6 +469,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
             value={form.theIntroDbKey}
             onValue={(theIntroDbKey) => update({ theIntroDbKey })}
             error={fieldError(['invalid_theintrodb_key', 'theintrodb_unreachable'])}
+            reveal={() => revealServerSecret('theIntroDbKey')}
           />
         </Setting>
         <Setting text={[s.similarTitles, s.similarTitlesHelp]}>
@@ -698,6 +701,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
               saved={form.traktClientSecretSet}
               value={form.traktClientSecret}
               onValue={(traktClientSecret) => update({ traktClientSecret })}
+              reveal={() => revealServerSecret('traktClientSecret')}
             />
           </Setting>
         </SettingsGroup>

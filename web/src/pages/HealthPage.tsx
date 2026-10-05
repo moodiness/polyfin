@@ -14,7 +14,7 @@ import { Empty, Facts, Meter, Panel, Skeleton, StatusText, type Tone } from '@/c
 import { MusicBadge } from '@/components/AddonSettings'
 import { lineupPath } from '@/components/lineup/common'
 import OwnerChip from '@/components/OwnerChip'
-import { findProblems, lowOnSpace, useHealthData } from '@/components/problems'
+import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/components/problems'
 import { buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
@@ -105,6 +105,7 @@ export default function HealthPage() {
             <Storage health={health.data} />
             <Thumbnails health={health.data} />
             <Process health={health.data} />
+            <Secrets health={health.data} />
           </div>
         </div>
       )}
@@ -504,6 +505,43 @@ function Storage({ health }: { health: Health }) {
         </ul>
       </Panel>
     </>
+  )
+}
+
+function Secrets({ health }: { health: Health }) {
+  const { t } = useI18n()
+  const text = t.dashboard.health
+  const secrets = health.secrets
+  if (secrets === null) return null
+  return (
+    <Panel id="secrets" title={text.secretsTitle} description={text.secretsHelp}>
+      <Facts
+        items={[
+          {
+            label: text.encryption,
+            value: secrets.encrypted ? (
+              <StatusText tone="ok">{text.encrypted}</StatusText>
+            ) : (
+              <StatusText tone={secrets.plaintext > 0 ? 'warning' : 'muted'}>
+                {text.notEncrypted}
+              </StatusText>
+            ),
+          },
+          { label: text.storedPlain, value: secrets.plaintext },
+          {
+            label: text.unreadable,
+            value:
+              secrets.unreadable.length === 0 ? (
+                text.noneUnreadable
+              ) : (
+                <StatusText tone="error">
+                  {secrets.unreadable.map((secret) => unreadableName(t, secret)).join(', ')}
+                </StatusText>
+              ),
+          },
+        ]}
+      />
+    </Panel>
   )
 }
 

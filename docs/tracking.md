@@ -76,7 +76,7 @@ MDBList and PublicMetaDB need nothing from the administrator. Trakt and Simkl ar
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Trakt client ID** | **Settings › Tracking** | Empty | Client ID of your Trakt app. |
-| **Trakt client secret** | **Settings › Tracking** | Empty | Client secret of your Trakt app. Never shown again once saved. |
+| **Trakt client secret** | **Settings › Tracking** | Empty | Client secret of your Trakt app. Shown as dots once saved; administrators can show it again with its eye. |
 | **Simkl client ID** | **Settings › Tracking** | Empty | Client ID of your Simkl app. |
 
 ### Trakt
@@ -84,7 +84,7 @@ MDBList and PublicMetaDB need nothing from the administrator. Trakt and Simkl ar
 1. Create an application in your [Trakt API apps](https://app.trakt.tv/settings/apps), with the redirect URI `urn:ietf:wg:oauth:2.0:oob`.
 2. Paste its **Client ID** and **Client Secret** in **Trakt client ID** and **Trakt client secret**.
 
-The secret is never shown again once saved.
+The secret is never sent back with the settings. Once saved, it shows as dots, and its eye shows it again on demand (see [Showing a saved key](administration.md#showing-a-saved-key)).
 
 ### Simkl
 
@@ -115,4 +115,5 @@ Nothing waits for the services: reports and marks are sent in the background.
 
 - Trakt and Simkl tokens are refreshed before they expire, and revoked when the user disconnects.
 - Deleting a user deletes their connections and what waited to be sent.
-- Tokens and keys are never shown, nor written to the log.
+- Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key shows as dots, and its owner can show it with its eye; Trakt and Simkl tokens are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
+- With `POLYFIN_SECRET_KEY` set, tokens and keys are stored encrypted. A connection whose tokens cannot be decrypted with it counts as not connected until the user connects again or the right key is set; nothing is sent with it meanwhile. See [Stored keys and tokens](configuration.md#stored-keys-and-tokens).

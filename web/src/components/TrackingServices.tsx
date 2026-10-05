@@ -7,12 +7,14 @@ import {
   disconnectTracking,
   fetchTracking,
   importTracking,
+  revealTrackingKey,
   setTrackingImport,
   queryClient,
   queryKeys,
   type TrackingService,
   type TrackingServiceName,
 } from '@/api'
+import { SecretField } from '@/components/settings'
 import { useSessionUser } from '@/components/session'
 import {
   Badge,
@@ -22,7 +24,6 @@ import {
   ConfirmButton,
   Notice,
   RelativeTime,
-  TextField,
 } from '@/components/ui'
 import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
@@ -268,6 +269,19 @@ function ServiceRow({ service }: { service: TrackingService }) {
 
     body = service.connected ? (
       <div className="space-y-4">
+        {service.connection === 'key' && (
+          <div className="max-w-md">
+            <SecretField
+              label={text.keyLabel(name)}
+              hint={text.savedKeyHelp}
+              saved
+              value={undefined}
+              reveal={() => revealTrackingKey(service.service as 'mdblist' | 'publicmetadb')}
+              replaceable={false}
+              removable={false}
+            />
+          </div>
+        )}
         <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
           {service.account !== null && (
             <>
@@ -383,19 +397,17 @@ function KeyForm({
 
   return (
     <form onSubmit={submit} noValidate className="max-w-md space-y-3">
-      <TextField
+      <SecretField
         label={text.keyLabel(name)}
         hint={hint}
-        type="password"
-        autoComplete="off"
-        spellCheck={false}
-        value={key}
+        saved={false}
+        showStatus={false}
+        value={key === '' ? undefined : key}
         onValue={(value) => {
-          setKey(value)
+          setKey(value ?? '')
           onChange()
         }}
         error={error}
-        required
       />
       <button type="submit" className={buttonPrimary} disabled={pending || key.trim() === ''}>
         {pending ? text.checking : label}

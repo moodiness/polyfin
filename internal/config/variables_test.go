@@ -11,6 +11,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		"POLYFIN_CACHE_SIZE=20GB",
 		"POLYFIN_API_TOKEN=tok-123",
 		"POLYFIN_ADMIN_PASSWORD=hunter2",
+		"POLYFIN_SECRET_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 		"POLYFIN_EXTRA_FEED=https://user:pw@feeds.example/list?key=abc",
 		"HOME=/root",
 	}
@@ -29,7 +30,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 	byName := map[string]Variable{}
 	for _, v := range Variables(environ, cfg) {
 		byName[v.Name] = v
-		for _, secret := range []string{"s3cret-pw", "polyfin:", "tok-123", "hunter2", "pw@", "abc", "sslmode"} {
+		for _, secret := range []string{"s3cret-pw", "polyfin:", "tok-123", "hunter2", "pw@", "abc", "sslmode", "MDEy"} {
 			if strings.Contains(v.Value, secret) {
 				t.Errorf("%s shows %q: %q", v.Name, secret, v.Value)
 			}
@@ -46,6 +47,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		"POLYFIN_SEGMENTS":       {Value: "theintrodb,introdb,publicmetadb", Known: true},
 		"POLYFIN_API_TOKEN":      {Set: true, Hidden: true},
 		"POLYFIN_ADMIN_PASSWORD": {Set: true, Hidden: true},
+		"POLYFIN_SECRET_KEY":     {Set: true, Hidden: true, Known: true},
 		"POLYFIN_EXTRA_FEED":     {Value: "https://feeds.example/…", Set: true},
 	} {
 		got := byName[name]

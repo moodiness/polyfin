@@ -55,6 +55,25 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
   return owner === null ? name : `${name} (${t.dashboard.health.owner.user(owner.name)})`
 }
 
+/** The name of a stored secret the key cannot decrypt: a server setting or a user's connection. */
+export function unreadableName(
+  t: Messages,
+  secret: NonNullable<Health['secrets']>['unreadable'][number],
+): string {
+  const text = t.dashboard.health
+  return secret.setting !== null
+    ? text.secretNames[secret.setting]
+    : text.connectionOf(serviceNames[secret.service ?? 'trakt'], secret.user ?? '')
+}
+
+/** The tracking services by their names. */
+const serviceNames = {
+  trakt: 'Trakt',
+  simkl: 'Simkl',
+  mdblist: 'MDBList',
+  publicmetadb: 'PublicMetaDB',
+}
+
 /** The problems the health data shows, errors first; users' own sources count too. */
 export function findProblems(
   t: Messages,
@@ -99,6 +118,19 @@ export function findProblems(
     }
     for (const paused of health.thumbnails?.pausedHosts ?? []) {
       problems.push({ tone: 'warning', text: text.paused(paused.host), to: '/health#thumbnails' })
+    }
+    const secrets = health.secrets
+    if (secrets !== null && secrets.unreadable.length > 0) {
+      problems.push({
+        tone: 'error',
+        text: text.unreadableSecrets(
+          secrets.unreadable.map((secret) => unreadableName(t, secret)).join(', '),
+        ),
+        to: '/health#secrets',
+      })
+    }
+    if (secrets !== null && !secrets.encrypted && secrets.plaintext > 0) {
+      problems.push({ tone: 'warning', text: text.plaintextSecrets, to: '/health#secrets' })
     }
   }
   for (const addon of sources?.addons ?? []) {
