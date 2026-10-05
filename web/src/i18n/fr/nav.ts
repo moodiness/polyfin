@@ -67,7 +67,7 @@ const nav: typeof en = {
     },
     kinds: {
       stremio: 'Addon Stremio',
-      eclipse: 'Addon de musique',
+      eclipse: 'Addon Eclipse',
       iptv: 'Source IPTV',
     },
     ownedBy: (kind: string, owner: string) => `${kind} de ${owner}`,

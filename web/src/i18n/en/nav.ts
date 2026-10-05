@@ -67,7 +67,7 @@ const nav = {
     },
     kinds: {
       stremio: 'Stremio addon',
-      eclipse: 'Music addon',
+      eclipse: 'Eclipse addon',
       iptv: 'IPTV source',
     },
     /** A user's own source, as the palette describes it: "IPTV source of sam". */

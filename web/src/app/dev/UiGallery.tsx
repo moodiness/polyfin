@@ -377,7 +377,7 @@ export default function UiGallery() {
               }
               className="w-full"
             >
-              Add a Stremio addon, a music addon or an IPTV account: their catalogs become
+              Add a Stremio addon, an Eclipse addon or an IPTV account: their catalogs become
               libraries.
             </EmptyState>
           </Specimen>

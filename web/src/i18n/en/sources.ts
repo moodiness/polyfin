@@ -2,14 +2,14 @@
 const sources = {
   sources: {
     title: 'Sources',
-    lede: 'Stremio, music and IPTV addons in one list. The server’s sources serve every user; a member’s own sources serve only them.',
+    lede: 'Stremio addons, Eclipse addons and IPTV sources in one list. The server’s sources serve every user; a member’s own sources serve only them.',
     add: 'Add a source',
     listLabel: 'Sources',
     listNote: 'Members’ own sources only serve their owner.',
     loading: 'Loading the sources',
     kindFilter: 'Filter by kind',
     all: 'All',
-    kinds: { stremio: 'Stremio', eclipse: 'Music', iptv: 'IPTV' },
+    kinds: { stremio: 'Stremio', eclipse: 'Eclipse', iptv: 'IPTV' },
     owner: 'Owner',
     everyOwner: 'Every owner',
     server: 'The server',
@@ -18,15 +18,15 @@ const sources = {
     clearFilters: 'Clear the filters',
     emptyTitle: 'No source yet',
     emptyShared:
-      'Add a Stremio addon, a music addon or an IPTV source: it serves every user of this server.',
+      'Add a Stremio addon, an Eclipse addon or an IPTV source: it serves every user of this server.',
     emptyMine:
-      'Add a Stremio addon, a music addon or an IPTV source: it serves only you, after the server’s.',
+      'Add a Stremio addon, an Eclipse addon or an IPTV source: it serves only you, after the server’s.',
     noMatchTitle: 'No source matches',
     noMatch: 'Change the kind, the owner or the search.',
     tag: { stremio: 'Stremio', eclipse: 'Eclipse', m3u: 'M3U', xtream: 'Xtream' },
     kindName: {
       stremio: 'Stremio addon',
-      eclipse: 'Music addon',
+      eclipse: 'Eclipse addon',
       m3u: 'M3U playlist',
       xtream: 'Xtream Codes account',
     },
@@ -103,7 +103,7 @@ const sources = {
   sourceAdd: {
     title: 'Add a source',
     kind: 'Kind of source',
-    kinds: { stremio: 'Stremio addon', music: 'Music addon', iptv: 'IPTV source' },
+    kinds: { stremio: 'Stremio addon', music: 'Eclipse addon', iptv: 'IPTV source' },
     stremioHelp: 'A Stremio addon brings catalogs, metadata and streams. Paste its install link.',
     musicHelp:
       'An Eclipse music addon brings music, audiobooks or podcasts. Paste its manifest address.',
@@ -146,7 +146,7 @@ const sources = {
     series: (count: string) => `${count} series`,
   },
   mySources: {
-    lede: 'Add your own Stremio, music and IPTV sources and choose which of their catalogs appear as libraries in your Jellyfin apps.',
+    lede: 'Add your own Stremio, Eclipse and IPTV sources and choose which of their catalogs appear as libraries in your Jellyfin apps.',
     preferenceTitle: 'The server’s sources',
     useShared: 'Use the server’s sources',
     useSharedHelp:
