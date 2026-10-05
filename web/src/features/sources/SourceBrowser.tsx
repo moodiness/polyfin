@@ -260,7 +260,7 @@ export function SourceBrowser({
               placeholder={text.searchPlaceholder}
               aria-label={text.search}
               type="search"
-              className="min-w-0 flex-1"
+              className="min-w-0 sm:flex-1"
             />
             {ownerFilter && owners.size > 0 && (
               <Select

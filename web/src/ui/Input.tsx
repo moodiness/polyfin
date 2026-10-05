@@ -1,8 +1,9 @@
-import { CaretDownIcon, EyeIcon, EyeSlashIcon, type Icon } from '@phosphor-icons/react'
+import { EyeIcon, EyeSlashIcon, type Icon } from '@phosphor-icons/react'
 import {
   useState,
   type InputHTMLAttributes,
   type ReactNode,
+  type Ref,
   type TextareaHTMLAttributes,
 } from 'react'
 import { useI18n } from '@/i18n'
@@ -18,11 +19,12 @@ export const fieldBox = cx(
   'has-disabled:cursor-not-allowed has-disabled:opacity-50 has-disabled:hover:border-line-2',
 )
 
-const control =
+/** The text inside a field box. */
+export const control =
   'h-full min-w-0 flex-1 bg-transparent px-3 text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none disabled:cursor-not-allowed'
 
 /** The id and `aria-*` a control takes from its Field, unless given its own. */
-function useControlProps(
+export function useControlProps(
   id: string | undefined,
   describedById: string | undefined,
   invalid?: boolean,
@@ -55,6 +57,7 @@ export type TextInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size' 
   mono?: boolean
   /** Classes of the outer box (width, margins). */
   className?: string
+  ref?: Ref<HTMLInputElement>
 }
 
 /**
@@ -162,73 +165,6 @@ export function NumberInput({
       {suffix !== undefined && (
         <span className="shrink-0 pr-3 font-mono text-small text-ink-3">{suffix}</span>
       )}
-    </div>
-  )
-}
-
-export type SelectOption<T extends string | number> = {
-  value: T
-  label: string
-  disabled?: boolean
-}
-
-export type SelectProps<T extends string | number> = {
-  /** The chosen value. */
-  value: T
-  /** The choices, in order. */
-  options: readonly SelectOption<T>[]
-  /** Called with the value chosen, typed like the options. */
-  onValue: (value: T) => void
-  disabled?: boolean
-  invalid?: boolean
-  id?: string
-  'aria-label'?: string
-  'aria-describedby'?: string
-  /** Classes of the outer box (width). */
-  className?: string
-}
-
-/** A native list to choose one value from, styled like the other fields. */
-export function Select<T extends string | number>({
-  value,
-  options,
-  onValue,
-  disabled,
-  invalid,
-  id,
-  'aria-describedby': ownDescribedBy,
-  'aria-label': ariaLabel,
-  className,
-}: SelectProps<T>) {
-  const controlProps = useControlProps(id, ownDescribedBy, invalid)
-  return (
-    <div className={cx(fieldBox, 'h-10', className)}>
-      <select
-        value={String(value)}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        onChange={(event) => {
-          const chosen = options.find((option) => String(option.value) === event.target.value)
-          if (chosen) onValue(chosen.value)
-        }}
-        className={cx(control, 'cursor-pointer appearance-none pr-9 [&>option]:bg-s2')}
-        {...controlProps}
-      >
-        {options.map((option) => (
-          <option
-            key={String(option.value)}
-            value={String(option.value)}
-            disabled={option.disabled}
-          >
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <CaretDownIcon
-        size={14}
-        aria-hidden="true"
-        className="pointer-events-none absolute right-3 text-ink-3"
-      />
     </div>
   )
 }

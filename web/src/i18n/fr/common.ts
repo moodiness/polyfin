@@ -271,6 +271,8 @@ const common: typeof en = {
     unsaved: 'Modifications non enregistrées',
     allSaved: 'Tout est enregistré',
     discard: 'Annuler les modifications',
+    searchList: 'Chercher dans la liste',
+    noMatch: 'Rien ne correspond.',
     secret: {
       saved: 'Valeur enregistrée',
       notSet: 'Aucune valeur',
