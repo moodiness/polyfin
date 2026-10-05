@@ -165,7 +165,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
       />
       <MenuSeparator />
       <MenuItem icon={GithubLogoIcon} href={repositoryUrl} external>
-        {t.footer.sourceCode}
+        GitHub
       </MenuItem>
       <MenuItem icon={SignOutIcon} disabled={signOut.isPending} onSelect={() => signOut.mutate()}>
         {signOut.isPending ? t.nav.signingOut : t.nav.signOut}

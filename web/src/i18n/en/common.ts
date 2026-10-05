@@ -244,9 +244,6 @@ const common = {
   time: {
     justNow: 'just now',
   },
-  footer: {
-    sourceCode: 'Source code on GitHub',
-  },
   /** The words of the design system in `src/ui/`. */
   ui: {
     on: 'On',

@@ -7,7 +7,7 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
 import { Button } from '@/ui'
-import { AddSourceDrawer } from './AddSource'
+import { AddSourceModal } from './AddSource'
 import type { Entry } from './model'
 import { SourceBrowser } from './SourceBrowser'
 
@@ -76,7 +76,7 @@ export default function SourcesRoute() {
         listNote={t.sources.listNote}
         onAdd={() => setAdding(true)}
       />
-      <AddSourceDrawer
+      <AddSourceModal
         scope="shared"
         open={adding}
         onClose={() => setAdding(false)}

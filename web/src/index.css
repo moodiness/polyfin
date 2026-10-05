@@ -90,8 +90,7 @@
   --animate-rise: rise 420ms var(--ease-nuit) both;
   --animate-pop: pop 220ms var(--ease-nuit) both;
   --animate-fade: fade 160ms var(--ease-nuit) both;
-  --animate-drawer-right: drawer-right 220ms var(--ease-nuit) both;
-  --animate-drawer-left: drawer-left 220ms var(--ease-nuit) both;
+  --animate-modal: modal 220ms var(--ease-nuit) both;
 
   @keyframes rise {
     from {
@@ -105,14 +104,10 @@
       transform: scale(0.98) translateY(-4px);
     }
   }
-  @keyframes drawer-right {
+  @keyframes modal {
     from {
-      translate: 100% 0;
-    }
-  }
-  @keyframes drawer-left {
-    from {
-      translate: -100% 0;
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
     }
   }
   @keyframes fade {

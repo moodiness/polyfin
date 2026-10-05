@@ -9,7 +9,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import type { SessionUser } from '@/api'
 import { useI18n } from '@/i18n'
-import { Avatar, cx, Drawer, IconButton } from '@/ui'
+import { Avatar, cx, IconButton, Modal } from '@/ui'
 import { LanguageSwitch, repositoryUrl } from './Brand'
 import { accountPages, adminSections, isCurrent, memberSections } from './navigation'
 import { useSignOut } from './session'
@@ -73,7 +73,7 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
         aria-expanded={open}
         onClick={() => setOpen(true)}
       />
-      <Drawer open={open} onClose={() => setOpen(false)} title={t.nav.menu} width={360}>
+      <Modal open={open} onClose={() => setOpen(false)} title={t.nav.menu} width={400}>
         <div className="flex flex-col gap-1 p-3">
           <div className="mb-2 flex items-center gap-3 px-3 py-2">
             <Avatar name={user.name} size="lg" />
@@ -144,7 +144,7 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
           </div>
           <a href={repositoryUrl} target="_blank" rel="noopener" className={itemClass}>
             <GithubLogoIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />
-            {t.footer.sourceCode}
+            GitHub
           </a>
           <button
             type="button"
@@ -156,7 +156,7 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
             {signOut.isPending ? t.nav.signingOut : t.nav.signOut}
           </button>
         </div>
-      </Drawer>
+      </Modal>
     </>
   )
 }

@@ -12,7 +12,7 @@ export {
 } from './Button'
 export { Checkbox, type CheckboxProps } from './Checkbox'
 export { cx, searchable } from './cx'
-export { ConfirmDialog, Drawer, type ConfirmDialogProps, type DrawerProps } from './Dialog'
+export { ConfirmDialog, Modal, type ConfirmDialogProps, type ModalProps } from './Dialog'
 export { describedBy, Field, FieldError, useField, type FieldProps } from './Field'
 export {
   fieldBox,

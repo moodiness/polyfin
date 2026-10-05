@@ -27,7 +27,7 @@ import {
   Checkbox,
   ConfirmDialog,
   Count,
-  Drawer,
+  Modal,
   EmptyState,
   Field,
   IconButton,
@@ -113,7 +113,7 @@ export default function UiGallery() {
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [drawer, setDrawer] = useState(false)
+  const [modal, setModal] = useState(false)
   const [dirty, setDirty] = useState(true)
   const [saving, setSaving] = useState(false)
   const [order, setOrder] = useState(['Popular', 'Trending', 'New releases'])
@@ -678,11 +678,11 @@ export default function UiGallery() {
       </Block>
 
       <Block title="Overlays">
-        <Specimen name="ConfirmDialog, Drawer, Toast">
+        <Specimen name="ConfirmDialog, Modal, Toast">
           <Button variant="danger" onClick={() => setConfirm(true)}>
             Delete the user sam
           </Button>
-          <Button onClick={() => setDrawer(true)}>Open a drawer</Button>
+          <Button onClick={() => setModal(true)}>Open a modal</Button>
           <Button onClick={() => toast('Settings saved.')}>Toast</Button>
           <Button onClick={() => toast('The last download failed.', { tone: 'danger' })}>
             Error toast
@@ -708,16 +708,16 @@ export default function UiGallery() {
         >
           Their devices are signed out and their own sources are removed. This cannot be undone.
         </ConfirmDialog>
-        <Drawer
-          open={drawer}
-          onClose={() => setDrawer(false)}
+        <Modal
+          open={modal}
+          onClose={() => setModal(false)}
           title="Edit the channel"
           footer={
             <>
-              <Button variant="ghost" onClick={() => setDrawer(false)}>
+              <Button variant="ghost" onClick={() => setModal(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={() => setDrawer(false)}>
+              <Button variant="primary" onClick={() => setModal(false)}>
                 Save
               </Button>
             </>
@@ -731,7 +731,7 @@ export default function UiGallery() {
               <NumberInput value={12} onValue={() => {}} />
             </Field>
           </div>
-        </Drawer>
+        </Modal>
       </Block>
 
       <Block title="SaveBar">

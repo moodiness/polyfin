@@ -18,7 +18,7 @@ import {
   StatusPill,
   RelativeTime,
 } from '@/ui'
-import CreateUserDrawer from './CreateUserDrawer'
+import CreateUserModal from './CreateUserModal'
 import { clockTime, UserAvatar, useRestrictions } from './shared'
 
 /** `/users`: every account, each opening its page, and the button to create one. */
@@ -56,8 +56,8 @@ export default function UsersList() {
           )}
         </Block>
       </PageLayout>
-      {/* Outside the layout, whose block spacing would push the drawer down. */}
-      <CreateUserDrawer open={creating} onClose={() => setCreating(false)} />
+      {/* Outside the layout, whose block spacing would push the panel down. */}
+      <CreateUserModal open={creating} onClose={() => setCreating(false)} />
     </>
   )
 }

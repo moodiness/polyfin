@@ -4,20 +4,14 @@ import { useNavigate } from 'react-router'
 import { ApiError, createUser, queryClient, queryKeys, type User } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Checkbox, Drawer, Field, Notice, TextInput, useToast } from '@/ui'
+import { Button, Checkbox, Modal, Field, Notice, TextInput, useToast } from '@/ui'
 
 /** Codes about one field, shown under it rather than above the buttons. */
 const nameCodes = ['invalid_name', 'name_taken']
 const passwordCodes = ['invalid_password']
 
-/** The form to create a user, in a drawer over the list. */
-export default function CreateUserDrawer({
-  open,
-  onClose,
-}: {
-  open: boolean
-  onClose: () => void
-}) {
+/** The form to create a user, in a floating panel over the list. */
+export default function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n()
   const toast = useToast()
   const navigate = useNavigate()
@@ -56,14 +50,14 @@ export default function CreateUserDrawer({
   }
 
   return (
-    <Drawer
+    <Modal
       open={open}
       onClose={() => {
         mutation.reset()
         onClose()
       }}
       title={t.users.createTitle}
-      width={460}
+      width={480}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -117,6 +111,6 @@ export default function CreateUserDrawer({
         />
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
-    </Drawer>
+    </Modal>
   )
 }
