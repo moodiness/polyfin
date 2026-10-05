@@ -77,7 +77,8 @@ func TestXtreamAccountsAreRead(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		entries, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), false)
+		list, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), false, livePart)
+		entries := list.entries
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,10 +96,10 @@ func TestXtreamAccountsAreRead(t *testing.T) {
 	}
 	x := newXtreamServer(t, "ts")
 	address, _ := x.account("wrong").address()
-	if _, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), false); !errors.Is(err, ErrLoginRefused) {
+	if _, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), false, livePart); !errors.Is(err, ErrLoginRefused) {
 		t.Errorf("a refused account: %v", err)
 	}
-	if _, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), true); !errors.Is(err, stremio.ErrPrivateNetwork) {
+	if _, err := fetch(t.Context(), client, accountOf(addons.KindXtream, address), true, livePart); !errors.Is(err, stremio.ErrPrivateNetwork) {
 		t.Errorf("a confined source on this machine: %v", err)
 	}
 }

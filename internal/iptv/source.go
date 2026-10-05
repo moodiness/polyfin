@@ -13,7 +13,6 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 var (
@@ -146,20 +145,3 @@ func validName(name string) (string, error) {
 const IDPrefix = "polyfin-iptv:"
 
 func prefix(source accounts.ID) string { return IDPrefix + source.String() + ":" }
-
-// manifest describes a source as an addon with one live TV catalog, whose
-// channels' metas and streams it answers.
-func manifest(source accounts.ID, kind, name string) stremio.Manifest {
-	description := "M3U playlist"
-	if kind == addons.KindXtream {
-		description = "Xtream Codes account"
-	}
-	only := []string{prefix(source)}
-	return stremio.Manifest{
-		ID: "polyfin.iptv." + source.String(), Version: "1", Name: name, Description: description, Types: []string{"tv"},
-		Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: []string{"tv"}, IDPrefixes: only},
-			{Name: "stream", Types: []string{"tv"}, IDPrefixes: only}},
-		Catalogs:   []stremio.Catalog{{Type: "tv", ID: catalogID, Name: name}},
-		IDPrefixes: only,
-	}
-}

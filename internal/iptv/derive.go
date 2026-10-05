@@ -18,56 +18,87 @@ const (
 	ChannelsMerged     = "merged"
 	NumberingProvider  = "provider"
 	NumberingSequence  = "sequential"
+	LibrariesByType    = "type"
+	LibrariesByGroup   = "category"
 )
 
 // ErrInvalidOptions reports import options out of their values.
 var ErrInvalidOptions = errors.New("invalid import options")
 
-// Options are how a source's list becomes its line-up: provider groups or
-// one category per country; one channel per entry, or the entries of the
-// same name in a category merged into one channel; the group (g:<title>)
-// and country (c:<code>) keys not imported; whether channels appearing on
-// a refresh arrive enabled; and whether a channel without a fixed number
-// takes the provider's or its place among the user's channels.
+// Options are what a source imports and how. Its list's live channels,
+// when LiveTv is set, become its line-up: provider groups or one category
+// per country; one channel per entry, or the entries of the same name in a
+// category merged into one channel; the group (g:<title>) and country
+// (c:<code>) keys not imported; whether channels appearing on a refresh
+// arrive enabled; and whether a channel without a fixed number takes the
+// provider's or its place among the user's channels. Movies and Series
+// import the provider's movies and series, but for the categories
+// VODExcluded lists (movie:<name>, series:<name>), in libraries by type or
+// by category (VODLibraries); Enrichment describes titles with a provider
+// TMDB or IMDb id through the server's metadata addons.
 type Options struct {
-	Categories  string
-	Channels    string
-	Excluded    []string
-	NewChannels bool
-	Numbering   string
+	Categories   string
+	Channels     string
+	Excluded     []string
+	NewChannels  bool
+	Numbering    string
+	LiveTv       bool
+	Movies       bool
+	Series       bool
+	VODExcluded  []string
+	VODLibraries string
+	Enrichment   bool
 }
 
-// DefaultOptions are today's: provider groups, one channel per entry,
-// nothing excluded, new channels enabled, provider numbers.
+// DefaultOptions are today's: live channels only, in provider groups, one
+// channel per entry, nothing excluded, new channels enabled, provider
+// numbers; were movies or series turned on, libraries by type, described
+// through metadata addons.
 func DefaultOptions() Options {
-	return Options{Categories: CategoriesOriginal, Channels: ChannelsOriginal, Excluded: []string{}, NewChannels: true, Numbering: NumberingProvider}
+	return Options{Categories: CategoriesOriginal, Channels: ChannelsOriginal, Excluded: []string{}, NewChannels: true, Numbering: NumberingProvider,
+		LiveTv: true, VODExcluded: []string{}, VODLibraries: LibrariesByType, Enrichment: true}
 }
 
 // check validates options, removing duplicate excluded keys.
 func (o *Options) check() error {
 	if o.Categories != CategoriesOriginal && o.Categories != CategoriesCountry || o.Channels != ChannelsOriginal && o.Channels != ChannelsMerged ||
-		o.Numbering != NumberingProvider && o.Numbering != NumberingSequence || len(o.Excluded) > 5000 {
+		o.Numbering != NumberingProvider && o.Numbering != NumberingSequence || o.VODLibraries != LibrariesByType && o.VODLibraries != LibrariesByGroup ||
+		!o.LiveTv && !o.Movies && !o.Series {
 		return ErrInvalidOptions
 	}
-	kept := make([]string, 0, len(o.Excluded))
+	var err error
+	if o.Excluded, err = checkKeys(o.Excluded, "g:", "c:"); err != nil {
+		return err
+	}
+	o.VODExcluded, err = checkKeys(o.VODExcluded, typeMovie+":", typeSeries+":")
+	return err
+}
+
+// checkKeys checks excluded keys, which start with one of prefixes,
+// removing duplicates.
+func checkKeys(keys []string, prefixes ...string) ([]string, error) {
+	if len(keys) > 5000 {
+		return nil, ErrInvalidOptions
+	}
+	kept := make([]string, 0, len(keys))
 	seen := map[string]bool{}
-	for _, key := range o.Excluded {
-		if len(key) > 300 || !strings.HasPrefix(key, "g:") && !strings.HasPrefix(key, "c:") {
-			return ErrInvalidOptions
+	for _, key := range keys {
+		if len(key) > 300 || !slices.ContainsFunc(prefixes, func(p string) bool { return strings.HasPrefix(key, p) }) {
+			return nil, ErrInvalidOptions
 		}
 		if !seen[key] {
 			seen[key] = true
 			kept = append(kept, key)
 		}
 	}
-	o.Excluded = kept
-	return nil
+	return kept, nil
 }
 
 // storedEntry is an entry of a source's stored list.
 type storedEntry struct {
 	Key, Name, Logo, Group, GuideID string
 	Number                          int
+	Kind                            string
 }
 
 func groupKey(group string) string { return "g:" + group }

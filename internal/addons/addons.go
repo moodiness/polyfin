@@ -390,6 +390,57 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 	return addon, err
 }
 
+// SyncCatalogs replaces an IPTV source's manifest, in tx, as its options
+// and lists change its catalogs: a browsable catalog it gains becomes an
+// enabled library at the end of its scope's libraries, one it loses (or
+// that is no longer browsable) loses its library, guides included.
+// Libraries the administrator turned off stay off.
+func SyncCatalogs(ctx context.Context, tx pgx.Tx, id accounts.ID, manifest stremio.Manifest) error {
+	var owner *accounts.ID
+	var raw []byte
+	if err := tx.QueryRow(ctx, "SELECT owner_id, manifest FROM addons WHERE id = $1 FOR UPDATE", id).Scan(&owner, &raw); err != nil {
+		return err
+	}
+	var old stremio.Manifest
+	if err := json.Unmarshal(raw, &old); err != nil {
+		return err
+	}
+	if err := lockScope(ctx, tx, Scope{Owner: owner}); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "UPDATE addons SET manifest = $2 WHERE id = $1", id, encoded); err != nil {
+		return err
+	}
+	for _, catalog := range old.Catalogs {
+		if kept, ok := manifest.Catalog(catalog.Type, catalog.ID); !ok || !kept.Browsable() {
+			if _, err := tx.Exec(ctx, "DELETE FROM libraries WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3", id, catalog.Type,
+				catalog.ID); err != nil {
+				return err
+			}
+		}
+	}
+	var last int
+	if err := tx.QueryRow(ctx, `SELECT coalesce(max(l.position), 0) FROM libraries l
+		JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1`, owner).Scan(&last); err != nil {
+		return err
+	}
+	for _, catalog := range manifest.Catalogs {
+		if _, existed := old.Catalog(catalog.Type, catalog.ID); existed || !catalog.Browsable() {
+			continue
+		}
+		last++
+		if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+			id, catalog.Type, catalog.ID, last); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // enableDefaults makes libraries of a new addon's catalogs. An addon that
 // groups its catalogs into collections (such as AIOMetadata) already says how
 // to organize them: its browsable collection catalogs become the libraries.

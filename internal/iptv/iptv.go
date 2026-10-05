@@ -1,6 +1,7 @@
 package iptv
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,6 +56,14 @@ type Service struct {
 	// listCache, so that previewing again or adding the source does not
 	// download the list again.
 	lists map[string]cachedList
+
+	// nextDetail is, for each provider host, when it may be asked for
+	// details again (see pace), and detailGap the least time between two
+	// requests; detailRequests counts them.
+	paceMu         sync.Mutex
+	nextDetail     map[string]time.Time
+	detailGap      time.Duration
+	detailRequests atomic.Int64
 }
 
 // listCache is how long the list a preview downloaded is kept, at most
@@ -64,13 +74,13 @@ const (
 )
 
 type cachedList struct {
-	entries []Entry
-	at      time.Time
+	list downloaded
+	at   time.Time
 }
 
-// fetchCached fetches an account's list, or takes the one a preview
-// downloaded within listCache; keep caches what it downloads.
-func (s *Service) fetchCached(ctx context.Context, account Account, confined, keep bool) ([]Entry, error) {
+// fetchCached downloads the parts want names of an account, taking those
+// a preview downloaded within listCache; keep caches what it downloads.
+func (s *Service) fetchCached(ctx context.Context, account Account, confined bool, want parts, keep bool) (downloaded, error) {
 	key := fmt.Sprint(account.Kind, "\x00", account.URL, "\x00", account.Server, "\x00", account.Username, "\x00", account.Password, "\x00", confined)
 	s.mu.Lock()
 	for k, list := range s.lists {
@@ -78,18 +88,28 @@ func (s *Service) fetchCached(ctx context.Context, account Account, confined, ke
 			delete(s.lists, k)
 		}
 	}
-	list, ok := s.lists[key]
+	cached, ok := s.lists[key]
 	s.mu.Unlock()
+	missing := want
 	if ok {
-		return list.entries, nil
+		missing = want.missing(cached.list.got)
 	}
-	entries, err := fetch(ctx, s.client, account, confined)
-	if err != nil || !keep {
-		return entries, err
+	if !missing.any() {
+		return cached.list, nil
+	}
+	fetched, err := fetch(ctx, s.client, account, confined, missing)
+	if err != nil {
+		return downloaded{}, err
+	}
+	if ok {
+		fetched.merge(cached.list)
+	}
+	if !keep {
+		return fetched, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.lists) >= maxCachedLists {
+	if _, ok := s.lists[key]; !ok && len(s.lists) >= maxCachedLists {
 		oldest := ""
 		for k, list := range s.lists {
 			if oldest == "" || list.at.Before(s.lists[oldest].at) {
@@ -98,15 +118,15 @@ func (s *Service) fetchCached(ctx context.Context, account Account, confined, ke
 		}
 		delete(s.lists, oldest)
 	}
-	s.lists[key] = cachedList{entries: entries, at: s.now()}
-	return entries, nil
+	s.lists[key] = cachedList{list: fetched, at: s.now()}
+	return fetched, nil
 }
 
 // New returns the IPTV service. settings gives LiveTvRefreshHours, read
 // whenever lists due are looked for.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, addons: store, client: client, logger: logger, settings: settings, now: time.Now,
-		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}}
+		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}, nextDetail: map[string]time.Time{}, detailGap: DetailGap}
 }
 
 // OnChange sets what is told, after the change, that a source's line-up
@@ -129,11 +149,17 @@ type NewSource struct {
 
 // OptionsPatch changes import options: nil fields keep their values.
 type OptionsPatch struct {
-	Categories  *string   `json:"categories"`
-	Channels    *string   `json:"channels"`
-	Excluded    *[]string `json:"excluded"`
-	NewChannels *bool     `json:"newChannels"`
-	Numbering   *string   `json:"numbering"`
+	Categories   *string   `json:"categories"`
+	Channels     *string   `json:"channels"`
+	Excluded     *[]string `json:"excluded"`
+	NewChannels  *bool     `json:"newChannels"`
+	Numbering    *string   `json:"numbering"`
+	LiveTv       *bool     `json:"liveTv"`
+	Movies       *bool     `json:"movies"`
+	Series       *bool     `json:"series"`
+	VODExcluded  *[]string `json:"vodExcluded"`
+	VODLibraries *string   `json:"vodLibraries"`
+	Enrichment   *bool     `json:"enrichment"`
 }
 
 // apply returns options with patch applied, checked.
@@ -144,18 +170,32 @@ func (o Options) apply(patch *OptionsPatch) (Options, error) {
 				*field = *value
 			}
 		}
+		turn := func(field *bool, value *bool) {
+			if value != nil {
+				*field = *value
+			}
+		}
 		set(&o.Categories, patch.Categories)
 		set(&o.Channels, patch.Channels)
 		set(&o.Numbering, patch.Numbering)
+		set(&o.VODLibraries, patch.VODLibraries)
 		if patch.Excluded != nil {
 			o.Excluded = *patch.Excluded
 		}
-		if patch.NewChannels != nil {
-			o.NewChannels = *patch.NewChannels
+		if patch.VODExcluded != nil {
+			o.VODExcluded = *patch.VODExcluded
 		}
+		turn(&o.NewChannels, patch.NewChannels)
+		turn(&o.LiveTv, patch.LiveTv)
+		turn(&o.Movies, patch.Movies)
+		turn(&o.Series, patch.Series)
+		turn(&o.Enrichment, patch.Enrichment)
 	}
 	if o.Excluded == nil {
 		o.Excluded = []string{}
+	}
+	if o.VODExcluded == nil {
+		o.VODExcluded = []string{}
 	}
 	return o, o.check()
 }
@@ -183,6 +223,7 @@ type Source struct {
 	Error     string
 	Options   Options
 	Lineup    LineupCounts
+	VOD       VODCounts
 }
 
 // Add fetches an account's channel list and adds it to the scope as an
@@ -207,26 +248,25 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	entries, err := s.fetchCached(ctx, accountOf(source.Account.Kind, address), confined, false)
+	list, err := s.fetchCached(ctx, accountOf(source.Account.Kind, address), confined, partsOf(options), false)
 	if err != nil {
 		return addons.Addon{}, err
 	}
 	at := s.now()
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
-		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name) },
+		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, `INSERT INTO iptv_sources (addon_id, category_mode, channel_mode, excluded, new_channels, numbering)
-				VALUES ($1, $2, $3, $4, $5, $6)`, addon.ID, options.Categories, options.Channels, options.Excluded, options.NewChannels,
-				options.Numbering); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+				append([]any{addon.ID}, options.values()...)...); err != nil {
 				return err
 			}
 			if guide != "" {
 				if _, err := tx.Exec(ctx, `INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url)
-					SELECT addon_id, catalog_type, catalog_id, 1, $2 FROM libraries WHERE addon_id = $1`, addon.ID, guide); err != nil {
+					SELECT addon_id, catalog_type, catalog_id, 1, $2 FROM libraries WHERE addon_id = $1 AND catalog_type = 'tv'`, addon.ID, guide); err != nil {
 					return err
 				}
 			}
-			if err := storeList(ctx, tx, addon.ID, entries, at); err != nil {
+			if err := storeDownload(ctx, tx, addon.ID, list, at); err != nil {
 				return err
 			}
 			return reconcile(ctx, tx, addon.ID, at)
@@ -265,7 +305,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	if err != nil {
 		return err
 	}
-	var entries []Entry
+	var list downloaded
 	if changes.Account != nil {
 		account := *changes.Account
 		account.Kind = addon.Kind
@@ -276,21 +316,26 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		if address, err = account.address(); err != nil {
 			return err
 		}
-		if entries, err = fetch(ctx, s.client, accountOf(addon.Kind, address), confined); err != nil {
+		if list, err = fetch(ctx, s.client, accountOf(addon.Kind, address), confined, partsOf(options)); err != nil {
 			return err
+		}
+	} else if addon.Kind == addons.KindXtream {
+		// The parts of an Xtream account turned on are downloaded first;
+		// those of an M3U playlist were stored with it.
+		if need := partsOf(options).missing(partsOf(current.Options)); need.any() {
+			if list, err = s.fetchCached(ctx, accountOf(addon.Kind, address), confined, need, false); err != nil {
+				return err
+			}
 		}
 	}
 	at := s.now()
-	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, manifest(id, addon.Kind, name), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE iptv_sources SET category_mode = $2, channel_mode = $3, excluded = $4, new_channels = $5,
-			numbering = $6 WHERE addon_id = $1`, id, options.Categories, options.Channels, options.Excluded, options.NewChannels,
-			options.Numbering); err != nil {
+	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, renamed(addon.Manifest, name), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+") = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) WHERE addon_id = $1",
+			append([]any{id}, options.values()...)...); err != nil {
 			return err
 		}
-		if changes.Account != nil {
-			if err := storeList(ctx, tx, id, entries, at); err != nil {
-				return err
-			}
+		if err := storeDownload(ctx, tx, id, list, at); err != nil {
+			return err
 		}
 		if changes.Account != nil || changes.Options != nil {
 			return reconcile(ctx, tx, id, at)
@@ -369,7 +414,11 @@ func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool) error {
 	_, err, _ := s.flight.Do(addon.ID.String(), func() (any, error) {
 		at := s.now()
-		entries, err := fetch(ctx, s.client, accountOf(addon.Kind, addon.ManifestURL), confined)
+		options, err := loadOptions(ctx, s.db, addon.ID)
+		if err != nil {
+			return nil, err
+		}
+		list, err := fetch(ctx, s.client, accountOf(addon.Kind, addon.ManifestURL), confined, partsOf(options))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -391,7 +440,7 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 			return nil, err
 		}
 		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-			if err := storeList(ctx, tx, addon.ID, entries, at); err != nil {
+			if err := storeDownload(ctx, tx, addon.ID, list, at); err != nil {
 				return err
 			}
 			return reconcile(ctx, tx, addon.ID, at)
@@ -402,6 +451,35 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 		return nil, err
 	})
 	return err
+}
+
+// storeDownload stores the parts a download brought: its list's entries,
+// an Xtream account's movies and series.
+func storeDownload(ctx context.Context, tx pgx.Tx, source accounts.ID, list downloaded, at time.Time) error {
+	if list.got.live {
+		if err := storeList(ctx, tx, source, list.entries, at); err != nil {
+			return err
+		}
+	}
+	if list.got.any() {
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '' WHERE addon_id = $1", source, at); err != nil {
+			return err
+		}
+	}
+	if !list.xtream {
+		return nil
+	}
+	if list.got.movies {
+		if err := storeTitles(ctx, tx, source, typeMovie, list.movies, nil); err != nil {
+			return err
+		}
+	}
+	if list.got.series {
+		if err := storeTitles(ctx, tx, source, typeSeries, list.series, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // storeList replaces a source's stored list with a list fetched at at.
@@ -425,10 +503,15 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 		if e.Number > 0 {
 			number = &e.Number
 		}
-		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers})
+		kind := cmp.Or(e.Kind, kindLive)
+		var season, episode *int
+		if kind == KindEpisode {
+			season, episode = &e.Season, &e.Episode
+		}
+		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers, kind, e.Series, season, episode})
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_entries"},
-		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers"},
+		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers", "kind", "series_name", "season", "episode"},
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
@@ -490,10 +573,9 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	source := Source{Addon: list[index]}
 	o := &source.Options
-	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, category_mode, channel_mode, excluded, new_channels, numbering,
+	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, `+optionColumns+`,
 		(SELECT count(*) FROM iptv_entries WHERE addon_id = $1) FROM iptv_sources WHERE addon_id = $1`, id).
-		Scan(&source.CheckedAt, &source.FetchedAt, &source.Error, &o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering,
-			&source.Channels)
+		Scan(append(append([]any{&source.CheckedAt, &source.FetchedAt, &source.Error}, o.fields()...), &source.Channels)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Source{}, addons.ErrNotFound
 	}
@@ -514,6 +596,10 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 		LEFT JOIN live_guide_maps m ON m.addon_id = l.addon_id AND m.catalog_type = 'tv' AND m.catalog_id = $2 AND m.channel_id = l.item_id
 		WHERE l.addon_id = $1`, id, catalogID).Scan(&n.Categories, &n.EnabledCategories, &n.Channels, &n.EnabledChannels, &n.ShownChannels, &n.Mapped)
 	n.Unmapped = n.Channels - n.Mapped
+	if err != nil {
+		return Source{}, err
+	}
+	source.VOD, err = s.vodCounts(ctx, id)
 	return source, err
 }
 
@@ -560,7 +646,7 @@ func (s *Service) Channels(ctx context.Context, source accounts.ID) ([]stremio.M
 		return nil, err
 	}
 	result, err, _ := s.flight.Do("channels "+source.String(), func() (any, error) {
-		rows, err := s.db.Query(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND "+shownSQL+
+		rows, err := s.db.Query(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND i.live_tv AND "+shownSQL+
 			" ORDER BY c.position, l.sort, l.id", source)
 		if err != nil {
 			return nil, err
@@ -612,14 +698,21 @@ func (s *Service) Logo(ctx context.Context, item accounts.ID) (string, bool, err
 	return logo, confined, err
 }
 
-// Meta describes a channel of a source by its Stremio identifier, while it
-// shows: the others play no more than they are listed.
+// Meta describes a channel, a movie or a series of a source by its
+// Stremio identifier, while it shows: the others play no more than they
+// are listed (see titleMeta for movies and series).
 func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {
 	key, ok := strings.CutPrefix(id, prefix(source))
 	if !ok {
 		return stremio.Meta{}, stremio.ErrNotFound
 	}
-	meta, err := scanMeta(source, s.db.QueryRow(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND l.id = $2 AND "+shownSQL,
+	if movie, ok := strings.CutPrefix(key, "vod:"); ok {
+		return s.titleMeta(ctx, source, typeMovie, movie)
+	}
+	if series, ok := strings.CutPrefix(key, "series:"); ok {
+		return s.titleMeta(ctx, source, typeSeries, series)
+	}
+	meta, err := scanMeta(source, s.db.QueryRow(ctx, "SELECT "+channelColumns+" "+channelJoins+" WHERE l.addon_id = $1 AND l.id = $2 AND i.live_tv AND "+shownSQL,
 		source, key))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return stremio.Meta{}, stremio.ErrNotFound
@@ -635,6 +728,9 @@ const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 // its entries' addresses, requested with the headers their list gives, and
 // its custom streams. Each is labelled by its quality.
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
+	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
+		return s.vodStreams(ctx, source, key)
+	}
 	meta, err := s.Meta(ctx, source, id)
 	if errors.Is(err, stremio.ErrNotFound) {
 		return nil, nil

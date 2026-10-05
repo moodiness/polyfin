@@ -23,6 +23,13 @@ type Entry struct {
 	GuideID string
 	URL     string
 	Headers map[string]string
+	// Kind is what an M3U entry is, told by its address or name: a live
+	// channel (""), KindMovie or KindEpisode, an episode of the series
+	// Series with its Season and Episode numbers, 0 when its name gives
+	// none.
+	Kind            string
+	Series          string
+	Season, Episode int
 }
 
 // maxLine bounds a playlist line: a line longer than that is not M3U.
@@ -86,6 +93,7 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 			if !streamAddress(e.URL) || heading(e.Name) {
 				continue
 			}
+			e.classify()
 			if err := entry(e); err != nil {
 				return err
 			}

@@ -125,7 +125,7 @@ type previewCategoryJSON struct {
 }
 
 func validPreview(w http.ResponseWriter, by string) bool {
-	if by != iptv.PreviewGroups && by != iptv.PreviewCountries {
+	if !iptv.ValidPreview(by) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return false
 	}
