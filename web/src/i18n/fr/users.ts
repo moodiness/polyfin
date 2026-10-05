@@ -151,6 +151,23 @@ const users: typeof en = {
     qualityGroupHelp:
       'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie, et seules les versions qui conviennent peuvent être téléchargées.',
     qualityGroupOriginal: 'D’origine (sans limite)',
+    member: 'Membre',
+    lastSignInLabel: 'Dernière connexion :',
+    active: 'Actif',
+    pinRequested: 'PIN demandé',
+    emptyHelp:
+      'Créez un compte pour chaque personne qui regarde ici, puis connectez-vous avec depuis une application Jellyfin.',
+    devicesEmptyHelp:
+      'Les applications apparaissent ici dès qu’elles se connectent avec ce compte.',
+    notFound: 'Utilisateur introuvable',
+    notFoundHelp:
+      'Cet utilisateur n’existe plus, ou l’adresse est fausse. Choisissez un utilisateur dans la liste.',
+    backToUsers: 'Retour aux utilisateurs',
+    sectionsLabel: 'Sections de l’utilisateur',
+    profileTitle: 'Nom et mot de passe',
+    accessHelp: 'Chaque changement est enregistré tout de suite.',
+    noServerLibrariesHelp:
+      'Ajoutez une bibliothèque dans Contenu › Bibliothèques, puis choisissez ici celles que cet utilisateur voit.',
   },
 }
 
