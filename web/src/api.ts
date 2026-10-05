@@ -141,6 +141,10 @@ export type Settings = {
   channelLimit: number
   /** Whether apps get skip intro, recap and credits buttons, from the segment databases. */
   skipButtons: boolean
+  /** Whether a PublicMetaDB key is saved; it adds a third source of skip markers. */
+  publicMetaDbKeySet: boolean
+  /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
+  publicMetaDbKey?: string
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
   /** Percent of a title's runtime past which a reported position marks it played. */

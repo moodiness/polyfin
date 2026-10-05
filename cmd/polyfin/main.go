@@ -73,7 +73,7 @@ Environment:
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
   POLYFIN_HWACCEL       GPU video is converted on unless the settings choose: auto, nvenc, vaapi or none (default auto)
   POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
-  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb or none (default theintrodb,introdb)
+  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb, publicmetadb or none (default theintrodb,introdb,publicmetadb)
 `
 
 func main() {
@@ -213,6 +213,7 @@ func serve(ctx context.Context) error {
 	case cfg.WebDir != config.DefaultWebDir:
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
+	skipSegments := mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger, store.Settings)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -224,7 +225,7 @@ func serve(ctx context.Context) error {
 		Playback:      player,
 		Preferences:   preferences.New(pool),
 		UserData:      userdata.New(pool),
-		Segments:      mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger),
+		Segments:      skipSegments,
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
 		Thumbnails:    images,
@@ -253,6 +254,7 @@ func serve(ctx context.Context) error {
 				Logger:        logger,
 				Guides:        lib,
 				IPTV:          channels,
+				Segments:      skipSegments,
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
 				Acceleration:  cfg.Acceleration,

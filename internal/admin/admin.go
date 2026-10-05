@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -75,6 +76,9 @@ type Options struct {
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
+	// Segments checks a PublicMetaDB key with PublicMetaDB before the
+	// settings save it; nil saves none.
+	Segments *mediasegments.Service
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
 	// Sessions are the playbacks under way, which the dashboard shows and
@@ -292,6 +296,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrResumeNotBelowPlayed, http.StatusBadRequest, "resume_not_below_played"},
 		{accounts.ErrInvalidVersionListMinutes, http.StatusBadRequest, "invalid_version_list_minutes"},
 		{accounts.ErrInvalidCatalogRefreshMinutes, http.StatusBadRequest, "invalid_catalog_refresh_minutes"},
+		{accounts.ErrInvalidPublicMetaDBKey, http.StatusBadRequest, "invalid_publicmetadb_key"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
 		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
 		{accounts.ErrInvalidAnalysisTimeout, http.StatusBadRequest, "invalid_analysis_timeout"},

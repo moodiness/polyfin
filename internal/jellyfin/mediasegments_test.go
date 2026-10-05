@@ -116,7 +116,7 @@ func skipping(t *testing.T, names ...string) skipSetup {
 	for _, name := range names {
 		sources = append(sources, mediasegments.Source{Name: name, URL: d.url})
 	}
-	s.handler.Segments = mediasegments.New(s.pool, sources, "test", s.handler.Logger)
+	s.handler.Segments = mediasegments.New(s.pool, sources, "test", s.handler.Logger, s.store.Settings)
 	user := s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), skipAddon(t), false)
 	if err != nil {

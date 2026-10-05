@@ -156,6 +156,10 @@ const en = {
     invalid_custom_css: 'The custom CSS must take at most 256 KB.',
     invalid_custom_js: 'The custom JavaScript must take at most 256 KB.',
     invalid_login_disclaimer: 'The sign-in message must take at most 8 KB.',
+    invalid_publicmetadb_key:
+      'PublicMetaDB did not accept this key. Copy it again from your PublicMetaDB account. Nothing was saved.',
+    publicmetadb_unreachable:
+      'PublicMetaDB could not be reached to check the key. Nothing was saved: try again later.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
@@ -416,6 +420,16 @@ const en = {
     qualityGroupOriginal: 'Original (no limit)',
   },
   settings: {
+    secret: {
+      saved: 'Saved',
+      notSet: 'Not set',
+      removing: 'Removed when you save',
+      pastePlaceholder: 'Paste it here',
+      replacePlaceholder: 'Paste a new one to replace the saved one',
+      remove: 'Remove',
+      keep: 'Keep it',
+      removeHint: 'Save to remove it, or choose Keep it.',
+    },
     title: 'Settings',
     description: 'Options that apply to the whole server.',
     serverName: 'Server name',
@@ -608,6 +622,9 @@ const en = {
     skipButtons: 'Skip intro and credits buttons',
     skipButtonsHelp:
       'Apps offer to skip intros, recaps and credits, found in community databases. When off, apps show no skip buttons and the databases are not asked.',
+    publicMetaDbKey: 'PublicMetaDB key',
+    publicMetaDbKeyHelp:
+      'Optional. A PublicMetaDB API key adds a third source of skip markers, asked after TheIntroDB and IntroDB.',
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',

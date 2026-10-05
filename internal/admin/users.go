@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
+	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 )
 
@@ -273,12 +274,18 @@ type settingsJSON struct {
 	ChannelLimit *int  `json:"channelLimit"`
 	// The content settings keep their current values too when a PUT
 	// leaves them out.
-	SkipButtons           *bool `json:"skipButtons"`
-	SimilarTitles         *bool `json:"similarTitles"`
-	PlayedPercent         *int  `json:"playedPercent"`
-	ResumePercent         *int  `json:"resumePercent"`
-	VersionListMinutes    *int  `json:"versionListMinutes"`
-	CatalogRefreshMinutes *int  `json:"catalogRefreshMinutes"`
+	SkipButtons *bool `json:"skipButtons"`
+	// PublicMetaDBKeySet tells whether a PublicMetaDB key is saved; a PUT
+	// ignores it. PublicMetaDBKey, which no answer holds, replaces the key
+	// once PublicMetaDB accepts it; empty removes it, and a PUT leaving it
+	// out keeps it.
+	PublicMetaDBKeySet    bool    `json:"publicMetaDbKeySet"`
+	PublicMetaDBKey       *string `json:"publicMetaDbKey,omitempty"`
+	SimilarTitles         *bool   `json:"similarTitles"`
+	PlayedPercent         *int    `json:"playedPercent"`
+	ResumePercent         *int    `json:"resumePercent"`
+	VersionListMinutes    *int    `json:"versionListMinutes"`
+	CatalogRefreshMinutes *int    `json:"catalogRefreshMinutes"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -353,6 +360,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ChannelLimit:        &settings.ChannelLimit,
 
 		SkipButtons:           &settings.SkipButtons,
+		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
 		SimilarTitles:         &settings.SimilarTitles,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
@@ -765,6 +773,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := h.Accounts.Settings()
+	key, ok := h.publicMetaDBKey(w, r, body.PublicMetaDBKey, current.PublicMetaDBKey)
+	if !ok {
+		return
+	}
 	settings, err := h.Accounts.UpdateSettings(r.Context(), accounts.Settings{
 		ServerName:          body.ServerName,
 		QuickConnectEnabled: body.QuickConnectEnabled,
@@ -778,6 +790,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 
 		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
+		PublicMetaDBKey:       key,
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
@@ -844,6 +857,39 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		encoder.SelectHardware(cmp.Or(settings.HardwareAcceleration, h.Acceleration), h.VAAPIDevice)
 	}
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
+}
+
+// publicMetaDBKey is the PublicMetaDB key a settings PUT saves: the current
+// one when the body leaves it out, none for an empty one, else the key sent
+// once PublicMetaDB accepted it. A key that is malformed or that PublicMetaDB
+// refuses is answered 400, and one that PublicMetaDB could not be asked
+// about 502, ok then being false.
+func (h *handler) publicMetaDBKey(w http.ResponseWriter, r *http.Request, sent *string, current string) (key string, ok bool) {
+	if sent == nil {
+		return current, true
+	}
+	if *sent == "" {
+		return "", true
+	}
+	key = strings.TrimSpace(*sent)
+	if key == "" || !accounts.ValidPublicMetaDBKey(key) {
+		writeError(w, http.StatusBadRequest, "invalid_publicmetadb_key")
+		return "", false
+	}
+	if h.Segments == nil {
+		writeError(w, http.StatusBadGateway, "publicmetadb_unreachable")
+		return "", false
+	}
+	switch err := h.Segments.CheckPublicMetaDBKey(r.Context(), key); {
+	case errors.Is(err, mediasegments.ErrKeyRefused):
+		writeError(w, http.StatusBadRequest, "invalid_publicmetadb_key")
+		return "", false
+	case err != nil:
+		h.Logger.Warn("PublicMetaDB could not check the key", "error", err)
+		writeError(w, http.StatusBadGateway, "publicmetadb_unreachable")
+		return "", false
+	}
+	return key, true
 }
 
 // valueOr is the value value points to, else fallback.
