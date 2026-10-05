@@ -56,8 +56,9 @@ func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
 	}
 }
 
-// Converted video is scaled down to the height cap, keeping its shape, at
-// the bitrate of that height; under the cap, nothing changes.
+// Converted video is scaled down to fit the height cap's 16:9 frame,
+// keeping its shape, at the bitrate of that height; under the cap, nothing
+// changes.
 func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 	can := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true}
 	video := func(width, height int) MediaStream {
@@ -76,7 +77,7 @@ func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 		{"no cap", 0, 0, video(1920, 1080), h264(1920, 1080, 10_000_000)},
 		{"720p", 720, 0, video(1920, 1080), h264(1280, 720, 5_000_000)},
 		{"480p", 480, 0, video(1920, 1080), h264(852, 480, 2_000_000)},
-		{"a wide picture", 480, 0, video(1920, 800), h264(1152, 480, 2_000_000)},
+		{"a wide picture", 480, 0, video(1920, 800), h264(854, 354, 2_000_000)},
 		{"an upright picture", 720, 0, video(1080, 1920), h264(404, 720, 5_000_000)},
 		{"a source under the cap", 720, 0, video(640, 360), h264(640, 360, 10_000_000)},
 		{"a source at the cap", 720, 0, video(1280, 720), h264(1280, 720, 10_000_000)},
@@ -99,7 +100,7 @@ func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 	remux := Remux{ConvertVideo: ConvertVideo("h264", 0, 480, video(1920, 800), can)}
 	var encoding hls.Remux
 	remux.convert(&encoding, stream, Tuning{})
-	if e := encoding.Encode; e == nil || e.Width != 1152 || e.Height != 480 || e.Bitrate != 2_000_000 {
+	if e := encoding.Encode; e == nil || e.Width != 854 || e.Height != 354 || e.Bitrate != 2_000_000 {
 		t.Errorf("encoding: %+v", e)
 	}
 }

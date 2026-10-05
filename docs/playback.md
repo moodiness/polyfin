@@ -108,7 +108,7 @@ Five more settings change how Polyfin picks a version and how much video the ser
 
 ### Maximum quality of converted video
 
-- Video keeps its shape and is converted at the bitrate of that height.
+- Video keeps its shape and is converted at the bitrate of that height. It fits that height's 16:9 frame: a wide film converted to 1080p is 1920×800, as a 1080p release is.
 - A running conversion keeps the size it started with.
 - Files played as they are, or with their tracks copied, are untouched.
 - Polyfin converts to 1080p at most, so 1440p and 2160p change nothing for now.
