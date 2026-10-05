@@ -94,6 +94,14 @@ export function SecretField({
     const timer = setTimeout(() => setRevealed(null), revealedFor)
     return () => clearTimeout(timer)
   }, [revealed])
+  // A replacement the form saved or discarded (the value goes back to undefined while nobody is
+  // typing in the field) brings back the saved dots.
+  const pending = useRef(value)
+  useEffect(() => {
+    const dropped = pending.current !== undefined && pending.current !== '' && value === undefined
+    pending.current = value
+    if (dropped && document.activeElement !== input.current) setReplacing(false)
+  }, [value])
 
   async function toggleRevealed() {
     if (revealing) return
