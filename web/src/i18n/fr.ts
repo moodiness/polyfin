@@ -171,6 +171,10 @@ const fr: Messages = {
     invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 256 Ko.',
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 256 Ko.',
     invalid_login_disclaimer: 'Le message de connexion ne doit pas dépasser 8 Ko.',
+    invalid_publicmetadb_key:
+      'PublicMetaDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte PublicMetaDB. Rien n’a été enregistré.',
+    publicmetadb_unreachable:
+      'PublicMetaDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
@@ -442,6 +446,16 @@ const fr: Messages = {
     qualityGroupOriginal: 'D’origine (sans limite)',
   },
   settings: {
+    secret: {
+      saved: 'Valeur enregistrée',
+      notSet: 'Aucune valeur',
+      removing: 'Supprimée à l’enregistrement',
+      pastePlaceholder: 'Collez la valeur ici',
+      replacePlaceholder: 'Collez une nouvelle valeur pour remplacer celle enregistrée',
+      remove: 'Supprimer',
+      keep: 'Garder la valeur',
+      removeHint: 'Enregistrez pour la supprimer, ou choisissez « Garder la valeur ».',
+    },
     title: 'Paramètres',
     description: 'Options qui s’appliquent à l’ensemble du serveur.',
     serverName: 'Nom du serveur',
@@ -637,6 +651,9 @@ const fr: Messages = {
     skipButtons: 'Boutons « Passer l’intro » et « Passer le générique »',
     skipButtonsHelp:
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
+    publicMetaDbKey: 'Clé PublicMetaDB',
+    publicMetaDbKeyHelp:
+      'Facultatif. Une clé d’API PublicMetaDB ajoute une troisième source de repères pour passer l’intro et le générique, consultée après TheIntroDB et IntroDB.',
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',

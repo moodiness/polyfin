@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNod
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   analysisTimeoutRange,
+  ApiError,
   catalogLimitRange,
   catalogRefreshMinutesRange,
   channelLimitRange,
@@ -43,6 +44,7 @@ import {
 import {
   SearchContext,
   searchable,
+  SecretField,
   Setting,
   wholeNumber,
   wholeNumberField,
@@ -228,6 +230,14 @@ function SettingsForm({ initial }: { initial: Settings }) {
     setForm((current) => ({ ...current, ...patch }))
   }
 
+  /** The save error, also shown under the field it is about when its code is one of `codes`. */
+  function fieldError(codes: readonly string[]): string | undefined {
+    const error = mutation.error
+    return error instanceof ApiError && codes.includes(error.code)
+      ? errorMessage(t, error)
+      : undefined
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     mutation.mutate({ ...form, serverName: form.serverName.trim() })
@@ -368,6 +378,16 @@ function SettingsForm({ initial }: { initial: Settings }) {
             help={s.skipButtonsHelp}
             checked={form.skipButtons}
             onChange={(skipButtons) => update({ skipButtons })}
+          />
+        </Setting>
+        <Setting text={[s.publicMetaDbKey, s.publicMetaDbKeyHelp, 'PublicMetaDB']}>
+          <SecretField
+            label={s.publicMetaDbKey}
+            hint={s.publicMetaDbKeyHelp}
+            saved={form.publicMetaDbKeySet}
+            value={form.publicMetaDbKey}
+            onValue={(publicMetaDbKey) => update({ publicMetaDbKey })}
+            error={fieldError(['invalid_publicmetadb_key', 'publicmetadb_unreachable'])}
           />
         </Setting>
         <Setting text={[s.similarTitles, s.similarTitlesHelp]}>
