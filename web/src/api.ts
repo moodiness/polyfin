@@ -169,6 +169,38 @@ export type Settings = {
   maxConversions: number
   /** Height converted video is scaled down to at most, 0 to keep the original's. */
   maxConversionHeight: number
+  /** Encoder speed against quality: auto (Polyfin's choice), then veryslow to ultrafast. */
+  encoderPreset: EncoderPreset
+  /** Quality factor of H.264 and HEVC conversions (CRF, CQ or QVBR's), 0 aiming for the bitrate alone. */
+  h264Quality: number
+  hevcQuality: number
+  /** Converts to HEVC for the apps that list it before H.264. */
+  allowHevcEncoding: boolean
+  /** GPU conversions run on; empty follows POLYFIN_HWACCEL. */
+  hardwareAcceleration: HardwareAcceleration
+  /** Codecs the GPU decodes. */
+  hardwareDecodingCodecs: HardwareDecodingCodec[]
+  /** Converts HDR to SDR with toneMappingAlgorithm; peak (nits, 0 the video's) and desaturation on the processor only. */
+  toneMapping: boolean
+  toneMappingAlgorithm: ToneMappingAlgorithm
+  toneMappingPeak: number
+  toneMappingDesat: number
+  /** Deinterlacer, and whether it makes a frame of each field. */
+  deinterlaceMethod: DeinterlaceMethod
+  deinterlaceDoubleRate: boolean
+  /** Stereo downmix, and the volume it is multiplied by. */
+  downmixAlgorithm: DownmixAlgorithm
+  downmixBoost: number
+  /** Most channels of converted audio, 0 for no limit but the app's. */
+  maxAudioChannels: number
+  /** Bitrate of converted audio per channel, in kb/s; 0 keeps Polyfin's. */
+  audioBitratePerChannel: number
+  /** Threads FFmpeg converts with, 0 letting it choose. */
+  encodingThreads: number
+  /** Segments, of about 6 seconds, made ahead of what the app asked for. */
+  aheadSegments: number
+  /** What conversions run on (read-only). */
+  conversionHardware: ConversionHardware
   /** Makes scrubbing thumbnails of the versions played, from their keyframes, in the background. */
   trickplay: boolean
   /** Seconds between two scrubbing thumbnails. */
@@ -227,6 +259,80 @@ export const versionAttemptsRange = { min: 1, max: 10 }
 export const maxConversionsRange = { min: 0, max: 32 }
 /** The values the server accepts for Settings.maxConversionHeight, 0 keeping the original height. */
 export const conversionHeights = [0, 480, 720, 1080, 1440, 2160]
+
+/** The values the server accepts for the conversion settings. */
+export const encoderPresets = [
+  'auto',
+  'veryslow',
+  'slower',
+  'slow',
+  'medium',
+  'fast',
+  'faster',
+  'veryfast',
+  'superfast',
+  'ultrafast',
+] as const
+export type EncoderPreset = (typeof encoderPresets)[number]
+export const hardwareAccelerations = ['', 'auto', 'nvenc', 'vaapi', 'none'] as const
+export type HardwareAcceleration = (typeof hardwareAccelerations)[number]
+export const hardwareDecodingCodecs = [
+  'h264',
+  'hevc',
+  'hevc_10bit',
+  'vp9',
+  'av1',
+  'mpeg2video',
+  'vc1',
+] as const
+export type HardwareDecodingCodec = (typeof hardwareDecodingCodecs)[number]
+export const toneMappingAlgorithms = [
+  'auto',
+  'bt2390',
+  'hable',
+  'reinhard',
+  'mobius',
+  'clip',
+  'linear',
+] as const
+export type ToneMappingAlgorithm = (typeof toneMappingAlgorithms)[number]
+export const deinterlaceMethods = ['yadif', 'bwdif'] as const
+export type DeinterlaceMethod = (typeof deinterlaceMethods)[number]
+export const downmixAlgorithms = ['None', 'Dave750', 'NightmodeDialogue', 'Rfc7845', 'Ac4'] as const
+export type DownmixAlgorithm = (typeof downmixAlgorithms)[number]
+export const audioChannelLimits = [0, 1, 2, 6]
+export const videoQualityRange = { min: 1, max: 51 }
+export const toneMappingPeakRange = { min: 100, max: 10000 }
+export const toneMappingDesatRange = { min: 0, max: 10 }
+export const downmixBoostRange = { min: 0.5, max: 3 }
+export const audioBitratePerChannelRange = { min: 32, max: 320 }
+export const encodingThreadsRange = { min: 0, max: 64 }
+export const aheadSegmentsRange = { min: 1, max: 60 }
+
+/** A GPU conversions run on. */
+export type ConversionGPU = {
+  /** cuda for NVIDIA, vaapi for AMD and Intel. */
+  method: string
+  device: string
+  encoders: string[]
+  toneMapping: boolean
+  /** Whether a VAAPI GPU takes a quality factor. */
+  qvbr: boolean
+}
+
+/** What conversions run on. */
+export type ConversionHardware = {
+  /** The GPU POLYFIN_HWACCEL asks for, which the settings fall back on. */
+  default: string
+  /** The GPU chosen, null for none. */
+  gpu: ConversionGPU | null
+  /** Software video encoders FFmpeg has. */
+  encoders: string[]
+  /** Whether FFmpeg tone maps HDR on the processor. */
+  toneMapping: boolean
+  /** Whether FFmpeg has the bwdif deinterlacer. */
+  bwdif: boolean
+}
 /** The ranges and values the server accepts for the thumbnail settings. */
 export const trickplayIntervalRange = { min: 5, max: 60 }
 export const trickplayWidths = [240, 320, 480]

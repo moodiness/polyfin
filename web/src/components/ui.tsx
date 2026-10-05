@@ -83,19 +83,22 @@ export function Checkbox({
   help,
   checked,
   onChange,
+  disabled,
 }: {
   label: string
   help?: string
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }) {
   const id = useId()
   return (
-    <div className="flex items-start gap-3">
+    <div className={`flex items-start gap-3 ${disabled ? 'opacity-50' : ''}`}>
       <input
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         aria-describedby={help ? `${id}-help` : undefined}
         className="mt-0.5 size-5 shrink-0 accent-fin-3"

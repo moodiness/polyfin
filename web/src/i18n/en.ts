@@ -91,6 +91,23 @@ const en = {
     invalid_version_attempts: 'Versions tried must be a whole number from 1 to 10.',
     invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
     invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
+    invalid_encoder_preset: 'Choose an encoding speed from the list.',
+    invalid_video_quality: 'Video quality must be 0, or a whole number from 1 to 51.',
+    invalid_hardware_acceleration: 'Choose a graphics card from the list.',
+    invalid_hardware_decoding_codecs:
+      'This list of formats read on the graphics card is not supported. Reload the page.',
+    invalid_tone_mapping_algorithm: 'Choose a tone mapping method from the list.',
+    invalid_tone_mapping_peak:
+      'Peak brightness must be 0, or a whole number of nits from 100 to 10,000.',
+    invalid_tone_mapping_desat: 'Highlight desaturation must be a number from 0 to 10.',
+    invalid_deinterlace_method: 'Choose a deinterlacing method from the list.',
+    invalid_downmix_algorithm: 'Choose a stereo mix from the list.',
+    invalid_downmix_boost: 'The volume when mixing to stereo must be a number from 0.5 to 3.',
+    invalid_max_audio_channels: 'Choose the most audio channels from the list.',
+    invalid_audio_bitrate_per_channel:
+      'Audio bitrate per channel must be 0, or a whole number of kb/s from 32 to 320.',
+    invalid_encoding_threads: 'Processor threads must be a whole number from 0 to 64.',
+    invalid_ahead_segments: 'Segments prepared ahead must be a whole number from 1 to 60.',
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',
@@ -444,6 +461,142 @@ const en = {
       'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. Polyfin never converts above 1080p, so higher choices change nothing for now.',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
+    conversion: {
+      description:
+        'When an app cannot play a file as it is, Polyfin converts it with FFmpeg. These settings choose how, for movies, series and Live TV alike. The defaults suit most servers.',
+      groups: {
+        general: 'General',
+        gpu: 'Graphics card',
+        video: 'Video',
+        hdr: 'HDR',
+        interlaced: 'Interlaced video',
+        audio: 'Audio',
+        performance: 'Performance',
+      },
+      hardwareAcceleration: 'Graphics card used to convert',
+      hardwareAccelerationHelp:
+        'A graphics card (GPU) converts video much faster than the processor. The POLYFIN_HWACCEL environment variable still sets the default; a choice here overrides it once saved, without a restart.',
+      hardwareDefault: (value: string) => `Default from POLYFIN_HWACCEL (${value})`,
+      hardware: {
+        auto: 'Automatic: NVIDIA, else AMD or Intel',
+        nvenc: 'NVIDIA (NVENC)',
+        vaapi: 'AMD or Intel (VAAPI)',
+        none: 'None: the processor only',
+      },
+      detected: 'Detected on this server',
+      noGpu: 'No graphics card is used: the processor converts video.',
+      gpu: 'Graphics card',
+      gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD or Intel (VAAPI)' },
+      encoders: 'Encoders on the card',
+      gpuToneMapping: 'HDR to SDR on the card',
+      qualityFactor: 'Takes a quality number',
+      processor: 'Encoders on the processor',
+      processorToneMapping: 'HDR to SDR on the processor',
+      yes: 'Yes',
+      no: 'No',
+      none: 'None',
+      hardwareDecoding: 'Read these formats on the graphics card',
+      hardwareDecodingHelp:
+        'The card reads (decodes) these formats itself, which leaves the processor free. Uncheck one if its videos fail to convert or look wrong: the processor then reads it. Other formats are tried on the card. HEVC 10-bit needs HEVC.',
+      hardwareDecodingNoGpu: 'No graphics card is used, so the processor reads every format.',
+      codecs: {
+        h264: 'H.264',
+        hevc: 'HEVC',
+        hevc_10bit: 'HEVC 10-bit',
+        vp9: 'VP9',
+        av1: 'AV1',
+        mpeg2video: 'MPEG-2',
+        vc1: 'VC-1',
+      },
+      encoderPreset: 'Encoding speed',
+      encoderPresetHelp:
+        'Slower gives a better picture at the same size, but needs more power. If converted videos stutter, choose a faster one. Automatic keeps Polyfin’s choice: very fast on the processor, medium on NVIDIA cards, the driver’s on AMD and Intel cards.',
+      presets: {
+        auto: 'Automatic',
+        veryslow: 'Very slow (best picture)',
+        slower: 'Slower',
+        slow: 'Slow',
+        medium: 'Medium',
+        fast: 'Fast',
+        faster: 'Faster',
+        veryfast: 'Very fast',
+        superfast: 'Super fast',
+        ultrafast: 'Ultra fast (lightest work)',
+      },
+      h264Quality: 'H.264 quality (0 = by bitrate)',
+      hevcQuality: 'HEVC quality (0 = by bitrate)',
+      qualityHelp:
+        'A lower number gives a better picture and more data; the bitrate still sets the maximum. 0 aims for the bitrate alone. Jellyfin uses 23 for H.264 and 28 for HEVC. 0, or from 1 to 51; 0 by default.',
+      qualityIgnored:
+        'This graphics card cannot take a quality number: it keeps aiming for the bitrate.',
+      allowHevcEncoding: 'Allow converting to HEVC',
+      allowHevcEncodingHelp:
+        'HEVC needs less data than H.264 for the same picture, but takes more power to make. When on, apps that list HEVC first get it. When off, only apps that cannot play H.264 get HEVC.',
+      noHevcEncoder: 'FFmpeg cannot make HEVC on this server.',
+      toneMapping: 'Convert HDR to SDR (tone mapping)',
+      toneMappingHelp:
+        'Keeps the colors and brightness of HDR videos right on screens that only show SDR. When off, converted HDR videos look pale, and Dolby Vision videos without an HDR10 layer are not converted.',
+      toneMappingUnavailable:
+        'Neither the graphics card nor FFmpeg can do it on this server: HDR videos are only converted when this is off.',
+      toneMappingAlgorithm: 'Tone mapping method',
+      toneMappingAlgorithmHelp:
+        'How bright parts are brought down to SDR. Automatic uses BT.2390 on the graphics card and Hable on the processor.',
+      algorithms: {
+        auto: 'Automatic',
+        bt2390: 'BT.2390 (graphics card only)',
+        hable: 'Hable',
+        reinhard: 'Reinhard',
+        mobius: 'Möbius',
+        clip: 'Clip',
+        linear: 'Linear',
+      },
+      toneMappingPeak: 'Peak brightness in nits (0 = from the video)',
+      toneMappingDesat: 'Highlight desaturation (0 = off)',
+      toneMappingPeakHelp:
+        'On the processor only. The peak replaces the brightest level the video says it reaches: 0, or from 100 to 10,000. Desaturation fades the color of very bright parts: from 0 to 10. Both are 0 by default.',
+      processorCannotToneMap: 'FFmpeg cannot do tone mapping on the processor on this server.',
+      deinterlaceMethod: 'Deinterlacing method',
+      deinterlaceMethodHelp:
+        'TV broadcasts and DVDs are often interlaced, which shows comb-like lines once converted. Yadif is fast; Bwdif is a little sharper.',
+      noBwdif: 'FFmpeg on this server has no Bwdif.',
+      deinterlacers: { yadif: 'Yadif', bwdif: 'Bwdif' },
+      deinterlaceDoubleRate: 'Double the frame rate',
+      deinterlaceDoubleRateHelp:
+        'Makes a picture from each half-frame, for smoother motion in sports and TV shows. Only for videos up to 30 frames per second.',
+      downmixAlgorithm: 'Mix to stereo',
+      downmixAlgorithmHelp:
+        'How surround sound is mixed down to two speakers. Dave750 and Night mode keep voices clear; RFC 7845 and AC-4 follow standards.',
+      downmixes: {
+        None: 'FFmpeg’s own mix',
+        Dave750: 'Dave750',
+        NightmodeDialogue: 'Night mode (clearer voices)',
+        Rfc7845: 'RFC 7845',
+        Ac4: 'AC-4',
+      },
+      downmixBoost: 'Volume when mixing to stereo',
+      downmixBoostHelp:
+        'Stereo mixes often sound quieter: the volume is multiplied by this number. From 0.5 to 3; 1 (no change) by default. Jellyfin uses 2.',
+      maxAudioChannels: 'Most audio channels',
+      maxAudioChannelsHelp:
+        'Converted sound keeps at most this many channels, even if the app takes more.',
+      audioChannels: (channels: number): string =>
+        channels === 0
+          ? 'As many as the app takes'
+          : channels === 1
+            ? 'Mono'
+            : channels === 2
+              ? 'Stereo'
+              : '5.1',
+      audioBitratePerChannel: 'Audio bitrate per channel in kb/s (0 = automatic)',
+      audioBitratePerChannelHelp:
+        'Automatic gives 192 kb/s in stereo, and 64 kb/s per channel above. 0, or from 32 to 320; 0 by default.',
+      encodingThreads: 'Processor threads per conversion (0 = automatic)',
+      encodingThreadsHelp:
+        'Limits how much of the processor one conversion uses, to leave room for other work. From 0 to 64; 0 lets FFmpeg choose.',
+      aheadSegments: 'Segments prepared ahead',
+      aheadSegmentsHelp:
+        'Polyfin prepares a video at most this many segments, of about 6 seconds each, past the part the app asked for, then waits. More helps with slow sources, but uses more power and disk space when people stop watching early. From 1 to 60; 10 by default.',
+    },
     catalogsTitle: 'Catalogs',
     catalogLimit: 'Titles read per movie and series catalog',
     catalogLimitHelp:
