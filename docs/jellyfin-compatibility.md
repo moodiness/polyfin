@@ -94,7 +94,7 @@ Fallback fonts are the fonts in `POLYFIN_FONTS_DIR`, folders within included. Th
 
 ### Subtitle files
 
-Under **Users**, the **Can manage subtitles** permission is on for administrators and off for other users. Administrators' apps can set it too. See [users](users.md) and [subtitles](subtitles.md).
+On a user's page under **Users**, the **Access** section's **Can manage subtitles** permission is on for administrators and off for other users. Administrators' apps can set it too. See [users](users.md) and [subtitles](subtitles.md).
 
 - With it, a user can add an SRT, WebVTT, ASS or SSA file to a movie or an episode from their app. Every version then offers that file first among its subtitles.
 - Only administrators delete such files, as in Jellyfin.

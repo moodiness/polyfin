@@ -6,7 +6,7 @@ This page covers user accounts: what Polyfin keeps for each user, and the limits
 
 Polyfin has separate accounts for each user, with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points and Next Up are tracked per user, and each user can be limited to titles up to a rating.
 
-An administrator sets each user's limits under **Users** in the admin app. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
+An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
 Each user can also connect their own tracking accounts; see [Tracking services](tracking.md).
 
@@ -43,7 +43,7 @@ Two settings under **Settings › Content** decide when a title counts as played
 
 ## Parental control
 
-Under **Users**, an administrator can limit a user to titles up to a rating. The administrator can also hide from them the movies or shows that have no rating. Administrators' Jellyfin apps can set the same limit from their user settings.
+On a user's page under **Users**, the **Parental control** section can limit the user to titles up to a rating (**Maximum rating**). The administrator can also hide from them the movies or shows that have no rating (**Block unrated movies**, **Block unrated shows**). Administrators' Jellyfin apps can set the same limit from their user settings.
 
 ### How a title's rating is found
 
@@ -76,7 +76,7 @@ Addon catalogs rarely carry ratings. For a limited user, Polyfin asks the metada
 
 ## Blocked genres, visible libraries and allowed hours
 
-Under **Users**, each user has three more settings. Administrators' Jellyfin apps can also set them from their user pages.
+On a user's page under **Users**, three more sections hold three more settings, each with its own save button. Administrators' Jellyfin apps can also set them from their user pages.
 
 ### Visible libraries
 
@@ -123,11 +123,11 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 
 ## Playback and access limits
 
-Under **Users**, each user's **Playback and access** section holds five more limits. Administrators' Jellyfin apps also set them from the user's settings.
+On a user's page under **Users**, the **Playback and access** section holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them from the user's settings.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Playbacks at once** | **Users › Playback and access** | 0, no limit (up to 20) | How many of the user's devices may play at once. |
+| **Playbacks at once (0 = no limit)** | **Users › Playback and access** | 0, no limit (up to 20) | How many of the user's devices may play at once. |
 | **Maximum quality** | **Users › Playback and access** | No limit | Caps the bitrate of everything the user plays. |
 | **Live TV** | **Users › Playback and access** | On | Whether the user can see and play Live TV. |
 | **Watch together** | **Users › Playback and access** | Create and join | Whether the user may create and join SyncPlay groups, only join them, or not watch together at all. |
@@ -187,11 +187,11 @@ Creating a group takes the first choice. Listing and joining groups takes either
 
 ## Quality groups
 
-**Quality group**, under **Users** in **Playback and access** next to the maximum quality, sets the highest resolution each user is offered.
+**Quality group**, on a user's page under **Users** in **Playback and access** next to the maximum quality, sets the highest resolution each user is offered.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Quality group** | **Users › Playback and access** | **Original** (no limit) | Highest resolution offered: **Original**, **4K**, **1440p**, **1080p**, **720p** or **480p**. |
+| **Quality group** | **Users › Playback and access** | **Original (no limit)** | Highest resolution offered: **Original (no limit)**, **4K**, **1440p**, **1080p**, **720p** or **480p**. |
 
 ### How a version's height is found
 
@@ -240,13 +240,13 @@ When every version is taller, all are kept rather than none, the closest to the 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
-| **Block an account after this many wrong passwords** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
-| **Sign out devices unused for** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
+| **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
+| **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
 
 ### Users' own addons
 
-Under **Users**, each user also has their own **Can add their own addons** permission, on by default. While either this or **Allow users' own addons** is off:
+On a user's page under **Users**, the **Access** section also holds **Can add their own addons**, on by default. While either this or **Allow users' own addons** is off:
 
 - the user's own addons are kept but not used;
 - their apps show the server's addons and libraries only;
@@ -263,7 +263,7 @@ The count starts again after any of these:
 
 - a sign-in;
 - a new password set by an administrator;
-- **Unblock** under **Users**, where the account shows until when it is blocked;
+- **Unblock** on the user's page under **Users**, where the account shows until when it is blocked;
 - setting the limit to 0.
 
 **Compared with Jellyfin:**

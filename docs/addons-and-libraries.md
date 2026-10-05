@@ -12,7 +12,7 @@ Polyfin gets its content from Stremio addons. Each addon has a role:
 
 ### Server addons
 
-To share an addon with every user, paste its manifest URL (from the addon's configure page) under **Content › Sources**. Then pick under **Libraries** which of its catalogs become libraries in Jellyfin apps.
+To share an addon with every user, open **Add a source** under **Content › Sources**, keep the **Stremio addon** tab, and paste its **Manifest address** (from the addon's configure page). Then pick under **Content › Libraries** which of its catalogs become libraries in Jellyfin apps.
 
 - When an addon offers collection catalogs, those are enabled first.
 - Otherwise its first 20 movie, series and TV catalogs are enabled.
@@ -22,11 +22,13 @@ Only administrators can install addons hosted on a local network address.
 
 ### Personal addons
 
-Each user can add their own addons and libraries under **My sources**. Users can also turn the server's addons off for themselves.
+Each user can add their own addons and libraries under **My sources**. Users can also turn the server's sources off for themselves with **Use the server's sources**.
 
-### Manifest URLs
+### Manifest addresses
 
-Manifest URLs usually contain your addon settings or keys. Polyfin never shows them in full.
+Manifest addresses usually contain your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu.
+
+Each source has its own page, from **Open its page** on its row, with its details, an **Active** switch and its place in the order. **Remove** asks first.
 
 ## Libraries
 
@@ -38,11 +40,11 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 ## Music addons
 
-Eclipse music addons install like Stremio addons: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest URL or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Music addon addresses are redacted like manifest URLs.
+Eclipse music addons install like Stremio addons, with the **Music addon** tab of **Add a source**: under **Content › Sources** for the server, or under **My sources** for a user's own. You can add one by its manifest address or by its base address (`https://addon.example/{token}/`). Polyfin tells the two kinds of addon apart by their manifest. Music addon addresses are redacted like manifest addresses.
 
 ### Music addon settings
 
-Change the settings an addon declares (pickers, switches, texts and numbers) with its **Settings** button under **Content › Sources** or **My sources**.
+Change the settings an addon declares (pickers, switches, texts and numbers) under **Addon settings**, on the addon's own page under **Content › Sources** or **My sources**.
 
 - Each setting holds one value.
 - A per-network setting keeps its Wi-Fi default.
@@ -50,7 +52,7 @@ Change the settings an addon declares (pickers, switches, texts and numbers) wit
 
 ### Music libraries
 
-Each catalog row (songs, albums, artists or playlists) is a library under **Libraries**:
+Each catalog row (songs, albums, artists or playlists) is a library under **Content › Libraries**:
 
 - a Jellyfin music library; or
 - a books library, for an addon whose `contentType` is `audiobook`. Its tracks are audiobooks, with the chapters their stream gives.
@@ -90,7 +92,7 @@ Eclipse's video renditions are not used: Jellyfin music apps cannot show a video
 
 ### Health and parental control
 
-Music addon requests count in **Health** like a Stremio addon's: last answer, failures and response time, with the same manifest check (see [Administration](administration.md)).
+Music addon requests count in **System › Health** like a Stremio addon's: last answer, failures and response time, with the same manifest check (see [Administration](administration.md)).
 
 - Explicit songs and albums are hidden from users whose parental control sets a highest rating.
 - Music has no rating, so all music (books, for audiobooks) is hidden from users who block unrated music.
@@ -159,7 +161,7 @@ Rules:
 
 ### Permission
 
-Under **Users**, the **Access** section's **Can manage collections** permission is on for administrators, existing ones included, and off for other users. Without it, nobody can create a collection or add and remove its titles, administrators included. Administrators and users who may manage collections can delete a collection. See [Users](users.md).
+On a user's page under **Users**, the **Access** section's **Can manage collections** permission is on for administrators, existing ones included, and off for other users. Without it, nobody can create a collection or add and remove its titles, administrators included. Administrators and users who may manage collections can delete a collection. See [Users](users.md).
 
 **Compared with Jellyfin:**
 

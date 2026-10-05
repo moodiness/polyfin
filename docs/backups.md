@@ -20,9 +20,9 @@ Every day, at the hour set under **Settings › Backups › Back up every day at
 - After each backup, Polyfin deletes its oldest backups past **Backups to keep** (7 by default, from 1 to 90). It deletes only files named like its backups, never other files in the folder.
 - The database password is passed to `pg_dump` in its environment, never on its command line or in the logs.
 
-To back up now, run **Back up the database** on the **Schedule** page.
+To back up now, press **Back up now** in the **Database backups** panel of **System › Schedule**, or run the **Back up the database** task from the list on the same page.
 
-**Settings › Backups** shows the folder, the last run and its result, the last backup made with its file and size, and when the next one is. **Health** shows the same. It lists a problem when the last backup failed, or when the last one made is more than two days old.
+The **Database backups** panel shows the last run and its result, the last backup made with its file and size, and when the next one is. **Settings › Backups** shows the folder and the last backup. **System › Health** shows the same as the panel. It lists a problem when the last backup failed, or when the last one made is more than two days old.
 
 The folder is on the same server as the database. Copy the backups elsewhere too, for example with your usual file backup, so that a failed disk does not take them with it.
 

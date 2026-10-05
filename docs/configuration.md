@@ -32,9 +32,9 @@ Polyfin stores a few secrets in its database: the server's PublicMetaDB key, The
 
 - At startup, the secrets still stored unencrypted are encrypted in place, in one go. Running again changes nothing.
 - New values are written encrypted, and read back decrypted.
-- Without the key, nothing changes from earlier versions: secrets are stored as they are, and **Health** shows a warning while any is stored that way.
+- Without the key, nothing changes from earlier versions: secrets are stored as they are, and **System › Health** shows a warning while any is stored that way.
 
-If the key is missing, changed or wrong while encrypted secrets exist, Polyfin still starts. The secrets it cannot decrypt count as not set: the services they belong to act as not configured or not connected. The log shows one error naming them, never their values, and **Health** lists them. Set the key they were encrypted with again, or enter them again: a server key under **Settings**, a user's connection under **My account › Tracking**. Until one is entered again, saving other settings keeps the value the right key can still decrypt.
+If the key is missing, changed or wrong while encrypted secrets exist, Polyfin still starts. The secrets it cannot decrypt count as not set: the services they belong to act as not configured or not connected. The log shows one error naming them, never their values, and **System › Health** lists them. Set the key they were encrypted with again, or enter them again: a server key under **Settings**, a user's connection under **My account › Tracking**. Until one is entered again, saving other settings keeps the value the right key can still decrypt.
 
 Addon addresses, IPTV passwords and guide addresses stay unencrypted.
 

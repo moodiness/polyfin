@@ -78,7 +78,7 @@ Five more settings change how Polyfin picks a version and how much video the ser
 | **Maximum time to analyze a version** | **Settings › Playback** | 45 seconds (5 to 120) | Bounds every ffprobe analysis, of files and of live streams. A source that does not answer in time is given up for 15 minutes, and Polyfin moves on to the next version sooner. |
 | **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none, for titles and channels alike. Later versions analyzed before are still tried, as they cost nothing. |
 | **Prefer versions the app plays without conversion** | **Settings › Playback** | Off | Goes on through those versions until one plays on the app as it is or remuxed with its tracks copied. If none does, falls back to the first that plays at all. |
-| **Video conversions at once** | **Settings › Conversion** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |
+| **Video conversions at once (0 = no limit)** | **Settings › Conversion** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |
 | **Maximum quality of converted video** | **Settings › Conversion** | Original (or 480p to 2160p) | Scales converted video down to that height. |
 
 ### Prefer versions the app plays without conversion
