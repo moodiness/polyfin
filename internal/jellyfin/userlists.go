@@ -151,6 +151,12 @@ func (h *Handler) playingItems(r *http.Request, user accounts.User) map[accounts
 	return playing
 }
 
+// watchedSeriesLimit bounds the series Next Up and Upcoming look at among
+// those the user played, the most recently played first: each needs its
+// description from its addon, and a history imported from a tracking
+// service can hold hundreds of series.
+const watchedSeriesLimit = 50
+
 // watching is a series the user watches: the episode furthest into it the
 // user played, as Next Up starts from it, and the latest date the user
 // played one of its episodes.
@@ -207,8 +213,11 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	if oneSeries {
 		// A series asked for is considered whatever the user did with it.
 		candidates = []watching{{series: seriesID}}
-	} else if cutoff != nil {
-		candidates = slices.DeleteFunc(candidates, func(c watching) bool { return c.latest.Before(*cutoff) })
+	} else {
+		if cutoff != nil {
+			candidates = slices.DeleteFunc(candidates, func(c watching) bool { return c.latest.Before(*cutoff) })
+		}
+		candidates = candidates[:min(len(candidates), watchedSeriesLimit)]
 	}
 	type entry struct {
 		episode library.Item
@@ -287,7 +296,7 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	var candidates []accounts.ID
 	seen := map[accounts.ID]bool{}
 	for _, e := range watched {
-		if e.Played && !seen[e.Series] {
+		if e.Played && !seen[e.Series] && len(candidates) < watchedSeriesLimit {
 			seen[e.Series] = true
 			candidates = append(candidates, e.Series)
 		}

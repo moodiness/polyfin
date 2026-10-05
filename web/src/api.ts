@@ -895,6 +895,25 @@ export type TrackingService = {
   problem: 'reconnect' | 'unreachable' | 'app_refused' | null
   /** While a code connection waits for the user to enter the code on the service's site. */
   code: { userCode: string; verificationUrl: string; expiresAt: string } | null
+  /** Whether the service's watch history is imported into Polyfin, every 6 hours. */
+  importHistory: boolean
+  /** An import runs now. */
+  importing: boolean
+  /** How the last import went; null before the first. */
+  lastImport: TrackingImport | null
+}
+
+/** How an import of a watch history went. */
+export type TrackingImport = {
+  at: string
+  /** Titles it newly marked played. */
+  played: number
+  /** Resume points it set. */
+  resumed: number
+  /** Titles of the history Polyfin could not identify. */
+  unmapped: number
+  /** Why the history could not be read whole; what was read is imported all the same. */
+  problem: 'reconnect' | 'unreachable' | 'rate_limited' | null
 }
 
 export const fetchTracking = async (signal?: AbortSignal) =>
@@ -908,6 +927,14 @@ export const connectTracking = (service: TrackingServiceName, key?: string) =>
     `/account/tracking/${seg(service)}`,
     key === undefined ? {} : { key },
   )
+
+/** Turns the import of a connected service's watch history on (importing it at once) or off. */
+export const setTrackingImport = (service: TrackingServiceName, importHistory: boolean) =>
+  request<TrackingService>('PATCH', `/account/tracking/${seg(service)}`, { importHistory })
+
+/** Imports a service's watch history at once. */
+export const importTracking = (service: TrackingServiceName) =>
+  request<TrackingService>('POST', `/account/tracking/${seg(service)}/import`)
 
 /** Disconnects a service, or cancels the code it waits for. */
 export const disconnectTracking = (service: TrackingServiceName) =>

@@ -215,7 +215,11 @@ func serve(ctx context.Context) error {
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger, store.Settings)
-	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Version: version, Logger: logger})
+	userData := userdata.New(pool)
+	// Imported watch histories find their titles in the library and add to
+	// the users' data.
+	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Version: version, Logger: logger,
+		Titles: lib, UserData: userData})
 	defer tracking.Close()
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
@@ -227,7 +231,7 @@ func serve(ctx context.Context) error {
 		Stremio:       addonClient,
 		Playback:      player,
 		Preferences:   preferences.New(pool),
-		UserData:      userdata.New(pool),
+		UserData:      userData,
 		Segments:      skipSegments,
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),

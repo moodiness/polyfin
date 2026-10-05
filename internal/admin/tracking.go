@@ -21,6 +21,20 @@ type trackingServiceJSON struct {
 	LastSentAt  *time.Time        `json:"lastSentAt"`
 	Problem     *string           `json:"problem"`
 	Code        *trackingCodeJSON `json:"code"`
+	// ImportHistory tells that the service's watch history is imported;
+	// Importing, that an import runs now; LastImport, how the last went.
+	ImportHistory bool                `json:"importHistory"`
+	Importing     bool                `json:"importing"`
+	LastImport    *trackingImportJSON `json:"lastImport"`
+}
+
+// trackingImportJSON is how the last import of a watch history went.
+type trackingImportJSON struct {
+	At       time.Time `json:"at"`
+	Played   int       `json:"played"`
+	Resumed  int       `json:"resumed"`
+	Unmapped int       `json:"unmapped"`
+	Problem  *string   `json:"problem"`
 }
 
 // trackingCodeJSON is a code waiting for the user to enter it on the
@@ -46,6 +60,14 @@ func newTrackingServiceJSON(status trackers.Status) trackingServiceJSON {
 	if status.Code != nil {
 		result.Code = &trackingCodeJSON{UserCode: status.Code.UserCode, VerificationURL: status.Code.VerificationURL,
 			ExpiresAt: status.Code.ExpiresAt.UTC().Truncate(time.Second)}
+	}
+	result.ImportHistory, result.Importing = status.ImportHistory, status.Importing
+	if last := status.LastImport; last != nil {
+		result.LastImport = &trackingImportJSON{At: last.At.UTC().Truncate(time.Second), Played: last.Played, Resumed: last.Resumed,
+			Unmapped: last.Unmapped}
+		if last.Problem != "" {
+			result.LastImport.Problem = &last.Problem
+		}
 	}
 	return result
 }
@@ -130,4 +152,51 @@ func (h *handler) disconnectTracking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// setTrackingImport turns the import of the signed-in user's watch history
+// from a connected service on or off; turned on, it imports at once.
+func (h *handler) setTrackingImport(w http.ResponseWriter, r *http.Request) {
+	service := r.PathValue("service")
+	if h.Trackers == nil || !slices.Contains(trackers.Services, service) {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	var body struct {
+		ImportHistory *bool `json:"importHistory"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.ImportHistory == nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	status, err := h.Trackers.SetImport(r.Context(), sessionFrom(r.Context()).User.ID, service, *body.ImportHistory)
+	h.importAnswer(w, r, http.StatusOK, status, err)
+}
+
+// importTracking imports the signed-in user's watch history from a
+// service at once.
+func (h *handler) importTracking(w http.ResponseWriter, r *http.Request) {
+	service := r.PathValue("service")
+	if h.Trackers == nil || !slices.Contains(trackers.Services, service) {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	status, err := h.Trackers.ImportNow(r.Context(), sessionFrom(r.Context()).User.ID, service)
+	h.importAnswer(w, r, http.StatusAccepted, status, err)
+}
+
+func (h *handler) importAnswer(w http.ResponseWriter, r *http.Request, success int, status trackers.Status, err error) {
+	switch {
+	case errors.Is(err, trackers.ErrNotConnected):
+		writeError(w, http.StatusConflict, "not_connected")
+	case errors.Is(err, trackers.ErrImportOff):
+		writeError(w, http.StatusConflict, "import_off")
+	case err != nil:
+		h.internalError(w, r, err)
+	default:
+		writeJSON(w, success, newTrackingServiceJSON(status))
+	}
 }

@@ -134,6 +134,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/tracking", h.signedIn(h.ownTracking))
 	mux.Handle("POST /admin/api/account/tracking/{service}", h.signedIn(h.connectTracking))
 	mux.Handle("DELETE /admin/api/account/tracking/{service}", h.signedIn(h.disconnectTracking))
+	mux.Handle("PATCH /admin/api/account/tracking/{service}", h.signedIn(h.setTrackingImport))
+	mux.Handle("POST /admin/api/account/tracking/{service}/import", h.signedIn(h.importTracking))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 

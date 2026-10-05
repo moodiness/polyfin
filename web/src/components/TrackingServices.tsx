@@ -6,6 +6,8 @@ import {
   connectTracking,
   disconnectTracking,
   fetchTracking,
+  importTracking,
+  setTrackingImport,
   queryClient,
   queryKeys,
   type TrackingService,
@@ -16,6 +18,7 @@ import {
   Badge,
   buttonPrimary,
   buttonSecondary,
+  Checkbox,
   ConfirmButton,
   Notice,
   RelativeTime,
@@ -35,6 +38,9 @@ const serviceNames: Record<TrackingServiceName, string> = {
 /** How often the services are read while a code waits to be entered on a service's site. */
 const codePollMs = 5000
 
+/** How often the services are read while a watch history is imported. */
+const importPollMs = 3000
+
 function codeExpired(code: TrackingService['code'], now: number): boolean {
   return code !== null && Date.parse(code.expiresAt) <= now
 }
@@ -52,7 +58,9 @@ export default function TrackingServices() {
         (service) => service.code !== null && !codeExpired(service.code, Date.now()),
       )
         ? codePollMs
-        : false,
+        : query.state.data?.some((service) => service.importing)
+          ? importPollMs
+          : false,
   })
 
   if (tracking.isPending) return <p className="text-muted">{t.common.loading}</p>
@@ -305,6 +313,7 @@ function ServiceRow({ service }: { service: TrackingService }) {
             onConfirm={() => disconnect.mutate()}
           />
         </div>
+        <HistoryImport service={service} name={name} />
       </div>
     ) : (
       <div className="space-y-4">
@@ -392,5 +401,68 @@ function KeyForm({
         {pending ? text.checking : label}
       </button>
     </form>
+  )
+}
+
+/**
+ * Whether a connected service's watch history is imported into Polyfin, Import now, and how the
+ * last import went.
+ */
+function HistoryImport({ service, name }: { service: TrackingService; name: string }) {
+  const { t } = useI18n()
+  const text = t.account.tracking.history
+  const toggle = useMutation({
+    mutationFn: (on: boolean) => setTrackingImport(service.service, on),
+    onSuccess: store,
+  })
+  const now = useMutation({
+    mutationFn: () => importTracking(service.service),
+    onSuccess: store,
+  })
+  const last = service.lastImport
+  const busy = toggle.isPending || now.isPending
+  const failed = toggle.error ?? now.error
+  return (
+    <div className="space-y-3 rounded-lg border border-line p-4">
+      <Checkbox
+        label={text.toggle(name)}
+        help={text.toggleHelp(name)}
+        checked={service.importHistory}
+        disabled={busy}
+        onChange={(on) => {
+          now.reset()
+          toggle.mutate(on)
+        }}
+      />
+      {service.importHistory && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className={buttonSecondary}
+            disabled={busy || service.importing}
+            onClick={() => now.mutate()}
+          >
+            {service.importing ? text.importing : text.importNow}
+          </button>
+          <p role="status" className="text-sm text-muted">
+            {service.importing ? (
+              text.importingStatus
+            ) : last === null ? (
+              text.never
+            ) : (
+              <>
+                {text.lastImport} <RelativeTime iso={last.at} />
+                {text.colon}
+                {text.counts(last.played, last.resumed, last.unmapped)}
+              </>
+            )}
+          </p>
+        </div>
+      )}
+      {service.importHistory && !service.importing && last?.problem && (
+        <Callout tone="warning">{text.problem[last.problem](name)}</Callout>
+      )}
+      {failed && <Notice kind="error">{errorMessage(t, failed)}</Notice>}
+    </div>
   )
 }

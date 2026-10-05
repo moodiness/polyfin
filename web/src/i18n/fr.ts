@@ -350,6 +350,27 @@ const fr: Messages = {
         `${name} n’est pas configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name}.`,
       appRefused: (name: string) =>
         `${name} a refusé l’application de ce serveur. Un administrateur doit vérifier son client ID et son client secret dans Paramètres › Suivi.`,
+      history: {
+        toggle: (name: string) => `Importer mon historique ${name}`,
+        toggleHelp: (name: string) =>
+          `Marque comme vu dans Polyfin ce que vous avez regardé sur ${name}, et reprend là où vous vous êtes arrêté, pour que Reprendre et À suivre correspondent. Importé toutes les 6 heures ; rien n’est renvoyé à ${name}.`,
+        importNow: 'Importer maintenant',
+        importing: 'Importation…',
+        importingStatus: 'Importation de votre historique…',
+        never: 'Pas encore importé.',
+        lastImport: 'Dernière importation',
+        colon: ' : ',
+        counts: (played: number, resumed: number, unmapped: number) =>
+          `${played <= 1 ? `${played} titre marqué vu` : `${played} titres marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
+        problem: {
+          reconnect: (name: string) =>
+            `${name} a refusé la connexion lors de la dernière importation. Reconnectez-vous pour importer votre historique.`,
+          unreachable: (name: string) =>
+            `${name} n’a pas pu être lu entièrement lors de la dernière importation. Ce qui a été lu a été importé ; Polyfin réessaie dans 6 heures.`,
+          rate_limited: (name: string) =>
+            `${name} a demandé à Polyfin d’attendre lors de la dernière importation. Ce qui a été lu a été importé ; Polyfin réessaie dans 6 heures.`,
+        },
+      },
     },
   },
   devices: {

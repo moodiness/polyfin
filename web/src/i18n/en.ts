@@ -331,6 +331,27 @@ const en = {
         `${name} is not set up on this server: an administrator has to add the ${name} app first.`,
       appRefused: (name: string) =>
         `${name} refused this server’s app. An administrator has to check its client ID and secret under Settings › Tracking.`,
+      history: {
+        toggle: (name: string) => `Import my ${name} history`,
+        toggleHelp: (name: string) =>
+          `Marks played in Polyfin what you watched on ${name}, and picks up where you stopped, so Continue Watching and Next Up match. Imported every 6 hours; nothing is sent back to ${name}.`,
+        importNow: 'Import now',
+        importing: 'Importing…',
+        importingStatus: 'Importing your history…',
+        never: 'Not imported yet.',
+        lastImport: 'Last import',
+        colon: ': ',
+        counts: (played: number, resumed: number, unmapped: number) =>
+          `${played === 1 ? '1 title' : `${played} titles`} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
+        problem: {
+          reconnect: (name: string) =>
+            `${name} refused the connection during the last import. Connect again to import your history.`,
+          unreachable: (name: string) =>
+            `${name} could not be read whole during the last import. What was read was imported; Polyfin tries again in 6 hours.`,
+          rate_limited: (name: string) =>
+            `${name} asked Polyfin to wait during the last import. What was read was imported; Polyfin tries again in 6 hours.`,
+        },
+      },
     },
   },
   devices: {

@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/trackers"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // trackingServices stands in for Trakt (/trakt), MDBList (/mdblist) and
@@ -45,6 +47,8 @@ func trackingServices(t *testing.T) string {
 			default:
 				w.WriteHeader(http.StatusServiceUnavailable)
 			}
+		case "/mdblist/sync/playback":
+			_, _ = io.WriteString(w, `[]`)
 		default:
 			_, _ = io.WriteString(w, `{}`)
 		}
@@ -58,7 +62,9 @@ func newTrackingAPI(t *testing.T) testAPI {
 	services := trackingServices(t)
 	return newTestAPI(t, 10, func(options *Options, deps testDeps) {
 		tracker := trackers.New(trackers.Options{DB: deps.pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
-			URLs: map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb"}})
+			URLs:     map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb"},
+			Titles:   library.New(deps.pool, deps.addons, deps.client, options.Logger, options.Accounts.Settings),
+			UserData: userdata.New(deps.pool)})
 		t.Cleanup(tracker.Close)
 		options.Trackers = tracker
 	})
@@ -75,10 +81,10 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 
 	status, body, _ := member.call(http.MethodGet, "/account/tracking", nil)
 	want := `{"services":[
-		{"service":"trakt","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null},
-		{"service":"simkl","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null},
-		{"service":"mdblist","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null},
-		{"service":"publicmetadb","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null}]}`
+		{"service":"trakt","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"simkl","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"mdblist","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"publicmetadb","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null}]}`
 	var expected map[string]any
 	_ = json.Unmarshal([]byte(want), &expected)
 	if encoded, _ := json.Marshal(body); status != http.StatusOK || string(encoded) != mustCompact(t, expected) {
@@ -165,4 +171,65 @@ func mustCompact(t *testing.T, value map[string]any) string {
 		t.Fatal(err)
 	}
 	return string(encoded)
+}
+
+func TestHistoryImportFollowsTheContract(t *testing.T) {
+	api := newTrackingAPI(t)
+	member := api.signedIn("member", false)
+	other := api.signedIn("other", false)
+	if status, body, _ := member.call(http.MethodPost, "/account/tracking/mdblist", map[string]string{"key": "good"}); status != http.StatusOK ||
+		body["importHistory"] != false || body["importing"] != false || body["lastImport"] != nil {
+		t.Fatalf("connected: %d %v", status, body)
+	}
+	for _, check := range []struct {
+		method, path string
+		body         any
+		status       int
+		code         string
+	}{
+		{http.MethodPatch, "/account/tracking/other", map[string]bool{"importHistory": true}, http.StatusNotFound, "not_found"},
+		{http.MethodPost, "/account/tracking/other/import", nil, http.StatusNotFound, "not_found"},
+		{http.MethodPatch, "/account/tracking/mdblist", map[string]string{}, http.StatusBadRequest, "invalid_request"},
+		{http.MethodPatch, "/account/tracking/publicmetadb", map[string]bool{"importHistory": true}, http.StatusConflict, "not_connected"},
+		{http.MethodPost, "/account/tracking/publicmetadb/import", nil, http.StatusConflict, "not_connected"},
+		{http.MethodPost, "/account/tracking/mdblist/import", nil, http.StatusConflict, "import_off"},
+	} {
+		if status, body, _ := member.call(check.method, check.path, check.body); status != check.status || body["error"] != check.code {
+			t.Errorf("%s %s: %d %v", check.method, check.path, status, body)
+		}
+	}
+
+	if status, body, _ := member.call(http.MethodPatch, "/account/tracking/mdblist", map[string]bool{"importHistory": true}); status != http.StatusOK ||
+		body["importHistory"] != true || body["service"] != "mdblist" {
+		t.Fatalf("turned on: %d %v", status, body)
+	}
+	var last map[string]any
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		_, body, _ := member.call(http.MethodGet, "/account/tracking", nil)
+		entry := body["services"].([]any)[2].(map[string]any)
+		if entry["importing"] == false && entry["lastImport"] != nil {
+			last = entry["lastImport"].(map[string]any)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the import never ended: %v", entry)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	at, _ := last["at"].(string)
+	if parsed, err := time.Parse(time.RFC3339, at); err != nil || parsed.Location() != time.UTC || last["played"] != 0.0 || last["resumed"] != 0.0 ||
+		last["unmapped"] != 0.0 || last["problem"] != nil || len(last) != 5 {
+		t.Errorf("last import: %v", last)
+	}
+	if status, body, _ := member.call(http.MethodPost, "/account/tracking/mdblist/import", nil); status != http.StatusAccepted || body["importHistory"] != true {
+		t.Errorf("import now: %d %v", status, body)
+	}
+	if _, body, _ := other.call(http.MethodGet, "/account/tracking", nil); body["services"].([]any)[2].(map[string]any)["importHistory"] != false {
+		t.Errorf("another user sees %v", body)
+	}
+	if status, body, _ := member.call(http.MethodPatch, "/account/tracking/mdblist", map[string]bool{"importHistory": false}); status != http.StatusOK ||
+		body["importHistory"] != false {
+		t.Errorf("turned off: %d %v", status, body)
+	}
 }

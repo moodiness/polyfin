@@ -18,8 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // request is a request one of the fake services received.
@@ -30,6 +34,8 @@ type request struct {
 	// body is the JSON body decoded, or the form's values.
 	body any
 	form url.Values
+	// at is when it came.
+	at time.Time
 }
 
 // answer is what a fake service answers.
@@ -55,7 +61,7 @@ func newFakes(t *testing.T) *fakes {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		service, path, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		raw, _ := io.ReadAll(r.Body)
-		req := request{service: service, method: r.Method, path: "/" + path, query: r.URL.Query(), header: r.Header.Clone()}
+		req := request{service: service, method: r.Method, path: "/" + path, query: r.URL.Query(), header: r.Header.Clone(), at: time.Now()}
 		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 			req.form, _ = url.ParseQuery(string(raw))
 		} else if len(raw) > 0 {
@@ -204,13 +210,19 @@ func newHarness(t *testing.T) harness {
 // newService is a service on pool sending to f, logging to log, at a fixed
 // time, without waiting between requests and retrying soon.
 func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writer) *Service {
-	s := New(Options{DB: pool, Settings: store.Settings, Version: "1.2.3", Logger: slog.New(slog.NewTextHandler(log, nil)),
-		URLs: map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb"}})
+	logger := slog.New(slog.NewTextHandler(log, nil))
+	client := stremio.NewClient("test")
+	s := New(Options{DB: pool, Settings: store.Settings, Version: "1.2.3", Logger: logger,
+		URLs:     map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb"},
+		Titles:   library.New(pool, addons.New(pool, client), client, logger, store.Settings),
+		UserData: userdata.New(pool)})
 	s.now = func() time.Time { return clockStart }
 	s.timing.gaps = map[string]time.Duration{}
 	s.timing.publicMetaDBGap = 0
 	s.timing.retryFirst, s.timing.retryMax = 10*time.Millisecond, 40*time.Millisecond
 	s.timing.pollUnit = 5 * time.Millisecond
+	s.timing.importGaps = map[string]time.Duration{}
+	s.timing.importMaxWait = 2 * time.Second
 	return s
 }
 
