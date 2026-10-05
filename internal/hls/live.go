@@ -341,13 +341,11 @@ func (r Remux) liveArgs(dir string, start int) []string {
 		args = append(args, "-tag:v", r.VideoTag)
 	}
 	if r.Audio >= 0 && r.AudioCodec != "" {
-		args = append(args, "-c:a", r.AudioCodec, "-ac", strconv.Itoa(r.AudioChannels))
-		if r.AudioBitrate > 0 {
-			args = append(args, "-b:a", strconv.FormatInt(r.AudioBitrate, 10))
-		}
+		args = append(args, r.audioArgs()...)
 	} else if r.Audio >= 0 && r.ADTS && r.Format == FMP4 {
 		args = append(args, "-bsf:a", "aac_adtstoasc")
 	}
+	args = append(args, r.threadArgs()...)
 	args = append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegment), "-hls_list_size", strconv.Itoa(liveWindow),
 		"-hls_flags", "delete_segments+independent_segments+temp_file", "-start_number", strconv.Itoa(start))
 	if r.Format == FMP4 {
@@ -356,4 +354,28 @@ func (r Remux) liveArgs(dir string, start int) []string {
 		args = append(args, "-hls_segment_type", "mpegts")
 	}
 	return append(args, "-hls_segment_filename", filepath.Join(dir, "%d."+r.Format.Extension()), filepath.Join(dir, livePlaylist))
+}
+
+// audioArgs are FFmpeg's options converting the audio, none when it is
+// copied.
+func (r Remux) audioArgs() []string {
+	if r.Audio < 0 || r.AudioCodec == "" {
+		return nil
+	}
+	args := []string{"-c:a", r.AudioCodec, "-ac", strconv.Itoa(r.AudioChannels)}
+	if r.AudioBitrate > 0 {
+		args = append(args, "-b:a", strconv.FormatInt(r.AudioBitrate, 10))
+	}
+	if r.AudioFilter != "" {
+		args = append(args, "-af", r.AudioFilter)
+	}
+	return args
+}
+
+// threadArgs bound the threads of a conversion; a copy needs none.
+func (r Remux) threadArgs() []string {
+	if r.Threads <= 0 || r.Encode == nil && (r.Audio < 0 || r.AudioCodec == "") {
+		return nil
+	}
+	return []string{"-threads", strconv.Itoa(r.Threads)}
 }

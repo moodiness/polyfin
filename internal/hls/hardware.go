@@ -25,6 +25,10 @@ type Hardware struct {
 	// Vision's metadata: NVIDIA GPUs only. On AMD GPUs, the frames libplacebo
 	// imports from memory set off a fault in the Linux driver.
 	ToneMapping bool
+	// QVBR is set when a VAAPI driver takes a quality factor within a
+	// maximum rate, which a quality set in the settings needs there: AMD's
+	// drivers often lack it.
+	QVBR bool
 }
 
 // hardwareMethods are the GPU methods by preference, named as
@@ -40,9 +44,40 @@ var hardwareMethods = []struct {
 // DetectHardware chooses the GPU video is converted on, by encoding a few
 // frames with each encoder: with want auto, the first of NVIDIA and VAAPI
 // that encodes, VAAPI on device or else on each render node in turn; with
-// nvenc or vaapi, that one only; with none, none. Call it before encoding
-// starts. It reports false when no GPU encodes.
+// nvenc or vaapi, that one only; with none, none. Each want is detected
+// once: choosing it again switches to what was found, encodings already
+// running going on as they started. It reports false when no GPU encodes.
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
+	m.detecting.Lock()
+	defer m.detecting.Unlock()
+	hw, done := m.detected[want]
+	if !done {
+		hw = m.detect(want, device)
+		m.detected[want] = hw
+	}
+	m.hardware.Store(hw)
+	if hw == nil {
+		return Hardware{}, false
+	}
+	return *hw, true
+}
+
+// SelectHardware chooses the GPU as DetectHardware does, and logs the
+// outcome.
+func (m *Manager) SelectHardware(want, device string) {
+	switch hw, ok := m.DetectHardware(want, device); {
+	case ok:
+		m.logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders,
+			"tone_mapping", hw.ToneMapping, "qvbr", hw.QVBR)
+	case want == "auto":
+		m.logger.Info("Video is converted in software: no GPU encodes")
+	case want != "none":
+		m.logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", want)
+	}
+}
+
+// detect finds the GPU want asks for (see DetectHardware), nil for none.
+func (m *Manager) detect(want, device string) *Hardware {
 	for _, candidate := range hardwareMethods {
 		if want != "auto" && want != candidate.name {
 			continue
@@ -60,12 +95,12 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 			}
 			if len(hw.Encoders) > 0 {
 				hw.ToneMapping = hw.Method == "cuda" && slices.Contains(m.can.filters, "libplacebo") && m.toneMaps(hw)
-				m.hardware = &hw
-				return hw, true
+				hw.QVBR = hw.Method == "vaapi" && m.encodes(hw, hw.Encoders[0], "-rc_mode", "QVBR", "-global_quality", "25", "-b:v", "1000000", "-maxrate", "1500000")
+				return &hw
 			}
 		}
 	}
-	return Hardware{}, false
+	return nil
 }
 
 // toneMaps reports whether hw tone maps a quarter of a second of test
@@ -90,7 +125,7 @@ var toneMappingDevices = []string{"-init_hw_device", "cuda=cu", "-init_hw_device
 
 // Hardware is the GPU DetectHardware chose, nil for none.
 func (m *Manager) Hardware() *Hardware {
-	return m.hardware
+	return m.hardware.Load()
 }
 
 // renderNodes are the render nodes VAAPI may open: device if set, else
@@ -105,8 +140,9 @@ func renderNodes(device string) []string {
 }
 
 // encodes reports whether encoder encodes a quarter of a second of test
-// pattern on hw. A GPU or driver that fails makes FFmpeg fail, or abort.
-func (m *Manager) encodes(hw Hardware, encoder string) bool {
+// pattern on hw, with options. A GPU or driver that fails makes FFmpeg
+// fail, or abort.
+func (m *Manager) encodes(hw Hardware, encoder string, options ...string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error"}, hw.devices()...)
@@ -114,7 +150,9 @@ func (m *Manager) encodes(hw Hardware, encoder string) bool {
 	if hw.Method == "vaapi" {
 		args = append(args, "-vf", "format=nv12,hwupload")
 	}
-	args = append(args, "-c:v", encoder, "-f", "null", "-")
+	args = append(args, "-c:v", encoder)
+	args = append(args, options...)
+	args = append(args, "-f", "null", "-")
 	return exec.CommandContext(ctx, m.ffmpeg, args...).Run() == nil
 }
 
@@ -129,16 +167,27 @@ func (hw Hardware) devices() []string {
 }
 
 // inputs are FFmpeg's input options of a conversion on a GPU: decoding on
-// it, into memory, and, to tone map there, the devices libplacebo needs.
+// it, into memory, unless DecodeOnCPU, and, to tone map there, the devices
+// libplacebo needs.
 func (v *VideoEncoding) inputs() []string {
 	hw := v.Hardware
+	var devices []string
 	switch {
 	case hw == nil:
 		return nil
 	case hw.Method == "vaapi":
-		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
+		devices = hw.devices()
 	case v.toneMapsOnGPU():
-		return append(slices.Clone(toneMappingDevices), "-hwaccel", "cuda", "-hwaccel_device", "cu")
+		devices = slices.Clone(toneMappingDevices)
+	}
+	if v.DecodeOnCPU {
+		return devices
+	}
+	switch {
+	case hw.Method == "vaapi":
+		return append(devices, "-hwaccel", "vaapi", "-hwaccel_device", "va")
+	case v.toneMapsOnGPU():
+		return append(devices, "-hwaccel", "cuda", "-hwaccel_device", "cu")
 	}
 	return []string{"-hwaccel", "cuda"}
 }
