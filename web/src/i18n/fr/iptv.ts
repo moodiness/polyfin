@@ -53,8 +53,29 @@ const iptv: typeof en = {
     description:
       'Ce que cette source importe et comment les applis Jellyfin l’affichent : ses chaînes de TV en direct, avec leur ordre, leurs noms et leurs guides des programmes, et ses films et séries.',
     notFound: 'Cette source IPTV n’existe pas, ou vous ne pouvez pas la gérer.',
-    backShared: 'Retour aux addons',
-    backMine: 'Retour à mes addons',
+    backShared: 'Retour aux sources',
+    backMine: 'Retour à mes sources',
+    notFoundTitle: 'Source introuvable',
+    reset: 'Réinitialiser',
+    unsaved: 'Modifications non enregistrées',
+    upToDate: 'Aucune modification en attente',
+    unmappedNotice: (count: string) => `${count} chaînes n’ont pas de guide.`,
+    openMapping: 'Ouvrir la correspondance',
+    channelsEmpty: 'Aucune chaîne pour l’instant',
+    channelsEmptyHelp:
+      'La liste n’a pas été téléchargée, ou rien n’est importé. Téléchargez-la à nouveau depuis l’en-tête, ou changez ce qu’il faut importer.',
+    guidesNoneHelp: 'Ajoutez l’adresse d’un guide XMLTV ci-dessous, puis enregistrez.',
+    dragHandle: (name: string) => `Déplacer ${name}`,
+    guideErrors: {
+      unreachable:
+        'La dernière récupération a échoué : impossible de télécharger le guide. Vérifiez l’adresse et réessayez.',
+      private_network:
+        'La dernière récupération a échoué : ce guide se trouve à une adresse du réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
+      too_large: 'La dernière récupération a échoué : le guide dépasse 300 Mo.',
+      malformed: 'La dernière récupération a échoué : ce fichier n’est pas un guide XMLTV.',
+      channels_unreachable:
+        'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
+    } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
       summary: 'Résumé',
@@ -254,6 +275,8 @@ const iptv: typeof en = {
       resetName: 'Nom du fournisseur',
       delete: 'Supprimer',
       deleting: 'Suppression…',
+      deleteLabel: (name: string) => `Supprimer ${name}`,
+      resetNameLabel: (name: string) => `Reprendre le nom du fournisseur pour ${name}`,
       deleteConfirm: (name: string) =>
         `Supprimer ${name} ? Ses chaînes retournent dans leur catégorie d’origine.`,
       dragHint: 'Faire glisser pour déplacer',
@@ -433,7 +456,7 @@ const iptv: typeof en = {
       titleLoading: 'Guides',
       description:
         'Les guides XMLTV de ce catalogue de TV en direct, et la chaîne de guide de chacune de ses chaînes.',
-      back: 'Retour aux bibliothèques',
+      back: 'Retour à la TV en direct',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 guide' : `${count} guides`),

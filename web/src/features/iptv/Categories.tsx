@@ -1,5 +1,12 @@
-import { useId, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import {
+  ArrowCounterClockwiseIcon,
+  ListBulletsIcon,
+  MagnifyingGlassIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@phosphor-icons/react'
+import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   bulkLineupCategories,
@@ -13,24 +20,32 @@ import {
   type LineupCategory,
   type Scope,
 } from '@/api'
-import { icons } from '@/components/icons'
-import { smallField, Switch } from '@/components/lineup/shared'
-import { Empty, Panel, Skeleton } from '@/components/panels'
-import {
-  Badge,
-  buttonPrimary,
-  buttonSecondary,
-  ConfirmButton,
-  MoveButtons,
-  Notice,
-} from '@/components/ui'
+import { invalidateLineup, lineupPath } from '@/components/lineup/common'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { invalidateLineup, lineupPath } from '@/components/lineup/common'
+import {
+  Badge,
+  Button,
+  ButtonLink,
+  ConfirmDialog,
+  cx,
+  EmptyState,
+  Field,
+  FieldError,
+  IconButton,
+  InlineError,
+  Panel,
+  SkeletonRows,
+  Switch,
+  TextInput,
+  useToast,
+} from '@/ui'
+import { DragGrip, MoveButtons, useNumber } from './shared'
 
 /** A source's categories, in order: shown or not, renamed, reordered, custom ones added. */
 export default function Categories({ scope, id }: { scope: Scope; id: string }) {
   const { language, t } = useI18n()
+  const toast = useToast()
   const text = t.lineup.categories
   const key = [...queryKeys.lineup(scope, id), 'categories']
   const categories = useQuery({
@@ -41,7 +56,6 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
   const [announcement, setAnnouncement] = useState('')
   const [dragged, setDragged] = useState<string | null>(null)
   const [dropBefore, setDropBefore] = useState<number | null>(null)
-  const searchId = useId()
   const items = categories.data?.items ?? []
   const needle = search.trim().toLocaleLowerCase(language)
   const listed =
@@ -67,7 +81,10 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
   const bulk = useMutation({
     mutationFn: (enabled: boolean) =>
       bulkLineupCategories(scope, id, enabled, filtering ? listed.map((c) => c.id) : undefined),
-    onSuccess: (result) => setAnnouncement(text.bulkDone(result.changed)),
+    onSuccess: (result) => {
+      setAnnouncement(text.bulkDone(result.changed))
+      toast(text.bulkDone(result.changed))
+    },
     onSettled: () => invalidateLineup(scope, id),
   })
 
@@ -81,63 +98,69 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <CreateForm scope={scope} id={id} />
-      <Panel
-        title={text.title}
-        description={filtering ? text.reorderOff : text.help}
-        actions={
-          <>
-            <button
-              type="button"
-              className={buttonSecondary}
+      <Panel title={text.title} description={filtering ? text.reorderOff : text.help} flush>
+        <div className="flex flex-wrap items-center gap-3 px-6 pt-5 pb-4 max-sm:px-4">
+          <TextInput
+            type="search"
+            size="sm"
+            icon={MagnifyingGlassIcon}
+            value={search}
+            onValue={setSearch}
+            placeholder={text.search}
+            aria-label={text.search}
+            autoComplete="off"
+            className="min-w-48 flex-1 sm:max-w-80"
+          />
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            <Button
+              size="sm"
               disabled={bulk.isPending || items.length === 0}
               onClick={() => bulk.mutate(true)}
             >
               {filtering ? text.enableListed : text.enableAll}
-            </button>
-            <button
-              type="button"
-              className={buttonSecondary}
+            </Button>
+            <Button
+              size="sm"
               disabled={bulk.isPending || items.length === 0}
               onClick={() => bulk.mutate(false)}
             >
               {filtering ? text.disableListed : text.disableAll}
-            </button>
-          </>
-        }
-      >
-        <div className="relative mb-4 max-w-md">
-          <label htmlFor={searchId} className="mb-1.5 block text-xs font-medium text-muted">
-            {text.search}
-          </label>
-          <icons.search className="pointer-events-none absolute bottom-2.5 left-3 size-4 text-muted" />
-          <input
-            id={searchId}
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            autoComplete="off"
-            className={`${smallField} pl-9`}
-          />
+            </Button>
+          </div>
         </div>
         <p aria-live="polite" className="sr-only">
           {announcement}
         </p>
         {(order.isError || bulk.isError) && (
-          <div className="mb-3">
-            <Notice kind="error">{errorMessage(t, order.error ?? bulk.error)}</Notice>
+          <div className="px-6 pb-4 max-sm:px-4">
+            <FieldError>{errorMessage(t, order.error ?? bulk.error)}</FieldError>
           </div>
         )}
         {categories.isPending ? (
-          <Skeleton rows={6} label={t.common.loading} />
+          <div className="border-t border-line">
+            <SkeletonRows rows={6} boxed={false} />
+          </div>
         ) : categories.isError ? (
-          <Notice kind="error">{errorMessage(t, categories.error)}</Notice>
+          <div className="px-6 pb-6 max-sm:px-4">
+            <InlineError onRetry={() => void categories.refetch()} retrying={categories.isFetching}>
+              {errorMessage(t, categories.error)}
+            </InlineError>
+          </div>
         ) : listed.length === 0 ? (
-          <Empty>{items.length === 0 ? text.empty : text.noMatch}</Empty>
+          <div className="px-6 pb-6 max-sm:px-4">
+            <EmptyState
+              icon={ListBulletsIcon}
+              title={items.length === 0 ? text.empty : text.noMatch}
+            >
+              {items.length === 0 ? t.lineup.channelsEmptyHelp : undefined}
+            </EmptyState>
+          </div>
         ) : (
           <ol
-            className="rounded-xl border border-line"
+            aria-label={text.title}
+            className="border-t border-line"
             onDragLeave={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 setDropBefore(null)
@@ -185,12 +208,15 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
 
 function CreateForm({ scope, id }: { scope: Scope; id: string }) {
   const { t } = useI18n()
+  const toast = useToast()
   const text = t.lineup.categories
-  const inputId = useId()
   const [name, setName] = useState('')
   const create = useMutation({
     mutationFn: () => createLineupCategory(scope, id, name.trim()),
-    onSuccess: () => setName(''),
+    onSuccess: (created) => {
+      setName('')
+      toast(text.created(created.name))
+    },
     onSettled: () => invalidateLineup(scope, id),
   })
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -199,35 +225,35 @@ function CreateForm({ scope, id }: { scope: Scope; id: string }) {
   }
   return (
     <Panel title={text.createTitle} description={text.createHelp}>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label htmlFor={inputId} className="mb-1.5 block text-xs font-medium text-muted">
-            {text.createLabel}
-          </label>
-          <input
-            id={inputId}
+      <form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <Field
+          label={text.createLabel}
+          hideLabel
+          error={create.isError ? errorMessage(t, create.error) : undefined}
+          className="flex-1"
+        >
+          <TextInput
             value={name}
             maxLength={64}
             autoComplete="off"
-            onChange={(event) => {
+            placeholder={text.createLabel}
+            onValue={(value) => {
               create.reset()
-              setName(event.target.value)
+              setName(value)
             }}
-            className={smallField}
           />
-        </div>
-        <button
+        </Field>
+        <Button
           type="submit"
-          className={buttonPrimary}
-          disabled={create.isPending || name.trim() === ''}
+          variant="primary"
+          icon={PlusIcon}
+          className="h-10"
+          loading={create.isPending}
+          disabled={name.trim() === ''}
         >
           {text.create}
-        </button>
+        </Button>
       </form>
-      <div aria-live="polite" className="mt-3 empty:hidden">
-        {create.isError && <Notice kind="error">{errorMessage(t, create.error)}</Notice>}
-        {create.isSuccess && <Notice kind="success">{text.created(create.data.name)}</Notice>}
-      </div>
     </Panel>
   )
 }
@@ -263,11 +289,12 @@ function CategoryRow({
   onDragOverHalf: (after: boolean) => void
   onDrop: () => void
 }) {
-  const { language, t } = useI18n()
+  const { t } = useI18n()
+  const number = useNumber()
   const text = t.lineup.categories
   const [renaming, setRenaming] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [name, setName] = useState(category.name)
-  const nameId = useId()
   // Entries the provider lists without a group share a category with no
   // name; it is shown under the import preview's "No group".
   const shown = category.name || t.lineup.exclusions.noGroup
@@ -285,6 +312,7 @@ function CategoryRow({
   })
   const remove = useMutation({
     mutationFn: () => deleteLineupCategory(scope, id, category.id),
+    onSuccess: () => setConfirming(false),
     onSettled: () => invalidateLineup(scope, id),
   })
   const renamed = !category.custom && category.name !== category.providerName
@@ -313,27 +341,20 @@ function CategoryRow({
         event.preventDefault()
         onDrop()
       }}
-      className={`relative border-b border-line px-3 py-2.5 last:border-b-0 [contain-intrinsic-size:auto_3.75rem] [content-visibility:auto] ${
-        dragging ? 'opacity-40' : ''
-      }`}
+      className={cx(
+        'relative px-5 py-3 not-first:border-t not-first:border-line [contain-intrinsic-size:auto_4rem] [content-visibility:auto] max-sm:px-4',
+        dragging && 'opacity-40',
+      )}
     >
       {dropAbove && (
-        <span aria-hidden="true" className="absolute inset-x-0 -top-px h-0.5 bg-fin-5" />
+        <span aria-hidden="true" className="absolute inset-x-0 -top-px h-0.5 bg-accent" />
       )}
       {dropBelow && (
-        <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-fin-5" />
+        <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
       )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {reorder && (
-          <span
-            aria-hidden="true"
-            className="hidden cursor-grab text-zinc-600 select-none sm:inline"
-            title={text.dragHint}
-          >
-            ⋮⋮
-          </span>
-        )}
-        <span className="w-10 shrink-0 text-right text-xs text-muted tabular-nums">
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
+        {reorder && <DragGrip name={shown} />}
+        <span className="figures w-8 shrink-0 text-right text-[12.5px] text-ink-3">
           {category.position}
         </span>
         <Switch
@@ -345,98 +366,105 @@ function CategoryRow({
         <div className="min-w-0 flex-1 basis-48">
           {renaming ? (
             <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
-              <label htmlFor={nameId} className="sr-only">
-                {text.renameLabel(shown)}
-              </label>
-              <input
-                id={nameId}
+              <TextInput
+                size="sm"
                 value={name}
                 maxLength={64}
                 autoFocus
                 autoComplete="off"
-                onChange={(event) => setName(event.target.value)}
+                aria-label={text.renameLabel(shown)}
+                onValue={setName}
                 onKeyDown={(event) => event.key === 'Escape' && setRenaming(false)}
-                className={`${smallField} max-w-xs`}
+                className="max-w-xs flex-1"
               />
-              <button type="submit" className={rowButton} disabled={update.isPending}>
+              <Button type="submit" size="sm" variant="primary" loading={update.isPending}>
                 {t.common.save}
-              </button>
-              <button type="button" className={rowButton} onClick={() => setRenaming(false)}>
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>
                 {t.common.cancel}
-              </button>
+              </Button>
             </form>
           ) : (
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <span className={`font-medium ${category.enabled ? 'text-white' : 'text-zinc-400'}`}>
+            <p className="flex min-w-0 flex-wrap items-center gap-2">
+              <span
+                className={cx(
+                  'truncate text-[14px] font-medium',
+                  category.enabled ? 'text-ink' : 'text-ink-2',
+                )}
+              >
                 {shown}
               </span>
-              {category.custom && <Badge tone="fin">{text.custom}</Badge>}
+              {category.custom && <Badge tone="accent">{text.custom}</Badge>}
               {renamed && (
-                <span className="text-xs text-muted">
+                <span className="text-small text-ink-3">
                   {text.providerName(category.providerName)}
                 </span>
               )}
             </p>
           )}
-          <p className="text-xs text-muted tabular-nums">
-            {text.channelCounts(
-              category.enabledChannels.toLocaleString(language),
-              category.channels.toLocaleString(language),
-            )}
+          <p className="mt-0.5 text-[12.5px] text-ink-3 tabular-nums">
+            {text.channelCounts(number(category.enabledChannels), number(category.channels))}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Link
+        <div className="flex flex-wrap items-center gap-0.5 max-sm:w-full max-sm:justify-end">
+          <ButtonLink
+            size="sm"
+            variant="ghost"
             to={`${lineupPath(scope, id, 'channels')}?category=${category.id}`}
-            className={rowButton}
             aria-label={text.channelsLabel(shown)}
           >
             {text.channels}
-          </Link>
+          </ButtonLink>
           {!renaming && (
-            <button
-              type="button"
-              className={rowButton}
-              aria-label={text.renameLabel(shown)}
+            <IconButton
+              size="sm"
+              icon={PencilSimpleIcon}
+              label={text.renameLabel(shown)}
               onClick={() => {
                 update.reset()
                 setName(category.name)
                 setRenaming(true)
               }}
-            >
-              {text.rename}
-            </button>
+            />
           )}
           {renamed && (
-            <button
-              type="button"
-              className={rowButton}
+            <IconButton
+              size="sm"
+              icon={ArrowCounterClockwiseIcon}
+              label={text.resetNameLabel(shown)}
               disabled={update.isPending}
               onClick={() => update.mutate({ name: null })}
-            >
-              {text.resetName}
-            </button>
+            />
           )}
           {category.custom && (
-            <ConfirmButton
-              label={text.delete}
-              busyLabel={text.deleting}
-              message={text.deleteConfirm(shown)}
-              busy={remove.isPending}
-              onConfirm={() => remove.mutate()}
+            <IconButton
+              size="sm"
+              danger
+              icon={TrashIcon}
+              label={text.deleteLabel(shown)}
+              onClick={() => {
+                remove.reset()
+                setConfirming(true)
+              }}
             />
           )}
           {reorder && <MoveButtons name={shown} index={index} count={count} onMove={onMove} />}
         </div>
       </div>
-      {(update.isError || remove.isError) && (
+      {update.isError && (
         <div className="mt-2">
-          <Notice kind="error">{errorMessage(t, update.error ?? remove.error)}</Notice>
+          <FieldError>{errorMessage(t, update.error)}</FieldError>
         </div>
       )}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => remove.mutate()}
+        title={text.deleteConfirm(shown)}
+        confirmLabel={text.delete}
+        busy={remove.isPending}
+        error={remove.isError ? errorMessage(t, remove.error) : undefined}
+      />
     </li>
   )
 }
-
-const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'

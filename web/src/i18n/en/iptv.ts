@@ -51,8 +51,29 @@ const iptv = {
     description:
       'What this source imports and how Jellyfin apps show it: its Live TV channels, with their order, names and programme guides, and its movies and series.',
     notFound: 'This IPTV source does not exist, or is not one you can manage.',
-    backShared: 'Back to addons',
-    backMine: 'Back to my addons',
+    backShared: 'Back to sources',
+    backMine: 'Back to my sources',
+    notFoundTitle: 'Source not found',
+    reset: 'Reset',
+    unsaved: 'Unsaved changes',
+    upToDate: 'No unsaved changes',
+    unmappedNotice: (count: string) => `${count} channels have no guide.`,
+    openMapping: 'Open the mapping',
+    channelsEmpty: 'No channel yet',
+    channelsEmptyHelp:
+      'The list has not been downloaded, or nothing is imported. Download it again from the header, or change what to import.',
+    guidesNoneHelp: 'Add the address of an XMLTV guide below, then save.',
+    dragHandle: (name: string) => `Drag ${name}`,
+    guideErrors: {
+      unreachable:
+        'The last fetch failed: the guide could not be downloaded. Check the address and try again.',
+      private_network:
+        'The last fetch failed: this guide is on a local network address. Only administrators can use such addresses.',
+      too_large: 'The last fetch failed: the guide is larger than 300 MB.',
+      malformed: 'The last fetch failed: this file is not an XMLTV guide.',
+      channels_unreachable:
+        'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
+    } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
       summary: 'Summary',
@@ -242,6 +263,8 @@ const iptv = {
       resetName: 'Provider’s name',
       delete: 'Delete',
       deleting: 'Deleting…',
+      deleteLabel: (name: string) => `Delete ${name}`,
+      resetNameLabel: (name: string) => `Use the provider’s name for ${name}`,
       deleteConfirm: (name: string) =>
         `Delete ${name}? Its channels go back to their provider’s category.`,
       dragHint: 'Drag to move',
@@ -418,7 +441,7 @@ const iptv = {
       titleLoading: 'Guides',
       description:
         'The XMLTV guides of this Live TV catalog, and which guide channel each of its channels takes.',
-      back: 'Back to libraries',
+      back: 'Back to Live TV',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 guide' : `${count} guides`),

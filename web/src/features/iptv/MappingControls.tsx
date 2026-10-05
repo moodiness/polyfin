@@ -8,11 +8,10 @@ import {
   type MappingItem,
   type Scope,
 } from '@/api'
-import GuidePicker from '@/components/lineup/GuidePicker'
-import { Badge, Notice } from '@/components/ui'
 import { errorMessage } from '@/format'
-import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n'
+import { useI18n, type Messages } from '@/i18n'
+import { Badge, Button, FieldError } from '@/ui'
+import GuidePicker from './GuidePicker'
 
 /** How a channel's mapping reads: the guide channel, or none, and whether it was set by hand. */
 export function MappingText({ mapping }: { mapping: GuideMapping | null }) {
@@ -21,23 +20,26 @@ export function MappingText({ mapping }: { mapping: GuideMapping | null }) {
   if (mapping === null || mapping.guideChannelId === null) {
     return (
       <span className="inline-flex flex-wrap items-center gap-1.5">
-        <span className="text-muted">{text.none}</span>
-        {mapping?.manual && <Badge tone="fin">{text.manualNone}</Badge>}
+        <span className="text-ink-3">{text.none}</span>
+        {mapping?.manual && <Badge tone="accent">{text.manualNone}</Badge>}
       </span>
     )
   }
   return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
-      <span className="text-zinc-100">{mapping.guideChannelName ?? mapping.guideChannelId}</span>
-      <span className="font-mono text-xs break-all text-muted">{mapping.guideChannelId}</span>
-      <Badge tone={mapping.manual ? 'fin' : 'muted'}>
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="text-ink">{mapping.guideChannelName ?? mapping.guideChannelId}</span>
+      <span className="figures text-small break-all text-ink-3">{mapping.guideChannelId}</span>
+      <Badge tone={mapping.manual ? 'accent' : 'neutral'}>
         {mapping.manual ? text.manual : text.automatic}
       </Badge>
     </span>
   )
 }
 
-/** The actions on one channel's mapping: choose a guide channel, pin "no guide", or go back to automatic. */
+/**
+ * The actions on one channel's mapping: choose a guide channel, pin "no guide", or go back to
+ * automatic. The picker opens under the actions, full width.
+ */
 export function MappingControls({
   scope,
   target,
@@ -70,44 +72,43 @@ export function MappingControls({
   })
   const busy = set.isPending || clear.isPending
   return (
-    <div className="contents">
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          className={rowButton}
+    <>
+      <div className="flex flex-wrap gap-1">
+        <Button
+          size="sm"
           aria-expanded={picking}
           aria-label={text.chooseLabel(channelName)}
           disabled={busy}
           onClick={() => setPicking((open) => !open)}
         >
           {text.choose}
-        </button>
+        </Button>
         {!(mapping?.manual && mapping.guideChannelId === null) && (
-          <button
-            type="button"
-            className={rowButton}
+          <Button
+            size="sm"
+            variant="ghost"
             disabled={busy}
             aria-label={text.noGuideLabel(channelName)}
             onClick={() => set.mutate(null)}
           >
             {text.noGuide}
-          </button>
+          </Button>
         )}
         {mapping?.manual && (
-          <button
-            type="button"
-            className={rowButton}
+          <Button
+            size="sm"
+            variant="ghost"
             disabled={busy}
             aria-label={text.automaticLabel(channelName)}
             onClick={() => clear.mutate()}
           >
             {text.backToAutomatic}
-          </button>
+          </Button>
         )}
       </div>
       {(set.isError || clear.isError) && (
         <div className="w-full">
-          <Notice kind="error">{errorMessage(t, set.error ?? clear.error)}</Notice>
+          <FieldError>{errorMessage(t, set.error ?? clear.error)}</FieldError>
         </div>
       )}
       {picking && (
@@ -116,6 +117,7 @@ export function MappingControls({
             scope={scope}
             target={target}
             channelName={channelName}
+            busy={busy}
             onPick={(channel) =>
               set.mutate({ guideId: channel.guideId, guideChannelId: channel.id })
             }
@@ -123,7 +125,7 @@ export function MappingControls({
           />
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -133,6 +135,3 @@ export function mappingWords(t: Messages, item: MappingItem): string {
   if (mapping === null || mapping.guideChannelId === null) return t.lineup.mapping.none
   return mapping.guideChannelName ?? mapping.guideChannelId
 }
-
-const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'
