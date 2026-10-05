@@ -77,8 +77,9 @@ type Options struct {
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
-	// Segments checks a PublicMetaDB key with PublicMetaDB before the
-	// settings save it; nil saves none.
+	// Segments checks the keys of the segment databases before the settings
+	// save them, and tells the order they are preferred in; nil saves no
+	// key and asks no database.
 	Segments *mediasegments.Service
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
@@ -304,6 +305,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVersionListMinutes, http.StatusBadRequest, "invalid_version_list_minutes"},
 		{accounts.ErrInvalidCatalogRefreshMinutes, http.StatusBadRequest, "invalid_catalog_refresh_minutes"},
 		{accounts.ErrInvalidPublicMetaDBKey, http.StatusBadRequest, "invalid_publicmetadb_key"},
+		{accounts.ErrInvalidTheIntroDBKey, http.StatusBadRequest, "invalid_theintrodb_key"},
+		{accounts.ErrInvalidSegmentOrder, http.StatusBadRequest, "invalid_segment_order"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
 		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
 		{accounts.ErrInvalidAnalysisTimeout, http.StatusBadRequest, "invalid_analysis_timeout"},

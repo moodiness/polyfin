@@ -1,6 +1,7 @@
 package mediasegments
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -35,24 +36,28 @@ const (
 
 // databases stands in for TheIntroDB (/media), IntroDB (/segments) and
 // PublicMetaDB (/api/external/skips): it answers each with the reply set
-// for it, and records what each was asked and with which Authorization
-// header.
+// for it, or 401 to a key it refuses, and records what each was asked and
+// with which Authorization header.
 type databases struct {
-	mu      sync.Mutex
-	replies map[string]reply
-	asked   map[string][]url.Values
-	auth    map[string][]string
-	url     string
+	mu       sync.Mutex
+	replies  map[string]reply
+	refusing map[string]string
+	asked    map[string][]url.Values
+	auth     map[string][]string
+	url      string
 }
 
 func newDatabases(t *testing.T) *databases {
 	t.Helper()
-	d := &databases{replies: map[string]reply{}, asked: map[string][]url.Values{}, auth: map[string][]string{}}
+	d := &databases{replies: map[string]reply{}, refusing: map[string]string{}, asked: map[string][]url.Values{}, auth: map[string][]string{}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d.mu.Lock()
 		d.asked[r.URL.Path] = append(d.asked[r.URL.Path], r.URL.Query())
 		d.auth[r.URL.Path] = append(d.auth[r.URL.Path], r.Header.Get("Authorization"))
 		answer, ok := d.replies[r.URL.Path]
+		if refused := d.refusing[r.URL.Path]; refused != "" && r.Header.Get("Authorization") == "Bearer "+refused {
+			answer, ok = reply{status: http.StatusUnauthorized, body: `{"error":"Unauthorized"}`}, true
+		}
 		d.mu.Unlock()
 		if !ok {
 			answer = reply{status: http.StatusNotFound, body: `{"error":"media not found"}`}
@@ -82,6 +87,21 @@ func (d *databases) limit(path, retryAfter string) {
 	d.replies[path] = reply{status: http.StatusTooManyRequests, body: `{"error":"Too Many Requests"}`, retryAfter: retryAfter}
 }
 
+// refuse makes the database at path answer 401 to key.
+func (d *databases) refuse(path, key string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.refusing[path] = key
+}
+
+// authorizations returns the Authorization headers the database at path
+// was asked with, one a request.
+func (d *databases) authorizations(path string) []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.auth[path])
+}
+
 // calls returns how many times each database was asked: TheIntroDB, then
 // IntroDB.
 func (d *databases) calls() (theIntroDB, introDB int) {
@@ -93,9 +113,7 @@ func (d *databases) calls() (theIntroDB, introDB int) {
 // publicMetaDB returns the Authorization headers PublicMetaDB was asked
 // with, one a request.
 func (d *databases) publicMetaDB() []string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return slices.Clone(d.auth[publicMetaDBPath])
+	return d.authorizations(publicMetaDBPath)
 }
 
 func (d *databases) last(path string) url.Values {
@@ -132,7 +150,12 @@ func service(t *testing.T, d *databases, names ...string) (*Service, *clock) {
 
 // useKey saves key as the server's PublicMetaDB key, empty for none.
 func useKey(s *Service, key string) {
-	s.settings = func() accounts.Settings { return accounts.Settings{PublicMetaDBKey: key} }
+	useSettings(s, accounts.Settings{PublicMetaDBKey: key})
+}
+
+// useSettings saves settings as the server's.
+func useSettings(s *Service, settings accounts.Settings) {
+	s.settings = func() accounts.Settings { return settings }
 }
 
 var episode = Title{Item: accounts.ID{1}, IMDb: "tt0903747", TMDB: "1396", Season: 1, Episode: 2, Runtime: time.Hour}
@@ -512,7 +535,7 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 	useKey(s, restored)
 	s.Segments(t.Context(), titles[1])
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage())
-	if err := s.CheckPublicMetaDBKey(t.Context(), restored); err != nil {
+	if err := s.CheckKey(t.Context(), PublicMetaDB, restored); err != nil {
 		t.Fatal(err)
 	}
 	s.Segments(t.Context(), titles[1])
@@ -560,5 +583,153 @@ func TestARateLimitHoldsForEveryTitle(t *testing.T) {
 	s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2})
 	if asked := len(d.publicMetaDB()); asked != 5 {
 		t.Errorf("with a date: asked %d times", asked)
+	}
+}
+
+func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
+	d := newDatabases(t)
+	// Each database has an intro of its own; PublicMetaDB also a recap.
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(introDBPath, http.StatusOK, `{"imdb_id":"tt0903747","intro":{"start_ms":40000,"end_ms":70000},"recap":null,"outro":null}`)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+	s, _ := service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
+	intro := func(order ...string) Segment {
+		t.Helper()
+		useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order})
+		for _, segment := range s.Segments(t.Context(), episode) {
+			if segment.Type == Intro {
+				return segment
+			}
+		}
+		t.Fatalf("no intro with the order %v", order)
+		return Segment{}
+	}
+	theIntroDB := Segment{Type: Intro, Start: 0, End: at(30.5)}
+	introDB := Segment{Type: Intro, Start: at(40), End: at(70)}
+	publicMetaDB := Segment{Type: Intro, Start: at(15), End: at(62)}
+	for _, tc := range []struct {
+		order []string
+		want  Segment
+	}{
+		{nil, theIntroDB},
+		{[]string{PublicMetaDB, IntroDB, TheIntroDB}, publicMetaDB},
+		{[]string{IntroDB, PublicMetaDB, TheIntroDB}, introDB},
+		{[]string{}, theIntroDB},
+	} {
+		if got := intro(tc.order...); got != tc.want {
+			t.Errorf("order %v: intro %+v, want %+v", tc.order, got, tc.want)
+		}
+	}
+	// Reordering asks no database again: the answers kept are merged anew.
+	if a, b := d.calls(); a != 1 || b != 1 || len(d.publicMetaDB()) != 1 {
+		t.Errorf("asked %d, %d and %d times", a, b, len(d.publicMetaDB()))
+	}
+
+	// The order does not bring back a database POLYFIN_SEGMENTS leaves
+	// out, nor PublicMetaDB without a key.
+	s, _ = service(t, d, IntroDB, TheIntroDB)
+	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: []string{PublicMetaDB, TheIntroDB, IntroDB}})
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB}) || len(d.publicMetaDB()) != 1 {
+		t.Errorf("without PublicMetaDB: %+v, asked %d times", got, len(d.publicMetaDB()))
+	}
+	s, _ = service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
+	useSettings(s, accounts.Settings{SegmentOrder: []string{PublicMetaDB, IntroDB, TheIntroDB}})
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{introDB}) || len(d.publicMetaDB()) != 1 {
+		t.Errorf("without a key: %+v, asked %d times", got, len(d.publicMetaDB()))
+	}
+}
+
+func TestOrderListsEveryDatabase(t *testing.T) {
+	for _, tc := range []struct {
+		on, saved, order, off []string
+	}{
+		{[]string{TheIntroDB, IntroDB, PublicMetaDB}, nil, []string{TheIntroDB, IntroDB, PublicMetaDB}, []string{}},
+		{[]string{PublicMetaDB, TheIntroDB}, nil, []string{PublicMetaDB, TheIntroDB, IntroDB}, []string{IntroDB}},
+		{[]string{PublicMetaDB, TheIntroDB}, []string{IntroDB, TheIntroDB, PublicMetaDB}, []string{IntroDB, TheIntroDB, PublicMetaDB}, []string{IntroDB}},
+		{nil, nil, []string{TheIntroDB, IntroDB, PublicMetaDB}, []string{TheIntroDB, IntroDB, PublicMetaDB}},
+	} {
+		order, off := New(nil, Sources(tc.on), "test", nil, nil).Order(tc.saved)
+		if !slices.Equal(order, tc.order) || !slices.Equal(off, tc.off) {
+			t.Errorf("%v, saved %v: order %v, off %v", tc.on, tc.saved, order, off)
+		}
+	}
+	if order, off := (*Service)(nil).Order(nil); len(order) != 3 || len(off) != 3 {
+		t.Errorf("no service: %v, %v", order, off)
+	}
+}
+
+func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	s, _ := service(t, d, TheIntroDB)
+	var log strings.Builder
+	s.logger = slog.New(slog.NewTextHandler(&log, nil))
+	want := []Segment{{Type: Intro, Start: 0, End: at(30.5)}}
+	title := func(n byte) Title { return Title{Item: accounts.ID{n}, TMDB: "1396", Season: 1, Episode: int(n)} }
+
+	s.Segments(t.Context(), title(1))
+	const key = "tidb-Accepted"
+	useSettings(s, accounts.Settings{TheIntroDBKey: key})
+	s.Segments(t.Context(), title(2))
+	if auth := d.authorizations(theIntroDBPath); !slices.Equal(auth, []string{"", "Bearer " + key}) {
+		t.Fatalf("without, then with a key: %q", auth)
+	}
+
+	// A key refused later is logged once, and the question asked again
+	// without it: the segments are still found, and later titles are
+	// asked without it at once.
+	const refused = "tidb-Revoked"
+	d.refuse(theIntroDBPath, refused)
+	useSettings(s, accounts.Settings{TheIntroDBKey: refused})
+	for n := byte(3); n <= 5; n++ {
+		if got := s.Segments(t.Context(), title(n)); !slices.Equal(got, want) {
+			t.Errorf("episode %d with a refused key: %+v", n, got)
+		}
+	}
+	if auth := d.authorizations(theIntroDBPath)[2:]; !slices.Equal(auth, []string{"Bearer " + refused, "", "", ""}) {
+		t.Errorf("with a refused key: %q", auth)
+	}
+	if warnings := strings.Count(log.String(), "level=WARN"); warnings != 1 {
+		t.Errorf("%d warnings", warnings)
+	}
+	// Another key is sent at once.
+	useSettings(s, accounts.Settings{TheIntroDBKey: key})
+	s.Segments(t.Context(), title(6))
+	if auth := d.authorizations(theIntroDBPath); auth[len(auth)-1] != "Bearer "+key {
+		t.Errorf("with another key: %q", auth[len(auth)-1])
+	}
+	if strings.Contains(log.String(), key) || strings.Contains(log.String(), refused) {
+		t.Error("a key was logged")
+	}
+}
+
+func TestCheckKeyTellsRefusedFromUnreachable(t *testing.T) {
+	d := newDatabases(t)
+	s, _ := service(t, d, TheIntroDB, PublicMetaDB)
+	d.refuse(theIntroDBPath, "refused")
+	for _, tc := range []struct {
+		key     string
+		reply   int
+		refused bool
+		failed  bool
+	}{
+		{"accepted", http.StatusOK, false, false},
+		// TheIntroDB not knowing the movie still accepts the key.
+		{"accepted", http.StatusNotFound, false, false},
+		{"refused", http.StatusOK, true, true},
+		{"accepted", http.StatusTooManyRequests, false, true},
+		{"accepted", http.StatusBadGateway, false, true},
+	} {
+		d.reply(theIntroDBPath, tc.reply, `{}`)
+		err := s.CheckKey(t.Context(), TheIntroDB, tc.key)
+		if errors.Is(err, ErrKeyRefused) != tc.refused || (err != nil) != tc.failed {
+			t.Errorf("%s answered %d: %v", tc.key, tc.reply, err)
+		}
+	}
+	if auth := d.authorizations(theIntroDBPath); auth[0] != "Bearer accepted" || len(auth) != 5 {
+		t.Errorf("checked with %q", auth)
+	}
+	if q := d.last(theIntroDBPath); q.Get("tmdb_id") == "" {
+		t.Errorf("checked with %v", q)
 	}
 }
