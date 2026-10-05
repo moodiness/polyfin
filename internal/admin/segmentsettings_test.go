@@ -99,15 +99,16 @@ func TestSettingsSegmentOrder(t *testing.T) {
 // ever in an answer or the log.
 func TestSettingsTheIntroDBKey(t *testing.T) {
 	var status atomic.Int32
-	status.Store(http.StatusOK)
 	var mu sync.Mutex
-	var authorizations []string
+	var requests []string
+	// TheIntroDB answers a submission with an empty body 400 once it
+	// accepts the key, or as status says.
 	theIntroDB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		authorizations = append(authorizations, r.Header.Get("Authorization"))
+		requests = append(requests, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
 		mu.Unlock()
 		w.WriteHeader(int(status.Load()))
-		_, _ = io.WriteString(w, `{"error":"no data found for this tmdb_id"}`)
+		_, _ = io.WriteString(w, `{"error":"invalid request body"}`)
 	}))
 	t.Cleanup(theIntroDB.Close)
 	publicMetaDB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +146,8 @@ func TestSettingsTheIntroDBKey(t *testing.T) {
 		http.StatusForbidden:           {http.StatusBadRequest, "invalid_theintrodb_key"},
 		http.StatusTooManyRequests:     {http.StatusBadGateway, "theintrodb_unreachable"},
 		http.StatusInternalServerError: {http.StatusBadGateway, "theintrodb_unreachable"},
+		// An answer that does not tell whether the key is accepted.
+		http.StatusOK: {http.StatusBadGateway, "theintrodb_unreachable"},
 	} {
 		status.Store(int32(answer))
 		if got, body, _ := administrator.call(http.MethodPut, "/settings", set); got != want.status || body["error"] != want.code {
@@ -152,7 +155,7 @@ func TestSettingsTheIntroDBKey(t *testing.T) {
 		}
 	}
 	mu.Lock()
-	asked := len(authorizations)
+	asked := len(requests)
 	mu.Unlock()
 	for _, malformed := range []string{"  ", strings.Repeat("k", 257), "tidb-k\u00e9y"} {
 		body := maps.Clone(base)
@@ -162,21 +165,21 @@ func TestSettingsTheIntroDBKey(t *testing.T) {
 		}
 	}
 	mu.Lock()
-	if len(authorizations) != asked || api.store.Settings().TheIntroDBKey != "" {
-		t.Fatalf("refused keys: %d more requests, key saved: %t", len(authorizations)-asked, api.store.Settings().TheIntroDBKey != "")
+	if len(requests) != asked || api.store.Settings().TheIntroDBKey != "" {
+		t.Fatalf("refused keys: %d more requests, key saved: %t", len(requests)-asked, api.store.Settings().TheIntroDBKey != "")
 	}
 	mu.Unlock()
 
-	// TheIntroDB knowing nothing of the movie checked still accepts the
-	// key, saved with the PublicMetaDB one.
-	status.Store(http.StatusNotFound)
+	// A key TheIntroDB accepts, refusing the empty submission instead, is
+	// saved with the PublicMetaDB one.
+	status.Store(http.StatusBadRequest)
 	set["publicMetaDbKey"] = publicMetaDBKey
 	if got, body, _ := administrator.call(http.MethodPut, "/settings", set); got != http.StatusOK || body["theIntroDbKeySet"] != true ||
 		body["publicMetaDbKeySet"] != true || holdsKey(body) {
 		t.Fatalf("accepted: %d %v", got, body["error"])
 	}
 	mu.Lock()
-	if authorizations[len(authorizations)-1] != "Bearer "+key || api.store.Settings().TheIntroDBKey != key {
+	if requests[len(requests)-1] != "POST /submit Bearer "+key || api.store.Settings().TheIntroDBKey != key {
 		t.Error("the key checked is not the key saved")
 	}
 	mu.Unlock()

@@ -703,33 +703,61 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 	}
 }
 
-func TestCheckKeyTellsRefusedFromUnreachable(t *testing.T) {
-	d := newDatabases(t)
-	s, _ := service(t, d, TheIntroDB, PublicMetaDB)
-	d.refuse(theIntroDBPath, "refused")
+func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
+	// TheIntroDB's media answers ignore a key they do not know: only a
+	// submission tells. It refuses the key before reading the body, and
+	// an empty body once the key is accepted.
+	var mu sync.Mutex
+	var asked []string
+	var status int
+	theIntroDB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		asked = append(asked, r.Method+" "+r.URL.Path+" "+string(body)+" "+r.Header.Get("Authorization"))
+		answer := status
+		mu.Unlock()
+		switch {
+		case r.Header.Get("Authorization") != "Bearer good":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":"Invalid or expired token"}`)
+		default:
+			w.WriteHeader(answer)
+			_, _ = io.WriteString(w, `{"error":"invalid request body"}`)
+		}
+	}))
+	t.Cleanup(theIntroDB.Close)
+	s := New(nil, []Source{{Name: TheIntroDB, URL: theIntroDB.URL}}, "test", slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	for _, tc := range []struct {
-		key     string
-		reply   int
-		refused bool
-		failed  bool
+		key      string
+		answer   int
+		accepted bool
+		refused  bool
 	}{
-		{"accepted", http.StatusOK, false, false},
-		// TheIntroDB not knowing the movie still accepts the key.
-		{"accepted", http.StatusNotFound, false, false},
-		{"refused", http.StatusOK, true, true},
-		{"accepted", http.StatusTooManyRequests, false, true},
-		{"accepted", http.StatusBadGateway, false, true},
+		{"good", http.StatusBadRequest, true, false},
+		{"good", http.StatusUnprocessableEntity, true, false},
+		{"made-up", http.StatusBadRequest, false, true},
+		{"good", http.StatusTooManyRequests, false, false},
+		{"good", http.StatusBadGateway, false, false},
+		// An answer that cannot be told apart does not accept the key.
+		{"good", http.StatusOK, false, false},
+		{"good", http.StatusNotFound, false, false},
 	} {
-		d.reply(theIntroDBPath, tc.reply, `{}`)
+		mu.Lock()
+		status = tc.answer
+		mu.Unlock()
 		err := s.CheckKey(t.Context(), TheIntroDB, tc.key)
-		if errors.Is(err, ErrKeyRefused) != tc.refused || (err != nil) != tc.failed {
-			t.Errorf("%s answered %d: %v", tc.key, tc.reply, err)
+		if (err == nil) != tc.accepted || errors.Is(err, ErrKeyRefused) != tc.refused {
+			t.Errorf("%s, answering %d: %v", tc.key, tc.answer, err)
 		}
 	}
-	if auth := d.authorizations(theIntroDBPath); auth[0] != "Bearer accepted" || len(auth) != 5 {
-		t.Errorf("checked with %q", auth)
+	mu.Lock()
+	defer mu.Unlock()
+	if asked[0] != "POST /submit {} Bearer good" || asked[2] != "POST /submit {} Bearer made-up" || len(asked) != 7 {
+		t.Errorf("asked %q", asked)
 	}
-	if q := d.last(theIntroDBPath); q.Get("tmdb_id") == "" {
-		t.Errorf("checked with %v", q)
+	// Unreachable, the key is not accepted either.
+	theIntroDB.Close()
+	if err := s.CheckKey(t.Context(), TheIntroDB, "good"); err == nil || errors.Is(err, ErrKeyRefused) {
+		t.Errorf("unreachable: %v", err)
 	}
 }

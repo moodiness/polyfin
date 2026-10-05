@@ -636,22 +636,11 @@ func compareBool(a, b bool) int {
 	}
 }
 
-// checks are the questions CheckKey asks each database that takes a key,
-// by path from its base URL: a cheap one about a known movie.
-var checks = map[string]string{
-	TheIntroDB:   "/media?tmdb_id=550",
-	PublicMetaDB: "/api/external/skips?media_type=movie&perPage=1&tmdb_id=550",
-}
-
 // CheckKey asks database, TheIntroDB or PublicMetaDB, one question with
 // key: ErrKeyRefused when it refuses the key, another error when it could
 // not be asked. A key it accepts is asked with again, even one it refused
 // before.
 func (s *Service) CheckKey(ctx context.Context, database, key string) error {
-	check, ok := checks[database]
-	if !ok {
-		return fmt.Errorf("%s takes no key", database)
-	}
 	base := publicURLs[database]
 	for _, source := range s.sources {
 		if source.Name == database {
@@ -660,8 +649,18 @@ func (s *Service) CheckKey(ctx context.Context, database, key string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, askTimeout)
 	defer cancel()
-	var body json.RawMessage
-	if _, err := s.get(ctx, base+check, key, &body); err != nil {
+	var err error
+	switch database {
+	case PublicMetaDB:
+		// The skip timestamps of a known movie, which take a key.
+		var body json.RawMessage
+		_, err = s.get(ctx, base+"/api/external/skips?media_type=movie&perPage=1&tmdb_id=550", key, &body)
+	case TheIntroDB:
+		err = s.checkTheIntroDBKey(ctx, base, key)
+	default:
+		return fmt.Errorf("%s takes no key", database)
+	}
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -670,6 +669,36 @@ func (s *Service) CheckKey(ctx context.Context, database, key string) error {
 		delete(s.refused, database)
 	}
 	return nil
+}
+
+// checkTheIntroDBKey submits nothing to TheIntroDB with key. Its media
+// answers ignore a key they do not know, while a submission checks the key
+// before its body: an empty body, which submits nothing, is refused as
+// invalid (400 or 422) once the key is accepted, and the key refused with
+// 401 or 403. Any other answer leaves the key unchecked.
+func (s *Service) checkTheIntroDBKey(ctx context.Context, base, key string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/submit", strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("User-Agent", s.userAgent)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+key)
+	response, err := s.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxAnswer))
+	switch status := response.StatusCode; status {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("HTTP %d: %w", status, ErrKeyRefused)
+	default:
+		return fmt.Errorf("HTTP %d", status)
+	}
 }
 
 // rateLimited reports a database that answered 429 with a Retry-After, and
