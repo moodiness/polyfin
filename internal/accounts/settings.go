@@ -292,6 +292,18 @@ func ValidPublicMetaDBKey(key string) bool {
 	return true
 }
 
+// ErrInvalidTraktApp and ErrInvalidSimklApp report a Settings.TraktClientID,
+// TraktClientSecret or SimklClientID longer than MaxTrackingAppBytes, or
+// holding anything but printable ASCII without spaces, which the services'
+// credentials are made of.
+var (
+	ErrInvalidTraktApp = errors.New("invalid Trakt app")
+	ErrInvalidSimklApp = errors.New("invalid Simkl app")
+)
+
+// MaxTrackingAppBytes is the longest Trakt or Simkl credential, in bytes.
+const MaxTrackingAppBytes = 256
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -465,6 +477,41 @@ type Settings struct {
 	CustomCss       string
 	CustomJs        string
 	LoginDisclaimer string
+	// TraktClientID and TraktClientSecret identify the app an
+	// administrator registered with Trakt, and SimklClientID the one
+	// registered with Simkl, through which users connect their accounts
+	// to have what they watch sent there. Empty by default, which offers
+	// neither service.
+	TraktClientID     string
+	TraktClientSecret string
+	SimklClientID     string
+}
+
+// TraktAvailable reports whether users can connect Trakt: its app's ID and
+// secret are saved.
+func (s Settings) TraktAvailable() bool {
+	return s.TraktClientID != "" && s.TraktClientSecret != ""
+}
+
+// SimklAvailable reports whether users can connect Simkl: its app's ID is
+// saved.
+func (s Settings) SimklAvailable() bool {
+	return s.SimklClientID != ""
+}
+
+// validTrackingApp reports whether credential may be a Trakt or Simkl app
+// credential: empty, or up to MaxTrackingAppBytes of printable ASCII
+// without spaces.
+func validTrackingApp(credential string) bool {
+	if len(credential) > MaxTrackingAppBytes {
+		return false
+	}
+	for i := range len(credential) {
+		if credential[i] <= ' ' || credential[i] > '~' {
+			return false
+		}
+	}
+	return true
 }
 
 // validWebText reports whether text fits in max bytes and holds no NUL.
@@ -483,7 +530,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_segments, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
-	"custom_css, custom_js, login_disclaimer"
+	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -507,7 +554,7 @@ func (settings *Settings) fields() []any {
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSegments,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
-		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer}
+		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -605,6 +652,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validWebText(settings.LoginDisclaimer, MaxLoginDisclaimerBytes) {
 		return Settings{}, ErrInvalidLoginDisclaimer
+	}
+	if !validTrackingApp(settings.TraktClientID) || !validTrackingApp(settings.TraktClientSecret) {
+		return Settings{}, ErrInvalidTraktApp
+	}
+	if !validTrackingApp(settings.SimklClientID) {
+		return Settings{}, ErrInvalidSimklApp
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

@@ -344,6 +344,14 @@ type settingsJSON struct {
 	CustomCss       *string `json:"customCss"`
 	CustomJs        *string `json:"customJs"`
 	LoginDisclaimer *string `json:"loginDisclaimer"`
+	// TraktClientID, TraktClientSecret and SimklClientID keep their current
+	// values when a PUT leaves them out; empty removes them. The secret is
+	// never sent back: TraktClientSecretSet tells whether one is saved, and
+	// a PUT ignores it.
+	TraktClientID        *string `json:"traktClientId"`
+	TraktClientSecret    *string `json:"traktClientSecret,omitempty"`
+	TraktClientSecretSet bool    `json:"traktClientSecretSet"`
+	SimklClientID        *string `json:"simklClientId"`
 }
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
@@ -409,6 +417,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CustomCss:       &settings.CustomCss,
 		CustomJs:        &settings.CustomJs,
 		LoginDisclaimer: &settings.LoginDisclaimer,
+
+		TraktClientID:        &settings.TraktClientID,
+		TraktClientSecretSet: settings.TraktClientSecret != "",
+		SimklClientID:        &settings.SimklClientID,
 	}
 }
 
@@ -839,6 +851,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CustomCss:       valueOr(body.CustomCss, current.CustomCss),
 		CustomJs:        valueOr(body.CustomJs, current.CustomJs),
 		LoginDisclaimer: valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
+
+		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),
+		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),
+		SimklClientID:     valueOr(body.SimklClientID, current.SimklClientID),
 	})
 	if accountError(w, err) {
 		return
