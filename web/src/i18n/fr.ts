@@ -175,6 +175,12 @@ const fr: Messages = {
       'PublicMetaDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte PublicMetaDB. Rien n’a été enregistré.',
     publicmetadb_unreachable:
       'PublicMetaDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_theintrodb_key:
+      'TheIntroDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte TheIntroDB. Rien n’a été enregistré.',
+    theintrodb_unreachable:
+      'TheIntroDB n’a pas pu être joint pour vérifier la clé, ou limite les demandes pour le moment. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_segment_order:
+      'L’ordre des sources de repères doit citer chaque source une fois. Rechargez la page.',
     invalid_trakt_app:
       'Le client ID et le client secret Trakt doivent faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-les de nouveau depuis votre application Trakt.',
     invalid_simkl_app:
@@ -733,7 +739,21 @@ const fr: Messages = {
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
     publicMetaDbKey: 'Clé PublicMetaDB',
     publicMetaDbKeyHelp:
-      'Facultatif. Une clé d’API PublicMetaDB ajoute une troisième source de repères pour passer l’intro et le générique, consultée après TheIntroDB et IntroDB.',
+      'Facultatif. Une clé d’API PublicMetaDB ajoute une troisième source de repères pour passer l’intro et le générique.',
+    theIntroDbKey: 'Clé TheIntroDB (facultative)',
+    theIntroDbKeyHelp:
+      'Relève la limite quotidienne de TheIntroDB et inclut vos propres contributions. La lecture fonctionne sans elle.',
+    segmentSources: {
+      label: 'Ordre des sources de repères',
+      help: 'Pour chaque type de passage (intro, résumé, générique, aperçu), la première source de cette liste qui le connaît l’emporte ; les suivantes complètent.',
+      offHelp:
+        'Les sources désactivées par POLYFIN_SEGMENTS ne sont jamais consultées, quelle que soit leur place.',
+      on: 'Active',
+      needsKey: 'Clé requise',
+      off: 'Désactivée (POLYFIN_SEGMENTS)',
+      reset: 'Rétablir l’ordre par défaut',
+      resetDone: 'Ordre par défaut rétabli. Enregistrez pour l’appliquer.',
+    },
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',

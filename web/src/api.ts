@@ -121,6 +121,9 @@ export type QuickConnectRequest = {
   requestedAt: string
 }
 
+/** The skip marker sources, by the names POLYFIN_SEGMENTS gives them. */
+export type SegmentSource = 'theintrodb' | 'introdb' | 'publicmetadb'
+
 export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
@@ -145,6 +148,19 @@ export type Settings = {
   publicMetaDbKeySet: boolean
   /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
   publicMetaDbKey?: string
+  /** Whether a TheIntroDB key is saved; optional, it raises TheIntroDB's daily limit. */
+  theIntroDbKeySet: boolean
+  /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
+  theIntroDbKey?: string
+  /**
+   * The order of preference of the skip marker sources in effect, all three. Saved as sent; an empty
+   * list goes back to the order POLYFIN_SEGMENTS gives.
+   */
+  segmentOrder: SegmentSource[]
+  /** The order POLYFIN_SEGMENTS gives, which an empty segmentOrder follows; read only. */
+  segmentOrderDefault: SegmentSource[]
+  /** The sources POLYFIN_SEGMENTS turns off, whatever the order; read only. */
+  segmentSourcesOff: SegmentSource[]
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
   /** Percent of a title's runtime past which a reported position marks it played. */
