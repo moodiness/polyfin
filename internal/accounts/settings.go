@@ -599,7 +599,57 @@ func (settings *Settings) fields() []any {
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
 	err := s.db.QueryRow(ctx, "SELECT "+settingsColumns+" FROM settings").Scan(settings.fields()...)
-	return settings, err
+	if err != nil {
+		return settings, err
+	}
+	s.openSecrets(&settings)
+	return settings, nil
+}
+
+// secrets points to the secrets of settings, by the names the secrets
+// package and the admin API give them.
+func (settings *Settings) secrets() []struct {
+	name  string
+	value *string
+} {
+	return []struct {
+		name  string
+		value *string
+	}{
+		{"publicMetaDbKey", &settings.PublicMetaDBKey},
+		{"theIntroDbKey", &settings.TheIntroDBKey},
+		{"traktClientSecret", &settings.TraktClientSecret},
+	}
+}
+
+// openSecrets opens the secrets of settings as read from the database. One
+// the key cannot open reads as not set, and is kept as it is stored until
+// another value replaces it: a corrected key opens it again.
+func (s *Store) openSecrets(settings *Settings) {
+	s.secretsMu.Lock()
+	defer s.secretsMu.Unlock()
+	s.unreadable = map[string]string{}
+	for _, secret := range settings.secrets() {
+		value, err := s.box.Open(*secret.value)
+		if err != nil {
+			s.unreadable[secret.name] = *secret.value
+		}
+		*secret.value = value
+	}
+}
+
+// sealSecrets returns settings as they are stored: their secrets sealed,
+// and those that read as not set because the key could not open them kept
+// as they were stored. It is called with secretsMu held.
+func (s *Store) sealSecrets(settings Settings) Settings {
+	for _, secret := range settings.secrets() {
+		if stored, ok := s.unreadable[secret.name]; ok && *secret.value == "" {
+			*secret.value = stored
+			continue
+		}
+		*secret.value = s.box.Seal(*secret.value)
+	}
+	return settings
 }
 
 // Settings returns the current settings without querying the database. This
@@ -713,9 +763,17 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 			return Settings{}, err
 		}
 	}
-	_, err = s.db.Exec(ctx, updateSettingsQuery, settings.fields()...)
+	s.secretsMu.Lock()
+	defer s.secretsMu.Unlock()
+	stored := s.sealSecrets(settings)
+	_, err = s.db.Exec(ctx, updateSettingsQuery, stored.fields()...)
 	if err != nil {
 		return Settings{}, err
+	}
+	for _, secret := range settings.secrets() {
+		if *secret.value != "" {
+			delete(s.unreadable, secret.name)
+		}
 	}
 	s.settings.Store(&settings)
 	s.applyLogLevel()

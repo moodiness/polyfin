@@ -35,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -75,6 +76,7 @@ Environment:
   POLYFIN_HWACCEL       GPU video is converted on unless the settings choose: auto, nvenc, vaapi or none (default auto)
   POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
   POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb, publicmetadb or none (default theintrodb,introdb,publicmetadb)
+  POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
 `
 
 func main() {
@@ -133,7 +135,14 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	store, err := accounts.Open(ctx, pool)
+	box, err := secrets.New(cfg.SecretKey)
+	if err != nil {
+		return fmt.Errorf("POLYFIN_SECRET_KEY: %w", err)
+	}
+	if err := box.Prepare(ctx, pool, logger); err != nil {
+		return fmt.Errorf("seal the stored secrets: %w", err)
+	}
+	store, err := accounts.Open(ctx, pool, accounts.Sealing(box))
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
@@ -218,7 +227,7 @@ func serve(ctx context.Context) error {
 	userData := userdata.New(pool)
 	// Imported watch histories find their titles in the library and add to
 	// the users' data.
-	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Version: version, Logger: logger,
+	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
 		Titles: lib, UserData: userData})
 	defer tracking.Close()
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
@@ -281,6 +290,8 @@ func serve(ctx context.Context) error {
 					Thumbnails:   images,
 					DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
 					Started:      started,
+					SecretKey:    box.Enabled(),
+					Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
 				},
 				Variables: config.Variables(os.Environ(), cfg),
 				Trackers:  tracking,

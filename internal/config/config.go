@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/secrets"
 )
 
 // DefaultListen is the port Jellyfin clients try first when no port is given.
@@ -52,6 +54,9 @@ type Config struct {
 	// WebDir is the folder of jellyfin-web, the web client served at
 	// /web/. A folder without its index.html leaves the web client off.
 	WebDir string
+	// SecretKey is the key the keys, secrets and tokens stored in the
+	// database are sealed with, nil for none. It is a secret: never log it.
+	SecretKey []byte
 }
 
 // defaultFontsDir is the system font folder, which the Docker image fills
@@ -141,6 +146,13 @@ func Load(getenv func(string) string) (Config, error) {
 		} else {
 			cfg.RecordingsDir = filepath.Clean(dir)
 		}
+	}
+	if raw := strings.TrimSpace(getenv("POLYFIN_SECRET_KEY")); raw != "" {
+		key, err := secrets.ParseKey(raw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("POLYFIN_SECRET_KEY: %w", err))
+		}
+		cfg.SecretKey = key
 	}
 	return cfg, errors.Join(errs...)
 }
