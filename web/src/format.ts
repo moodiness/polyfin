@@ -67,7 +67,8 @@ export function formatBytes(bytes: number, language: string): string {
   return new Intl.NumberFormat(language, {
     style: 'unit',
     unit: byteUnits[unit],
-    unitDisplay: 'short',
+    // Plain bytes are written out, which the short form gets wrong: "0 byte" in English.
+    unitDisplay: unit === 0 ? 'long' : 'short',
     maximumFractionDigits: value < 10 && unit > 0 ? 1 : 0,
   }).format(value)
 }

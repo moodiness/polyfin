@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchBackup, fetchVariables, queryKeys } from '@/api'
-import BackupStatus from '@/components/BackupStatus'
+import BackupStatus from '@/features/system/BackupStatus'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Badge, EmptyState, InlineError, SkeletonRows, TextLink } from '@/ui'

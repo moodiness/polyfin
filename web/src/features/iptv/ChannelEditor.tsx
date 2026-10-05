@@ -14,7 +14,7 @@ import {
   type LineupChannel,
   type Scope,
 } from '@/api'
-import { invalidateLineup, iptvCatalog } from '@/components/lineup/common'
+import { invalidateLineup, iptvCatalog } from '@/features/iptv/lineup'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -32,9 +32,10 @@ import {
   Textarea,
   TextInput,
   useToast,
+  MoveButtons,
 } from '@/ui'
 import { MappingControls, mappingWords, MappingText } from './MappingControls'
-import { ChannelLogo, MoveButtons } from './shared'
+import { ChannelLogo } from './shared'
 
 /** Edits one channel: its name, logo, description, category, number, streams and guide. */
 export default function ChannelEditor({

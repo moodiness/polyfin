@@ -1,19 +1,6 @@
 /** Settings: the server-wide settings and their sections. */
 const settings = {
   settings: {
-    secret: {
-      saved: 'Saved',
-      notSet: 'Not set',
-      removing: 'Removed when you save',
-      pastePlaceholder: 'Paste it here',
-      replacePlaceholder: 'Paste a new one to replace the saved one',
-      remove: 'Remove',
-      keep: 'Keep it',
-      removeHint: 'Save to remove it, or choose Keep it.',
-      show: 'Show key',
-      hide: 'Hide key',
-      savedHidden: 'Saved key, hidden',
-    },
     tracking: {
       description:
         'Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts on their My account page, and Polyfin tells those services what they watch. Trakt and Simkl first need an app of this server’s, set up here. MDBList and PublicMetaDB need nothing.',
@@ -45,7 +32,6 @@ const settings = {
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
-    playbackTitle: 'Playback',
     chapters: 'Show chapters',
     chaptersHelp:
       'Chapters are read along with the file analysis Polyfin does anyway before a first play, so they never delay playback. Turning this off only hides them from apps.',
@@ -218,7 +204,6 @@ const settings = {
     channelLimit: 'Channels read per Live TV catalog',
     channelLimitHelp:
       'Polyfin stops reading a Live TV catalog after this many channels, and reads at most this many programmes per day for the guide. A higher number shows more, but loads more slowly and the addon gets more requests. From 100 to 50,000; 10,000 by default.',
-    contentTitle: 'Content',
     skipButtons: 'Skip intro and credits buttons',
     skipButtonsHelp:
       'Apps offer to skip intros, recaps and credits, found in community databases. When off, apps show no skip buttons and the databases are not asked.',
@@ -252,7 +237,6 @@ const settings = {
     catalogRefreshMinutes: 'Refresh catalogs every (minutes)',
     catalogRefreshMinutesHelp:
       'How long Polyfin keeps the catalog pages it reads from addons, the Live TV guide included, before reading them again. A longer time sends fewer requests to the addons, but new titles show up later. From 1 to 1,440 (one day); 10 by default.',
-    securityTitle: 'Security',
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
@@ -266,7 +250,6 @@ const settings = {
     detailedLogHelp:
       'Polyfin writes much more to its log, at once and without a restart. Turn it off once the problem is found.',
     saved: 'Settings saved.',
-    thumbnailsTitle: 'Thumbnails',
     thumbnailsHelp:
       'Images made from the titles themselves, after they are watched. To make them, Polyfin reads small parts of the file from the source, at a gentle pace, once nobody is playing from that source: at most 60 requests per title, one every 3 seconds, and 120 an hour per source, never the whole file. A source that asks Polyfin to slow down gets no request for images for 2 hours. Off by default.',
     trickplay: 'Thumbnails when moving through a title',
@@ -297,7 +280,6 @@ const settings = {
     recordingRetentionDays: 'Keep recordings for (days, 0 = forever)',
     recordingRetentionDaysHelp:
       'Recordings older than this are deleted. This is checked every day. From 0 to 3,650.',
-    liveTvTitle: 'Live TV',
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp:
       'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. From 1 to 168; 12 by default.',
@@ -329,31 +311,13 @@ const settings = {
     codeKeys: 'Tab inserts spaces; press Escape, then Tab, to leave the field.',
   },
   settingsPage: {
-    search: 'Search settings',
     searchHint: 'By name or description.',
     noMatch: 'No setting matches this search.',
-    sectionsLabel: 'Sections',
-    unsaved: 'Unsaved changes',
-    upToDate: 'All changes saved',
     sections: {
-      general: 'General',
-      playback: 'Playback',
-      conversion: 'Conversion',
-      content: 'Content',
-      catalogs: 'Catalogs',
-      thumbnails: 'Thumbnails',
-      security: 'Users and security',
-      tracking: 'Tracking',
-      liveTv: 'Live TV',
-      recordings: 'Recordings',
-      diagnostics: 'Diagnostics',
-      webPlayer: 'Web player',
-      backups: 'Backups',
       variables: 'Environment variables',
     },
     variablesHelp:
       'Read only. These are set on the container (Docker environment, compose file or Unraid template) and apply when Polyfin starts: change them there, then restart the container. Secrets are hidden, and the database address shows its host and database only.',
-    variable: 'Variable',
     value: 'Value in effect',
     defaultValue: 'Default',
     setValue: 'Set',

@@ -37,8 +37,10 @@ import {
   StatusPill,
   TextInput,
   useToast,
+  MoveButtons,
+  RelativeTime,
 } from '@/ui'
-import { Figures, MoveButtons, RelativeTime, useNumber } from './shared'
+import { Figures, useNumber } from './shared'
 
 /** The most guides a catalog takes. */
 const maxGuides = 10

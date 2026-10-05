@@ -36,9 +36,11 @@ export {
   type MenuTriggerProps,
 } from './Menu'
 export { Block, PageHeader, TextLink } from './PageHeader'
+export { MoveButtons } from './MoveButtons'
 export { Panel, PanelFooter, PanelSection, type PanelProps } from './Panel'
 export { Avatar, ProgressBar, type ProgressVariant } from './ProgressBar'
 export { IconTile, Row, RowList, type RowListVariant, type RowProps } from './RowList'
+export { RelativeTime } from './RelativeTime'
 export { SaveBar } from './SaveBar'
 export { SecretField, type SecretFieldProps } from './SecretField'
 export { SectionNav, type SectionNavItem, type SectionNavProps } from './SectionNav'

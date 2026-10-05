@@ -19,7 +19,6 @@ import {
 } from '@/api'
 import { useI18n } from '@/i18n'
 import { Checkbox, Field, FieldError, NumberInput, Select, StatusPill } from '@/ui'
-import { shownNumber, wholeNumber } from './numbers'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 
@@ -28,7 +27,7 @@ import type { SectionFormApi } from './SectionForm'
  * it was found to do, then video, HDR, interlaced video, audio and performance. Options the
  * hardware cannot do are disabled.
  */
-export default function ConversionSection({ form, update, error }: SectionFormApi) {
+export default function ConversionSection({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const c = s.conversion
@@ -61,8 +60,9 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
             min={maxConversionsRange.min}
             max={maxConversionsRange.max}
             step={1}
-            value={shownNumber(form.maxConversions)}
-            onValue={(value) => update({ maxConversions: wholeNumber(value) })}
+            {...number('max-conversions', form.maxConversions, (value) =>
+              update({ maxConversions: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
         <FieldRow
@@ -186,22 +186,32 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
         </FieldRow>
         <SettingRow anchor="video-quality">
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={c.h264Quality} className="[&_label]:text-[15px]">
+            <Field
+              label={c.h264Quality}
+              error={error('h264-quality')}
+              className="[&_label]:text-[15px]"
+            >
               <NumberInput
                 min={0}
                 max={videoQualityRange.max}
                 step={1}
-                value={shownNumber(form.h264Quality)}
-                onValue={(value) => update({ h264Quality: wholeNumber(value) })}
+                {...number('h264-quality', form.h264Quality, (value) =>
+                  update({ h264Quality: Math.trunc(value) }),
+                )}
               />
             </Field>
-            <Field label={c.hevcQuality} className="[&_label]:text-[15px]">
+            <Field
+              label={c.hevcQuality}
+              error={error('hevc-quality')}
+              className="[&_label]:text-[15px]"
+            >
               <NumberInput
                 min={0}
                 max={videoQualityRange.max}
                 step={1}
-                value={shownNumber(form.hevcQuality)}
-                onValue={(value) => update({ hevcQuality: wholeNumber(value) })}
+                {...number('hevc-quality', form.hevcQuality, (value) =>
+                  update({ hevcQuality: Math.trunc(value) }),
+                )}
               />
             </Field>
           </div>
@@ -256,24 +266,34 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
         </FieldRow>
         <SettingRow anchor="tone-mapping-peak">
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={c.toneMappingPeak} className="[&_label]:text-[15px]">
+            <Field
+              label={c.toneMappingPeak}
+              error={error('tone-mapping-peak-value')}
+              className="[&_label]:text-[15px]"
+            >
               <NumberInput
                 min={0}
                 max={toneMappingPeakRange.max}
                 step={1}
                 disabled={!form.toneMapping || !hardware.toneMapping}
-                value={shownNumber(form.toneMappingPeak)}
-                onValue={(value) => update({ toneMappingPeak: wholeNumber(value) })}
+                {...number('tone-mapping-peak-value', form.toneMappingPeak, (value) =>
+                  update({ toneMappingPeak: Math.trunc(value) }),
+                )}
               />
             </Field>
-            <Field label={c.toneMappingDesat} className="[&_label]:text-[15px]">
+            <Field
+              label={c.toneMappingDesat}
+              error={error('tone-mapping-desat')}
+              className="[&_label]:text-[15px]"
+            >
               <NumberInput
                 min={toneMappingDesatRange.min}
                 max={toneMappingDesatRange.max}
                 step={0.1}
                 disabled={!form.toneMapping || !hardware.toneMapping}
-                value={shownNumber(form.toneMappingDesat)}
-                onValue={(value) => update({ toneMappingDesat: value ?? -1 })}
+                {...number('tone-mapping-desat', form.toneMappingDesat, (value) =>
+                  update({ toneMappingDesat: value }),
+                )}
               />
             </Field>
           </div>
@@ -342,8 +362,9 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
             min={downmixBoostRange.min}
             max={downmixBoostRange.max}
             step={0.1}
-            value={form.downmixBoost || null}
-            onValue={(value) => update({ downmixBoost: value ?? 0 })}
+            {...number('downmix-boost', form.downmixBoost, (value) =>
+              update({ downmixBoost: value }),
+            )}
           />
         </FieldRow>
         <FieldRow
@@ -372,8 +393,9 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
             min={0}
             max={audioBitratePerChannelRange.max}
             step={1}
-            value={shownNumber(form.audioBitratePerChannel)}
-            onValue={(value) => update({ audioBitratePerChannel: wholeNumber(value) })}
+            {...number('audio-bitrate-per-channel', form.audioBitratePerChannel, (value) =>
+              update({ audioBitratePerChannel: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
       </SettingsGroup>
@@ -389,8 +411,9 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
             min={encodingThreadsRange.min}
             max={encodingThreadsRange.max}
             step={1}
-            value={shownNumber(form.encodingThreads)}
-            onValue={(value) => update({ encodingThreads: wholeNumber(value) })}
+            {...number('encoding-threads', form.encodingThreads, (value) =>
+              update({ encodingThreads: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
         <FieldRow
@@ -403,8 +426,9 @@ export default function ConversionSection({ form, update, error }: SectionFormAp
             min={aheadSegmentsRange.min}
             max={aheadSegmentsRange.max}
             step={1}
-            value={shownNumber(form.aheadSegments)}
-            onValue={(value) => update({ aheadSegments: wholeNumber(value) })}
+            {...number('ahead-segments', form.aheadSegments, (value) =>
+              update({ aheadSegments: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
       </SettingsGroup>

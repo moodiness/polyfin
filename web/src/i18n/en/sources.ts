@@ -168,13 +168,7 @@ const sources = {
       audiobook: 'Books library',
       podcast: 'Music library',
     } as Record<string, string>,
-    libraryHelp: {
-      music: 'Its items appear in the music view of Jellyfin apps.',
-      audiobook: 'Its audiobooks appear in a books library of Jellyfin apps.',
-      podcast: 'Its episodes appear in the music view of Jellyfin apps.',
-    } as Record<string, string>,
     settings: 'Settings',
-    settingsLabel: (name: string) => `Settings of ${name}`,
     settingsTitle: 'Addon settings',
     settingsHelp:
       'Declared by the addon and sent with every request Polyfin makes to it. They may hold your account details: only you, or the administrators for the server’s addons, can see them.',
@@ -189,7 +183,6 @@ const sources = {
     stepOf: (step: string) => `In steps of ${step}.`,
     maxLength: (count: number) => `${count} characters at most.`,
     tooLong: (count: number) => `Use ${count} characters at most.`,
-    notNumber: 'Enter a number.',
     belowMin: (min: string) => `Enter ${min} or more.`,
     aboveMax: (max: string) => `Enter ${max} or less.`,
     offStep: (step: string) => `Use a multiple of ${step}.`,

@@ -11,7 +11,7 @@ import { Link } from 'react-router'
 import { fetchStatus, queryKeys } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { findProblems, useHealthData, type Problem } from '@/components/problems'
+import { findProblems, useHealthData, type Problem } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import {

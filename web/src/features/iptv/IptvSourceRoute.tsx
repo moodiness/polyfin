@@ -15,7 +15,7 @@ import {
   type Scope,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
-import { invalidateLineup, iptvCatalog, lineupPath, routeScope } from '@/components/lineup/common'
+import { invalidateLineup, iptvCatalog, lineupPath, routeScope } from '@/features/iptv/lineup'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -33,13 +33,14 @@ import {
   Tabs,
   TextLink,
   useToast,
+  RelativeTime,
 } from '@/ui'
 import CatalogGuides from './CatalogGuides'
 import Categories from './Categories'
 import Channels from './Channels'
 import { optionsValid, SourceOptions } from './ImportOptions'
 import Mappings from './Mappings'
-import { Figures, RelativeTime, useNumber } from './shared'
+import { Figures, useNumber } from './shared'
 
 export const lineupSections = [
   'summary',
@@ -116,17 +117,9 @@ export default function IptvSourceRoute({ scope: fixedScope }: { scope?: Scope }
   return (
     <PageLayout
       back={back}
-      title={
-        addon ? (
-          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-            {addon.name}
-            <Badge className="align-middle">
-              {addon.kind === 'xtream' ? t.iptv.kindXtream : t.iptv.kindM3u}
-            </Badge>
-          </span>
-        ) : (
-          t.lineup.titleLoading
-        )
+      title={addon ? addon.name : t.lineup.titleLoading}
+      titleAside={
+        addon && <Badge>{addon.kind === 'xtream' ? t.iptv.kindXtream : t.iptv.kindM3u}</Badge>
       }
       lede={t.lineup.description}
       actions={

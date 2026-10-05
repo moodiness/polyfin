@@ -23,7 +23,7 @@ import {
   type MusicContent,
   type Scope,
 } from '@/api'
-import { lineupPath } from '@/components/lineup/common'
+import { lineupPath } from '@/features/iptv/lineup'
 import {
   failingGuides,
   guideSummary,
@@ -52,8 +52,8 @@ import {
   TextInput,
   IconButton,
   useToast,
+  MoveButtons,
 } from '@/ui'
-import { MoveButtons } from './MoveButtons'
 
 /** Above this many libraries the home screen of Jellyfin apps gets heavy; the server default. */
 const recommendedLibraries = 20

@@ -65,7 +65,6 @@ const account = {
       problemUnreachable: (name: string) =>
         `${name} could not be reached lately. Polyfin keeps trying, and sends what you watched once it answers.`,
       disconnect: 'Disconnect',
-      disconnecting: 'Disconnecting…',
       disconnectTitle: (name: string) => `Disconnect ${name}?`,
       disconnectBody: (name: string) =>
         `Polyfin stops telling it what you watch. What it already has stays on ${name}.`,

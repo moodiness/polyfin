@@ -146,8 +146,6 @@ const system: typeof en = {
       checking: 'Vérification…',
       iptvTitle: 'Sources IPTV',
       guidesTitle: 'Guides des programmes',
-      channelsMatched: (matched: number, channels: number) =>
-        `${matched} chaînes couvertes sur ${channels}`,
       transcoderTitle: 'Transcodage',
       gpu: 'GPU',
       noGpu: 'Aucun : la vidéo est convertie par le processeur',

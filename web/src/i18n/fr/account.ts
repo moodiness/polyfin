@@ -67,7 +67,6 @@ const account: typeof en = {
       problemUnreachable: (name: string) =>
         `${name} n’a pas pu être joint ces derniers temps. Polyfin réessaie, et envoie ce que vous avez regardé dès qu’il répond.`,
       disconnect: 'Déconnecter',
-      disconnecting: 'Déconnexion…',
       disconnectTitle: (name: string) => `Déconnecter ${name} ?`,
       disconnectBody: (name: string) =>
         `Polyfin cesse de lui indiquer ce que vous regardez. Ce qu’il a déjà reste sur ${name}.`,

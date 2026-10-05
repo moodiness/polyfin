@@ -1,15 +1,8 @@
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  DotsSixVerticalIcon,
-} from '@phosphor-icons/react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { CaretLeftIcon, CaretRightIcon, DotsSixVerticalIcon } from '@phosphor-icons/react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { dateTime, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, cx, IconButton } from '@/ui'
+import { Button, cx } from '@/ui'
 
 /** A value that follows `value` once it stopped changing for `delay` milliseconds. */
 export function useDebounced<T>(value: T, delay = 300): T {
@@ -25,16 +18,6 @@ export function useDebounced<T>(value: T, delay = 300): T {
 export function useNumber(): (n: number) => string {
   const { language } = useI18n()
   return (n: number) => n.toLocaleString(language)
-}
-
-/** A time as "3 hours ago", with the full date on hover. */
-export function RelativeTime({ iso }: { iso: string }) {
-  const { language, t } = useI18n()
-  return (
-    <time dateTime={iso} title={dateTime(iso, language)}>
-      {relativeTime(iso, language, t.time.justNow)}
-    </time>
-  )
 }
 
 /** Previous and next buttons over a paged list, with where the page stands. */
@@ -82,61 +65,6 @@ export function Pager({
         </Button>
       </div>
     </nav>
-  )
-}
-
-/**
- * Up and down buttons for one item of an ordered list. After a move, focus follows the item (or
- * the other button at an end of the list).
- */
-export function MoveButtons({
-  name,
-  index,
-  count,
-  disabled = false,
-  onMove,
-}: {
-  name: string
-  index: number
-  count: number
-  disabled?: boolean
-  onMove: (to: number) => void
-}) {
-  const { t } = useI18n()
-  const box = useRef<HTMLSpanElement>(null)
-  const moved = useRef<'up' | 'down' | null>(null)
-  const first = index === 0
-  const last = index === count - 1
-  useEffect(() => {
-    const direction = moved.current
-    if (direction === null) return
-    moved.current = null
-    const goUp = direction === 'up' ? !first : last
-    box.current?.querySelectorAll('button')[goUp ? 0 : 1]?.focus()
-  }, [index, first, last])
-  return (
-    <span ref={box} className="flex shrink-0">
-      <IconButton
-        size="sm"
-        icon={ArrowUpIcon}
-        label={t.common.moveUp(name)}
-        disabled={disabled || first}
-        onClick={() => {
-          moved.current = 'up'
-          onMove(index - 1)
-        }}
-      />
-      <IconButton
-        size="sm"
-        icon={ArrowDownIcon}
-        label={t.common.moveDown(name)}
-        disabled={disabled || last}
-        onClick={() => {
-          moved.current = 'down'
-          onMove(index + 1)
-        }}
-      />
-    </span>
   )
 }
 

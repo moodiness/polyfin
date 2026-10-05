@@ -13,7 +13,6 @@ import {
   type UserPatch,
 } from '@/api'
 import { useSessionUser } from '@/app/session'
-import { dateTime, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import { Avatar, cx, Switch } from '@/ui'
 
@@ -45,16 +44,6 @@ export function useUserPatch(user: User) {
     },
     onError: refreshIfGone,
   })
-}
-
-/** "2 hours ago", with the full date on hover. */
-export function RelativeTime({ iso, className }: { iso: string; className?: string }) {
-  const { language, t } = useI18n()
-  return (
-    <time dateTime={iso} title={dateTime(iso, language)} className={className}>
-      {relativeTime(iso, language, t.time.justNow)}
-    </time>
-  )
 }
 
 /** "14:05" in the reader's language. */

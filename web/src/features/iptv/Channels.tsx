@@ -20,7 +20,7 @@ import {
   type Page,
   type Scope,
 } from '@/api'
-import { invalidateLineup } from '@/components/lineup/common'
+import { invalidateLineup } from '@/features/iptv/lineup'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -41,9 +41,10 @@ import {
   TextInput,
   Tooltip,
   useToast,
+  MoveButtons,
 } from '@/ui'
 import ChannelEditor from './ChannelEditor'
-import { ChannelLogo, DragGrip, MoveButtons, Pager, useDebounced, useNumber } from './shared'
+import { ChannelLogo, DragGrip, Pager, useDebounced, useNumber } from './shared'
 
 /** Rows of one page: enough to scan, few enough to draw at once without delay. */
 const pageSize = 100

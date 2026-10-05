@@ -1,5 +1,5 @@
 import type { Addon, Library, Scope } from '@/api'
-import { catalogGuidesPath, lineupPath } from '@/components/lineup/common'
+import { catalogGuidesPath, lineupPath } from '@/features/iptv/lineup'
 import type { Messages } from '@/i18n'
 import type { StatusTone } from '@/ui'
 

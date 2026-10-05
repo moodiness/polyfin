@@ -1,17 +1,5 @@
 import type { ReactNode } from 'react'
 import { cx, ProgressBar, type ProgressVariant } from '@/ui'
-import { dateTime, relativeTime } from '@/format'
-import { useI18n } from '@/i18n'
-
-/** A time as "5 minutes ago", with the full date on hover and in `dateTime`. */
-export function RelativeTime({ iso }: { iso: string }) {
-  const { language, t } = useI18n()
-  return (
-    <time dateTime={iso} title={dateTime(iso, language)}>
-      {relativeTime(iso, language, t.time.justNow)}
-    </time>
-  )
-}
 
 export type Fact = { label: string; value: ReactNode }
 

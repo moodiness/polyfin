@@ -11,7 +11,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import LibraryEditor from '@/components/LibraryEditor'
+import LibraryEditor from '@/features/libraries/LibraryEditor'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {

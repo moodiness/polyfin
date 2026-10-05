@@ -139,8 +139,6 @@ const system = {
       checking: 'Checking…',
       iptvTitle: 'IPTV sources',
       guidesTitle: 'Programme guides',
-      channelsMatched: (matched: number, channels: number) =>
-        `${matched} of ${channels} channels covered`,
       transcoderTitle: 'Transcoder',
       gpu: 'GPU',
       noGpu: 'None: video is converted on the CPU',

@@ -40,6 +40,7 @@ import {
   Notice,
   Panel,
   PanelSection,
+  RelativeTime,
   SectionNav,
   Skeleton,
   SkeletonRows,
@@ -51,7 +52,6 @@ import DeviceList from './DeviceList'
 import {
   clockTime,
   refreshIfGone,
-  RelativeTime,
   storeUser,
   SwitchRow,
   UserAvatar,

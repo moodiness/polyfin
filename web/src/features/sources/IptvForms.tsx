@@ -14,7 +14,7 @@ import {
   type IptvSourcePatch,
   type Scope,
 } from '@/api'
-import { optionsValid, SourceOptions } from '@/components/lineup/ImportOptions'
+import { optionsValid, SourceOptions } from '@/features/iptv/ImportOptions'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'

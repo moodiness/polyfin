@@ -1,8 +1,8 @@
 import type { Backup } from '@/api'
-import { StatusPill } from '@/ui'
+import { StatusPill, RelativeTime } from '@/ui'
 import { formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
-import { Facts, RelativeTime } from './parts'
+import { Facts } from './parts'
 
 /**
  * How the database backups go: the last run, the last backup made (its file and size), and when

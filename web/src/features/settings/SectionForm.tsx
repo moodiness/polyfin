@@ -12,10 +12,17 @@ import { settingEntries } from './catalog'
 export type SectionFormApi = {
   form: Settings
   update: (patch: Partial<Settings>) => void
-  /** The save error about the setting at this anchor, shown under it. */
+  /** The error about the setting at this anchor, shown under it: an empty number, or the save's. */
   error: (anchor: string) => string | undefined
-  /** Counts the saves, so that secret fields start over (back to the dots) after each one. */
-  saves: number
+  /**
+   * The value and change handler of the number field at this anchor. An empty field keeps the
+   * last number in `form`, shows "Enter a number" under it and blocks the save until it is filled.
+   */
+  number: (
+    anchor: string,
+    value: number,
+    set: (value: number) => void,
+  ) => { value: number | null; onValue: (value: number | null) => void }
 }
 
 /**
@@ -35,8 +42,9 @@ export default function SectionForm({
   const toast = useToast()
   const [saved, setSaved] = useState(initial)
   const [form, setForm] = useState(initial)
-  const [saves, setSaves] = useState(0)
-  const dirty = JSON.stringify(form) !== JSON.stringify(saved)
+  /** The anchors of the number fields left empty. */
+  const [empty, setEmpty] = useState<ReadonlySet<string>>(new Set())
+  const dirty = empty.size > 0 || JSON.stringify(form) !== JSON.stringify(saved)
 
   const mutation = useMutation({
     mutationFn: saveSettings,
@@ -44,7 +52,6 @@ export default function SectionForm({
       queryClient.setQueryData(queryKeys.settings, result)
       setSaved(result)
       setForm(result)
-      setSaves((count) => count + 1)
       toast(t.settings.saved, { tone: 'ok' })
       // The server name is part of the public status.
       void queryClient.invalidateQueries({ queryKey: queryKeys.status })
@@ -81,6 +88,10 @@ export default function SectionForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (empty.size > 0) {
+      event.currentTarget.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      return
+    }
     mutation.mutate({
       ...form,
       serverName: form.serverName.trim(),
@@ -97,14 +108,32 @@ export default function SectionForm({
       {children({
         form,
         update,
-        saves,
-        error: (anchor) => (failedEntry?.anchor === anchor ? failureText : undefined),
+        error: (anchor) =>
+          empty.has(anchor)
+            ? t.common.enterNumber
+            : failedEntry?.anchor === anchor
+              ? failureText
+              : undefined,
+        number: (anchor, value, set) => ({
+          value: empty.has(anchor) ? null : value,
+          onValue: (next) => {
+            setEmpty((current) => {
+              const updated = new Set(current)
+              if (next === null) updated.add(anchor)
+              else updated.delete(anchor)
+              return updated
+            })
+            if (next === null) mutation.reset()
+            else set(next)
+          },
+        }),
       })}
       <SaveBar
         dirty={dirty}
         saving={mutation.isPending}
         onDiscard={() => {
           mutation.reset()
+          setEmpty(new Set())
           setForm(saved)
         }}
         error={failedEntry === undefined ? failureText : undefined}

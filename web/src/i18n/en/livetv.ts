@@ -65,15 +65,6 @@ const livetv = {
     channels: 'Channels',
     channelsLabel: (name: string) => `Channels of ${name}`,
     openMapping: 'Open the guide mapping',
-    iptvErrors: {
-      unreachable:
-        'The last download failed: the server could not be reached. The previous channels are kept.',
-      private_network:
-        'The last download failed: this address is on a local network. Only administrators can use such addresses.',
-      too_large: 'The last download failed: the list is too large. The previous channels are kept.',
-      malformed:
-        'The last download failed: the server did not return a channel list, or refused the login. The previous channels are kept.',
-    } as Record<string, string>,
     recordingsTitle: 'Recordings',
     recordingsLoading: 'Loading recordings…',
     recordingsOffTitle: 'Recording is off',

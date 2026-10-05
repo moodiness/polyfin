@@ -4,7 +4,6 @@ const common: typeof en = {
   documentTitle: 'Administration Polyfin',
   header: {
     productName: 'Polyfin',
-    subtitle: 'Administration',
   },
   language: {
     label: 'Langue de l’interface',
@@ -12,11 +11,11 @@ const common: typeof en = {
     fr: { short: 'FR', name: 'Français' },
   },
   common: {
+    enterNumber: 'Saisissez un nombre.',
     loading: 'Chargement…',
     save: 'Enregistrer',
     saving: 'Enregistrement…',
     cancel: 'Annuler',
-    confirm: 'Confirmer',
     retry: 'Réessayer',
     never: 'Jamais',
     colon: '\u202F:',
@@ -104,11 +103,11 @@ const common: typeof en = {
     invalid_max_bitrate: 'Choisissez la qualité maximale dans la liste.',
     invalid_sync_play: 'Choisissez une option de « Regarder ensemble » dans la liste.',
     invalid_manifest_url:
-      'Saisissez l’URL du manifeste d’un addon, commençant par https://, http:// ou stremio:// et se terminant par /manifest.json.',
+      'Saisissez l’adresse du manifeste d’un addon, commençant par https://, http:// ou stremio:// et se terminant par /manifest.json.',
     addon_exists: 'Cet addon est déjà installé ici.',
     addon_unreachable:
-      'Impossible de joindre l’addon. Vérifiez l’URL et que l’addon est en ligne, puis réessayez.',
-    invalid_manifest: 'Cette URL n’a pas renvoyé de manifeste d’addon Stremio.',
+      'Impossible de joindre l’addon. Vérifiez l’adresse et que l’addon est en ligne, puis réessayez.',
+    invalid_manifest: 'Cette adresse n’a pas renvoyé de manifeste d’addon Stremio.',
     private_network:
       'Cet addon se trouve à une adresse du réseau local. Seuls les administrateurs peuvent installer ce type d’addon.',
     invalid_order: 'La liste des addons a changé entre-temps. Elle a été actualisée : réessayez.',
@@ -230,7 +229,6 @@ const common: typeof en = {
     signOut: 'Déconnecter',
     signOutConfirm: (device: string) =>
       `Déconnecter « ${device} » ? L’application devra se reconnecter.`,
-    signingOut: 'Déconnexion…',
     signedOut: (device: string) => `« ${device} » a été déconnecté.`,
   },
   stremioTypes: {
@@ -273,8 +271,6 @@ const common: typeof en = {
     close: 'Fermer',
     dismiss: 'Fermer le message',
     notifications: 'Notifications',
-    moreActions: 'Plus d’actions',
-    noMatch: 'Aucun résultat.',
     unsaved: 'Modifications non enregistrées',
     allSaved: 'Tout est enregistré',
     discard: 'Annuler les modifications',
