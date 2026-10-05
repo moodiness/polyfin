@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -184,5 +185,46 @@ func TestUsersTrackingServicesHearOfTheirMoviesAndEpisodes(t *testing.T) {
 	}
 	if strings.Join(publicMetaDB, "\n") != strings.Join(want, "\n") {
 		t.Errorf("PublicMetaDB:\n%s\nwant\n%s", strings.Join(publicMetaDB, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestUserDataUploadsReachTrackingServicesAsPlayedMarks(t *testing.T) {
+	fakes := newTrackerFakes(t)
+	var tracker *trackers.Service
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, pool *pgxpool.Pool) {
+		tracker = trackers.New(trackers.Options{DB: pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
+			URLs: map[string]string{trackers.MDBList: fakes.url + "/mdblist"}})
+		options.Trackers = tracker
+	})
+	t.Cleanup(tracker.Close)
+	tr := trackingOn(t, s)
+	if _, err := tracker.ConnectKey(t.Context(), mustID(t, tr.user), trackers.MDBList, "mdblist-member"); err != nil {
+		t.Fatal(err)
+	}
+	upload := func(path string, body map[string]any) {
+		t.Helper()
+		if status, data := tr.call(http.MethodPost, path, app("tv", tr.token), body); status != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, status, data)
+		}
+	}
+	// Played offline on a given day, then uploaded again, then unplayed
+	// through the older route; a favorite changes nothing played.
+	upload("/UserItems/"+tr.episodes[0]+"/UserData", map[string]any{"Played": true, "LastPlayedDate": "2026-09-01T20:00:00Z"})
+	upload("/UserItems/"+tr.episodes[0]+"/UserData", map[string]any{"Played": true})
+	upload("/UserItems/"+tr.episodes[0]+"/UserData", map[string]any{"IsFavorite": true})
+	upload("/Users/"+tr.user+"/Items/"+tr.episodes[0]+"/UserData", map[string]any{"Played": false})
+	upload("/UserItems/"+tr.movie+"/UserData", map[string]any{"Played": true, "PlayCount": 1})
+
+	calls := fakes.wait(t, 3)
+	var got []string
+	for _, call := range calls {
+		body, _ := json.Marshal(call.body)
+		got = append(got, call.method+" "+call.path+" "+string(body))
+	}
+	episode := `{"shows":[{"ids":{"imdb":"tt0100","tvdb":20},"seasons":[{"episodes":[{"number":1%s}],"number":1}]}]}`
+	if len(got) != 3 || got[0] != "POST /mdblist/sync/watched "+fmt.Sprintf(episode, `,"watched_at":"2026-09-01T20:00:00Z"`) ||
+		got[1] != "POST /mdblist/sync/watched/remove "+fmt.Sprintf(episode, "") ||
+		!strings.HasPrefix(got[2], `POST /mdblist/sync/watched {"movies":[{"ids":{"imdb":"tt0000","tmdb":10}`) {
+		t.Errorf("sent:\n%s", strings.Join(got, "\n"))
 	}
 }

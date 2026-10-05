@@ -340,7 +340,9 @@ type userDataUpdate struct {
 }
 
 // updateUserData replaces what an app sends, without the rules playback
-// follows: apps use it to upload what was played offline.
+// follows: apps use it to upload what was played offline. A title it turns
+// played or unplayed is marked so on the user's tracking services, as a
+// played mark is.
 func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
@@ -364,7 +366,9 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h.change(w, r, user, item, []library.Item{item}, func(d *userdata.Data) {
+	var turned *bool
+	if !h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
+		was := d.Played
 		if update.PlaybackPositionTicks != nil {
 			d.Position = time.Duration(max(*update.PlaybackPositionTicks, 0)) * 100
 			if d.Runtime <= 0 {
@@ -391,7 +395,17 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 		if update.Played != nil {
 			d.Played = *update.Played
 		}
-	})
+		if d.Played != was {
+			turned = new(d.Played)
+		}
+	}) || turned == nil || h.Trackers == nil {
+		return
+	}
+	var date *time.Time
+	if *turned && update.LastPlayedDate != nil {
+		date = new(time.Time(*update.LastPlayedDate).UTC())
+	}
+	h.Trackers.Mark(user.ID, trackers.Mark{Played: *turned, Date: date, Scope: markScope(item.Kind), Titles: h.trackedTitles(user, []library.Item{item})})
 }
 
 // playbackEvent is the kind of a playback report.
