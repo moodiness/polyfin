@@ -144,6 +144,21 @@ const users = {
     qualityGroupHelp:
       'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too, and only versions that fit can be downloaded.',
     qualityGroupOriginal: 'Original (no limit)',
+    member: 'Member',
+    lastSignInLabel: 'Last sign-in:',
+    active: 'Active',
+    pinRequested: 'PIN requested',
+    emptyHelp:
+      'Create an account for each person who watches here, then sign in with it from a Jellyfin app.',
+    devicesEmptyHelp: 'Apps show here once they sign in with this account.',
+    notFound: 'User not found',
+    notFoundHelp: 'This user no longer exists, or the address is wrong. Pick a user from the list.',
+    backToUsers: 'Back to users',
+    sectionsLabel: 'Sections of the user',
+    profileTitle: 'Name and password',
+    accessHelp: 'Each change is saved at once.',
+    noServerLibrariesHelp:
+      'Add a library in Content › Libraries, then choose here which ones this user sees.',
   },
 }
 
