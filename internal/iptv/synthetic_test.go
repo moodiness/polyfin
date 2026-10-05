@@ -2,6 +2,7 @@ package iptv
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -105,7 +108,7 @@ func (s *synthetic) withVOD(movies, series int) *synthetic {
 	for g := range max(series/100, 2) {
 		s.seriesGroups = append(s.seriesGroups, fmt.Sprintf("%s Series %d", syntheticGenres[g%len(syntheticGenres)], g/len(syntheticGenres)+1))
 	}
-	extensions := []string{"mkv", "mp4", "avi"}
+	extensions := []string{"mkv", "mp4"}
 	qualities := []string{" 4K", " FHD", "", " HD"}
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 	for i := range movies {
@@ -178,8 +181,10 @@ func newSynthetic(streams, groups int) *synthetic {
 // short video when one could be made.
 type syntheticServer struct {
 	*httptest.Server
-	data  *synthetic
-	video []byte
+	data *synthetic
+	// videos are the files streams play, by container (see
+	// syntheticVideos).
+	videos map[string][]byte
 	// requests counts the player API's requests by action.
 	mu       sync.Mutex
 	requests map[string]int
@@ -194,8 +199,8 @@ func (s *syntheticServer) count(action string) int {
 	return s.requests[action]
 }
 
-func newSyntheticServer(data *synthetic, video []byte) *syntheticServer {
-	s := &syntheticServer{data: data, video: video, requests: map[string]int{}}
+func newSyntheticServer(data *synthetic, videos map[string][]byte) *syntheticServer {
+	s := &syntheticServer{data: data, videos: videos, requests: map[string]int{}}
 	s.Server = httptest.NewUnstartedServer(http.HandlerFunc(s.serve))
 	return s
 }
@@ -217,10 +222,17 @@ func (s *syntheticServer) serve(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/xmltv.php" && authorized:
 		w.Header().Set("Content-Type", "application/xml")
 		s.guide(w)
-	case (strings.HasPrefix(r.URL.Path, "/live/user/secret/") || strings.HasPrefix(r.URL.Path, "/movie/user/secret/") ||
-		strings.HasPrefix(r.URL.Path, "/series/user/secret/")) && s.video != nil:
+	case strings.HasPrefix(r.URL.Path, "/live/user/secret/") && s.videos != nil:
 		w.Header().Set("Content-Type", "video/mp2t")
-		_, _ = w.Write(s.video)
+		_, _ = w.Write(s.videos["ts"])
+	case (strings.HasPrefix(r.URL.Path, "/movie/user/secret/") || strings.HasPrefix(r.URL.Path, "/series/user/secret/")) && s.videos != nil:
+		// Files are served as they are named, ranges included.
+		video, ok := s.videos[strings.TrimPrefix(path.Ext(r.URL.Path), ".")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeContent(w, r, path.Base(r.URL.Path), time.Time{}, bytes.NewReader(video))
 	default:
 		http.NotFound(w, r)
 	}
@@ -346,20 +358,35 @@ func (s *syntheticServer) guide(w http.ResponseWriter) {
 	_, _ = buffered.WriteString("</tv>\n")
 }
 
-// syntheticVideo makes ten seconds of MPEG-TS video with the ffmpeg of
-// POLYFIN_TEST_FFMPEG, nil without one.
-func syntheticVideo(ctx context.Context) []byte {
+// syntheticVideos makes ten seconds of video with the ffmpeg of
+// POLYFIN_TEST_FFMPEG, by container: MPEG-TS for channels, Matroska and
+// MP4 for movies and episodes; nil without one.
+func syntheticVideos(ctx context.Context) map[string][]byte {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		return nil
 	}
-	video, err := exec.CommandContext(ctx, ffmpeg, "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25",
-		"-f", "lavfi", "-i", "sine=frequency=440", "-t", "10", "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac",
-		"-f", "mpegts", "pipe:1").Output()
+	dir, err := os.MkdirTemp("", "polyfin-synthetic-")
 	if err != nil {
 		return nil
 	}
-	return video
+	defer os.RemoveAll(dir)
+	videos := map[string][]byte{}
+	for _, container := range []string{"ts", "mkv", "mp4"} {
+		file := filepath.Join(dir, "video."+container)
+		args := []string{"-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=440",
+			"-t", "10", "-c:v", "libx264", "-preset", "veryfast", "-g", "50", "-pix_fmt", "yuv420p", "-c:a", "aac"}
+		if container == "mp4" {
+			args = append(args, "-movflags", "+faststart")
+		}
+		if err := exec.CommandContext(ctx, ffmpeg, append(args, file)...).Run(); err != nil {
+			return nil
+		}
+		if videos[container], err = os.ReadFile(file); err != nil {
+			return nil
+		}
+	}
+	return videos
 }
 
 // TestServeSyntheticXtream serves a synthetic Xtream Codes provider until
@@ -382,7 +409,7 @@ func TestServeSyntheticXtream(t *testing.T) {
 		}
 		channels = n
 	}
-	server := newSyntheticServer(newSynthetic(channels, max(channels/130, 1)).withVOD(channels/3, channels/20), syntheticVideo(t.Context()))
+	server := newSyntheticServer(newSynthetic(channels, max(channels/130, 1)).withVOD(channels/3, channels/20), syntheticVideos(t.Context()))
 	if address := os.Getenv("POLYFIN_SYNTHETIC_XTREAM_ADDR"); address != "" {
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
@@ -395,7 +422,7 @@ func TestServeSyntheticXtream(t *testing.T) {
 	defer server.Close()
 	fmt.Printf("Synthetic Xtream provider: %d channels in %d groups, %d movies in %d categories, %d series in %d categories, video %v\n",
 		len(server.data.streams), len(server.data.groups), len(server.data.movies), len(server.data.vodGroups), len(server.data.series),
-		len(server.data.seriesGroups), server.video != nil)
+		len(server.data.seriesGroups), server.videos != nil)
 	fmt.Printf("  server   %s\n  username user\n  password secret\n  guide    %s/xmltv.php?username=user&password=secret\n",
 		server.URL, server.URL)
 	fmt.Println("Interrupt (Ctrl-C) to stop.")

@@ -37,6 +37,15 @@ func newProvider(t *testing.T) string {
 				_, _ = io.WriteString(w, `[{"category_id": "1", "category_name": "News"}]`)
 			case "get_live_streams":
 				_, _ = io.WriteString(w, `[{"num": 1, "name": "Zeb One", "stream_id": 7, "epg_channel_id": "zeb.zz", "category_id": "1"}]`)
+			case "get_vod_categories":
+				_, _ = io.WriteString(w, `[{"category_id": "5", "category_name": "Action"}, {"category_id": "6", "category_name": "Kids"}]`)
+			case "get_vod_streams":
+				_, _ = io.WriteString(w, `[{"name": "EN - Orb Quest (2019)", "stream_id": 31, "category_id": "5", "container_extension": "mkv"},
+					{"name": "Lumo Cartoon", "stream_id": 32, "category_id": "6", "container_extension": "mp4"}]`)
+			case "get_series_categories":
+				_, _ = io.WriteString(w, `[{"category_id": "8", "category_name": "Drama"}]`)
+			case "get_series":
+				_, _ = io.WriteString(w, `[{"name": "Quill Days", "series_id": 9, "category_id": "8"}]`)
 			}
 		case "/xmltv.php":
 			now := time.Now().UTC()
