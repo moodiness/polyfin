@@ -26,7 +26,7 @@ import {
 } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 import { lineupPath } from '@/components/lineup/common'
 import { fieldClass } from '@/components/lineup/shared'
 
@@ -414,7 +414,7 @@ export function IptvSourceEditor({
       id={id}
       onSubmit={submit}
       noValidate
-      className="mt-4 space-y-4 rounded-xl border border-line bg-ink/40 p-4"
+      className="mt-4 space-y-4 rounded-xl border border-line bg-bg/40 p-4"
     >
       <TextField
         label={t.iptv.name}

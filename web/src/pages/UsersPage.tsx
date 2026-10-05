@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ApiError,
@@ -27,7 +27,7 @@ import {
   type QualityGroup,
 } from '@/api'
 import DeviceList from '@/components/DeviceList'
-import { useSessionUser } from '@/components/session'
+import { useSessionUser } from '@/app/session'
 import {
   Badge,
   buttonPrimary,
@@ -44,11 +44,21 @@ import {
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 
-export default function UsersPage() {
+/** The users; `openId`, from `/users/:id`, opens that user's editor. */
+export default function UsersPage({ openId }: { openId?: string }) {
   const { t } = useI18n()
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(openId ?? null)
   const [deletedName, setDeletedName] = useState<string | null>(null)
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
+  // The user the address names is brought into view once the list is drawn.
+  const loaded = users.data !== undefined
+  useEffect(() => {
+    if (loaded && openId) {
+      document
+        .getElementById(`user-editor-${openId}`)
+        ?.parentElement?.scrollIntoView({ block: 'start' })
+    }
+  }, [loaded, openId])
 
   return (
     <>
@@ -244,7 +254,7 @@ function UserEditor({ user, onDeleted }: { user: User; onDeleted: () => void }) 
   }
 
   return (
-    <div className="grid gap-4 rounded-xl border border-line bg-ink/40 p-4 lg:grid-cols-2">
+    <div className="grid gap-4 rounded-xl border border-line bg-bg/40 p-4 lg:grid-cols-2">
       <h3 className="text-base font-semibold text-white lg:col-span-2">
         {t.users.editTitle(user.name)}
       </h3>
@@ -456,7 +466,7 @@ function ResetPinNotice({ pin }: { pin: PasswordResetPin }) {
     new Date(pin.expiresAt),
   )
   return (
-    <div className="mt-2 rounded-lg border border-fin-4/50 bg-ink/40 p-3 text-sm">
+    <div className="mt-2 rounded-lg border border-fin-4/50 bg-bg/40 p-3 text-sm">
       <p className="text-white">
         {t.users.resetPinRequested}{' '}
         <code className="font-mono text-base font-semibold tracking-widest select-all">
@@ -523,7 +533,7 @@ function ParentalControlForm({ user }: { user: User }) {
               )
             }}
             aria-describedby={`${selectId}-hint`}
-            className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white sm:max-w-sm"
+            className="mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white sm:max-w-sm"
           >
             <option value={-1}>{t.users.noLimit}</option>
             {groups.map((group, index) => (
@@ -679,7 +689,7 @@ function PlaybackAccessForm({ user }: { user: User }) {
     ? null
     : (form.maxBitrate / 1_000_000).toLocaleString(language, { maximumFractionDigits: 2 })
   const selectClass =
-    'mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white sm:max-w-sm'
+    'mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white sm:max-w-sm'
 
   return (
     <form onSubmit={submit} noValidate className="space-y-3 lg:col-span-2">
@@ -943,7 +953,7 @@ function hourLabel(hour: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-const hourSelectClass = 'mt-1 block rounded-lg border border-line bg-ink px-3 py-2 text-white'
+const hourSelectClass = 'mt-1 block rounded-lg border border-line bg-bg px-3 py-2 text-white'
 
 function AllowedHoursForm({ user }: { user: User }) {
   const { t } = useI18n()

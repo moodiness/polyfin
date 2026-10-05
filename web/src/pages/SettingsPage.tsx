@@ -1,4 +1,6 @@
 import {
+  createContext,
+  use,
   useEffect,
   useId,
   useLayoutEffect,
@@ -40,6 +42,7 @@ import {
   versionListMinutesRange,
   type Settings,
 } from '@/api'
+import { settingsPath, settingsSections, type SettingsSectionId } from '@/app/navigation'
 import BackupStatus from '@/components/BackupStatus'
 import CodeEditor from '@/components/CodeEditor'
 import ConversionSettings from '@/components/ConversionSettings'
@@ -90,6 +93,26 @@ const sectionIds = [
 ] as const
 type SectionId = (typeof sectionIds)[number]
 
+/** The sections of this page each `/settings/:section` shows: Diagnostics holds the variables. */
+const shownBy: Record<SettingsSectionId, readonly SectionId[]> = {
+  general: ['general'],
+  playback: ['playback'],
+  conversion: ['conversion'],
+  content: ['content'],
+  catalogs: ['catalogs'],
+  thumbnails: ['thumbnails'],
+  security: ['security'],
+  tracking: ['tracking'],
+  'live-tv': ['liveTv'],
+  recordings: ['recordings'],
+  backups: ['backups'],
+  'web-player': ['webPlayer'],
+  diagnostics: ['diagnostics', 'variables'],
+}
+
+/** The sections the route shows; a search shows every section with a match instead. */
+const ShownSections = createContext<readonly SectionId[]>(sectionIds)
+
 /** A section of settings, hidden when the search leaves none of them. */
 function Section({
   id,
@@ -102,10 +125,13 @@ function Section({
   description?: string
   children: ReactNode
 }) {
+  const shown = use(ShownSections)
+  const query = use(SearchContext)
   return (
     <section
       id={`settings-${id}`}
       aria-labelledby={`settings-${id}-title`}
+      hidden={query === '' && !shown.includes(id)}
       className="scroll-mt-24 rounded-2xl border border-line bg-surface p-5 [&:not(:has([data-setting]:not([hidden])))]:hidden"
     >
       <h2 id={`settings-${id}-title`} className="text-base font-semibold text-white">
@@ -119,9 +145,13 @@ function Section({
   )
 }
 
-export default function SettingsPage() {
+/**
+ * The server settings, one section per route (`/settings/:section`). The form holds every
+ * section, so that changes made in one survive a move to another and one save covers them all.
+ */
+export default function SettingsPage({ section }: { section: SettingsSectionId }) {
   const { t } = useI18n()
-  const text = t.dashboard.settings
+  const text = t.settingsPage
   const settings = useQuery({
     queryKey: queryKeys.settings,
     queryFn: ({ signal }) => fetchSettings(signal),
@@ -154,14 +184,15 @@ export default function SettingsPage() {
       <div className="lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[12rem_minmax(0,48rem)]">
         <nav aria-label={text.sectionsLabel} className="hidden lg:block">
           <ul className="sticky top-8 space-y-0.5 text-sm">
-            {sectionIds.map((id) => (
-              <li key={id}>
-                <a
-                  href={`#settings-${id}`}
-                  className="block rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-surface hover:text-white"
+            {settingsSections.map((item) => (
+              <li key={item.id}>
+                <Link
+                  to={settingsPath(item.id)}
+                  aria-current={item.id === section ? 'page' : undefined}
+                  className="block rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-surface hover:text-white aria-[current=page]:bg-surface-2 aria-[current=page]:text-white"
                 >
-                  {text.sections[id]}
-                </a>
+                  {t.nav.settingsSections[item.key]}
+                </Link>
               </li>
             ))}
           </ul>
@@ -190,37 +221,40 @@ export default function SettingsPage() {
             className="-mx-4 mb-6 overflow-x-auto px-4 lg:hidden"
           >
             <ul className="flex gap-1.5 text-sm whitespace-nowrap">
-              {sectionIds.map((id) => (
-                <li key={id}>
-                  <a
-                    href={`#settings-${id}`}
-                    className="block rounded-lg border border-line px-3 py-1.5 text-muted transition-colors hover:border-fin-4 hover:text-white"
+              {settingsSections.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    to={settingsPath(item.id)}
+                    aria-current={item.id === section ? 'page' : undefined}
+                    className="block rounded-lg border border-line px-3 py-1.5 text-muted transition-colors hover:border-fin-4 hover:text-white aria-[current=page]:bg-surface-2 aria-[current=page]:text-white"
                   >
-                    {text.sections[id]}
-                  </a>
+                    {t.nav.settingsSections[item.key]}
+                  </Link>
                 </li>
               ))}
             </ul>
           </nav>
           <SearchContext value={query}>
-            <div ref={content} className="space-y-6">
-              {noMatch && (
-                <p
-                  role="status"
-                  className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted"
-                >
-                  {text.noMatch}
-                </p>
-              )}
-              {settings.isPending ? (
-                <Loading />
-              ) : settings.isError ? (
-                <Notice kind="error">{errorMessage(t, settings.error)}</Notice>
-              ) : (
-                <SettingsForm initial={settings.data} />
-              )}
-              <Variables />
-            </div>
+            <ShownSections value={shownBy[section]}>
+              <div ref={content} className="space-y-6">
+                {noMatch && (
+                  <p
+                    role="status"
+                    className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted"
+                  >
+                    {text.noMatch}
+                  </p>
+                )}
+                {settings.isPending ? (
+                  <Loading />
+                ) : settings.isError ? (
+                  <Notice kind="error">{errorMessage(t, settings.error)}</Notice>
+                ) : (
+                  <SettingsForm initial={settings.data} />
+                )}
+                <Variables />
+              </div>
+            </ShownSections>
           </SearchContext>
         </div>
       </div>
@@ -231,7 +265,7 @@ export default function SettingsPage() {
 function SettingsForm({ initial }: { initial: Settings }) {
   const { language, t } = useI18n()
   const s = t.settings
-  const sections = t.dashboard.settings.sections
+  const sections = t.settingsPage.sections
   const languageId = useId()
   const trickplayWidthId = useId()
   const status = useQuery({
@@ -286,7 +320,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
     <p className="mt-2 text-sm text-muted">
       {s.tracking.redirectUri}
       {t.common.colon}{' '}
-      <code className="rounded bg-ink px-1.5 py-0.5 font-mono text-xs break-all text-zinc-100 select-all">
+      <code className="rounded bg-bg px-1.5 py-0.5 font-mono text-xs break-all text-zinc-100 select-all">
         {oobRedirectUri}
       </code>
     </p>
@@ -314,7 +348,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
             value={form.language}
             onChange={(event) => update({ language: event.target.value as Language })}
             aria-describedby={`${languageId}-hint`}
-            className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+            className="mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white"
           >
             {languages.map((code) => (
               <option key={code} value={code} lang={code}>
@@ -607,7 +641,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
             value={form.trickplayWidth}
             onChange={(event) => update({ trickplayWidth: Number(event.target.value) })}
             aria-describedby={`${trickplayWidthId}-hint`}
-            className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
+            className="mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white"
           >
             {trickplayWidths.map((width) => (
               <option key={width} value={width}>
@@ -895,19 +929,19 @@ function SettingsForm({ initial }: { initial: Settings }) {
           />
         </Setting>
         {form.backupFolder !== '' && (
-          <Setting text={[s.lastBackup, t.dashboard.health.backup.runHint]}>
+          <Setting text={[s.lastBackup, t.system.health.backup.runHint]}>
             <LastBackup />
           </Setting>
         )}
       </Section>
 
-      <div className="sticky bottom-0 z-10 -mx-1 rounded-t-2xl border border-b-0 border-line bg-ink/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-10 -mx-1 rounded-t-2xl border border-b-0 border-line bg-bg/95 px-4 py-3 backdrop-blur">
         <div className="space-y-3">
           {mutation.isError && <Notice kind="error">{errorMessage(t, mutation.error)}</Notice>}
           {mutation.isSuccess && !dirty && <Notice kind="success">{s.saved}</Notice>}
           <div className="flex items-center justify-between gap-3">
             <p aria-live="polite" className={`text-sm ${dirty ? 'text-amber-200' : 'text-muted'}`}>
-              {dirty ? t.dashboard.settings.unsaved : t.dashboard.settings.upToDate}
+              {dirty ? t.settingsPage.unsaved : t.settingsPage.upToDate}
             </p>
             <button type="submit" className={buttonPrimary} disabled={mutation.isPending}>
               {mutation.isPending ? t.common.saving : t.common.save}
@@ -938,8 +972,8 @@ function LastBackup() {
         <BackupStatus backup={backup.data} />
       )}
       <p className="mt-3 text-xs text-muted">
-        <Link to="/schedule" className="underline underline-offset-4 hover:text-white">
-          {t.dashboard.health.backup.runHint}
+        <Link to="/system/schedule" className="underline underline-offset-4 hover:text-white">
+          {t.system.health.backup.runHint}
         </Link>
       </p>
     </div>
@@ -949,7 +983,7 @@ function LastBackup() {
 /** The POLYFIN_ environment variables in effect, read only. */
 function Variables() {
   const { t } = useI18n()
-  const text = t.dashboard.settings
+  const text = t.settingsPage
   const variables = useQuery({
     queryKey: queryKeys.variables,
     queryFn: ({ signal }) => fetchVariables(signal),

@@ -14,7 +14,7 @@ import { Empty, Panel, Skeleton } from '@/components/panels'
 import { Badge, buttonPrimary, buttonSecondary, ConfirmButton, Notice } from '@/components/ui'
 import { errorMessage, formatBitrate, formatClock, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 /** How long a message shows on the device, in seconds. */
 const messageSeconds = 10
@@ -305,7 +305,7 @@ function HowItPlays({ session }: { session: LiveSession }) {
   ]
 
   return (
-    <div className="rounded-lg border border-line bg-ink/50 px-3 py-2.5">
+    <div className="rounded-lg border border-line bg-bg/50 px-3 py-2.5">
       <p className="sr-only">{live.howItPlays}</p>
       <dl className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-[auto_1fr]">
         {rows.map((row) => (
@@ -381,7 +381,7 @@ function MessageForm({ session, onSent }: { session: LiveSession; onSent: () => 
         required
         onChange={(event) => setText(event.target.value)}
         aria-describedby={`${id}-hint`}
-        className="block w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm text-white placeholder:text-zinc-500"
+        className="block w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-white placeholder:text-zinc-500"
       />
       <p id={`${id}-hint`} className="text-xs text-muted">
         {live.messageHint}

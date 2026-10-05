@@ -93,7 +93,7 @@ export default function RecentActivity() {
             value={search}
             placeholder={t.dashboard.activity.search}
             onChange={(event) => setSearch(event.target.value)}
-            className="block min-h-9 w-full rounded-lg border border-line bg-ink py-1.5 pr-3 pl-9 text-sm text-white placeholder:text-zinc-500"
+            className="block min-h-9 w-full rounded-lg border border-line bg-bg py-1.5 pr-3 pl-9 text-sm text-white placeholder:text-zinc-500"
           />
         </div>
       </div>

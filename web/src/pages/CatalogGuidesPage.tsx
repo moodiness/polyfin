@@ -27,7 +27,7 @@ export default function CatalogGuidesPage() {
     (l) =>
       l.addonId === target.addonId && l.catalogType === 'tv' && l.catalogId === target.catalogId,
   )
-  const back = scope === 'shared' ? '/libraries' : '/my-addons'
+  const back = scope === 'shared' ? '/libraries' : '/me/sources'
 
   if (scope === null || (section !== 'guides' && section !== 'mapping')) {
     return (

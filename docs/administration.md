@@ -1,18 +1,32 @@
 # Administration
 
-This page covers Polyfin's admin app: its Overview, Schedule, Health, Logs and Settings pages, API keys for other tools, and the administration features Jellyfin apps can use.
+This page covers Polyfin's admin app: its Home, its System pages (Health, Schedule, Logs and API keys) and Settings, API keys for other tools, and the administration features Jellyfin apps can use.
 
 ## The admin app
 
-The admin app is at `/admin/`. It opens on the **Overview** for administrators. From the [web client](web-client.md), the **Dashboard** link opens it too.
+The admin app is at `/admin/`. From the [web client](web-client.md), the **Dashboard** link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings.
+
+A bar at the top holds the sections, for administrators:
+
+- **Home** (`/admin/`): what plays now and what needs a look;
+- **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`) and **Live TV** (`/admin/live-tv`);
+- **Users** (`/admin/users`);
+- **System**: **Health**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
+- **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
+
+The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
+
+**Search** (⌘K on a Mac, Ctrl K elsewhere, or `/`) finds pages, settings, users and sources by name, with or without accents. Use the arrows and Enter to open one, Escape to close it.
+
+Addresses from before this layout, such as `/admin/health` or `/admin/settings#settings-tracking`, still open the right page.
 
 **Compared with Jellyfin:**
 
 - None of the admin app's pages exist in Jellyfin's API. They use Polyfin's admin API only.
 
-## Overview
+## Home
 
-The **Overview** shows what plays now, updated every 3 seconds. For each playback you see:
+**Home** shows what plays now, updated every 3 seconds. For each playback you see:
 
 - the user, the device and the app;
 - the title and the position;
@@ -35,7 +49,7 @@ An administrator can stop a playback, or show a message on its app, when the app
 - the upcoming Live TV recordings (see [Live TV](live-tv.md));
 - when the IPTV lists and guides are fetched again (see [IPTV](iptv.md)).
 
-Schedule covers the server's addons, IPTV sources and guides first, then those users keep under **My addons**, each marked with its owner.
+Schedule covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner.
 
 ## Health
 
@@ -52,7 +66,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - **Polyfin itself**: memory, goroutines, uptime and version.
 - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
 
-Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My addons**, each marked with its owner. Their problems count in the summary.
+Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary.
 
 ## Logs
 
@@ -60,7 +74,7 @@ Health sends no request outside the server. Like Schedule, it covers the server'
 
 ## Settings
 
-**Settings** is split into sections, with a search box. It ends with the `POLYFIN_*` variables in effect, read only:
+**Settings** has one page per section, listed on its left, with a search box over all of them; changes made in several sections are saved together. **Settings › Diagnostics** ends with the `POLYFIN_*` variables in effect, read only:
 
 - secrets are hidden;
 - the database URL shows its host and database only.
@@ -131,7 +145,7 @@ The activity log records:
 - settings saved;
 - addons installed or removed.
 
-It keeps 30 days. Its last entries show on the admin app's [**Overview**](#overview), and Jellyfin apps can read it.
+It keeps 30 days. Its last entries show on the admin app's [**Home**](#home), and Jellyfin apps can read it.
 
 ### Server logs
 

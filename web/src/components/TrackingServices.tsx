@@ -15,7 +15,7 @@ import {
   type TrackingServiceName,
 } from '@/api'
 import { SecretField } from '@/components/settings'
-import { useSessionUser } from '@/components/session'
+import { useSessionUser } from '@/app/session'
 import {
   Badge,
   buttonPrimary,
@@ -27,7 +27,7 @@ import {
 } from '@/components/ui'
 import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 const serviceNames: Record<TrackingServiceName, string> = {
   trakt: 'Trakt',
@@ -176,7 +176,7 @@ function ServiceRow({ service }: { service: TrackingService }) {
   // The administrator's page where the app is set up, for administrators.
   const setUpLink = user.isAdministrator && (
     <Link
-      to="/settings#settings-tracking"
+      to="/settings/tracking"
       className="inline-flex text-sm font-medium text-fin-5 underline-offset-4 hover:underline"
     >
       {text.setUpApp(name)}
@@ -199,7 +199,7 @@ function ServiceRow({ service }: { service: TrackingService }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <p
             aria-label={text.codeLabel}
-            className="w-fit rounded-xl border border-fin-4/50 bg-ink px-5 py-3 font-mono text-3xl font-semibold tracking-[0.2em] text-white select-all"
+            className="w-fit rounded-xl border border-fin-4/50 bg-bg px-5 py-3 font-mono text-3xl font-semibold tracking-[0.2em] text-white select-all"
           >
             {code.userCode}
           </p>

@@ -56,7 +56,7 @@ export default function GuidePicker({
   return (
     <section
       aria-labelledby={ids.title}
-      className="space-y-3 rounded-xl border border-fin-4/40 bg-ink/60 p-3"
+      className="space-y-3 rounded-xl border border-fin-4/40 bg-bg/60 p-3"
     >
       <div className="flex items-center justify-between gap-2">
         <h3 id={ids.title} className="text-sm font-semibold text-white">

@@ -4,7 +4,7 @@ This page explains how to import an M3U playlist or an Xtream Codes account dire
 
 ## Adding a source
 
-Use **Add an IPTV source**, under **Addons** for the server or **My addons** for a user's own. Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
+Use **Add an IPTV source**, under **Content › Sources** for the server or **My sources** for a user's own. Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
 
 - A user's own sources follow **Allow users' own addons** and the user's **Can add their own addons** (see [Users](users.md)).
 - Only an administrator's source may reach a local network address.
@@ -81,7 +81,7 @@ When merged, the entries of a category with the same name, once country prefixes
 
 ## The source page
 
-Each source has its own page, titled **IPTV source**, opened from **Open the source** on its row under **Addons** or **My addons**. It has six sections. While **Live TV channels** is off, the four Live TV sections (**Categories**, **Channels**, **Guides**, **Guide mapping**) are hidden.
+Each source has its own page, titled **IPTV source**, opened from **Open the source** on its row under **Content › Sources** or **My sources**. It has six sections. While **Live TV channels** is off, the four Live TV sections (**Categories**, **Channels**, **Guides**, **Guide mapping**) are hidden.
 
 ### Summary
 

@@ -235,13 +235,13 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ## Security settings
 
-**Settings › Users and security** gathers three settings, and **Settings › Diagnostics** a fourth. They apply at once, without a restart.
+**Settings › Security** gathers three settings, and **Settings › Diagnostics** a fourth. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Allow users' own addons** | **Settings › Users and security** | On | Lets users add addons of their own under **My addons**. |
-| **Block an account after this many wrong passwords** | **Settings › Users and security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
-| **Sign out devices unused for** | **Settings › Users and security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
+| **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
+| **Block an account after this many wrong passwords** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
+| **Sign out devices unused for** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
 
 ### Users' own addons
@@ -250,7 +250,7 @@ Under **Users**, each user also has their own **Can add their own addons** permi
 
 - the user's own addons are kept but not used;
 - their apps show the server's addons and libraries only;
-- **My addons** says why;
+- **My sources** says why;
 - their addons cannot be added, replaced, refreshed or turned on (403 `personal_addons_disabled`).
 
 The addons come back once both are on again. See [Addons and libraries](addons-and-libraries.md).

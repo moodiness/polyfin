@@ -47,7 +47,7 @@ function parse(raw: string, seq: number): Line {
 
 export default function LogsPage() {
   const { language, t } = useI18n()
-  const text = t.dashboard.logs
+  const text = t.system.logs
   const [lines, setLines] = useState<Line[]>([])
   const [following, setFollowing] = useState(true)
   const [filter, setFilter] = useState<Filter>('all')
@@ -140,7 +140,7 @@ export default function LogsPage() {
             id={levelId}
             value={filter}
             onChange={(event) => setFilter(event.target.value as Filter)}
-            className="mt-1 block min-h-9 rounded-lg border border-line bg-ink px-3 py-1.5 text-sm text-white"
+            className="mt-1 block min-h-9 rounded-lg border border-line bg-bg px-3 py-1.5 text-sm text-white"
           >
             {(Object.keys(filters) as Filter[]).map((key) => (
               <option key={key} value={key}>
@@ -159,7 +159,7 @@ export default function LogsPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="mt-1 block min-h-9 w-full rounded-lg border border-line bg-ink py-1.5 pr-3 pl-9 text-sm text-white"
+            className="mt-1 block min-h-9 w-full rounded-lg border border-line bg-bg py-1.5 pr-3 pl-9 text-sm text-white"
           />
         </div>
         <button

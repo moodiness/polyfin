@@ -12,7 +12,7 @@ import GuidePicker from '@/components/lineup/GuidePicker'
 import { Badge, Notice } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 /** How a channel's mapping reads: the guide channel, or none, and whether it was set by hand. */
 export function MappingText({ mapping }: { mapping: GuideMapping | null }) {
@@ -135,4 +135,4 @@ export function mappingWords(t: Messages, item: MappingItem): string {
 }
 
 const rowButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'
+  'inline-flex min-h-9 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'

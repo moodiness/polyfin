@@ -174,7 +174,7 @@ function NewKey({ apiKey, onDone }: { apiKey: NewApiKey; onDone: () => void }) {
       >
         {t.apiKeys.newKeyNotice}
       </p>
-      <code className="block rounded-lg border border-line bg-ink px-3 py-2 font-mono text-sm break-all text-white select-all">
+      <code className="block rounded-lg border border-line bg-bg px-3 py-2 font-mono text-sm break-all text-white select-all">
         {apiKey.key}
       </code>
       {copy === 'copied' && <Notice kind="success">{t.apiKeys.copied}</Notice>}

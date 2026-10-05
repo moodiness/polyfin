@@ -1,5 +1,5 @@
 import { ApiError } from '@/api'
-import type { Messages } from '@/i18n/en'
+import type { Messages } from '@/i18n'
 
 type ErrorCode = keyof Messages['errors']
 

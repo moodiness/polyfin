@@ -33,7 +33,7 @@ Addons that publish a guide (Stremio's Native EPG: a TV catalog taking a date) f
 
 ### XMLTV guides
 
-Some IPTV addons publish no Native EPG guide, while their provider publishes one as an XMLTV file. You can attach such guides to any TV catalog shown under **Libraries**, or under **My addons** for a user's own, once the libraries are saved.
+Some IPTV addons publish no Native EPG guide, while their provider publishes one as an XMLTV file. You can attach such guides to any TV catalog shown under **Libraries**, or under **My sources** for a user's own, once the libraries are saved.
 
 - Each catalog takes up to 10 guides, in order, from its guide page. Its row shows the first one.
 - On a Stremio addon's catalog, open the page with **Guides and mapping** on its row under **Libraries**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).

@@ -5,7 +5,7 @@ import { dateTime, relativeTime } from '@/format'
 export const buttonPrimary =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-fin-2 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-fin-1 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 export const buttonSecondary =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-bg px-4 py-2 text-sm font-medium text-white transition-colors hover:border-fin-4 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 export const buttonDanger =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/50 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 active:translate-y-px disabled:cursor-progress disabled:opacity-70'
 
@@ -62,7 +62,7 @@ export function TextField({ label, hint, error, onValue, className, ...input }: 
         onChange={(event) => onValue(event.target.value)}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={`mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white placeholder:text-zinc-500 aria-invalid:border-rose-400 ${className ?? ''}`}
+        className={`mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white placeholder:text-zinc-500 aria-invalid:border-rose-400 ${className ?? ''}`}
       />
       {hint && (
         <p id={hintId} className="mt-1 text-xs text-muted">
@@ -179,7 +179,7 @@ export function Loading() {
 }
 
 const moveButton =
-  'inline-flex size-10 items-center justify-center rounded-lg border border-line bg-ink text-base text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line'
+  'inline-flex size-10 items-center justify-center rounded-lg border border-line bg-bg text-base text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line'
 
 /**
  * Up and down buttons for one item of an ordered list. After a move, focus follows the item (or

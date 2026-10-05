@@ -223,33 +223,53 @@ func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
 
 // The script sends jellyfin-web's administration routes to the admin app
 // however the client gets to them: on load, through its router (history),
-// a link (hashchange) or Back (popstate). It runs in Node.js, in a context
-// that stands for the browser.
+// a link (hashchange) or Back (popstate). A dashboard page with a match in the
+// admin app opens that page; the others open its home. It runs in Node.js, in
+// a context that stands for the browser.
 func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
 	}
-	routes := map[string]bool{
-		"#/dashboard":                       true,
-		"#/dashboard/users":                 true,
-		"#/dashboard/plugins/0123/settings": true,
-		"#/Dashboard/Tasks":                 true,
-		"#/dashboard?tab=1":                 true,
-		"#!/dashboard":                      true,
-		"#/metadata":                        true,
-		"#/configurationpage?name=Plugin":   true,
-		"#/wizard/start":                    true,
-		"":                                  false,
-		"#/home":                            false,
-		"#/dashboards":                      false,
-		"#/metadatas":                       false,
-		"#/details?id=dashboard":            false,
-		"#/search?query=dashboard":          false,
-		"#/mypreferencesmenu":               false,
-		"#/livetv":                          false,
-		"#/list?parentId=0123&serverId=dashboard":  false,
-		"#/userprofile?userId=0123&from=dashboard": false,
+	// The admin page each route opens, after /admin/; "-" for a route left alone.
+	routes := map[string]string{
+		"#/dashboard":       "",
+		"#/dashboard/users": "users",
+		"#/dashboard/users/profile?userId=0123456789ABCDEF0123456789abcdef":    "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/users/access?userId=01234567-89ab-cdef-0123-456789abcdef": "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/devices":                      "users",
+		"#/dashboard/libraries/display":            "libraries",
+		"#/dashboard/livetv":                       "live-tv",
+		"#/dashboard/livetv/recordings":            "settings/recordings",
+		"#/dashboard/playback/transcoding":         "settings/conversion",
+		"#/dashboard/playback/resume":              "settings/content",
+		"#/dashboard/playback/trickplay":           "settings/thumbnails",
+		"#/dashboard/playback/streaming":           "settings/playback",
+		"#/dashboard/branding":                     "settings/web-player",
+		"#/dashboard/settings":                     "settings/general",
+		"#/dashboard/backups":                      "settings/backups",
+		"#/dashboard/logs":                         "system/logs",
+		"#/dashboard/keys":                         "system/api-keys",
+		"#/dashboard/plugins/0123/settings":        "",
+		"#/Dashboard/Tasks":                        "system/schedule",
+		"#/dashboard/tasks/edit?id=3":              "system/schedule",
+		"#/dashboard/activity":                     "",
+		"#/dashboard?tab=1":                        "",
+		"#!/dashboard":                             "",
+		"#!/dashboard/logs":                        "system/logs",
+		"#/metadata":                               "",
+		"#/configurationpage?name=Plugin":          "",
+		"#/wizard/start":                           "",
+		"":                                         "-",
+		"#/home":                                   "-",
+		"#/dashboards":                             "-",
+		"#/metadatas":                              "-",
+		"#/details?id=dashboard":                   "-",
+		"#/search?query=dashboard":                 "-",
+		"#/mypreferencesmenu":                      "-",
+		"#/livetv":                                 "-",
+		"#/list?parentId=0123&serverId=dashboard":  "-",
+		"#/userprofile?userId=0123&from=dashboard": "-",
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -298,8 +318,8 @@ process.stdout.write(JSON.stringify(results))
 			route = key[at:]
 		}
 		want := ""
-		if routes[route] {
-			want = "http://polyfin.test/admin/"
+		if page := routes[route]; page != "-" {
+			want = "http://polyfin.test/admin/" + page
 		}
 		if replaced != want {
 			t.Errorf("%s: went to %q, want %q", key, replaced, want)

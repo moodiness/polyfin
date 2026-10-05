@@ -1,10 +1,95 @@
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
-import en, { type Messages } from './en'
-import fr from './fr'
+import enAccount from './en/account'
+import enAuth from './en/auth'
+import enCommon from './en/common'
+import enHome from './en/home'
+import enIptv from './en/iptv'
+import enLibraries from './en/libraries'
+import enLivetv from './en/livetv'
+import enNav from './en/nav'
+import enSettings from './en/settings'
+import enSources from './en/sources'
+import enSystem from './en/system'
+import enUsers from './en/users'
+import frAccount from './fr/account'
+import frAuth from './fr/auth'
+import frCommon from './fr/common'
+import frHome from './fr/home'
+import frIptv from './fr/iptv'
+import frLibraries from './fr/libraries'
+import frLivetv from './fr/livetv'
+import frNav from './fr/nav'
+import frSettings from './fr/settings'
+import frSources from './fr/sources'
+import frSystem from './fr/system'
+import frUsers from './fr/users'
+
+/*
+ * The messages are split into one file per area, `en/<area>.ts` and `fr/<area>.ts`, each holding
+ * whole top-level keys (`t.users`, `t.lineup`…). English is the reference: each French file is typed
+ * with its English twin, so a missing or extra French key fails type checking.
+ */
 
 export type Language = 'en' | 'fr'
 
 export const languages: readonly Language[] = ['en', 'fr']
+
+const en = {
+  ...enCommon,
+  ...enNav,
+  ...enHome,
+  ...enAuth,
+  ...enSources,
+  ...enIptv,
+  ...enLibraries,
+  ...enLivetv,
+  ...enUsers,
+  ...enSystem,
+  ...enSettings,
+  ...enAccount,
+}
+
+/** Every message of the interface, in one language. */
+export type Messages = typeof en
+
+const fr: Messages = {
+  ...frCommon,
+  ...frNav,
+  ...frHome,
+  ...frAuth,
+  ...frSources,
+  ...frIptv,
+  ...frLibraries,
+  ...frLivetv,
+  ...frUsers,
+  ...frSystem,
+  ...frSettings,
+  ...frAccount,
+}
+
+// Two areas defining the same top-level key would silently hide one of them.
+if (import.meta.env.DEV) {
+  const seen = new Set<string>()
+  for (const area of [
+    enCommon,
+    enNav,
+    enHome,
+    enAuth,
+    enSources,
+    enIptv,
+    enLibraries,
+    enLivetv,
+    enUsers,
+    enSystem,
+    enSettings,
+    enAccount,
+  ]) {
+    for (const key of Object.keys(area)) {
+      if (seen.has(key)) throw new Error(`i18n: the key "${key}" is defined by two areas`)
+      seen.add(key)
+    }
+  }
+}
 
 const dictionaries: Record<Language, Messages> = { en, fr }
 

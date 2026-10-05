@@ -64,7 +64,7 @@ export function SelectField<T extends string | number>({
           if (chosen) onValue(chosen.value)
         }}
         aria-describedby={hint ? `${id}-hint` : undefined}
-        className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white disabled:opacity-50"
+        className="mt-1.5 block w-full rounded-lg border border-line bg-bg px-3 py-2 text-white disabled:opacity-50"
       >
         {options.map((option) => (
           <option
@@ -226,7 +226,7 @@ export function SecretField({
         )}
       </div>
       {saved && !removing && (
-        <div className="mt-1.5 flex min-h-11 items-center gap-2 rounded-lg border border-line bg-ink/60 py-1.5 pr-1.5 pl-3">
+        <div className="mt-1.5 flex min-h-11 items-center gap-2 rounded-lg border border-line bg-bg/60 py-1.5 pr-1.5 pl-3">
           <output
             id={`${id}-saved`}
             aria-label={revealed === null ? text.savedHidden : undefined}
@@ -265,7 +265,7 @@ export function SecretField({
                 }
                 aria-invalid={error ? true : undefined}
                 aria-describedby={describedBy}
-                className="block w-full min-w-0 rounded-lg border border-line bg-ink py-2 pr-11 pl-3 text-white placeholder:text-zinc-500 disabled:opacity-50 aria-invalid:border-rose-400"
+                className="block w-full min-w-0 rounded-lg border border-line bg-bg py-2 pr-11 pl-3 text-white placeholder:text-zinc-500 disabled:opacity-50 aria-invalid:border-rose-400"
               />
               {!removing && (
                 <div className="absolute inset-y-0 right-1.5 flex items-center">

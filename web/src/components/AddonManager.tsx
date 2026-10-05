@@ -410,7 +410,7 @@ function AddonRow({
           id={formId}
           onSubmit={submitReplace}
           noValidate
-          className="mt-4 space-y-3 rounded-xl border border-line bg-ink/40 p-4"
+          className="mt-4 space-y-3 rounded-xl border border-line bg-bg/40 p-4"
         >
           <TextField
             label={t.addons.newManifestUrl}
@@ -465,7 +465,7 @@ function AddonLogo({ name, logo }: { name: string; logo: string | null }) {
   return (
     <div
       aria-hidden="true"
-      className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-ink text-lg font-semibold text-fin-5"
+      className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-bg text-lg font-semibold text-fin-5"
     >
       {initial}
       {src !== null && (
@@ -479,7 +479,7 @@ function AddonLogo({ name, logo }: { name: string; logo: string | null }) {
           referrerPolicy="no-referrer"
           onLoad={() => setState('loaded')}
           onError={() => setState('failed')}
-          className={`absolute inset-0 size-full bg-ink object-contain p-1 ${
+          className={`absolute inset-0 size-full bg-bg object-contain p-1 ${
             state === 'loaded' ? 'opacity-100' : 'opacity-0'
           }`}
         />

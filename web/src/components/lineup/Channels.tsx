@@ -617,7 +617,7 @@ function KeywordBulk({
         {apply.isError && <Notice kind="error">{errorMessage(t, apply.error)}</Notice>}
         {apply.isSuccess && <Notice kind="success">{text.done(apply.data.changed)}</Notice>}
         {count.isSuccess && (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ink/50 p-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-bg/50 p-3">
             <p className="text-sm text-zinc-100">
               {text.matched(count.data.matched.toLocaleString(language))}
             </p>
@@ -649,6 +649,6 @@ function KeywordBulk({
 }
 
 const rowButton =
-  'inline-flex min-h-9 shrink-0 items-center rounded-lg border border-line bg-ink px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'
+  'inline-flex min-h-9 shrink-0 items-center rounded-lg border border-line bg-bg px-3 text-xs font-medium text-white transition-colors hover:border-fin-4 disabled:cursor-progress disabled:opacity-60'
 const iconButton =
-  'inline-flex size-9 items-center justify-center rounded-lg border border-line bg-ink text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40'
+  'inline-flex size-9 items-center justify-center rounded-lg border border-line bg-bg text-white transition-colors hover:border-fin-4 disabled:cursor-not-allowed disabled:opacity-40'
