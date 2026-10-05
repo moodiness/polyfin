@@ -14,8 +14,8 @@ import {
   RowList,
   SkeletonRows,
   useToast,
+  RelativeTime,
 } from '@/ui'
-import { RelativeTime } from './shared'
 
 export type DeviceListProps = {
   /** The query key of the list; it is refreshed after a sign-out. */

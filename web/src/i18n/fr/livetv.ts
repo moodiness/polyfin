@@ -67,16 +67,6 @@ const livetv: typeof en = {
     channels: 'Chaînes',
     channelsLabel: (name: string) => `Chaînes de ${name}`,
     openMapping: 'Ouvrir les correspondances',
-    iptvErrors: {
-      unreachable:
-        'Le dernier téléchargement a échoué : impossible de joindre le serveur. Les chaînes précédentes sont gardées.',
-      private_network:
-        'Le dernier téléchargement a échoué : cette adresse est sur un réseau local. Seuls les administrateurs peuvent utiliser ce type d’adresse.',
-      too_large:
-        'Le dernier téléchargement a échoué : la liste est trop grande. Les chaînes précédentes sont gardées.',
-      malformed:
-        'Le dernier téléchargement a échoué : le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
-    },
     recordingsTitle: 'Enregistrements',
     recordingsLoading: 'Chargement des enregistrements…',
     recordingsOffTitle: 'L’enregistrement est désactivé',

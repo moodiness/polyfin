@@ -120,20 +120,6 @@
       opacity: 0;
     }
   }
-
-  /*
-   * Legacy names used by the pages written before « Nuit » (`pages/`, `components/`). They map to
-   * the new palette so those pages fit the shell until their area replaces them. New code never
-   * uses them; the final QA pass removes them.
-   */
-  --color-fin-1: #6d4aff;
-  --color-fin-2: #4c3fd9;
-  --color-fin-3: #5b63f6;
-  --color-fin-4: #3e8ef7;
-  --color-fin-5: #22d3ee;
-  --color-surface: #0d0d15;
-  --color-surface-2: #191925;
-  --color-muted: #a6a6ba;
 }
 
 /* The brand gradient. Only the logo and playback progress bars wear it. */
@@ -145,18 +131,6 @@
     var(--color-brand-3) 48%,
     var(--color-brand-4) 74%,
     var(--color-brand-5) 100%
-  );
-}
-
-/* Legacy name of `bg-brand`, for the old pages only. */
-@utility bg-fin-gradient {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-brand-1),
-    var(--color-brand-2),
-    var(--color-brand-3),
-    var(--color-brand-4),
-    var(--color-brand-5)
   );
 }
 
@@ -246,7 +220,7 @@
     color: var(--color-ink);
   }
 
-  /* Native widgets follow the accent: checkboxes, radios and ranges left in older pages. */
+  /* Native widgets follow the accent. */
   input,
   progress {
     accent-color: var(--color-accent);

@@ -169,14 +169,7 @@ const sources: typeof en = {
       audiobook: 'Bibliothèque de livres',
       podcast: 'Bibliothèque musicale',
     },
-    libraryHelp: {
-      music: 'Ses éléments apparaissent dans la musique des applis Jellyfin.',
-      audiobook:
-        'Ses livres audio apparaissent dans une bibliothèque de livres des applis Jellyfin.',
-      podcast: 'Ses épisodes apparaissent dans la musique des applis Jellyfin.',
-    },
     settings: 'Réglages',
-    settingsLabel: (name: string) => `Réglages de ${name}`,
     settingsTitle: 'Réglages de l’addon',
     settingsHelp:
       'Proposés par l’addon et envoyés avec chaque requête que Polyfin lui fait. Ils peuvent contenir les infos de votre compte : seuls vous, ou les administrateurs pour les addons du serveur, pouvez les voir.',
@@ -191,7 +184,6 @@ const sources: typeof en = {
     stepOf: (step: string) => `Par pas de ${step}.`,
     maxLength: (count: number) => `${count} caractères au plus.`,
     tooLong: (count: number) => `Utilisez ${count} caractères au plus.`,
-    notNumber: 'Saisissez un nombre.',
     belowMin: (min: string) => `Saisissez ${min} ou plus.`,
     aboveMax: (max: string) => `Saisissez ${max} ou moins.`,
     offStep: (step: string) => `Utilisez un multiple de ${step}.`,

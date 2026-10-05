@@ -9,7 +9,6 @@ const users = {
     hidden: 'Hidden from sign-in screen',
     disabled: 'Disabled',
     you: 'You',
-    lastSignIn: 'Last sign-in',
     createTitle: 'Create a user',
     name: 'Name',
     password: 'Password',
@@ -23,7 +22,6 @@ const users = {
     created: (name: string) => `${name} has been created.`,
     edit: 'Edit',
     close: 'Close',
-    editTitle: (name: string) => `Edit ${name}`,
     rename: 'Rename',
     renamed: 'The name has been changed.',
     resetPassword: 'Reset password',
@@ -58,7 +56,7 @@ const users = {
     deleted: (name: string) => `${name} has been deleted.`,
     canAddAddons: 'Can add their own addons',
     canAddAddonsHelp:
-      'Lets this user add Stremio addons of their own on their My addons page. Without it, their addons are kept but not used.',
+      'Lets this user add Stremio addons of their own on their My sources page. Without it, their addons are kept but not used.',
     noPersonalAddons: 'No own addons',
     blockedUntil: (time: string) => `Blocked until ${time}`,
     blockedHelp:

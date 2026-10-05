@@ -4,6 +4,8 @@ import { cx, PageHeader } from '@/ui'
 export type PageLayoutProps = {
   /** The h1: the same words as the page's tab or menu entry. */
   title: ReactNode
+  /** Badges beside the title, outside the h1 (a source's kind). */
+  titleAside?: ReactNode
   /** One or two sentences under the title. */
   lede?: ReactNode
   /** The page's main actions, on the right of the title. */
@@ -35,6 +37,7 @@ const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
  */
 export function PageLayout({
   title,
+  titleAside,
   lede,
   actions,
   back,
@@ -42,7 +45,9 @@ export function PageLayout({
   children,
   className,
 }: PageLayoutProps) {
-  const header = <PageHeader title={title} lede={lede} actions={actions} back={back} />
+  const header = (
+    <PageHeader title={title} titleAside={titleAside} lede={lede} actions={actions} back={back} />
+  )
   if (nav) {
     return (
       <div className={cx('stagger', className)}>

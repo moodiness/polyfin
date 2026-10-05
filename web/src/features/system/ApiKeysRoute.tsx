@@ -27,10 +27,10 @@ import {
   SkeletonRows,
   TextInput,
   useToast,
+  RelativeTime,
 } from '@/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { RelativeTime } from './parts'
 
 /** `/system/api-keys`: keys for other tools, created once, shown once, revoked here. */
 export default function ApiKeysRoute() {

@@ -32,7 +32,6 @@ import { ExternalButtonLink, Notice, NumberInput, SecretField, Select, TextInput
 import CodeEditor from './CodeEditor'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
-import { shownNumber, wholeNumber } from './numbers'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
@@ -111,7 +110,7 @@ function General({ form, update, error }: SectionFormApi) {
   )
 }
 
-function Playback({ form, update, error }: SectionFormApi) {
+function Playback({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -154,8 +153,9 @@ function Playback({ form, update, error }: SectionFormApi) {
           min={analysisTimeoutRange.min}
           max={analysisTimeoutRange.max}
           step={1}
-          value={shownNumber(form.analysisTimeout)}
-          onValue={(value) => update({ analysisTimeout: wholeNumber(value) })}
+          {...number('analysis-timeout', form.analysisTimeout, (value) =>
+            update({ analysisTimeout: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -168,15 +168,16 @@ function Playback({ form, update, error }: SectionFormApi) {
           min={versionAttemptsRange.min}
           max={versionAttemptsRange.max}
           step={1}
-          value={shownNumber(form.versionAttempts)}
-          onValue={(value) => update({ versionAttempts: wholeNumber(value) })}
+          {...number('version-attempts', form.versionAttempts, (value) =>
+            update({ versionAttempts: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
     </SettingsGroup>
   )
 }
 
-function Content({ form, update, error, saves }: SectionFormApi) {
+function Content({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const groups = t.settingsPage.groups
@@ -209,7 +210,6 @@ function Content({ form, update, error, saves }: SectionFormApi) {
           className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
         >
           <SecretField
-            key={saves}
             label={s.publicMetaDbKey}
             help={s.publicMetaDbKeyHelp}
             saved={form.publicMetaDbKeySet}
@@ -224,7 +224,6 @@ function Content({ form, update, error, saves }: SectionFormApi) {
           className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
         >
           <SecretField
-            key={saves}
             label={s.theIntroDbKey}
             help={s.theIntroDbKeyHelp}
             saved={form.theIntroDbKeySet}
@@ -257,8 +256,9 @@ function Content({ form, update, error, saves }: SectionFormApi) {
               max={playedPercentRange.max}
               step={1}
               suffix="%"
-              value={shownNumber(form.playedPercent)}
-              onValue={(value) => update({ playedPercent: wholeNumber(value) })}
+              {...number('played-percent', form.playedPercent, (value) =>
+                update({ playedPercent: Math.trunc(value) }),
+              )}
             />
           </FieldRow>
           <FieldRow
@@ -273,8 +273,9 @@ function Content({ form, update, error, saves }: SectionFormApi) {
               step={1}
               suffix="%"
               // 0 is a valid threshold: it is shown, not left blank.
-              value={shownNumber(form.resumePercent)}
-              onValue={(value) => update({ resumePercent: wholeNumber(value) })}
+              {...number('resume-percent', form.resumePercent, (value) =>
+                update({ resumePercent: Math.trunc(value) }),
+              )}
             />
           </FieldRow>
         </div>
@@ -283,7 +284,7 @@ function Content({ form, update, error, saves }: SectionFormApi) {
   )
 }
 
-function Catalogs({ form, update, error }: SectionFormApi) {
+function Catalogs({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -298,8 +299,9 @@ function Catalogs({ form, update, error }: SectionFormApi) {
           min={catalogLimitRange.min}
           max={catalogLimitRange.max}
           step={1}
-          value={shownNumber(form.catalogLimit)}
-          onValue={(value) => update({ catalogLimit: wholeNumber(value) })}
+          {...number('catalog-limit', form.catalogLimit, (value) =>
+            update({ catalogLimit: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -312,8 +314,9 @@ function Catalogs({ form, update, error }: SectionFormApi) {
           min={channelLimitRange.min}
           max={channelLimitRange.max}
           step={1}
-          value={shownNumber(form.channelLimit)}
-          onValue={(value) => update({ channelLimit: wholeNumber(value) })}
+          {...number('channel-limit', form.channelLimit, (value) =>
+            update({ channelLimit: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -326,8 +329,9 @@ function Catalogs({ form, update, error }: SectionFormApi) {
           min={versionListMinutesRange.min}
           max={versionListMinutesRange.max}
           step={1}
-          value={shownNumber(form.versionListMinutes)}
-          onValue={(value) => update({ versionListMinutes: wholeNumber(value) })}
+          {...number('version-list-minutes', form.versionListMinutes, (value) =>
+            update({ versionListMinutes: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -340,15 +344,16 @@ function Catalogs({ form, update, error }: SectionFormApi) {
           min={catalogRefreshMinutesRange.min}
           max={catalogRefreshMinutesRange.max}
           step={1}
-          value={shownNumber(form.catalogRefreshMinutes)}
-          onValue={(value) => update({ catalogRefreshMinutes: wholeNumber(value) })}
+          {...number('catalog-refresh-minutes', form.catalogRefreshMinutes, (value) =>
+            update({ catalogRefreshMinutes: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
     </SettingsGroup>
   )
 }
 
-function Thumbnails({ form, update, error }: SectionFormApi) {
+function Thumbnails({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -370,8 +375,9 @@ function Thumbnails({ form, update, error }: SectionFormApi) {
           min={trickplayIntervalRange.min}
           max={trickplayIntervalRange.max}
           step={1}
-          value={shownNumber(form.trickplayInterval)}
-          onValue={(value) => update({ trickplayInterval: wholeNumber(value) })}
+          {...number('trickplay-interval', form.trickplayInterval, (value) =>
+            update({ trickplayInterval: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -404,15 +410,16 @@ function Thumbnails({ form, update, error }: SectionFormApi) {
           min={thumbnailStorageRange.min}
           max={thumbnailStorageRange.max}
           step={1}
-          value={shownNumber(form.thumbnailStorageGB)}
-          onValue={(value) => update({ thumbnailStorageGB: wholeNumber(value) })}
+          {...number('thumbnail-storage', form.thumbnailStorageGB, (value) =>
+            update({ thumbnailStorageGB: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
     </SettingsGroup>
   )
 }
 
-function Security({ form, update, error }: SectionFormApi) {
+function Security({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -434,8 +441,9 @@ function Security({ form, update, error }: SectionFormApi) {
           min={0}
           max={loginAttemptsRange.max}
           step={1}
-          value={shownNumber(form.loginAttempts)}
-          onValue={(value) => update({ loginAttempts: wholeNumber(value) })}
+          {...number('login-attempts', form.loginAttempts, (value) =>
+            update({ loginAttempts: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
       <FieldRow
@@ -448,15 +456,16 @@ function Security({ form, update, error }: SectionFormApi) {
           min={inactiveDeviceDaysRange.min}
           max={inactiveDeviceDaysRange.max}
           step={1}
-          value={shownNumber(form.inactiveDeviceDays)}
-          onValue={(value) => update({ inactiveDeviceDays: wholeNumber(value) })}
+          {...number('inactive-device-days', form.inactiveDeviceDays, (value) =>
+            update({ inactiveDeviceDays: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
     </SettingsGroup>
   )
 }
 
-function Tracking({ form, update, error, saves }: SectionFormApi) {
+function Tracking({ form, update, error }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings.tracking
   return (
@@ -491,7 +500,6 @@ function Tracking({ form, update, error, saves }: SectionFormApi) {
           className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
         >
           <SecretField
-            key={saves}
             label={s.traktClientSecret}
             help={s.traktClientSecretHelp}
             saved={form.traktClientSecretSet}
@@ -524,7 +532,7 @@ function Tracking({ form, update, error, saves }: SectionFormApi) {
   )
 }
 
-function LiveTv({ form, update, error }: SectionFormApi) {
+function LiveTv({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -539,15 +547,16 @@ function LiveTv({ form, update, error }: SectionFormApi) {
           min={liveTvRefreshHoursRange.min}
           max={liveTvRefreshHoursRange.max}
           step={1}
-          value={shownNumber(form.liveTvRefreshHours)}
-          onValue={(value) => update({ liveTvRefreshHours: wholeNumber(value) })}
+          {...number('live-tv-refresh-hours', form.liveTvRefreshHours, (value) =>
+            update({ liveTvRefreshHours: Math.trunc(value) }),
+          )}
         />
       </FieldRow>
     </SettingsGroup>
   )
 }
 
-function Recordings({ form, update, error }: SectionFormApi) {
+function Recordings({ form, update, error, number }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -568,8 +577,11 @@ function Recordings({ form, update, error }: SectionFormApi) {
             min={recordingPaddingMinutesRange.min}
             max={recordingPaddingMinutesRange.max}
             step={1}
-            value={shownNumber(Math.round(form.recordingPrePadding / 60))}
-            onValue={(value) => update({ recordingPrePadding: wholeNumber(value) * 60 })}
+            {...number(
+              'recording-pre-padding',
+              Math.round(form.recordingPrePadding / 60),
+              (value) => update({ recordingPrePadding: Math.trunc(value) * 60 }),
+            )}
           />
         </FieldRow>
         <FieldRow
@@ -582,8 +594,11 @@ function Recordings({ form, update, error }: SectionFormApi) {
             min={recordingPaddingMinutesRange.min}
             max={recordingPaddingMinutesRange.max}
             step={1}
-            value={shownNumber(Math.round(form.recordingPostPadding / 60))}
-            onValue={(value) => update({ recordingPostPadding: wholeNumber(value) * 60 })}
+            {...number(
+              'recording-post-padding',
+              Math.round(form.recordingPostPadding / 60),
+              (value) => update({ recordingPostPadding: Math.trunc(value) * 60 }),
+            )}
           />
         </FieldRow>
         <FieldRow
@@ -596,8 +611,9 @@ function Recordings({ form, update, error }: SectionFormApi) {
             min={recordingRetentionDaysRange.min}
             max={recordingRetentionDaysRange.max}
             step={1}
-            value={shownNumber(form.recordingRetentionDays)}
-            onValue={(value) => update({ recordingRetentionDays: wholeNumber(value) })}
+            {...number('recording-retention-days', form.recordingRetentionDays, (value) =>
+              update({ recordingRetentionDays: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
       </SettingsGroup>
@@ -605,7 +621,7 @@ function Recordings({ form, update, error }: SectionFormApi) {
   )
 }
 
-function Backups({ form, update, error }: SectionFormApi) {
+function Backups({ form, update, error, number }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   return (
@@ -642,8 +658,9 @@ function Backups({ form, update, error }: SectionFormApi) {
             min={backupsKeptRange.min}
             max={backupsKeptRange.max}
             step={1}
-            value={shownNumber(form.backupsKept)}
-            onValue={(value) => update({ backupsKept: wholeNumber(value) })}
+            {...number('backups-kept', form.backupsKept, (value) =>
+              update({ backupsKept: Math.trunc(value) }),
+            )}
           />
         </FieldRow>
         {form.backupFolder !== '' && <LastBackup />}

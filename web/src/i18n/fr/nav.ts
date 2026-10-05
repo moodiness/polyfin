@@ -49,7 +49,6 @@ const nav: typeof en = {
     signOut: 'Se déconnecter',
     signingOut: 'Déconnexion…',
     menu: 'Menu',
-    closeMenu: 'Fermer le menu',
     skipToContent: 'Aller au contenu',
   },
   palette: {

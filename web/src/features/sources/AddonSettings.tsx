@@ -39,7 +39,7 @@ function problem(
   }
   if (setting.type !== 'number') return null
   const parsed = Number(value.trim())
-  if (value.trim() === '' || !Number.isFinite(parsed)) return t.music.notNumber
+  if (value.trim() === '' || !Number.isFinite(parsed)) return t.common.enterNumber
   if (setting.min !== null && parsed < setting.min) return t.music.belowMin(number(setting.min))
   if (setting.max !== null && parsed > setting.max) return t.music.aboveMax(number(setting.max))
   if (setting.step !== null && setting.step > 0) {

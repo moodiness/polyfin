@@ -2,38 +2,17 @@ import type en from '../en/iptv'
 
 const iptv: typeof en = {
   iptv: {
-    addTitle: 'Ajouter une source IPTV',
-    addHelp:
-      'Importez directement les chaînes d’une playlist M3U ou d’un compte Xtream Codes. Elles apparaissent dans la TV en direct comme un catalogue TV, que vous pouvez ranger dans Bibliothèques. La liste est téléchargée à nouveau selon l’intervalle choisi dans Paramètres › TV en direct.',
     name: 'Nom',
     kind: 'Type',
     kindM3u: 'Playlist M3U',
     kindXtream: 'Compte Xtream Codes',
-    playlistUrl: 'Adresse de la playlist',
-    playlistUrlHint:
-      'L’adresse M3U donnée par votre fournisseur. Elle peut contenir vos identifiants : elle n’est jamais affichée en entier.',
     server: 'Adresse du serveur',
-    serverHint: 'Par exemple https://serveur:8080, telle que votre fournisseur la donne.',
-    username: 'Identifiant',
-    password: 'Mot de passe',
-    keepHint: 'Laissez vide pour garder l’actuelle.',
-    passwordKeepHint: 'Laissez vide pour garder le mot de passe actuel.',
-    providerGuide: 'Utiliser le guide des programmes du fournisseur',
-    providerGuideHelp:
-      'Les serveurs Xtream Codes publient un guide pour le compte : il remplit les programmes des chaînes.',
-    guideUrl: 'Adresse du guide des programmes (XMLTV, facultatif)',
-    guideUrlHint:
-      'Fichier XMLTV, compressé ou non. Vous pouvez aussi l’ajouter ou le changer plus tard dans Bibliothèques.',
-    add: 'Ajouter la source',
-    adding: 'Téléchargement de la liste…',
     address: 'Adresse',
     channels: 'Chaînes',
-    channelCount: (count: number) => (count <= 1 ? `${count} chaîne` : `${count} chaînes`),
     lastFetch: 'Dernier téléchargement',
     nextFetch: 'Prochain téléchargement',
     never: 'Jamais',
     edit: 'Modifier',
-    editLabel: (name: string) => `Modifier ${name}`,
     saved: 'Source enregistrée.',
     errors: {
       unreachable:
@@ -86,26 +65,11 @@ const iptv: typeof en = {
       mapping: 'Correspondance des guides',
     },
     close: 'Fermer',
-    editorHint:
-      'Ce qu’il faut importer, les catégories, chaînes, numéros et guides se règlent sur la page de la source.',
     pager: {
       label: 'Pages',
       range: (from: string, to: string, total: string) => `${from} à ${to} sur ${total}`,
       previous: 'Précédent',
       next: 'Suivant',
-    },
-    add: {
-      steps: 'Étapes',
-      stepAccount: 'Compte',
-      stepCategories: 'À importer',
-      next: 'Suivant : choisir quoi importer',
-      back: 'Retour au compte',
-      import: 'Importer',
-      importing: 'Import…',
-      added: (name: string, parts: string[]) => `${name} a été ajoutée : ${parts.join(', ')}.`,
-      channels: (count: string) => `${count} chaînes`,
-      movies: (count: string) => `${count} films`,
-      series: (count: string) => `${count} séries`,
     },
     summary: {
       categories: 'Catégories activées',
@@ -174,7 +138,6 @@ const iptv: typeof en = {
         'Désactiver la TV en direct retire sa bibliothèque et ses guides (il faudra ajouter les guides à nouveau). Les catégories, les chaînes et vos modifications sont gardées pour le jour où vous la réactivez.',
       liveOff: 'Les chaînes de TV en direct ne sont pas importées de cette source.',
       liveOffAction: 'Le changer dans les options d’import',
-      liveGroup: 'TV en direct',
       notImported: 'Non importées',
     },
     vod: {
@@ -270,16 +233,12 @@ const iptv: typeof en = {
       channelCounts: (enabled: string, total: string) => `${enabled} chaînes activées sur ${total}`,
       channels: 'Chaînes',
       channelsLabel: (name: string) => `Chaînes de ${name}`,
-      rename: 'Renommer',
       renameLabel: (name: string) => `Renommer ${name}`,
-      resetName: 'Nom du fournisseur',
       delete: 'Supprimer',
-      deleting: 'Suppression…',
       deleteLabel: (name: string) => `Supprimer ${name}`,
       resetNameLabel: (name: string) => `Reprendre le nom du fournisseur pour ${name}`,
       deleteConfirm: (name: string) =>
         `Supprimer ${name} ? Ses chaînes retournent dans leur catégorie d’origine.`,
-      dragHint: 'Faire glisser pour déplacer',
     },
     channels: {
       title: 'Chaînes',
@@ -359,7 +318,6 @@ const iptv: typeof en = {
       unnamed: 'Flux',
       save: 'Enregistrer les flux',
       saveFirst: 'Enregistrez d’abord l’ordre.',
-      remove: 'Retirer',
       removeLabel: (label: string) => `Retirer le flux ${label}`,
       addTitle: 'Ajouter un flux',
       url: 'Adresse du flux',

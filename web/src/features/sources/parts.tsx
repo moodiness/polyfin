@@ -1,19 +1,8 @@
 import { useState } from 'react'
 import type { Addon } from '@/api'
-import { dateTime, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import { IconTile, StatusPill } from '@/ui'
 import { kindIcon } from './model'
-
-/** "18 minutes ago", with the full date on hover. */
-export function RelativeTime({ iso }: { iso: string }) {
-  const { language, t } = useI18n()
-  return (
-    <time dateTime={iso} title={dateTime(iso, language)}>
-      {relativeTime(iso, language, t.time.justNow)}
-    </time>
-  )
-}
 
 /**
  * The source's kind icon, covered by its logo once that loads. Logos are third-party images: when

@@ -6,7 +6,6 @@ const common = {
   documentTitle: 'Polyfin administration',
   header: {
     productName: 'Polyfin',
-    subtitle: 'Administration',
   },
   language: {
     label: 'Interface language',
@@ -14,11 +13,11 @@ const common = {
     fr: { short: 'FR', name: 'Français' },
   },
   common: {
+    enterNumber: 'Enter a number.',
     loading: 'Loading…',
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
-    confirm: 'Confirm',
     retry: 'Try again',
     never: 'Never',
     // The colon after a label: French sets it off with a narrow no-break space.
@@ -95,11 +94,11 @@ const common = {
     invalid_max_bitrate: 'Choose the maximum quality from the list.',
     invalid_sync_play: 'Choose a watch together option from the list.',
     invalid_manifest_url:
-      'Enter an addon manifest URL starting with https://, http:// or stremio:// and ending in /manifest.json.',
+      'Enter an addon manifest address starting with https://, http:// or stremio:// and ending in /manifest.json.',
     addon_exists: 'This addon is already installed here.',
     addon_unreachable:
-      'The addon could not be reached. Check the URL and that the addon is online, then try again.',
-    invalid_manifest: 'This URL did not return a Stremio addon manifest.',
+      'The addon could not be reached. Check the address and that the addon is online, then try again.',
+    invalid_manifest: 'This address did not return a Stremio addon manifest.',
     private_network:
       'This addon is on a local network address. Only administrators can install such addons.',
     invalid_order: 'The addon list changed in the meantime. It has been refreshed: try again.',
@@ -214,7 +213,6 @@ const common = {
     address: 'Address',
     signOut: 'Sign out',
     signOutConfirm: (device: string) => `Sign out ${device}? The app will need to sign in again.`,
-    signingOut: 'Signing out…',
     signedOut: (device: string) => `${device} has been signed out.`,
   },
   stremioTypes: {
@@ -258,8 +256,6 @@ const common = {
     close: 'Close',
     dismiss: 'Dismiss',
     notifications: 'Notifications',
-    moreActions: 'More actions',
-    noMatch: 'No match.',
     unsaved: 'Unsaved changes',
     allSaved: 'All changes saved',
     discard: 'Discard changes',

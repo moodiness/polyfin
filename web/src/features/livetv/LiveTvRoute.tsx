@@ -20,7 +20,7 @@ import {
 } from '@/api'
 import { settingsPath } from '@/app/navigation'
 import { PageLayout } from '@/app/PageLayout'
-import { lineupPath } from '@/components/lineup/common'
+import { lineupPath } from '@/features/iptv/lineup'
 import { dateTime, errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -39,6 +39,7 @@ import {
   SkeletonRows,
   StatusPill,
   TextLink,
+  RelativeTime,
 } from '@/ui'
 import {
   catalogState,
@@ -48,7 +49,6 @@ import {
   isIptv,
   isTvCatalog,
 } from './catalogs'
-import { RelativeTime } from './RelativeTime'
 
 /**
  * `/live-tv`: the server's TV catalogs with the state of their guides, the channels of its IPTV
@@ -182,7 +182,7 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
                   <WarningCircleIcon size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
                   {t.livetv.guideLine(
                     guide.position,
-                    t.libraries.guideErrors[guide.error] ?? t.errors.generic,
+                    t.lineup.guideErrors[guide.error] ?? t.errors.generic,
                   )}
                 </p>
               ))}
@@ -271,7 +271,7 @@ function IptvSourcePanel({ addon, source }: { addon: Addon; source: IptvSource }
     >
       <div className="space-y-5">
         {source.error !== '' && (
-          <Notice tone="warn">{t.livetv.iptvErrors[source.error] ?? t.errors.generic}</Notice>
+          <Notice tone="warn">{t.iptv.errors[source.error] ?? t.errors.generic}</Notice>
         )}
         {source.options.liveTv ? (
           <>

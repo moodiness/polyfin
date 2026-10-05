@@ -21,6 +21,8 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | Columns of comparable values                                          | `Table` (scrolls inside itself on a phone)                                  |
 | Figures that are compared (counts, times, IPs, versions)              | the `figures` class                                                         |
 | How far something is                                                  | `ProgressBar` (`brand` only for playback)                                   |
+| A time ("18 min ago"), with the full date on hover                    | `RelativeTime` (`className` for its color and size)                         |
+| Reordering an item of a list from the keyboard                        | `MoveButtons` (focus follows the item after a move)                         |
 
 ## States
 

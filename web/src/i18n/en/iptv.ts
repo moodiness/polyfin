@@ -1,38 +1,17 @@
 /** IPTV: adding a source and its source page (summary, what to import, categories, channels, guides, mapping). */
 const iptv = {
   iptv: {
-    addTitle: 'Add an IPTV source',
-    addHelp:
-      'Import the channels of an M3U playlist or an Xtream Codes account directly. They appear in Live TV like a TV catalog, which you can order under Libraries. The list is downloaded again at the interval set under Settings › Live TV.',
     name: 'Name',
     kind: 'Kind',
     kindM3u: 'M3U playlist',
     kindXtream: 'Xtream Codes account',
-    playlistUrl: 'Playlist address',
-    playlistUrlHint:
-      'The M3U address your provider gives. It may contain your login: it is never shown in full.',
     server: 'Server address',
-    serverHint: 'For example https://server:8080, as your provider gives it.',
-    username: 'Username',
-    password: 'Password',
-    keepHint: 'Leave empty to keep the current one.',
-    passwordKeepHint: 'Leave empty to keep the current password.',
-    providerGuide: 'Use the provider’s programme guide',
-    providerGuideHelp:
-      'Xtream Codes servers publish a guide for the account: it fills the channels’ programmes.',
-    guideUrl: 'Programme guide address (XMLTV, optional)',
-    guideUrlHint:
-      'Plain or compressed XMLTV file. You can also add or change it later under Libraries.',
-    add: 'Add the source',
-    adding: 'Downloading the list…',
     address: 'Address',
     channels: 'Channels',
-    channelCount: (count: number) => (count === 1 ? '1 channel' : `${count} channels`),
     lastFetch: 'Last download',
     nextFetch: 'Next download',
     never: 'Never',
     edit: 'Edit',
-    editLabel: (name: string) => `Edit ${name}`,
     saved: 'Source saved.',
     errors: {
       unreachable:
@@ -84,26 +63,11 @@ const iptv = {
       mapping: 'Guide mapping',
     },
     close: 'Close',
-    editorHint:
-      'What to import, categories, channels, numbers and guides are set on the source page.',
     pager: {
       label: 'Pages',
       range: (from: string, to: string, total: string) => `${from}–${to} of ${total}`,
       previous: 'Previous',
       next: 'Next',
-    },
-    add: {
-      steps: 'Steps',
-      stepAccount: 'Account',
-      stepCategories: 'What to import',
-      next: 'Next: choose what to import',
-      back: 'Back to the account',
-      import: 'Import',
-      importing: 'Importing…',
-      added: (name: string, parts: string[]) => `${name} was added: ${parts.join(', ')}.`,
-      channels: (count: string) => `${count} channels`,
-      movies: (count: string) => `${count} movies`,
-      series: (count: string) => `${count} series`,
     },
     summary: {
       categories: 'Categories on',
@@ -170,7 +134,6 @@ const iptv = {
         'Turning Live TV off removes its library and its guides (you would add the guides again). The categories, channels and your edits are kept for when you turn it back on.',
       liveOff: 'Live TV channels are not imported from this source.',
       liveOffAction: 'Change it in Import options',
-      liveGroup: 'Live TV',
       notImported: 'Not imported',
     },
     vod: {
@@ -258,16 +221,12 @@ const iptv = {
       channelCounts: (enabled: string, total: string) => `${enabled} of ${total} channels on`,
       channels: 'Channels',
       channelsLabel: (name: string) => `Channels of ${name}`,
-      rename: 'Rename',
       renameLabel: (name: string) => `Rename ${name}`,
-      resetName: 'Provider’s name',
       delete: 'Delete',
-      deleting: 'Deleting…',
       deleteLabel: (name: string) => `Delete ${name}`,
       resetNameLabel: (name: string) => `Use the provider’s name for ${name}`,
       deleteConfirm: (name: string) =>
         `Delete ${name}? Its channels go back to their provider’s category.`,
-      dragHint: 'Drag to move',
     },
     channels: {
       title: 'Channels',
@@ -346,7 +305,6 @@ const iptv = {
       unnamed: 'Stream',
       save: 'Save the streams',
       saveFirst: 'Save the order first.',
-      remove: 'Remove',
       removeLabel: (label: string) => `Remove the stream ${label}`,
       addTitle: 'Add a stream',
       url: 'Stream address',

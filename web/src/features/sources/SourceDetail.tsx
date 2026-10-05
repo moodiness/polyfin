@@ -42,6 +42,7 @@ import {
   Switch,
   TextInput,
   useToast,
+  RelativeTime,
 } from '@/ui'
 import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
@@ -53,7 +54,7 @@ import {
   sourcePath,
   type Entry,
 } from './model'
-import { RelativeTime, SourceStatus, SourceTile } from './parts'
+import { SourceStatus, SourceTile } from './parts'
 
 /** The tag of a source's kind, as in the list. */
 export function KindBadge({ addon }: { addon: Addon }) {
@@ -201,12 +202,12 @@ export function SourceDetail({
     <Panel
       as="section"
       flush
-      title={
-        <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="min-w-0 break-words">{addon.name}</span>
+      title={addon.name}
+      titleAside={
+        <>
           <KindBadge addon={addon} />
           {addon.music !== null && <MusicBadge music={addon.music} />}
-        </span>
+        </>
       }
       description={
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">

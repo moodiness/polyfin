@@ -39,6 +39,7 @@ import {
   MenuSeparator,
   modKey,
   Notice,
+  MoveButtons,
   NumberInput,
   Panel,
   PanelFooter,
@@ -46,6 +47,7 @@ import {
   ProgressBar,
   Row,
   RowList,
+  RelativeTime,
   SaveBar,
   SecretField,
   SectionNav,
@@ -114,6 +116,14 @@ export default function UiGallery() {
   const [drawer, setDrawer] = useState(false)
   const [dirty, setDirty] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [order, setOrder] = useState(['Popular', 'Trending', 'New releases'])
+  const [times] = useState(() => {
+    const now = Date.now()
+    return {
+      past: new Date(now - 18 * 60_000).toISOString(),
+      future: new Date(now + 9 * 3_600_000).toISOString(),
+    }
+  })
 
   return (
     <PageLayout
@@ -481,6 +491,41 @@ export default function UiGallery() {
             trailing={<span className="text-small text-ink-3">41 catalogs</span>}
           />
         </RowList>
+      </Block>
+
+      <Block title="Order and time">
+        <div className="grid grid-cols-2 gap-6 max-lg:grid-cols-1">
+          <Specimen name="MoveButtons (focus follows the item)">
+            <RowList aria-label="Catalogs" className="w-full">
+              {order.map((name, index) => (
+                <Row
+                  key={name}
+                  title={name}
+                  trailing={
+                    <MoveButtons
+                      name={name}
+                      index={index}
+                      count={order.length}
+                      onMove={(to) =>
+                        setOrder((old) => {
+                          const next = old.filter((item) => item !== name)
+                          next.splice(to, 0, name)
+                          return next
+                        })
+                      }
+                    />
+                  }
+                />
+              ))}
+            </RowList>
+          </Specimen>
+          <Specimen name="RelativeTime (full date on hover)">
+            <span className="text-small text-ink-2">
+              Updated <RelativeTime iso={times.past} />
+            </span>
+            <RelativeTime iso={times.future} className="text-small text-ink-3" />
+          </Specimen>
+        </div>
       </Block>
 
       <Block title="Table">

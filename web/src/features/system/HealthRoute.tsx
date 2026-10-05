@@ -33,16 +33,17 @@ import {
   SkeletonText,
   StatusPill,
   type StatusTone,
+  RelativeTime,
 } from '@/ui'
-import { MusicBadge } from '@/components/AddonSettings'
-import { lineupPath } from '@/components/lineup/common'
-import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/components/problems'
+import { MusicBadge } from '@/features/sources/AddonSettings'
+import { lineupPath } from '@/features/iptv/lineup'
+import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
-import { Anchor, Facts, Meter, RelativeTime } from './parts'
+import { Anchor, Facts, Meter } from './parts'
 
 /** `/system/health`: problems first, then the state of each part of the server. */
 export default function HealthRoute() {
@@ -439,7 +440,7 @@ function Guides({ sources }: { sources: Sources | undefined }) {
                         <WarningIcon size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
                         <span>
                           {t.lineup.picker.guideN(guide.position)}
-                          {t.common.colon} {t.libraries.guideErrors[guide.error] ?? guide.error}
+                          {t.common.colon} {t.lineup.guideErrors[guide.error] ?? guide.error}
                         </span>
                       </p>
                     ))}

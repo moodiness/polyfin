@@ -16,9 +16,10 @@ import {
   RowList,
   SkeletonRows,
   StatusPill,
+  RelativeTime,
 } from '@/ui'
 import CreateUserDrawer from './CreateUserDrawer'
-import { clockTime, RelativeTime, UserAvatar, useRestrictions } from './shared'
+import { clockTime, UserAvatar, useRestrictions } from './shared'
 
 /** `/users`: every account, each opening its page, and the button to create one. */
 export default function UsersList() {

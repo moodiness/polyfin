@@ -20,7 +20,7 @@ import {
   type LineupCategory,
   type Scope,
 } from '@/api'
-import { invalidateLineup, lineupPath } from '@/components/lineup/common'
+import { invalidateLineup, lineupPath } from '@/features/iptv/lineup'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -39,8 +39,9 @@ import {
   Switch,
   TextInput,
   useToast,
+  MoveButtons,
 } from '@/ui'
-import { DragGrip, MoveButtons, useNumber } from './shared'
+import { DragGrip, useNumber } from './shared'
 
 /** A source's categories, in order: shown or not, renamed, reordered, custom ones added. */
 export default function Categories({ scope, id }: { scope: Scope; id: string }) {

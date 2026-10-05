@@ -40,12 +40,13 @@ import {
   SkeletonText,
   StatusPill,
   useToast,
+  RelativeTime,
 } from '@/ui'
 import { dateTime, errorMessage, formatHour, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
-import { Anchor, RelativeTime } from './parts'
+import { Anchor } from './parts'
 
 /** The task that backs the database up, registered when POLYFIN_BACKUP_DIR is set. */
 const backupTaskKey = 'BackUpDatabase'

@@ -49,7 +49,6 @@ const nav = {
     signOut: 'Sign out',
     signingOut: 'Signing out…',
     menu: 'Menu',
-    closeMenu: 'Close the menu',
     skipToContent: 'Skip to content',
   },
   palette: {

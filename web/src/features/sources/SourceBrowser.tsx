@@ -19,9 +19,10 @@ import {
   SkeletonRows,
   Skeleton,
   TextInput,
+  RelativeTime,
 } from '@/ui'
 import { invalidateScope, isIptv, kindOf, lastTime, type Entry, type KindFilter } from './model'
-import { RelativeTime, SourceStatus, SourceTile } from './parts'
+import { SourceStatus, SourceTile } from './parts'
 import { KindBadge, OwnerLabel, SourceDetail } from './SourceDetail'
 
 const wideQuery = '(min-width: 1024px)'

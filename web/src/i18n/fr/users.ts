@@ -10,7 +10,6 @@ const users: typeof en = {
     hidden: 'Masqué sur l’écran de connexion',
     disabled: 'Désactivé',
     you: 'Vous',
-    lastSignIn: 'Dernière connexion',
     createTitle: 'Créer un utilisateur',
     name: 'Nom',
     password: 'Mot de passe',
@@ -25,7 +24,6 @@ const users: typeof en = {
     created: (name: string) => `${name} a été créé.`,
     edit: 'Modifier',
     close: 'Fermer',
-    editTitle: (name: string) => `Modifier ${name}`,
     rename: 'Renommer',
     renamed: 'Le nom a été modifié.',
     resetPassword: 'Réinitialiser le mot de passe',
@@ -64,7 +62,7 @@ const users: typeof en = {
     deleted: (name: string) => `${name} a été supprimé.`,
     canAddAddons: 'Peut ajouter ses propres addons',
     canAddAddonsHelp:
-      'Cet utilisateur peut ajouter ses propres addons Stremio depuis sa page Mes addons. Sinon, ses addons sont conservés mais pas utilisés.',
+      'Cet utilisateur peut ajouter ses propres addons Stremio depuis sa page Mes sources. Sinon, ses addons sont conservés mais pas utilisés.',
     noPersonalAddons: 'Sans addons personnels',
     blockedUntil: (time: string) => `Bloqué jusqu’à ${time}`,
     blockedHelp:

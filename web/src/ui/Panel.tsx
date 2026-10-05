@@ -6,6 +6,8 @@ export type PanelProps = {
   title?: ReactNode
   /** Heading level, so pages keep a correct outline. */
   titleAs?: 'h2' | 'h3'
+  /** Badges beside the title, outside the heading so they stay out of its name. */
+  titleAside?: ReactNode
   /** A line under the title. */
   description?: ReactNode
   /** Buttons at the top right (refresh, more actions). */
@@ -30,6 +32,7 @@ export type PanelProps = {
 export function Panel({
   title,
   titleAs: Title = 'h2',
+  titleAside,
   description,
   actions,
   media,
@@ -50,11 +53,19 @@ export function Panel({
         <div className="flex items-start gap-4 px-6 pt-[22px] max-sm:px-4">
           {media}
           <div className="min-w-0 flex-1">
-            {title !== undefined && (
-              <Title id={titleId} className="text-h3 text-ink">
-                {title}
-              </Title>
-            )}
+            {title !== undefined &&
+              (titleAside ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Title id={titleId} className="min-w-0 text-h3 break-words text-ink">
+                    {title}
+                  </Title>
+                  {titleAside}
+                </div>
+              ) : (
+                <Title id={titleId} className="text-h3 text-ink">
+                  {title}
+                </Title>
+              ))}
             {description !== undefined && (
               <p className="mt-1 text-small text-ink-2">{description}</p>
             )}

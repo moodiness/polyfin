@@ -2,19 +2,6 @@ import type en from '../en/settings'
 
 const settings: typeof en = {
   settings: {
-    secret: {
-      saved: 'Valeur enregistrée',
-      notSet: 'Aucune valeur',
-      removing: 'Supprimée à l’enregistrement',
-      pastePlaceholder: 'Collez la valeur ici',
-      replacePlaceholder: 'Collez une nouvelle valeur pour remplacer celle enregistrée',
-      remove: 'Supprimer',
-      keep: 'Garder la valeur',
-      removeHint: 'Enregistrez pour la supprimer, ou choisissez « Garder la valeur ».',
-      show: 'Afficher la clé',
-      hide: 'Masquer la clé',
-      savedHidden: 'Clé enregistrée, masquée',
-    },
     tracking: {
       description:
         'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList et PublicMetaDB depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde. Trakt et Simkl ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList et PublicMetaDB n’ont besoin de rien.',
@@ -49,7 +36,6 @@ const settings: typeof en = {
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
-    playbackTitle: 'Lecture',
     chapters: 'Afficher les chapitres',
     chaptersHelp:
       'Polyfin lit les chapitres en même temps qu’il analyse le fichier, ce qu’il fait de toute façon avant une première lecture : ils ne retardent donc jamais la lecture. Désactivés, ils sont simplement masqués dans les applications.',
@@ -224,7 +210,6 @@ const settings: typeof en = {
     channelLimit: 'Chaînes lues par catalogue de TV en direct',
     channelLimitHelp:
       'Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De 100 à 50 000 ; 10 000 par défaut.',
-    contentTitle: 'Contenu',
     skipButtons: 'Boutons « Passer l’intro » et « Passer le générique »',
     skipButtonsHelp:
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
@@ -260,7 +245,6 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
     catalogRefreshMinutesHelp:
       'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',
-    securityTitle: 'Sécurité',
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
@@ -274,7 +258,6 @@ const settings: typeof en = {
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
     saved: 'Paramètres enregistrés.',
-    thumbnailsTitle: 'Miniatures',
     thumbnailsHelp:
       'Des images tirées des titres eux-mêmes, après leur visionnage. Pour les faire, Polyfin lit de petits morceaux du fichier à la source, doucement, quand personne ne regarde depuis cette source : au plus 60 demandes par titre, une toutes les 3 secondes, et 120 par heure et par source, jamais le fichier entier. Une source qui demande de ralentir ne reçoit plus de demande d’images pendant 2 heures. Désactivé par défaut.',
     trickplay: 'Miniatures quand on avance dans un titre',
@@ -306,7 +289,6 @@ const settings: typeof en = {
     recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
     recordingRetentionDaysHelp:
       'Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De 0 à 3 650.',
-    liveTvTitle: 'TV en direct',
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp:
       'À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. De 1 à 168 ; 12 par défaut.',
@@ -339,31 +321,13 @@ const settings: typeof en = {
     codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',
   },
   settingsPage: {
-    search: 'Chercher un paramètre',
     searchHint: 'Par nom ou par description.',
     noMatch: 'Aucun paramètre ne correspond à cette recherche.',
-    sectionsLabel: 'Sections',
-    unsaved: 'Modifications non enregistrées',
-    upToDate: 'Tout est enregistré',
     sections: {
-      general: 'Général',
-      playback: 'Lecture',
-      conversion: 'Conversion',
-      content: 'Contenu',
-      catalogs: 'Catalogues',
-      thumbnails: 'Miniatures',
-      security: 'Utilisateurs et sécurité',
-      tracking: 'Suivi',
-      liveTv: 'TV en direct',
-      recordings: 'Enregistrements',
-      diagnostics: 'Diagnostic',
-      webPlayer: 'Lecteur web',
-      backups: 'Sauvegardes',
       variables: 'Variables d’environnement',
     },
     variablesHelp:
       'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
-    variable: 'Variable',
     value: 'Valeur utilisée',
     defaultValue: 'Par défaut',
     setValue: 'Définie',

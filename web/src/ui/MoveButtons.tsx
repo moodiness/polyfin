@@ -1,7 +1,7 @@
 import { ArrowDownIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import { useEffect, useId, useRef } from 'react'
 import { useI18n } from '@/i18n'
-import { IconButton } from '@/ui'
+import { IconButton } from './Button'
 
 /**
  * Up and down buttons for one item of an ordered list. After a move, focus follows the item (or
@@ -11,12 +11,14 @@ export function MoveButtons({
   name,
   index,
   count,
+  disabled = false,
   onMove,
 }: {
   /** The item's name, for the buttons' labels: "Move Popular up". */
   name: string
   index: number
   count: number
+  disabled?: boolean
   /** Called with the index the item moves to. */
   onMove: (to: number) => void
 }) {
@@ -37,13 +39,13 @@ export function MoveButtons({
   }, [index, first, last, upId, downId])
 
   return (
-    <span className="flex">
+    <span className="flex shrink-0">
       <IconButton
         id={upId}
         size="sm"
         icon={ArrowUpIcon}
         label={t.common.moveUp(name)}
-        disabled={first}
+        disabled={disabled || first}
         onClick={() => {
           moved.current = 'up'
           onMove(index - 1)
@@ -54,7 +56,7 @@ export function MoveButtons({
         size="sm"
         icon={ArrowDownIcon}
         label={t.common.moveDown(name)}
-        disabled={last}
+        disabled={disabled || last}
         onClick={() => {
           moved.current = 'down'
           onMove(index + 1)

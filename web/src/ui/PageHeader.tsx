@@ -10,6 +10,7 @@ import { cx } from './cx'
  */
 export function PageHeader({
   title,
+  titleAside,
   lede,
   actions,
   back,
@@ -17,6 +18,8 @@ export function PageHeader({
 }: {
   /** The page title: the same words as its tab or menu entry. */
   title: ReactNode
+  /** Badges beside the title, outside the h1 so they stay out of its name. */
+  titleAside?: ReactNode
   /** What the page is for, or its state in one sentence. */
   lede?: ReactNode
   /** The page's main actions (one primary at most). */
@@ -42,7 +45,14 @@ export function PageHeader({
       )}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <h1 className="text-h1 text-ink max-md:text-[26px]">{title}</h1>
+          {titleAside ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="min-w-0 text-h1 break-words text-ink max-md:text-[26px]">{title}</h1>
+              {titleAside}
+            </div>
+          ) : (
+            <h1 className="text-h1 text-ink max-md:text-[26px]">{title}</h1>
+          )}
           {lede !== undefined && (
             <p className="mt-2 max-w-[62ch] text-lead text-ink-2 max-md:text-body">{lede}</p>
           )}
