@@ -186,7 +186,8 @@ type CollectionSource struct {
 
 // Extras are details some metadata addons add. SeasonPosters holds a
 // series' season posters in the order of its seasons, without their
-// numbers (see library.seasonPosters).
+// numbers (see library.seasonPosters); SeasonPosterByNumber holds them by
+// season number.
 type Extras struct {
 	Cast                 []CastMember      `json:"cast,omitempty"`
 	SeasonPosterByNumber map[string]string `json:"seasonPosterByNumber,omitempty"`
@@ -196,6 +197,46 @@ type Extras struct {
 	// or the US one again when that country has none.
 	Certification      string `json:"certification,omitempty"`
 	CertificationLocal string `json:"certificationLocal,omitempty"`
+}
+
+// UnmarshalJSON reads Extras, whose seasonPosters some addons send as a
+// list in season order and others as an object keyed by season number,
+// such as {"0": …, "1": …}, depending on the database a series came from.
+// The object form names its seasons, so it joins SeasonPosterByNumber,
+// where seasonPosterByNumber itself wins.
+func (e *Extras) UnmarshalJSON(data []byte) error {
+	type plain Extras
+	var decoded struct {
+		plain
+		// Shallower than plain's field of the same name, so it takes the
+		// value whatever its form.
+		SeasonPosters json.RawMessage `json:"seasonPosters"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*e = Extras(decoded.plain)
+	if len(decoded.SeasonPosters) == 0 {
+		return nil
+	}
+	_ = json.Unmarshal(decoded.SeasonPosters, &e.SeasonPosters)
+	var byNumber map[string]json.RawMessage
+	if json.Unmarshal(decoded.SeasonPosters, &byNumber) != nil {
+		return nil
+	}
+	for number, raw := range byNumber {
+		var poster string
+		if _, err := strconv.Atoi(number); err != nil || json.Unmarshal(raw, &poster) != nil || poster == "" {
+			continue
+		}
+		if e.SeasonPosterByNumber == nil {
+			e.SeasonPosterByNumber = map[string]string{}
+		}
+		if _, set := e.SeasonPosterByNumber[number]; !set {
+			e.SeasonPosterByNumber[number] = poster
+		}
+	}
+	return nil
 }
 
 // CastMember is an actor with their role.
