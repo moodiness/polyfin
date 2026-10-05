@@ -48,7 +48,8 @@ export function PageLayout({
       <div className={cx('stagger', className)}>
         {header}
         <div className="grid items-start gap-16 md:grid-cols-[216px_minmax(0,1fr)] max-lg:gap-10 max-md:block">
-          <div className="max-md:contents">{nav}</div>
+          {/* As tall as the content beside it, so the section nav stays in view while scrolling. */}
+          <div className="self-stretch max-md:contents">{nav}</div>
           <div className={cx('max-w-[784px] min-w-0', blockSpacing)}>{children}</div>
         </div>
       </div>

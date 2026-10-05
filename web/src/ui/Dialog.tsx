@@ -1,5 +1,6 @@
 import { XIcon } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n'
 import { Button, IconButton } from './Button'
 import { cx } from './cx'
@@ -80,7 +81,9 @@ export function ConfirmDialog({
   const dialog = useModal(open, onClose)
   const titleId = useId()
   const bodyId = useId()
-  return (
+  // In the body, wherever it is declared: the page's spacing and entrance motion stay off it, and
+  // a list or a table never holds a dialog.
+  return createPortal(
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
@@ -115,7 +118,8 @@ export function ConfirmDialog({
           {confirmLabel}
         </Button>
       </div>
-    </dialog>
+    </dialog>,
+    document.body,
   )
 }
 
@@ -152,7 +156,7 @@ export function Drawer({
   const { t } = useI18n()
   const dialog = useModal(open, onClose)
   const titleId = useId()
-  return (
+  return createPortal(
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
@@ -177,6 +181,7 @@ export function Drawer({
           {footer}
         </div>
       )}
-    </dialog>
+    </dialog>,
+    document.body,
   )
 }
