@@ -25,6 +25,10 @@ const system: typeof en = {
     revokeConfirm: (app: string) =>
       `Révoquer la clé pour ${app} ? Les outils et applications qui l’utilisent ne fonctionneront plus. Impossible de revenir en arrière.`,
     revoked: (app: string) => `La clé pour ${app} a été révoquée.`,
+    emptyHint:
+      'Créez-en une ci-dessous pour chaque outil ou application, pour pouvoir les révoquer une à une.',
+    revokeTitle: 'Révoquer cette clé ?',
+    revokeLabel: (app: string) => `Révoquer la clé pour ${app}`,
   },
   system: {
     schedule: {
@@ -73,6 +77,14 @@ const system: typeof en = {
       lastDownload: 'Dernier téléchargement',
       nextDownload: 'Prochain téléchargement',
       notYet: 'Pas encore',
+      noTasks: 'Aucune tâche.',
+      noTasksHint: 'Le serveur liste ici ses tâches une fois démarré.',
+      recordingsHint:
+        'Les enregistrements programmés depuis une application ou depuis le guide apparaissent ici.',
+      refreshesHint:
+        'Ajoutez une source IPTV dans Contenu › Sources, ou un guide des programmes à un catalogue TV, et leurs téléchargements apparaissent ici.',
+      backupsTitle: 'Sauvegardes de la base de données',
+      backUpNow: 'Sauvegarder maintenant',
     },
     health: {
       title: 'Santé',
@@ -209,6 +221,12 @@ const system: typeof en = {
         traktClientSecret: 'Client secret Trakt',
       },
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
+      noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
+      noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
+      noGuides: 'Aucun guide des programmes.',
+      noGuidesHint:
+        'Ajoutez un guide des programmes à un catalogue TV dans Contenu › TV en direct.',
+      serverTitle: 'Serveur',
     },
     logs: {
       title: 'Journal',
@@ -234,6 +252,9 @@ const system: typeof en = {
       detailedHint:
         'Les lignes de débogage apparaissent avec le « Journal détaillé », dans Paramètres › Diagnostic.',
       region: 'Journal du serveur',
+      emptyHint: 'Les lignes apparaissent ici à mesure que le serveur les écrit.',
+      noMatchHint: 'Choisissez un autre niveau ou modifiez la recherche.',
+      filters: 'Filtrer le journal',
     },
   },
 }
