@@ -34,6 +34,41 @@ Polyfin checks an API key with the service before saving it.
 
 Trakt and Simkl are offered only once an administrator has set them up; see [Setting up Trakt and Simkl](#setting-up-trakt-and-simkl-administrators).
 
+## Importing your watch history
+
+Polyfin can also read what you watched elsewhere, in other apps that report to the same services, so that played marks, **Continue Watching** and **Next Up** match. It is off by default. Under **My account › Tracking**, each connected service has:
+
+- **Import my … history**: turning it on imports at once, then every 6 hours.
+- **Import now**: imports at once.
+- A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, and what stopped it, if anything.
+
+Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user.
+
+### What is imported
+
+| Service | Watched movies and episodes | Resume points |
+|---|---|---|
+| Trakt | Its watch history, a page of 250 plays at a time, read again only when its last activities changed. | Its playback progress. |
+| Simkl | Its watched movies and the watched episodes of its shows, one list status at a time, only what changed since the last import. Anime is left out: Simkl numbers it as AniDB does. | Its paused playbacks. |
+| MDBList | Its watched movies and episodes, 1,000 at a time, only what changed since the last import. Whole shows or seasons marked watched without their episodes are left out. | Its paused playbacks. |
+| PublicMetaDB | Its watch history, 500 plays at a time, whole every time. | Its resume points. |
+
+Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. PublicMetaDB names titles by TMDB only: those Polyfin does not know by it are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Titles found no way are counted as not found, and the import goes on.
+
+### How the history merges with Polyfin's
+
+- **Played marks**: an import only adds them, never removes one. A title gets the service's date unless Polyfin's is later, and is played at least once; a title already played keeps its play count.
+- **Resume points**: only for titles not played. Of Polyfin's resume point and the service's, the more recent one stays. A position past **Marked played after (%)** marks the title played; one before **Resume point kept after (%)** is ignored (see [Played and resume thresholds](users.md#played-and-resume-thresholds)).
+- **Several services**: a title played on any of them is played, and the most recent resume point wins.
+- Apps see the changes the next time they refresh: an import does not push them through Jellyfin's live connection, which would ask the addons for every title it changed.
+
+### Pace and problems
+
+- Each service is read at its pace (one page a second for Trakt, two for Simkl and MDBList, PublicMetaDB's limit per server address), waiting as long as it asks, up to 15 minutes.
+- One import runs at a time per user and service. An import interrupted by a restart runs again later.
+- When the history cannot be read whole, what was read is imported, and the status line says why: the service refused the connection (**Connect again**), could not be reached, or asked to wait too long.
+- Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
+
 ## Setting up Trakt and Simkl (administrators)
 
 MDBList and PublicMetaDB need nothing from the administrator. Trakt and Simkl are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.

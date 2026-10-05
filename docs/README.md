@@ -26,7 +26,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Transcoding](transcoding.md) | When Polyfin converts, GPUs, HDR tone mapping, and the conversion settings |
 | [Subtitles](subtitles.md) | Addon subtitles, text tracks inside files, ASS styles and fonts, and image subtitles |
 | [Skip segments](skip-segments.md) | Skipping intros, recaps, credits and previews: the sources, their order, and their keys |
-| [Tracking](tracking.md) | Sending what you watch to Trakt, Simkl, MDBList and PublicMetaDB |
+| [Tracking](tracking.md) | Sending what you watch to Trakt, Simkl, MDBList and PublicMetaDB, and importing what you watched there |
 
 ## Users and administration
 

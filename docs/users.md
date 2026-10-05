@@ -18,6 +18,7 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings. T
 - **Continue Watching** lists what is under way.
 - **Next Up** lists the next episode of each series being watched.
 - The **Upcoming** row lists the coming episodes of the series the user watches or marked favorite.
+- Both look at the 50 series the user played most recently, as each series asks its addon for its episodes. A history imported from a tracking service can hold hundreds of series (see [Importing your watch history](tracking.md#importing-your-watch-history)).
 - Marking a series or a season played marks its released episodes.
 - Apps that keep Jellyfin's live connection (WebSocket) open are told of these changes as they happen, from any of the user's apps.
 
