@@ -35,6 +35,9 @@ services:
       # Live TV recording, optional: the folder recordings are written to,
       # mounted below.
       # POLYFIN_RECORDINGS_DIR: /recordings
+      # Daily database backups, optional: the folder they are written to,
+      # mounted below. Create ./backups first, owned by UID 65532.
+      # POLYFIN_BACKUP_DIR: /backups
     # A GPU to convert video on, optional. NVIDIA, with the NVIDIA Container
     # Toolkit installed:
     # runtime: nvidia
@@ -45,6 +48,7 @@ services:
     volumes:
       - polyfin_cache:/cache
       # - ./recordings:/recordings
+      # - ./backups:/backups
     # Reachable on the LAN by default: TVs and phones connect to it directly.
     ports:
       - "${POLYFIN_BIND_IP:-0.0.0.0}:${POLYFIN_PORT:-8096}:8096"

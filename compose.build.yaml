@@ -9,8 +9,11 @@ services:
       context: .
       args:
         VERSION: ${POLYFIN_VERSION:-dev}
-    # Live TV recording, optional: the folder recordings are written to.
+    # Live TV recording and daily database backups, optional: the folders
+    # recordings and backups are written to.
     # environment:
     #   POLYFIN_RECORDINGS_DIR: /recordings
+    #   POLYFIN_BACKUP_DIR: /backups
     # volumes:
     #   - ./recordings:/recordings
+    #   - ./backups:/backups

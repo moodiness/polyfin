@@ -46,7 +46,8 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - **The transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md)).
 - **The database** and its size.
 - **The source cache**, against `POLYFIN_CACHE_SIZE`.
-- **Disk space** for the cache and recordings folders.
+- **Disk space** for the cache, recordings and backups folders.
+- **Backups**: the last run and its result, the last backup made, its file and size, and the next one. A failed backup, or a last backup older than two days, is a problem. See [Backups](backups.md).
 - **The thumbnail queue** and paused hosts.
 - **Polyfin itself**: memory, goroutines, uptime and version.
 - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.

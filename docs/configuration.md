@@ -20,6 +20,7 @@ This page lists the environment variables Polyfin reads. Many settings can also 
 | `POLYFIN_RECORDINGS_DIR` | (unset) | Folder Live TV recordings are written to, as an absolute path. Unset leaves recording off. Polyfin must be able to write to it, or it does not start. See [Live TV](live-tv.md). |
 | `POLYFIN_WEB_DIR` | `/usr/share/polyfin/jellyfin-web`, where the Docker image puts jellyfin-web | Folder of jellyfin-web, the web client served at `/web/`. A folder without its `index.html` leaves the web client off, as happens without the Docker image. See [Web client](web-client.md). |
 | `POLYFIN_SECRET_KEY` | (unset) | Key the stored API keys, client secret and tracking tokens are encrypted with: 32 random bytes in base64, made with `openssl rand -base64 32`, or 64 hexadecimal digits. Unset keeps them unencrypted, and **Health** warns about it. A malformed key stops Polyfin from starting. Keep it with your backups: see [Stored keys and tokens](#stored-keys-and-tokens). |
+| `POLYFIN_BACKUP_DIR` | (unset) | Folder the database is backed up into every day, as an absolute path. Unset leaves backups off. Polyfin must be able to write to it, or it does not start. The hour and the number of backups kept are under **Settings › Backups**. See [Backups](backups.md). |
 
 ## Compose settings in `.env`
 
