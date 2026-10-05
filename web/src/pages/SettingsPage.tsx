@@ -662,9 +662,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </Setting>
         </SettingsGroup>
         <SettingsGroup title="Simkl">
-          <Setting text={['Simkl', s.tracking.simklSetup, s.tracking.redirectUri]}>
+          <Setting text={['Simkl', s.tracking.simklSetup]}>
             <p className="text-sm text-muted">{s.tracking.simklSetup}</p>
-            {redirectUri}
           </Setting>
           <Setting text={['Simkl', s.tracking.simklClientId, s.tracking.simklClientIdHelp]}>
             <TextField
