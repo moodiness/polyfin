@@ -279,13 +279,26 @@ type settingsJSON struct {
 	// ignores it. PublicMetaDBKey, which no answer holds, replaces the key
 	// once PublicMetaDB accepts it; empty removes it, and a PUT leaving it
 	// out keeps it.
-	PublicMetaDBKeySet    bool    `json:"publicMetaDbKeySet"`
-	PublicMetaDBKey       *string `json:"publicMetaDbKey,omitempty"`
-	SimilarTitles         *bool   `json:"similarTitles"`
-	PlayedPercent         *int    `json:"playedPercent"`
-	ResumePercent         *int    `json:"resumePercent"`
-	VersionListMinutes    *int    `json:"versionListMinutes"`
-	CatalogRefreshMinutes *int    `json:"catalogRefreshMinutes"`
+	PublicMetaDBKeySet bool    `json:"publicMetaDbKeySet"`
+	PublicMetaDBKey    *string `json:"publicMetaDbKey,omitempty"`
+	// TheIntroDBKeySet and TheIntroDBKey are the same for TheIntroDB's
+	// optional key.
+	TheIntroDBKeySet bool    `json:"theIntroDbKeySet"`
+	TheIntroDBKey    *string `json:"theIntroDbKey,omitempty"`
+	// SegmentOrder is the order of preference of the segment databases in
+	// effect, every one of them; SegmentOrderDefault, the one POLYFIN_SEGMENTS
+	// gives, which a reset returns to; and SegmentSourcesOff, those
+	// POLYFIN_SEGMENTS turns off. A PUT saves SegmentOrder, every database
+	// once, or follows POLYFIN_SEGMENTS again with an empty one; leaving it
+	// out (or null) keeps the saved one. It ignores the other two.
+	SegmentOrder          []string `json:"segmentOrder"`
+	SegmentOrderDefault   []string `json:"segmentOrderDefault"`
+	SegmentSourcesOff     []string `json:"segmentSourcesOff"`
+	SimilarTitles         *bool    `json:"similarTitles"`
+	PlayedPercent         *int     `json:"playedPercent"`
+	ResumePercent         *int     `json:"resumePercent"`
+	VersionListMinutes    *int     `json:"versionListMinutes"`
+	CatalogRefreshMinutes *int     `json:"catalogRefreshMinutes"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -369,6 +382,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		SkipButtons:           &settings.SkipButtons,
 		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
+		TheIntroDBKeySet:      settings.TheIntroDBKey != "",
 		SimilarTitles:         &settings.SimilarTitles,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
@@ -749,6 +763,8 @@ func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 // what conversions run on.
 func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	body := newSettingsJSON(settings)
+	body.SegmentOrder, body.SegmentSourcesOff = h.Segments.Order(settings.SegmentOrder)
+	body.SegmentOrderDefault, _ = h.Segments.Order(nil)
 	body.RecordingsFolder = h.RecordingsDir
 	body.ConversionHardware = conversionHardwareJSON{Default: h.Acceleration, Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
@@ -785,9 +801,17 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := h.Accounts.Settings()
-	key, ok := h.publicMetaDBKey(w, r, body.PublicMetaDBKey, current.PublicMetaDBKey)
+	publicMetaDBKey, ok := h.segmentKey(w, r, mediasegments.PublicMetaDB, body.PublicMetaDBKey, current.PublicMetaDBKey)
 	if !ok {
 		return
+	}
+	theIntroDBKey, ok := h.segmentKey(w, r, mediasegments.TheIntroDB, body.TheIntroDBKey, current.TheIntroDBKey)
+	if !ok {
+		return
+	}
+	segmentOrder := current.SegmentOrder
+	if body.SegmentOrder != nil {
+		segmentOrder = body.SegmentOrder
 	}
 	settings, err := h.Accounts.UpdateSettings(r.Context(), accounts.Settings{
 		ServerName:          body.ServerName,
@@ -802,7 +826,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 
 		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
-		PublicMetaDBKey:       key,
+		PublicMetaDBKey:       publicMetaDBKey,
+		TheIntroDBKey:         theIntroDBKey,
+		SegmentOrder:          segmentOrder,
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
@@ -875,34 +901,42 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }
 
-// publicMetaDBKey is the PublicMetaDB key a settings PUT saves: the current
-// one when the body leaves it out, none for an empty one, else the key sent
-// once PublicMetaDB accepted it. A key that is malformed or that PublicMetaDB
-// refuses is answered 400, and one that PublicMetaDB could not be asked
-// about 502, ok then being false.
-func (h *handler) publicMetaDBKey(w http.ResponseWriter, r *http.Request, sent *string, current string) (key string, ok bool) {
+// segmentKeyErrors are the error codes of the keys of the segment
+// databases: malformed or refused, then not checked.
+var segmentKeyErrors = map[string][2]string{
+	mediasegments.PublicMetaDB: {"invalid_publicmetadb_key", "publicmetadb_unreachable"},
+	mediasegments.TheIntroDB:   {"invalid_theintrodb_key", "theintrodb_unreachable"},
+}
+
+// segmentKey is the key of a segment database a settings PUT saves: the
+// current one when the body leaves it out, none for an empty one, else the
+// key sent once the database accepted it. A key that is malformed or that
+// the database refuses is answered 400, and one that the database could
+// not be asked about 502, ok then being false.
+func (h *handler) segmentKey(w http.ResponseWriter, r *http.Request, database string, sent *string, current string) (key string, ok bool) {
 	if sent == nil {
 		return current, true
 	}
 	if *sent == "" {
 		return "", true
 	}
+	codes := segmentKeyErrors[database]
 	key = strings.TrimSpace(*sent)
-	if key == "" || !accounts.ValidPublicMetaDBKey(key) {
-		writeError(w, http.StatusBadRequest, "invalid_publicmetadb_key")
+	if key == "" || !accounts.ValidSegmentKey(key) {
+		writeError(w, http.StatusBadRequest, codes[0])
 		return "", false
 	}
 	if h.Segments == nil {
-		writeError(w, http.StatusBadGateway, "publicmetadb_unreachable")
+		writeError(w, http.StatusBadGateway, codes[1])
 		return "", false
 	}
-	switch err := h.Segments.CheckPublicMetaDBKey(r.Context(), key); {
+	switch err := h.Segments.CheckKey(r.Context(), database, key); {
 	case errors.Is(err, mediasegments.ErrKeyRefused):
-		writeError(w, http.StatusBadRequest, "invalid_publicmetadb_key")
+		writeError(w, http.StatusBadRequest, codes[0])
 		return "", false
 	case err != nil:
-		h.Logger.Warn("PublicMetaDB could not check the key", "error", err)
-		writeError(w, http.StatusBadGateway, "publicmetadb_unreachable")
+		h.Logger.Warn("A segment database could not check the key", "database", database, "error", err)
+		writeError(w, http.StatusBadGateway, codes[1])
 		return "", false
 	}
 	return key, true

@@ -270,22 +270,52 @@ const (
 	MaxLoginDisclaimerBytes = 8 << 10
 )
 
-// ErrInvalidPublicMetaDBKey reports a Settings.PublicMetaDBKey that is not
-// a valid key (see ValidPublicMetaDBKey).
-var ErrInvalidPublicMetaDBKey = errors.New("invalid PublicMetaDB key")
+// ErrInvalidPublicMetaDBKey and ErrInvalidTheIntroDBKey report a
+// Settings.PublicMetaDBKey or TheIntroDBKey that is not a valid key (see
+// ValidSegmentKey).
+var (
+	ErrInvalidPublicMetaDBKey = errors.New("invalid PublicMetaDB key")
+	ErrInvalidTheIntroDBKey   = errors.New("invalid TheIntroDB key")
+)
 
-// MaxPublicMetaDBKeyBytes is the longest Settings.PublicMetaDBKey.
-const MaxPublicMetaDBKeyBytes = 256
+// MaxSegmentKeyBytes is the longest Settings.PublicMetaDBKey and
+// TheIntroDBKey.
+const MaxSegmentKeyBytes = 256
 
-// ValidPublicMetaDBKey reports whether key may be a PublicMetaDB key: at
-// most MaxPublicMetaDBKeyBytes of printable ASCII. Empty is valid, for no
-// key.
-func ValidPublicMetaDBKey(key string) bool {
-	if len(key) > MaxPublicMetaDBKeyBytes {
+// ValidSegmentKey reports whether key may be the API key of a segment
+// database: at most MaxSegmentKeyBytes of printable ASCII. Empty is valid,
+// for no key.
+func ValidSegmentKey(key string) bool {
+	if len(key) > MaxSegmentKeyBytes {
 		return false
 	}
 	for i := range len(key) {
 		if key[i] < ' ' || key[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// SegmentSources are the segment databases, by the names POLYFIN_SEGMENTS
+// gives them, in its default order of preference.
+var SegmentSources = []string{"theintrodb", "introdb", "publicmetadb"}
+
+// ErrInvalidSegmentOrder reports a Settings.SegmentOrder that is neither
+// empty nor every one of SegmentSources once.
+var ErrInvalidSegmentOrder = errors.New("invalid segment order")
+
+// validSegmentOrder reports whether order is empty or SegmentSources in
+// any order.
+func validSegmentOrder(order []string) bool {
+	if len(order) == 0 {
+		return true
+	}
+	if len(order) != len(SegmentSources) {
+		return false
+	}
+	for i, name := range order {
+		if !slices.Contains(SegmentSources, name) || slices.Contains(order[:i], name) {
 			return false
 		}
 	}
@@ -352,6 +382,14 @@ type Settings struct {
 	// segments with; empty, PublicMetaDB is not asked. It is a secret:
 	// never shown, never logged.
 	PublicMetaDBKey string
+	// TheIntroDBKey is the API key TheIntroDB is asked with, which raises
+	// its daily limit and adds its owner's own submissions; empty,
+	// TheIntroDB is asked without one. A secret, like PublicMetaDBKey.
+	TheIntroDBKey string
+	// SegmentOrder is the order of preference of the segment databases,
+	// every one of SegmentSources once; empty follows POLYFIN_SEGMENTS.
+	// It only orders them: POLYFIN_SEGMENTS still chooses which are asked.
+	SegmentOrder []string
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
@@ -522,7 +560,7 @@ func validWebText(text string, max int) bool {
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, " +
-	"skip_buttons, publicmetadb_key, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -546,7 +584,8 @@ var updateSettingsQuery = func() string {
 func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder,
+		&settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
@@ -599,9 +638,17 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.CatalogRefreshMinutes < MinCatalogRefreshMinutes || settings.CatalogRefreshMinutes > MaxCatalogRefreshMinutes {
 		return Settings{}, ErrInvalidCatalogRefreshMinutes
 	}
-	if !ValidPublicMetaDBKey(settings.PublicMetaDBKey) {
+	if !ValidSegmentKey(settings.PublicMetaDBKey) {
 		return Settings{}, ErrInvalidPublicMetaDBKey
 	}
+	if !ValidSegmentKey(settings.TheIntroDBKey) {
+		return Settings{}, ErrInvalidTheIntroDBKey
+	}
+	if !validSegmentOrder(settings.SegmentOrder) {
+		return Settings{}, ErrInvalidSegmentOrder
+	}
+	// The column holds no NULL: no order is an empty one.
+	settings.SegmentOrder = append([]string{}, settings.SegmentOrder...)
 	if settings.LoginAttempts != 0 && (settings.LoginAttempts < MinLoginAttempts || settings.LoginAttempts > MaxLoginAttempts) {
 		return Settings{}, ErrInvalidLoginAttempts
 	}

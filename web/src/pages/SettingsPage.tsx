@@ -40,6 +40,7 @@ import {
 import CodeEditor from '@/components/CodeEditor'
 import ConversionSettings from '@/components/ConversionSettings'
 import { icons } from '@/components/icons'
+import SegmentSources from '@/components/SegmentSources'
 import { Skeleton } from '@/components/panels'
 import {
   Badge,
@@ -268,6 +269,9 @@ function SettingsForm({ initial }: { initial: Settings }) {
       serverName: form.serverName.trim(),
       traktClientId: form.traktClientId.trim(),
       simklClientId: form.simklClientId.trim(),
+      // The order POLYFIN_SEGMENTS gives is not saved, so that it keeps following the variable.
+      segmentOrder:
+        form.segmentOrder.join() === form.segmentOrderDefault.join() ? [] : form.segmentOrder,
     })
   }
 
@@ -419,6 +423,32 @@ function SettingsForm({ initial }: { initial: Settings }) {
             onChange={(skipButtons) => update({ skipButtons })}
           />
         </Setting>
+        <Setting
+          text={[
+            s.segmentSources.label,
+            s.segmentSources.help,
+            'TheIntroDB',
+            'IntroDB',
+            'PublicMetaDB',
+          ]}
+        >
+          <SegmentSources
+            order={form.segmentOrder}
+            defaultOrder={form.segmentOrderDefault}
+            off={form.segmentSourcesOff}
+            publicMetaDbKey={
+              form.publicMetaDbKey === undefined
+                ? form.publicMetaDbKeySet
+                : form.publicMetaDbKey.trim() !== ''
+            }
+            onOrder={(segmentOrder) => update({ segmentOrder })}
+          />
+          {fieldError(['invalid_segment_order']) && (
+            <p role="alert" className="mt-1 text-sm text-rose-300">
+              {fieldError(['invalid_segment_order'])}
+            </p>
+          )}
+        </Setting>
         <Setting text={[s.publicMetaDbKey, s.publicMetaDbKeyHelp, 'PublicMetaDB']}>
           <SecretField
             label={s.publicMetaDbKey}
@@ -427,6 +457,16 @@ function SettingsForm({ initial }: { initial: Settings }) {
             value={form.publicMetaDbKey}
             onValue={(publicMetaDbKey) => update({ publicMetaDbKey })}
             error={fieldError(['invalid_publicmetadb_key', 'publicmetadb_unreachable'])}
+          />
+        </Setting>
+        <Setting text={[s.theIntroDbKey, s.theIntroDbKeyHelp, 'TheIntroDB']}>
+          <SecretField
+            label={s.theIntroDbKey}
+            hint={s.theIntroDbKeyHelp}
+            saved={form.theIntroDbKeySet}
+            value={form.theIntroDbKey}
+            onValue={(theIntroDbKey) => update({ theIntroDbKey })}
+            error={fieldError(['invalid_theintrodb_key', 'theintrodb_unreachable'])}
           />
         </Setting>
         <Setting text={[s.similarTitles, s.similarTitlesHelp]}>

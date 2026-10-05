@@ -126,10 +126,11 @@ var ErrKeyRefused = errors.New("API key refused")
 // Service finds the segments of titles.
 type Service struct {
 	db *pgxpool.Pool
-	// sources are the databases asked, the preferred first.
+	// sources are the databases asked, in the order of preference
+	// POLYFIN_SEGMENTS gives them.
 	sources []Source
-	// settings hold the PublicMetaDB key, read at each request so that a
-	// key saved, changed or removed applies at once.
+	// settings hold the keys and the saved order of preference, read at
+	// each request so that a change applies at once.
 	settings  func() accounts.Settings
 	client    *http.Client
 	userAgent string
@@ -138,20 +139,44 @@ type Service struct {
 	now       func() time.Time
 
 	mu sync.Mutex
-	// refusedKey is the last key PublicMetaDB refused: PublicMetaDB is not
-	// asked with it again.
-	refusedKey string
+	// refused holds, by database, the last key it refused: PublicMetaDB
+	// is not asked with it again, and TheIntroDB is asked without it.
+	refused map[string]string
 	// limited holds, by database, when one that answered 429 with a
 	// Retry-After may be asked again.
 	limited map[string]time.Time
 }
 
-// New returns a service asking sources, in order of preference, and
-// keeping their answers in db. Without sources it finds nothing.
-// PublicMetaDB is asked only while settings hold a key for it.
+// New returns a service asking sources, in order of preference unless the
+// settings save another, and keeping their answers in db. Without sources
+// it finds nothing. PublicMetaDB is asked only while settings hold a key
+// for it.
 func New(db *pgxpool.Pool, sources []Source, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, sources: sources, settings: settings, client: &http.Client{}, userAgent: "Polyfin/" + version, logger: logger,
-		now: time.Now, limited: map[string]time.Time{}}
+		now: time.Now, refused: map[string]string{}, limited: map[string]time.Time{}}
+}
+
+// Order returns the order of preference of every segment database: saved
+// when it is not empty, else that of the sources asked followed by the
+// others; and off, the databases not asked whatever the order, in the
+// order of accounts.SegmentSources. A nil service asks none.
+func (s *Service) Order(saved []string) (order, off []string) {
+	var on []string
+	if s != nil {
+		for _, source := range s.sources {
+			on = append(on, source.Name)
+		}
+	}
+	off = []string{}
+	for _, name := range accounts.SegmentSources {
+		if !slices.Contains(on, name) {
+			off = append(off, name)
+		}
+	}
+	if len(saved) > 0 {
+		return slices.Clone(saved), off
+	}
+	return append(on, off...), off
 }
 
 // mark is a segment as a database gave it.
@@ -184,31 +209,46 @@ func (s *Service) Segments(ctx context.Context, title Title) []Segment {
 	if !tmdbPattern.MatchString(title.TMDB) {
 		title.TMDB = ""
 	}
-	key := s.settings().PublicMetaDBKey
-	sources := s.used(key)
+	settings := s.settings()
+	sources := s.used(settings)
 	if len(sources) == 0 || (title.IMDb == "" && title.TMDB == "") ||
 		(!title.movie() && (title.Season < 1 || title.Episode < 1)) {
 		return nil
 	}
 	answers := s.load(ctx, title.Item)
-	if stale := s.stale(sources, answers, key); len(stale) > 0 {
+	if stale := s.stale(sources, answers, settings.PublicMetaDBKey); len(stale) > 0 {
 		result, _, _ := s.flight.Do(title.Item.String(), func() (any, error) {
 			// The answers are kept even once the request that asked is
 			// canceled, as when an app stops waiting.
-			return s.refresh(context.WithoutCancel(ctx), title, answers, stale, key), nil
+			return s.refresh(context.WithoutCancel(ctx), title, answers, stale, settings), nil
 		})
 		answers = result.(map[string]answer)
 	}
 	return merge(answers, sources, title.Runtime)
 }
 
-// used are the sources whose answers count: all of them, but PublicMetaDB
-// while no key for it is saved.
-func (s *Service) used(key string) []Source {
-	if key != "" {
-		return s.sources
+// used are the sources whose answers count, in the order of preference the
+// settings save, if any: all of them, but PublicMetaDB while no key for it
+// is saved.
+func (s *Service) used(settings accounts.Settings) []Source {
+	sources := slices.Clone(s.sources)
+	if settings.PublicMetaDBKey == "" {
+		sources = slices.DeleteFunc(sources, func(source Source) bool { return source.Name == PublicMetaDB })
 	}
-	return slices.DeleteFunc(slices.Clone(s.sources), func(source Source) bool { return source.Name == PublicMetaDB })
+	if len(settings.SegmentOrder) > 0 {
+		slices.SortStableFunc(sources, func(a, b Source) int {
+			return cmp.Compare(rank(settings.SegmentOrder, a.Name), rank(settings.SegmentOrder, b.Name))
+		})
+	}
+	return sources
+}
+
+// rank is the place of name in order, past its end when missing.
+func rank(order []string, name string) int {
+	if i := slices.Index(order, name); i >= 0 {
+		return i
+	}
+	return len(order)
 }
 
 // load reads the answers kept for a title; none when there are none or the
@@ -242,7 +282,7 @@ func (s *Service) stale(sources []Source, answers map[string]answer, key string)
 		if kept, ok := answers[source.Name]; ok && now.Before(kept.Expires) {
 			continue
 		}
-		if now.Before(s.limited[source.Name]) || (source.Name == PublicMetaDB && key == s.refusedKey) {
+		if now.Before(s.limited[source.Name]) || (source.Name == PublicMetaDB && key == s.refused[PublicMetaDB]) {
 			continue
 		}
 		stale = append(stale, source)
@@ -255,7 +295,7 @@ func (s *Service) stale(sources []Source, answers map[string]answer, key string)
 // any, and is asked again after failedFor, or once the rate limit its
 // Retry-After sets ends if later. A PublicMetaDB refusing the key leaves
 // no answer: the title is asked again with the next key.
-func (s *Service) refresh(ctx context.Context, title Title, answers map[string]answer, stale []Source, key string) map[string]answer {
+func (s *Service) refresh(ctx context.Context, title Title, answers map[string]answer, stale []Source, settings accounts.Settings) map[string]answer {
 	now := s.now()
 	fresh := maps.Clone(answers)
 	var mu sync.Mutex
@@ -264,12 +304,12 @@ func (s *Service) refresh(ctx context.Context, title Title, answers map[string]a
 		wg.Go(func() {
 			ctx, cancel := context.WithTimeout(ctx, askTimeout)
 			defer cancel()
-			marks, err := s.ask(ctx, source, title, key)
+			marks, err := s.ask(ctx, source, title, settings)
 			result := answer{Marks: marks, Expires: now.Add(nothingFor)}
 			var limited *rateLimited
 			switch {
 			case source.Name == PublicMetaDB && errors.Is(err, ErrKeyRefused):
-				s.refuse(key)
+				s.refuse(PublicMetaDB, settings.PublicMetaDBKey)
 				return
 			case errors.As(err, &limited):
 				s.logger.Info("A segment database limits requests", "database", source.Name, "until", limited.until)
@@ -298,16 +338,31 @@ func (s *Service) refresh(ctx context.Context, title Title, answers map[string]a
 	return fresh
 }
 
-// refuse remembers that PublicMetaDB refused key, which it is not asked
-// with again, and logs it once per key rather than once per title.
-func (s *Service) refuse(key string) {
+// refuse remembers that database refused key, which it is not asked with
+// again, and logs it once per key rather than once per title.
+func (s *Service) refuse(database, key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.refusedKey == key {
+	if s.refused[database] == key {
 		return
 	}
-	s.refusedKey = key
-	s.logger.Warn("PublicMetaDB refused the API key: it is not asked for segments until another key is saved in the settings")
+	s.refused[database] = key
+	switch database {
+	case PublicMetaDB:
+		s.logger.Warn("PublicMetaDB refused the API key: it is not asked for segments until another key is saved in the settings")
+	case TheIntroDB:
+		s.logger.Warn("TheIntroDB refused the API key: it is asked without one until another key is saved in the settings")
+	}
+}
+
+// usable is key unless database refused it.
+func (s *Service) usable(database, key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refused[database] == key {
+		return ""
+	}
+	return key
 }
 
 // limit leaves a database unasked until until.
@@ -351,14 +406,14 @@ func merge(answers map[string]answer, sources []Source, runtime time.Duration) [
 
 // ask asks a source for a title's segments: none when it knows nothing of
 // the title.
-func (s *Service) ask(ctx context.Context, source Source, title Title, key string) ([]mark, error) {
+func (s *Service) ask(ctx context.Context, source Source, title Title, settings accounts.Settings) ([]mark, error) {
 	switch source.Name {
 	case TheIntroDB:
-		return s.askTheIntroDB(ctx, source.URL, title)
+		return s.askTheIntroDB(ctx, source.URL, title, settings.TheIntroDBKey)
 	case IntroDB:
 		return s.askIntroDB(ctx, source.URL, title)
 	case PublicMetaDB:
-		return s.askPublicMetaDB(ctx, source.URL, title, key)
+		return s.askPublicMetaDB(ctx, source.URL, title, settings.PublicMetaDBKey)
 	default:
 		return nil, nil
 	}
@@ -372,8 +427,10 @@ type span struct {
 }
 
 // askTheIntroDB asks TheIntroDB, by TMDB identifier when known as it
-// prefers, else by IMDb identifier.
-func (s *Service) askTheIntroDB(ctx context.Context, base string, title Title) ([]mark, error) {
+// prefers, else by IMDb identifier, with key unless it refused it. A key it
+// refuses is logged and the question asked again without it, as TheIntroDB
+// answers without a key too.
+func (s *Service) askTheIntroDB(ctx context.Context, base string, title Title, key string) ([]mark, error) {
 	query := url.Values{}
 	if title.TMDB != "" {
 		query.Set("tmdb_id", title.TMDB)
@@ -393,7 +450,14 @@ func (s *Service) askTheIntroDB(ctx context.Context, base string, title Title) (
 		Credits []span `json:"credits"`
 		Preview []span `json:"preview"`
 	}
-	if found, err := s.get(ctx, base+"/media?"+query.Encode(), "", &body); err != nil || !found {
+	target := base + "/media?" + query.Encode()
+	key = s.usable(TheIntroDB, key)
+	found, err := s.get(ctx, target, key, &body)
+	if key != "" && errors.Is(err, ErrKeyRefused) {
+		s.refuse(TheIntroDB, key)
+		found, err = s.get(ctx, target, "", &body)
+	}
+	if err != nil || !found {
 		return nil, err
 	}
 	var marks []mark
@@ -572,32 +636,69 @@ func compareBool(a, b bool) int {
 	}
 }
 
-// CheckPublicMetaDBKey asks PublicMetaDB one question with key, the skip
-// timestamps of a movie: ErrKeyRefused when it refuses the key, another
-// error when it could not be asked. A key it accepts is asked with again,
-// even one it refused before.
-func (s *Service) CheckPublicMetaDBKey(ctx context.Context, key string) error {
-	base := publicURLs[PublicMetaDB]
+// CheckKey asks database, TheIntroDB or PublicMetaDB, one question with
+// key: ErrKeyRefused when it refuses the key, another error when it could
+// not be asked. A key it accepts is asked with again, even one it refused
+// before.
+func (s *Service) CheckKey(ctx context.Context, database, key string) error {
+	base := publicURLs[database]
 	for _, source := range s.sources {
-		if source.Name == PublicMetaDB {
+		if source.Name == database {
 			base = source.URL
 		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, askTimeout)
 	defer cancel()
-	query := url.Values{"tmdb_id": {"550"}, "media_type": {"movie"}, "perPage": {"1"}}
-	var body struct {
-		Items []json.RawMessage `json:"items"`
+	var err error
+	switch database {
+	case PublicMetaDB:
+		// The skip timestamps of a known movie, which take a key.
+		var body json.RawMessage
+		_, err = s.get(ctx, base+"/api/external/skips?media_type=movie&perPage=1&tmdb_id=550", key, &body)
+	case TheIntroDB:
+		err = s.checkTheIntroDBKey(ctx, base, key)
+	default:
+		return fmt.Errorf("%s takes no key", database)
 	}
-	if _, err := s.get(ctx, base+"/api/external/skips?"+query.Encode(), key, &body); err != nil {
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.refusedKey == key {
-		s.refusedKey = ""
+	if s.refused[database] == key {
+		delete(s.refused, database)
 	}
 	return nil
+}
+
+// checkTheIntroDBKey submits nothing to TheIntroDB with key. Its media
+// answers ignore a key they do not know, while a submission checks the key
+// before its body: an empty body, which submits nothing, is refused as
+// invalid (400 or 422) once the key is accepted, and the key refused with
+// 401 or 403. Any other answer leaves the key unchecked.
+func (s *Service) checkTheIntroDBKey(ctx context.Context, base, key string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/submit", strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("User-Agent", s.userAgent)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+key)
+	response, err := s.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxAnswer))
+	switch status := response.StatusCode; status {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("HTTP %d: %w", status, ErrKeyRefused)
+	default:
+		return fmt.Errorf("HTTP %d", status)
+	}
 }
 
 // rateLimited reports a database that answered 429 with a Retry-After, and

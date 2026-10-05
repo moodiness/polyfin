@@ -160,6 +160,12 @@ const en = {
       'PublicMetaDB did not accept this key. Copy it again from your PublicMetaDB account. Nothing was saved.',
     publicmetadb_unreachable:
       'PublicMetaDB could not be reached to check the key. Nothing was saved: try again later.',
+    invalid_theintrodb_key:
+      'TheIntroDB did not accept this key. Copy it again from your TheIntroDB account. Nothing was saved.',
+    theintrodb_unreachable:
+      'TheIntroDB could not be reached to check the key, or limits requests for now. Nothing was saved: try again later.',
+    invalid_segment_order:
+      'The order of the skip marker sources must list each source once. Reload the page.',
     invalid_trakt_app:
       'The Trakt client ID and secret must be at most 256 characters, without spaces or special characters. Copy them again from your Trakt app.',
     invalid_simkl_app:
@@ -701,8 +707,20 @@ const en = {
     skipButtonsHelp:
       'Apps offer to skip intros, recaps and credits, found in community databases. When off, apps show no skip buttons and the databases are not asked.',
     publicMetaDbKey: 'PublicMetaDB key',
-    publicMetaDbKeyHelp:
-      'Optional. A PublicMetaDB API key adds a third source of skip markers, asked after TheIntroDB and IntroDB.',
+    publicMetaDbKeyHelp: 'Optional. A PublicMetaDB API key adds a third source of skip markers.',
+    theIntroDbKey: 'TheIntroDB key (optional)',
+    theIntroDbKeyHelp:
+      'Raises TheIntroDB’s daily limit and includes your own submissions. Reading works without it.',
+    segmentSources: {
+      label: 'Order of the skip marker sources',
+      help: 'For each kind of passage (intro, recap, credits, preview), the first source in this list that has it wins; the next ones fill the gaps.',
+      offHelp: 'Sources turned off by POLYFIN_SEGMENTS are never asked, wherever they are.',
+      on: 'On',
+      needsKey: 'Needs a key',
+      off: 'Off (POLYFIN_SEGMENTS)',
+      reset: 'Reset to the default order',
+      resetDone: 'Default order restored. Save to apply it.',
+    },
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',
