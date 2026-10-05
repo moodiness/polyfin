@@ -108,7 +108,7 @@ func (s *synthetic) withVOD(movies, series int) *synthetic {
 	for g := range max(series/100, 2) {
 		s.seriesGroups = append(s.seriesGroups, fmt.Sprintf("%s Series %d", syntheticGenres[g%len(syntheticGenres)], g/len(syntheticGenres)+1))
 	}
-	extensions := []string{"mkv", "mp4"}
+	extensions := []string{"mkv", "mp4", "ts"}
 	qualities := []string{" 4K", " FHD", "", " HD"}
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 	for i := range movies {
@@ -359,8 +359,8 @@ func (s *syntheticServer) guide(w http.ResponseWriter) {
 }
 
 // syntheticVideos makes ten seconds of video with the ffmpeg of
-// POLYFIN_TEST_FFMPEG, by container: MPEG-TS for channels, Matroska and
-// MP4 for movies and episodes; nil without one.
+// POLYFIN_TEST_FFMPEG, by container: MPEG-TS for channels and movies,
+// Matroska and MP4 for movies and episodes; nil without one.
 func syntheticVideos(ctx context.Context) map[string][]byte {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
