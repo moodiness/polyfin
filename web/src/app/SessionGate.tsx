@@ -39,7 +39,9 @@ export function SessionGate() {
     queryKey: queryKeys.session,
     queryFn: ({ signal }) => fetchSession(signal),
     enabled: setupRequired === false,
-    staleTime: Infinity,
+    // Read again when the tab comes back after 30 s: a profile picture or a name changed in an
+    // app shows on the account button.
+    staleTime: 30_000,
   })
 
   if (status.data === undefined) {

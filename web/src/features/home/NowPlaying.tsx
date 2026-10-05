@@ -17,6 +17,7 @@ import {
   queryClient,
   queryKeys,
   stopLiveSession,
+  userImageUrl,
   type LiveSession,
   type StreamInfo,
 } from '@/api'
@@ -242,7 +243,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
 
         <div className="min-w-0">
           <p className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2">
-            <UserAvatar session={session} />
+            <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
             <b className="truncate font-medium text-ink">{session.user.name}</b>
             <span aria-hidden="true" className="size-[3px] shrink-0 rounded-full bg-ink-3" />
             <span className="truncate">{live.appOn(app, session.device.name)}</span>
@@ -371,20 +372,6 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
         {live.stopConfirm(session.user.name, title)}
       </ConfirmDialog>
     </article>
-  )
-}
-
-function UserAvatar({ session }: { session: LiveSession }) {
-  const [failed, setFailed] = useState(false)
-  const { user } = session
-  if (user.imageTag === null || failed) return <Avatar name={user.name} size="sm" />
-  return (
-    <img
-      src={`/UserImage?userId=${encodeURIComponent(user.id)}&tag=${encodeURIComponent(user.imageTag)}`}
-      alt=""
-      onError={() => setFailed(true)}
-      className="size-[22px] shrink-0 rounded-[7px] object-cover"
-    />
   )
 }
 

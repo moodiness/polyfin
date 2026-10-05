@@ -14,7 +14,7 @@ import {
 } from '@/api'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { Avatar, cx, Switch } from '@/ui'
+import { Switch } from '@/ui'
 
 /** Puts a user returned by the server into the cached list. */
 export function storeUser(updated: User) {
@@ -51,23 +51,6 @@ export function clockTime(iso: string, language: string) {
   return new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(
     new Date(iso),
   )
-}
-
-/** The user's profile picture, as their Jellyfin apps show it, or their initial. */
-export function UserAvatar({ user, size = 'lg' }: { user: User; size?: 'md' | 'lg' }) {
-  if (user.imageTag !== null) {
-    return (
-      <img
-        src={`/UserImage?userId=${encodeURIComponent(user.id)}&tag=${encodeURIComponent(user.imageTag)}`}
-        alt=""
-        className={cx(
-          'shrink-0 border border-line-2 object-cover',
-          size === 'lg' ? 'size-10 rounded-row' : 'size-7 rounded-[9px]',
-        )}
-      />
-    )
-  }
-  return <Avatar name={user.name} size={size} />
 }
 
 /** A quality group as people name video of that height: 4K, else its lines, 1080p. */

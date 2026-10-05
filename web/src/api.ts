@@ -12,7 +12,19 @@ export type Status = {
   webClient?: boolean
 }
 
-export type SessionUser = { id: string; name: string; isAdministrator: boolean }
+export type SessionUser = {
+  id: string
+  name: string
+  isAdministrator: boolean
+  /** Identifies the user's profile picture, served at /UserImage; null without one. */
+  imageTag: string | null
+}
+
+/** The address of a user's profile picture, undefined without one. */
+export const userImageUrl = (user: { id: string; imageTag: string | null }) =>
+  user.imageTag === null
+    ? undefined
+    : `/UserImage?userId=${encodeURIComponent(user.id)}&tag=${encodeURIComponent(user.imageTag)}`
 
 export type User = {
   id: string

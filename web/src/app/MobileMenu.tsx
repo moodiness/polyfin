@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import type { SessionUser } from '@/api'
+import { userImageUrl, type SessionUser } from '@/api'
 import { useI18n } from '@/i18n'
 import { Avatar, cx, IconButton, Modal } from '@/ui'
 import { LanguageSwitch, repositoryUrl } from './Brand'
@@ -76,7 +76,7 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
       <Modal open={open} onClose={() => setOpen(false)} title={t.nav.menu} width={400}>
         <div className="flex flex-col gap-1 p-3">
           <div className="mb-2 flex items-center gap-3 px-3 py-2">
-            <Avatar name={user.name} size="lg" />
+            <Avatar name={user.name} image={userImageUrl(user)} size="lg" />
             <div className="min-w-0">
               <p className="truncate text-body font-semibold text-ink">{user.name}</p>
               <p className="text-[12.5px] text-ink-3">
