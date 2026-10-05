@@ -79,12 +79,14 @@ Each channel takes one guide channel. Several channels, such as a channel and it
 
 1. **Identifier.** A guide channel whose identifier is the channel's Stremio ID, or, for a channel of an IPTV source, the channel's own guide identifier (its list's `tvg-id` or `epg_channel_id`), takes it.
 2. **Identifier, loosely.** Lists often write that identifier in another case, or with a feed after an `@` (`Name.fr@SD`). Failing an exact match, a guide channel whose identifier is the same ignoring case takes it; then one equal to the part before the last `@`, exactly and then ignoring case. This comes before any name match, with ties ranked by country and then programmes as below.
-3. **Name.** Otherwise the guide channel's display names are compared with the channel's name, once HTML entities left in them are decoded and these are set aside: case, accents, punctuation, separators such as "|", list prefixes such as "FR:", "FR|" or "KIDS|", and marker characters such as ᴴᴰ or ★. An exact match keeps quality tags such as HD, FHD, UHD, 4K or SD; a loose one sets them aside too.
+3. **Name.** Otherwise the guide channel's display names are compared with the channel's name, once HTML entities left in them are decoded and these are set aside: case, accents, punctuation, separators such as "|", list prefixes such as "FR:", "FR|" or "KIDS|", and marker characters such as ᴴᴰ or ★. "+" reads as "plus", as identifiers write it. An exact match keeps quality tags such as HD, FHD, UHD, 4K or SD; a loose one sets them aside too, and the "+", which lists sometimes leave out ("Zeb Sport" for "Zeb+ Sport").
+   - French lists write the public networks "France 2" to "France 5" as "F2" to "F5", followed by a region. On a French server, or under a French prefix, Polyfin reads them in full: "F3 Zebria" matches "France 3 Zebria". "F1" is left as it is.
+4. **Identifier as a name.** Failing a display name, a guide channel whose identifier, without its country suffix, writes the channel's name takes it: "ZebPlus1.fr" for "Zeb +1", "ZebAndCo.fr" for "Zeb & Co". Guides keep identifiers when a channel is renamed, so a list still using the old name finds it.
 
 Many guides list the same channel for several countries, so the candidates are ranked:
 
 1. Those of the channel's own country first: the one its prefix names ("FR:"), else the one the server language suggests (France for French; none for English). A guide channel's countries are those of its identifier ("Name.fr") and of its display names' prefixes ("FR|").
-2. Exact matches before loose ones.
+2. Exact matches before loose ones, and loose ones before identifiers read as names.
 3. The catalog's guide listed first.
 4. Within a guide, the guide channel with the most distinct programme titles in the window kept. A placeholder repeating one title ("No Data", or "Name 4K" advertising itself) loses to a real guide.
 5. The first one listed.

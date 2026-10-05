@@ -28,7 +28,11 @@ import (
 //     in another;
 //   - tier: a display name equal to the channel's name once folded (Exact)
 //     before one equal once quality tags are left out too (Loose), which
-//     a placeholder such as "Name 4K" may share with "Name";
+//     a placeholder such as "Name 4K" may share with "Name", before an
+//     identifier that writes the channel's name ("ZebPlus1.fr" for
+//     "Zeb+ 1", "ZebAndCo.fr" for "Zeb & Co", see IDName), which some
+//     guides keep for a channel renamed since. A French public network written short, "F2" to "F5" before a
+//     region, counts as written in full (see FrenchName);
 //   - then the guide's order;
 //   - then, among the candidates left, the one with the most distinct
 //     programme titles in the guide's window, so that placeholders, which
@@ -96,11 +100,17 @@ func (m *Matcher) Add(stremioID, guideID, name string) {
 			index(m.foldedBase, strings.ToLower(guideID[:at]), i)
 		}
 	}
-	if parsed.Exact != "" {
-		m.exact[parsed.Exact] = append(m.exact[parsed.Exact], i)
+	names := []Name{parsed}
+	if full := FrenchName(name); full != "" && m.channels[i].country == "fr" {
+		names = append(names, ParseName(full))
 	}
-	if parsed.Loose != "" {
-		m.loose[parsed.Loose] = append(m.loose[parsed.Loose], i)
+	// Identifiers write "&" as "And" ("ZebAndCo.fr" for "Zeb & Co").
+	if strings.Contains(name, "&") {
+		names = append(names, ParseName(strings.ReplaceAll(name, "&", " and ")))
+	}
+	for _, n := range names {
+		index(m.exact, n.Exact, i)
+		index(m.loose, n.Loose, i)
 	}
 }
 
@@ -111,6 +121,15 @@ const (
 	byFoldedBase = 1
 	byBase       = 2
 	byFolded     = 3
+)
+
+// Name tiers of candidates (see Declare), and what the country adds,
+// above any tier.
+const (
+	byIDName     = 1
+	byLooseName  = 2
+	byExactName  = 3
+	countryBonus = 4
 )
 
 // Declare ranks a channel of the guide at position guide against the
@@ -125,14 +144,17 @@ func (m *Matcher) Declare(guide int, channel Channel) {
 	}
 	countries := []string{IDCountry(channel.ID)}
 	tiers := map[int]int{}
+	for _, i := range m.exact[IDName(channel.ID)] {
+		tiers[i] = byIDName
+	}
 	for _, raw := range channel.Names {
 		name := ParseName(raw)
 		countries = append(countries, name.Country)
 		for _, i := range m.loose[name.Loose] {
-			tiers[i] = max(tiers[i], 1)
+			tiers[i] = max(tiers[i], byLooseName)
 		}
 		for _, i := range m.exact[name.Exact] {
-			tiers[i] = 2
+			tiers[i] = byExactName
 		}
 	}
 	// An identifier's kind outranks every name; the country and the name's
@@ -157,7 +179,7 @@ func (m *Matcher) Declare(guide int, channel Channel) {
 		// The identifier's kind first, then the country, then the tier.
 		rank := kinds[i]*10 + tier
 		if c.country != "" && slices.Contains(countries, c.country) {
-			rank += 3
+			rank += countryBonus
 		}
 		switch {
 		case rank > c.rank:

@@ -71,7 +71,7 @@ A channel's country is told by the group's name first and then the channel's: a 
 
 ### Merged channels
 
-When merged, the entries of a category with the same name, once country prefixes and quality tags are set aside, become one channel with a stream per entry, best quality first: 4K, UHD, FHD, HD, SD, then the others.
+When merged, the entries of a category with the same name, once country prefixes and quality tags are set aside, become one channel with a stream per entry, best quality first: 4K, UHD, FHD, HD, SD, then the others. The channel's name keeps the brackets that belong to it, such as "Zeb (Prime)".
 
 - A merged channel's details offer one version per turned-on stream, best first.
 - Playing it tries them in order, as many as **Versions tried when one does not work**, past those that fail, among those that fit the user's quality group (see [Playback](playback.md)).

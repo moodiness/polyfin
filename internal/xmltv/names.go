@@ -26,10 +26,13 @@ var qualityTags = map[string]bool{
 // Name is a channel name in the forms guides are matched by. Exact is the
 // name folded: without its list prefix, HTML entities decoded, without
 // case, accents, punctuation, separators, superscript and marker
-// characters (such as ᴴᴰ, ⁴ᴷ or ★), its words joined, so "ZEB 1" is "ZEB1".
-// Loose is Exact without the quality tags too, such as HD, FHD, UHD, 4K
-// or SD. A name left with nothing is empty, and matches nothing. Country
-// is the country its prefix names, if any (see Country).
+// characters (such as ᴴᴰ, ⁴ᴷ or ★), its words joined, so "ZEB 1" is "ZEB1",
+// and "+" read as "plus", as guide identifiers write it ("Zeb+ 1" is
+// "zebplus1", as "ZebPlus1.fr" is). Loose is Exact without the quality
+// tags too, such as HD, FHD, UHD, 4K or SD, and without the "+", which
+// lists leave out at times ("Zeb Sport" for "Zeb+ Sport"). A name left
+// with nothing is empty, and matches nothing. Country is the country its
+// prefix names, if any (see Country).
 type Name struct {
 	Exact, Loose string
 	Country      string
@@ -78,6 +81,9 @@ func foldName(name string) Name {
 	for _, r := range norm.NFKD.String(folded.String()) {
 		switch {
 		case unicode.Is(unicode.Mn, r):
+		case r == '+':
+			flush()
+			exact.WriteString("plus")
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			word.WriteRune(unicode.ToLower(r))
 		default:
@@ -86,6 +92,39 @@ func foldName(name string) Name {
 	}
 	flush()
 	return Name{Exact: exact.String(), Loose: loose.String()}
+}
+
+// frenchShortName is how French lists write the public networks numbered
+// 2 to 5: "F3" (or "F3:") before a region, or alone.
+var frenchShortName = regexp.MustCompile(`^\s*F([2-5])(?:\s*:)?(\s|$)`)
+
+// FrenchName is a French channel name with its public network written in
+// full ("F3 Zebria" is "France 3 Zebria", "FR| F3 Zebria" is "FR| France 3
+// Zebria"), or "" when it has none. "F1" is not one of these networks.
+func FrenchName(name string) string {
+	name = html.UnescapeString(name)
+	prefix := ""
+	// "F3:" reads as a list prefix too: the network comes first.
+	if found := listPrefix.FindString(name); found != "" && !frenchShortName.MatchString(name) {
+		prefix, name = found, name[len(found):]
+	}
+	match := frenchShortName.FindStringSubmatchIndex(name)
+	if match == nil {
+		return ""
+	}
+	return prefix + "France " + name[match[2]:match[3]] + name[match[4]:]
+}
+
+// IDName is the name a guide channel's identifier gives, as in
+// "ZebPlus1.fr" for "Zeb+ 1": the identifier without its country suffix,
+// folded (see Name), or "" for an identifier without one, which is not
+// written as a name.
+func IDName(id string) string {
+	at := strings.LastIndexByte(id, '.')
+	if at <= 0 || IDCountry(id) == "" || strings.ContainsAny(id[:at], " .") {
+		return ""
+	}
+	return foldName(id[:at]).Exact
 }
 
 // countries are the ISO 3166-1 alpha-2 country codes.
