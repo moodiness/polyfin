@@ -307,7 +307,8 @@ const settings = {
     loginDisclaimer: 'Sign-in message',
     loginDisclaimerHelp:
       'Shown under the sign-in form of the web player. Plain text, Markdown or HTML; the web player removes unsafe HTML.',
-    codeSize: (used: number, max: number) => `${used} KB of ${max} KB`,
+    codeSize: (used: number, max: number) =>
+      `${used} KB of ${max >= 1024 ? `${max / 1024} MB` : `${max} KB`}`,
     codeKeys: 'Tab inserts spaces; press Escape, then Tab, to leave the field.',
   },
   settingsPage: {

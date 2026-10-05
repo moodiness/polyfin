@@ -317,7 +317,8 @@ const settings: typeof en = {
     loginDisclaimer: 'Message de connexion',
     loginDisclaimerHelp:
       'Affiché sous le formulaire de connexion du lecteur web. Texte, Markdown ou HTML ; le lecteur web retire le HTML dangereux.',
-    codeSize: (used: number, max: number) => `${used} Ko sur ${max} Ko`,
+    codeSize: (used: number, max: number) =>
+      `${used} Ko sur ${max >= 1024 ? `${max / 1024} Mo` : `${max} Ko`}`,
     codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',
   },
   settingsPage: {

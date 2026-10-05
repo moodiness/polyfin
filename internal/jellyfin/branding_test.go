@@ -119,6 +119,15 @@ func TestBrandingIsSavedByAdministratorsOnly(t *testing.T) {
 	if got := s.store.Settings(); got.CustomCss != "a {}" {
 		t.Errorf("a refused body changed the CSS: %q", got.CustomCss)
 	}
+	// The largest CSS fits the body, even with every character escaped by
+	// JSON, so that a valid CSS is never refused for its body's size.
+	largest := strings.Repeat("<", accounts.MaxCustomCodeBytes)
+	if status, body := s.call(http.MethodPost, "/System/Configuration/branding", admin, map[string]any{"CustomCss": largest}); status != http.StatusNoContent {
+		t.Fatalf("largest CSS: %d %s", status, body)
+	}
+	if got := s.store.Settings(); got.CustomCss != largest {
+		t.Errorf("largest CSS: %d bytes saved", len(got.CustomCss))
+	}
 	// Other parts of the configuration stay read only.
 	if status, _ := s.call(http.MethodPost, "/System/Configuration/encoding", admin, map[string]any{}); status != http.StatusMethodNotAllowed {
 		t.Errorf("encoding: %d", status)

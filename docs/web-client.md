@@ -51,9 +51,9 @@ An administrator signed in to the web client arrives in the admin app signed in.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Custom CSS** | **Settings › Web player** | Empty | CSS applied to every page of the web client. Up to 256 KB. |
+| **Custom CSS** | **Settings › Web player** | Empty | CSS applied to every page of the web client. Up to 2 MB. |
 | **Sign-in message** | **Settings › Web player** | Empty | Text shown under the sign-in form. Plain text, Markdown or HTML. Up to 8 KB. |
-| **Custom JavaScript** | **Settings › Web player** | Empty | Script run on every page of the web client. Up to 256 KB. |
+| **Custom JavaScript** | **Settings › Web player** | Empty | Script run on every page of the web client. Up to 2 MB. |
 
 ### Custom CSS
 

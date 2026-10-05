@@ -27,11 +27,17 @@ import (
 // errs what ASP.NET reports when it is missing or does not convert. raw is
 // nil then.
 func requestBody(w http.ResponseWriter, r *http.Request, parameter string, errs bindErrors) (raw []byte, ok bool) {
+	return requestBodyUpTo(w, r, parameter, errs, maxBody)
+}
+
+// requestBodyUpTo is requestBody for a body that may be larger than
+// maxBody, up to limit bytes.
+func requestBodyUpTo(w http.ResponseWriter, r *http.Request, parameter string, errs bindErrors, limit int64) (raw []byte, ok bool) {
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
 		return nil, false
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		processingError(w, http.StatusRequestEntityTooLarge)
 		return nil, false

@@ -264,7 +264,7 @@ export type Settings = {
 }
 
 /** The largest custom CSS and script, and login disclaimer, the server accepts, in bytes. */
-export const customCodeMaxBytes = 256 * 1024
+export const customCodeMaxBytes = 2 * 1024 * 1024
 export const loginDisclaimerMaxBytes = 8 * 1024
 
 /** The range the server accepts for Settings.liveTvRefreshHours. */
