@@ -1,35 +1,28 @@
-import { BroadcastIcon, MusicNotesIcon, PuzzlePieceIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAddons, fetchSources, queryKeys, type Addon, type Owner } from '@/api'
 import { registerPaletteSource, type PaletteEntry } from '@/app/palette/registry'
-import { lineupPath } from '@/components/lineup/common'
 import type { Messages } from '@/i18n'
+import { isIptv, kindIcon, sourcePath } from './model'
 
 /** One source as a palette entry, opening its page when it has one, else its list. */
 function entry(t: Messages, selfId: string, addon: Addon, owner: Owner): PaletteEntry {
-  const iptv = addon.kind === 'm3u' || addon.kind === 'xtream'
-  const kind =
-    addon.kind === 'm3u' || addon.kind === 'xtream'
-      ? t.palette.kinds.iptv
-      : t.palette.kinds[addon.kind]
+  const kind = isIptv(addon)
+    ? t.palette.kinds.iptv
+    : t.palette.kinds[addon.kind as 'stremio' | 'eclipse']
   const mine = owner?.id === selfId
-  // A source of another user's has no page an administrator can open: their list shows it.
+  // Another user's source has no page an administrator can open: their row in the list shows it.
   const to =
     owner === null
-      ? iptv
-        ? lineupPath('shared', addon.id)
-        : '/sources'
+      ? sourcePath('shared', addon.id)
       : mine
-        ? iptv
-          ? lineupPath('me', addon.id)
-          : '/me/sources'
-        : '/sources'
+        ? sourcePath('me', addon.id)
+        : `/sources?source=${encodeURIComponent(`user:${owner.id}:${addon.id}`)}`
   return {
     id: `sources:${owner?.id ?? 'server'}:${addon.id}`,
     group: 'sources',
     label: addon.name,
     hint: owner === null || mine ? kind : t.palette.ownedBy(kind, owner.name),
-    icon: iptv ? BroadcastIcon : addon.kind === 'eclipse' ? MusicNotesIcon : PuzzlePieceIcon,
+    icon: kindIcon(addon),
     to,
   }
 }
