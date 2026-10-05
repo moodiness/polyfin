@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cmp"
 	"errors"
 	"net/http"
 	"slices"
@@ -292,6 +293,28 @@ type settingsJSON struct {
 	PreferDirectPlay    *bool `json:"preferDirectPlay"`
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
+	// The settings tuning conversions keep their current values when a
+	// PUT leaves them out. ConversionHardware is what conversions run on;
+	// a PUT cannot change it.
+	EncoderPreset          *string                `json:"encoderPreset"`
+	H264Quality            *int                   `json:"h264Quality"`
+	HevcQuality            *int                   `json:"hevcQuality"`
+	AllowHevcEncoding      *bool                  `json:"allowHevcEncoding"`
+	HardwareAcceleration   *string                `json:"hardwareAcceleration"`
+	HardwareDecodingCodecs *[]string              `json:"hardwareDecodingCodecs"`
+	ToneMapping            *bool                  `json:"toneMapping"`
+	ToneMappingAlgorithm   *string                `json:"toneMappingAlgorithm"`
+	ToneMappingPeak        *int                   `json:"toneMappingPeak"`
+	ToneMappingDesat       *float64               `json:"toneMappingDesat"`
+	DeinterlaceMethod      *string                `json:"deinterlaceMethod"`
+	DeinterlaceDoubleRate  *bool                  `json:"deinterlaceDoubleRate"`
+	DownmixAlgorithm       *string                `json:"downmixAlgorithm"`
+	DownmixBoost           *float64               `json:"downmixBoost"`
+	MaxAudioChannels       *int                   `json:"maxAudioChannels"`
+	AudioBitratePerChannel *int                   `json:"audioBitratePerChannel"`
+	EncodingThreads        *int                   `json:"encodingThreads"`
+	AheadSegments          *int                   `json:"aheadSegments"`
+	ConversionHardware     conversionHardwareJSON `json:"conversionHardware"`
 	// The thumbnail settings keep their current values when a PUT leaves
 	// them out.
 	Trickplay          *bool `json:"trickplay"`
@@ -344,11 +367,31 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		PreferDirectPlay:      &settings.PreferDirectPlay,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
-		Trickplay:             &settings.Trickplay,
-		TrickplayInterval:     &settings.TrickplayInterval,
-		TrickplayWidth:        &settings.TrickplayWidth,
-		ChapterImages:         &settings.ChapterImages,
-		ThumbnailStorageGB:    &settings.ThumbnailStorageGB,
+
+		EncoderPreset:          &settings.EncoderPreset,
+		H264Quality:            &settings.H264Quality,
+		HevcQuality:            &settings.HevcQuality,
+		AllowHevcEncoding:      &settings.AllowHevcEncoding,
+		HardwareAcceleration:   &settings.HardwareAcceleration,
+		HardwareDecodingCodecs: &settings.HardwareDecodingCodecs,
+		ToneMapping:            &settings.ToneMapping,
+		ToneMappingAlgorithm:   &settings.ToneMappingAlgorithm,
+		ToneMappingPeak:        &settings.ToneMappingPeak,
+		ToneMappingDesat:       &settings.ToneMappingDesat,
+		DeinterlaceMethod:      &settings.DeinterlaceMethod,
+		DeinterlaceDoubleRate:  &settings.DeinterlaceDoubleRate,
+		DownmixAlgorithm:       &settings.DownmixAlgorithm,
+		DownmixBoost:           &settings.DownmixBoost,
+		MaxAudioChannels:       &settings.MaxAudioChannels,
+		AudioBitratePerChannel: &settings.AudioBitratePerChannel,
+		EncodingThreads:        &settings.EncodingThreads,
+		AheadSegments:          &settings.AheadSegments,
+
+		Trickplay:          &settings.Trickplay,
+		TrickplayInterval:  &settings.TrickplayInterval,
+		TrickplayWidth:     &settings.TrickplayWidth,
+		ChapterImages:      &settings.ChapterImages,
+		ThumbnailStorageGB: &settings.ThumbnailStorageGB,
 
 		RecordingPrePadding:    &settings.RecordingPrePadding,
 		RecordingPostPadding:   &settings.RecordingPostPadding,
@@ -682,11 +725,37 @@ func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
 }
 
-// settingsJSON describes settings with what the configuration sets.
+// settingsJSON describes settings with what the configuration sets, and
+// what conversions run on.
 func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	body := newSettingsJSON(settings)
 	body.RecordingsFolder = h.RecordingsDir
+	body.ConversionHardware = conversionHardwareJSON{Default: h.Acceleration, Encoders: []string{}}
+	if encoder := h.Health.Encoder; encoder != nil {
+		if hw := encoder.Hardware(); hw != nil {
+			body.ConversionHardware.GPU = newHardwareJSON(hw)
+		}
+		for _, name := range []string{"libx264", "libx265"} {
+			if slices.Contains(encoder.Encoders(), name) {
+				body.ConversionHardware.Encoders = append(body.ConversionHardware.Encoders, name)
+			}
+		}
+		body.ConversionHardware.ToneMapping = encoder.HasFilters("zscale", "tonemap")
+		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
+	}
 	return body
+}
+
+// conversionHardwareJSON is what conversions run on: the GPU
+// POLYFIN_HWACCEL asks for, which the settings fall back on, the GPU
+// chosen, null for none, and, in software, the video encoders, the filters
+// tone mapping HDR and the bwdif deinterlacer.
+type conversionHardwareJSON struct {
+	Default     string        `json:"default"`
+	GPU         *hardwareJSON `json:"gpu"`
+	Encoders    []string      `json:"encoders"`
+	ToneMapping bool          `json:"toneMapping"`
+	Bwdif       bool          `json:"bwdif"`
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -723,11 +792,31 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
-		Trickplay:             valueOr(body.Trickplay, current.Trickplay),
-		TrickplayInterval:     valueOr(body.TrickplayInterval, current.TrickplayInterval),
-		TrickplayWidth:        valueOr(body.TrickplayWidth, current.TrickplayWidth),
-		ChapterImages:         valueOr(body.ChapterImages, current.ChapterImages),
-		ThumbnailStorageGB:    valueOr(body.ThumbnailStorageGB, current.ThumbnailStorageGB),
+
+		EncoderPreset:          valueOr(body.EncoderPreset, current.EncoderPreset),
+		H264Quality:            valueOr(body.H264Quality, current.H264Quality),
+		HevcQuality:            valueOr(body.HevcQuality, current.HevcQuality),
+		AllowHevcEncoding:      valueOr(body.AllowHevcEncoding, current.AllowHevcEncoding),
+		HardwareAcceleration:   valueOr(body.HardwareAcceleration, current.HardwareAcceleration),
+		HardwareDecodingCodecs: valueOr(body.HardwareDecodingCodecs, current.HardwareDecodingCodecs),
+		ToneMapping:            valueOr(body.ToneMapping, current.ToneMapping),
+		ToneMappingAlgorithm:   valueOr(body.ToneMappingAlgorithm, current.ToneMappingAlgorithm),
+		ToneMappingPeak:        valueOr(body.ToneMappingPeak, current.ToneMappingPeak),
+		ToneMappingDesat:       valueOr(body.ToneMappingDesat, current.ToneMappingDesat),
+		DeinterlaceMethod:      valueOr(body.DeinterlaceMethod, current.DeinterlaceMethod),
+		DeinterlaceDoubleRate:  valueOr(body.DeinterlaceDoubleRate, current.DeinterlaceDoubleRate),
+		DownmixAlgorithm:       valueOr(body.DownmixAlgorithm, current.DownmixAlgorithm),
+		DownmixBoost:           valueOr(body.DownmixBoost, current.DownmixBoost),
+		MaxAudioChannels:       valueOr(body.MaxAudioChannels, current.MaxAudioChannels),
+		AudioBitratePerChannel: valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
+		EncodingThreads:        valueOr(body.EncodingThreads, current.EncodingThreads),
+		AheadSegments:          valueOr(body.AheadSegments, current.AheadSegments),
+
+		Trickplay:          valueOr(body.Trickplay, current.Trickplay),
+		TrickplayInterval:  valueOr(body.TrickplayInterval, current.TrickplayInterval),
+		TrickplayWidth:     valueOr(body.TrickplayWidth, current.TrickplayWidth),
+		ChapterImages:      valueOr(body.ChapterImages, current.ChapterImages),
+		ThumbnailStorageGB: valueOr(body.ThumbnailStorageGB, current.ThumbnailStorageGB),
 
 		RecordingPrePadding:    valueOr(body.RecordingPrePadding, current.RecordingPrePadding),
 		RecordingPostPadding:   valueOr(body.RecordingPostPadding, current.RecordingPostPadding),
@@ -748,6 +837,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	h.Activity.SettingsSaved(r.Context(), sessionFrom(r.Context()).User.Name)
 	if !settings.QuickConnectEnabled {
 		h.QuickConnect.Clear()
+	}
+	// A GPU chosen anew is detected, or switched to, before the answer
+	// shows what was found.
+	if encoder := h.Health.Encoder; encoder != nil && settings.HardwareAcceleration != current.HardwareAcceleration {
+		encoder.SelectHardware(cmp.Or(settings.HardwareAcceleration, h.Acceleration), h.VAAPIDevice)
 	}
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }

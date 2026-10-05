@@ -220,13 +220,14 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		remux.Burn = new(index - len(files))
 	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
-		channels := 0
+		channels, layout := 0, ""
 		for _, stream := range analysis.Streams {
 			if stream.Index == remux.Audio {
-				channels = stream.Channels
+				channels, layout = stream.Channels, stream.ChannelLayout
 			}
 		}
-		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels)
+		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels, layout,
+			h.Playback.Capabilities().Tuning)
 	}
 	// PlaybackInfo copies no video above the user's bitrate limit, nor
 	// taller than their quality group: this guards URLs kept from before

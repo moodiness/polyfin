@@ -103,8 +103,9 @@ type Service struct {
 // sources through sources, remuxing them with segments, and renewing
 // expired links with renew, which may be nil. settings returns the server
 // settings, read as they apply: the analysis timeout as each analysis
-// starts, and the limit of the playbacks converting video, which it sets
-// on segments, whenever one more would start.
+// starts, the tuning of conversions as each encoding opens, and, which it
+// sets on segments, the limit of the playbacks converting video, whenever
+// one more would start, and the segments made ahead of the player.
 func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger,
 	settings func() accounts.Settings) (*Service, error) {
 	server, err := newLoopback()
@@ -112,6 +113,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
 	segments.LimitConversions(func() int { return settings().MaxConversions })
+	segments.LimitAhead(func() int { return settings().AheadSegments })
 	s := &Service{
 		db:          db,
 		opener:      opener,

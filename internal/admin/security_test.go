@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func TestSettingsSecurity(t *testing.T) {
 		saved["inactiveDeviceDays"] != float64(90) || saved["detailedLog"] != true {
 		t.Fatalf("saving: %d %v", status, saved)
 	}
-	if got := api.store.Settings(); got != want {
+	if got := api.store.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("stored: %+v, want %+v", got, want)
 	}
 	// An admin app that does not know them keeps them, one by one too.

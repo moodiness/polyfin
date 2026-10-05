@@ -100,6 +100,25 @@ const fr: Messages = {
     invalid_max_conversions:
       'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
     invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',
+    invalid_encoder_preset: 'Choisissez une vitesse d’encodage dans la liste.',
+    invalid_video_quality: 'La qualité vidéo doit être 0, ou un nombre entier de 1 à 51.',
+    invalid_hardware_acceleration: 'Choisissez une carte graphique dans la liste.',
+    invalid_hardware_decoding_codecs:
+      'Cette liste de formats lus par la carte graphique n’est pas prise en charge. Rechargez la page.',
+    invalid_tone_mapping_algorithm: 'Choisissez une méthode de conversion HDR dans la liste.',
+    invalid_tone_mapping_peak:
+      'La luminosité max doit être 0, ou un nombre entier de nits de 100 à 10 000.',
+    invalid_tone_mapping_desat: 'La désaturation des zones claires doit être un nombre de 0 à 10.',
+    invalid_deinterlace_method: 'Choisissez une méthode de désentrelacement dans la liste.',
+    invalid_downmix_algorithm: 'Choisissez un mixage stéréo dans la liste.',
+    invalid_downmix_boost: 'Le volume du mixage stéréo doit être un nombre de 0,5 à 3.',
+    invalid_max_audio_channels: 'Choisissez le nombre max de canaux audio dans la liste.',
+    invalid_audio_bitrate_per_channel:
+      'Le débit audio par canal doit être 0, ou un nombre entier de kb/s de 32 à 320.',
+    invalid_encoding_threads:
+      'Le nombre de threads du processeur doit être un nombre entier de 0 à 64.',
+    invalid_ahead_segments:
+      'Le nombre de segments préparés à l’avance doit être un nombre entier de 1 à 60.',
     parental_control:
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:
@@ -469,6 +488,144 @@ const fr: Messages = {
       'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. Polyfin ne convertit jamais au-delà de 1080p : les choix plus élevés ne changent rien pour l’instant.',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
+    conversion: {
+      description:
+        'Quand une application ne sait pas lire un fichier tel quel, Polyfin le convertit avec FFmpeg. Ces réglages disent comment, pour les films, les séries et la TV en direct. Les valeurs par défaut conviennent à la plupart des serveurs.',
+      groups: {
+        general: 'Général',
+        gpu: 'Carte graphique',
+        video: 'Image',
+        hdr: 'HDR',
+        interlaced: 'Vidéo entrelacée',
+        audio: 'Son',
+        performance: 'Performances',
+      },
+      hardwareAcceleration: 'Carte graphique pour convertir',
+      hardwareAccelerationHelp:
+        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. La variable d’environnement POLYFIN_HWACCEL donne toujours la valeur par défaut ; un choix fait ici la remplace dès l’enregistrement, sans redémarrer.',
+      hardwareDefault: (value: string) => `Par défaut, selon POLYFIN_HWACCEL (${value})`,
+      hardware: {
+        auto: 'Automatique : NVIDIA, sinon AMD ou Intel',
+        nvenc: 'NVIDIA (NVENC)',
+        vaapi: 'AMD ou Intel (VAAPI)',
+        none: 'Aucune : le processeur seul',
+      },
+      detected: 'Trouvé sur ce serveur',
+      noGpu: 'Aucune carte graphique n’est utilisée : le processeur convertit la vidéo.',
+      gpu: 'Carte graphique',
+      gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD ou Intel (VAAPI)' },
+      encoders: 'Encodeurs de la carte',
+      gpuToneMapping: 'HDR vers SDR sur la carte',
+      qualityFactor: 'Accepte un niveau de qualité',
+      processor: 'Encodeurs du processeur',
+      processorToneMapping: 'HDR vers SDR sur le processeur',
+      yes: 'Oui',
+      no: 'Non',
+      none: 'Aucun',
+      hardwareDecoding: 'Lire ces formats avec la carte graphique',
+      hardwareDecodingHelp:
+        'La carte lit (décode) elle-même ces formats, ce qui laisse le processeur libre. Décochez-en un si ses vidéos se convertissent mal ou pas du tout : le processeur le lira alors. Les autres formats sont tentés sur la carte. HEVC 10 bits a besoin de HEVC.',
+      hardwareDecodingNoGpu:
+        'Aucune carte graphique n’est utilisée : le processeur lit tous les formats.',
+      codecs: {
+        h264: 'H.264',
+        hevc: 'HEVC',
+        hevc_10bit: 'HEVC 10 bits',
+        vp9: 'VP9',
+        av1: 'AV1',
+        mpeg2video: 'MPEG-2',
+        vc1: 'VC-1',
+      },
+      encoderPreset: 'Vitesse d’encodage',
+      encoderPresetHelp:
+        'Plus lent donne une meilleure image pour la même taille, mais demande plus de puissance. Si les vidéos converties saccadent, choisissez plus rapide. Automatique garde le choix de Polyfin : très rapide sur le processeur, moyen sur les cartes NVIDIA, celui du pilote sur les cartes AMD et Intel.',
+      presets: {
+        auto: 'Automatique',
+        veryslow: 'Très lent (meilleure image)',
+        slower: 'Plus lent',
+        slow: 'Lent',
+        medium: 'Moyen',
+        fast: 'Rapide',
+        faster: 'Plus rapide',
+        veryfast: 'Très rapide',
+        superfast: 'Super rapide',
+        ultrafast: 'Ultra rapide (travail le plus léger)',
+      },
+      h264Quality: 'Qualité H.264 (0 = selon le débit)',
+      hevcQuality: 'Qualité HEVC (0 = selon le débit)',
+      qualityHelp:
+        'Un nombre plus petit donne une meilleure image, mais plus de données ; le débit reste le maximum. 0 vise seulement le débit. Jellyfin utilise 23 pour H.264 et 28 pour HEVC. 0, ou de 1 à 51 ; 0 par défaut.',
+      qualityIgnored:
+        'Cette carte graphique n’accepte pas de niveau de qualité : elle continue de viser le débit.',
+      allowHevcEncoding: 'Autoriser la conversion en HEVC',
+      allowHevcEncodingHelp:
+        'HEVC demande moins de données que H.264 pour la même image, mais plus de puissance pour le créer. Si cette option est activée, les applications qui citent HEVC en premier le reçoivent. Sinon, seules les applications qui ne lisent pas H.264 reçoivent du HEVC.',
+      noHevcEncoder: 'FFmpeg ne sait pas créer de HEVC sur ce serveur.',
+      toneMapping: 'Convertir le HDR en SDR (tone mapping)',
+      toneMappingHelp:
+        'Garde les bonnes couleurs et la bonne luminosité des vidéos HDR sur les écrans qui n’affichent que le SDR. Si cette option est désactivée, les vidéos HDR converties paraissent ternes, et les vidéos Dolby Vision sans couche HDR10 ne sont pas converties.',
+      toneMappingUnavailable:
+        'Ni la carte graphique ni FFmpeg ne savent le faire sur ce serveur : les vidéos HDR ne sont converties que si cette option est désactivée.',
+      toneMappingAlgorithm: 'Méthode de conversion HDR',
+      toneMappingAlgorithmHelp:
+        'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur la carte graphique et Hable sur le processeur.',
+      algorithms: {
+        auto: 'Automatique',
+        bt2390: 'BT.2390 (carte graphique seulement)',
+        hable: 'Hable',
+        reinhard: 'Reinhard',
+        mobius: 'Möbius',
+        clip: 'Écrêtage',
+        linear: 'Linéaire',
+      },
+      toneMappingPeak: 'Luminosité max en nits (0 = celle de la vidéo)',
+      toneMappingDesat: 'Désaturation des zones claires (0 = aucune)',
+      toneMappingPeakHelp:
+        'Sur le processeur seulement. La luminosité max remplace le niveau le plus clair annoncé par la vidéo : 0, ou de 100 à 10 000. La désaturation atténue la couleur des parties très claires : de 0 à 10. Les deux valent 0 par défaut.',
+      processorCannotToneMap:
+        'FFmpeg ne sait pas convertir le HDR sur le processeur de ce serveur.',
+      deinterlaceMethod: 'Méthode de désentrelacement',
+      deinterlaceMethodHelp:
+        'Les émissions de télé et les DVD sont souvent entrelacés, ce qui fait apparaître des lignes en peigne une fois converti. Yadif est rapide ; Bwdif est un peu plus net.',
+      noBwdif: 'FFmpeg n’a pas Bwdif sur ce serveur.',
+      deinterlacers: { yadif: 'Yadif', bwdif: 'Bwdif' },
+      deinterlaceDoubleRate: 'Doubler le nombre d’images par seconde',
+      deinterlaceDoubleRateHelp:
+        'Crée une image à partir de chaque demi-image, pour des mouvements plus fluides dans le sport et les émissions de télé. Seulement pour les vidéos jusqu’à 30 images par seconde.',
+      downmixAlgorithm: 'Mixage en stéréo',
+      downmixAlgorithmHelp:
+        'La façon de ramener le son multicanal sur deux enceintes. Dave750 et le mode nuit gardent les voix claires ; RFC 7845 et AC-4 suivent des normes.',
+      downmixes: {
+        None: 'Le mixage de FFmpeg',
+        Dave750: 'Dave750',
+        NightmodeDialogue: 'Mode nuit (voix plus claires)',
+        Rfc7845: 'RFC 7845',
+        Ac4: 'AC-4',
+      },
+      downmixBoost: 'Volume du mixage stéréo',
+      downmixBoostHelp:
+        'Un mixage en stéréo sonne souvent moins fort : le volume est multiplié par ce nombre. De 0,5 à 3 ; 1 (aucun changement) par défaut. Jellyfin utilise 2.',
+      maxAudioChannels: 'Nombre max de canaux audio',
+      maxAudioChannelsHelp:
+        'Le son converti garde au plus ce nombre de canaux, même si l’application en accepte plus.',
+      audioChannels: (channels: number) =>
+        channels === 0
+          ? 'Autant que l’application en accepte'
+          : channels === 1
+            ? 'Mono'
+            : channels === 2
+              ? 'Stéréo'
+              : '5.1',
+      audioBitratePerChannel: 'Débit audio par canal en kb/s (0 = automatique)',
+      audioBitratePerChannelHelp:
+        'Automatique donne 192 kb/s en stéréo, et 64 kb/s par canal au-delà. 0, ou de 32 à 320 ; 0 par défaut.',
+      encodingThreads: 'Threads du processeur par conversion (0 = automatique)',
+      encodingThreadsHelp:
+        'Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De 0 à 64 ; 0 laisse FFmpeg choisir.',
+      aheadSegments: 'Segments préparés à l’avance',
+      aheadSegmentsHelp:
+        'Polyfin prépare une vidéo au plus ce nombre de segments, d’environ 6 secondes chacun, au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De 1 à 60 ; 10 par défaut.',
+    },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
     catalogLimitHelp:

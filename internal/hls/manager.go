@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,15 +16,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 const (
-	// ahead is how many segments FFmpeg makes past the last one asked for
-	// before it waits: a player buffers about a minute ahead.
-	ahead = 10
+	// defaultAhead is how many segments FFmpeg makes past the last one
+	// asked for before it waits, unless LimitAhead says otherwise: a
+	// player buffers about a minute ahead.
+	defaultAhead = 10
 	// reach is how far past the segment being made a request waits for it,
 	// rather than starting FFmpeg again from the segment asked for.
 	reach = 3
@@ -71,6 +74,12 @@ type Remux struct {
 	AudioCodec    string
 	AudioChannels int
 	AudioBitrate  int64
+	// AudioFilter is the filter graph converted audio goes through, such
+	// as a downmix to stereo, empty for none.
+	AudioFilter string
+	// Threads is how many threads FFmpeg converts with, 0 letting it
+	// choose.
+	Threads int
 	// VideoTag is the sample entry of the video in MP4, such as hvc1 for
 	// HEVC, which Apple players require; empty keeps FFmpeg's.
 	VideoTag string
@@ -87,7 +96,9 @@ type Remux struct {
 
 // VideoEncoding is what a job converts the video to: 8-bit, progressive,
 // with a keyframe at the start of every segment, so that the segments of
-// a conversion follow those of a remux of the same version.
+// a conversion follow those of a remux of the same version. The fields
+// after Hardware come from the server's settings; their zero values are
+// what Polyfin did before they were settings.
 type VideoEncoding struct {
 	// Encoder is libx264, libx265 or one of Hardware's; Level, the codec
 	// level it declares.
@@ -95,7 +106,8 @@ type VideoEncoding struct {
 	Width, Height  int
 	// Bitrate is the average the encoder aims for, in bits per second.
 	Bitrate int64
-	// FrameRate is the source's, frames a second.
+	// FrameRate is the converted video's, frames a second: the source's,
+	// twice it with DoubleRate.
 	FrameRate float64
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
@@ -105,6 +117,30 @@ type VideoEncoding struct {
 	Burn *int
 	// Hardware is the GPU decoding and encoding the video, nil for none.
 	Hardware *Hardware
+	// Preset trades the encoder's speed for quality: one of x264's preset
+	// names, from veryslow to ultrafast, which the other encoders' follow
+	// (see nvencPresets and vaapiCompression). Empty keeps Polyfin's:
+	// veryfast in software, p4 on NVIDIA GPUs, the driver's on VAAPI.
+	Preset string
+	// Quality is the encoder's quality factor, Bitrate then being a cap:
+	// CRF in software, CQ on NVIDIA GPUs and QVBR's on VAAPI drivers that
+	// have it (see Hardware.QVBR). 0 aims for Bitrate.
+	Quality int
+	// ToneMapCurve is the curve HDR is tone mapped with: bt2390, hable,
+	// reinhard, mobius, clip or linear. Empty is BT.2390 on the GPU and
+	// Hable on the processor, whose filter has no BT.2390. ToneMapPeak, in
+	// nits, overrides the video's peak, 0 keeping it, and ToneMapDesat
+	// desaturates highlights; libplacebo, on the GPU, takes neither.
+	ToneMapCurve string
+	ToneMapPeak  int
+	ToneMapDesat float64
+	// Deinterlacer is yadif, if empty, or bwdif; DoubleRate makes a frame
+	// of each field rather than of each frame.
+	Deinterlacer string
+	DoubleRate   bool
+	// DecodeOnCPU leaves decoding to FFmpeg's own decoder when converting
+	// on a GPU.
+	DecodeOnCPU bool
 }
 
 // filters is the filter chain of the video: 8-bit, at the size asked, in
@@ -121,21 +157,55 @@ func (v *VideoEncoding) filters() string {
 func (v *VideoEncoding) convert() string {
 	var filters []string
 	if v.Deinterlace {
-		filters = append(filters, "yadif")
+		filters = append(filters, v.deinterlacer())
 	}
 	size := "w=" + strconv.Itoa(v.Width) + ":h=" + strconv.Itoa(v.Height)
 	switch {
 	case v.toneMapsOnGPU():
-		filters = append(filters, "libplacebo="+size+":format=yuv420p:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping=bt.2390")
+		filters = append(filters, "libplacebo="+size+":format=yuv420p:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping="+v.gpuCurve())
 	case v.ToneMap:
 		// To linear light in floating point, to BT.709 primaries, tone
 		// mapped, then to the BT.709 transfer and matrix in limited range.
+		tonemap := "tonemap=tonemap=" + v.cpuCurve() + ":desat=" + strconv.FormatFloat(v.ToneMapDesat, 'f', -1, 64)
+		if v.ToneMapPeak > 0 {
+			tonemap += ":peak=" + strconv.Itoa(v.ToneMapPeak)
+		}
 		filters = append(filters, "scale="+size, "zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
-			"tonemap=tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv")
+			tonemap, "zscale=t=bt709:m=bt709:r=tv")
 	default:
 		filters = append(filters, "scale="+size)
 	}
 	return strings.Join(filters, ",")
+}
+
+// deinterlacer is the deinterlacing filter. yadif makes a frame of each
+// frame by default, bwdif one of each field.
+func (v *VideoEncoding) deinterlacer() string {
+	name := cmp.Or(v.Deinterlacer, "yadif")
+	switch {
+	case v.DoubleRate:
+		return name + "=1"
+	case name == "yadif":
+		return name
+	}
+	return name + "=0"
+}
+
+// gpuCurve is the tone mapping curve as libplacebo names it.
+func (v *VideoEncoding) gpuCurve() string {
+	if v.ToneMapCurve == "" || v.ToneMapCurve == "bt2390" {
+		return "bt.2390"
+	}
+	return v.ToneMapCurve
+}
+
+// cpuCurve is the tone mapping curve as FFmpeg's tonemap filter names it:
+// it has no BT.2390, and uses Hable instead.
+func (v *VideoEncoding) cpuCurve() string {
+	if v.ToneMapCurve == "" || v.ToneMapCurve == "bt2390" {
+		return "hable"
+	}
+	return v.ToneMapCurve
 }
 
 // burnGraph is the filter graph burning subtitle stream burn into video
@@ -173,12 +243,35 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 	return v.encoderArgs(strings.Join(times, ","))
 }
 
+// nvencPresets are NVENC's presets for x264's names, as Jellyfin maps
+// them.
+var nvencPresets = map[string]string{"veryslow": "p7", "slower": "p6", "slow": "p5", "medium": "p4", "fast": "p3", "faster": "p2",
+	"veryfast": "p1", "superfast": "p1", "ultrafast": "p1"}
+
+// vaapiCompression are VAAPI's compression levels for x264's preset
+// names, as Jellyfin maps them: 1 is the slowest. Jellyfin sets them on
+// Intel drivers only, AMD's following them unreliably; Polyfin does not
+// tell drivers apart, and sets them on any.
+var vaapiCompression = map[string]string{"veryslow": "1", "slower": "2", "slow": "3", "medium": "4", "fast": "5", "faster": "6",
+	"veryfast": "7", "superfast": "7", "ultrafast": "7"}
+
 // encoderArgs are FFmpeg's encoder options, with keyframes forced as
 // -force_key_frames takes them.
 func (v *VideoEncoding) encoderArgs(keyframes string) []string {
-	args := []string{"-c:v", v.Encoder,
-		"-b:v", strconv.FormatInt(v.Bitrate, 10), "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
-		"-force_key_frames", keyframes}
+	nvenc := v.Encoder == "h264_nvenc" || v.Encoder == "hevc_nvenc"
+	software := v.Encoder == "libx264" || v.Encoder == "libx265"
+	qvbr := v.Quality > 0 && !software && !nvenc && v.Hardware != nil && v.Hardware.QVBR
+	args := []string{"-c:v", v.Encoder}
+	switch {
+	case v.Quality > 0 && software:
+		// The quality factor rules, within the maximum rate.
+	case v.Quality > 0 && nvenc:
+		args = append(args, "-b:v", "0")
+	default:
+		args = append(args, "-b:v", strconv.FormatInt(v.Bitrate, 10))
+	}
+	args = append(args, "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
+		"-force_key_frames", keyframes)
 	if v.Burn == nil {
 		args = append(args, "-vf", v.filters())
 	}
@@ -186,16 +279,29 @@ func (v *VideoEncoding) encoderArgs(keyframes string) []string {
 	if strings.HasPrefix(v.Encoder, "h264") {
 		profile = "high"
 	}
-	switch v.Encoder {
-	case "libx264":
-		args = append(args, "-preset", "veryfast", "-sc_threshold", "0", "-profile:v", profile, "-level:v", v.Level)
-	case "libx265":
-		args = append(args, "-preset", "veryfast", "-sc_threshold", "0", "-profile:v", profile, "-x265-params", "log-level=error:level-idc="+v.Level)
-	case "h264_nvenc", "hevc_nvenc":
+	switch {
+	case v.Encoder == "libx264":
+		args = append(args, "-preset", cmp.Or(v.Preset, "veryfast"), "-sc_threshold", "0", "-profile:v", profile, "-level:v", v.Level)
+	case v.Encoder == "libx265":
+		args = append(args, "-preset", cmp.Or(v.Preset, "veryfast"), "-sc_threshold", "0", "-profile:v", profile, "-x265-params", "log-level=error:level-idc="+v.Level)
+	case nvenc:
 		// A forced keyframe is an IDR frame, as a segment's first must be.
-		args = append(args, "-preset", "p4", "-rc", "vbr", "-forced-idr", "1", "-profile:v", profile, "-level:v", v.Level)
+		args = append(args, "-preset", cmp.Or(nvencPresets[v.Preset], "p4"), "-rc", "vbr", "-forced-idr", "1", "-profile:v", profile, "-level:v", v.Level)
+	case qvbr:
+		args = append(args, "-rc_mode", "QVBR", "-profile:v", profile, "-level:v", v.Level)
 	default:
 		args = append(args, "-rc_mode", "VBR", "-profile:v", profile, "-level:v", v.Level)
+	}
+	switch {
+	case v.Quality > 0 && software:
+		args = append(args, "-crf", strconv.Itoa(v.Quality))
+	case v.Quality > 0 && nvenc:
+		args = append(args, "-cq", strconv.Itoa(v.Quality))
+	case qvbr:
+		args = append(args, "-global_quality", strconv.Itoa(v.Quality))
+	}
+	if level := vaapiCompression[v.Preset]; level != "" && !software && !nvenc {
+		args = append(args, "-compression_level", level)
 	}
 	return args
 }
@@ -230,11 +336,17 @@ type Manager struct {
 	logger *slog.Logger
 	done   chan struct{}
 	can    capabilities
-	// hardware is the GPU DetectHardware chose, set before encoding starts.
-	hardware *Hardware
+	// hardware is the GPU DetectHardware chose last, nil for none; detected
+	// holds what it found for each choice, and detecting serializes it.
+	hardware  atomic.Pointer[Hardware]
+	detecting sync.Mutex
+	detected  map[string]*Hardware
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
+	// ahead returns how many segments FFmpeg makes past the last one asked
+	// for before it waits; nil, or a value below 1, keeps defaultAhead.
+	ahead atomic.Pointer[func() int]
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -258,7 +370,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath),
-		encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
+		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
 	go m.stopIdle()
 	return m, nil
 }
@@ -326,6 +438,24 @@ func (m *Manager) LimitConversions(limit func() int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.conversions = limit
+}
+
+// LimitAhead bounds how many segments FFmpeg makes past the last one a
+// player asked for to what ahead returns, read whenever FFmpeg finishes a
+// segment: past it, FFmpeg waits for the player.
+func (m *Manager) LimitAhead(ahead func() int) {
+	m.ahead.Store(&ahead)
+}
+
+// aheadSegments is how many segments FFmpeg makes past the last one asked
+// for (see LimitAhead).
+func (m *Manager) aheadSegments() int {
+	if ahead := m.ahead.Load(); ahead != nil {
+		if n := (*ahead)(); n > 0 {
+			return n
+		}
+	}
+	return defaultAhead
 }
 
 // MayConvert reports whether an encoding converting the video of version
@@ -596,8 +726,9 @@ func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 
 // prune removes the segments far from segment n. The caller holds e.mu.
 func (e *encoding) prune(n int) {
+	far := n + e.m.aheadSegments() + reach
 	for i, ready := range e.ready {
-		if ready && (i < n-behind || i > n+ahead+reach) {
+		if ready && (i < n-behind || i > far) {
 			e.ready[i] = false
 			if err := os.Remove(e.path(i)); err != nil && !errors.Is(err, os.ErrNotExist) {
 				e.m.logger.Warn("A segment could not be removed", "error", err)
@@ -767,8 +898,8 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 		if err := e.close(j); err != nil {
 			return err
 		}
-		// Keep at most ahead segments past the last one asked for.
-		for j.next > e.requested+ahead {
+		// Keep at most so many segments past the last one asked for.
+		for j.next > e.requested+e.m.aheadSegments() {
 			if err := e.wait(ctx); err != nil {
 				return errStale
 			}
@@ -895,16 +1026,12 @@ func (r Remux) args(n int) []string {
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)
 	}
-	if r.Audio >= 0 && r.AudioCodec != "" {
-		args = append(args, "-c:a", r.AudioCodec, "-ac", strconv.Itoa(r.AudioChannels))
-		if r.AudioBitrate > 0 {
-			args = append(args, "-b:a", strconv.FormatInt(r.AudioBitrate, 10))
-		}
-	}
+	args = append(args, r.audioArgs()...)
 	if r.Audio >= 0 {
 		// Audio before zero, such as encoder priming, is not played.
 		args = append(args, "-bsf:a", `noise=drop=lt(pts\,0)`)
 	}
+	args = append(args, r.threadArgs()...)
 	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat(timestampOffset.Seconds(), 'f', -1, 64))
 	if r.Format == TS {
 		args = append(args, "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1")

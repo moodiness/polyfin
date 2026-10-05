@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -41,7 +42,7 @@ func TestRecordingSettingsStayInRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.Settings(); got != changed {
+	if got := reopened.Settings(); !reflect.DeepEqual(got, changed) {
 		t.Errorf("after reopening: %+v, want %+v", got, changed)
 	}
 	// The administrator's setup keeps them.

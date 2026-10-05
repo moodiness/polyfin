@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -101,8 +102,9 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	if DefaultCatalogLimit != 2000 || DefaultChannelLimit != 10000 {
 		t.Errorf("default limits: %d and %d", DefaultCatalogLimit, DefaultChannelLimit)
 	}
-	want := Settings{ServerName: "Maison", QuickConnectEnabled: false, LegacyAuthorization: true, Language: "fr", Chapters: false, PrepareAhead: true,
-		CatalogLimit: 5000, ChannelLimit: 30000}
+	want := store.Settings()
+	want.ServerName, want.QuickConnectEnabled, want.LegacyAuthorization, want.Language, want.Chapters, want.PrepareAhead = "Maison", false, true, "fr", false, true
+	want.CatalogLimit, want.ChannelLimit = 5000, 30000
 	want.PlayedPercent, want.ResumePercent = DefaultPlayedPercent, DefaultResumePercent
 	want.VersionListMinutes, want.CatalogRefreshMinutes = DefaultVersionListMinutes, DefaultCatalogRefreshMinutes
 	want.AnalysisTimeout, want.VersionAttempts, want.PreferDirectPlay, want.MaxConversions, want.MaxConversionHeight = 30, 5, true, 4, 720
@@ -115,7 +117,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.Settings(); got != want {
+	if got := reopened.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("settings after reopening: %+v, want %+v", got, want)
 	}
 	for _, language := range []string{"", "de", "FR", "fr-FR"} {
@@ -125,7 +127,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 			t.Errorf("language %q: got %v", language, err)
 		}
 	}
-	if got := store.Settings(); got != want {
+	if got := store.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("a refused update changed the settings: %+v", got)
 	}
 }
@@ -191,7 +193,7 @@ func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.Settings(); got != want {
+	if got := reopened.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("after reopening: %+v, want %+v", got, want)
 	}
 
@@ -218,7 +220,7 @@ func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
 			t.Errorf("%s: got %v, want %v", tc.name, err, tc.err)
 		}
 	}
-	if got := store.Settings(); got != want {
+	if got := store.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("a refused update changed the settings: %+v", got)
 	}
 	for _, bounds := range [][4]int{
@@ -252,7 +254,7 @@ func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
 		if cached, stored := store.Settings().Language, reopened.Settings().Language; cached != tc.want || stored != tc.want {
 			t.Errorf("setup in %q: language %q (stored %q), want %q", tc.given, cached, stored, tc.want)
 		}
-		if cached, stored := store.Settings(), reopened.Settings(); cached != stored || cached.CatalogLimit != DefaultCatalogLimit {
+		if cached, stored := store.Settings(), reopened.Settings(); !reflect.DeepEqual(cached, stored) || cached.CatalogLimit != DefaultCatalogLimit {
 			t.Errorf("setup in %q: settings %+v, stored %+v", tc.given, cached, stored)
 		}
 	}

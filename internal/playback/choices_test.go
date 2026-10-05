@@ -98,7 +98,7 @@ func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 	stream := media.Stream{Index: 0, Type: "video", Codec: "mpeg2video", Width: 1920, Height: 800, AverageRate: 24}
 	remux := Remux{ConvertVideo: ConvertVideo("h264", 0, 480, video(1920, 800), can)}
 	var encoding hls.Remux
-	remux.convert(&encoding, stream)
+	remux.convert(&encoding, stream, Tuning{})
 	if e := encoding.Encode; e == nil || e.Width != 1152 || e.Height != 480 || e.Bitrate != 2_000_000 {
 		t.Errorf("encoding: %+v", e)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -124,6 +125,74 @@ const (
 // the default, keeps the height of the original, the others are the
 // heights of usual video.
 var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
+
+// The errors of the settings tuning conversions, reporting a value
+// outside the bounds or choices below.
+var (
+	ErrInvalidEncoderPreset          = errors.New("invalid encoder preset")
+	ErrInvalidVideoQuality           = errors.New("invalid video quality")
+	ErrInvalidHardwareAcceleration   = errors.New("invalid hardware acceleration")
+	ErrInvalidHardwareDecodingCodecs = errors.New("invalid hardware decoding codecs")
+	ErrInvalidToneMappingAlgorithm   = errors.New("invalid tone mapping algorithm")
+	ErrInvalidToneMappingPeak        = errors.New("invalid tone mapping peak")
+	ErrInvalidToneMappingDesat       = errors.New("invalid tone mapping desaturation")
+	ErrInvalidDeinterlaceMethod      = errors.New("invalid deinterlace method")
+	ErrInvalidDownmixAlgorithm       = errors.New("invalid downmix algorithm")
+	ErrInvalidDownmixBoost           = errors.New("invalid downmix boost")
+	ErrInvalidMaxAudioChannels       = errors.New("invalid maximum of audio channels")
+	ErrInvalidAudioBitrate           = errors.New("invalid audio bitrate")
+	ErrInvalidEncodingThreads        = errors.New("invalid encoding threads")
+	ErrInvalidAheadSegments          = errors.New("invalid segments ahead")
+)
+
+// The choices of the settings tuning conversions, named as Jellyfin's
+// encoding options name them where it has them; the first of each is the
+// default.
+var (
+	// EncoderPresets are the values of Settings.EncoderPreset: auto lets
+	// Polyfin choose each encoder's, then from the slowest to the fastest.
+	EncoderPresets = []string{"auto", "veryslow", "slower", "slow", "medium", "fast", "faster", "veryfast", "superfast", "ultrafast"}
+	// HardwareAccelerations are the values of Settings.HardwareAcceleration:
+	// empty follows POLYFIN_HWACCEL, whose values the others are.
+	HardwareAccelerations = []string{"", "auto", "nvenc", "vaapi", "none"}
+	// HardwareDecodingCodecs are the values Settings.HardwareDecodingCodecs
+	// holds, all by default: FFmpeg's codec names, and hevc_10bit for HEVC
+	// in 10 bits, which HEVC needs too.
+	HardwareDecodingCodecs = []string{"h264", "hevc", "hevc_10bit", "vp9", "av1", "mpeg2video", "vc1"}
+	// ToneMappingAlgorithms are the values of Settings.ToneMappingAlgorithm:
+	// auto is BT.2390 on the GPU and Hable on the processor.
+	ToneMappingAlgorithms = []string{"auto", "bt2390", "hable", "reinhard", "mobius", "clip", "linear"}
+	// DeinterlaceMethods are the values of Settings.DeinterlaceMethod.
+	DeinterlaceMethods = []string{"yadif", "bwdif"}
+	// DownmixAlgorithms are the values of Settings.DownmixAlgorithm: None
+	// leaves FFmpeg's own downmix.
+	DownmixAlgorithms = []string{"None", "Dave750", "NightmodeDialogue", "Rfc7845", "Ac4"}
+	// AudioChannelLimits are the values of Settings.MaxAudioChannels: 0
+	// leaves the app's limit alone.
+	AudioChannelLimits = []int{0, 1, 2, 6}
+)
+
+// The bounds and defaults of the numbers tuning conversions. The defaults
+// are what Polyfin did before they were settings: 0 quality aims for the
+// bitrate alone, 0 peak keeps the video's, a boost of 1 changes nothing,
+// 0 audio bitrate keeps Polyfin's per channel count, and 0 threads lets
+// FFmpeg choose.
+const (
+	MinVideoQuality           = 1
+	MaxVideoQuality           = 51
+	MinToneMappingPeak        = 100
+	MaxToneMappingPeak        = 10000
+	MaxToneMappingDesat       = 10
+	MinDownmixBoost           = 0.5
+	MaxDownmixBoost           = 3
+	DefaultDownmixBoost       = 1
+	MinAudioBitratePerChannel = 32
+	MaxAudioBitratePerChannel = 320
+	MaxEncodingThreads        = 64
+	MinAheadSegments          = 1
+	MaxAheadSegments          = 60
+	DefaultAheadSegments      = 10
+)
 
 // ErrInvalidTrickplayInterval reports a TrickplayInterval outside
 // [MinTrickplayInterval, MaxTrickplayInterval].
@@ -289,6 +358,55 @@ type Settings struct {
 	// at most, keeping its shape, one of ConversionHeights; 0 keeps the
 	// original's.
 	MaxConversionHeight int
+	// The settings below tune the conversions of files and Live TV alike,
+	// as Jellyfin's Transcoding page does (recordings copy the stream).
+	// EncoderPreset trades encoding speed for quality, one of
+	// EncoderPresets. H264Quality and HevcQuality are the encoders' quality
+	// factors, CRF in software and CQ or QVBR's on GPUs, the bitrate then
+	// being a cap; 0 aims for the bitrate alone.
+	EncoderPreset string
+	H264Quality   int
+	HevcQuality   int
+	// AllowHevcEncoding converts video to HEVC for the apps that list it
+	// before H.264; off, HEVC is only for apps taking no H.264, as with
+	// Jellyfin's option of the same name.
+	AllowHevcEncoding bool
+	// HardwareAcceleration chooses the GPU, one of HardwareAccelerations:
+	// empty follows POLYFIN_HWACCEL. HardwareDecodingCodecs are the
+	// codecs, of HardwareDecodingCodecs, the GPU decodes; the others are
+	// decoded in software.
+	HardwareAcceleration   string
+	HardwareDecodingCodecs []string
+	// ToneMapping converts HDR video to SDR when it is converted, with
+	// ToneMappingAlgorithm, one of ToneMappingAlgorithms; off, it keeps
+	// HDR's washed-out colors. ToneMappingPeak, in nits, overrides the
+	// video's peak, 0 keeping it, and ToneMappingDesat desaturates the
+	// highlights: both on the processor only.
+	ToneMapping          bool
+	ToneMappingAlgorithm string
+	ToneMappingPeak      int
+	ToneMappingDesat     float64
+	// DeinterlaceMethod is one of DeinterlaceMethods; DeinterlaceDoubleRate
+	// makes a frame of each field, doubling the frame rate up to 30.
+	DeinterlaceMethod     string
+	DeinterlaceDoubleRate bool
+	// DownmixAlgorithm is how audio is mixed down to stereo, one of
+	// DownmixAlgorithms, and DownmixBoost the volume it is multiplied by
+	// then. MaxAudioChannels caps converted audio, one of
+	// AudioChannelLimits, and AudioBitratePerChannel, in kb/s, sets its
+	// bitrate; 0 keeps Polyfin's (192 kb/s in stereo, 64 kb/s a channel
+	// above).
+	DownmixAlgorithm       string
+	DownmixBoost           float64
+	MaxAudioChannels       int
+	AudioBitratePerChannel int
+	// EncodingThreads is how many threads FFmpeg converts with, 0 letting
+	// it choose.
+	EncodingThreads int
+	// AheadSegments is how many segments, of about 6 seconds, a remux or
+	// conversion of a file makes past the last one the app asked for
+	// before it waits.
+	AheadSegments int
 	// Trickplay makes scrubbing thumbnails of the versions played, one
 	// every TrickplayInterval seconds, TrickplayWidth pixels wide, and
 	// ChapterImages an image of each of their chapters. Both read keyframes
@@ -328,17 +446,47 @@ func validWebText(text string, max int) bool {
 	return len(text) <= max && !strings.ContainsRune(text, 0)
 }
 
+// settingsColumns are the columns of the settings, in the order of
+// Settings.fields.
+const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, " +
+	"skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"personal_addons, login_attempts, inactive_device_days, detailed_log, " +
+	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
+	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
+	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, deinterlace_method, deinterlace_double_rate, " +
+	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_segments, " +
+	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
+	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
+	"custom_css, custom_js, login_disclaimer"
+
+// updateSettingsQuery sets every column of settingsColumns, in order.
+var updateSettingsQuery = func() string {
+	columns := strings.Split(settingsColumns, ", ")
+	for i, column := range columns {
+		columns[i] = column + " = $" + strconv.Itoa(i+1)
+	}
+	return "UPDATE settings SET " + strings.Join(columns, ", ")
+}()
+
+// fields points to the fields of settings, in the order of
+// settingsColumns: what a row scans into, and what an update writes.
+func (settings *Settings) fields() []any {
+	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
+		&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
+		&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
+		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
+		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
+		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
+		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSegments,
+		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
+		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
+		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer}
+}
+
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	var settings Settings
-	err := s.db.QueryRow(ctx, "SELECT server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, skip_buttons, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, personal_addons, login_attempts, inactive_device_days, detailed_log, analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, custom_css, custom_js, login_disclaimer FROM settings").
-		Scan(&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
-			&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-			&settings.SkipButtons, &settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
-			&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
-			&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
-			&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
-			&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
-			&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer)
+	err := s.db.QueryRow(ctx, "SELECT "+settingsColumns+" FROM settings").Scan(settings.fields()...)
 	return settings, err
 }
 
@@ -396,6 +544,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !slices.Contains(ConversionHeights, settings.MaxConversionHeight) {
 		return Settings{}, ErrInvalidMaxConversionHeight
 	}
+	codecs, err := validConversion(settings)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.HardwareDecodingCodecs = codecs
 	if settings.TrickplayInterval < MinTrickplayInterval || settings.TrickplayInterval > MaxTrickplayInterval {
 		return Settings{}, ErrInvalidTrickplayInterval
 	}
@@ -431,16 +584,7 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 			return Settings{}, err
 		}
 	}
-	_, err := s.db.Exec(ctx,
-		"UPDATE settings SET server_name = $1, quick_connect_enabled = $2, legacy_authorization = $3, language = $4, chapters = $5, prepare_ahead = $6, transcoding = $7, downloads = $8, catalog_limit = $9, channel_limit = $10, skip_buttons = $11, similar_titles = $12, played_percent = $13, resume_percent = $14, version_list_minutes = $15, catalog_refresh_minutes = $16, personal_addons = $17, login_attempts = $18, inactive_device_days = $19, detailed_log = $20, analysis_timeout = $21, version_attempts = $22, prefer_direct_play = $23, max_conversions = $24, max_conversion_height = $25, trickplay = $26, trickplay_interval = $27, trickplay_width = $28, chapter_images = $29, thumbnail_storage_gb = $30, recording_pre_padding = $31, recording_post_padding = $32, recording_retention_days = $33, live_tv_refresh_hours = $34, custom_css = $35, custom_js = $36, login_disclaimer = $37",
-		settings.ServerName, settings.QuickConnectEnabled, settings.LegacyAuthorization, settings.Language,
-		settings.Chapters, settings.PrepareAhead, settings.Transcoding, settings.Downloads, settings.CatalogLimit, settings.ChannelLimit,
-		settings.SkipButtons, settings.SimilarTitles, settings.PlayedPercent, settings.ResumePercent, settings.VersionListMinutes, settings.CatalogRefreshMinutes,
-		settings.PersonalAddons, settings.LoginAttempts, settings.InactiveDeviceDays, settings.DetailedLog,
-		settings.AnalysisTimeout, settings.VersionAttempts, settings.PreferDirectPlay, settings.MaxConversions, settings.MaxConversionHeight,
-		settings.Trickplay, settings.TrickplayInterval, settings.TrickplayWidth, settings.ChapterImages, settings.ThumbnailStorageGB,
-		settings.RecordingPrePadding, settings.RecordingPostPadding, settings.RecordingRetentionDays, settings.LiveTvRefreshHours,
-		settings.CustomCss, settings.CustomJs, settings.LoginDisclaimer)
+	_, err = s.db.Exec(ctx, updateSettingsQuery, settings.fields()...)
 	if err != nil {
 		return Settings{}, err
 	}
@@ -459,4 +603,52 @@ func validServerName(name string) bool {
 		}
 	}
 	return true
+}
+
+// validConversion checks the settings tuning conversions, and returns the
+// codecs decoded on the GPU in the order of HardwareDecodingCodecs.
+func validConversion(settings Settings) ([]string, error) {
+	validQuality := func(quality int) bool {
+		return quality == 0 || quality >= MinVideoQuality && quality <= MaxVideoQuality
+	}
+	switch {
+	case !slices.Contains(EncoderPresets, settings.EncoderPreset):
+		return nil, ErrInvalidEncoderPreset
+	case !validQuality(settings.H264Quality) || !validQuality(settings.HevcQuality):
+		return nil, ErrInvalidVideoQuality
+	case !slices.Contains(HardwareAccelerations, settings.HardwareAcceleration):
+		return nil, ErrInvalidHardwareAcceleration
+	case !slices.Contains(ToneMappingAlgorithms, settings.ToneMappingAlgorithm):
+		return nil, ErrInvalidToneMappingAlgorithm
+	case settings.ToneMappingPeak != 0 && (settings.ToneMappingPeak < MinToneMappingPeak || settings.ToneMappingPeak > MaxToneMappingPeak):
+		return nil, ErrInvalidToneMappingPeak
+	case !(settings.ToneMappingDesat >= 0 && settings.ToneMappingDesat <= MaxToneMappingDesat):
+		return nil, ErrInvalidToneMappingDesat
+	case !slices.Contains(DeinterlaceMethods, settings.DeinterlaceMethod):
+		return nil, ErrInvalidDeinterlaceMethod
+	case !slices.Contains(DownmixAlgorithms, settings.DownmixAlgorithm):
+		return nil, ErrInvalidDownmixAlgorithm
+	case !(settings.DownmixBoost >= MinDownmixBoost && settings.DownmixBoost <= MaxDownmixBoost):
+		return nil, ErrInvalidDownmixBoost
+	case !slices.Contains(AudioChannelLimits, settings.MaxAudioChannels):
+		return nil, ErrInvalidMaxAudioChannels
+	case settings.AudioBitratePerChannel != 0 &&
+		(settings.AudioBitratePerChannel < MinAudioBitratePerChannel || settings.AudioBitratePerChannel > MaxAudioBitratePerChannel):
+		return nil, ErrInvalidAudioBitrate
+	case settings.EncodingThreads < 0 || settings.EncodingThreads > MaxEncodingThreads:
+		return nil, ErrInvalidEncodingThreads
+	case settings.AheadSegments < MinAheadSegments || settings.AheadSegments > MaxAheadSegments:
+		return nil, ErrInvalidAheadSegments
+	}
+	codecs := []string{}
+	for _, codec := range HardwareDecodingCodecs {
+		if slices.Contains(settings.HardwareDecodingCodecs, codec) {
+			codecs = append(codecs, codec)
+		}
+	}
+	// A codec unknown, or listed twice, leaves the counts apart.
+	if len(codecs) != len(settings.HardwareDecodingCodecs) {
+		return nil, ErrInvalidHardwareDecodingCodecs
+	}
+	return codecs, nil
 }

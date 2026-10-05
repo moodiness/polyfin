@@ -1,20 +1,10 @@
-import {
-  createContext,
-  use,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react'
+import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   analysisTimeoutRange,
   catalogLimitRange,
   catalogRefreshMinutesRange,
   channelLimitRange,
-  conversionHeights,
   customCodeMaxBytes,
   fetchSettings,
   fetchStatus,
@@ -23,7 +13,6 @@ import {
   liveTvRefreshHoursRange,
   loginAttemptsRange,
   loginDisclaimerMaxBytes,
-  maxConversionsRange,
   recordingPaddingMinutesRange,
   recordingRetentionDaysRange,
   playedPercentRange,
@@ -39,6 +28,7 @@ import {
   type Settings,
 } from '@/api'
 import CodeEditor from '@/components/CodeEditor'
+import ConversionSettings from '@/components/ConversionSettings'
 import { icons } from '@/components/icons'
 import { Skeleton } from '@/components/panels'
 import {
@@ -50,6 +40,13 @@ import {
   PageHeader,
   TextField,
 } from '@/components/ui'
+import {
+  SearchContext,
+  searchable,
+  Setting,
+  wholeNumber,
+  wholeNumberField,
+} from '@/components/settings'
 import { errorMessage } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 
@@ -69,25 +66,6 @@ const sectionIds = [
   'variables',
 ] as const
 type SectionId = (typeof sectionIds)[number]
-
-/** Lower case without accents, so that a search for "resume" finds "Résumé". */
-function searchable(text: string): string {
-  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-}
-
-/** The search typed, made searchable; empty shows every setting. */
-const SearchContext = createContext('')
-
-/** One setting, hidden while the search matches none of its words. */
-function Setting({ text, children }: { text: readonly string[]; children: ReactNode }) {
-  const query = use(SearchContext)
-  const shown = query === '' || searchable(text.join(' ')).includes(query)
-  return (
-    <div data-setting="" hidden={!shown}>
-      {children}
-    </div>
-  )
-}
 
 /** A section of settings, hidden when the search leaves none of them. */
 function Section({
@@ -223,7 +201,6 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const s = t.settings
   const sections = t.dashboard.settings.sections
   const languageId = useId()
-  const heightId = useId()
   const trickplayWidthId = useId()
   const status = useQuery({
     queryKey: queryKeys.status,
@@ -380,50 +357,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </Setting>
       </Section>
 
-      <Section id="conversion" title={sections.conversion}>
-        <Setting text={[s.transcoding, s.transcodingHelp]}>
-          <Checkbox
-            label={s.transcoding}
-            help={s.transcodingHelp}
-            checked={form.transcoding}
-            onChange={(transcoding) => update({ transcoding })}
-          />
-        </Setting>
-        <Setting text={[s.maxConversions, s.maxConversionsHelp]}>
-          <TextField
-            label={s.maxConversions}
-            hint={s.maxConversionsHelp}
-            type="number"
-            inputMode="numeric"
-            min={maxConversionsRange.min}
-            max={maxConversionsRange.max}
-            step={1}
-            value={form.maxConversions}
-            onValue={(value) => update({ maxConversions: Math.trunc(Number(value)) })}
-            required
-          />
-        </Setting>
-        <Setting text={[s.maxConversionHeight, s.maxConversionHeightHelp]}>
-          <label htmlFor={heightId} className="block text-sm font-medium text-zinc-200">
-            {s.maxConversionHeight}
-          </label>
-          <select
-            id={heightId}
-            value={form.maxConversionHeight}
-            onChange={(event) => update({ maxConversionHeight: Number(event.target.value) })}
-            aria-describedby={`${heightId}-hint`}
-            className="mt-1.5 block w-full rounded-lg border border-line bg-ink px-3 py-2 text-white"
-          >
-            {conversionHeights.map((height) => (
-              <option key={height} value={height}>
-                {height === 0 ? s.conversionHeightOriginal : s.conversionHeight(height)}
-              </option>
-            ))}
-          </select>
-          <p id={`${heightId}-hint`} className="mt-1 text-xs text-muted">
-            {s.maxConversionHeightHelp}
-          </p>
-        </Setting>
+      <Section id="conversion" title={sections.conversion} description={s.conversion.description}>
+        <ConversionSettings form={form} update={update} />
       </Section>
 
       <Section id="content" title={sections.content}>
@@ -843,17 +778,4 @@ function Variables() {
       )}
     </Section>
   )
-}
-
-/**
- * A whole number typed in a field where 0 is a valid value: an empty field is -1, which the server
- * refuses, rather than 0, which would turn the setting off without the user typing it.
- */
-function wholeNumber(value: string): number {
-  return value.trim() === '' ? -1 : Math.trunc(Number(value))
-}
-
-/** The text of a field holding a whole number; -1 (see wholeNumber) shows as empty. */
-function wholeNumberField(value: number): number | '' {
-  return value < 0 ? '' : value
 }

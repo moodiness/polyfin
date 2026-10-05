@@ -70,11 +70,11 @@ type Playing struct {
 // Options are what the service needs.
 type Options struct {
 	DB *pgxpool.Pool
-	// FFmpeg is the FFmpeg executable; Hardware the GPU it decodes on, nil
-	// for none; ToneMapping tells whether it has the filters bringing HDR
-	// to SDR.
+	// FFmpeg is the FFmpeg executable; Hardware returns the GPU decoding
+	// video of a codec in a bit depth, nil for none, nil itself for no GPU;
+	// ToneMapping tells whether FFmpeg has the filters bringing HDR to SDR.
 	FFmpeg      string
-	Hardware    *hls.Hardware
+	Hardware    func(codec string, bitDepth int) *hls.Hardware
 	ToneMapping bool
 	// Settings returns the server settings, read as they apply.
 	Settings func() accounts.Settings
@@ -410,6 +410,10 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	}
 	order := chooseKeyframes(video.Keyframes, targets)
 	hdr := s.ToneMapping && (stream.ColorTransfer == "smpte2084" || stream.ColorTransfer == "arib-std-b67")
+	var hw *hls.Hardware
+	if s.Hardware != nil {
+		hw = s.Hardware(stream.Codec, stream.BitDepth)
+	}
 
 	var filters []string
 	if want.trickplay {
@@ -423,7 +427,7 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	// order the keyframes were read in.
 	var frames []decodedFrame
 	err = video.ReadFrames(ctx, p, order, func(index int, frame []byte) error {
-		images, err := decodeKeyframe(ctx, s.FFmpeg, s.Hardware, video, frame, filters)
+		images, err := decodeKeyframe(ctx, s.FFmpeg, hw, video, frame, filters)
 		switch {
 		case err == nil:
 			frames = append(frames, decodedFrame{at: video.Keyframes[index], images: images})

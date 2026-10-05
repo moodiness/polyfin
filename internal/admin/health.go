@@ -104,6 +104,12 @@ type hardwareJSON struct {
 	Device      string   `json:"device"`
 	Encoders    []string `json:"encoders"`
 	ToneMapping bool     `json:"toneMapping"`
+	// QVBR tells whether a VAAPI GPU takes a quality factor.
+	QVBR bool `json:"qvbr"`
+}
+
+func newHardwareJSON(hw *hls.Hardware) *hardwareJSON {
+	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR}
 }
 
 type thumbnailHealthJSON struct {
@@ -178,7 +184,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	if encoder := h.Health.Encoder; encoder != nil {
 		t := &transcoderJSON{Encoders: []string{}, MaxHeight: settings.MaxConversionHeight, Enabled: settings.Transcoding}
 		if hw := encoder.Hardware(); hw != nil {
-			t.Hardware = &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping}
+			t.Hardware = newHardwareJSON(hw)
 		}
 		for _, name := range softwareEncoders {
 			if slices.Contains(encoder.Encoders(), name) {
