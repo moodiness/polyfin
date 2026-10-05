@@ -244,15 +244,27 @@ function Iptv({ sources: all }: { sources: Sources | undefined }) {
                   )}
                 </div>
                 <p className="text-xs text-muted">
-                  {t.lineup.summary.shownOf(
-                    source.lineup.shownChannels.toLocaleString(language),
-                    source.lineup.channels.toLocaleString(language),
+                  {source.options.liveTv && (
+                    <>
+                      {t.lineup.summary.shownOf(
+                        source.lineup.shownChannels.toLocaleString(language),
+                        source.lineup.channels.toLocaleString(language),
+                      )}
+                      {' · '}
+                      {t.lineup.summary.mappedOf(
+                        source.lineup.mapped.toLocaleString(language),
+                        source.lineup.channels.toLocaleString(language),
+                      )}
+                    </>
                   )}
-                  {' · '}
-                  {t.lineup.summary.mappedOf(
-                    source.lineup.mapped.toLocaleString(language),
-                    source.lineup.channels.toLocaleString(language),
-                  )}
+                  {source.options.liveTv &&
+                    (source.options.movies || source.options.series) &&
+                    ' · '}
+                  {(source.options.movies || source.options.series) &&
+                    t.lineup.summary.vodShort(
+                      source.vod.shownMovies.toLocaleString(language),
+                      source.vod.shownSeries.toLocaleString(language),
+                    )}
                   {addon.owner === null && (
                     <>
                       {' · '}
