@@ -391,8 +391,8 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{"never more than the source's bitrate", "h264", 0, video(1920, 1080, 4_000_000, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 4_000_000}},
 		{"a low limit", "h264", 1_000_000, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 852, Height: 480, Bitrate: 1_000_000}},
 		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 640, Height: 266, Bitrate: 300_000, Deinterlace: true}},
-		// A film in 2.40:1 fits 1080p's 16:9 frame by its width.
-		{"a wide film", "h264", 0, video(3832, 1600, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 800, Bitrate: 10_000_000}},
+		// A 2.40:1 picture fits 1080p's 16:9 frame by its width.
+		{"a wide picture", "h264", 0, video(3832, 1600, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 800, Bitrate: 10_000_000}},
 		{"HDR tone mapped at 720p at most", "h264", 0, MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)},
 			&VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}},
 		{"HEVC only", "hevc,mpeg4", 0, video(1920, 1080, 0, false), &VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
@@ -425,6 +425,13 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{VideoConversion{Codec: "h264", Width: 2586, Height: 1080}, 23.976, "5", "avc1.640032"},
 		{VideoConversion{Codec: "hevc", Width: 1920, Height: 1080}, 59.94, "4.1", "hvc1.1.6.L123.B0"},
 		{VideoConversion{Codec: "hevc", Width: 1920, Height: 1080}, 120, "5", "hvc1.1.6.L150.B0"},
+		// 4K, which only a GPU converts to.
+		{VideoConversion{Codec: "h264", Width: 3840, Height: 2160}, 23.976, "5.1", "avc1.640033"},
+		{VideoConversion{Codec: "h264", Width: 3832, Height: 1600}, 23.976, "5.1", "avc1.640033"},
+		{VideoConversion{Codec: "h264", Width: 3840, Height: 2160}, 59.94, "5.2", "avc1.640034"},
+		{VideoConversion{Codec: "h264", Width: 3840, Height: 2160}, 120, "6.1", "avc1.64003D"},
+		{VideoConversion{Codec: "hevc", Width: 3840, Height: 2160}, 23.976, "5", "hvc1.1.6.L150.B0"},
+		{VideoConversion{Codec: "hevc", Width: 3840, Height: 2160}, 59.94, "5.1", "hvc1.1.6.L153.B0"},
 	} {
 		if level, codecs := c.conversion.Level(c.rate), c.conversion.CodecString(c.rate); level != c.level || codecs != c.codecsString {
 			t.Errorf("%dx%d %s at %v: level %s, %s; want %s, %s", c.conversion.Width, c.conversion.Height, c.conversion.Codec, c.rate, level, codecs, c.level, c.codecsString)
@@ -449,6 +456,38 @@ func TestVideoIsConvertedOnTheGPUThatEncodesTheCodec(t *testing.T) {
 	}
 }
 
+// A GPU converts up to 4K, in the source's shape, at the bitrate of the
+// height the limit allows; the processor stops at 1080p.
+func TestTheGPUConvertsUpTo4K(t *testing.T) {
+	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}}
+	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true, Hardware: gpu}
+	video := func(width, height int) MediaStream {
+		return MediaStream{Codec: "hevc", VideoRange: "SDR", Width: new(width), Height: new(height)}
+	}
+	on := func(width, height int, bitrate int64) *VideoConversion {
+		return &VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: width, Height: height, Bitrate: bitrate, Hardware: gpu}
+	}
+	for _, test := range []struct {
+		name      string
+		codecs    string
+		limit     int64
+		maxHeight int
+		video     MediaStream
+		want      *VideoConversion
+	}{
+		{"4K", "h264", 0, 0, video(3840, 2160), on(3840, 2160, 40_000_000)},
+		{"a wide 4K episode", "h264", 0, 0, video(3832, 1600), on(3832, 1600, 40_000_000)},
+		{"a limit that allows 1440p", "h264", 20_000_000, 0, video(3840, 2160), on(2560, 1440, 20_000_000)},
+		{"the quality cap", "h264", 0, 1080, video(3832, 1600), on(1920, 800, 10_000_000)},
+		{"HEVC, encoded in software", "hevc", 0, 0, video(3840, 2160),
+			&VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
+	} {
+		if got := ConvertVideo(test.codecs, test.limit, test.maxHeight, test.video, can); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
+		}
+	}
+}
+
 func TestHDRIsToneMappedOnTheGPUWithoutTheProcessorsLimits(t *testing.T) {
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	vaapi := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
@@ -462,9 +501,9 @@ func TestHDRIsToneMappedOnTheGPUWithoutTheProcessorsLimits(t *testing.T) {
 		want   *VideoConversion
 	}{
 		{"HDR10 on a GPU that tone maps", "h264", nvidia, hdr10,
-			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 10_000_000, ToneMap: true, Hardware: nvidia}},
+			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 3840, Height: 2160, Bitrate: 40_000_000, ToneMap: true, Hardware: nvidia}},
 		{"Dolby Vision profile 5 on a GPU that tone maps", "h264", nvidia, profile5,
-			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 10_000_000, ToneMap: true, Hardware: nvidia}},
+			&VideoConversion{Codec: "h264", Encoder: "h264_nvenc", Width: 3840, Height: 2160, Bitrate: 40_000_000, ToneMap: true, Hardware: nvidia}},
 		// HEVC only: encoded in software, so tone mapped on the processor.
 		{"HDR10 encoded in software", "hevc", nvidia, hdr10,
 			&VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}},

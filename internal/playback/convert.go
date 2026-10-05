@@ -124,18 +124,40 @@ type VideoConversion struct {
 // codec comes first.
 var videoEncoders = []struct{ codec, encoder string }{{"h264", "libx264"}, {"hevc", "libx265"}}
 
-// rungs are the heights video is converted to by software encoders, with
-// the least video bitrate each needs and the most it uses. Software
-// encoding stops at 1080p to keep up with playback.
+// rungs are the heights video is converted to, with the least video bitrate
+// each needs and the most it uses. A GPU converts up to 4K; the processor
+// stops at softwareHeight.
 var rungs = []struct {
 	height         int
 	least, ceiling int64
 }{
+	{2160, 25_000_000, 40_000_000},
+	{1440, 12_000_000, 20_000_000},
 	{1080, 6_000_000, 10_000_000},
 	{720, 3_000_000, 5_000_000},
 	{540, 1_500_000, 3_000_000},
 	{480, 900_000, 2_000_000},
 	{360, 0, 1_000_000},
+}
+
+// softwareHeight caps video converted by the processor: software encoding
+// keeps up with playback up to 1080p.
+const softwareHeight = 1080
+
+// sizeClass is the height of the smallest rung whose 16:9 frame holds the
+// whole source (2160 for a 3832×1600 picture, 1080 for 1920×800), the top
+// rung for anything larger, and 1080p when the size is unknown.
+func sizeClass(video MediaStream) int {
+	if video.Width == nil || video.Height == nil {
+		return softwareHeight
+	}
+	class := rungs[0].height
+	for _, r := range rungs {
+		if *video.Width <= (r.height*16+8)/9 && *video.Height <= r.height {
+			class = r.height
+		}
+	}
+	return class
 }
 
 // toneMappedHeight caps video converted from HDR to SDR on the processor:
@@ -148,9 +170,10 @@ const toneMappedHeight = 720
 // is positive: the first of H.264 and HEVC the profile takes and FFmpeg
 // encodes, H.264 first unless the tuning prefers HEVC, which then follows
 // the profile's order, on the GPU when it encodes that codec, at the
-// height the limit allows, never larger than the source nor, when it is
-// positive, than maxHeight, the bitrate being that height's, converted to
-// SDR and deinterlaced as needed. HDR is tone mapped on that GPU when it
+// height the limit allows, up to 4K on a GPU and 1080p on the processor,
+// never larger than the source nor, when it is positive, than maxHeight,
+// the bitrate being that height's, converted to SDR and deinterlaced as
+// needed. HDR is tone mapped on that GPU when it
 // can, Dolby Vision with no base layer other players read (profile 5)
 // included, else on the processor, unless the tuning turns tone mapping
 // off. It is nil when the profile takes neither codec, and for HDR that
@@ -186,7 +209,12 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 	if conversion.Codec == "" {
 		return nil
 	}
-	tallest := rungs[0].height
+	tallest := softwareHeight
+	if conversion.Hardware != nil {
+		// A GPU converts up to 4K, at the rung of the source's own size: a
+		// source no larger than 1080p converts as on the processor.
+		tallest = max(softwareHeight, sizeClass(video))
+	}
 	switch {
 	case video.VideoRange != "HDR":
 	case can.Tuning.NoToneMapping:
@@ -216,7 +244,7 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 	}
 	// The rung's frame is 16:9, as 1080p's 1920×1080, its width rounded up
 	// so that a 16:9 source fills it. A wider source fits its width, as in
-	// Jellyfin: a film in 2.40:1 becomes 1920×800 rather than 2586×1080,
+	// Jellyfin: a 2.40:1 picture becomes 1920×800 rather than 2586×1080,
 	// which no 1080p level holds and an NVIDIA GPU refuses to encode.
 	height, width := rung.height, (rung.height*16+8)/9
 	if video.Height != nil && video.Width != nil && *video.Height > 0 && *video.Width > 0 {
@@ -245,15 +273,18 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 // levels are the codec levels a conversion may declare, lowest first, in
 // tenths (41 is 4.1), with the largest frame and the most samples a second
 // each holds: macroblocks for H.264 (ITU-T H.264, table A-1), luma samples
-// for HEVC (ITU-T H.265, table A.8, main tier). Conversions are 1080p at
-// most, which 5.2 holds up to 250 frames a second; every encoder Polyfin
-// uses takes these levels' names.
+// for HEVC (ITU-T H.265, table A.8, main tier). Conversions are 4K at
+// most, which 5.2 holds up to 60 frames a second and 6.1 above. 6.0 is
+// left out: NVENC's H.264 calls it 6.0 and VAAPI 6, while every encoder
+// Polyfin uses takes the other levels' names.
 var levels = map[string][]struct {
 	tenths        int
 	frame, second int64
 }{
-	"h264": {{41, 8_192, 245_760}, {42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600}},
-	"hevc": {{41, 2_228_224, 133_693_440}, {50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520}},
+	"h264": {{41, 8_192, 245_760}, {42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600},
+		{61, 139_264, 8_355_840}},
+	"hevc": {{41, 2_228_224, 133_693_440}, {50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520},
+		{61, 35_651_584, 2_139_095_040}},
 }
 
 // level is the codec level a conversion declares for video of a frame
