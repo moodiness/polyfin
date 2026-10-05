@@ -113,8 +113,10 @@ type EncodingOptions struct {
 // encodingOptions are Jellyfin 12.1's defaults, as a new server answers
 // them; encodingConfiguration enables the fallback fonts when there are
 // some.
-// Polyfin's own encoding settings are its environment variables; the path
-// of Jellyfin's FFmpeg is left out.
+// Polyfin's own encoding settings, under the admin app's Conversion
+// settings, are not reported here: Polyfin's defaults differ from
+// Jellyfin's, and jellyfin-web's dashboard pages open the admin app. The
+// path of Jellyfin's FFmpeg is left out.
 var encodingOptions = EncodingOptions{
 	EncodingThreadCount: -1, DownMixAudioBoost: 2, DownMixStereoAlgorithm: "None", MaxMuxingQueueSize: 2048,
 	ThrottleDelaySeconds: 180, SegmentKeepSeconds: 720, HardwareAccelerationType: "none", VaapiDevice: "/dev/dri/renderD128",

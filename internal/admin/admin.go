@@ -67,6 +67,11 @@ type Options struct {
 	// RecordingsDir is the folder Live TV recordings are written to, empty
 	// when recording is off.
 	RecordingsDir string
+	// Acceleration is the GPU POLYFIN_HWACCEL asks for, which the settings
+	// fall back on, and VAAPIDevice the render node POLYFIN_VAAPI_DEVICE
+	// names, empty for any.
+	Acceleration string
+	VAAPIDevice  string
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
@@ -293,6 +298,20 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVersionAttempts, http.StatusBadRequest, "invalid_version_attempts"},
 		{accounts.ErrInvalidMaxConversions, http.StatusBadRequest, "invalid_max_conversions"},
 		{accounts.ErrInvalidMaxConversionHeight, http.StatusBadRequest, "invalid_max_conversion_height"},
+		{accounts.ErrInvalidEncoderPreset, http.StatusBadRequest, "invalid_encoder_preset"},
+		{accounts.ErrInvalidVideoQuality, http.StatusBadRequest, "invalid_video_quality"},
+		{accounts.ErrInvalidHardwareAcceleration, http.StatusBadRequest, "invalid_hardware_acceleration"},
+		{accounts.ErrInvalidHardwareDecodingCodecs, http.StatusBadRequest, "invalid_hardware_decoding_codecs"},
+		{accounts.ErrInvalidToneMappingAlgorithm, http.StatusBadRequest, "invalid_tone_mapping_algorithm"},
+		{accounts.ErrInvalidToneMappingPeak, http.StatusBadRequest, "invalid_tone_mapping_peak"},
+		{accounts.ErrInvalidToneMappingDesat, http.StatusBadRequest, "invalid_tone_mapping_desat"},
+		{accounts.ErrInvalidDeinterlaceMethod, http.StatusBadRequest, "invalid_deinterlace_method"},
+		{accounts.ErrInvalidDownmixAlgorithm, http.StatusBadRequest, "invalid_downmix_algorithm"},
+		{accounts.ErrInvalidDownmixBoost, http.StatusBadRequest, "invalid_downmix_boost"},
+		{accounts.ErrInvalidMaxAudioChannels, http.StatusBadRequest, "invalid_max_audio_channels"},
+		{accounts.ErrInvalidAudioBitrate, http.StatusBadRequest, "invalid_audio_bitrate_per_channel"},
+		{accounts.ErrInvalidEncodingThreads, http.StatusBadRequest, "invalid_encoding_threads"},
+		{accounts.ErrInvalidAheadSegments, http.StatusBadRequest, "invalid_ahead_segments"},
 		{accounts.ErrInvalidTrickplayInterval, http.StatusBadRequest, "invalid_trickplay_interval"},
 		{accounts.ErrInvalidTrickplayWidth, http.StatusBadRequest, "invalid_trickplay_width"},
 		{accounts.ErrInvalidThumbnailStorage, http.StatusBadRequest, "invalid_thumbnail_storage_gb"},

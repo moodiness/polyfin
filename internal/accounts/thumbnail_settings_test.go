@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -60,7 +61,7 @@ func TestThumbnailSettingsStayInRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := reopened.Settings(); got != changed {
+		if got := reopened.Settings(); !reflect.DeepEqual(got, changed) {
 			t.Errorf("%v after reopening: %+v, want %+v", edge, got, changed)
 		}
 	}

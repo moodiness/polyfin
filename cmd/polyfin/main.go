@@ -2,6 +2,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -70,7 +71,7 @@ Environment:
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
   POLYFIN_CACHE_DIR     where sources being played and their remuxes are kept (default: a polyfin directory in the system's temporary directory)
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
-  POLYFIN_HWACCEL       GPU video is converted on: auto, nvenc, vaapi or none (default auto)
+  POLYFIN_HWACCEL       GPU video is converted on unless the settings choose: auto, nvenc, vaapi or none (default auto)
   POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
   POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb or none (default theintrodb,introdb)
 `
@@ -172,14 +173,8 @@ func serve(ctx context.Context) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
-	switch hw, ok := segments.DetectHardware(cfg.Acceleration, cfg.VAAPIDevice); {
-	case ok:
-		logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders, "tone_mapping", hw.ToneMapping)
-	case cfg.Acceleration == "auto":
-		logger.Info("Video is converted in software: no GPU encodes")
-	case cfg.Acceleration != "none":
-		logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", cfg.Acceleration)
-	}
+	// The settings choose the GPU, POLYFIN_HWACCEL when they leave it.
+	segments.SelectHardware(cmp.Or(store.Settings().HardwareAcceleration, cfg.Acceleration), cfg.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
@@ -198,7 +193,7 @@ func serve(ctx context.Context) error {
 	images := thumbnails.New(thumbnails.Options{
 		DB:          pool,
 		FFmpeg:      cfg.FFmpeg,
-		Hardware:    segments.Hardware(),
+		Hardware:    player.DecodingHardware,
 		ToneMapping: segments.HasFilters("zscale", "tonemap"),
 		Settings:    store.Settings,
 		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v).Once() },
@@ -260,6 +255,8 @@ func serve(ctx context.Context) error {
 				IPTV:          channels,
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
+				Acceleration:  cfg.Acceleration,
+				VAAPIDevice:   cfg.VAAPIDevice,
 				WebClient:     webClient != nil,
 				Sessions:      jellyfinAPI,
 				Tasks:         registry,

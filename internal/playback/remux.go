@@ -378,7 +378,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		}
 		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
 			Subtitles: streams, Extracted: x}
-		remux.convert(&r, video)
+		remux.convert(&r, video, TuningOf(s.settings()))
 		return r, release, nil
 	}
 }
@@ -392,8 +392,8 @@ func audioOf(analysis media.Analysis, index int) int {
 }
 
 // convert sets what an encoding of video tags and converts its video and
-// audio to.
-func (remux Remux) convert(r *hls.Remux, video media.Stream) {
+// audio to, tuned by t.
+func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 	codec := video.Codec
 	if remux.ConvertVideo != nil {
 		codec = remux.ConvertVideo.Codec
@@ -406,10 +406,20 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream) {
 		if rate <= 0 {
 			rate = video.FrameRate
 		}
+		// Like Jellyfin, frames are doubled up to 30 a second.
+		double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30
+		if double {
+			rate *= 2
+		}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-			FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware}
+			FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware,
+			Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat,
+			Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
-		r.AudioCodec, r.AudioChannels, r.AudioBitrate = c.Codec, c.Channels, c.Bitrate
+		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter
+	}
+	if r.Encode != nil || r.AudioCodec != "" {
+		r.Threads = t.Threads
 	}
 }

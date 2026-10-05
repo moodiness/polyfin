@@ -483,7 +483,7 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 	if audio.Channels != nil {
 		channels = *audio.Channels
 	}
-	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels)
+	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, options.Can.Tuning)
 	return conversion != nil, video, conversion
 }
 
@@ -645,6 +645,19 @@ func listHas(list, name string) bool {
 		}
 	}
 	return false
+}
+
+// listIndex is the position of name in a comma-separated list, ignoring
+// case; a name the list does not hold comes after all.
+func listIndex(list, name string) int {
+	i := 0
+	for item := range strings.SplitSeq(list, ",") {
+		if strings.EqualFold(strings.TrimSpace(item), name) {
+			return i
+		}
+		i++
+	}
+	return i
 }
 
 // listMeets reports whether a comma-separated list holds any of the

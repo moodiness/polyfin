@@ -308,7 +308,7 @@ func TestAudioIsConvertedToTheFirstCodecFFmpegEncodes(t *testing.T) {
 		{"aac", "", 0, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
 		{"mp2,opus", "2", 6, nil},
 	} {
-		if got := ConvertAudio(test.codecs, test.maxChannels, test.channels); !reflect.DeepEqual(got, test.want) {
+		if got := ConvertAudio(test.codecs, test.maxChannels, test.channels, "", Tuning{}); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("ConvertAudio(%q, %q, %d) = %+v, want %+v", test.codecs, test.maxChannels, test.channels, got, test.want)
 		}
 	}

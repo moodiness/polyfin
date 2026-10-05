@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -56,7 +57,7 @@ func TestSecuritySettingsRoundTripAndStayInRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := reopened.Settings(); got != changed {
+		if got := reopened.Settings(); !reflect.DeepEqual(got, changed) {
 			t.Errorf("after reopening: %+v, want %+v", got, changed)
 		}
 	}

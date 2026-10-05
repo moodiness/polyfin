@@ -322,7 +322,7 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 		if audio, ok := streamOf(analysis, r.Audio); ok && audio.Codec == "aac" {
 			r.ADTS = true
 		}
-		remux.convert(&r, video)
+		remux.convert(&r, video, TuningOf(s.settings()))
 		return r, release, nil
 	}
 }

@@ -8,9 +8,20 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 )
 
-// Capabilities returns what the installed FFmpeg converts with.
+// Capabilities returns what the installed FFmpeg converts with, tuned as
+// the settings say.
 func (s *Service) Capabilities() Capabilities {
-	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: s.segments.Hardware()}
+	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: s.segments.Hardware(),
+		Tuning: TuningOf(s.settings())}
+}
+
+// DecodingHardware is the GPU that decodes video of codec in bitDepth
+// bits, as the settings allow, nil for none.
+func (s *Service) DecodingHardware(codec string, bitDepth int) *hls.Hardware {
+	if hw := s.segments.Hardware(); hw != nil && TuningOf(s.settings()).DecodesOnGPU(codec, bitDepth) {
+		return hw
+	}
+	return nil
 }
 
 // Capabilities are what the installed FFmpeg converts with.
@@ -22,6 +33,8 @@ type Capabilities struct {
 	ToneMapping bool
 	// Hardware is the GPU video is converted on, nil for none.
 	Hardware *hls.Hardware
+	// Tuning is how the settings tune conversions.
+	Tuning Tuning
 }
 
 // AudioConversion is what the audio that plays is converted to when the
@@ -32,18 +45,23 @@ type AudioConversion struct {
 	Channels int
 	// Bitrate is in bits per second, zero for lossless codecs.
 	Bitrate int64
+	// Filter is the filter graph the audio goes through, such as a downmix
+	// to stereo, empty for none.
+	Filter string
 }
 
 // audioEncoders are the audio encoders every FFmpeg build has, by
 // preference when a profile takes several.
 var audioEncoders = []string{"aac", "ac3", "eac3", "flac"}
 
-// ConvertAudio is the conversion of audio for a transcoding profile taking
-// codecs, as a comma-separated list, and at most maxChannels channels when
-// it is a number: the first codec of the list FFmpeg encodes, with the
-// audio's channels up to the limit and to what the codec carries. It is
-// nil when the profile takes no codec Polyfin encodes.
-func ConvertAudio(codecs, maxChannels string, channels int) *AudioConversion {
+// ConvertAudio is the conversion of audio of channels in layout, as
+// ffprobe names it, for a transcoding profile taking codecs, as a
+// comma-separated list, and at most maxChannels channels when it is a
+// number: the first codec of the list FFmpeg encodes, with the audio's
+// channels up to the limit, to the tuning's and to what the codec carries,
+// mixed down to stereo as the tuning says. It is nil when the profile takes
+// no codec Polyfin encodes.
+func ConvertAudio(codecs, maxChannels string, channels int, layout string, t Tuning) *AudioConversion {
 	codec := ""
 	for name := range strings.SplitSeq(codecs, ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(audioEncoders, name) {
@@ -54,23 +72,33 @@ func ConvertAudio(codecs, maxChannels string, channels int) *AudioConversion {
 	if codec == "" {
 		return nil
 	}
+	source := channels
 	if channels <= 0 {
 		channels = 2
 	}
 	if limit, err := strconv.Atoi(maxChannels); err == nil && limit > 0 {
 		channels = min(channels, limit)
 	}
+	if t.MaxAudioChannels > 0 {
+		channels = min(channels, t.MaxAudioChannels)
+	}
 	// AAC and Dolby Digital go up to 5.1 in the players that take them.
 	if codec != "flac" {
 		channels = min(channels, 6)
 	}
 	conversion := &AudioConversion{Codec: codec, Channels: channels}
-	if codec != "flac" {
+	switch {
+	case codec == "flac":
+	case t.AudioBitrate > 0:
+		conversion.Bitrate = int64(channels) * t.AudioBitrate
+	case channels == 2:
+		conversion.Bitrate = 192_000
+	default:
 		// About 64 kb/s a channel: 192 kb/s in stereo, 384 kb/s in 5.1.
 		conversion.Bitrate = max(int64(channels)*64_000, 128_000)
-		if channels == 2 {
-			conversion.Bitrate = 192_000
-		}
+	}
+	if channels == 2 && source > 2 {
+		conversion.Filter = t.downmix(source, layout)
 	}
 	return conversion
 }
@@ -91,8 +119,9 @@ type VideoConversion struct {
 }
 
 // videoEncoders are the software encoders Polyfin converts video with, by
-// preference: H.264 encodes several times faster than HEVC, and more apps
-// take it. A GPU's encoder of the same codec comes first.
+// preference unless the tuning prefers HEVC: H.264 encodes several times
+// faster than HEVC, and more apps take it. A GPU's encoder of the same
+// codec comes first.
 var videoEncoders = []struct{ codec, encoder string }{{"h264", "libx264"}, {"hevc", "libx265"}}
 
 // rungs are the heights video is converted to by software encoders, with
@@ -117,17 +146,29 @@ const toneMappedHeight = 720
 // ConvertVideo is the conversion of video for a transcoding profile taking
 // codecs, as a comma-separated list, within limit bits per second when it
 // is positive: the first of H.264 and HEVC the profile takes and FFmpeg
-// encodes, on the GPU when it encodes that codec, at the height the limit
-// allows, never larger than the source nor, when it is positive, than
-// maxHeight, the bitrate being that height's, converted to SDR and
-// deinterlaced as needed. HDR is tone mapped on that GPU when it can,
-// Dolby Vision with no base layer other players read (profile 5) included,
-// else on the processor. It is nil when the profile takes neither codec,
-// and for HDR that cannot be converted: on the processor, without FFmpeg's
-// filters, or Dolby Vision with no base layer other players read.
+// encodes, H.264 first unless the tuning prefers HEVC, which then follows
+// the profile's order, on the GPU when it encodes that codec, at the
+// height the limit allows, never larger than the source nor, when it is
+// positive, than maxHeight, the bitrate being that height's, converted to
+// SDR and deinterlaced as needed. HDR is tone mapped on that GPU when it
+// can, Dolby Vision with no base layer other players read (profile 5)
+// included, else on the processor, unless the tuning turns tone mapping
+// off. It is nil when the profile takes neither codec, and for HDR that
+// cannot be converted: on the processor, without FFmpeg's filters, or
+// Dolby Vision with no base layer other players read, which without tone
+// mapping would show wrong colors.
 func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, can Capabilities) *VideoConversion {
+	candidates := videoEncoders
+	if can.Tuning.PreferHEVC {
+		// Jellyfin's AllowHevcEncoding keeps the profile's order, and
+		// otherwise moves HEVC last.
+		candidates = slices.Clone(videoEncoders)
+		slices.SortStableFunc(candidates, func(a, b struct{ codec, encoder string }) int {
+			return listIndex(codecs, a.codec) - listIndex(codecs, b.codec)
+		})
+	}
 	conversion := &VideoConversion{}
-	for _, candidate := range videoEncoders {
+	for _, candidate := range candidates {
 		if !listHas(codecs, candidate.codec) {
 			continue
 		}
@@ -146,7 +187,13 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 		return nil
 	}
 	tallest := rungs[0].height
-	if video.VideoRange == "HDR" {
+	switch {
+	case video.VideoRange != "HDR":
+	case can.Tuning.NoToneMapping:
+		if video.VideoRangeType == "DOVI" {
+			return nil
+		}
+	default:
 		if gpu := conversion.Hardware; gpu == nil || !gpu.ToneMapping {
 			if video.VideoRangeType == "DOVI" || !can.ToneMapping {
 				return nil
