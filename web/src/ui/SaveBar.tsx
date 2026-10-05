@@ -38,8 +38,8 @@ export function SaveBar({
   return (
     <div
       className={cx(
-        'sticky bottom-0 z-20 -mx-1 mt-10 px-1 pt-3 pb-4',
-        dirty && 'bg-gradient-to-t from-bg via-bg/95 to-transparent',
+        'z-20 -mx-1 mt-10 px-1 pt-3 pb-4',
+        dirty && 'sticky bottom-0 bg-gradient-to-t from-bg via-bg/95 to-transparent',
       )}
     >
       <div

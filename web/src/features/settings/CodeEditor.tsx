@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '@/i18n'
+import { cx, FieldError } from '@/ui'
 
 const encoder = new TextEncoder()
 
@@ -9,24 +10,26 @@ const indent = '  '
 /**
  * A monospace text area for code, with line numbers beside it. Tab inserts spaces; after Escape,
  * Tab leaves the field as usual, so that the keyboard never gets stuck in it. Shows the size the
- * server counts, in bytes, against its limit.
+ * server counts, in bytes, against its limit, and the server's error under it.
  */
 export default function CodeEditor({
   label,
-  hint,
+  help,
   value,
   onValue,
   maxBytes,
   rows = 14,
+  error,
   children,
 }: {
   label: string
-  hint: string
+  help: string
   value: string
   onValue: (value: string) => void
   maxBytes: number
   rows?: number
-  /** Shown between the label and the field, such as a warning. */
+  error?: string
+  /** Shown between the help and the field, such as a warning. */
   children?: ReactNode
 }) {
   const { t } = useI18n()
@@ -61,16 +64,24 @@ export default function CodeEditor({
   }
 
   return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-zinc-200">
+    <div className="flex flex-col gap-2">
+      <label htmlFor={id} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
         {label}
       </label>
+      <p id={`${id}-help`} className="-mt-1 max-w-[60ch] text-small text-ink-3">
+        {help}
+      </p>
       {children}
-      <div className="mt-1.5 flex overflow-hidden rounded-lg border border-line bg-bg font-mono text-[13px] leading-5 has-[textarea:focus-visible]:border-fin-4">
+      <div
+        className={cx(
+          'flex overflow-hidden rounded-field border bg-s2 font-mono text-small leading-5 transition-colors duration-160 ease-nuit has-[textarea:focus-visible]:border-link',
+          error || tooLarge ? 'border-danger' : 'border-line-2',
+        )}
+      >
         <pre
           ref={gutter}
           aria-hidden="true"
-          className="m-0 shrink-0 overflow-hidden border-r border-line px-2 py-2 text-right text-zinc-500 select-none"
+          className="figures m-0 shrink-0 overflow-hidden border-r border-line px-2 py-2.5 text-right text-ink-3 select-none"
         >
           {lines}
         </pre>
@@ -87,20 +98,21 @@ export default function CodeEditor({
           onScroll={(event) => {
             if (gutter.current) gutter.current.scrollTop = event.currentTarget.scrollTop
           }}
-          aria-describedby={`${id}-hint`}
-          aria-invalid={tooLarge ? true : undefined}
-          className="block min-w-0 flex-1 resize-y bg-transparent px-3 py-2 text-white outline-none"
+          aria-describedby={`${id}-help ${id}-size${error ? ` ${id}-error` : ''}`}
+          aria-invalid={tooLarge || error ? true : undefined}
+          className="block min-w-0 flex-1 resize-y bg-transparent px-3 py-2.5 text-ink outline-none"
         />
       </div>
       <p
-        id={`${id}-hint`}
-        className="mt-1 flex flex-wrap justify-between gap-x-4 text-xs text-muted"
+        id={`${id}-size`}
+        className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-micro text-ink-3"
       >
-        <span>{hint}</span>
-        <span className={tooLarge ? 'text-rose-300' : undefined}>
+        <span>{t.settings.codeKeys}</span>
+        <span className={cx('figures', tooLarge && 'text-danger')}>
           {t.settings.codeSize(Math.ceil(bytes / 1024), maxBytes / 1024)}
         </span>
       </p>
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </div>
   )
 }

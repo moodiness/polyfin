@@ -370,6 +370,32 @@ const settings: typeof en = {
     hidden: 'Masquée',
     empty: 'Vide',
     notRead: 'Non lue par Polyfin',
+    searchPlaceholder: 'Chercher un réglage',
+    results: (count: number) => (count === 1 ? '1 réglage trouvé' : `${count} réglages trouvés`),
+    noMatchHelp: 'Essayez un autre mot, comme le nom d’une variable ou d’un service.',
+    variableHint: 'Variable d’environnement',
+    ledes: {
+      general: 'Le nom du serveur, sa langue et la connexion des applications.',
+      playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
+      content: 'Passer l’intro, titres similaires et seuils de lecture.',
+      catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
+      security: 'Addons des utilisateurs, comptes bloqués et appareils inutilisés.',
+      liveTv:
+        'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
+      diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',
+    },
+    groups: {
+      skip: 'Passer l’intro et le générique',
+      titlePages: 'Fiche des titres',
+      thresholds: 'Seuils de lecture',
+    },
+    leaveTitle: 'Partir sans enregistrer ?',
+    leaveBody:
+      'Les modifications de cette section ne sont pas encore enregistrées. Elles seront perdues si vous partez.',
+    leave: 'Partir sans enregistrer',
+    stay: 'Rester',
+    variablesEmpty: 'Aucune variable à afficher',
+    variablesEmptyHelp: 'Définissez des variables POLYFIN_ sur le conteneur, puis redémarrez-le.',
   },
 }
 
