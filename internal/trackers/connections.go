@@ -88,6 +88,12 @@ type Status struct {
 	Problem string
 	// Code is the code the user is asked to enter, while one waits.
 	Code *Code
+	// ImportHistory tells that the service's watch history is imported
+	// into Polyfin; Importing, that an import runs now; LastImport, how
+	// the last one went, nil before the first.
+	ImportHistory bool
+	Importing     bool
+	LastImport    *ImportResult
 }
 
 // Code is a code waiting for a user to enter it on a service's site.
@@ -137,6 +143,11 @@ func (s *Service) status(ctx context.Context, user accounts.ID, service string) 
 		}
 	}
 	s.mu.Unlock()
+	if ok {
+		if err := s.importStatus(ctx, key, &status); err != nil {
+			return status, err
+		}
+	}
 	return status, nil
 }
 
@@ -463,6 +474,10 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, service stri
 		delete(s.pending, key)
 	}
 	s.mu.Unlock()
+	// Its imports stop; what they imported stays.
+	if err := s.forgetImport(ctx, key); err != nil {
+		return err
+	}
 	var token, refresh string
 	err := s.db.QueryRow(ctx, "DELETE FROM tracking_connections WHERE user_id = $1 AND service = $2 RETURNING token, refresh_token",
 		user, service).Scan(&token, &refresh)

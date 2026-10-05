@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // The services, by the names the admin API gives them.
@@ -117,6 +118,11 @@ type Options struct {
 	// URLs replaces the base URLs of the services' APIs, by service name.
 	// Tests point them at fakes; the public APIs are used otherwise.
 	URLs map[string]string
+	// Titles finds the items of the titles an imported watch history
+	// names, and UserData keeps what imports add to the users' data;
+	// without both, nothing is imported.
+	Titles   Titles
+	UserData *userdata.Store
 }
 
 // timing is how long the service waits for what. Tests shorten it.
@@ -147,6 +153,15 @@ type timing struct {
 	pollUnit time.Duration
 	// request bounds each request.
 	request time.Duration
+	// importEvery is how long after an import of a watch history the
+	// next one runs, imports being looked for every importCheck.
+	importEvery, importCheck time.Duration
+	// importGaps are the least time between two requests of an import to
+	// a service, which reads at most for importMaxWait when the service
+	// asks it to wait; it tries a failed request importRetries times more.
+	importGaps    map[string]time.Duration
+	importMaxWait time.Duration
+	importRetries int
 }
 
 var defaultTiming = timing{
@@ -162,6 +177,13 @@ var defaultTiming = timing{
 	watchedWindow:    6 * time.Hour,
 	pollUnit:         time.Second,
 	request:          15 * time.Second,
+	importEvery:      6 * time.Hour,
+	importCheck:      10 * time.Minute,
+	// Trakt reads 1,000 pages (500 per its latest docs) every 5 minutes,
+	// Simkl 10 a second, MDBList counts a daily allowance.
+	importGaps:    map[string]time.Duration{Trakt: time.Second, Simkl: 500 * time.Millisecond, MDBList: 500 * time.Millisecond},
+	importMaxWait: 15 * time.Minute,
+	importRetries: 3,
 }
 
 // maxIntake bounds the reports and marks waiting to be looked at for one
@@ -199,6 +221,14 @@ type Service struct {
 	seq   int64
 	// pace spaces every request to PublicMetaDB.
 	pace pace
+
+	titles   Titles
+	userData *userdata.Store
+	// importing are the imports running, by user and service.
+	importing map[laneKey]*importRun
+	// publicMetaDBIMDb caches the IMDb identifiers PublicMetaDB maps TMDB
+	// identifiers to (see mapPublicMetaDB).
+	publicMetaDBIMDb map[string]string
 }
 
 // New returns a service keeping connections and queued changes in the
@@ -228,16 +258,24 @@ func New(options Options) *Service {
 		intakes:     map[accounts.ID]*intake{},
 		sessions:    map[sessionKey]*session{},
 		lanes:       map[laneKey]*lane{},
+		titles:      options.Titles,
+		userData:    options.UserData,
+		importing:   map[laneKey]*importRun{},
+
+		publicMetaDBIMDb: map[string]string{},
 	}
 }
 
-// Run sends the changes an earlier run left queued and keeps tokens
-// fresh until ctx ends, then stops sending and waits for the sends under
-// way.
+// Run sends the changes an earlier run left queued, keeps tokens fresh
+// and imports watch histories when due until ctx ends, then stops sending
+// and waits for the sends under way.
 func (s *Service) Run(ctx context.Context) {
 	s.resumeQueued()
+	s.importDue()
 	ticker := time.NewTicker(s.timing.refreshEvery)
 	defer ticker.Stop()
+	imports := time.NewTicker(s.timing.importCheck)
+	defer imports.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -245,6 +283,8 @@ func (s *Service) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.refreshDue()
+		case <-imports.C:
+			s.importDue()
 		}
 	}
 }
