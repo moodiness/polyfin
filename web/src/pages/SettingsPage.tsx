@@ -1,4 +1,13 @@
-import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
+import { useLocation } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   analysisTimeoutRange,
@@ -44,6 +53,7 @@ import {
 import {
   SearchContext,
   searchable,
+  SettingsGroup,
   SecretField,
   Setting,
   wholeNumber,
@@ -51,6 +61,9 @@ import {
 } from '@/components/settings'
 import { errorMessage } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
+
+/** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
+const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
 
 /** The sections of the page, in order; `variables` is read only, outside the form. */
 const sectionIds = [
@@ -61,6 +74,7 @@ const sectionIds = [
   'catalogs',
   'thumbnails',
   'security',
+  'tracking',
   'liveTv',
   'recordings',
   'diagnostics',
@@ -117,6 +131,15 @@ export default function SettingsPage() {
       query !== '' && content.current?.querySelector('[data-setting]:not([hidden])') === null,
     )
   }, [query, settings.data])
+
+  // A link to a section of this page, such as the tracking apps, scrolls to it once it is drawn.
+  const location = useLocation()
+  const loaded = settings.data !== undefined
+  useEffect(() => {
+    if (loaded && location.hash) {
+      document.getElementById(location.hash.slice(1))?.scrollIntoView()
+    }
+  }, [loaded, location.hash])
 
   return (
     <>
@@ -240,8 +263,24 @@ function SettingsForm({ initial }: { initial: Settings }) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    mutation.mutate({ ...form, serverName: form.serverName.trim() })
+    mutation.mutate({
+      ...form,
+      serverName: form.serverName.trim(),
+      traktClientId: form.traktClientId.trim(),
+      simklClientId: form.simklClientId.trim(),
+    })
   }
+
+  // Trakt and Simkl ask for a redirect URI when an app is created; a code connection uses none.
+  const redirectUri = (
+    <p className="mt-2 text-sm text-muted">
+      {s.tracking.redirectUri}
+      {t.common.colon}{' '}
+      <code className="rounded bg-ink px-1.5 py-0.5 font-mono text-xs break-all text-zinc-100 select-all">
+        {oobRedirectUri}
+      </code>
+    </p>
+  )
 
   return (
     <form onSubmit={submit} noValidate className="space-y-6">
@@ -593,6 +632,52 @@ function SettingsForm({ initial }: { initial: Settings }) {
             required
           />
         </Setting>
+      </Section>
+
+      <Section id="tracking" title={sections.tracking} description={s.tracking.description}>
+        <SettingsGroup title="Trakt">
+          <Setting text={['Trakt', s.tracking.traktSetup, s.tracking.redirectUri]}>
+            <p className="text-sm text-muted">{s.tracking.traktSetup}</p>
+            {redirectUri}
+          </Setting>
+          <Setting text={['Trakt', s.tracking.traktClientId, s.tracking.traktClientIdHelp]}>
+            <TextField
+              label={s.tracking.traktClientId}
+              hint={s.tracking.traktClientIdHelp}
+              value={form.traktClientId}
+              onValue={(traktClientId) => update({ traktClientId })}
+              autoComplete="off"
+              spellCheck={false}
+              error={fieldError(['invalid_trakt_app'])}
+            />
+          </Setting>
+          <Setting text={['Trakt', s.tracking.traktClientSecret, s.tracking.traktClientSecretHelp]}>
+            <SecretField
+              label={s.tracking.traktClientSecret}
+              hint={s.tracking.traktClientSecretHelp}
+              saved={form.traktClientSecretSet}
+              value={form.traktClientSecret}
+              onValue={(traktClientSecret) => update({ traktClientSecret })}
+            />
+          </Setting>
+        </SettingsGroup>
+        <SettingsGroup title="Simkl">
+          <Setting text={['Simkl', s.tracking.simklSetup, s.tracking.redirectUri]}>
+            <p className="text-sm text-muted">{s.tracking.simklSetup}</p>
+            {redirectUri}
+          </Setting>
+          <Setting text={['Simkl', s.tracking.simklClientId, s.tracking.simklClientIdHelp]}>
+            <TextField
+              label={s.tracking.simklClientId}
+              hint={s.tracking.simklClientIdHelp}
+              value={form.simklClientId}
+              onValue={(simklClientId) => update({ simklClientId })}
+              autoComplete="off"
+              spellCheck={false}
+              error={fieldError(['invalid_simkl_app'])}
+            />
+          </Setting>
+        </SettingsGroup>
       </Section>
 
       <Section id="liveTv" title={sections.liveTv}>

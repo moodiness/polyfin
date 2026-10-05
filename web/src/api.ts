@@ -231,6 +231,14 @@ export type Settings = {
   customJs: string
   /** Text, Markdown or HTML jellyfin-web shows under its sign-in form (Jellyfin's branding). */
   loginDisclaimer: string
+  /** Trakt app users connect through; both its client ID and secret are needed. */
+  traktClientId: string
+  /** Whether the Trakt client secret is saved. */
+  traktClientSecretSet: boolean
+  /** Sent only to change the secret: a new secret, or "" to remove it. */
+  traktClientSecret?: string
+  /** Simkl app users connect through. */
+  simklClientId: string
 }
 
 /** The largest custom CSS and script, and login disclaimer, the server accepts, in bytes. */
@@ -848,6 +856,44 @@ export const fetchMyDevices = (signal?: AbortSignal) =>
 export const signOutMyDevice = (id: string) =>
   request<void>('DELETE', `/account/devices/${seg(id)}`)
 
+/** The tracking services, in the order the server lists them. */
+export type TrackingServiceName = 'trakt' | 'simkl' | 'mdblist' | 'publicmetadb'
+
+/** One of the signed-in user's tracking services, which Polyfin tells what the user watches. */
+export type TrackingService = {
+  service: TrackingServiceName
+  /** "code": the user enters a code on the service's site; "key": the user pastes an API key. */
+  connection: 'code' | 'key'
+  /** False only for a code service whose app the server is not set up with. */
+  available: boolean
+  connected: boolean
+  /** The account name the service reports. */
+  account: string | null
+  connectedAt: string | null
+  /** The last time the service accepted something for this user. */
+  lastSentAt: string | null
+  /** "reconnect": the service refused the connection; "unreachable": sends failed and are retried. */
+  problem: 'reconnect' | 'unreachable' | null
+  /** While a code connection waits for the user to enter the code on the service's site. */
+  code: { userCode: string; verificationUrl: string; expiresAt: string } | null
+}
+
+export const fetchTracking = async (signal?: AbortSignal) =>
+  (await request<{ services: TrackingService[] }>('GET', '/account/tracking', undefined, signal))
+    .services
+
+/** Connects a key service with `key`, or starts a code connection without it. */
+export const connectTracking = (service: TrackingServiceName, key?: string) =>
+  request<TrackingService>(
+    'POST',
+    `/account/tracking/${seg(service)}`,
+    key === undefined ? {} : { key },
+  )
+
+/** Disconnects a service, or cancels the code it waits for. */
+export const disconnectTracking = (service: TrackingServiceName) =>
+  request<void>('DELETE', `/account/tracking/${seg(service)}`)
+
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)
 
@@ -1382,6 +1428,7 @@ export const queryKeys = {
   status: ['status'] as const,
   session: ['session'] as const,
   myDevices: ['account', 'devices'] as const,
+  tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,

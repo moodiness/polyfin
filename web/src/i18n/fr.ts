@@ -175,6 +175,10 @@ const fr: Messages = {
       'PublicMetaDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte PublicMetaDB. Rien n’a été enregistré.',
     publicmetadb_unreachable:
       'PublicMetaDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_trakt_app:
+      'Le client ID et le client secret Trakt doivent faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-les de nouveau depuis votre application Trakt.',
+    invalid_simkl_app:
+      'Le client ID Simkl doit faire au plus 256 caractères, sans espaces ni caractères spéciaux. Copiez-le de nouveau depuis votre application Simkl.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
@@ -275,7 +279,8 @@ const fr: Messages = {
   },
   account: {
     title: 'Mon compte',
-    description: 'Gérez votre mot de passe et les applications connectées avec votre compte.',
+    description:
+      'Gérez votre mot de passe, les applications connectées avec votre compte et les services qui suivent ce que vous regardez.',
     passwordTitle: 'Changer de mot de passe',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',
     currentPassword: 'Mot de passe actuel',
@@ -283,6 +288,60 @@ const fr: Messages = {
     confirmPassword: 'Confirmer le nouveau mot de passe',
     passwordChanged: 'Votre mot de passe a été modifié.',
     devicesTitle: 'Mes appareils',
+    tracking: {
+      title: 'Suivi',
+      description:
+        'Connectez les services qui gardent la trace de ce que vous regardez. Polyfin indique à chaque service connecté les films et les épisodes que vous regardez dans vos applications Jellyfin.',
+      status: {
+        connected: 'Connecté',
+        notConnected: 'Non connecté',
+        waiting: 'En attente du code',
+        reconnect: 'À reconnecter',
+        unreachable: 'Nouvelles tentatives',
+        unavailable: 'Non configuré',
+      },
+      unavailable: (name: string) =>
+        `${name} n’est pas encore configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name} dans les paramètres.`,
+      setUpApp: (name: string) => `Configurer l’application ${name}`,
+      codeIntro: (name: string) =>
+        `Connectez votre compte ${name} : Polyfin vous donne un code à saisir sur le site de ${name}.`,
+      keyIntro: (name: string) => `Connectez votre compte ${name} avec votre clé d’API ${name}.`,
+      keyLabel: (name: string) => `Clé d’API ${name}`,
+      keyHelp: {
+        mdblist: 'Elle se trouve sur mdblist.com, dans Preferences, sous API key.',
+        publicmetadb: 'Elle se trouve dans votre compte PublicMetaDB.',
+      },
+      connect: 'Connecter',
+      connecting: 'Connexion…',
+      checking: 'Vérification de la clé…',
+      reconnect: 'Reconnecter',
+      newCode: 'Obtenir un nouveau code',
+      enterCode: (site: string) => `Allez sur ${site}, connectez-vous et saisissez ce code :`,
+      codeLabel: 'Code à saisir',
+      openSite: (site: string) => `Ouvrir ${site}`,
+      waiting: 'Cette page se met à jour toute seule une fois le code saisi.',
+      expires: 'Le code expire ',
+      codeEnded:
+        'Le code a expiré ou a été refusé avant d’être saisi. Obtenez un nouveau code pour réessayer.',
+      account: 'Compte',
+      connectedAt: 'Connecté le',
+      lastSent: 'Dernier envoi',
+      nothingSent: 'Rien d’envoyé pour l’instant',
+      problemReconnect: (name: string) =>
+        `${name} n’accepte plus cette connexion, donc plus rien ne lui est envoyé. Reconnectez-vous pour reprendre l’envoi de ce que vous regardez.`,
+      problemUnreachable: (name: string) =>
+        `${name} n’a pas pu être joint ces derniers temps. Polyfin réessaie, et envoie ce que vous avez regardé dès qu’il répond.`,
+      disconnect: 'Déconnecter',
+      disconnecting: 'Déconnexion…',
+      disconnectConfirm: (name: string) =>
+        `Déconnecter ${name} ? Polyfin cesse de lui indiquer ce que vous regardez. Ce qu’il a déjà reste sur ${name}.`,
+      invalidKey: (name: string) =>
+        `${name} n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte ${name}.`,
+      serviceUnreachable: (name: string) =>
+        `${name} n’a pas pu être joint. Réessayez dans quelques minutes.`,
+      notAvailable: (name: string) =>
+        `${name} n’est pas configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name}.`,
+    },
   },
   devices: {
     empty: 'Aucun appareil connecté.',
@@ -455,6 +514,24 @@ const fr: Messages = {
       remove: 'Supprimer',
       keep: 'Garder la valeur',
       removeHint: 'Enregistrez pour la supprimer, ou choisissez « Garder la valeur ».',
+    },
+    tracking: {
+      description:
+        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList et PublicMetaDB depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde. Trakt et Simkl ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList et PublicMetaDB n’ont besoin de rien.',
+      traktSetup:
+        'Créez une application sur trakt.tv, dans Settings, Your API Apps, New application. Donnez-lui le nom de votre choix, puis copiez ici son client ID et son client secret.',
+      redirectUri: 'Adresse de redirection (redirect URI) à saisir dans l’application',
+      traktClientId: 'Client ID Trakt',
+      traktClientIdHelp:
+        'Laissez vide pour désactiver Trakt. Les utilisateurs peuvent se connecter une fois le client ID et le client secret enregistrés.',
+      traktClientSecret: 'Client secret Trakt',
+      traktClientSecretHelp:
+        'Affiché sur la page de l’application sur trakt.tv, sous le client ID.',
+      simklSetup:
+        'Créez une application sur simkl.com, dans Settings, Developer, Create new app. Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
+      simklClientId: 'Client ID Simkl',
+      simklClientIdHelp:
+        'Laissez vide pour désactiver Simkl. Aucun client secret n’est nécessaire.',
     },
     title: 'Paramètres',
     description: 'Options qui s’appliquent à l’ensemble du serveur.',
@@ -1273,6 +1350,7 @@ const fr: Messages = {
         catalogs: 'Catalogues',
         thumbnails: 'Miniatures',
         security: 'Utilisateurs et sécurité',
+        tracking: 'Suivi',
         liveTv: 'TV en direct',
         recordings: 'Enregistrements',
         diagnostics: 'Diagnostic',

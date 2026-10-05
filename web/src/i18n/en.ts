@@ -160,6 +160,10 @@ const en = {
       'PublicMetaDB did not accept this key. Copy it again from your PublicMetaDB account. Nothing was saved.',
     publicmetadb_unreachable:
       'PublicMetaDB could not be reached to check the key. Nothing was saved: try again later.',
+    invalid_trakt_app:
+      'The Trakt client ID and secret must be at most 256 characters, without spaces or special characters. Copy them again from your Trakt app.',
+    invalid_simkl_app:
+      'The Simkl client ID must be at most 256 characters, without spaces or special characters. Copy it again from your Simkl app.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
@@ -256,7 +260,8 @@ const en = {
   },
   account: {
     title: 'My account',
-    description: 'Manage your password and the apps signed in with your account.',
+    description:
+      'Manage your password, the apps signed in with your account, and the services that track what you watch.',
     passwordTitle: 'Change password',
     passwordHelp: 'Changing your password signs out all your Jellyfin devices.',
     currentPassword: 'Current password',
@@ -264,6 +269,60 @@ const en = {
     confirmPassword: 'Confirm new password',
     passwordChanged: 'Your password has been changed.',
     devicesTitle: 'My devices',
+    tracking: {
+      title: 'Tracking',
+      description:
+        'Connect the services that keep track of what you watch. Polyfin tells each connected service the movies and episodes you watch in your Jellyfin apps.',
+      status: {
+        connected: 'Connected',
+        notConnected: 'Not connected',
+        waiting: 'Waiting for the code',
+        reconnect: 'Needs connecting again',
+        unreachable: 'Retrying',
+        unavailable: 'Not set up',
+      },
+      unavailable: (name: string) =>
+        `${name} is not set up on this server yet: an administrator has to add the ${name} app in the settings first.`,
+      setUpApp: (name: string) => `Set up the ${name} app`,
+      codeIntro: (name: string) =>
+        `Connect your ${name} account: Polyfin gives you a code to enter on the ${name} site.`,
+      keyIntro: (name: string) => `Connect your ${name} account with your ${name} API key.`,
+      keyLabel: (name: string) => `${name} API key`,
+      keyHelp: {
+        mdblist: 'Find it on mdblist.com, in Preferences, under API key.',
+        publicmetadb: 'Find it in your PublicMetaDB account.',
+      },
+      connect: 'Connect',
+      connecting: 'Connecting…',
+      checking: 'Checking the key…',
+      reconnect: 'Connect again',
+      newCode: 'Get a new code',
+      enterCode: (site: string) => `Go to ${site}, sign in, and enter this code:`,
+      codeLabel: 'Code to enter',
+      openSite: (site: string) => `Open ${site}`,
+      waiting: 'This page updates by itself once you have entered it.',
+      expires: 'The code expires ',
+      codeEnded:
+        'The code expired or was refused before it was entered. Get a new code to try again.',
+      account: 'Account',
+      connectedAt: 'Connected on',
+      lastSent: 'Last sent',
+      nothingSent: 'Nothing sent yet',
+      problemReconnect: (name: string) =>
+        `${name} no longer accepts this connection, so nothing is sent to it. Connect again to start sending what you watch.`,
+      problemUnreachable: (name: string) =>
+        `${name} could not be reached lately. Polyfin keeps trying, and sends what you watched once it answers.`,
+      disconnect: 'Disconnect',
+      disconnecting: 'Disconnecting…',
+      disconnectConfirm: (name: string) =>
+        `Disconnect ${name}? Polyfin stops telling it what you watch. What it already has stays on ${name}.`,
+      invalidKey: (name: string) =>
+        `${name} did not accept this key. Copy it again from your ${name} account.`,
+      serviceUnreachable: (name: string) =>
+        `${name} could not be reached. Try again in a few minutes.`,
+      notAvailable: (name: string) =>
+        `${name} is not set up on this server: an administrator has to add the ${name} app first.`,
+    },
   },
   devices: {
     empty: 'No device is signed in.',
@@ -429,6 +488,22 @@ const en = {
       remove: 'Remove',
       keep: 'Keep it',
       removeHint: 'Save to remove it, or choose Keep it.',
+    },
+    tracking: {
+      description:
+        'Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts on their My account page, and Polyfin tells those services what they watch. Trakt and Simkl first need an app of this server’s, set up here. MDBList and PublicMetaDB need nothing.',
+      traktSetup:
+        'Create an app on trakt.tv, in Settings, Your API Apps, New application. Give it any name, then copy its client ID and client secret here.',
+      redirectUri: 'Redirect URI to enter in the app',
+      traktClientId: 'Trakt client ID',
+      traktClientIdHelp:
+        'Leave empty to turn Trakt off. Users can connect once both the client ID and the client secret are saved.',
+      traktClientSecret: 'Trakt client secret',
+      traktClientSecretHelp: 'Shown on the app’s page on trakt.tv, under the client ID.',
+      simklSetup:
+        'Create an app on simkl.com, in Settings, Developer, Create new app. Give it any name, then copy its client ID here.',
+      simklClientId: 'Simkl client ID',
+      simklClientIdHelp: 'Leave empty to turn Simkl off. No client secret is needed.',
     },
     title: 'Settings',
     description: 'Options that apply to the whole server.',
@@ -1234,6 +1309,7 @@ const en = {
         catalogs: 'Catalogs',
         thumbnails: 'Thumbnails',
         security: 'Users and security',
+        tracking: 'Tracking',
         liveTv: 'Live TV',
         recordings: 'Recordings',
         diagnostics: 'Diagnostics',

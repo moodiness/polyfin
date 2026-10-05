@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { changePassword, fetchMyDevices, queryClient, queryKeys, signOutMyDevice } from '@/api'
 import DeviceList from '@/components/DeviceList'
+import TrackingServices from '@/components/TrackingServices'
 import { buttonPrimary, Card, Notice, PageHeader, TextField } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
@@ -22,6 +23,14 @@ export default function AccountPage() {
             signOut={signOutMyDevice}
           />
         </Card>
+        <div className="lg:col-span-2">
+          <Card title={t.account.tracking.title}>
+            <p className="-mt-2 mb-5 max-w-prose text-sm text-muted">
+              {t.account.tracking.description}
+            </p>
+            <TrackingServices />
+          </Card>
+        </div>
       </div>
     </>
   )
