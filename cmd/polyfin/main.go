@@ -41,6 +41,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/userdata"
 	webui "github.com/moodiness/polyfin/web"
 )
@@ -214,6 +215,8 @@ func serve(ctx context.Context) error {
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger, store.Settings)
+	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Version: version, Logger: logger})
+	defer tracking.Close()
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -237,6 +240,7 @@ func serve(ctx context.Context) error {
 		RecordingsDir: cfg.RecordingsDir,
 		FontsDir:      cfg.FontsDir,
 		Recordings:    recorder,
+		Trackers:      tracking,
 	})
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
@@ -275,6 +279,7 @@ func serve(ctx context.Context) error {
 					Started:      started,
 				},
 				Variables: config.Variables(os.Environ(), cfg),
+				Trackers:  tracking,
 			}),
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
@@ -291,6 +296,8 @@ func serve(ctx context.Context) error {
 	// Recordings in progress when ctx ends are finished, as partial, when
 	// Polyfin starts again.
 	go recorder.Run(ctx)
+	// What was left to send to tracking services is sent again.
+	go tracking.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)

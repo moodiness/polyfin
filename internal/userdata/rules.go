@@ -15,6 +15,16 @@ type Thresholds struct {
 	Resume, Played int
 }
 
+// Reaches reports whether position, against runtime, is far enough into
+// an item for Reach to mark it played.
+func (t Thresholds) Reaches(position, runtime time.Duration) bool {
+	if runtime <= 0 {
+		return false
+	}
+	percent := float64(position) / float64(runtime) * 100
+	return percent >= float64(t.Resume) && (percent > float64(t.Played) || runtime < MinResumeDuration)
+}
+
 // Start records that playback began at now: one more play.
 func (d *Data) Start(now time.Time) {
 	d.PlayCount++
@@ -37,7 +47,7 @@ func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
 	switch {
 	case percent < float64(thresholds.Resume):
 		d.Position = 0
-	case percent > float64(thresholds.Played) || runtime < MinResumeDuration:
+	case thresholds.Reaches(position, runtime):
 		d.Position = 0
 		d.Played = true
 	default:

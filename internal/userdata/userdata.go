@@ -180,6 +180,11 @@ func (s *Store) Episodes(ctx context.Context, user accounts.ID) ([]Entry, error)
 // returns the data of the items afterwards, in order. An item listed twice
 // is changed once.
 func (s *Store) Change(ctx context.Context, user accounts.ID, items []Item, change func(*Data)) ([]Data, error) {
+	return s.ChangeEach(ctx, user, items, func(_ Item, d *Data) { change(d) })
+}
+
+// ChangeEach is Change with change told which item it changes.
+func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, change func(Item, *Data)) ([]Data, error) {
 	seen := make(map[accounts.ID]bool, len(items))
 	items = slices.DeleteFunc(slices.Clone(items), func(item Item) bool {
 		duplicate := seen[item.ID]
@@ -228,7 +233,7 @@ func (s *Store) Change(ctx context.Context, user accounts.ID, items []Item, chan
 		lastPlayed := make([]pgtype.Timestamptz, len(items))
 		for i, id := range ids {
 			data := byID[id]
-			change(&data)
+			change(items[i], &data)
 			result[i] = data
 			played[i], counts[i], favorites[i] = data.Played, int32(max(data.PlayCount, 0)), data.Favorite
 			positions[i], runtimes[i] = int64(max(data.Position, 0)/tick), int64(max(data.Runtime, 0)/tick)

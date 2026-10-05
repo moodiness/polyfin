@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -84,6 +85,9 @@ type Options struct {
 	// Recordings schedules and keeps Live TV recordings; nil, or one
 	// without a folder, records nothing.
 	Recordings *recordings.Service
+	// Trackers sends what users watch to the tracking services they
+	// connected; nil sends nothing.
+	Trackers *trackers.Service
 }
 
 // Handler serves the Jellyfin API.
