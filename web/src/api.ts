@@ -732,6 +732,12 @@ export type Library = {
   appName: string | null
   enabled: boolean
   browsable: boolean
+  /** The library's item in Jellyfin apps; null for a catalog that is not an enabled library. */
+  itemId: string | null
+  /** How it finds the image apps show on its tile; `custom` once one was uploaded for it. */
+  image: LibraryImageChoice
+  /** Tag of that image, served as the item's Primary image; null when it shows none. */
+  imageTag: string | null
   /** First XMLTV guide of an enabled TV catalog; null for any other library. */
   guide: Guide | null
   /** Every guide of an enabled TV catalog, in order; null for any other library. */
@@ -756,6 +762,19 @@ export type Guide = {
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
+
+export type LibraryImageChoice = 'none' | 'automatic' | 'custom'
+
+/**
+ * Chooses the image of one enabled library: none, automatic, or custom with a picture sent in
+ * base64 (`data`) or found at an address the server downloads once (`url`).
+ */
+export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'catalogId'> &
+  (
+    | { image: 'none' | 'automatic' }
+    | { image: 'custom'; data: string }
+    | { image: 'custom'; url: string }
+  )
 
 /**
  * `parentalControl`: the user's parental control keeps them on the server's addons only.
@@ -1045,6 +1064,10 @@ export const fetchLibraries = (scope: Scope, signal?: AbortSignal) =>
 /** Replaces the scope's enabled libraries with `libraries`, in this order. */
 export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
   request<Library[]>('PUT', `${scopePath(scope)}/libraries`, { libraries })
+
+/** Chooses one library's image at once, answering the scope's libraries. */
+export const saveLibraryImage = (scope: Scope, body: LibraryImageRequest) =>
+  request<Library[]>('PUT', `${scopePath(scope)}/libraries/image`, body)
 
 /** Query parameters, without those left undefined. */
 function params(values: Record<string, string | number | boolean | undefined>): string {

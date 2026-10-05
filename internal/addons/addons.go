@@ -104,6 +104,10 @@ type Library struct {
 	Name        *string
 	Enabled     bool
 	AddonActive bool
+	// Image is how an enabled library finds the image apps show on its
+	// tile: LibraryImageNone or LibraryImageAutomatic. An image uploaded for
+	// the library's item wins over both (see library.LibraryImages).
+	Image string
 	// Guides are the XMLTV guides of an enabled live TV catalog, in order;
 	// nil for any other library. GuideChannels counts the catalog's channels
 	// when they were last mapped to guide channels, GuideMapped those mapped.
@@ -111,6 +115,12 @@ type Library struct {
 	GuideChannels int
 	GuideMapped   int
 }
+
+// The images a library may find on its own (see Library.Image).
+const (
+	LibraryImageNone      = "none"
+	LibraryImageAutomatic = "automatic"
+)
 
 // MaxGuides bounds the guides of a live TV catalog.
 const MaxGuides = 10
@@ -649,7 +659,7 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched FROM libraries l
+	rows, err := db.Query(ctx, `SELECT l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image FROM libraries l
 		JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1 ORDER BY l.position`, scope.Owner)
 	if err != nil {
 		return nil, err
@@ -665,8 +675,9 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 		kind, catID       string
 		name              *string
 		channels, matched int
+		image             string
 	}
-	if _, err := pgx.ForEachRow(rows, []any{&row.addon, &row.kind, &row.catID, &row.name, &row.channels, &row.matched}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&row.addon, &row.kind, &row.catID, &row.name, &row.channels, &row.matched, &row.image}, func() error {
 		index := slices.IndexFunc(installed, func(a Addon) bool { return a.ID == row.addon })
 		if index < 0 {
 			return nil
@@ -678,7 +689,7 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 		}
 		chosen[key{row.addon, row.kind, row.catID}] = true
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-			Name: row.name, Enabled: true, AddonActive: addon.Enabled}
+			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Image: row.image}
 		if catalog.Type == "tv" {
 			library.Guides, library.GuideChannels, library.GuideMapped = []Guide{}, row.channels, row.matched
 		}
@@ -712,7 +723,7 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 				continue
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-				AddonActive: addon.Enabled})
+				AddonActive: addon.Enabled, Image: LibraryImageNone})
 		}
 	}
 	return result, nil
@@ -790,6 +801,26 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 		return err
 	})
 	return result, err
+}
+
+// SetLibraryImage sets how one of the scope's enabled libraries finds its
+// image (see Library.Image). It answers ErrInvalidLibrary for a catalog
+// that is not an enabled library of the scope, or a live TV catalog, which
+// makes none.
+func (s *Store) SetLibraryImage(ctx context.Context, scope Scope, key LibraryKey, image string) error {
+	if image != LibraryImageNone && image != LibraryImageAutomatic {
+		return ErrInvalidLibrary
+	}
+	tag, err := s.db.Exec(ctx, `UPDATE libraries l SET image = $5 FROM addons a WHERE a.id = l.addon_id AND l.addon_id = $1
+		AND l.catalog_type = $2 AND l.catalog_id = $3 AND l.catalog_type <> 'tv' AND a.owner_id IS NOT DISTINCT FROM $4`,
+		key.AddonID, key.CatalogType, key.CatalogID, scope.Owner, image)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrInvalidLibrary
+	}
+	return nil
 }
 
 // validGuideURL checks a guide address.

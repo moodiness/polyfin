@@ -114,6 +114,12 @@ const common: typeof en = {
     invalid_library:
       'Une bibliothèque fait référence à un catalogue qui n’existe plus ou ne peut pas être parcouru. Retirez les bibliothèques signalées comme plus disponibles, puis enregistrez à nouveau.',
     invalid_library_name: 'Le nom d’une bibliothèque doit comporter de 1 à 64 caractères.',
+    invalid_image: 'Choisissez une image JPEG, PNG ou WebP de 10 Mo au plus.',
+    invalid_image_url: 'Saisissez une adresse d’image commençant par https:// ou http://.',
+    image_unreachable:
+      'Aucune image n’a pu être téléchargée depuis cette adresse. Vérifiez qu’elle ouvre bien une image, puis réessayez.',
+    image_private_network:
+      'Cette image est sur une adresse du réseau local. Seuls les administrateurs peuvent utiliser de telles adresses.',
     invalid_login_attempts:
       'Le nombre de mots de passe faux avant blocage doit être 0, ou un nombre entier de 3 à 20.',
     invalid_inactive_device_days:

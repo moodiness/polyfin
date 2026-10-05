@@ -51,6 +51,9 @@ type Service struct {
 	pages  *cache.Cache[pageKey, []stremio.Meta]
 	metas  *cache.Cache[metaKey, stremio.Meta]
 	flight singleflight.Group
+	// libraryImages are the libraries' automatic images, by catalog (see
+	// automaticImage).
+	libraryImages *cache.Cache[pageKey, string]
 
 	streamLists   *cache.Cache[streamKey, []stremio.Stream]
 	subtitleLists *cache.Cache[streamKey, []stremio.Subtitle]
@@ -138,6 +141,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
+	s.libraryImages = cache.NewLasting[pageKey, string](1000, s.catalogLife, clock)
 	s.streamLists = cache.NewLasting[streamKey, []stremio.Stream](2000, s.listLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, []stremio.Subtitle](2000, s.listLife, clock)
 	s.musicPages = cache.NewLasting[musicKey, musicPage](2000, s.catalogLife, clock)
@@ -168,11 +172,13 @@ type installed struct {
 	shared   bool
 }
 
-// library is a library of a user with its catalog.
+// library is a library of a user with its catalog, and how it finds its
+// image (see addons.Library.Image).
 type library struct {
 	item    Item
 	addon   installed
 	catalog stremio.Catalog
+	image   string
 }
 
 // view is what a user can browse: their enabled addons and libraries, the
@@ -265,7 +271,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 				}
 			// The server's libraries the user does not see; their titles stay
 			// reachable through the addon.
-			case scope.Owner == nil && slices.Contains(user.HiddenLibraries, libraryID(l)):
+			case scope.Owner == nil && slices.Contains(user.HiddenLibraries, LibraryID(l)):
 			default:
 				visible = append(visible, l)
 				entries = append(entries, entry)
@@ -281,13 +287,14 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 		}
 		v.libraries = append(v.libraries, library{
 			item: Item{
-				ID:             libraryID(l),
+				ID:             LibraryID(l),
 				Kind:           KindLibrary,
 				Name:           name,
 				CollectionType: collection,
 			},
 			addon:   entries[i],
 			catalog: l.Catalog,
+			image:   l.Image,
 		})
 	}
 	return v, nil
@@ -311,24 +318,29 @@ func (v view) library(id accounts.ID) (library, bool) {
 	return library{}, false
 }
 
-// Libraries lists a user's libraries in order.
+// Libraries lists a user's libraries in order, with their images (see
+// libraryimages.go).
 func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return nil, err
 	}
+	images := s.automaticImages(ctx, v.libraries)
 	items := make([]Item, 0, len(v.libraries))
 	records := make([]record, 0, len(v.libraries))
-	for _, l := range v.libraries {
-		items = append(items, l.item)
-		addon := l.addon.addon.ID
-		records = append(records, record{ID: l.item.ID, Key: libraryKey(addon, l.catalog.Type, l.catalog.ID), Kind: KindLibrary,
-			Addon: &addon, CatalogType: l.catalog.Type, CatalogID: l.catalog.ID, Confined: l.addon.confined})
+	for i, l := range v.libraries {
+		item := l.item
+		if !v.restricted() {
+			item.Images.Primary = images[i]
+		}
+		items = append(items, item)
+		records = append(records, libraryRecord(l, images[i]))
 	}
 	return s.overridden(items), s.save(ctx, records)
 }
 
-func libraryID(l addons.Library) accounts.ID {
+// LibraryID is the item of a library in Jellyfin apps.
+func LibraryID(l addons.Library) accounts.ID {
 	return itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID))
 }
 
@@ -365,7 +377,7 @@ func ServerLibraries(ctx context.Context, store *addons.Store, language string) 
 	}
 	result := make([]ServerLibrary, 0, len(shown))
 	for i, name := range LibraryNames(shown, language) {
-		library := ServerLibrary{ID: libraryID(shown[i]), Name: name, Genres: []string{}}
+		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}}
 		for _, extra := range shown[i].Catalog.Extra {
 			if extra.Name == "genre" {
 				library.Genres = append(library.Genres, extra.Options...)
@@ -972,7 +984,11 @@ func (s *Service) Items(ctx context.Context, user accounts.User, ids []accounts.
 
 func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	if l, ok := v.library(id); ok {
-		return l.item, nil
+		item := l.item
+		if l.image == addons.LibraryImageAutomatic && !v.restricted() {
+			item.Images.Primary = s.automaticImage(ctx, l.addon, l.catalog)
+		}
+		return item, nil
 	}
 	r, err := s.load(ctx, id)
 	if err != nil {
@@ -1451,6 +1467,9 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		}
 	case r.Kind == KindPerson && r.Person != nil:
 		images.Primary = r.Person.Image
+	case r.Kind == KindLibrary:
+		// A library's automatic image, when it was last looked up.
+		images.Primary = r.Poster
 	case r.Music != nil:
 		images.Primary = r.Music.Artwork
 	case r.Kind == KindSeason:

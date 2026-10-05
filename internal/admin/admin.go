@@ -96,6 +96,9 @@ type Options struct {
 	Recordings *recordings.Service
 	// Library names the channels of recordings.
 	Library ItemReader
+	// LibraryImages finds and keeps the images of libraries; nil shows
+	// none, and refuses to choose them.
+	LibraryImages LibraryImages
 	// Health are what the health page reads.
 	Health HealthSources
 	// Variables are the POLYFIN_ environment variables in effect,
@@ -187,6 +190,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}", h.signedIn(h.updateSource))
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
+	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
 	mux.Handle("GET /admin/api/account/addon-preferences", h.signedIn(h.addonPreferences))
 	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
 	mux.Handle("PUT /admin/api/scopes/{scope}/guides", h.signedIn(h.saveGuide))

@@ -63,6 +63,41 @@ const libraries = {
         podcast: 'Its episodes appear in the music view of Jellyfin apps.',
       } as Record<string, string>,
     },
+    image: {
+      label: 'Image in apps',
+      edit: (name: string, state: string) => `Image of ${name}: ${state}`,
+      choices: {
+        none: 'None',
+        automatic: 'Automatic',
+        custom: 'Custom',
+      },
+      help: {
+        none: 'Apps show this library without an image, as before.',
+        automatic:
+          'Polyfin takes it from the catalog: the backdrop of one of its first titles, else a poster.',
+        custom:
+          'An image you upload, or one Polyfin downloads once from an address. Wide 16:9 images fit library tiles best. JPEG, PNG or WebP, at most 10 MB.',
+      },
+      parental: 'Users under parental control or blocking genres do not see it.',
+      notFound: 'Nothing found in this catalog for now, so apps show no image.',
+      noImage: 'No image',
+      upload: 'Upload an image',
+      uploadAnother: 'Upload another image',
+      address: 'Or an image address',
+      addressHelp: 'Polyfin downloads it once and keeps a copy.',
+      useAddress: 'Use this address',
+      remove: 'Remove the image',
+      removeTitle: (name: string) => `Remove the image of ${name}?`,
+      removeToNone: 'The uploaded image is deleted. Apps show this library without an image.',
+      removeToAutomatic:
+        'The uploaded image is deleted. Apps show the image found in the catalog instead.',
+      removeConfirm: 'Remove',
+      saved: 'Image saved.',
+      removed: 'Image removed.',
+      atOnce: 'Image changes are saved at once.',
+      afterSave: 'Save the libraries first, then choose this library’s image.',
+      close: (name: string) => `Close the image of ${name}`,
+    },
   },
 }
 

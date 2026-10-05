@@ -105,6 +105,12 @@ const common = {
     invalid_library:
       'A library refers to a catalog that no longer exists or cannot be browsed. Remove the libraries marked as no longer available, then save again.',
     invalid_library_name: 'Library names must be 1 to 64 characters long.',
+    invalid_image: 'Choose a JPEG, PNG or WebP image of at most 10 MB.',
+    invalid_image_url: 'Enter an image address starting with https:// or http://.',
+    image_unreachable:
+      'No image could be downloaded from this address. Check that it opens an image, then try again.',
+    image_private_network:
+      'This image is on a local network address. Only administrators can use such addresses.',
     invalid_login_attempts:
       'Wrong passwords before an account is blocked must be 0, or a whole number from 3 to 20.',
     invalid_inactive_device_days:
