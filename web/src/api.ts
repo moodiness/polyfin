@@ -940,6 +940,10 @@ export const importTracking = (service: TrackingServiceName) =>
 export const disconnectTracking = (service: TrackingServiceName) =>
   request<void>('DELETE', `/account/tracking/${seg(service)}`)
 
+/** Reads the signed-in user's saved MDBList or PublicMetaDB key again; never cached. */
+export const revealTrackingKey = async (service: 'mdblist' | 'publicmetadb') =>
+  (await request<{ value: string }>('POST', `/account/tracking/${seg(service)}/key/reveal`)).value
+
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)
 
@@ -975,6 +979,13 @@ export const fetchSettings = (signal?: AbortSignal) =>
   request<Settings>('GET', '/settings', undefined, signal)
 
 export const saveSettings = (settings: Settings) => request<Settings>('PUT', '/settings', settings)
+
+/** The server's secrets an administrator can read again. */
+export type ServerSecretName = 'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret'
+
+/** Reads one of the server's saved secrets again, for an administrator; never cached. */
+export const revealServerSecret = async (name: ServerSecretName) =>
+  (await request<{ value: string }>('POST', `/settings/secrets/${seg(name)}/reveal`)).value
 
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
@@ -1428,6 +1439,19 @@ export type Health = {
     pausedHosts: { host: string; until: string }[]
   } | null
   addons: AddonHealth[]
+  /** How the stored keys and tokens stand; null when the server could not read them. */
+  secrets: {
+    /** Whether POLYFIN_SECRET_KEY is set, which encrypts them. */
+    encrypted: boolean
+    /** How many are stored unencrypted. */
+    plaintext: number
+    /** Those POLYFIN_SECRET_KEY cannot decrypt: a server setting, or a user's connection. */
+    unreadable: {
+      setting: ServerSecretName | null
+      service: TrackingServiceName | null
+      user: string | null
+    }[]
+  } | null
 }
 
 /** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */

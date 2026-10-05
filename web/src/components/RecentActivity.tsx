@@ -18,7 +18,9 @@ const filters = {
   signIns: { types: ['AuthenticationSucceeded', 'AuthenticationFailed'] },
   playback: { types: ['VideoPlayback', 'VideoPlaybackStopped'] },
   users: { types: ['UserCreated', 'UserDeleted', 'UserPolicyUpdated', 'UserPasswordChanged'] },
-  server: { types: ['ServerConfigurationUpdated', 'AddonInstalled', 'AddonUninstalled'] },
+  server: {
+    types: ['ServerConfigurationUpdated', 'AddonInstalled', 'AddonUninstalled', 'SecretRevealed'],
+  },
   recordings: { types: ['RecordingScheduled', 'RecordingDeleted'] },
 } satisfies Record<string, Omit<ActivityQuery, 'limit'>>
 
