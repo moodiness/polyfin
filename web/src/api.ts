@@ -872,8 +872,11 @@ export type TrackingService = {
   connectedAt: string | null
   /** The last time the service accepted something for this user. */
   lastSentAt: string | null
-  /** "reconnect": the service refused the connection; "unreachable": sends failed and are retried. */
-  problem: 'reconnect' | 'unreachable' | null
+  /**
+   * "reconnect": the service refused the connection; "unreachable": sends failed and are retried;
+   * "app_refused": the service refused the server's app while the user's code waited.
+   */
+  problem: 'reconnect' | 'unreachable' | 'app_refused' | null
   /** While a code connection waits for the user to enter the code on the service's site. */
   code: { userCode: string; verificationUrl: string; expiresAt: string } | null
 }

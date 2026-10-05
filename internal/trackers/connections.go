@@ -124,8 +124,17 @@ func (s *Service) status(ctx context.Context, user accounts.ID, service string) 
 		}
 	}
 	s.mu.Lock()
-	if p := s.pending[laneKey{user, service}]; p != nil {
+	key := laneKey{user, service}
+	if p := s.pending[key]; p != nil {
 		status.Code = &Code{UserCode: p.userCode, VerificationURL: p.verificationURL, ExpiresAt: p.expiresAt}
+	}
+	if refused, ok := s.refusedApps[key]; ok {
+		if refused == appCredentials(service, s.settings()) {
+			status.Problem = ProblemAppRefused
+		} else {
+			// The app's settings changed since.
+			delete(s.refusedApps, key)
+		}
 	}
 	s.mu.Unlock()
 	return status, nil
@@ -207,6 +216,11 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 	if !Available(service, settings) {
 		return Status{}, ErrNotAvailable
 	}
+	// A new attempt forgets that the app was refused.
+	key := laneKey{user, service}
+	s.mu.Lock()
+	delete(s.refusedApps, key)
+	s.mu.Unlock()
 	var (
 		r   reply
 		err error
@@ -216,7 +230,10 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 	} else {
 		r, err = s.form(ctx, "/oauth2/device", url.Values{"client_id": {settings.SimklClientID}, "scope": {simklScope}})
 	}
-	if err != nil || r.status != http.StatusOK {
+	switch {
+	case err == nil && refusesApp(r):
+		return Status{}, ErrAppRefused
+	case err != nil || r.status != http.StatusOK:
 		return Status{}, ErrUnreachable
 	}
 	var answer codeAnswer
@@ -240,7 +257,6 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 			p.verificationURL = answer.VerificationURI
 		}
 	}
-	key := laneKey{user, service}
 	s.mu.Lock()
 	if old := s.pending[key]; old != nil {
 		old.cancel()
@@ -259,6 +275,8 @@ const (
 	slowDown
 	approved
 	ended
+	// appRefused: the service refused the server's app.
+	appRefused
 )
 
 // tokens are what Trakt and Simkl answer once a user lets Polyfin in, or
@@ -314,6 +332,13 @@ func (s *Service) poll(p *pending) {
 			p.interval += 5 * s.timing.pollUnit
 		case ended:
 			return
+		case appRefused:
+			s.mu.Lock()
+			s.refusedApps[laneKey{p.user, p.service}] = appCredentials(p.service, s.settings())
+			s.mu.Unlock()
+			s.logger.Info("A tracking service refused this server's app: its client ID and secret need checking under Settings › Tracking",
+				"user_id", p.user.String(), "service", p.service)
+			return
 		case approved:
 			select {
 			case <-p.done:
@@ -362,6 +387,8 @@ func (s *Service) pollCode(p *pending) (pollState, tokens) {
 			return ended, t
 		}
 		return approved, t
+	case refusesApp(r):
+		return appRefused, t
 	case r.status == http.StatusTooManyRequests:
 		return slowDown, t
 	case p.service == Trakt && r.status == http.StatusBadRequest:
@@ -382,8 +409,24 @@ func (s *Service) pollCode(p *pending) (pollState, tokens) {
 	if r.status >= 500 {
 		return waiting, t
 	}
-	// Simkl: expired, or the app was refused.
+	// Simkl: expired, or the grant was refused.
 	return ended, t
+}
+
+// refusesApp reports whether r refuses the app the settings name rather
+// than the user or the code: Trakt and Simkl answer 401 invalid_client to
+// an unknown client ID or a wrong secret.
+func refusesApp(r reply) bool {
+	return r.status == http.StatusUnauthorized || r.status == http.StatusForbidden || errorCode(r.body) == "invalid_client"
+}
+
+// appCredentials are the credentials of the app the settings name for
+// service.
+func appCredentials(service string, settings accounts.Settings) string {
+	if service == Trakt {
+		return settings.TraktClientID + "\x00" + settings.TraktClientSecret
+	}
+	return settings.SimklClientID
 }
 
 // account asks the service the name of the account token is for, empty

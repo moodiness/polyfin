@@ -299,6 +299,7 @@ const fr: Messages = {
         reconnect: 'À reconnecter',
         unreachable: 'Nouvelles tentatives',
         unavailable: 'Non configuré',
+        appRefused: 'Application refusée',
       },
       unavailable: (name: string) =>
         `${name} n’est pas encore configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name} dans les paramètres.`,
@@ -341,6 +342,8 @@ const fr: Messages = {
         `${name} n’a pas pu être joint. Réessayez dans quelques minutes.`,
       notAvailable: (name: string) =>
         `${name} n’est pas configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name}.`,
+      appRefused: (name: string) =>
+        `${name} a refusé l’application de ce serveur. Un administrateur doit vérifier son client ID et son client secret dans Paramètres › Suivi.`,
     },
   },
   devices: {
@@ -528,7 +531,7 @@ const fr: Messages = {
       traktClientSecretHelp:
         'Affiché sur la page de l’application sur trakt.tv, sous le client ID.',
       simklSetup:
-        'Créez une application sur simkl.com, dans Settings, Developer, Create new app. Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
+        'Créez une application sur simkl.com, dans Settings, Developer, Create new app, du type « TV, devices & command line » (l’AUTH V2 de Simkl ; elle n’a pas besoin d’adresse de redirection, et les client ID des anciennes applications AUTH V1 sont refusés). Donnez-lui le nom de votre choix, puis copiez ici son client ID.',
       simklClientId: 'Client ID Simkl',
       simklClientIdHelp:
         'Laissez vide pour désactiver Simkl. Aucun client secret n’est nécessaire.',

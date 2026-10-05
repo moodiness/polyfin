@@ -263,3 +263,60 @@ func TestDeletingAUserDeletesTheirConnections(t *testing.T) {
 	}
 	h.idle(t)
 }
+
+func TestARefusedAppIsNotAnOutage(t *testing.T) {
+	h := newHarness(t)
+	user := h.user(t, "zoe")
+	// Asking for a code with an app Trakt does not know.
+	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
+	if _, err := h.StartCode(t.Context(), user, Trakt); !errors.Is(err, ErrAppRefused) {
+		t.Errorf("Trakt: %v", err)
+	}
+
+	// A wrong secret shows only once the user entered the code: the code
+	// ends, and the service shows the app refused, connected or not.
+	h.connected(t, user, Trakt, "trakt-zoe")
+	h.f.reply("POST", "/trakt/oauth/device/code", http.StatusOK,
+		`{"device_code":"device-2","user_code":"EFGH5678","verification_url":"https://trakt.example/activate","expires_in":600,"interval":1}`)
+	h.f.reply("POST", "/trakt/oauth/device/token", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"client not found"}`)
+	if _, err := h.StartCode(t.Context(), user, Trakt); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "Trakt refusing the app", func() bool { return h.status(t, user, Trakt).Problem == ProblemAppRefused })
+	if status := h.status(t, user, Trakt); status.Code != nil || !status.Connected {
+		t.Errorf("Trakt: %+v", status)
+	}
+	// Fixing the app's settings clears it.
+	settings := h.store.Settings()
+	settings.TraktClientSecret = "fixed-secret"
+	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if status := h.status(t, user, Trakt); status.Problem != "" {
+		t.Errorf("after the settings changed: %+v", status)
+	}
+
+	// Simkl refuses an AUTH V1 client ID on its token endpoint the same
+	// way; the next attempt clears it.
+	h.f.reply("POST", "/simkl/oauth2/device", http.StatusOK, `{"device_code":"simkl-device","user_code":"WXYZ-2345",
+		"verification_uri":"https://simkl.example/pin","expires_in":900,"interval":1}`)
+	h.f.reply("POST", "/simkl/oauth2/token", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"Unknown or missing client_id"}`)
+	if _, err := h.StartCode(t.Context(), user, Simkl); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "Simkl refusing the app", func() bool { return h.status(t, user, Simkl).Problem == ProblemAppRefused })
+	if status := h.status(t, user, Simkl); status.Connected || status.Code != nil {
+		t.Errorf("Simkl: %+v", status)
+	}
+	h.f.reply("POST", "/simkl/oauth2/token", http.StatusBadRequest, `{"error":"authorization_pending"}`)
+	if status, err := h.StartCode(t.Context(), user, Simkl); err != nil || status.Problem != "" || status.Code == nil {
+		t.Errorf("trying again: %+v %v", status, err)
+	}
+	h.f.reply("POST", "/simkl/oauth2/device", http.StatusUnauthorized, `{"error":"invalid_client","error_description":"Unknown or missing client_id"}`)
+	if _, err := h.StartCode(t.Context(), user, Simkl); !errors.Is(err, ErrAppRefused) {
+		t.Errorf("Simkl: %v", err)
+	}
+	if strings.Contains(h.log.String(), "trakt-secret") || strings.Contains(h.log.String(), "simkl-client") {
+		t.Errorf("log: %s", h.log.String())
+	}
+}

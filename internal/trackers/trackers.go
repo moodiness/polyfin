@@ -83,6 +83,10 @@ const (
 	ProblemReconnect = "reconnect"
 	// ProblemUnreachable: recent sends failed and are being retried.
 	ProblemUnreachable = "unreachable"
+	// ProblemAppRefused: the service refused the app an administrator
+	// registered with it while the user was connecting, until the user
+	// tries again or the app's settings change.
+	ProblemAppRefused = "app_refused"
 )
 
 var (
@@ -96,6 +100,9 @@ var (
 	ErrInvalidKey = errors.New("invalid API key")
 	// ErrUnreachable reports a service that could not be asked.
 	ErrUnreachable = errors.New("tracking service unreachable")
+	// ErrAppRefused reports a code service that refused the app the
+	// settings name: a wrong client ID or secret.
+	ErrAppRefused = errors.New("tracking service refused the server's app")
 )
 
 // Options are the dependencies of the service.
@@ -180,6 +187,9 @@ type Service struct {
 	closed bool
 	// pending are the code connections waiting for users.
 	pending map[laneKey]*pending
+	// refusedApps are the users whose code the service ended by refusing
+	// the server's app, with the app's credentials it refused.
+	refusedApps map[laneKey]string
 	// intakes are the reports and marks waiting to be looked at, by user.
 	intakes map[accounts.ID]*intake
 	// sessions are the playbacks under way, by user and device.
@@ -203,20 +213,21 @@ func New(options Options) *Service {
 		}
 	}
 	return &Service{
-		db:       options.DB,
-		settings: options.Settings,
-		version:  options.Version,
-		logger:   options.Logger,
-		urls:     urls,
-		client:   &http.Client{},
-		now:      time.Now,
-		timing:   defaultTiming,
-		ctx:      ctx,
-		cancel:   cancel,
-		pending:  map[laneKey]*pending{},
-		intakes:  map[accounts.ID]*intake{},
-		sessions: map[sessionKey]*session{},
-		lanes:    map[laneKey]*lane{},
+		db:          options.DB,
+		settings:    options.Settings,
+		version:     options.Version,
+		logger:      options.Logger,
+		urls:        urls,
+		client:      &http.Client{},
+		now:         time.Now,
+		timing:      defaultTiming,
+		ctx:         ctx,
+		cancel:      cancel,
+		pending:     map[laneKey]*pending{},
+		refusedApps: map[laneKey]string{},
+		intakes:     map[accounts.ID]*intake{},
+		sessions:    map[sessionKey]*session{},
+		lanes:       map[laneKey]*lane{},
 	}
 }
 

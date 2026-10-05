@@ -14,13 +14,23 @@ import (
 
 // trackingServices stands in for Trakt (/trakt), MDBList (/mdblist) and
 // PublicMetaDB (/publicmetadb): MDBList takes the key "good", refuses
-// "bad" and fails for any other; Trakt hands out a code.
+// "bad" and fails for any other; Trakt hands out a code to any app but
+// "unknown-id".
 func trackingServices(t *testing.T) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/trakt/oauth/device/code":
+			var body struct {
+				ClientID string `json:"client_id"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body.ClientID == "unknown-id" {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = io.WriteString(w, `{"error":"invalid_client","error_description":"client not found"}`)
+				return
+			}
 			_, _ = io.WriteString(w, `{"device_code":"secret-device","user_code":"ABCD1234","verification_url":"https://trakt.example/activate",
 				"expires_in":600,"interval":5}`)
 		case "/trakt/oauth/device/token":
@@ -105,9 +115,18 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 		t.Errorf("another user sees %v", body)
 	}
 
-	// With the Trakt app saved, a code waits for the user.
+	// An app Trakt does not know is not an outage.
 	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en",
-		"traktClientId": "trakt-id", "traktClientSecret": "trakt-secret"}
+		"traktClientId": "unknown-id", "traktClientSecret": "trakt-secret"}
+	if status, _, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
+		t.Fatalf("settings: %d", status)
+	}
+	if status, body, _ := member.call(http.MethodPost, "/account/tracking/trakt", map[string]string{}); status != http.StatusConflict || body["error"] != "app_refused" {
+		t.Errorf("refused app: %d %v", status, body)
+	}
+
+	// With the Trakt app saved, a code waits for the user.
+	settings["traktClientId"] = "trakt-id"
 	if status, _, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
 		t.Fatalf("settings: %d", status)
 	}

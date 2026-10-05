@@ -95,6 +95,7 @@ function connectError(t: Messages, name: string, error: unknown): string {
     if (error.code === 'invalid_key') return text.invalidKey(name)
     if (error.code === 'service_unreachable') return text.serviceUnreachable(name)
     if (error.code === 'not_available') return text.notAvailable(name)
+    if (error.code === 'app_refused') return text.appRefused(name)
   }
   return errorMessage(t, error)
 }
@@ -115,7 +116,10 @@ function ServiceRow({ service }: { service: TrackingService }) {
   if (codeKey !== lastCodeKey) {
     setLastCodeKey(codeKey)
     setCodeEnded(
-      codeKey === null && lastCodeKey !== null && (!service.connected || service.problem !== null),
+      codeKey === null &&
+        lastCodeKey !== null &&
+        service.problem !== 'app_refused' &&
+        (!service.connected || service.problem !== null),
     )
   }
 
@@ -150,27 +154,32 @@ function ServiceRow({ service }: { service: TrackingService }) {
       ? { tone: 'muted', label: text.status.unavailable }
       : code !== null && !expired
         ? { tone: 'fin', label: text.status.waiting }
-        : service.problem === 'reconnect'
-          ? { tone: 'danger', label: text.status.reconnect }
-          : service.problem === 'unreachable'
-            ? { tone: 'warning', label: text.status.unreachable }
-            : service.connected
-              ? { tone: 'ok', label: text.status.connected }
-              : { tone: 'muted', label: text.status.notConnected }
+        : service.problem === 'app_refused'
+          ? { tone: 'danger', label: text.status.appRefused }
+          : service.problem === 'reconnect'
+            ? { tone: 'danger', label: text.status.reconnect }
+            : service.problem === 'unreachable'
+              ? { tone: 'warning', label: text.status.unreachable }
+              : service.connected
+                ? { tone: 'ok', label: text.status.connected }
+                : { tone: 'muted', label: text.status.notConnected }
+
+  // The administrator's page where the app is set up, for administrators.
+  const setUpLink = user.isAdministrator && (
+    <Link
+      to="/settings#settings-tracking"
+      className="inline-flex text-sm font-medium text-fin-5 underline-offset-4 hover:underline"
+    >
+      {text.setUpApp(name)}
+    </Link>
+  )
 
   let body: ReactNode
   if (!service.available) {
     body = (
       <div className="space-y-2 text-sm">
         <p className="text-muted">{text.unavailable(name)}</p>
-        {user.isAdministrator && (
-          <Link
-            to="/settings#settings-tracking"
-            className="inline-flex font-medium text-fin-5 underline-offset-4 hover:underline"
-          >
-            {text.setUpApp(name)}
-          </Link>
-        )}
+        {setUpLink}
       </div>
     )
   } else if (code !== null && !expired) {
@@ -231,11 +240,23 @@ function ServiceRow({ service }: { service: TrackingService }) {
         onConnect={(key) => connect.mutate(key)}
       />
     )
+    const appRefused =
+      connect.isError && connect.error instanceof ApiError && connect.error.code === 'app_refused'
     const codeError =
       service.connection === 'code' && connect.isError ? (
-        <Notice kind="error">{connectError(t, name, connect.error)}</Notice>
+        <div className="space-y-2">
+          <Notice kind="error">{connectError(t, name, connect.error)}</Notice>
+          {appRefused && setUpLink}
+        </div>
       ) : null
     const ended = (expired || codeEnded) && <Callout tone="warning">{text.codeEnded}</Callout>
+    // The server's app was refused while the code waited; another attempt clears it.
+    const refusedApp = service.problem === 'app_refused' && !connect.isError && (
+      <div className="space-y-2">
+        <Callout tone="danger">{text.appRefused(name)}</Callout>
+        {setUpLink}
+      </div>
+    )
 
     body = service.connected ? (
       <div className="space-y-4">
@@ -267,14 +288,15 @@ function ServiceRow({ service }: { service: TrackingService }) {
         {service.problem === 'unreachable' && (
           <Callout tone="warning">{text.problemUnreachable(name)}</Callout>
         )}
+        {refusedApp}
         {ended}
         {codeError}
         {service.problem === 'reconnect' && service.connection === 'key' && keyForm(text.reconnect)}
         {disconnect.isError && <Notice kind="error">{errorMessage(t, disconnect.error)}</Notice>}
         <div className="flex flex-wrap gap-2">
-          {service.problem === 'reconnect' &&
+          {(service.problem === 'reconnect' || service.problem === 'app_refused') &&
             service.connection === 'code' &&
-            codeConnect(ended ? text.newCode : text.reconnect)}
+            codeConnect(ended || service.problem === 'app_refused' ? text.newCode : text.reconnect)}
           <ConfirmButton
             label={text.disconnect}
             busyLabel={text.disconnecting}
@@ -289,6 +311,7 @@ function ServiceRow({ service }: { service: TrackingService }) {
         <p className="text-sm text-muted">
           {service.connection === 'code' ? text.codeIntro(name) : text.keyIntro(name)}
         </p>
+        {refusedApp}
         {ended}
         {codeError}
         {service.connection === 'code'

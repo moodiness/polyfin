@@ -280,6 +280,7 @@ const en = {
         reconnect: 'Needs connecting again',
         unreachable: 'Retrying',
         unavailable: 'Not set up',
+        appRefused: 'App refused',
       },
       unavailable: (name: string) =>
         `${name} is not set up on this server yet: an administrator has to add the ${name} app in the settings first.`,
@@ -322,6 +323,8 @@ const en = {
         `${name} could not be reached. Try again in a few minutes.`,
       notAvailable: (name: string) =>
         `${name} is not set up on this server: an administrator has to add the ${name} app first.`,
+      appRefused: (name: string) =>
+        `${name} refused this server’s app. An administrator has to check its client ID and secret under Settings › Tracking.`,
     },
   },
   devices: {
@@ -501,7 +504,7 @@ const en = {
       traktClientSecret: 'Trakt client secret',
       traktClientSecretHelp: 'Shown on the app’s page on trakt.tv, under the client ID.',
       simklSetup:
-        'Create an app on simkl.com, in Settings, Developer, Create new app. Give it any name, then copy its client ID here.',
+        'Create an app on simkl.com, in Settings, Developer, Create new app, of the type “TV, devices & command line” (Simkl’s AUTH V2; it needs no redirect URI, and client IDs of older AUTH V1 apps are refused). Give it any name, then copy its client ID here.',
       simklClientId: 'Simkl client ID',
       simklClientIdHelp: 'Leave empty to turn Simkl off. No client secret is needed.',
     },

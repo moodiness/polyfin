@@ -107,6 +107,8 @@ func (h *handler) connectTracking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_key")
 	case errors.Is(err, trackers.ErrNotAvailable):
 		writeError(w, http.StatusConflict, "not_available")
+	case errors.Is(err, trackers.ErrAppRefused):
+		writeError(w, http.StatusConflict, "app_refused")
 	case errors.Is(err, trackers.ErrUnreachable):
 		writeError(w, http.StatusBadGateway, "service_unreachable")
 	case err != nil:
