@@ -75,7 +75,6 @@ const home: typeof en = {
       autoRefresh: 'Mise à jour toutes les 3 secondes.',
       paused: 'En pause',
       unknownTitle: 'Titre introuvable',
-      episode: (season: number, episode: number) => `Saison ${season}, épisode ${episode}`,
       movie: (year: number) => (year > 0 ? `Film, ${year}` : 'Film'),
       liveChannel: 'Direct',
       progress: (title: string) => `Position de lecture de ${title}`,

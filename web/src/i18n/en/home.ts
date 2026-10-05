@@ -73,7 +73,6 @@ const home = {
       autoRefresh: 'Updates every 3 seconds.',
       paused: 'Paused',
       unknownTitle: 'Title not found',
-      episode: (season: number, episode: number) => `Season ${season}, episode ${episode}`,
       movie: (year: number) => (year > 0 ? `Movie, ${year}` : 'Movie'),
       liveChannel: 'Live',
       progress: (title: string) => `Playback position of ${title}`,
