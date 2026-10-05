@@ -257,8 +257,22 @@ func youTubeID(trailer string) string {
 // genre (a category) in a catalog of a type, or those whose name holds
 // search, newest first, then in the provider's order.
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, catalog string, skip int, genre, search string) ([]stremio.Meta, error) {
+	metas, _, err := s.catalogWindow(ctx, source, catalogType, catalog, genre, search, skip, vodPage, false)
+	return metas, err
+}
+
+// CatalogWindow lists the titles [start, start+count) of one of a source's
+// movie or series catalogs, as Catalog orders them, and how many there
+// are: a stored list is paged and counted whole, unlike an addon's
+// catalog.
+func (s *Service) CatalogWindow(ctx context.Context, source accounts.ID, catalogType, catalog, genre, search string, start, count int) ([]stremio.Meta, int, error) {
+	return s.catalogWindow(ctx, source, catalogType, catalog, genre, search, start, count, true)
+}
+
+func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalogType, catalog, genre, search string, skip, limit int,
+	counted bool) ([]stremio.Meta, int, error) {
 	if catalogType != typeMovie && catalogType != typeSeries {
-		return nil, nil
+		return nil, 0, nil
 	}
 	filter, args := "", []any{source, catalogType}
 	switch catalog {
@@ -270,7 +284,7 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	default:
 		hash, ok := strings.CutPrefix(catalog, catalogType+".")
 		if !ok {
-			return nil, nil
+			return nil, 0, nil
 		}
 		args = append(args, hash)
 		filter += " AND left(encode(sha256(convert_to(t.category, 'UTF8')), 'hex'), 16) = $" + strconv.Itoa(len(args))
@@ -281,12 +295,22 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 		filter += " AND t.search LIKE $" + strconv.Itoa(len(args)-1)
 		order = "t.search LIKE $" + strconv.Itoa(len(args)) + " DESC, " + order
 	} else if catalog == searchCatalogID(catalogType) {
-		return nil, nil
+		return nil, 0, nil
 	}
-	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+` FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id
-		WHERE t.addon_id = $1 AND t.type = $2 AND `+shownTitle+filter+` ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", vodPage, max(skip, 0)), args...)
+	from := ` FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id WHERE t.addon_id = $1 AND t.type = $2 AND ` + shownTitle + filter
+	total := 0
+	if counted {
+		countArgs := args
+		if search != "" {
+			countArgs = args[:len(args)-1]
+		}
+		if err := s.db.QueryRow(ctx, "SELECT count(*)"+from, countArgs...).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+	}
+	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+from+` ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", max(limit, 0), max(skip, 0)), args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	metas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) {
 		var t storedTitle
@@ -296,7 +320,7 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	if metas == nil {
 		metas = []stremio.Meta{}
 	}
-	return metas, err
+	return metas, total, err
 }
 
 // title finds a title a source shows, with its source's address and name.

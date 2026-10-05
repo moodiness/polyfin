@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -85,6 +86,7 @@ type Service struct {
 type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, genre, search string) ([]stremio.Meta, error)
+	CatalogWindow(ctx context.Context, source accounts.ID, catalogType, catalogID, genre, search string, start, count int) ([]stremio.Meta, int, error)
 	Enrichment(ctx context.Context, source accounts.ID) bool
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
@@ -198,10 +200,14 @@ type view struct {
 
 // limit is how many items one read of src's catalog fetches at most: the
 // channel limit for a live TV catalog, the catalog limit for any other.
-// Some catalogs are nearly endless.
+// Some catalogs are nearly endless; an IPTV source's movies and series
+// are a stored list, read whole.
 func (v view) limit(src source) int {
-	if LiveCatalog(src.catalog.Type) {
+	switch {
+	case LiveCatalog(src.catalog.Type):
 		return v.channelLimit
+	case src.addon.addon.IPTV():
+		return math.MaxInt32
 	}
 	return v.catalogLimit
 }
@@ -468,6 +474,12 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // wait for their rating: it reports that more may follow, which apps ask
 // for later, once the ratings are known.
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
+	// An IPTV source's movies and series are paged and counted from its
+	// stored lists, whole, but for a restricted user, whose listing leaves
+	// hidden titles out as it reads.
+	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.restricted() && src.date == "" {
+		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
+	}
 	var collected []stremio.Meta
 	seen := map[string]bool{}
 	received, size := 0, 0
