@@ -7,12 +7,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -176,25 +178,35 @@ func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErr
 // with item afterwards. The user's apps that keep a socket open get the new
 // data of item and items.
 func (h *Handler) change(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item, change func(*userdata.Data)) {
+	h.changeEach(w, r, user, item, items, func(_ userdata.Item, d *userdata.Data) { change(d) })
+}
+
+// changeEach is change with change told which item it changes. It reports
+// whether the change was made.
+func (h *Handler) changeEach(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item,
+	change func(userdata.Item, *userdata.Data)) bool {
 	refs := make([]userdata.Item, 0, len(items))
 	for _, target := range items {
 		refs = append(refs, stored(target))
 	}
-	if _, err := h.UserData.Change(r.Context(), user.ID, refs, change); err != nil {
+	if _, err := h.UserData.ChangeEach(r.Context(), user.ID, refs, change); err != nil {
 		h.internalError(w, r, err)
-		return
+		return false
 	}
 	h.userDataChanged(user, append([]library.Item{item}, items...))
 	data, err := h.itemData(r.Context(), user, item)
 	if err != nil {
 		h.internalError(w, r, err)
-		return
+		return true
 	}
 	writeJSON(w, http.StatusOK, data)
+	return true
 }
 
 // markPlayed marks an item played or unplayed: a movie or an episode
-// itself, or every released episode of a season or series.
+// itself, or every released episode of a season or series. The user's
+// tracking services are told of the movies and episodes it counts a new
+// play of, or of all it unmarks.
 func (h *Handler) markPlayed(played bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b := bindErrors{}
@@ -216,13 +228,29 @@ func (h *Handler) markPlayed(played bool) http.HandlerFunc {
 			return
 		}
 		now := time.Now().UTC()
-		h.change(w, r, user, item, targets, func(d *userdata.Data) {
+		var plays []accounts.ID
+		if !h.changeEach(w, r, user, item, targets, func(target userdata.Item, d *userdata.Data) {
 			if played {
+				// As MarkPlayed counts plays: a dated mark is one more, an
+				// undated one only on what was not played.
+				if date != nil || !d.Played {
+					plays = append(plays, target.ID)
+				}
 				d.MarkPlayed(date, now)
 			} else {
 				d.MarkUnplayed()
 			}
-		})
+		}) {
+			return
+		}
+		if h.Trackers == nil {
+			return
+		}
+		sent := targets
+		if played {
+			sent = slices.DeleteFunc(slices.Clone(targets), func(target library.Item) bool { return !slices.Contains(plays, target.ID) })
+		}
+		h.Trackers.Mark(user.ID, trackers.Mark{Played: played, Date: date, Scope: markScope(item.Kind), Titles: h.trackedTitles(user, sent)})
 	}
 }
 
@@ -312,7 +340,9 @@ type userDataUpdate struct {
 }
 
 // updateUserData replaces what an app sends, without the rules playback
-// follows: apps use it to upload what was played offline.
+// follows: apps use it to upload what was played offline. A title it turns
+// played or unplayed is marked so on the user's tracking services, as a
+// played mark is.
 func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
@@ -336,7 +366,9 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h.change(w, r, user, item, []library.Item{item}, func(d *userdata.Data) {
+	var turned *bool
+	if !h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
+		was := d.Played
 		if update.PlaybackPositionTicks != nil {
 			d.Position = time.Duration(max(*update.PlaybackPositionTicks, 0)) * 100
 			if d.Runtime <= 0 {
@@ -363,7 +395,17 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 		if update.Played != nil {
 			d.Played = *update.Played
 		}
-	})
+		if d.Played != was {
+			turned = new(d.Played)
+		}
+	}) || turned == nil || h.Trackers == nil {
+		return
+	}
+	var date *time.Time
+	if *turned && update.LastPlayedDate != nil {
+		date = new(time.Time(*update.LastPlayedDate).UTC())
+	}
+	h.Trackers.Mark(user.ID, trackers.Mark{Played: *turned, Date: date, Scope: markScope(item.Kind), Titles: h.trackedTitles(user, []library.Item{item})})
 }
 
 // playbackEvent is the kind of a playback report.
@@ -432,6 +474,27 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	// starts and stops are enough for what they show.
 	if event != playbackProgressed {
 		h.userDataChanged(user, []library.Item{item})
+	}
+	if h.Trackers != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+		h.Trackers.Playback(user.ID, trackers.Playback{
+			Event:         trackedEvents[event],
+			Device:        deviceID,
+			Item:          item.ID,
+			Position:      state.Position,
+			PositionKnown: positionKnown,
+			Runtime:       runtime,
+			Paused:        state.Paused,
+			// As the change above decides.
+			Played: event == playbackStopped && !positionKnown ||
+				event != playbackStarted && positionKnown && thresholds.Reaches(state.Position, runtime),
+			Title: func(ctx context.Context) (trackers.Title, bool) {
+				titles := h.trackedTitles(user, []library.Item{item})(ctx)
+				if len(titles) == 0 {
+					return trackers.Title{}, false
+				}
+				return titles[0], true
+			},
+		})
 	}
 }
 

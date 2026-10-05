@@ -26,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/trackers"
 )
 
 const (
@@ -97,6 +98,9 @@ type Options struct {
 	// Variables are the POLYFIN_ environment variables in effect,
 	// without secrets.
 	Variables []config.Variable
+	// Trackers connects users' accounts on tracking services; nil offers
+	// none.
+	Trackers *trackers.Service
 }
 
 type handler struct {
@@ -126,6 +130,9 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/password", h.signedIn(h.changePassword))
 	mux.Handle("GET /admin/api/account/devices", h.signedIn(h.ownDevices))
 	mux.Handle("DELETE /admin/api/account/devices/{id}", h.signedIn(h.revokeOwnDevice))
+	mux.Handle("GET /admin/api/account/tracking", h.signedIn(h.ownTracking))
+	mux.Handle("POST /admin/api/account/tracking/{service}", h.signedIn(h.connectTracking))
+	mux.Handle("DELETE /admin/api/account/tracking/{service}", h.signedIn(h.disconnectTracking))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
@@ -326,6 +333,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
+		{accounts.ErrInvalidTraktApp, http.StatusBadRequest, "invalid_trakt_app"},
+		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},
