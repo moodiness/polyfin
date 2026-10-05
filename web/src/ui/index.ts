@@ -17,12 +17,9 @@ export { describedBy, Field, FieldError, useField, type FieldProps } from './Fie
 export {
   fieldBox,
   NumberInput,
-  Select,
   Textarea,
   TextInput,
   type NumberInputProps,
-  type SelectOption,
-  type SelectProps,
   type TextareaProps,
   type TextInputProps,
 } from './Input'
@@ -42,6 +39,13 @@ export { Avatar, ProgressBar, type ProgressVariant } from './ProgressBar'
 export { IconTile, Row, RowList, type RowListVariant, type RowProps } from './RowList'
 export { RelativeTime } from './RelativeTime'
 export { SaveBar } from './SaveBar'
+export {
+  Select,
+  SuggestInput,
+  type SelectOption,
+  type SelectProps,
+  type SuggestInputProps,
+} from './Select'
 export { SecretField, type SecretFieldProps } from './SecretField'
 export { SectionNav, type SectionNavItem, type SectionNavProps } from './SectionNav'
 export { Segmented, type SegmentedOption, type SegmentedProps } from './Segmented'

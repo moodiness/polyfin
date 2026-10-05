@@ -60,6 +60,7 @@ import {
   Switch,
   Table,
   Tabs,
+  SuggestInput,
   Textarea,
   TextInput,
   TextLink,
@@ -92,6 +93,60 @@ const swatches = [
   ['brand', 'bg-brand'],
 ] as const
 
+/** Forty categories, as a large IPTV line-up has: enough for the Select's search. */
+const galleryGroups = [
+  'Actualités',
+  'Animation',
+  'Arts',
+  'Belgique',
+  'Cinéma',
+  'Comédie',
+  'Cuisine',
+  'Découverte',
+  'Documentaires',
+  'Éducation',
+  'Enfants',
+  'Espagne',
+  'Été',
+  'Football',
+  'Généraliste',
+  'Histoire',
+  'Info locale',
+  'Italie',
+  'Jeunesse',
+  'Kiosque',
+  'Langues',
+  'Maison',
+  'Météo',
+  'Musique',
+  'Nature',
+  'Opéra',
+  'Outre-mer',
+  'Policier',
+  'Portugal',
+  'Québec',
+  'Radio',
+  'Régions',
+  'Science',
+  'Séries',
+  'Sport',
+  'Suisse',
+  'Téléréalité',
+  'Théâtre',
+  'Voyage',
+  'Zen',
+]
+
+const galleryGenres = [
+  'Action',
+  'Animation',
+  'Comédie',
+  'Drame',
+  'Horror',
+  'Science-Fiction',
+  'Thriller',
+]
+
 /**
  * `/dev/ui`, in development only: every component of `src/ui/` in its states, for building pages
  * and for review. Not translated; not in production builds.
@@ -103,6 +158,9 @@ export default function UiGallery() {
   const [number, setNumber] = useState<number | null>(90)
   const [choice, setChoice] = useState<'fr' | 'en'>('fr')
   const [quality, setQuality] = useState('1080p')
+  const [group, setGroup] = useState('group-1')
+  const [genre, setGenre] = useState('')
+  const [genres, setGenres] = useState(['Horror'])
   const [on, setOn] = useState(true)
   const [off, setOff] = useState(false)
   const [checked, setChecked] = useState(true)
@@ -234,6 +292,73 @@ export default function UiGallery() {
               ]}
             />
           </Field>
+          <Field label="Category" help="More than 12 options: the list starts with a search.">
+            <Select
+              value={group}
+              onValue={setGroup}
+              options={galleryGroups.map((name, index) => ({
+                value: `group-${index + 1}`,
+                label: name,
+              }))}
+            />
+          </Field>
+          <Field label="Quality group" error="Choose a group the user may play.">
+            <Select
+              value={quality}
+              onValue={setQuality}
+              options={[
+                { value: '4k', label: '4K' },
+                { value: '1080p', label: '1080p' },
+              ]}
+            />
+          </Field>
+          <Field label="Disabled select">
+            <Select
+              value="1080p"
+              onValue={() => {}}
+              disabled
+              options={[{ value: '1080p', label: '1080p' }]}
+            />
+          </Field>
+          <Field
+            label="Genre"
+            help={`Suggestions under the field; Enter adds what is typed. Blocked: ${genres.join(', ')}.`}
+          >
+            <SuggestInput
+              value={genre}
+              onValue={setGenre}
+              suggestions={galleryGenres.filter((name) => !genres.includes(name))}
+              onPick={(name) => {
+                setGenres([...genres, name])
+                setGenre('')
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && genre.trim() !== '') {
+                  event.preventDefault()
+                  setGenres([...genres, genre.trim()])
+                  setGenre('')
+                }
+              }}
+            />
+          </Field>
+          <div className="flex flex-col gap-2">
+            <span className="text-control font-medium text-ink">In a scroll box</span>
+            <div className="h-28 overflow-auto rounded-row border border-line-2 p-3">
+              <p className="mb-3 text-small text-ink-3">The list opens whole, over the box.</p>
+              <Select
+                aria-label="Quality in a scroll box"
+                value={quality}
+                onValue={setQuality}
+                options={[
+                  { value: '4k', label: '4K' },
+                  { value: '1080p', label: '1080p' },
+                  { value: '720p', label: '720p' },
+                  { value: '480p', label: '480p' },
+                ]}
+              />
+              <div className="h-24" />
+            </div>
+          </div>
           <Field label="Custom CSS" help="Applied to the web player.">
             <Textarea mono rows={3} defaultValue={'.skinHeader { opacity: .9 }'} />
           </Field>
@@ -729,6 +854,16 @@ export default function UiGallery() {
             </Field>
             <Field label="Number" help="Apps sort channels by it.">
               <NumberInput value={12} onValue={() => {}} />
+            </Field>
+            <Field label="Category">
+              <Select
+                value={group}
+                onValue={setGroup}
+                options={galleryGroups.map((name, index) => ({
+                  value: `group-${index + 1}`,
+                  label: name,
+                }))}
+              />
             </Field>
           </div>
         </Modal>

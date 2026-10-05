@@ -256,6 +256,8 @@ const common = {
     unsaved: 'Unsaved changes',
     allSaved: 'All changes saved',
     discard: 'Discard changes',
+    searchList: 'Search the list',
+    noMatch: 'Nothing matches.',
     secret: {
       saved: 'Saved',
       notSet: 'Not set',

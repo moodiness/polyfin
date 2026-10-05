@@ -44,6 +44,7 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | Text, a filter, a password                | `TextInput` (`icon`, `suffix`, `revealable`)           |
 | A number with a unit                      | `NumberInput`                                          |
 | One choice among many                     | `Select`; two to four side by side: `Segmented`        |
+| Free text with suggestions (a genre)      | `SuggestInput`                                         |
 | Several lines                             | `Textarea` (`mono` for code)                           |
 | A setting that turns something on         | `Switch` (`stateText` to write On / Off beside it)     |
 | Picking items of a list                   | `Checkbox`                                             |
@@ -66,6 +67,7 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 ## Rules
 
 - Copy goes through `useI18n()`; the components' own words are in `t.ui`.
+- No browser-drawn list: `Select` and `SuggestInput` draw their own popover listbox, portaled out of tables, scroll boxes and dialogs, with the keyboard of a native list (arrows, Home, End, Enter, Escape, Tab, typing a letter). A `Select` with more than 12 options starts with a search, accents and case ignored. Never use `<select>` or `<datalist>`.
 - Every control has a label; toggles set `aria-pressed` or `aria-checked`, disclosures `aria-expanded`.
 - Motion comes from the tokens (`duration-160`/`220`, `ease-nuit`, `animate-rise`, `stagger`) and stops under `prefers-reduced-motion`.
 - Add a component here only when two areas need it; otherwise keep it in `src/features/<area>/`.

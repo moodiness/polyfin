@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import {
   fetchUserContentChoices,
   maxPlaybacksRange,
@@ -28,7 +28,7 @@ import {
   PanelFooter,
   Select,
   Skeleton,
-  TextInput,
+  SuggestInput,
   useToast,
 } from '@/ui'
 import {
@@ -374,7 +374,6 @@ export function VisibleLibrariesForm({ user, id }: { user: User; id: string }) {
 
 export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
   const { t } = useI18n()
-  const listId = useId()
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
@@ -383,8 +382,8 @@ export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
   const [genres, setGenres] = useState(user.blockedGenres)
   const [typed, setTyped] = useState('')
 
-  function add() {
-    const genre = typed.trim()
+  function add(value = typed) {
+    const genre = value.trim()
     save.reset()
     setTyped('')
     if (genre !== '' && !genres.some((g) => g.toLowerCase() === genre.toLowerCase())) {
@@ -429,12 +428,14 @@ export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
       )}
       <div className="flex flex-wrap items-start gap-2">
         <Field label={t.users.genre} help={t.users.genreHint} className="w-full sm:max-w-xs">
-          <TextInput
+          <SuggestInput
             value={typed}
             onValue={setTyped}
-            list={listId}
+            suggestions={(choices.data?.genres ?? []).filter(
+              (genre) => !genres.some((g) => g.toLowerCase() === genre.toLowerCase()),
+            )}
+            onPick={add}
             maxLength={100}
-            autoComplete="off"
             onKeyDown={(event) => {
               // Enter adds the genre rather than saving the list.
               if (event.key === 'Enter') {
@@ -444,14 +445,9 @@ export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
             }}
           />
         </Field>
-        <Button icon={PlusIcon} className="sm:mt-[26px]" onClick={add}>
+        <Button icon={PlusIcon} className="sm:mt-[26px]" onClick={() => add()}>
           {t.users.addGenre}
         </Button>
-        <datalist id={listId}>
-          {(choices.data?.genres ?? []).map((genre) => (
-            <option key={genre} value={genre} />
-          ))}
-        </datalist>
       </div>
     </SectionForm>
   )

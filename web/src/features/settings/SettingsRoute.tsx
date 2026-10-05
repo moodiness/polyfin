@@ -63,7 +63,7 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
     target
-      .querySelector<HTMLElement>('input, select, textarea, button[role="switch"]')
+      .querySelector<HTMLElement>('input, textarea, [role="combobox"], button[role="switch"]')
       ?.focus({ preventScroll: true })
     target.dataset.flash = ''
     const timer = setTimeout(() => delete target.dataset.flash, flashFor)
