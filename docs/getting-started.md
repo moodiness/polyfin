@@ -16,18 +16,18 @@ Enter the code on the setup page to create the administrator.
 
 ### Create users
 
-Create the other accounts under **Users**. See [Users](users.md) for more.
+Create the other accounts with **Create a user** under **Users**. See [Users](users.md) for more.
 
 ### Sign in from Jellyfin apps
 
 Jellyfin apps sign in with these accounts, in one of two ways:
 
 - **Password:** the account's user name and password.
-- **Quick Connect:** the app shows a 6-digit code, and a signed-in user approves it on the Quick Connect page.
+- **Quick Connect:** the app shows a 6-digit code, and a signed-in user approves it on the admin app's **Quick Connect** page.
 
 ### Change a password
 
-Users can change their password from Jellyfin apps. Doing so signs their other devices out.
+Users can change their password from Jellyfin apps, or under **My account › Password** in the admin app (**Change password**). Doing so signs their other devices out.
 
 ## Language of generated names
 

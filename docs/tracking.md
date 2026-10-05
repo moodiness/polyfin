@@ -26,9 +26,9 @@ Marking a movie, an episode, a season or a series played or unplayed from an app
 
 Each user connects their accounts under **My account › Tracking** in the admin app.
 
-- **Trakt** and **Simkl** show a code to enter on their site.
-- **MDBList** takes the user's API key, from MDBList's preferences.
-- **PublicMetaDB** takes the user's API key, from **Settings › API** on its site.
+- **Trakt** and **Simkl** show a code to enter on their site, after **Connect**.
+- **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences.
+- **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from **Settings → API** on its site.
 
 Polyfin checks an API key with the service before saving it.
 
@@ -38,7 +38,7 @@ Trakt and Simkl are offered only once an administrator has set them up; see [Set
 
 Polyfin can also read what you watched elsewhere, in other apps that report to the same services, so that played marks, **Continue Watching** and **Next Up** match. It is off by default. Under **My account › Tracking**, each connected service has:
 
-- **Import my … history**: turning it on imports at once, then every 6 hours.
+- The **Import my … history** switch (such as **Import my Trakt history**): turning it on imports at once, then every 6 hours.
 - **Import now**: imports at once.
 - A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, and what stopped it, if anything.
 
@@ -67,7 +67,7 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 - Each service is read at its pace (one page a second for Trakt, two for Simkl and MDBList, PublicMetaDB's limit per server address), waiting as long as it asks, up to 15 minutes.
 - One import runs at a time per user and service. An import interrupted by a restart runs again later.
 - When the history cannot be read whole, what was read is imported, and the status line says why: the service refused the connection (**Connect again**), could not be reached, or asked to wait too long.
-- Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
+- **Disconnect** asks first. Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
 
 ## Setting up Trakt and Simkl (administrators)
 

@@ -4,10 +4,20 @@ This page covers Live TV in Polyfin: the channels that come from addon TV catalo
 
 ## Channels from addons
 
-Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enabled under **Libraries** adds no library. Its channels appear in the Live TV view of Jellyfin apps instead, with their logos, numbered in the order the catalogs list them. See [Addons and libraries](addons-and-libraries.md) for enabling catalogs.
+Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enabled under **Content › Libraries** adds no library. Its channels appear in the Live TV view of Jellyfin apps instead, with their logos, numbered in the order the catalogs list them. See [Addons and libraries](addons-and-libraries.md) for enabling catalogs.
 
 - Polyfin reads at most **Channels read per Live TV catalog** channels from each TV catalog, and as many programmes from each day of its guide.
 - Who can watch is set per user with the **Live TV** permission on [Users](users.md).
+
+### The Live TV page
+
+**Content › Live TV** gathers Live TV in the admin app:
+
+- **TV catalogs**: each addon TV catalog with its guide state (such as **Guide complete** or **Guide download failed**) and how many channels have a guide, with **Guides and mapping** to open its guides. A catalog not shown as a library is marked **Not in Live TV**, with **Open Libraries**.
+- **IPTV channels**: each IPTV source's live entries, channels on, shown in apps and with a guide, with **Line-up and guides** to open [its source page](iptv.md#the-source-page).
+- **Recordings**: the recordings under way and scheduled.
+
+**Live TV settings** and **Recording settings** open those settings sections.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -33,11 +43,11 @@ Addons that publish a guide (Stremio's Native EPG: a TV catalog taking a date) f
 
 ### XMLTV guides
 
-Some IPTV addons publish no Native EPG guide, while their provider publishes one as an XMLTV file. You can attach such guides to any TV catalog shown under **Libraries**, or under **My sources** for a user's own, once the libraries are saved.
+Some IPTV addons publish no Native EPG guide, while their provider publishes one as an XMLTV file. You can attach such guides to any TV catalog shown under **Content › Live TV**, or under **My sources** for a user's own, once the libraries are saved.
 
-- Each catalog takes up to 10 guides, in order, from its guide page. Its row shows the first one.
-- On a Stremio addon's catalog, open the page with **Guides and mapping** on its row under **Libraries**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
-- An address may hold the provider's credentials. Like manifest URLs, it is never shown in full.
+- Each catalog takes up to 10 guides, in order, from its **Guides** page, saved with **Save and download**. Its row shows the first one.
+- On a Stremio addon's catalog, open the page with **Guides and mapping** on its row under **Content › Live TV**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
+- An address may hold the provider's credentials. Like manifest addresses, it is never shown in full.
 - Only administrators can use a guide address on a local network address.
 - A channel with Native EPG programmes keeps them: the XMLTV guide only fills the channels without.
 - Removing a guide removes its mappings with it.
@@ -51,11 +61,11 @@ Polyfin fetches a guide:
 
 - when its address is saved;
 - again once **Refresh Live TV lists and guides every** hours have passed (Polyfin looks for the guides due every 30 minutes);
-- when you press **Refresh guide**, which fetches every guide of the catalog.
+- when you press **Download again** on the **Guides** page, which fetches every guide of the catalog.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Refresh Live TV lists and guides every** | **Settings › Live TV** | 12 hours (as before the setting existed); 1 to 168 | How often guides, and IPTV lists, are downloaded again. |
+| **Refresh Live TV lists and guides every (hours)** | **Settings › Live TV** | 12 hours (as before the setting existed); 1 to 168 | How often guides, and IPTV lists, are downloaded again. |
 
 The catalog's row then shows when its first guide was last fetched, when it will be fetched next, how many of its channels are mapped to a guide channel, and why the last fetch failed, if it did. The guide page shows the same for each guide, with the channels and programmes it held.
 
@@ -96,11 +106,11 @@ Many guides list the same channel for several countries, so the candidates are r
 Channels are mapped again from what is kept, without downloading:
 
 - after every download, list refresh and change of an IPTV source's options;
-- from the guide page, where **Map unmapped channels** maps only the channels without a mapping and **Map all again** remaps every channel.
+- from the **Guides** page's **Automatic mapping**, where **Map channels without a guide** maps only the channels without a mapping and **Remap every channel** remaps every channel, after asking.
 
-The guide page (**Guide mapping**) also lists the catalog's channels with their mapping: all, mapped, unmapped or set by hand. It searches the guides' channels by name or identifier, showing what each airs now. From there you can map a channel by hand, or to no guide at all.
+The **Guide mapping** page also lists the catalog's channels with their mapping: all, with a guide, without a guide or set by hand. It searches the guides' channels by name or identifier, showing what each airs now. From there you can map a channel by hand (**Choose a guide channel**), or to no guide at all.
 
-A choice made by hand survives downloads, refreshes and **Map unmapped channels**. Only **Map all again**, or clearing it, returns the channel to automatic mapping.
+A choice made by hand survives downloads, refreshes and **Map channels without a guide**. Only **Remap every channel**, or **Back to automatic**, returns the channel to automatic mapping.
 
 #### Where XMLTV programmes appear
 
@@ -118,7 +128,7 @@ Without it, recording is off and Polyfin answers as a server that records nothin
 
 ### Who can record
 
-Under **Users**, **Can record Live TV** at the end of **Playback and access** lets a user schedule, change and cancel recordings and delete them. It is on for administrators and off for other users by default. Seeing recordings needs the **Live TV** permission only. See [Users](users.md).
+On a user's page under **Users**, **Can record Live TV** at the end of **Playback and access** lets a user schedule, change and cancel recordings and delete them. It is on for administrators and off for other users by default. Seeing recordings needs the **Live TV** permission only. See [Users](users.md).
 
 **Compared with Jellyfin:**
 - **Can record Live TV** is Jellyfin's `EnableLiveTvManagement`, which apps also read and set in the user's policy.
@@ -146,9 +156,9 @@ Timers, series timers and recordings are kept in the database.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Start recordings early** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Starts a recording this many minutes before its programme. Apps can change it per timer. |
-| **Keep recording after the end** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Goes on recording this many minutes after the programme. Apps can change it per timer. |
-| **Keep recordings for** | **Settings › Recordings** | 0 (forever); up to 3,650 days | Deletes older recordings once a day. |
+| **Start recordings early (minutes)** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Starts a recording this many minutes before its programme. Apps can change it per timer. |
+| **Keep recording after the end (minutes)** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Goes on recording this many minutes after the programme. Apps can change it per timer. |
+| **Keep recordings for (days, 0 = forever)** | **Settings › Recordings** | 0 (forever); up to 3,650 days | Deletes older recordings once a day. |
 
 ### How a recording is made
 

@@ -24,7 +24,7 @@ With **Conversion (transcoding)** off, Polyfin never re-encodes video or audio, 
 
 With **Downloads** off, nobody can download: apps hide their download button.
 
-Under **Users**, each user also has their own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Both the server's switch and the user's permission must be on. See [Users](users.md).
+On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Both the server's switch and the user's permission must be on. See [Users](users.md).
 
 **Compared with Jellyfin:**
 
@@ -89,8 +89,8 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the driver's for VAAPI. **Very slow** to **Ultra fast** are x264's presets, mapped to NVENC's `p7` to `p1` and VAAPI's compression levels 1 to 7. |
-| **H.264 quality** and **HEVC quality** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, and QVBR's quality for the VAAPI drivers that have it; other drivers ignore it. |
+| **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the driver's for VAAPI. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1` and VAAPI's compression levels 1 to 7. |
+| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, and QVBR's quality for the VAAPI drivers that have it; other drivers ignore it. |
 | **Allow converting to HEVC** | **Settings › Conversion** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
 | **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif. |
 | **Double the frame rate** | **Settings › Conversion** | — | Makes a frame of each field of video up to 30 frames a second. |
@@ -99,10 +99,10 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Convert HDR to SDR** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's 720p cap, and Dolby Vision without an HDR10 layer is not converted. |
+| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's 720p cap, and Dolby Vision without an HDR10 layer is not converted. |
 | **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on the card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on the card only: the processor's filter has none and uses Hable. |
-| **Peak brightness** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; libplacebo on the card does not take it. |
-| **Highlight desaturation** | **Settings › Conversion** | 0 to 10 | Processor only; libplacebo on the card does not take it. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; libplacebo on the card does not take it. |
+| **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only; libplacebo on the card does not take it. |
 
 ### Audio
 
@@ -111,13 +111,13 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 | **Mix to stereo** | **Settings › Conversion** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
 | **Volume when mixing to stereo** | **Settings › Conversion** | 1 (range 0.5 to 3) | Volume of the stereo mix. |
 | **Most audio channels** | **Settings › Conversion** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
-| **Audio bitrate per channel** | **Settings › Conversion** | 0 (range 32 to 320 kb/s) | 0 keeps Polyfin's 192 kb/s in stereo and 64 kb/s a channel above stereo. Shapes converted audio. |
+| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion** | 0 (range 32 to 320 kb/s) | 0 keeps Polyfin's 192 kb/s in stereo and 64 kb/s a channel above stereo. Shapes converted audio. |
 
 ### Performance
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Processor threads per conversion** | **Settings › Conversion** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
+| **Processor threads per conversion (0 = automatic)** | **Settings › Conversion** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Segments prepared ahead** | **Settings › Conversion** | 10 (range 1 to 60) | How many segments of about 6 seconds a remux or conversion of a file makes past the last one the app asked for, before it waits. |
 
 **Compared with Jellyfin:**

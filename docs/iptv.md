@@ -4,16 +4,16 @@ This page explains how to import an M3U playlist or an Xtream Codes account dire
 
 ## Adding a source
 
-Use **Add an IPTV source**, under **Content › Sources** for the server or **My sources** for a user's own. Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
+Use **Add a source** and its **IPTV source** tab, under **Content › Sources** for the server or **My sources** for a user's own. Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
 
 - A user's own sources follow **Allow users' own addons** and the user's **Can add their own addons** (see [Users](users.md)).
 - Only an administrator's source may reach a local network address.
 
-Adding a source takes two steps in the admin app: the account, then what to import and its categories.
+Adding a source takes two steps in the admin app: the **Account**, then **What to import** and its categories.
 
 ### M3U playlists
 
-An M3U source takes a name, the playlist's address and, optionally, the address of an XMLTV guide.
+An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **Programme guide address (XMLTV, optional)**.
 
 - A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma.
 - Its `#EXTVLCOPT` `http-user-agent` and `http-referrer` lines give the headers its stream is requested with.
@@ -21,7 +21,7 @@ An M3U source takes a name, the playlist's address and, optionally, the address 
 
 ### Xtream Codes accounts
 
-An Xtream Codes source takes a name, the server's address, a username and a password and, optionally, the address of an XMLTV guide. By default the guide is the one the server publishes for the account.
+An **Xtream Codes account** source takes a **Name**, the **Server address**, a **Username** and a **Password** and, optionally, the address of an XMLTV guide. By default the guide is the one the server publishes for the account (**Use the provider's programme guide**).
 
 - The account is read through its player API (its live categories and streams).
 - Its channels stream in MPEG-TS, or HLS when the account only allows HLS.
@@ -31,7 +31,7 @@ An Xtream Codes source takes a name, the server's address, a username and a pass
 - Lists are read as they arrive, up to 100 MB and 100,000 channels.
 - A list that cannot be read is not added.
 - Headings that lists put between channels are skipped: names without a letter or digit, or drawn with a run of three or more decoration characters, such as `##### NAME #####` or `=== NAME ===`.
-- Addresses and logins are stored as manifest URLs are: never shown in full (only the server's scheme and host) and never logged.
+- Addresses and logins are stored as manifest addresses are: never shown in full (only the server's scheme and host) and never logged.
 - Catch-up and connection limits are not handled.
 
 ## What to import
@@ -46,24 +46,24 @@ The add flow's second step starts with **What to import**:
 
 With **Movies** and **Series** off, a source stays exactly as before they existed: an M3U playlist's movies and episodes then stay channels.
 
-The step then previews the categories, to include or leave out:
+The step then previews the **Categories to import**, to include or leave out:
 
-- Channel categories by group or by country, with their channel counts. The preview downloads the list once and reuses it for the next few minutes.
-- With movies or series on, their categories per type, with title counts and search (include all, exclude all).
+- Channel categories **By group** or **By country**, with their channel counts. The preview downloads the list once and reuses it for the next few minutes.
+- With movies or series on, their categories per type, with title counts and search (**Include all**, **Exclude all**).
 
 It also shows the [import options](#import-options), and for movies and series the libraries choice and whether titles are described by the metadata addons (see [Movies and series libraries](#movies-and-series-libraries)).
 
 ## Import options
 
-**Import options** are chosen when the source is added and can be changed later on the source page, where they apply to the list already downloaded. They turn the list into the source's line-up.
+**Import options** are chosen when the source is added and can be changed later on the source page, where they apply to the list already downloaded. They turn the list into the source's line-up. On the source page, **Save and rebuild** applies them and **Discard changes** drops them.
 
 | Option | Default | What it does |
 |---|---|---|
-| **Categories** | the provider's groups | Categories from the provider's groups, or one per country. |
-| **Channels** | one per entry | One channel per entry, or merged. |
-| **left out** | none | The groups and countries left out. |
-| **new channels** | turned on | Whether new channels found by a refresh arrive turned on or off. |
-| **numbering** | the list's number | The list's number (`tvg-chno`, or Xtream's `num`), or none, apps then numbering channels by their place. |
+| **Categories** | **As the provider groups them** | Categories from the provider's groups, or **One per country**. |
+| **Channels** | **One per entry** | One channel per entry, or **Merge quality variants**. |
+| **Categories to import** | all included | The groups and countries left out. |
+| **Turn on new channels** | on | Whether new channels found by a refresh arrive turned on or off. |
+| **Numbering** | **The provider's numbers** | The list's number (`tvg-chno`, or Xtream's `num`), or **In line-up order**, apps then numbering channels by their place. |
 
 ### Categories by country
 
@@ -81,11 +81,11 @@ When merged, the entries of a category with the same name, once country prefixes
 
 ## The source page
 
-Each source has its own page, titled **IPTV source**, opened from **Open the source** on its row under **Content › Sources** or **My sources**. It has six sections. While **Live TV channels** is off, the four Live TV sections (**Categories**, **Channels**, **Guides**, **Guide mapping**) are hidden.
+Each source has its own page, titled with the source's name and its kind (**M3U playlist** or **Xtream Codes account**), opened from **Open the source** on its row under **Content › Sources** or **My sources**. Its header holds **Download again**, on every section. It has six sections: **Summary**, **Import options**, **Categories**, **Channels**, **Guides** and **Guide mapping**. While **Live TV channels** is off, the four Live TV sections (**Categories**, **Channels**, **Guides**, **Guide mapping**) are hidden.
 
 ### Summary
 
-Counts (including movies and series), last and next download, and **Download again**.
+Counts (including movies and series), and the last and next download.
 
 ### Import options
 
@@ -114,7 +114,7 @@ The catalog's XMLTV guides in order, with their status and the automatic mapping
 
 The guide channel each channel takes its programmes from, set by hand from a search across the guides showing what airs now. See [Remapping and mapping by hand](live-tv.md#remapping-and-mapping-by-hand).
 
-A Stremio addon's Live TV catalog has the same **Guides** and **Guide mapping** views, from **Guides and mapping** on its row under **Libraries**.
+A Stremio addon's Live TV catalog has the same **Guides** and **Guide mapping** views, from **Guides and mapping** on its row under **Content › Live TV** (see [Live TV](live-tv.md)). The **Content › Live TV** page also lists each IPTV source's channel counts, with **Line-up and guides** to open its page.
 
 ## How the line-up is kept
 
@@ -134,9 +134,9 @@ Apps list the turned-on channels of turned-on categories that have a turned-on s
 A source behaves as an installed addon with one TV catalog:
 
 - It is listed, ordered, turned off and removed with the addons.
-- Its catalog is enabled under **Libraries**, where its guide panel is, whatever the number of libraries.
+- Its catalog is enabled under **Content › Libraries**, where its guide panel is, whatever the number of libraries.
 - Its channels play, record and follow the **Live TV** permission, quality groups, parental control and allowed hours as any channel (see [Users](users.md) and [Live TV](live-tv.md)).
-- **Edit** on its row renames it and changes its address or login. The new address is fetched first; a password left empty keeps the current one.
+- **Edit the account** renames it and changes its address or login. The new address is fetched first; a password left empty keeps the current one.
 
 ## Movies and series libraries
 
@@ -144,14 +144,14 @@ A source behaves as an installed addon with one TV catalog:
 
 Movies and series libraries are chosen as:
 
-- **one per type** (default): a Movies and a Series library named after the source, each title's category being its genre, by which the library can be narrowed;
-- **one per category**.
+- **One per type: Movies, Series** (default): a Movies and a Series library named after the source, each title's category being its genre, by which the library can be narrowed;
+- **One per provider category**.
 
-The libraries are ordinary library rows of the source under **Libraries**, with a link to the source's import options.
+The libraries are ordinary library rows of the source under **Content › Libraries**, with a link to the source's import options (**Its import options**).
 
 - A catalog that appears is added as an enabled library at the end of the scope's libraries.
 - One that goes away loses its library.
-- A library turned off under **Libraries** stays off.
+- A library turned off under **Content › Libraries** stays off.
 - A category added later by the provider is imported.
 - With **Live TV channels** turned off, the source has no Live TV catalog (its guides are removed), while its line-up keeps its edits for when they come back.
 
@@ -196,6 +196,6 @@ The list is downloaded:
 
 - when the source is added;
 - again, with the guides, once **Refresh Live TV lists and guides every** hours have passed (under **Settings › Live TV**, 12 by default, 1 to 168; see [When guides are fetched](live-tv.md#when-guides-are-fetched));
-- when you press **Refresh** on the source's row, or **Download again** on its **Summary**.
+- when you press **Refresh** on the source's row, or **Download again** in its page's header.
 
 A download that fails keeps the previous channels and tells why. After every list refresh and change of options, channels are mapped to the guides again.
