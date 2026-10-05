@@ -26,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/trackers"
 )
 
 const (
@@ -97,6 +98,9 @@ type Options struct {
 	// Variables are the POLYFIN_ environment variables in effect,
 	// without secrets.
 	Variables []config.Variable
+	// Trackers connects users' accounts on tracking services; nil offers
+	// none.
+	Trackers *trackers.Service
 }
 
 type handler struct {
@@ -126,6 +130,9 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/password", h.signedIn(h.changePassword))
 	mux.Handle("GET /admin/api/account/devices", h.signedIn(h.ownDevices))
 	mux.Handle("DELETE /admin/api/account/devices/{id}", h.signedIn(h.revokeOwnDevice))
+	mux.Handle("GET /admin/api/account/tracking", h.signedIn(h.ownTracking))
+	mux.Handle("POST /admin/api/account/tracking/{service}", h.signedIn(h.connectTracking))
+	mux.Handle("DELETE /admin/api/account/tracking/{service}", h.signedIn(h.disconnectTracking))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
