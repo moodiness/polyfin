@@ -164,9 +164,11 @@ func TestPreferDirectPlayChoosesAVersionThatNeedsNoConversion(t *testing.T) {
 		t.Errorf("by default, the first version plays, converted: %+v", source)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
+	// The first version, passed over, is left out rather than listed after
+	// the second: the versions keep their order.
 	answer := p.ask(t, p.token, p.movie, minimal, nil)
 	if source := firstSource(t, answer); source.Id != p.versions[1].ID.String() || !source.SupportsDirectPlay || source.TranscodingUrl != "" ||
-		len(answer.MediaSources) != 2 || answer.MediaSources[1].Id != p.movie {
+		len(answer.MediaSources) != 1 {
 		t.Errorf("preferring direct play: %+v", answer)
 	}
 	// Repackaged with its tracks copied, a version needs no conversion

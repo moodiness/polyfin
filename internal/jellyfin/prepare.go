@@ -150,13 +150,17 @@ func (h *Handler) prepare(key preparationKey, work func(ctx context.Context)) {
 }
 
 // prepareOpened analyzes, in the background, the version a play of a title
-// whose details opened would start with: the first of versions, which come
-// in PlaybackInfo's order, without those that recently failed.
-func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item library.Item, versions []library.Version) {
-	if !h.Accounts.Settings().PrepareAhead || len(versions) == 0 || !h.unanalyzed(ctx, versions[0]) {
+// whose details opened would start with: the version it was opened as (see
+// openedIndex), which PlaybackInfo tries first, of versions, without those
+// that recently failed.
+func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) {
+	if !h.Accounts.Settings().PrepareAhead || len(versions) == 0 {
 		return
 	}
-	version := versions[0]
+	version := versions[openedIndex(opened, versions)]
+	if !h.unanalyzed(ctx, version) {
+		return
+	}
 	h.prepare(preparationKey{user: user.ID, title: item.ID}, func(ctx context.Context) {
 		h.analyzeAhead(ctx, version)
 	})
@@ -200,7 +204,7 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item
 		if err != nil {
 			h.Logger.Debug("The versions of the next episode could not be listed", "error", err)
 		}
-		if versions := p.ordered(next.ID); len(versions) > 0 {
+		if versions := p.versions; len(versions) > 0 {
 			h.analyzeAhead(ctx, versions[0])
 			// Its images too, in the background, as its play would ask,
 			// once the playback of this episode stopped.

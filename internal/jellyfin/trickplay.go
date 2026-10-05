@@ -31,8 +31,7 @@ type TrickplayInfo struct {
 // trickplayManifest is the Trickplay field of a movie's or episode's DTO:
 // the thumbnails of the versions the user is offered, by media source and
 // width, as Jellyfin lists them, keyed as the item's MediaSources name
-// them: versions, in their order, the first under the identifier the item
-// was opened with (see sourceID). Apps look a playing source's thumbnails
+// them (see sourceID). Apps look a playing source's thumbnails
 // up by its identifier. When the versions are not known, as in listings
 // before the title opened, the thumbnails are keyed by version, those
 // taller than the user's quality group left out while one fits. Empty when
@@ -57,9 +56,10 @@ func (h *Handler) trickplayManifest(ctx context.Context, user accounts.User, ite
 		return described
 	}
 	if len(versions) > 0 {
+		at := openedIndex(opened, versions)
 		for i, version := range versions {
 			if widths, ok := sets[version.ID]; ok {
-				manifest[sourceID(opened, version, i == 0).String()] = describe(widths)
+				manifest[sourceID(opened, version, i == at).String()] = describe(widths)
 			}
 		}
 		return &manifest

@@ -132,8 +132,8 @@ func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, i
 // setDownload tells apps that a movie or an episode with versions can be
 // downloaded, when they asked, the user may download and one of the
 // versions fits their quality group, and with withPath names in Path the
-// file its first version, the one it was opened as, downloads as.
-func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, withPath bool) {
+// file the version it was opened as (see openedIndex) downloads as.
+func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, opened accounts.ID, withPath bool) {
 	if len(versions) == 0 {
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItem
 		dto.CanDownload = new(true)
 	}
 	if withPath {
-		dto.Path = h.downloadName(r, item, versions[0])
+		dto.Path = h.downloadName(r, item, versions[openedIndex(opened, versions)])
 	}
 }
 

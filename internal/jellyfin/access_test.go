@@ -143,14 +143,6 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 		}
 		return answer.MediaSources[0]
 	}
-	listed := func(answer playbackAnswer, id string) MediaSourceInfo {
-		t.Helper()
-		i := slices.IndexFunc(answer.MediaSources, func(s MediaSourceInfo) bool { return s.Id == id })
-		if i < 0 {
-			t.Fatalf("%s not listed: %+v", id, answer)
-		}
-		return answer.MediaSources[i]
-	}
 	setLimit := func(bitrate int) { p.limit(t, p.user, func(c *accounts.UserChanges) { c.MaxBitrate = &bitrate }) }
 	fetch := func(target string) int {
 		t.Helper()
@@ -184,15 +176,13 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 	}
 
 	// Below the first version, without video conversion: the lighter one
-	// plays, and the heavier one is never offered as it is.
+	// plays, and the heavier one, passed over before it, is not listed,
+	// so that the versions keep their order.
 	setLimit(2_000_000)
 	p.permit(t, p.user, false, true, true)
 	answer := p.ask(t, p.token, p.movie, chrome, nil)
-	if source := first(answer); source.Id != light || !source.SupportsDirectPlay {
-		t.Errorf("fallback to the lighter version: %+v", source)
-	}
-	if other := listed(answer, heavy); other.SupportsDirectPlay || other.SupportsDirectStream {
-		t.Errorf("the heavier version listed as playable: %+v", other)
+	if source := first(answer); source.Id != light || !source.SupportsDirectPlay || len(answer.MediaSources) != 1 {
+		t.Errorf("fallback to the lighter version: %+v", answer)
 	}
 	if asked := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": heavy}); !asked.refused() {
 		t.Errorf("the heavier version asked for: %+v", asked)

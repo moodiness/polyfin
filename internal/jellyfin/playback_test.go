@@ -184,11 +184,13 @@ func TestItemDetailsListVersions(t *testing.T) {
 		second.DefaultSubtitleStreamIndex == nil || *second.DefaultSubtitleStreamIndex != -1 {
 		t.Errorf("analyzed version: container %s, subtitle %v, streams %+v", second.Container, second.DefaultSubtitleStreamIndex, second.MediaStreams)
 	}
-	// A version opens as an item, its own source first.
+	// A version opens as an item, its source carrying its identifier and
+	// describing the item's streams; the versions keep the title's order.
 	var version BaseItemDto
 	p.get(t, "/Items/"+second.Id, p.token, &version)
-	if version.Id != second.Id || version.Name != "Movie" || (*version.MediaSources)[0].Id != second.Id {
-		t.Errorf("version as an item: %s %s", version.Id, version.Name)
+	if version.Id != second.Id || version.Name != "Movie" || len(*version.MediaSources) != 2 || version.Container != "mp4" ||
+		(*version.MediaSources)[0].Id != p.versions[0].ID.String() || (*version.MediaSources)[1].Id != second.Id {
+		t.Errorf("version as an item: %s %s %s %+v", version.Id, version.Name, version.Container, version.MediaSources)
 	}
 	var titleAncestors, versionAncestors []BaseItemDto
 	p.get(t, "/Items/"+p.movie+"/Ancestors", p.token, &titleAncestors)

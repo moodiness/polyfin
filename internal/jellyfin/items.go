@@ -218,29 +218,30 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		}
 		sources = h.mediaSources(r, p, opened)
 		if item.Kind != library.KindRecording {
-			h.setDownload(r, user, dto, item, p.ordered(opened), true)
+			h.setDownload(r, user, dto, item, p.versions, opened, true)
 		}
-		h.prepareOpened(r.Context(), user, item, p.ordered(opened))
+		h.prepareOpened(r.Context(), user, item, p.versions, opened)
 	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)
 	} else {
 		sources = []MediaSourceInfo{h.placeholderSource(r, item)}
 	}
-	h.setChapters(r.Context(), dto, p.ordered(opened))
+	h.setChapters(r.Context(), dto, p.versions, opened)
 	dto.Id = opened.String()
 	dto.MediaSources = &sources
 	// Recordings get no thumbnails (see queueImages): no Trickplay field.
 	if detail && item.Kind != library.KindRecording {
-		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, p.ordered(opened), opened)
+		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, p.versions, opened)
 	}
 	if len(sources) == 0 {
 		dto.MediaStreams = &[]playback.MediaStream{}
 		return
 	}
-	first := sources[0]
-	dto.MediaStreams = &first.MediaStreams
-	dto.Container = first.Container
-	for _, stream := range first.MediaStreams {
+	// The item's streams are those of the version it was opened as.
+	opens := sources[openedIndex(opened, p.versions)]
+	dto.MediaStreams = &opens.MediaStreams
+	dto.Container = opens.Container
+	for _, stream := range opens.MediaStreams {
 		switch stream.Type {
 		case "Subtitle":
 			// Jellyfin leaves the flag out for titles without subtitles.
