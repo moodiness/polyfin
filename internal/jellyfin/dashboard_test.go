@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 func TestLiveSessionsShowWhatPlaysAndTakeCommands(t *testing.T) {
@@ -65,5 +66,24 @@ func TestLiveSessionsShowWhatPlaysAndTakeCommands(t *testing.T) {
 	p.call(http.MethodPost, "/Sessions/Playing/Stopped", app("tv", p.token), map[string]any{"ItemId": p.movie, "PositionTicks": 600_000_000})
 	if sessions, _ := p.handler.LiveSessions(t.Context()); len(sessions) != 0 {
 		t.Errorf("sessions after stopping: %+v", sessions)
+	}
+}
+
+// jellyfin-web reports a title's own identifier as the media source of its
+// first version: the play session tells which version plays, so that the
+// dashboard still describes it.
+func TestLiveSessionsFindTheVersionThePlaySessionNames(t *testing.T) {
+	p := playing(t)
+	session := p.handler.Playback.Signer().Sign(playback.Grant{Version: p.versions[1].ID, User: p.user.ID})
+	if status, body := p.call(http.MethodPost, "/Sessions/Playing", app("tv", p.token), map[string]any{"ItemId": p.movie, "MediaSourceId": p.movie,
+		"PlaySessionId": session, "PositionTicks": 600_000_000, "PlayMethod": "Transcode"}); status != http.StatusNoContent {
+		t.Fatalf("start: %d %s", status, body)
+	}
+	sessions, err := p.handler.LiveSessions(t.Context())
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("sessions: %+v %v", sessions, err)
+	}
+	if sessions[0].Source == nil {
+		t.Error("the version played is not described")
 	}
 }

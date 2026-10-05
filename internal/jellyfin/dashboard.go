@@ -79,7 +79,15 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 		if item, err := h.played(ctx, user, now.Item); err == nil {
 			session.Item, session.Found = item, true
 		}
-		if version, err := accounts.ParseID(now.MediaSourceID); err == nil {
+		// The version played is the one PlaybackInfo chose, which the play
+		// session names, else the media source the app reports. Apps report
+		// a title's own identifier for its first version, which has no
+		// analysis of its own.
+		version, err := accounts.ParseID(now.MediaSourceID)
+		if grant, grantErr := h.Playback.Signer().Verify(now.PlaySessionID); grantErr == nil {
+			version, err = grant.Version, nil
+		}
+		if err == nil {
 			if analysis, ok := h.Playback.Analyzed(ctx, version); ok {
 				session.Source = &analysis
 			}
