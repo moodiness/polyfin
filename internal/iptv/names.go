@@ -144,12 +144,35 @@ func cleanName(name string) string {
 		}
 		return r
 	}, cleaned)
-	cleaned = strings.Join(strings.Fields(cleaned), " ")
-	cleaned = strings.Trim(cleaned, " -_|:/—–()[]")
+	cleaned = trimSeparators(strings.Join(strings.Fields(cleaned), " "))
 	if cleaned == "" {
 		return strings.TrimSpace(name)
 	}
 	return cleaned
+}
+
+// trimSeparators trims the separators and brackets left around a name by
+// what cleanName removed, but for a bracket that closes or opens one the
+// name keeps, as in "Zeb (Prime)".
+func trimSeparators(name string) string {
+	for {
+		trimmed := strings.Trim(name, " -_|:/—–")
+		for _, pair := range []string{"()", "[]"} {
+			open, close := pair[:1], pair[1:]
+			switch {
+			case strings.HasSuffix(trimmed, open), strings.HasPrefix(trimmed, close):
+				trimmed = strings.TrimSuffix(strings.TrimPrefix(trimmed, close), open)
+			case strings.HasSuffix(trimmed, close) && strings.Count(trimmed, open) < strings.Count(trimmed, close):
+				trimmed = strings.TrimSuffix(trimmed, close)
+			case strings.HasPrefix(trimmed, open) && strings.Count(trimmed, close) < strings.Count(trimmed, open):
+				trimmed = strings.TrimPrefix(trimmed, open)
+			}
+		}
+		if trimmed == name {
+			return name
+		}
+		name = trimmed
+	}
 }
 
 // mergeKey is the name entries of the same channel share, for merging: the
