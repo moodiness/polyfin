@@ -65,7 +65,8 @@ type Remux struct {
 	InputOptions []string
 	// Video and Audio are FFmpeg stream indexes; Audio is -1 for none.
 	Video, Audio int
-	// ADTS marks live AAC audio, framed as MPEG-TS carries it, which MP4
+	// ADTS marks AAC audio framed as MPEG-TS carries it, live or in a file,
+	// which MP4
 	// stores otherwise when it is copied.
 	ADTS bool
 	// AudioCodec is the encoder the audio is converted with, empty to copy
@@ -1028,8 +1029,13 @@ func (r Remux) args(n int) []string {
 	}
 	args = append(args, r.audioArgs()...)
 	if r.Audio >= 0 {
-		// Audio before zero, such as encoder priming, is not played.
-		args = append(args, "-bsf:a", `noise=drop=lt(pts\,0)`)
+		// Audio before zero, such as encoder priming, is not played. AAC
+		// copied from MPEG-TS is reframed as MP4 stores it.
+		filters := `noise=drop=lt(pts\,0)`
+		if r.ADTS && r.AudioCodec == "" && r.Format == FMP4 {
+			filters = "aac_adtstoasc," + filters
+		}
+		args = append(args, "-bsf:a", filters)
 	}
 	args = append(args, r.threadArgs()...)
 	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat(timestampOffset.Seconds(), 'f', -1, 64))
