@@ -379,8 +379,14 @@ func (s *Service) poll(p *pending) {
 		case ended:
 			return
 		case appRefused:
+			key := laneKey{p.user, p.service}
 			s.mu.Lock()
-			s.refusedApps[laneKey{p.user, p.service}] = appCredentials(p.service, s.settings())
+			s.refusedApps[key] = appCredentials(p.service, s.settings())
+			// The code ends with the refusal, in the same step: a status in
+			// between would show the code with the refused app.
+			if s.pending[key] == p {
+				delete(s.pending, key)
+			}
 			s.mu.Unlock()
 			s.logger.Info("A tracking service refused this server's app: its client ID and secret need checking under Settings › Tracking",
 				"user_id", p.user.String(), "service", p.service)
