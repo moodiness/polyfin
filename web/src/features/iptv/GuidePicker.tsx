@@ -1,3 +1,4 @@
+import { MagnifyingGlassIcon, TelevisionSimpleIcon } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
@@ -8,12 +9,10 @@ import {
   type GuideChannel,
   type Scope,
 } from '@/api'
-import { icons } from '@/components/icons'
-import { Pager, smallField, useDebounced } from '@/components/lineup/shared'
-import { Empty, Skeleton } from '@/components/panels'
-import { buttonSecondary, Notice } from '@/components/ui'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import { Button, cx, EmptyState, Field, InlineError, Select, SkeletonRows, TextInput } from '@/ui'
+import { Pager, useDebounced } from './shared'
 
 const pageSize = 50
 
@@ -25,12 +24,14 @@ export default function GuidePicker({
   scope,
   target,
   channelName,
+  busy = false,
   onPick,
   onCancel,
 }: {
   scope: Scope
   target: CatalogTarget
   channelName: string
+  busy?: boolean
   onPick: (channel: GuideChannel) => void
   onCancel: () => void
 }) {
@@ -39,7 +40,7 @@ export default function GuidePicker({
   const [search, setSearch] = useState(channelName)
   const [guide, setGuide] = useState('')
   const [offset, setOffset] = useState(0)
-  const ids = { search: useId(), guide: useId(), title: useId() }
+  const titleId = useId()
   const q = useDebounced(search.trim())
   const guides = useQuery({
     queryKey: queryKeys.catalogGuides(scope, target),
@@ -55,90 +56,86 @@ export default function GuidePicker({
 
   return (
     <section
-      aria-labelledby={ids.title}
-      className="space-y-3 rounded-xl border border-fin-4/40 bg-bg/60 p-3"
+      aria-labelledby={titleId}
+      className="mt-3 space-y-4 rounded-row border border-accent/35 bg-bg p-4 max-sm:p-3"
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 id={ids.title} className="text-sm font-semibold text-white">
+        <h3 id={titleId} className="min-w-0 truncate text-[14px] font-semibold text-ink">
           {text.title(channelName)}
         </h3>
-        <button type="button" className={buttonSecondary} onClick={onCancel}>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
           {t.common.cancel}
-        </button>
+        </Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="relative">
-          <label htmlFor={ids.search} className="mb-1.5 block text-xs font-medium text-muted">
-            {text.search}
-          </label>
-          <icons.search className="pointer-events-none absolute bottom-2.5 left-3 size-4 text-muted" />
-          <input
-            id={ids.search}
+        <Field label={text.search} hideLabel>
+          <TextInput
             type="search"
+            size="sm"
+            icon={MagnifyingGlassIcon}
             value={search}
             autoFocus
             autoComplete="off"
-            onChange={(event) => {
-              setSearch(event.target.value)
+            placeholder={text.search}
+            onValue={(value) => {
+              setSearch(value)
               setOffset(0)
             }}
-            className={`${smallField} pl-9`}
           />
-        </div>
-        <div>
-          <label htmlFor={ids.guide} className="mb-1.5 block text-xs font-medium text-muted">
-            {text.guide}
-          </label>
-          <select
-            id={ids.guide}
+        </Field>
+        <Field label={text.guide} hideLabel>
+          <Select
+            className="h-9"
             value={guide}
-            onChange={(event) => {
-              setGuide(event.target.value)
+            options={[
+              { value: '', label: text.allGuides },
+              ...(guides.data?.guides ?? []).map((g) => ({
+                value: g.id,
+                label: `${text.guideN(g.position)} · ${g.url}`,
+              })),
+            ]}
+            onValue={(value) => {
+              setGuide(value)
               setOffset(0)
             }}
-            className={smallField}
-          >
-            <option value="">{text.allGuides}</option>
-            {(guides.data?.guides ?? []).map((g) => (
-              <option key={g.id} value={g.id}>
-                {text.guideN(g.position)} · {g.url}
-              </option>
-            ))}
-          </select>
-        </div>
+          />
+        </Field>
       </div>
       {channels.isPending ? (
-        <Skeleton rows={4} label={t.common.loading} />
+        <SkeletonRows rows={3} />
       ) : channels.isError ? (
-        <Notice kind="error">{errorMessage(t, channels.error)}</Notice>
+        <InlineError onRetry={() => void channels.refetch()} retrying={channels.isFetching}>
+          {errorMessage(t, channels.error)}
+        </InlineError>
       ) : channels.data.items.length === 0 ? (
-        <Empty hint={guides.data?.guides.length === 0 ? text.noGuides : undefined}>
-          {text.empty}
-        </Empty>
+        <EmptyState icon={TelevisionSimpleIcon} title={text.empty}>
+          {guides.data?.guides.length === 0 ? text.noGuides : undefined}
+        </EmptyState>
       ) : (
         <ul
           aria-busy={channels.isFetching}
-          className="max-h-[50dvh] divide-y divide-line overflow-y-auto rounded-lg border border-line"
+          className={cx(
+            'max-h-[50dvh] overflow-y-auto rounded-row border border-line-2 bg-s1 transition-opacity',
+            channels.isPlaceholderData && 'opacity-60',
+          )}
         >
           {channels.data.items.map((channel) => {
             const others = channel.names.filter((name) => name !== channel.name)
             return (
               <li
                 key={`${channel.guideId}:${channel.id}`}
-                className="flex items-start gap-3 p-3 text-sm"
+                className="flex items-start gap-3 px-3.5 py-3 not-first:border-t not-first:border-line"
               >
                 <GuideIcon icon={channel.icon} name={channel.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium break-words text-white">{channel.name}</p>
+                <div className="min-w-0 flex-1 text-small">
+                  <p className="text-[14px] font-medium break-words text-ink">{channel.name}</p>
                   {others.length > 0 && (
-                    <p className="text-xs break-words text-muted">
-                      {text.alsoNamed(others.join(' · '))}
-                    </p>
+                    <p className="break-words text-ink-3">{text.alsoNamed(others.join(' · '))}</p>
                   )}
-                  <p className="font-mono text-xs break-all text-zinc-400">
+                  <p className="figures break-all text-ink-3">
                     {channel.id} · {text.guideN(channel.guidePosition)}
                   </p>
-                  <p className="text-xs text-zinc-300">
+                  <p className="text-ink-2">
                     {channel.now
                       ? text.now(
                           channel.now.title,
@@ -148,14 +145,14 @@ export default function GuidePicker({
                       : text.nothingNow}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className={buttonSecondary}
+                <Button
+                  size="sm"
+                  disabled={busy}
                   aria-label={text.chooseLabel(channel.name)}
                   onClick={() => onPick(channel)}
                 >
                   {text.choose}
-                </button>
+                </Button>
               </li>
             )
           })}
@@ -176,12 +173,12 @@ export default function GuidePicker({
 
 function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
   const [failed, setFailed] = useState(false)
-  const frame = 'size-10 shrink-0 overflow-hidden rounded-md bg-surface-2'
+  const frame = 'size-10 shrink-0 overflow-hidden rounded-field border border-line bg-s3'
   if (!icon || failed) {
     return (
       <span
         aria-hidden="true"
-        className={`${frame} flex items-center justify-center text-xs font-semibold text-muted`}
+        className={cx(frame, 'inline-grid place-items-center text-small font-semibold text-ink-3')}
       >
         {name.slice(0, 1).toUpperCase()}
       </span>
@@ -194,7 +191,7 @@ function GuideIcon({ icon, name }: { icon: string | null; name: string }) {
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={`${frame} object-contain p-0.5`}
+      className={cx(frame, 'object-contain p-0.5')}
     />
   )
 }
