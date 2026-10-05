@@ -59,7 +59,7 @@ Import everything from `@/ui`. Each component documents its props in its file; `
 | An icon only (more actions, delete in a row)        | `IconButton`, whose `label` is required                            |
 | Several actions behind one button, the account menu | `Menu` with `MenuItem`, `MenuChoice`, `MenuSeparator`              |
 | Asking before a destructive action                  | `ConfirmDialog`                                                    |
-| An editor too large for its row, the phone menu     | `Drawer`                                                           |
+| A form or editor too large for its row, phone menu  | `Modal`: a centered floating panel, `width` per use (480 to 640)   |
 | A hint on hover or focus                            | `Tooltip` (never the only copy of something needed)                |
 | A keyboard shortcut                                 | `Kbd` (`modKey` is ⌘ or Ctrl)                                      |
 

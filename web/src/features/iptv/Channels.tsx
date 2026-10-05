@@ -28,7 +28,7 @@ import {
   Button,
   Checkbox,
   cx,
-  Drawer,
+  Modal,
   EmptyState,
   Field,
   FieldError,
@@ -342,14 +342,14 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           <div className="border-t border-line px-6 py-3 max-sm:px-4">{pager}</div>
         )}
       </Panel>
-      <Drawer
+      <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing ? t.lineup.editor.title(editing.name) : ''}
-        width={560}
+        width={640}
       >
         {editing && <ChannelEditor key={editing.id} scope={scope} id={id} channelId={editing.id} />}
-      </Drawer>
+      </Modal>
     </div>
   )
 }

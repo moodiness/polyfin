@@ -25,7 +25,7 @@ import {
   Switch,
   useToast,
 } from '@/ui'
-import { AddSourceDrawer } from './AddSource'
+import { AddSourceModal } from './AddSource'
 import type { Entry } from './model'
 import { SourceBrowser } from './SourceBrowser'
 
@@ -72,7 +72,7 @@ export default function MySourcesRoute() {
         />
       </Block>
       <LibraryEditor scope="me" />
-      <AddSourceDrawer
+      <AddSourceModal
         scope="me"
         open={adding}
         onClose={() => setAdding(false)}

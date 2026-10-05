@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { SessionUser } from '@/api'
 import { useI18n } from '@/i18n'
-import { Brand, LanguageSwitch, repositoryUrl } from './Brand'
+import { Brand, LanguageSwitch } from './Brand'
 import { CommandPaletteProvider } from './palette/CommandPalette'
 import { SessionContext } from './session'
 import { TopBar } from './TopBar'
@@ -42,7 +42,6 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
 /** The frame without a session (setup, sign-in, loading): the logo, the language, one column. */
 export function PublicShell({ children }: { children: ReactNode }) {
-  const { t } = useI18n()
   return (
     <div className="flex min-h-dvh flex-col">
       <SkipLink />
@@ -59,17 +58,6 @@ export function PublicShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <footer className="border-t border-line">
-        <div className="mx-auto w-full max-w-page px-14 py-5 text-small max-xl:px-8 max-md:px-5">
-          <a
-            href={repositoryUrl}
-            rel="noreferrer"
-            className="rounded-sm text-ink-3 underline decoration-line-3 underline-offset-4 transition-colors duration-160 hover:text-ink"
-          >
-            {t.footer.sourceCode}
-          </a>
-        </div>
-      </footer>
     </div>
   )
 }

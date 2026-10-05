@@ -4,17 +4,17 @@ import { useMutation } from '@tanstack/react-query'
 import { installAddon, queryClient, queryKeys, type Addon, type Scope } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Drawer, Field, Segmented, TextInput, useToast } from '@/ui'
+import { Button, Modal, Field, Segmented, TextInput, useToast } from '@/ui'
 import { addedParts, IptvAddFlow } from './IptvForms'
 import { invalidateScope } from './model'
 
 type AddKind = 'stremio' | 'music' | 'iptv'
 
 /**
- * The "Add a source" drawer: a Stremio or music addon from its manifest address (the server tells
+ * The "Add a source" panel: a Stremio or music addon from its manifest address (the server tells
  * which it is), or an IPTV source in two steps. `onAdded` receives the new source, to select it.
  */
-export function AddSourceDrawer({
+export function AddSourceModal({
   scope,
   open,
   onClose,
@@ -40,7 +40,7 @@ export function AddSourceDrawer({
   }
 
   return (
-    <Drawer open={open} onClose={onClose} title={text.title} width={600}>
+    <Modal open={open} onClose={onClose} title={text.title} width={640}>
       <div key={round} className="flex flex-col gap-6 p-5">
         <Segmented<AddKind>
           label={text.kind}
@@ -74,7 +74,7 @@ export function AddSourceDrawer({
           />
         )}
       </div>
-    </Drawer>
+    </Modal>
   )
 }
 

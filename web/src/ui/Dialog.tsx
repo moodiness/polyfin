@@ -88,7 +88,7 @@ export function ConfirmDialog({
       ref={dialog}
       aria-labelledby={titleId}
       aria-describedby={children ? bodyId : undefined}
-      className="m-auto w-[min(440px,calc(100vw-32px))] rounded-panel bg-s2 p-0 text-ink shadow-pop backdrop:bg-scrim backdrop:backdrop-blur-[3px] open:animate-pop"
+      className="m-auto w-[min(440px,calc(100vw-24px))] rounded-panel bg-s1 p-0 text-ink shadow-pop backdrop:bg-scrim backdrop:backdrop-blur-[6px] open:animate-modal"
     >
       <div className="p-6">
         <h2 id={titleId} className="text-h3 text-ink">
@@ -123,36 +123,34 @@ export function ConfirmDialog({
   )
 }
 
-export type DrawerProps = {
+export type ModalProps = {
   open: boolean
   onClose: () => void
-  /** The heading of the drawer and its accessible name. */
+  /** The heading of the panel and its accessible name. */
   title: ReactNode
   /** Hides the title visually, when the content starts with its own header (the phone menu). */
   hideTitle?: boolean
-  /** The side it slides from. */
-  side?: 'right' | 'left'
-  /** Width in px on screens wider than it; a phone gets the full width less a margin. */
+  /** Width in px on screens wider than it; a phone gets the full width less a 12 px margin. */
   width?: number
-  /** Buttons at the bottom (save, cancel). */
+  /** Buttons at the bottom (save, cancel). They stay put while the body scrolls. */
   footer?: ReactNode
   children: ReactNode
 }
 
 /**
- * A panel sliding over the page from a side: the phone menu, an editor too large for a row
- * (a channel, a user's devices). Modal like ConfirmDialog; the close button is always there.
+ * A panel floating at the center of the page over a lightly blurred backdrop: the phone menu, a
+ * form or an editor too large for a row. Modal like ConfirmDialog; the close button is always
+ * there. The header and footer stay put while the body scrolls.
  */
-export function Drawer({
+export function Modal({
   open,
   onClose,
   title,
   hideTitle = false,
-  side = 'right',
-  width = 420,
+  width = 480,
   footer,
   children,
-}: DrawerProps) {
+}: ModalProps) {
   const { t } = useI18n()
   const dialog = useModal(open, onClose)
   const titleId = useId()
@@ -160,13 +158,10 @@ export function Drawer({
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
-      style={{ width: `min(${width}px, calc(100vw - 32px))` }}
+      style={{ width: `min(${width}px, calc(100vw - 24px))` }}
       className={cx(
-        'm-0 h-dvh max-h-dvh max-w-none flex-col border-line-2 bg-s1 p-0 text-ink shadow-pop open:flex',
-        'backdrop:bg-scrim backdrop:backdrop-blur-[3px]',
-        side === 'right'
-          ? 'ml-auto border-l open:animate-drawer-right'
-          : 'mr-auto border-r open:animate-drawer-left',
+        'm-auto max-h-[min(85dvh,calc(100dvh-24px))] max-w-none flex-col overflow-hidden rounded-panel bg-s1 p-0 text-ink shadow-pop open:flex open:animate-modal',
+        'backdrop:bg-scrim backdrop:backdrop-blur-[6px]',
       )}
     >
       <div className="flex h-topbar shrink-0 items-center justify-between gap-3 border-b border-line px-5">
@@ -175,9 +170,9 @@ export function Drawer({
         </h2>
         <IconButton label={t.ui.close} icon={XIcon} onClick={onClose} className="ml-auto" />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
       {footer && (
-        <div className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-3.5">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-bg/40 px-5 py-3.5">
           {footer}
         </div>
       )}

@@ -9,7 +9,7 @@ import type { Messages } from '@/i18n'
 import {
   Button,
   cx,
-  Drawer,
+  Modal,
   EmptyState,
   FieldError,
   InlineError,
@@ -90,7 +90,7 @@ type Query = {
 }
 
 /**
- * The list of sources with its filters, and the detail of the one chosen beside it (in a drawer
+ * The list of sources with its filters, and the detail of the one chosen beside it (in a floating panel
  * on narrower screens). The choice is kept in the address (`?source=`), so it survives a reload.
  */
 export function SourceBrowser({
@@ -344,7 +344,7 @@ export function SourceBrowser({
       {wide ? (
         <div className="min-w-0">{detail}</div>
       ) : (
-        <Drawer
+        <Modal
           open={chosen !== undefined}
           onClose={() => choose(null)}
           title={chosen?.addon.name ?? ''}
@@ -352,7 +352,7 @@ export function SourceBrowser({
           width={640}
         >
           <div className="p-3">{detail}</div>
-        </Drawer>
+        </Modal>
       )}
     </div>
   )

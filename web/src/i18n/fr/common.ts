@@ -260,9 +260,6 @@ const common: typeof en = {
   time: {
     justNow: 'à l’instant',
   },
-  footer: {
-    sourceCode: 'Code source sur GitHub',
-  },
   ui: {
     on: 'Activé',
     off: 'Désactivé',
