@@ -1,42 +1,229 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
 
+/*
+ * « Nuit » design tokens. Pages use them through Tailwind classes (`bg-s1`, `text-ink-2`,
+ * `border-line-2`, `rounded-panel`, `shadow-pop`, `text-h1`…) and never raw colors.
+ */
 @theme {
+  /* Backgrounds: the brand night, then tinted surfaces. */
+  --color-bg: #08080e;
+  --color-s1: #0d0d15; /* panels */
+  --color-s2: #12121c; /* fields, hovered rows */
+  --color-s3: #191925; /* selected, secondary buttons */
+  --color-s4: #232331; /* pressed, switch off */
+
+  /* Hairlines: bluish white at 7, 11 and 17 %. */
+  --color-line: rgb(236 236 255 / 0.07);
+  --color-line-2: rgb(236 236 255 / 0.11);
+  --color-line-3: rgb(236 236 255 / 0.17);
+
+  /* Text, strongest first. All pass AA on every surface. */
+  --color-ink: #ededf5;
+  --color-ink-2: #a6a6ba;
+  --color-ink-3: #80809a;
+
+  /* The only accent (white text on it), its pressed state, and links and the focus ring. */
+  --color-accent: #5b63f6;
+  --color-accent-press: #4f57ec;
+  --color-link: #9aa0ff;
+  --color-link-hover: #c3c6ff;
+  /* Behind dialogs and the palette. */
+  --color-scrim: rgb(4 4 10 / 0.62);
+
+  /* States: always shown with an icon and a word. */
+  --color-ok: #5cc79d;
+  --color-warn: #e9b86c;
+  --color-danger: #f27d74;
+
+  /* The brand gradient stops: the logo and playback progress only (see `bg-brand`). */
+  --color-brand-1: #6d4aff;
+  --color-brand-2: #4c3fd9;
+  --color-brand-3: #5b63f6;
+  --color-brand-4: #3e8ef7;
+  --color-brand-5: #22d3ee;
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale: 30 / 22 / 16 / 15 / 14 / 13 / 12, plus 13.5 for controls as in the mockup. */
+  --text-h1: 30px;
+  --text-h1--line-height: 1.15;
+  --text-h1--letter-spacing: -0.025em;
+  --text-h1--font-weight: 600;
+  --text-h2: 22px;
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: -0.02em;
+  --text-h2--font-weight: 600;
+  --text-h3: 16px;
+  --text-h3--line-height: 1.35;
+  --text-h3--letter-spacing: -0.01em;
+  --text-h3--font-weight: 600;
+  --text-lead: 15px;
+  --text-lead--line-height: 1.55;
+  --text-body: 14px;
+  --text-body--line-height: 1.55;
+  --text-control: 13.5px;
+  --text-control--line-height: 1.4;
+  --text-small: 13px;
+  --text-small--line-height: 1.5;
+  --text-micro: 12px;
+  --text-micro--line-height: 1.45;
+
+  /* Radii: panels, rows and tiles, fields and buttons, checkboxes. */
+  --radius-panel: 16px;
+  --radius-row: 12px;
+  --radius-field: 8px;
+  --radius-check: 5px;
+
+  /* Spacing beyond the 4 px grid: between page blocks, and the top bar's height. */
+  --spacing-block: 52px;
+  --spacing-topbar: 60px;
+  --container-page: 1232px;
+
+  /* The one shadow, for floating surfaces only (menus, palette, dialogs). */
+  --shadow-pop: 0 28px 70px -20px rgb(3 3 14 / 0.9), 0 0 0 1px var(--color-line-2);
+
+  --ease-nuit: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --animate-rise: rise 420ms var(--ease-nuit) both;
+  --animate-pop: pop 220ms var(--ease-nuit) both;
+  --animate-fade: fade 160ms var(--ease-nuit) both;
+  --animate-drawer-right: drawer-right 220ms var(--ease-nuit) both;
+  --animate-drawer-left: drawer-left 220ms var(--ease-nuit) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.98) translateY(-4px);
+    }
+  }
+  @keyframes drawer-right {
+    from {
+      translate: 100% 0;
+    }
+  }
+  @keyframes drawer-left {
+    from {
+      translate: -100% 0;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /*
+   * Legacy names used by the pages written before « Nuit » (`pages/`, `components/`). They map to
+   * the new palette so those pages fit the shell until their area replaces them. New code never
+   * uses them; the final QA pass removes them.
+   */
   --color-fin-1: #6d4aff;
   --color-fin-2: #4c3fd9;
   --color-fin-3: #5b63f6;
   --color-fin-4: #3e8ef7;
   --color-fin-5: #22d3ee;
-  --color-ink: #08080e;
-  --color-surface: #11111a;
-  /* A raised surface: the active navigation item, rows inside cards. */
-  --color-surface-2: #181826;
-  --color-line: #262635;
-  --color-muted: #a3a3b8;
-
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Menlo, monospace;
+  --color-surface: #0d0d15;
+  --color-surface-2: #191925;
+  --color-muted: #a6a6ba;
 }
 
-/* The fin palette from base to tip, used sparingly for accents. */
+/* The brand gradient. Only the logo and playback progress bars wear it. */
+@utility bg-brand {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-1) 0%,
+    var(--color-brand-2) 22%,
+    var(--color-brand-3) 48%,
+    var(--color-brand-4) 74%,
+    var(--color-brand-5) 100%
+  );
+}
+
+/* Legacy name of `bg-brand`, for the old pages only. */
 @utility bg-fin-gradient {
   background-image: linear-gradient(
     90deg,
-    var(--color-fin-1),
-    var(--color-fin-2),
-    var(--color-fin-3),
-    var(--color-fin-4),
-    var(--color-fin-5)
+    var(--color-brand-1),
+    var(--color-brand-2),
+    var(--color-brand-3),
+    var(--color-brand-4),
+    var(--color-brand-5)
   );
+}
+
+/* Figures that are compared: server figures, IPTV counts, log times, IPs, versions. */
+@utility figures {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * Entrance: the block rises 6 px with a fade. On a container, `stagger` does it for each child,
+ * 50 ms apart (up to the eighth; later ones start with it).
+ */
+@utility stagger {
+  & > * {
+    animation: var(--animate-rise);
+  }
+  & > :nth-child(2) {
+    animation-delay: 50ms;
+  }
+  & > :nth-child(3) {
+    animation-delay: 100ms;
+  }
+  & > :nth-child(4) {
+    animation-delay: 150ms;
+  }
+  & > :nth-child(5) {
+    animation-delay: 200ms;
+  }
+  & > :nth-child(6) {
+    animation-delay: 250ms;
+  }
+  & > :nth-child(7) {
+    animation-delay: 300ms;
+  }
+  & > :nth-child(n + 8) {
+    animation-delay: 350ms;
+  }
+}
+
+/* Hides a scrollbar while keeping the scrolling, for rows of tabs on a phone. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
   html {
     color-scheme: dark;
-    background-color: var(--color-ink);
-    color: var(--color-zinc-100);
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--spacing-topbar) + 24px);
+    scrollbar-color: var(--color-s4) transparent;
+  }
+
+  body {
+    min-height: 100dvh;
   }
 
   h1,
@@ -45,18 +232,62 @@
     text-wrap: balance;
   }
 
+  p {
+    text-wrap: pretty;
+  }
+
   :focus-visible {
-    outline: 2px solid var(--color-fin-5);
+    outline: 2px solid var(--color-link);
     outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: rgb(91 99 246 / 0.45);
+    color: var(--color-ink);
+  }
+
+  /* Native widgets follow the accent: checkboxes, radios and ranges left in older pages. */
+  input,
+  progress {
+    accent-color: var(--color-accent);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-s4);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #2e2e3f;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Native dialogs open as they are drawn: the components size and place them. */
+  dialog {
+    color: inherit;
   }
 
   @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
     ::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      animation: none !important;
+      transition: none !important;
       scroll-behavior: auto !important;
     }
   }
