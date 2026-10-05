@@ -20,6 +20,7 @@ This page explains how to install Polyfin with Docker Compose or on Unraid. Afte
    ```
 
 2. Set `POSTGRES_PASSWORD` in `.env`. You can generate one with `openssl rand -hex 24`.
+   Optionally but preferably, also set `POLYFIN_SECRET_KEY` to the output of `openssl rand -base64 32`: Polyfin then encrypts the API keys and tracking tokens it stores (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keep a copy with your database backups; with another key or none, those keys have to be entered again.
 3. Start Polyfin:
 
    ```sh
@@ -55,6 +56,7 @@ To add the template:
    ```
 
 2. Choose **Polyfin** under **Docker › Add Container › Template**.
+3. Optionally but preferably, fill **Secret key** with the output of `openssl rand -base64 32`, run in Unraid's terminal, so that the keys and tokens Polyfin stores are encrypted. Keep a copy with your backups.
 
 ## GPU
 

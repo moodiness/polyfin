@@ -29,6 +29,9 @@ services:
       POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
       POLYFIN_CACHE_SIZE: ${POLYFIN_CACHE_SIZE:-10GB}
       POLYFIN_HWACCEL: ${POLYFIN_HWACCEL:-auto}
+      # Encrypts the keys and tokens Polyfin stores, optional but advised:
+      # set it in .env, and keep it, or they have to be entered again.
+      POLYFIN_SECRET_KEY: ${POLYFIN_SECRET_KEY:-}
       # Live TV recording, optional: the folder recordings are written to,
       # mounted below.
       # POLYFIN_RECORDINGS_DIR: /recordings

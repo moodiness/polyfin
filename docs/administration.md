@@ -49,6 +49,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - **Disk space** for the cache and recordings folders.
 - **The thumbnail queue** and paused hosts.
 - **Polyfin itself**: memory, goroutines, uptime and version.
+- **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
 
 Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My addons**, each marked with its owner. Their problems count in the summary.
 
@@ -64,6 +65,15 @@ Health sends no request outside the server. Like Schedule, it covers the server'
 - the database URL shows its host and database only.
 
 A **Web player** link appears when the server serves a web client. See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
+
+## Showing a saved key
+
+Fields that hold a key or a secret hide it. While you type one, an eye button (**Show key**, **Hide key**) shows what you typed. Once saved, the key shows as dots, with its own eye:
+
+- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key** and **Trakt client secret**.
+- Under **My account › Tracking**, each user can show their own **MDBList** and **PublicMetaDB** API keys. Trakt and Simkl hold tokens rather than keys, which are never shown.
+
+The key is fetched from the server when the eye is clicked, and hidden again on a second click, after a minute, or when you leave the page. Each time, the activity log records who showed which key, never the key itself, and the answer is never cached. A key that cannot be decrypted with `POLYFIN_SECRET_KEY` counts as not saved and cannot be shown.
 
 ## API keys and integrations
 
