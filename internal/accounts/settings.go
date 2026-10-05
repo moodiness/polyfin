@@ -264,9 +264,9 @@ var (
 )
 
 // The largest Settings.CustomCss and CustomJs, and LoginDisclaimer, in
-// bytes.
+// bytes. 2 MiB holds a whole theme pasted in, tens of thousands of lines.
 const (
-	MaxCustomCodeBytes      = 256 << 10
+	MaxCustomCodeBytes      = 2 << 20
 	MaxLoginDisclaimerBytes = 8 << 10
 )
 

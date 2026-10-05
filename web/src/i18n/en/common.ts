@@ -132,8 +132,8 @@ const common = {
     invalid_quality_group: 'Choose the quality group from the list.',
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',
-    invalid_custom_css: 'The custom CSS must take at most 256 KB.',
-    invalid_custom_js: 'The custom JavaScript must take at most 256 KB.',
+    invalid_custom_css: 'The custom CSS must take at most 2 MB.',
+    invalid_custom_js: 'The custom JavaScript must take at most 2 MB.',
     invalid_login_disclaimer: 'The sign-in message must take at most 8 KB.',
     invalid_publicmetadb_key:
       'PublicMetaDB did not accept this key. Copy it again from your PublicMetaDB account. Nothing was saved.',

@@ -143,8 +143,8 @@ const common: typeof en = {
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
     invalid_live_tv_refresh_hours:
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
-    invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 256 Ko.',
-    invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 256 Ko.',
+    invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 2 Mo.',
+    invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
     invalid_login_disclaimer: 'Le message de connexion ne doit pas dépasser 8 Ko.',
     invalid_publicmetadb_key:
       'PublicMetaDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte PublicMetaDB. Rien n’a été enregistré.',

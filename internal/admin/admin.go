@@ -35,8 +35,9 @@ const (
 	cookiePath = "/admin"
 	maxBody    = 64 << 10
 	// maxSettingsBody fits the settings with their custom CSS and script at
-	// their largest, written as JSON escapes them.
-	maxSettingsBody = 4 << 20
+	// their largest, each character written as JSON's longest escape
+	// (\u003c), plus the other settings.
+	maxSettingsBody = 6*(2*accounts.MaxCustomCodeBytes+accounts.MaxLoginDisclaimerBytes) + maxBody
 	readyWait       = 2 * time.Second
 )
 

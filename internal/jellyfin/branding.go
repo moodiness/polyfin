@@ -3,10 +3,16 @@ package jellyfin
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
+
+// maxBrandingBody fits the branding with its custom CSS and sign-in message
+// at their largest, each character written as JSON's longest escape
+// (\u003c).
+const maxBrandingBody = 6*(accounts.MaxCustomCodeBytes+accounts.MaxLoginDisclaimerBytes) + maxBody
 
 // BrandingOptions is Jellyfin's branding configuration, which jellyfin-web
 // reads to show the disclaimer under its sign-in form and to apply the
@@ -43,7 +49,7 @@ func (h *Handler) brandingCSS(w http.ResponseWriter, _ *http.Request) {
 // not Jellyfin's, is kept. Texts above Polyfin's limits are refused.
 func (h *Handler) updateBranding(w http.ResponseWriter, r *http.Request) {
 	errs := bindErrors{}
-	raw, ok := requestBody(w, r, "configuration", errs)
+	raw, ok := requestBodyUpTo(w, r, "configuration", errs, maxBrandingBody)
 	if !ok {
 		return
 	}
@@ -71,9 +77,9 @@ func (h *Handler) updateBranding(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.Accounts.UpdateSettings(r.Context(), settings); err != nil {
 		switch {
 		case errors.Is(err, accounts.ErrInvalidCustomCss):
-			validationProblem(w, map[string][]string{"CustomCss": {"The custom CSS must take at most 256 KB."}})
+			validationProblem(w, map[string][]string{"CustomCss": {fmt.Sprintf("The custom CSS must take at most %d MB.", accounts.MaxCustomCodeBytes>>20)}})
 		case errors.Is(err, accounts.ErrInvalidLoginDisclaimer):
-			validationProblem(w, map[string][]string{"LoginDisclaimer": {"The login disclaimer must take at most 8 KB."}})
+			validationProblem(w, map[string][]string{"LoginDisclaimer": {fmt.Sprintf("The login disclaimer must take at most %d KB.", accounts.MaxLoginDisclaimerBytes>>10)}})
 		default:
 			h.internalError(w, r, err)
 		}
