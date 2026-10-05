@@ -15,7 +15,7 @@ import { icons } from '@/components/icons'
 import OwnerChip from '@/components/OwnerChip'
 import { Empty, Panel, Skeleton, StatusText } from '@/components/panels'
 import { Badge, buttonSecondary, Notice, PageHeader, RelativeTime } from '@/components/ui'
-import { dateTime, errorMessage, formatSpan } from '@/format'
+import { dateTime, errorMessage, formatHour, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 
 export default function SchedulePage() {
@@ -115,6 +115,9 @@ function Tasks() {
                         <p className="text-muted">
                           {text.every(formatSpan(task.interval, language))}
                         </p>
+                      )}
+                      {task.daily !== null && (
+                        <p className="text-muted">{text.daily(formatHour(task.daily, language))}</p>
                       )}
                     </div>
                     <div className="flex gap-2 md:justify-end">

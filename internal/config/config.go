@@ -57,6 +57,9 @@ type Config struct {
 	// SecretKey is the key the keys, secrets and tokens stored in the
 	// database are sealed with, nil for none. It is a secret: never log it.
 	SecretKey []byte
+	// BackupDir is the folder the database is backed up into; empty
+	// leaves backups off.
+	BackupDir string
 }
 
 // defaultFontsDir is the system font folder, which the Docker image fills
@@ -153,6 +156,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("POLYFIN_SECRET_KEY: %w", err))
 		}
 		cfg.SecretKey = key
+	}
+	if dir := strings.TrimSpace(getenv("POLYFIN_BACKUP_DIR")); dir != "" {
+		if err := checkWritableDir(dir); err != nil {
+			errs = append(errs, fmt.Errorf("POLYFIN_BACKUP_DIR: %w", err))
+		} else {
+			cfg.BackupDir = filepath.Clean(dir)
+		}
 	}
 	return cfg, errors.Join(errs...)
 }

@@ -45,6 +45,15 @@ export function dateTime(iso: string, language: string): string {
   )
 }
 
+/** An hour of the day, 0 to 23, as the language writes it, "4:00 AM" or "04:00", in no time zone. */
+export function formatHour(hour: number, language: string): string {
+  return new Intl.DateTimeFormat(language, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(Date.UTC(2000, 0, 1, hour))
+}
+
 const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
 
 /** A size in bytes as "4.2 GB", decimal units as POLYFIN_CACHE_SIZE reads them. */

@@ -334,6 +334,24 @@ var (
 // MaxTrackingAppBytes is the longest Trakt or Simkl credential, in bytes.
 const MaxTrackingAppBytes = 256
 
+// ErrInvalidBackupHour reports a BackupHour outside [0, 23], and
+// ErrInvalidBackupsKept a BackupsKept outside [MinBackupsKept,
+// MaxBackupsKept].
+var (
+	ErrInvalidBackupHour  = errors.New("invalid backup hour")
+	ErrInvalidBackupsKept = errors.New("invalid number of backups kept")
+)
+
+// The bounds and defaults of Settings.BackupHour and BackupsKept: by
+// default, the database is backed up at 4 in the morning and the last week
+// of backups is kept.
+const (
+	DefaultBackupHour  = 4
+	MinBackupsKept     = 1
+	MaxBackupsKept     = 90
+	DefaultBackupsKept = 7
+)
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -523,6 +541,11 @@ type Settings struct {
 	TraktClientID     string
 	TraktClientSecret string
 	SimklClientID     string
+	// BackupHour is the hour of the server's time zone, 0 to 23, the
+	// database is backed up at every day, and BackupsKept how many of the
+	// newest backups are kept, when POLYFIN_BACKUP_DIR turns backups on.
+	BackupHour  int
+	BackupsKept int
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -568,7 +591,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_segments, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
-	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id"
+	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
+	"backup_hour, backups_kept"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -593,7 +617,8 @@ func (settings *Settings) fields() []any {
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSegments,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
-		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID}
+		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
+		&settings.BackupHour, &settings.BackupsKept}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -755,6 +780,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validTrackingApp(settings.SimklClientID) {
 		return Settings{}, ErrInvalidSimklApp
+	}
+	if settings.BackupHour < 0 || settings.BackupHour > 23 {
+		return Settings{}, ErrInvalidBackupHour
+	}
+	if settings.BackupsKept < MinBackupsKept || settings.BackupsKept > MaxBackupsKept {
+		return Settings{}, ErrInvalidBackupsKept
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
