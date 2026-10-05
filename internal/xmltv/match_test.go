@@ -199,3 +199,57 @@ func TestGuidesRankByOrderAfterKindCountryAndTier(t *testing.T) {
 		}
 	}
 }
+
+// A guide channel whose identifier writes a channel's name takes it when
+// no display name does, as guides keep identifiers for renamed channels;
+// a display name still wins, even in a later guide. An identifier without
+// a country suffix writes no name, and an identifier only takes the
+// channel it names whole.
+func TestIdentifiersWriteNames(t *testing.T) {
+	guide := []guideChannel{
+		{"ZebOne.fr", []string{"Orbe Next"}, 5},
+		{"QuillTv.fr", []string{"QuillTv.fr"}, 5},
+		{"loc.Lumo News", []string{"US| Other"}, 5},
+		{"LumoNews.zz", []string{"US| Other"}, 5},
+		{"TacPlus1.fr", []string{"Tac Classic"}, 5},
+	}
+	expect(t, "identifiers", match("fr", []string{"ZEB ONE", "QUILL TV", "LUMO NEWS", "ZEB", "TAC +1", "TAC 1"}, guide),
+		"ZebOne.fr", "QuillTv.fr", "", "", "TacPlus1.fr", "")
+
+	m := NewMatcher("fr")
+	m.Add("a", "", "Zeb One")
+	m.Declare(0, Channel{ID: "ZebOne.fr", Names: []string{"Orbe Next"}})
+	m.Declare(1, Channel{ID: "ZebOneOther.fr", Names: []string{"Zeb One"}})
+	expect(t, "a display name in a later guide", ids(m.Choose(one)), "ZebOneOther.fr")
+}
+
+// "+" reads as "plus", as identifiers write it, and names written with it
+// still take a list's name without it; "&" reads as "and" in identifiers.
+func TestPlusAndAmpersandAsIdentifiersWriteThem(t *testing.T) {
+	guide := []guideChannel{
+		{"ZebPlusSport.fr", []string{"ZebPlusSport.fr"}, 5},
+		{"Orbe.fr", []string{"Orbe+"}, 5},
+		{"Orbe2.fr", []string{"Orbe"}, 5},
+		{"QuillAndCo.fr", []string{"QuillAndCo.fr"}, 5},
+		{"LumoKids.fr", []string{"Lumo & Kids"}, 5},
+	}
+	expect(t, "plus and and", match("fr", []string{"ZEB+ SPORT", "ORBE+", "ORBE", "QUILL & CO", "LUMO & KIDS", "LUMO KIDS", "TAC+"}, guide),
+		"ZebPlusSport.fr", "Orbe.fr", "Orbe2.fr", "QuillAndCo.fr", "LumoKids.fr", "LumoKids.fr", "")
+	// A list leaving the "+" out still finds the channel.
+	expect(t, "without the plus", match("fr", []string{"ORBE SPORT"}, []guideChannel{{"OrbePlusSport.fr", []string{"Orbe+ Sport"}, 5}}),
+		"OrbePlusSport.fr")
+}
+
+// French lists write the public networks numbered 2 to 5 as "F2" to "F5"
+// before a region: on a French server, or under a French prefix,
+// "F3 Zebria" is "France 3 Zebria"; elsewhere, and "F1", stay as written.
+func TestFrenchNetworksWrittenShort(t *testing.T) {
+	guide := []guideChannel{
+		{"France3Zebria.fr", []string{"France 3 - Zébria"}, 5},
+		{"France5Orbe.fr", []string{"France 5 Orbe"}, 5},
+		{"France1Orbe.fr", []string{"France 1 Orbe"}, 5},
+	}
+	expect(t, "French server", match("fr", []string{"F3 ZEBRIA", "F5 ORBE", "F3: ZEBRIA HD", "F1 ORBE", "F3ZEBRIA"}, guide),
+		"France3Zebria.fr", "France5Orbe.fr", "France3Zebria.fr", "", "")
+	expect(t, "German server", match("de", []string{"F3 ZEBRIA", "FR| F3 ZEBRIA"}, guide), "", "France3Zebria.fr")
+}
