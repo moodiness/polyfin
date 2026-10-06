@@ -431,7 +431,7 @@ func TestPlaylistsHaveNoFeed(t *testing.T) {
 	}
 }
 
-// generatedTS encodes 4 seconds of video with a keyframe every second and
+// generatedTS encodes 4 seconds of padded video with a keyframe every second and
 // audio, as MPEG-TS, with FFmpeg; without indicator, the random access
 // indicators are cleared so that keyframes are found by their NAL units.
 func generatedTS(t *testing.T, codec string, indicator bool) []byte {
@@ -443,6 +443,8 @@ func generatedTS(t *testing.T, codec string, indicator bool) []byte {
 	out := filepath.Join(t.TempDir(), "live.ts")
 	command := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=25:duration=4",
 		"-f", "lavfi", "-i", "sine=duration=4", "-c:v", codec, "-g", "25", "-bf", "0", "-pix_fmt", "yuv420p", "-c:a", "aac",
+		// Padded to 1.5 MB a second, so that feedJoin spans several keyframes.
+		"-muxrate", "12M",
 		"-f", "mpegts", out)
 	if output, err := command.CombinedOutput(); err != nil {
 		if codec != "libx264" {
@@ -540,8 +542,8 @@ func readSome(t *testing.T, r *feedReader, n int) []byte {
 }
 
 // A reader joining a running feed starts with the stream's PAT and PMT,
-// then its latest keyframe; the first reader of a new feed starts at its
-// first keyframe. What it reads decodes from its first bytes, with
+// then its first keyframe within feedJoin; the first reader of a new feed
+// starts at its first keyframe, even once more came. What it reads decodes from its first bytes, with
 // FFmpeg's short probe.
 func TestReadersStartAtAKeyframe(t *testing.T) {
 	data := generatedTS(t, "libx264", true)
@@ -549,12 +551,17 @@ func TestReadersStartAtAKeyframe(t *testing.T) {
 	f := feedOf(data, 0)
 	r := f.join(t.Context(), accounts.ID{1})
 	head := readSome(t, r, 3*tsPacket)
-	if tsPID(head, 0) != 0 || tsPID(head, tsPacket) != f.index.pmtPID || !bytes.Equal(head[2*tsPacket:], data[keys[3]:keys[3]+tsPacket]) {
-		t.Fatalf("a joining reader starts with PIDs %d, %d, then %x, want 0, %d, then the last keyframe", tsPID(head, 0),
-			tsPID(head, tsPacket), head[2*tsPacket:2*tsPacket+8], f.index.pmtPID)
+	// The first keyframe within feedJoin of the end.
+	want := keys[slices.IndexFunc(keys, func(at int64) bool { return at >= int64(len(data))-feedJoin })]
+	if want == keys[0] {
+		t.Fatalf("the generated stream is too short: %d bytes", len(data))
 	}
-	if r.pos != keys[3]+tsPacket {
-		t.Errorf("the reader is at %d, want just past the last keyframe, %d", r.pos, keys[3]+tsPacket)
+	if tsPID(head, 0) != 0 || tsPID(head, tsPacket) != f.index.pmtPID || !bytes.Equal(head[2*tsPacket:], data[want:want+tsPacket]) {
+		t.Fatalf("a joining reader starts with PIDs %d, %d, then %x, want 0, %d, then the keyframe at %d", tsPID(head, 0),
+			tsPID(head, tsPacket), head[2*tsPacket:2*tsPacket+8], f.index.pmtPID, want)
+	}
+	if r.pos != want+tsPacket {
+		t.Errorf("the reader is at %d, want just past the keyframe, %d", r.pos, want+tsPacket)
 	}
 
 	// A new feed: its first reader waits for the first keyframe.
@@ -575,7 +582,7 @@ func TestReadersStartAtAKeyframe(t *testing.T) {
 
 	// What the joining reader read decodes with FFmpeg's short probe.
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
-	joined := append(slices.Clone(head[:2*tsPacket]), data[keys[3]:r.pos]...)
+	joined := append(slices.Clone(head[:2*tsPacket]), data[want:r.pos]...)
 	joined = append(joined, readSome(t, r, len(data)-int(r.pos))...)
 	file := filepath.Join(t.TempDir(), "joined.ts")
 	if err := os.WriteFile(file, joined, 0o600); err != nil {

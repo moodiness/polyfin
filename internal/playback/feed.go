@@ -22,8 +22,8 @@ const (
 	// behind is dropped rather than holding the others back.
 	feedBuffer = 6 << 20
 	// feedJoin is how far back in what it keeps a reader joining a running
-	// feed starts when the stream's keyframes are not known (see tsIndex):
-	// a few seconds, so that FFmpeg likely finds one.
+	// feed starts: at the first keyframe since (see tsIndex), or there on a
+	// packet when its keyframes are not known.
 	feedJoin = 3 << 20
 	// keyframeWait is how much of an MPEG-TS stream is read for its first
 	// keyframe before readers start without one.
@@ -296,15 +296,17 @@ func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 }
 
 // place sets where a reader starts, f.mu held: an MPEG-TS stream at its
-// first keyframe since the reader joined, else its latest one in the ring,
-// after its PAT and PMT, so that a reader joining at any time, the first
-// included, decodes from its first bytes.
+// first keyframe within feedJoin of where the reader joined, after its PAT
+// and PMT, so that a reader joining at any time, the first included,
+// decodes from its first bytes, and has a few seconds to read at once:
+// FFmpeg cuts its first segment from them without waiting for the
+// stream's next keyframe.
 // It reports false while the first keyframe is awaited, keyframeWait at
 // most; a stream of no keyframe known starts feedJoin back, on a packet.
 func (r *feedReader) place() bool {
 	f := r.f
 	oldest := max(f.received-int64(len(f.buf)), 0)
-	if at, prefix, ok := f.index.start(max(oldest, 0), r.from); ok {
+	if at, prefix, ok := f.index.start(oldest, max(r.from-feedJoin, oldest)); ok {
 		r.pos, r.prefix, r.placed = at, prefix, true
 		return true
 	}
@@ -917,9 +919,9 @@ func (x *tsIndex) awaiting(received int64) bool {
 	return true
 }
 
-// start returns where a reader that joined when the feed had received
-// from starts, and the PAT and PMT to read before it: the first keyframe
-// since, else the latest before, at or after oldest.
+// start returns where a reader starts, and the PAT and PMT to read before
+// it: the first keyframe at or after from, else the latest one at or after
+// oldest.
 func (x *tsIndex) start(oldest, from int64) (int64, []byte, bool) {
 	if x.off || x.pat == nil || x.pmt == nil || len(x.keys) == 0 {
 		return 0, nil, false
