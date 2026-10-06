@@ -154,7 +154,7 @@ Polyfin also keeps catalog pages and titles' descriptions in its database. So li
 To answer quickly:
 
 - While you look at a page of a library or collection, Polyfin reads the next one ahead, unless the addon's last answer failed.
-- When it starts, and every hour, Polyfin reads the first page of every library (the **Read the libraries' first pages** task).
+- When it starts, and every hour, Polyfin reads the first page of every library: the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard.
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
 - A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
