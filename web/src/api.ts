@@ -525,6 +525,17 @@ export type LineupCategory = {
   enabledChannels: number
 }
 
+/** How a stream last answered when its channel was opened. */
+export type StreamHealth = {
+  okAt: string | null
+  /** dead (no live stream), refused (not served now), timeout (nothing came), or empty. */
+  failure: '' | 'dead' | 'refused' | 'timeout'
+  failedAt: string | null
+  failures: number
+  /** Set while the stream is left out of its channel. */
+  hiddenUntil: string | null
+}
+
 export type ChannelStream = {
   id: string
   label: string
@@ -532,6 +543,7 @@ export type ChannelStream = {
   custom: boolean
   /** Redacted address of a custom stream; null for the provider's. */
   address: string | null
+  health: StreamHealth
 }
 
 /** The guide channel a channel takes; manual with null ids pins "no guide". */
@@ -1142,6 +1154,13 @@ export const addChannelStream = (
     'POST',
     `${sourcePath(scope, id)}/channels/${seg(channelId)}/streams`,
     stream,
+  )
+
+/** Forgets how a channel's streams answered: its next start tries them all. */
+export const retryChannelStreams = (scope: Scope, id: string, channelId: string) =>
+  request<LineupChannel>(
+    'POST',
+    `${sourcePath(scope, id)}/channels/${seg(channelId)}/streams/retry`,
   )
 
 export const deleteChannelStream = (

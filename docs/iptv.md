@@ -32,7 +32,9 @@ An **Xtream Codes account** source takes a **Name**, the **Server address**, a *
 - A list that cannot be read is not added.
 - Headings that lists put between channels are skipped: names without a letter or digit, or drawn with a run of three or more decoration characters, such as `##### NAME #####` or `=== NAME ===`.
 - Addresses and logins are stored as manifest addresses are: never shown in full (only the server's scheme and host) and never logged.
-- Catch-up and connection limits are not handled.
+- Requests to a provider's server (its lists, guide, and the details of a title) go one at a time, a second apart; a server that answers "too many requests" is asked again when it says. A list or guide that still fails says the server asked Polyfin to slow down, and is tried again after a few minutes (see [Refreshing](#refreshing)).
+- An Xtream account's connection limit, which its login tells, bounds the channels played at once (see [How a channel plays](live-tv.md#how-a-channel-plays)).
+- Catch-up is not handled.
 
 ## What to import
 
@@ -103,6 +105,16 @@ A list read a page of 100 at a time from the server, filtered by category, state
 - **Change by keyword**, after a count of what would change.
 - Moves within a category, or to another category or place.
 - An editor for the name, logo, description, category, fixed number, streams (reorder, turn off or add) and guide.
+
+#### Stream health
+
+Each stream shows how it last answered when its channel was opened:
+
+- **No live stream**: an error, a web page, an empty answer or bytes of no video. It is left out of its channel for an hour, then 6 hours, then a day while it keeps failing.
+- **Nothing came**: left out for 10 minutes.
+- **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
+
+Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. **Try every stream again** forgets it all for the channel.
 
 Edits work one by one or in bulk, by selection, category or keyword, with a count of what would change first. Lists are paged and searched by the server, so line-ups of tens of thousands of channels stay quick. An added stream's address follows the source's rule for local network addresses and is never shown in full.
 
@@ -198,4 +210,4 @@ The list is downloaded:
 - again, with the guides, once **Refresh Live TV lists and guides every** hours have passed (under **Settings › Live TV**, 12 by default, 1 to 168; see [When guides are fetched](live-tv.md#when-guides-are-fetched));
 - when you press **Refresh** on the source's row, or **Download again** in its page's header.
 
-A download that fails keeps the previous channels and tells why. After every list refresh and change of options, channels are mapped to the guides again.
+A download that fails keeps the previous channels and tells why, and is tried again after 5 minutes, then 15 minutes, then every hour (never later than the setting). After every list refresh and change of options, channels are mapped to the guides again.

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -271,6 +272,8 @@ type Stream struct {
 	Enabled bool
 	Custom  bool
 	Address string
+	// Health is how the stream last answered when its channel was opened.
+	Health StreamHealth
 }
 
 // Channel is a channel of a line-up as the administrator edits it.
@@ -353,20 +356,26 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 		keys[i], index[c.key] = c.key, i
 		channels[i].Streams = []Stream{}
 	}
-	rows, err = s.db.Query(ctx, `SELECT s.channel_id, s.key, s.label, s.enabled, s.custom_url FROM iptv_streams s
+	rows, err = s.db.Query(ctx, `SELECT s.channel_id, s.key, s.label, s.enabled, s.custom_url,
+		coalesce(s.custom_url, e.url, ''), coalesce(s.health_url, ''), s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
+		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
 		WHERE s.addon_id = $1 AND s.channel_id = ANY($2) ORDER BY s.channel_id, `+streamOrder, source, keys)
 	if err != nil {
 		return 0, nil, err
 	}
-	var channel string
+	var channel, address, checked string
 	var st Stream
 	var custom *string
-	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom}, func() error {
+	var okAt *time.Time
+	var h health
+	now := s.now()
+	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom, &address, &checked, &okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
 		stream := st
 		stream.Custom = custom != nil
 		if custom != nil {
 			stream.Address = Redact(*custom)
 		}
+		stream.Health = streamHealth(address, checked, okAt, h, now)
 		c := &channels[index[channel]]
 		c.Streams = append(c.Streams, stream)
 		return nil

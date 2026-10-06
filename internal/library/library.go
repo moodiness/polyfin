@@ -1149,6 +1149,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		return item, nil
 	}
 	r, err := s.load(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return s.unsavedProgram(ctx, v, id)
+	}
 	if err != nil {
 		return Item{}, err
 	}

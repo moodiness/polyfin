@@ -218,6 +218,34 @@ func TestCatalogGuideRoutesValidate(t *testing.T) {
 	}
 	_, page, _ := member.call(http.MethodGet, "/scopes/me/iptv/"+own.ID.String()+"/channels", nil)
 	first := page["items"].([]any)[0].(map[string]any)["id"].(string)
+	// A stream found dead shows it, until the member tries it again.
+	metas, err := channels.Channels(t.Context(), own.ID)
+	if err != nil || len(metas) == 0 {
+		t.Fatal(metas, err)
+	}
+	streams, err := channels.Streams(t.Context(), own.ID, metas[0].ID)
+	if err != nil || len(streams) == 0 {
+		t.Fatal(streams, err)
+	}
+	if err := channels.ReportStream(t.Context(), own.ID, metas[0].ID, streams[0].URL, iptv.FailureDead); err != nil {
+		t.Fatal(err)
+	}
+	streamHealth := func(body map[string]any) map[string]any {
+		for _, stream := range body["streams"].([]any) {
+			if health := stream.(map[string]any)["health"].(map[string]any); health["failure"] != "" {
+				return health
+			}
+		}
+		return nil
+	}
+	if status, body, _ := member.call(http.MethodGet, "/scopes/me/iptv/"+own.ID.String()+"/channels/"+metaChannel(t, member, own.ID.String(), metas[0].Name), nil); status != http.StatusOK ||
+		streamHealth(body) == nil || streamHealth(body)["failure"] != "dead" || streamHealth(body)["hiddenUntil"] == nil {
+		t.Errorf("a dead stream: %d %v", status, body)
+	}
+	if status, body, _ := member.call(http.MethodPost, "/scopes/me/iptv/"+own.ID.String()+"/channels/"+metaChannel(t, member, own.ID.String(), metas[0].Name)+"/streams/retry", nil); status != http.StatusOK ||
+		streamHealth(body) != nil {
+		t.Errorf("tried again: %d %v", status, body)
+	}
 	if status, body, _ := member.call(http.MethodPost, "/scopes/me/iptv/"+own.ID.String()+"/channels/"+first+"/streams",
 		map[string]any{"url": provider + "/live/9.ts"}); status != http.StatusForbidden || body["error"] != "private_network" {
 		t.Errorf("a member's local custom stream: %d %v", status, body)
@@ -229,4 +257,18 @@ func TestCatalogGuideRoutesValidate(t *testing.T) {
 	if status, body, _ := member.call(http.MethodGet, "/scopes/me/catalog-guides"+query, nil); status != http.StatusBadRequest || body["error"] != "invalid_library" {
 		t.Errorf("a member reading the server's catalog in their scope: %d %v", status, body)
 	}
+}
+
+// metaChannel is the identifier, in the admin, of a source's channel named
+// name.
+func metaChannel(t *testing.T, client browser, source, name string) string {
+	t.Helper()
+	_, page, _ := client.call(http.MethodGet, "/scopes/me/iptv/"+source+"/channels", nil)
+	for _, item := range page["items"].([]any) {
+		if channel := item.(map[string]any); channel["name"] == name {
+			return channel["id"].(string)
+		}
+	}
+	t.Fatalf("no channel %q", name)
+	return ""
 }

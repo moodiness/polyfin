@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -270,7 +271,11 @@ func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
 	fields := requestedFields(r)
 	var airing map[accounts.ID]library.Item
 	if current || !currentSet {
-		if airing, err = h.airing(r, user); err != nil {
+		page := make([]accounts.ID, 0, to-from)
+		for _, channel := range channels[from:to] {
+			page = append(page, channel.ID)
+		}
+		if airing, err = h.airing(r, user, page); err != nil {
 			h.browseError(w, r, err)
 			return
 		}
@@ -292,7 +297,13 @@ func (h *Handler) addCurrentPrograms(r *http.Request, user accounts.User, dtos [
 	if !slices.ContainsFunc(dtos, func(dto BaseItemDto) bool { return dto.Type == "TvChannel" }) {
 		return
 	}
-	airing, err := h.airing(r, user)
+	var ids []accounts.ID
+	for _, dto := range dtos {
+		if id, ok := parseGUID(dto.Id); ok && dto.Type == "TvChannel" {
+			ids = append(ids, id)
+		}
+	}
+	airing, err := h.airing(r, user, ids)
 	if err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("The programmes airing now could not be listed", "error", err)
 	}
@@ -305,10 +316,11 @@ func (h *Handler) addCurrentPrograms(r *http.Request, user accounts.User, dtos [
 	}
 }
 
-// airing maps each channel to the programme it airs now.
-func (h *Handler) airing(r *http.Request, user accounts.User) (map[accounts.ID]library.Item, error) {
+// airing maps each of channels to the programme it airs now; nil asks
+// for every channel.
+func (h *Handler) airing(r *http.Request, user accounts.User, channels []accounts.ID) (map[accounts.ID]library.Item, error) {
 	now := time.Now()
-	programs, err := h.Library.Programs(r.Context(), user, now, now.Add(time.Second))
+	programs, err := h.Library.Guide(r.Context(), user, library.GuideQuery{From: now, To: now.Add(time.Second), Channels: channels})
 	airing := map[accounts.ID]library.Item{}
 	for _, program := range programs {
 		if !program.StartDate.After(now) {
@@ -341,7 +353,7 @@ func (h *Handler) liveChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	dto := h.newItemDto(item, requestedFields(r), true, state)
 	h.addMediaSources(r, user, &dto, item, id, true)
-	if airing, err := h.airing(r, user); err == nil {
+	if airing, err := h.airing(r, user, []accounts.ID{item.ID}); err == nil {
 		if program, ok := airing[item.ID]; ok {
 			dto.CurrentProgram = new(h.newItemDto(program, nil, true, userState{}))
 		}
@@ -358,7 +370,7 @@ type programQuery struct {
 	MinStartDate, MaxStartDate, MinEndDate, MaxEndDate *Time
 	HasAired, IsAiring                                 *bool
 	IsMovie, IsSeries, IsNews, IsKids, IsSports        *bool
-	EnableUserData                                     *bool
+	EnableUserData, EnableTotalRecordCount             *bool
 	StartIndex, Limit                                  *int
 	// channels are the ChannelIds that are identifiers, read once.
 	channels map[accounts.ID]bool
@@ -431,7 +443,8 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 		}
 	}
 	for name, field := range map[string]**bool{"hasAired": &q.HasAired, "isAiring": &q.IsAiring, "isMovie": &q.IsMovie,
-		"isSeries": &q.IsSeries, "isNews": &q.IsNews, "isKids": &q.IsKids, "isSports": &q.IsSports, "enableUserData": &q.EnableUserData} {
+		"isSeries": &q.IsSeries, "isNews": &q.IsNews, "isKids": &q.IsKids, "isSports": &q.IsSports, "enableUserData": &q.EnableUserData,
+		"enableTotalRecordCount": &q.EnableTotalRecordCount} {
 		if value, ok := b.bool(r, name); ok {
 			*field = new(value)
 		}
@@ -505,30 +518,45 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		case q.HasAired != nil && *q.HasAired && to.After(now):
 			to = now
 		}
-		programs, err := h.Library.Programs(r.Context(), user, from, to)
-		if err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		programs = slices.DeleteFunc(programs, func(p library.Item) bool { return !q.keeps(p, now) })
-		if recommended {
-			slices.SortStableFunc(programs, func(a, b library.Item) int {
-				x, _ := strconv.Atoi(a.Channel.Number)
-				y, _ := strconv.Atoi(b.Channel.Number)
-				return x - y
-			})
-		} else if slices.ContainsFunc(q.SortBy, func(s string) bool { return strings.EqualFold(s, "SortName") }) {
-			slices.SortStableFunc(programs, func(a, b library.Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
-		}
-		if slices.ContainsFunc(q.SortOrder, func(s string) bool { return strings.EqualFold(s, "Descending") }) {
-			slices.Reverse(programs)
-		}
 		start, limit := 0, -1
 		if q.StartIndex != nil {
 			start = *q.StartIndex
 		}
 		if q.Limit != nil && *q.Limit >= 0 {
 			limit = *q.Limit
+		}
+		// The guide is read for the channels asked only, and, when the
+		// programmes are listed by start time with no total asked, no
+		// further than the page.
+		airing := q.IsAiring != nil && *q.IsAiring
+		byName := slices.ContainsFunc(q.SortBy, func(s string) bool { return strings.EqualFold(s, "SortName") })
+		descending := slices.ContainsFunc(q.SortOrder, func(s string) bool { return strings.EqualFold(s, "Descending") })
+		guide := library.GuideQuery{From: from, To: to, Keep: func(p library.Item) bool { return q.keeps(p, now) }}
+		if len(q.ChannelIds) > 0 {
+			guide.Channels = slices.Collect(maps.Keys(q.channels))
+		}
+		counted := q.EnableTotalRecordCount == nil || *q.EnableTotalRecordCount
+		if limit >= 0 && !counted && !byName && !descending && !(recommended && airing) {
+			guide.Limit = max(start, 0) + limit
+		}
+		programs, err := h.Library.Guide(r.Context(), user, guide)
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		// Recommended programmes airing now are listed by channel, those to
+		// come by start time.
+		if recommended && airing {
+			slices.SortStableFunc(programs, func(a, b library.Item) int {
+				x, _ := strconv.Atoi(a.Channel.Number)
+				y, _ := strconv.Atoi(b.Channel.Number)
+				return x - y
+			})
+		} else if byName {
+			slices.SortStableFunc(programs, func(a, b library.Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+		}
+		if descending {
+			slices.Reverse(programs)
 		}
 		fields := requestedFields(r)
 		for _, field := range q.Fields {
@@ -639,9 +667,11 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 			continue
 		}
 		attempts++
-		analysis, err := h.Playback.AnalyzeLive(r.Context(), version)
+		// A stream that answers no live stream fails within seconds: the
+		// next one is tried at once.
+		analysis, err := h.Playback.AnalyzeLive(playback.ForUser(r.Context(), user.ID), version)
 		if err != nil {
-			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.Addon, "error", err)
+			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.Addon, "failure", playback.LiveFailure(err), "error", err)
 			continue
 		}
 		manifest := playback.Manifest(analysis)
@@ -726,9 +756,11 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 
 // serveChannel serves a channel's stream to a player that plays it as it
 // is: an HLS playlist is relayed, its files named through Polyfin, unless
-// the player may be sent to the source; an endless stream is redirected
-// to or relayed like a file.
+// the player may be sent to the source; an MPEG-TS stream is relayed from
+// its shared feed, or redirected to when that costs no connection (see
+// playback.Service.ServeChannel).
 func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user accounts.User, channel library.Item, version library.Version, relay bool) {
+	r = r.WithContext(playback.ForUser(r.Context(), user.ID))
 	analysis, err := h.Playback.AnalyzeLive(r.Context(), version)
 	if err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
@@ -742,7 +774,7 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 		return
 	}
 	if !playback.Manifest(analysis) {
-		err = h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay})
+		err = h.Playback.ServeChannel(w, r, version, relay)
 	} else if relay {
 		grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: true})
 		err = h.Playback.ServeLive(w, r, version, "", h.liveLink(r, channel.ID, grant))

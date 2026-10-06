@@ -27,9 +27,6 @@ const (
 	// and maxDetailSize bounds a details answer.
 	detailTTL     = 7 * 24 * time.Hour
 	maxDetailSize = 16 << 20
-	// DetailGap is the least time between two details requests to one
-	// provider host: providers ban accounts that send bursts.
-	DetailGap = time.Second
 	// otherCategory names the catalog of titles without category.
 	otherCategory = "Other"
 )
@@ -473,7 +470,7 @@ func (d *details) apply(source accounts.ID, t Title, meta *stremio.Meta) {
 
 // details returns a title's details: those kept while fresh; else, when
 // fetch is set and its source is an Xtream account, asked again, paced
-// per host (see DetailGap); else those kept, even old, or nil. A failed
+// per host (see Pacer); else those kept, even old, or nil. A failed
 // request is logged and answers what was kept.
 func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle, fetch bool) (*details, error) {
 	var kept *details
@@ -494,12 +491,8 @@ func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle
 		if t.Type == typeSeries {
 			action = "get_series_info&series_id=" + url.QueryEscape(t.Key)
 		}
-		if err := s.pace(ctx, account.Server); err != nil {
-			return nil, err
-		}
-		s.detailRequests.Add(1)
 		var fetched *details
-		err := download(ctx, s.client, account.api(action), t.confined, maxDetailSize, func(body io.Reader) error {
+		err := download(ctx, s.requester(), account.api(action), t.confined, maxDetailSize, func(body io.Reader) error {
 			var err error
 			if t.Type == typeSeries {
 				fetched, err = parseSeriesInfo(body)
@@ -528,29 +521,6 @@ func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle
 		return kept, nil
 	}
 	return result.(*details), nil
-}
-
-// pace waits for host's turn to answer a details request, at most one
-// every detailGap, and takes it.
-func (s *Service) pace(ctx context.Context, host string) error {
-	s.paceMu.Lock()
-	now := time.Now()
-	turn := now
-	if next := s.nextDetail[host]; next.After(now) {
-		turn = next
-	}
-	s.nextDetail[host] = turn.Add(s.detailGap)
-	s.paceMu.Unlock()
-	if wait := turn.Sub(now); wait > 0 {
-		timer := time.NewTimer(wait)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	return nil
 }
 
 // xtreamInfo is the "info" of a get_vod_info or get_series_info answer.

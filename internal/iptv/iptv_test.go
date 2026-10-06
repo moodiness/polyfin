@@ -41,6 +41,8 @@ func newEnv(t *testing.T) env {
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
 	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), users.Settings)
+	// Requests are paced by the tests that check pacing only.
+	service.pacer = NewPacer(0)
 	now := new(atomic.Pointer[time.Time])
 	start := time.Now().Truncate(time.Second)
 	now.Store(&start)

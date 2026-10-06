@@ -275,7 +275,7 @@ func TestXtreamDetailsAreLazyCachedAndPaced(t *testing.T) {
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	server, account := syntheticVOD(t, 250, 3)
-	e.service.detailGap = 300 * time.Millisecond
+	e.service.pacer = NewPacer(300 * time.Millisecond)
 	on := true
 	addon := must(e.service.Add(ctx, shared, NewSource{Name: "Box", Account: account, Options: &OptionsPatch{Movies: &on, Series: &on}}, false))
 	source := addon.ID

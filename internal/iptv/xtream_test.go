@@ -62,7 +62,7 @@ func (x *xtreamServer) account(password string) Account {
 }
 
 func TestXtreamAccountsAreRead(t *testing.T) {
-	client := stremio.NewClient("test")
+	client := requester{client: stremio.NewClient("test"), pacer: NewPacer(0)}
 	for _, tc := range []struct {
 		formats   []string
 		extension string

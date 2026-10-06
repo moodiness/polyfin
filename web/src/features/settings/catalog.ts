@@ -399,7 +399,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'live-tv',
     anchor: 'live-tv-refresh-hours',
     label: (t) => s(t).liveTvRefreshHours,
-    help: (t) => s(t).liveTvRefreshHoursHelp,
+    help: (t, r) => s(t).liveTvRefreshHoursHelp(r('liveTvRefreshHours')),
     keywords: ['iptv', 'xmltv', 'epg'],
     codes: ['invalid_live_tv_refresh_hours'],
   },

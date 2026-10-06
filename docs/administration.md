@@ -162,7 +162,7 @@ Jellyfin apps see Polyfin's own jobs and can start and stop them:
 
 - signing out unused devices, hourly;
 - cleaning the activity log, daily;
-- fetching the IPTV channel lists, then the Live TV guides due under **Settings › Live TV**. Polyfin looks for due ones every 30 minutes; started by hand, the task fetches every list and guide;
+- fetching the IPTV channel lists, then the Live TV guides due under **Settings › Live TV**. Polyfin looks for due ones every 5 minutes; started by hand, the task fetches every list and guide;
 - refreshing ratings, which asks addons and runs only when started.
 
 Their schedules cannot be changed.

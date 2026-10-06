@@ -23,6 +23,8 @@ const iptv: typeof en = {
         'Le dernier téléchargement a échoué : la liste est trop grande. Les chaînes précédentes sont gardées.',
       malformed:
         'Le dernier téléchargement a échoué : le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
+      rate_limited:
+        'Le dernier téléchargement a échoué : le serveur a demandé à Polyfin de ralentir. Il est réessayé dans quelques minutes ; les chaînes précédentes sont gardées.',
     },
   },
   lineup: {
@@ -54,6 +56,8 @@ const iptv: typeof en = {
       malformed: 'La dernière récupération a échoué : ce fichier n’est pas un guide XMLTV.',
       channels_unreachable:
         'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
+      rate_limited:
+        'La dernière récupération a échoué : le serveur a demandé à Polyfin de ralentir. Elle est réessayée dans quelques minutes.',
     } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
@@ -328,6 +332,14 @@ const iptv: typeof en = {
       defaultLabel: 'Perso',
       add: 'Ajouter le flux',
       adding: 'Ajout…',
+      failures: {
+        dead: 'Aucun flux en direct',
+        refused: 'Refusé par le fournisseur',
+        timeout: 'Rien n’est venu',
+      },
+      leftOutUntil: 'écarté jusqu’à',
+      retry: 'Réessayer tous les flux',
+      retried: 'Tous les flux sont essayés au prochain démarrage.',
     },
     guides: {
       title: 'Guides',

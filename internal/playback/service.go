@@ -97,6 +97,8 @@ type Service struct {
 	// attached are the files versions carry, read once for the fonts a
 	// track asks for together.
 	attached *cache.Cache[accounts.ID, []container.Attachment]
+	// feeds are the live streams being read (see feed.go).
+	feeds liveState
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading

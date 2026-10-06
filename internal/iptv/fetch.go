@@ -60,11 +60,17 @@ type downloaded struct {
 	// xtream tells movies and series are an Xtream account's lists; an
 	// M3U playlist's are among its entries.
 	xtream bool
+	// connections is how many streams an Xtream account may play at once,
+	// as its login says; nil when it does not say, 0 for no limit.
+	connections *int
 }
 
 // merge adds to d the parts of more that d lacks.
 func (d *downloaded) merge(more downloaded) {
 	d.xtream = d.xtream || more.xtream
+	if d.connections == nil {
+		d.connections = more.connections
+	}
 	if more.got.live && !d.got.live {
 		d.entries, d.got.live = more.entries, true
 	}
@@ -81,7 +87,7 @@ func (d *downloaded) merge(more downloaded) {
 // keeps the requests on public addresses. Errors never contain an address:
 // they embed credentials. Entries of a kind not wanted as titles count as
 // channels, as they become.
-func fetch(ctx context.Context, client *stremio.Client, account Account, confined bool, want parts) (downloaded, error) {
+func fetch(ctx context.Context, client requester, account Account, confined bool, want parts) (downloaded, error) {
 	var d downloaded
 	channels, titles := 0, 0
 	add := func(e Entry) error {
@@ -114,18 +120,42 @@ func fetch(ctx context.Context, client *stremio.Client, account Account, confine
 	return d, err
 }
 
-// download requests address and hands its body to read, bounded in size
-// (limit) and time (see listTimeout).
-func download(ctx context.Context, client *stremio.Client, address string, confined bool, limit int64, read func(io.Reader) error) error {
+// download requests address in its host's turn (see Pacer) and hands its
+// body to read, bounded in size (limit) and time (see listTimeout). A
+// provider that asks to slow down moves its host's next turn back by what
+// it asks; the request is tried again then, twice at most, when that is
+// within maxRetryAfter, else it fails with a RateLimitError.
+func download(ctx context.Context, client requester, address string, confined bool, limit int64, read func(io.Reader) error) error {
+	for attempt := 0; ; attempt++ {
+		err := downloadOnce(ctx, client, address, confined, limit, read)
+		var limited *RateLimitError
+		if !errors.As(err, &limited) {
+			return err
+		}
+		wait := cmp.Or(limited.RetryAfter, RequestGap*2)
+		client.pacer.Delay(address, wait)
+		if attempt >= 2 || wait > maxRetryAfter {
+			return err
+		}
+	}
+}
+
+func downloadOnce(ctx context.Context, client requester, address string, confined bool, limit int64, read func(io.Reader) error) error {
+	if err := client.pacer.Wait(ctx, address); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	answered := time.AfterFunc(listAnswer, cancel)
-	response, err := client.Open(ctx, http.MethodGet, address, nil, confined)
+	response, err := client.client.Open(ctx, http.MethodGet, address, nil, confined)
 	answered.Stop()
 	if err != nil {
 		return err
 	}
 	defer response.Body.Close()
+	if limited := RateLimited(response); limited != nil {
+		return limited
+	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: HTTP %d", stremio.ErrUnreachable, response.StatusCode)
 	}
@@ -191,12 +221,13 @@ func (t *text) UnmarshalJSON(data []byte) error {
 // categories and streams, the VOD categories and streams, and the series
 // categories and series. Only list data is read: details of a title are
 // asked when it is opened (see Service.details).
-func fetchXtream(ctx context.Context, client *stremio.Client, account Account, confined bool, want parts) (downloaded, error) {
+func fetchXtream(ctx context.Context, client requester, account Account, confined bool, want parts) (downloaded, error) {
 	d := downloaded{got: want, xtream: true}
 	var login struct {
 		UserInfo struct {
-			Auth    text     `json:"auth"`
-			Formats []string `json:"allowed_output_formats"`
+			Auth           text     `json:"auth"`
+			Formats        []string `json:"allowed_output_formats"`
+			MaxConnections text     `json:"max_connections"`
 		} `json:"user_info"`
 	}
 	if err := download(ctx, client, account.api(""), confined, maxListSize, decodeJSON(&login)); err != nil {
@@ -204,6 +235,9 @@ func fetchXtream(ctx context.Context, client *stremio.Client, account Account, c
 	}
 	if login.UserInfo.Auth != "1" {
 		return d, ErrLoginRefused
+	}
+	if n, err := strconv.Atoi(strings.TrimSpace(string(login.UserInfo.MaxConnections))); err == nil && n >= 0 {
+		d.connections = &n
 	}
 	if want.live {
 		// MPEG-TS, unless the account only allows HLS.
@@ -245,7 +279,7 @@ func (a Account) api(action string) string {
 }
 
 // xtreamCategories reads the names of a category list of the player API.
-func xtreamCategories(ctx context.Context, client *stremio.Client, account Account, confined bool, action string) (map[text]string, error) {
+func xtreamCategories(ctx context.Context, client requester, account Account, confined bool, action string) (map[text]string, error) {
 	var categories []struct {
 		ID   text   `json:"category_id"`
 		Name string `json:"category_name"`
@@ -279,7 +313,7 @@ func eachItem[T any](body io.Reader, item func(T) error) error {
 }
 
 // fetchXtreamLive lists an Xtream account's live channels.
-func fetchXtreamLive(ctx context.Context, client *stremio.Client, account Account, confined, hls bool, add func(Entry) error) error {
+func fetchXtreamLive(ctx context.Context, client requester, account Account, confined, hls bool, add func(Entry) error) error {
 	names, err := xtreamCategories(ctx, client, account, confined, "get_live_categories")
 	if err != nil {
 		return err
@@ -334,7 +368,7 @@ type xtreamTitle struct {
 
 // fetchXtreamTitles lists an Xtream account's movies or series, in its
 // order.
-func fetchXtreamTitles(ctx context.Context, client *stremio.Client, account Account, confined bool, typ string) ([]Title, error) {
+func fetchXtreamTitles(ctx context.Context, client requester, account Account, confined bool, typ string) ([]Title, error) {
 	categoriesAction, listAction := "get_vod_categories", "get_vod_streams"
 	if typ == typeSeries {
 		categoriesAction, listAction = "get_series_categories", "get_series"
