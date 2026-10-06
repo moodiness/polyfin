@@ -56,9 +56,16 @@ func NewClient(version string) *Client {
 	}
 }
 
+// idleConnsPerHost is how many idle connections are kept to each host:
+// listings ask an addon for up to 16 catalogs or 8 pages at once, and
+// home screens a burst of posters from one artwork server, which would
+// otherwise open new connections, with TLS handshakes, at each wave.
+const idleConnsPerHost = 32
+
 func newHTTPClient(confined bool) *http.Client {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConnsPerHost = idleConnsPerHost
 	if confined {
 		dialer.Control = func(_, address string, _ syscall.RawConn) error {
 			host, _, err := net.SplitHostPort(address)
