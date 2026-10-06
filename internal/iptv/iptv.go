@@ -9,11 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,7 +32,34 @@ const (
 	errorPrivateNetwork = "private_network"
 	errorTooLarge       = "too_large"
 	errorMalformed      = "malformed"
+	errorRateLimited    = "rate_limited"
 )
+
+// Backoff is how long after its failures-th failure in a row a list or a
+// guide is tried again: 5 minutes, 15 minutes, then every hour, never later
+// than interval (LiveTvRefreshHours), and not before after (what the
+// provider asked, through Retry-After).
+func Backoff(failures int, interval, after time.Duration) time.Duration {
+	steps := []time.Duration{5 * time.Minute, 15 * time.Minute, time.Hour}
+	wait := steps[min(max(failures, 1), len(steps))-1]
+	return max(min(wait, interval), after)
+}
+
+// failureCode is the code the admin app shows for a failed download.
+func failureCode(err error) string {
+	switch {
+	case errors.Is(err, stremio.ErrPrivateNetwork):
+		return errorPrivateNetwork
+	case errors.Is(err, ErrTooLarge):
+		return errorTooLarge
+	case errors.Is(err, ErrInvalidList), errors.Is(err, ErrLoginRefused):
+		return errorMalformed
+	case errors.Is(err, ErrRateLimited):
+		return errorRateLimited
+	default:
+		return errorUnreachable
+	}
+}
 
 // Service stores the IPTV sources of the server and of each user, their
 // line-ups, and answers the library's catalog, meta and stream requests for
@@ -57,13 +84,9 @@ type Service struct {
 	// download the list again.
 	lists map[string]cachedList
 
-	// nextDetail is, for each provider host, when it may be asked for
-	// details again (see pace), and detailGap the least time between two
-	// requests; detailRequests counts them.
-	paceMu         sync.Mutex
-	nextDetail     map[string]time.Time
-	detailGap      time.Duration
-	detailRequests atomic.Int64
+	// pacer spaces the requests to each provider host: lists and
+	// details (see Pacer).
+	pacer *Pacer
 }
 
 // listCache is how long the list a preview downloaded is kept, at most
@@ -97,7 +120,7 @@ func (s *Service) fetchCached(ctx context.Context, account Account, confined boo
 	if !missing.any() {
 		return cached.list, nil
 	}
-	fetched, err := fetch(ctx, s.client, account, confined, missing)
+	fetched, err := fetch(ctx, s.requester(), account, confined, missing)
 	if err != nil {
 		return downloaded{}, err
 	}
@@ -126,7 +149,7 @@ func (s *Service) fetchCached(ctx context.Context, account Account, confined boo
 // whenever lists due are looked for.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, addons: store, client: client, logger: logger, settings: settings, now: time.Now,
-		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}, nextDetail: map[string]time.Time{}, detailGap: DetailGap}
+		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}, pacer: Hosts}
 }
 
 // OnChange sets what is told, after the change, that a source's line-up
@@ -221,9 +244,12 @@ type Source struct {
 	FetchedAt *time.Time
 	NextAt    *time.Time
 	Error     string
-	Options   Options
-	Lineup    LineupCounts
-	VOD       VODCounts
+	// MaxConnections is how many streams the account may play at once,
+	// as an Xtream server says; nil when unknown, 0 for no limit.
+	MaxConnections *int
+	Options        Options
+	Lineup         LineupCounts
+	VOD            VODCounts
 }
 
 // Add fetches an account's channel list and adds it to the scope as an
@@ -316,7 +342,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		if address, err = account.address(); err != nil {
 			return err
 		}
-		if list, err = fetch(ctx, s.client, accountOf(addon.Kind, address), confined, partsOf(options)); err != nil {
+		if list, err = fetch(ctx, s.requester(), accountOf(addon.Kind, address), confined, partsOf(options)); err != nil {
 			return err
 		}
 	} else if addon.Kind == addons.KindXtream {
@@ -349,6 +375,24 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	return err
 }
 
+// interval is how long a list or guide fetched is kept: the settings'
+// LiveTvRefreshHours.
+func (s *Service) interval() time.Duration {
+	return time.Duration(s.settings().LiveTvRefreshHours) * time.Hour
+}
+
+// Due reports whether a list or guide last tried at checked is due at now:
+// at retry after a failure, else once interval passed.
+func Due(checked, retry *time.Time, interval time.Duration, now time.Time) bool {
+	switch {
+	case retry != nil:
+		return !now.Before(*retry)
+	case checked != nil:
+		return now.Sub(*checked) >= interval
+	}
+	return true
+}
+
 // lineupChanged forgets a source's shown channels and tells OnChange.
 func (s *Service) lineupChanged(ctx context.Context, source accounts.ID) {
 	s.forget(source)
@@ -369,11 +413,12 @@ func (s *Service) Refresh(ctx context.Context, scope addons.Scope, id accounts.I
 }
 
 // RefreshDue fetches the lists not fetched for the settings'
-// LiveTvRefreshHours, or every list when all is set, one after the other,
-// of the enabled sources of every scope.
+// LiveTvRefreshHours, or whose failure's backoff ended (see Backoff), or
+// every list when all is set, one after the other, of the enabled sources
+// of every scope.
 func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 	rows, err := s.db.Query(ctx, `SELECT a.id, a.kind, a.manifest_url, a.manifest, a.enabled, a.refreshed_at,
-		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.checked_at
+		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.checked_at, i.next_try_at
 		FROM iptv_sources i JOIN addons a ON a.id = i.addon_id LEFT JOIN users u ON u.id = a.owner_id WHERE a.enabled`)
 	if err != nil {
 		return err
@@ -383,13 +428,12 @@ func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 		confined bool
 	}
 	var list []due
-	interval := time.Duration(s.settings().LiveTvRefreshHours) * time.Hour
 	var d due
 	var manifestJSON []byte
-	var checked *time.Time
+	var checked, retry *time.Time
 	if _, err := pgx.ForEachRow(rows, []any{&d.addon.ID, &d.addon.Kind, &d.addon.ManifestURL, &manifestJSON, &d.addon.Enabled,
-		&d.addon.RefreshedAt, &d.confined, &checked}, func() error {
-		if !all && checked != nil && s.now().Sub(*checked) < interval {
+		&d.addon.RefreshedAt, &d.confined, &checked, &retry}, func() error {
+		if !all && !Due(checked, retry, s.interval(), s.now()) {
 			return nil
 		}
 		d.addon.Manifest = stremio.Manifest{}
@@ -418,25 +462,24 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 		if err != nil {
 			return nil, err
 		}
-		list, err := fetch(ctx, s.client, accountOf(addon.Kind, addon.ManifestURL), confined, partsOf(options))
+		list, err := fetch(ctx, s.requester(), accountOf(addon.Kind, addon.ManifestURL), confined, partsOf(options))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		var code string
-		switch {
-		case err == nil:
-		case errors.Is(err, stremio.ErrPrivateNetwork):
-			code = errorPrivateNetwork
-		case errors.Is(err, ErrTooLarge):
-			code = errorTooLarge
-		case errors.Is(err, ErrInvalidList), errors.Is(err, ErrLoginRefused):
-			code = errorMalformed
-		default:
-			code = errorUnreachable
-		}
-		if code != "" {
-			s.logger.Warn("An IPTV channel list could not be fetched", "source", addon.Manifest.Name, "reason", code)
-			_, err := s.db.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, error = $3 WHERE addon_id = $1", addon.ID, at, code)
+		if err != nil {
+			code := failureCode(err)
+			var after time.Duration
+			if limited, ok := errors.AsType[*RateLimitError](err); ok {
+				after = limited.RetryAfter
+			}
+			var failures int
+			if err := s.db.QueryRow(ctx, "SELECT failures FROM iptv_sources WHERE addon_id = $1", addon.ID).Scan(&failures); err != nil {
+				return nil, err
+			}
+			next := at.Add(Backoff(failures+1, s.interval(), after))
+			s.logger.Warn("An IPTV channel list could not be fetched", "source", addon.Manifest.Name, "reason", code, "retry", next.Sub(at).Round(time.Second))
+			_, err := s.db.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, error = $3, failures = failures + 1, next_try_at = $4 WHERE addon_id = $1",
+				addon.ID, at, code, next)
 			return nil, err
 		}
 		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -462,12 +505,17 @@ func storeDownload(ctx context.Context, tx pgx.Tx, source accounts.ID, list down
 		}
 	}
 	if list.got.any() {
-		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '' WHERE addon_id = $1", source, at); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '', failures = 0, next_try_at = NULL WHERE addon_id = $1", source, at); err != nil {
 			return err
 		}
 	}
 	if !list.xtream {
 		return nil
+	}
+	if list.connections != nil {
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET max_connections = $2 WHERE addon_id = $1", source, *list.connections); err != nil {
+			return err
+		}
 	}
 	if list.got.movies {
 		if err := storeTitles(ctx, tx, source, typeMovie, list.movies, nil); err != nil {
@@ -515,7 +563,7 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '' WHERE addon_id = $1", source, at)
+	_, err := tx.Exec(ctx, "UPDATE iptv_sources SET checked_at = $2, fetched_at = $2, error = '', failures = 0, next_try_at = NULL WHERE addon_id = $1", source, at)
 	return err
 }
 
@@ -573,17 +621,20 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	source := Source{Addon: list[index]}
 	o := &source.Options
-	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, `+optionColumns+`,
+	var retry *time.Time
+	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, next_try_at, max_connections, `+optionColumns+`,
 		(SELECT count(*) FROM iptv_entries WHERE addon_id = $1) FROM iptv_sources WHERE addon_id = $1`, id).
-		Scan(append(append([]any{&source.CheckedAt, &source.FetchedAt, &source.Error}, o.fields()...), &source.Channels)...)
+		Scan(append(append([]any{&source.CheckedAt, &source.FetchedAt, &source.Error, &retry, &source.MaxConnections}, o.fields()...), &source.Channels)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Source{}, addons.ErrNotFound
 	}
 	if err != nil {
 		return Source{}, err
 	}
-	if source.CheckedAt != nil {
-		next := source.CheckedAt.Add(time.Duration(s.settings().LiveTvRefreshHours) * time.Hour)
+	if retry != nil {
+		source.NextAt = retry
+	} else if source.CheckedAt != nil {
+		next := source.CheckedAt.Add(s.interval())
 		source.NextAt = &next
 	}
 	n := &source.Lineup
@@ -726,7 +777,9 @@ const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 
 // Streams lists the enabled streams of a channel that shows, best first:
 // its entries' addresses, requested with the headers their list gives, and
-// its custom streams. Each is labelled by its quality.
+// its custom streams. Each is labelled by its quality. Streams that failed
+// last (see ReportStream) come after the others, and those found dead or
+// silent are left out until their backoff ends (see hidden).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
 		return s.vodStreams(ctx, source, key)
@@ -738,23 +791,35 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	if err != nil {
 		return nil, fmt.Errorf("IPTV channel: %w", err)
 	}
-	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}') FROM iptv_streams s
+	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}'), coalesce(s.health_url, ''),
+		s.failure, s.failed_at, s.failures FROM iptv_streams s
 		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
 		WHERE s.addon_id = $1 AND s.channel_id = $2 AND s.enabled AND (s.custom_url IS NOT NULL OR e.url IS NOT NULL)
 		ORDER BY `+streamOrder, source, strings.TrimPrefix(id, prefix(source)))
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
-		var label, address string
-		var headers map[string]string
-		if err := row.Scan(&label, &address, &headers); err != nil {
-			return stremio.Stream{}, err
-		}
+	var healthy, failing []stremio.Stream
+	now := s.now()
+	var label, address, checked string
+	var headers map[string]string
+	var h health
+	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &checked, &h.failure, &h.failedAt, &h.failures}, func() error {
 		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address}
 		if len(headers) > 0 {
-			stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: headers}
+			stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: maps.Clone(headers)}
 		}
-		return stream, nil
-	})
+		switch {
+		case checked != addressHash(address) || h.failure == nil:
+			healthy = append(healthy, stream)
+		case !h.hidden(now):
+			failing = append(failing, stream)
+		}
+		// pgx decodes JSON into the map given: each row starts empty.
+		headers = nil
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return append(healthy, failing...), nil
 }
