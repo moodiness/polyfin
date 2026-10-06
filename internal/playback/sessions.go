@@ -24,6 +24,10 @@ type PlayState struct {
 	AudioStreamIndex    *int
 	SubtitleStreamIndex *int
 	VolumeLevel         *int
+	// Queued reports whether the report gave the player's queue, and Next
+	// is the item it plays after Item, zero when nothing follows.
+	Queued bool
+	Next   accounts.ID
 }
 
 // NowPlaying is what one device plays, as last reported.

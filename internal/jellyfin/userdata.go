@@ -441,13 +441,17 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	}
 	h.recordPlayback(ctx, user, device, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
-	// Preparing the next episode and making thumbnails are for videos.
+	// Videos prepare the next episode near the end and make thumbnails;
+	// tracks prepare the next track as they start, as it comes soon.
 	audio := library.AudioKind(item.Kind)
 	if !audio && event != playbackStopped && (positionKnown || event == playbackStarted) {
 		h.prepareNearTheEnd(user, deviceID, item, runtime, state.Position)
 	}
 	if !audio && event == playbackStarted {
 		h.queueImages(ctx, user, deviceID, item, mediaSource)
+	}
+	if audio && event == playbackStarted {
+		h.prepareNextTrack(user, item, state)
 	}
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()
