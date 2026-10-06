@@ -9,9 +9,10 @@ import (
 
 // VersionProgress tells how far the listing of a title's versions has
 // come since its details opened: Pending is how many of the user's addons
-// are still asked for its streams in the background, Count how many media
-// sources its details would list now, the placeholder included. Polyfin's
-// jellyfin-web script polls it to reload the title page as versions come.
+// are still asked for its streams in the background, for the first time
+// or again (see library.Service.Pending), Count how many media sources its
+// details would list now, the placeholder included. Polyfin's jellyfin-web
+// script polls it to reload the title page as versions come.
 type VersionProgress struct {
 	Pending int
 	Count   int
@@ -41,7 +42,12 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 	if item.Kind == library.KindMovie || item.Kind == library.KindEpisode {
 		// Pending first: an addon no longer asked has its streams kept, so
 		// the count that follows has its versions.
-		progress.Pending = h.Library.Pending(user, item.ID)
+		pending, err := h.Library.Pending(r.Context(), user, item.ID)
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		progress.Pending = pending
 		versions, err := h.Library.KnownVersions(r.Context(), user, item.ID)
 		if err != nil {
 			h.browseError(w, r, err)

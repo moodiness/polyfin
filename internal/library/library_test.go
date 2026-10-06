@@ -36,6 +36,9 @@ type fakeAddon struct {
 	short map[int]int
 	// metaGate, when set, holds every meta request until it is closed.
 	metaGate chan struct{}
+	// reply, when set, answers the stream and subtitle requests instead
+	// (see scriptedReplies).
+	reply func(w http.ResponseWriter, r *http.Request, resource string)
 
 	mu       sync.Mutex
 	requests []string
@@ -47,6 +50,10 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	a.requests = append(a.requests, path)
 	a.mu.Unlock()
+	if a.reply != nil && (parts[0] == "stream" || parts[0] == "subtitles") {
+		a.reply(w, r, parts[0])
+		return
+	}
 	switch {
 	case path == "manifest":
 		_ = json.NewEncoder(w).Encode(a.manifest)
@@ -151,6 +158,9 @@ func newEnv(t *testing.T) env {
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
 	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), users.Settings)
+	// Follow-ups ask addons again, while tests count their requests: only
+	// the tests of follow-ups turn them on.
+	service.followUpDelays = nil
 	return env{t: t, service: service, addons: store, users: users, admin: admin, member: member}
 }
 

@@ -68,7 +68,10 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	}
 	for _, entry := range v.addons {
 		for _, video := range lists {
+			// Their follow-ups stop first: one answering meanwhile
+			// replaces no list, and none is brought back afterwards.
 			key := streamKey{entry.addon.ID, title.Meta.Type, video}
+			s.stopFollowUps(key)
 			s.streamLists.Delete(key)
 			s.subtitleLists.Delete(key)
 		}

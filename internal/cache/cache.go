@@ -76,6 +76,26 @@ func (c *Cache[K, V]) Put(key K, value V) {
 	}
 }
 
+// Improve keeps value for key, from now on, if key is still kept and
+// better reports that value is better than the one kept, and tells whether
+// it did. Unlike a Get followed by a Put, it never brings back a key that
+// was deleted or expired meanwhile.
+func (c *Cache[K, V]) Improve(key K, value V, better func(kept V) bool) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	element, ok := c.entries[key]
+	if !ok {
+		return false
+	}
+	e := element.Value.(*entry[K, V])
+	if c.now().Sub(e.stored) > c.lifetime() || !better(e.value) {
+		return false
+	}
+	e.value, e.stored = value, c.now()
+	c.order.MoveToFront(element)
+	return true
+}
+
 // Delete forgets key.
 func (c *Cache[K, V]) Delete(key K) {
 	c.mu.Lock()

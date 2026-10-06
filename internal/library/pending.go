@@ -10,8 +10,9 @@ import (
 
 // Item details answer with the versions Polyfin knows, without waiting for
 // the addons whose streams it does not remember: it asks them in the
-// background (see VersionsNow), and Pending tells how many it still asks,
-// for a page to add their versions as they come.
+// background (see VersionsNow), then asks them again a little later (see
+// followUpList), and Pending tells how many it still asks, for a page to
+// add their versions as they come.
 
 const (
 	// askedFor is how long the addons asked for a user's title are counted;
@@ -47,14 +48,26 @@ func (s *Service) KnownVersions(ctx context.Context, user accounts.User, id acco
 }
 
 // Pending is how many addons are still asked, in the background, for the
-// streams of a user's title (see VersionsNow). An addon that fails is no
-// longer asked: its versions are left out, as they are when a request
-// waits for it.
-func (s *Service) Pending(user accounts.User, id accounts.ID) int {
+// streams of a user's title: for the first time (see VersionsNow), or
+// again, their follow-ups scheduled or running (see followUpList). An
+// addon that fails is no longer asked: its versions are left out, as they
+// are when a request waits for it.
+func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.ID) (int, error) {
+	// The addons asked for the first time are counted first: one that
+	// answers meanwhile has its follow-up scheduled before it stops being
+	// asked, so it is counted at least once.
+	pending := 0
 	if a, ok := s.asked.Get(askedKey{user.ID, id}); ok {
-		return int(a.pending.Load())
+		pending = int(a.pending.Load())
 	}
-	return 0
+	t, v, err := s.target(ctx, user, id)
+	if err != nil {
+		return 0, err
+	}
+	if AudioKind(t.kind) {
+		return pending, nil
+	}
+	return pending + s.streamFollowUps(streamServing(v, t), t), nil
 }
 
 // askStreams asks addons for a user's title's streams in the background,
