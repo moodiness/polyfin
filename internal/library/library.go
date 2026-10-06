@@ -146,13 +146,14 @@ type metaKey struct {
 // change applies at once.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	s := &Service{
-		db:             db,
-		addons:         store,
-		client:         client,
-		logger:         logger,
-		now:            time.Now,
-		settings:       settings,
-		metas:          cache.NewLasting[metaKey, fetched[stremio.Meta]](4000, func() time.Duration { return metaKept }, time.Now),
+		db:       db,
+		addons:   store,
+		client:   client,
+		logger:   logger,
+		now:      time.Now,
+		settings: settings,
+		metas: cache.NewLasting[metaKey, fetched[stremio.Meta]](4000, func() time.Duration { return metaKept }, time.Now).
+			Sized(64<<20, fetchedSize[stremio.Meta]),
 		versions:       cache.New[accounts.ID, Version](20000, versionsTTL),
 		asked:          cache.New[askedKey, *asked](maxAsked, askedFor),
 		followUps:      followUps{running: map[followKey]*followUp{}},
@@ -162,8 +163,9 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		music:          eclipse.NewClient(client),
 	}
 	clock := func() time.Time { return s.now() }
-	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock)
-	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock)
+	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
+	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
+		Sized(16<<20, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[string]](1000, s.keptCatalogLife, clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.readAhead = true

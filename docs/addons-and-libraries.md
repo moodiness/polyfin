@@ -83,7 +83,7 @@ A row lists its own items. When an app asks for another kind, the library derive
 
 An album or artist that a song only names is found again through the addon's search when opened. So addons without catalogs still serve search and album, artist and playlist pages.
 
-Polyfin keeps what music addons answer. Catalog pages are read again after **Refresh catalogs every (minutes)**, and album, artist and playlist pages after 6 hours. A page due to be read again is still served at once, for up to 24 more hours, while Polyfin asks the addon again in the background. Searches are kept 10 minutes. At most 8 requests for pages go to one addon at a time.
+Polyfin keeps what music addons answer. Catalog pages are read again after **Refresh catalogs after (minutes)**, and album, artist and playlist pages after 6 hours. A page due to be read again is still served at once, for up to 24 more hours, while Polyfin asks the addon again in the background. Searches are kept 10 minutes. At most 8 requests for pages go to one addon at a time.
 
 ### Instant mixes and lyrics
 

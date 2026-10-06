@@ -56,6 +56,10 @@ type fetched[T any] struct {
 // fresh reports whether f is at most life old at now.
 func (f fetched[T]) fresh(now time.Time, life time.Duration) bool { return now.Sub(f.at) <= life }
 
+// fetchedSize is the size of what an addon gave, as the JSON of its value
+// measures it (see cache.Sized).
+func fetchedSize[T any](f fetched[T]) int { return cache.JSONSize(f.value) }
+
 // keptCatalogLife is how long catalog pages and automatic images are kept,
 // stale ones included.
 func (s *Service) keptCatalogLife() time.Duration { return s.catalogLife() + staleCatalogs }

@@ -117,4 +117,3 @@ func TestVersionListsAreKeptForTheirSetLife(t *testing.T) {
 		t.Errorf("1 minute later, kept 2 minutes: %d stream requests", got)
 	}
 }
-
