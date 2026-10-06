@@ -99,7 +99,7 @@ Chapters come without chapter images unless you turn those on (see [Scrubbing th
 The first play of a version waits for some reads. **Prepare playback in advance** does them before the user presses Play:
 
 - as soon as a title's details open in an app, it analyzes the first 2 versions the title would play, those a play reads at once, and again when an addon answering later puts another version first;
-- it then reads each version's keyframe index and where its subtitle tracks sit, which HLS playback needs;
+- it then reads each version's keyframe index and where its subtitle tracks sit, which HLS playback needs, and the bytes of its first segment (see [Reading the sources](#reading-the-sources));
 - it readies the next episode the same way, with its versions and subtitles, once the episode playing has 9 minutes left;
 - as a song or audiobook starts, it resolves the next track of the app's queue (else of the album) the same way: where it streams from, and its analysis when its addon does not describe it;
 - when an app asks for Continue Watching or Next Up, it asks the addons, in the background, for the versions of the first 10 movies and episodes of each row. A title opened from these rows then lists its versions at once, instead of a placeholder while the addons answer (see [Title pages](#title-pages)). The first version of the first 2 titles of each row is analyzed too, so that resuming from these rows starts at once.
@@ -176,6 +176,31 @@ Apps that offer SyncPlay, jellyfin-web first, play the same titles in step acros
 **Compared with Jellyfin:**
 
 - Like Jellyfin, Polyfin keeps the groups in memory.
+
+## Reading the sources
+
+FFmpeg, ffprobe and relayed apps read a version's file through Polyfin's source cache (`POLYFIN_CACHE_SIZE`). It fetches the file from the source in blocks and keeps them on disk for seeks.
+
+- A file is read over up to 3 connections when its host serves each one at its own pace: one serves what is being read, the others the stretches read next. A host that asks to slow down (`429`, `503`), refuses one more connection, or serves several no faster than one, is read over one connection per file for an hour.
+- Each request of FFmpeg or of an app is served on its own, the newest first. A seek is not slowed down by the request FFmpeg is leaving, and a request that ends stops what it waited for.
+- Polyfin reads further ahead of a playback as it goes on, up to 256 MiB (at most an eighth of the cache). While FFmpeg waits for the app, the connection stays open for 30 seconds instead of being opened again for each segment.
+- When a stream's address redirects, as addons' resolvers do, Polyfin keeps the address it led to for its own reads of the file. Each connection then skips the resolver, and the file cannot change under a playback. Apps sent to the source still get the addon's address. An address that stops working sends Polyfin back to the addon's, then to a renewed link.
+- Once a version's keyframe index is known, Polyfin reads the bytes of its first segment before the app asks for them, 64 MiB at most: from `PlaybackInfo`, and when a title's details open with [Prepare playback in advance](#preparing-playback-in-advance) on. For a resume, it reads the file's head, which FFmpeg probes, and the segment the playback resumes at. The index of a Matroska file is read during its analysis.
+- A file relayed to an app is served from the same cache: what was read before takes no request, and a seek reads only what is missing.
+- Before sending an app to a source for direct play, Polyfin checks that it answers, unless it answered Polyfin's own reads at that address within 2 minutes, as the analysis just did.
+
+### Sources that fail
+
+- A source that sends no headers within 15 seconds fails.
+- A connection that sends nothing for 10 seconds is opened again. A host that then does not answer within a few seconds fails, and the segments waiting for it get an error within seconds instead of two minutes.
+- An answer of another size than the file, such as an error page or a link now naming another file, is asked once more, after renewing the link when the file was known, then fails. Its bytes are never served as the file's. A `416` that tells another size counts the same.
+- Once an addon's file sizes proved right, the size it announces for a file is checked at the first answer: another file fails at once. Rounded or wrong sizes are never used.
+- The analysis of a version whose source fails stops at once, and the version is skipped for 15 minutes: the next one is tried within seconds. A version whose source fails while it plays is skipped the same way. The log tells what the source answered, never its address.
+- A host that failed to serve a version's keyframe index is asked again at the next play. A failed renewal of a link never counts as the file's failure.
+
+**For app developers:**
+
+- `PlaybackInfo` for a version played over HLS starts reading the bytes of its first segment; with `StartTimeTicks`, those of the segment the app resumes at.
 
 ## Scrubbing thumbnails and chapter images
 
