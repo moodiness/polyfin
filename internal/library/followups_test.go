@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,52 +32,79 @@ func scriptedReplies(replies <-chan int) func(http.ResponseWriter, *http.Request
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		if resource == "stream" {
-			streams := make([]stremio.Stream, n)
-			for i := range streams {
-				streams[i] = stremio.Stream{Name: fmt.Sprintf("Source %d", i+1), URL: fmt.Sprintf("https://cdn.example/movie/%d.mkv", i+1)}
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
-			return
+		numbers := make([]int, n)
+		for i := range numbers {
+			numbers[i] = i + 1
 		}
-		subtitles := make([]stremio.Subtitle, n)
-		for i := range subtitles {
-			subtitles[i] = stremio.Subtitle{ID: stremio.Text(fmt.Sprint(i + 1)), URL: fmt.Sprintf("https://cdn.example/movie/%d.srt", i+1), Lang: "eng"}
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": subtitles})
+		answerNumbered(w, resource, numbers)
 	}
 }
 
+// answerNumbered answers a request for a resource with the streams or
+// subtitles numbered as numbers lists: stream 2 is the second stream of an
+// answer of scriptedReplies, whatever the answer.
+func answerNumbered(w http.ResponseWriter, resource string, numbers []int) {
+	if resource == "stream" {
+		streams := make([]stremio.Stream, len(numbers))
+		for i, n := range numbers {
+			streams[i] = stremio.Stream{Name: fmt.Sprintf("Source %d", n), URL: fmt.Sprintf("https://cdn.example/movie/%d.mkv", n)}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		return
+	}
+	subtitles := make([]stremio.Subtitle, len(numbers))
+	for i, n := range numbers {
+		subtitles[i] = stremio.Subtitle{ID: stremio.Text(fmt.Sprint(n)), URL: fmt.Sprintf("https://cdn.example/movie/%d.srt", n), Lang: "eng"}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": subtitles})
+}
+
 // followEnv serves one movie from an addon whose streams and subtitles
-// the test scripts, followed up after short delays.
+// the test scripts, followed up after short delays, on a clock the test
+// moves.
 type followEnv struct {
 	env
 	addon   *fakeAddon
 	replies chan int
 	movie   accounts.ID
+	elapsed *atomic.Int64
 }
 
 func newFollowEnv(t *testing.T, delays ...time.Duration) followEnv {
 	t.Helper()
+	replies := make(chan int, 10)
+	e := repliedEnv(t, scriptedReplies(replies), delays...)
+	e.replies = replies
+	return e
+}
+
+// repliedEnv is a followEnv whose addon answers its stream and subtitle
+// requests with reply.
+func repliedEnv(t *testing.T, reply func(http.ResponseWriter, *http.Request, string), delays ...time.Duration) followEnv {
+	t.Helper()
 	e := newEnv(t)
 	e.service.followUpDelays = delays
+	elapsed := new(atomic.Int64)
+	e.service.now = func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) }
 	movies := titles("movie", 1)
-	replies := make(chan int, 10)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "gathered", Name: "Gathered", Version: "1", Types: []string{"movie"},
 			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}, {Name: "subtitles"}},
 			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}},
 		catalogs: map[string][]stremio.Meta{"movie/top": movies},
 		metas:    map[string]stremio.Meta{"movie/" + movies[0].ID: movies[0]},
-		reply:    scriptedReplies(replies),
+		reply:    reply,
 	}
 	e.install(addons.Shared(), addon)
 	page, err := e.service.Children(t.Context(), e.member, e.library(e.member, "Top").ID, 0, 10, "")
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("listing: %+v %v", page, err)
 	}
-	return followEnv{env: e, addon: addon, replies: replies, movie: page.Items[0].ID}
+	return followEnv{env: e, addon: addon, movie: page.Items[0].ID, elapsed: elapsed}
 }
+
+// wait moves the clock d ahead.
+func (e followEnv) wait(d time.Duration) { e.elapsed.Add(int64(d)) }
 
 // asked counts the addon's requests for a resource.
 func (e followEnv) asked(resource string) int {

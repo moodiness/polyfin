@@ -140,29 +140,31 @@ func (s *Service) Versions(ctx context.Context, user accounts.User, id accounts.
 }
 
 // CachedVersions lists an item's versions only if every addon's streams for
-// it are still remembered, without asking the addons: listings must not
-// ask addons for the streams of every title they show.
+// it are still remembered, stale ones included (see staleLists), without
+// asking the addons: listings must not ask addons for the streams of every
+// title they show.
 func (s *Service) CachedVersions(ctx context.Context, user accounts.User, id accounts.ID) ([]Version, bool) {
 	versions, complete, err := s.versionsOf(ctx, user, id, knownOnly)
 	return versions, err == nil && complete
 }
 
 // listing is how far versionsOf and subtitlesOf go for the addons whose
-// lists for a title are not remembered.
+// lists for a title are not remembered, or stale (see staleLists).
 type listing int
 
 const (
-	// knownOnly asks them nothing.
+	// knownOnly asks them nothing, and lists a stale list as it is.
 	knownOnly listing = iota
 	// askLater asks them in the background, for later requests (see
-	// VersionsNow).
+	// VersionsNow), and lists a stale list meanwhile.
 	askLater
-	// waitAll asks them and waits for their answers.
+	// waitAll asks them, those of stale lists included, and waits for
+	// their answers.
 	waitAll
 )
 
 // versionsOf lists an item's versions, and reports whether every addon's
-// streams are in.
+// streams are in: known, and not asked again.
 func (s *Service) versionsOf(ctx context.Context, user accounts.User, id accounts.ID, mode listing) ([]Version, bool, error) {
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
@@ -188,6 +190,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	}
 	serving := streamServing(v, t)
 	lists := make([][]stremio.Stream, len(serving))
+	// unknown are the addons whose streams are not known, or asked again.
 	var unknown []installed
 	if mode == waitAll {
 		var wg sync.WaitGroup
@@ -210,11 +213,13 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 				lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
 				continue
 			}
-			streams, ok := s.streamLists.Get(streamKey{entry.addon.ID, t.metaType, t.id})
-			if !ok {
+			// A stale list is listed until the addon answers again, which
+			// item details ask it to.
+			l, fresh, ok := listOf(s, s.streamLists, streamKey{entry.addon.ID, t.metaType, t.id})
+			if !ok || !fresh && mode == askLater {
 				unknown = append(unknown, entry)
 			}
-			lists[i] = streams
+			lists[i] = l.items
 		}
 		if mode == askLater {
 			s.askStreams(ctx, user, t, unknown)
@@ -282,7 +287,9 @@ func (s *Service) KnownVersion(id accounts.ID) (Version, bool) {
 
 // Renew asks the addon that listed a version for its streams again and
 // returns the same file with the link the addon gives now, for links that
-// expired. Every listing of the version uses the new link afterwards.
+// expired. Every listing of the version uses the new link afterwards. The
+// answer replaces the addon's list for the title, which keeps the items a
+// running follow-up keeps listed (see keepAnswer).
 func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	addon, err := s.addons.Find(ctx, old.Origin.Addon)
 	if errors.Is(err, addons.ErrNotFound) {
@@ -305,7 +312,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	s.streamLists.Put(streamKey{addon.ID, old.Origin.Type, old.Origin.ID}, streams)
+	keepAnswer(s, s.streamLists, streamKind, streamKey{addon.ID, old.Origin.Type, old.Origin.ID}, streams, false)
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
 	for _, stream := range streams {
 		if !stream.Playable() {
@@ -338,27 +345,26 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 	return version
 }
 
-// streams lists an addon's streams for a title: those remembered, else
-// its answer, which every caller asking meanwhile shares, item details'
-// background requests included (see VersionsNow). An answer stored is
-// followed up (see followUpList).
+// streams lists an addon's streams for a title: those remembered while
+// fresh, else its answer, which every caller asking meanwhile shares, item
+// details' background requests included (see VersionsNow). An answer
+// stored is followed up; until the follow-ups end, it is listed with the
+// items it lacks of the stale list it replaced (see followUpList).
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
 	// An IPTV source's line-up changes its streams at once.
 	if entry.addon.IPTV() {
 		return s.fetchStreams(ctx, entry, contentType, id)
 	}
 	key := streamKey{entry.addon.ID, contentType, id}
-	if streams, ok := s.streamLists.Get(key); ok {
-		return streams, nil
+	if l, fresh, _ := listOf(s, s.streamLists, key); fresh {
+		return l.items, nil
 	}
 	return shared(ctx, &s.flight, "streams "+key.addon.String()+" "+contentType+" "+id, func(ctx context.Context) ([]stremio.Stream, error) {
 		streams, err := s.fetchStreams(ctx, entry, contentType, id)
 		if err != nil {
 			return nil, err
 		}
-		s.streamLists.Put(key, streams)
-		s.followStreams(ctx, entry, key)
-		return streams, nil
+		return s.followStreams(ctx, entry, key, streams), nil
 	})
 }
 
@@ -406,14 +412,24 @@ func (s *Service) fetchStreams(ctx context.Context, entry installed, contentType
 	return s.iptv.Streams(ctx, entry.addon.ID, id)
 }
 
-// versionID identifies a stream of an item by its file when the addon names
-// it, and by its URL otherwise.
+// versionID identifies a stream of an item by its file (see fileIdentity).
 func versionID(item accounts.ID, version Version) accounts.ID {
-	identity := version.URL
-	if version.Filename != "" && version.Size > 0 {
-		identity = version.Filename + "|" + strconv.FormatInt(version.Size, 10)
+	return itemID("version|" + item.String() + "|" + fileIdentity(version.URL, version.Filename, version.Size))
+}
+
+// streamIdentity is the file a stream is, the same in every answer of its
+// addon however its link changes (see fileIdentity).
+func streamIdentity(stream stremio.Stream) string {
+	return fileIdentity(stream.URL, stream.BehaviorHints.Filename, int64(stream.BehaviorHints.VideoSize))
+}
+
+// fileIdentity tells a file by its name and size when the addon names it,
+// and by its URL otherwise.
+func fileIdentity(url, filename string, size int64) string {
+	if filename != "" && size > 0 {
+		return filename + "|" + strconv.FormatInt(size, 10)
 	}
-	return itemID("version|" + item.String() + "|" + identity)
+	return url
 }
 
 // versionName joins the stream's name and description lines into one line,
@@ -442,9 +458,10 @@ func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts
 }
 
 // SubtitlesNow lists, as Subtitles does, the subtitle files known now,
-// without waiting for addons: it asks those whose lists are not remembered
-// in the background, for later requests. complete reports whether every
-// addon's list was known.
+// without waiting for addons: it asks those whose lists are not remembered,
+// or stale, in the background, for later requests, a stale list being
+// listed meanwhile. complete reports whether every addon's list was known,
+// none asked again.
 func (s *Service) SubtitlesNow(ctx context.Context, user accounts.User, id accounts.ID) (subtitles []ExternalSubtitle, complete bool, err error) {
 	return s.subtitlesOf(ctx, user, id, askLater)
 }
@@ -477,14 +494,18 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 	} else {
 		detached := context.WithoutCancel(ctx)
 		for i, entry := range serving {
-			subtitles, ok := s.subtitleLists.Get(streamKey{entry.addon.ID, t.metaType, t.id})
-			lists[i], complete = subtitles, complete && ok
-			if !ok && mode == askLater {
-				go func() {
-					if _, err := s.subtitleList(detached, entry, t); err != nil {
-						s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
-					}
-				}()
+			l, fresh, ok := listOf(s, s.subtitleLists, streamKey{entry.addon.ID, t.metaType, t.id})
+			lists[i] = l.items
+			// A stale list is listed until the addon answers again.
+			if !ok || !fresh && mode == askLater {
+				complete = false
+				if mode == askLater {
+					go func() {
+						if _, err := s.subtitleList(detached, entry, t); err != nil {
+							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
+						}
+					}()
+				}
 			}
 		}
 	}
@@ -498,7 +519,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 			if !subtitle.Valid() {
 				continue
 			}
-			sum := sha256.Sum256([]byte(serving[i].addon.ID.String() + "|" + string(subtitle.ID) + "|" + subtitle.URL))
+			sum := sha256.Sum256([]byte(serving[i].addon.ID.String() + "|" + subtitleIdentity(subtitle)))
 			var subtitleID accounts.ID
 			copy(subtitleID[:], sum[:16])
 			if seen[subtitleID] {
@@ -512,23 +533,27 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 	return result, complete, nil
 }
 
-// subtitleList lists an addon's subtitles for a title: those remembered,
-// else its answer, which every caller asking meanwhile shares. An answer
-// stored is followed up (see followUpList).
+// subtitleList lists an addon's subtitles for a title: those remembered
+// while fresh, else its answer, which every caller asking meanwhile shares.
+// An answer stored is followed up; until the follow-ups end, it is listed
+// with the items it lacks of the stale list it replaced (see followUpList).
 func (s *Service) subtitleList(ctx context.Context, entry installed, t target) ([]stremio.Subtitle, error) {
 	key := streamKey{entry.addon.ID, t.metaType, t.id}
-	if subtitles, ok := s.subtitleLists.Get(key); ok {
-		return subtitles, nil
+	if l, fresh, _ := listOf(s, s.subtitleLists, key); fresh {
+		return l.items, nil
 	}
 	return shared(ctx, &s.flight, "subtitles "+key.addon.String()+" "+t.metaType+" "+t.id, func(ctx context.Context) ([]stremio.Subtitle, error) {
 		subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
 		if err != nil {
 			return nil, err
 		}
-		s.subtitleLists.Put(key, subtitles)
-		s.followSubtitles(ctx, entry, key)
-		return subtitles, nil
+		return s.followSubtitles(ctx, entry, key, subtitles), nil
 	})
+}
+
+// subtitleIdentity is the file a subtitle is among those of its addon.
+func subtitleIdentity(subtitle stremio.Subtitle) string {
+	return string(subtitle.ID) + "|" + subtitle.URL
 }
 
 // fetchSubtitles asks an addon for the subtitles of a title.

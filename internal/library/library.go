@@ -55,8 +55,10 @@ type Service struct {
 	// automaticImage).
 	libraryImages *cache.Cache[pageKey, string]
 
-	streamLists   *cache.Cache[streamKey, []stremio.Stream]
-	subtitleLists *cache.Cache[streamKey, []stremio.Subtitle]
+	// streamLists and subtitleLists are the addons' lists for each title,
+	// kept stale once expired (see staleLists).
+	streamLists   *cache.Cache[streamKey, list[stremio.Stream]]
+	subtitleLists *cache.Cache[streamKey, list[stremio.Subtitle]]
 	versions      *cache.Cache[accounts.ID, Version]
 	// asked counts, for each user's title, the addons still asked for its
 	// streams in the background (see VersionsNow).
@@ -152,15 +154,16 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
 	s.libraryImages = cache.NewLasting[pageKey, string](1000, s.catalogLife, clock)
-	s.streamLists = cache.NewLasting[streamKey, []stremio.Stream](2000, s.listLife, clock)
-	s.subtitleLists = cache.NewLasting[streamKey, []stremio.Subtitle](2000, s.listLife, clock)
+	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
+	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
 	s.musicPages = cache.NewLasting[musicKey, musicPage](2000, s.catalogLife, clock)
 	return s
 }
 
 // catalogLife is how long catalog pages are kept, and listLife how long a
-// title's version and subtitle lists from the addons are: the settings'
-// CatalogRefreshMinutes and VersionListMinutes.
+// title's version and subtitle lists from the addons are fresh: the
+// settings' CatalogRefreshMinutes and VersionListMinutes. keptListLife is
+// how long those lists are kept, stale ones included (see staleLists).
 func (s *Service) catalogLife() time.Duration {
 	return time.Duration(s.settings().CatalogRefreshMinutes) * time.Minute
 }
@@ -168,6 +171,15 @@ func (s *Service) catalogLife() time.Duration {
 func (s *Service) listLife() time.Duration {
 	return time.Duration(s.settings().VersionListMinutes) * time.Minute
 }
+
+func (s *Service) keptListLife() time.Duration {
+	return s.listLife() + staleLists
+}
+
+// SetClock replaces the clock the service measures time on, before the
+// service is used. Tests move it to let lists expire; the server keeps
+// time.Now.
+func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
 // words returns the generated names in the current server language.
 func (s *Service) words() words {

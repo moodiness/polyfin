@@ -62,6 +62,11 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 func (c *Cache[K, V]) Put(key K, value V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.put(key, value)
+}
+
+// put is Put, with c.mu held.
+func (c *Cache[K, V]) put(key K, value V) {
 	if element, ok := c.entries[key]; ok {
 		e := element.Value.(*entry[K, V])
 		e.value, e.stored = value, c.now()
@@ -76,24 +81,31 @@ func (c *Cache[K, V]) Put(key K, value V) {
 	}
 }
 
-// Improve keeps value for key, from now on, if key is still kept and
-// better reports that value is better than the one kept, and tells whether
-// it did. Unlike a Get followed by a Put, it never brings back a key that
-// was deleted or expired meanwhile.
-func (c *Cache[K, V]) Improve(key K, value V, better func(kept V) bool) bool {
+// Update keeps for key, from now on, what change makes of the value kept,
+// if any (ok is false when none is, the key being deleted or expired), and
+// tells whether it did: change reports whether to keep the value it
+// returns. Unlike a Get followed by a Put, nothing changes the key in
+// between, so change can refuse to bring back a key deleted or expired
+// meanwhile. change must not use the cache.
+func (c *Cache[K, V]) Update(key K, change func(kept V, ok bool) (V, bool)) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	var kept V
 	element, ok := c.entries[key]
-	if !ok {
-		return false
+	if ok {
+		if e := element.Value.(*entry[K, V]); c.now().Sub(e.stored) > c.lifetime() {
+			c.order.Remove(element)
+			delete(c.entries, key)
+			ok = false
+		} else {
+			kept = e.value
+		}
 	}
-	e := element.Value.(*entry[K, V])
-	if c.now().Sub(e.stored) > c.lifetime() || !better(e.value) {
-		return false
+	value, keep := change(kept, ok)
+	if keep {
+		c.put(key, value)
 	}
-	e.value, e.stored = value, c.now()
-	c.order.MoveToFront(element)
-	return true
+	return keep
 }
 
 // Delete forgets key.

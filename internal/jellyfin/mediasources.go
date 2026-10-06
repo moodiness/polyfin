@@ -94,11 +94,11 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 }
 
 // knownPlayable is what item details show of a movie or an episode: the
-// versions and subtitles known now, without waiting for addons, which are
-// asked for the others in the background (see library.Service.VersionsNow).
-// complete reports whether every addon's versions were known. Like
-// playable, it leaves out versions that recently failed and those taller
-// than the user's group.
+// versions and subtitles known now, stale lists' included, without waiting
+// for addons, which are asked for the others in the background (see
+// library.Service.VersionsNow). complete reports whether every addon's
+// versions were known, and none asked again. Like playable, it leaves out
+// versions that recently failed and those taller than the user's group.
 func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item) (playable, bool, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	versions, complete, err := h.Library.VersionsNow(ctx, user, item.ID)
@@ -113,8 +113,9 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 }
 
 // cachedPlayable is what listings show of a title's versions: only what is
-// already known, as asking addons for every listed title is too costly.
-// Like playable, it leaves out versions taller than the user's group.
+// already known, stale lists included, as asking addons for every listed
+// title is too costly. Like playable, it leaves out versions taller than
+// the user's group.
 func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item library.Item) playable {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	if item.Kind == library.KindRecording {

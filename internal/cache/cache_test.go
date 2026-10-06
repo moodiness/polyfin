@@ -54,31 +54,35 @@ func TestNewKeepsEntriesForItsTTL(t *testing.T) {
 	}
 }
 
-func TestImproveReplacesOnlyAKeptValueWithABetterOne(t *testing.T) {
+func TestUpdateReplacesWhatIsKeptAsChangeDecides(t *testing.T) {
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	c := NewLasting[string, int](10, func() time.Duration { return 10 * time.Minute }, func() time.Time { return now })
-	larger := func(value int) func(int) bool { return func(kept int) bool { return value > kept } }
+	// larger keeps value over a smaller kept one, and only over a kept one.
+	larger := func(value int) func(int, bool) (int, bool) {
+		return func(kept int, ok bool) (int, bool) { return value, ok && value > kept }
+	}
 	c.Put("kept", 2)
-	if c.Improve("kept", 1, larger(1)) {
-		t.Error("a worse value replaced the one kept")
+	if c.Update("kept", larger(1)) {
+		t.Error("a refused value replaced the one kept")
 	}
 	now = now.Add(9 * time.Minute)
-	if !c.Improve("kept", 3, larger(3)) {
-		t.Error("a better value was refused")
+	if !c.Update("kept", larger(3)) {
+		t.Error("an accepted value was refused")
 	}
 	// Replaced, the value is kept from then on.
 	now = now.Add(9 * time.Minute)
 	if v, ok := c.Get("kept"); !ok || v != 3 {
-		t.Fatalf("improved: %d %v", v, ok)
+		t.Fatalf("updated: %d %v", v, ok)
 	}
-	// Deleted or expired, a key is not brought back.
+	// Deleted or expired, a key is not kept: change is told, and need not
+	// bring it back.
 	c.Delete("kept")
-	if c.Improve("kept", 4, larger(4)) {
+	if c.Update("kept", larger(4)) {
 		t.Error("a deleted key was brought back")
 	}
 	c.Put("expiring", 1)
 	now = now.Add(11 * time.Minute)
-	if c.Improve("expiring", 5, larger(5)) {
+	if c.Update("expiring", larger(5)) {
 		t.Error("an expired key was brought back")
 	}
 	if _, ok := c.Get("kept"); ok {
@@ -86,5 +90,12 @@ func TestImproveReplacesOnlyAKeptValueWithABetterOne(t *testing.T) {
 	}
 	if _, ok := c.Get("expiring"); ok {
 		t.Error("expired, still kept")
+	}
+	// A change may store a value where none is kept.
+	if !c.Update("new", func(kept int, ok bool) (int, bool) { return kept + 6, !ok }) {
+		t.Error("a value for a key not kept was refused")
+	}
+	if v, ok := c.Get("new"); !ok || v != 6 {
+		t.Errorf("stored where none was kept: %d %v", v, ok)
 	}
 }

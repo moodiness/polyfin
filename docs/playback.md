@@ -43,10 +43,18 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 A title's page opens as soon as its description is ready, without waiting for the stream addons, some of which are slow. It lists the versions Polyfin already knows: those of the addons that answered for the title within **Keep version lists for (minutes)**, and those of IPTV sources. Polyfin asks the other addons in the background meanwhile.
 
+A title opened again once **Keep version lists for (minutes)** has passed shows the versions known before at once, even old ones, while Polyfin asks the addons again. For this, Polyfin keeps an addon's list for 24 hours after that time. Listings may show these versions too.
+
+- Play waits for the addon's new answer, as for an addon asked for the first time.
+- The new answer replaces the old list. The versions it lacks stay listed after its own until Polyfin stops asking the addon again (see below): an addon that gathers other addons' streams often answers first with only part of them. They still play meanwhile.
+- Once Polyfin stops asking, the list is the addon's last answer alone: the versions the addon no longer lists disappear.
+- [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops the old lists too.
+- Subtitles from the addons are kept the same way.
+
 Some addons gather other addons' streams. They answer the first request for a title with the streams that came in within their own time limit, and get the others moments later. So Polyfin asks an addon again 10 seconds after its first answer for a title, and once more 30 seconds later if that answer listed more playable streams:
 
-- Polyfin keeps the longer list, from then on for **Keep version lists for (minutes)**. It never replaces a list with a shorter one.
-- It stops at the first answer that lists no more streams, at an error, or once the list is dropped, by [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) or at the end of **Keep version lists for (minutes)**. A late answer never brings back a dropped list.
+- Polyfin keeps the longer list, from then on for **Keep version lists for (minutes)**. It never replaces a list with a shorter one. Each answer is compared with the addon's previous answer, not with the old versions still listed after it.
+- It stops at the first answer that lists no more streams, at an error, or once the list is dropped, by [Refresh metadata](jellyfin-compatibility.md#refresh-metadata), or has expired, at the end of **Keep version lists for (minutes)**. A late answer never brings back a dropped list, nor makes an expired one current again.
 - It asks again only when it asked the addon itself. A list it already kept is used as it is. IPTV sources are never asked again: their streams are Polyfin's own.
 - Subtitles from the addons are asked again the same way, and the longer list kept.
 - Opening a title and playing never wait for these requests.
@@ -66,8 +74,8 @@ In apps:
 
 **For app developers:**
 
-- Item details (`/Items/{id}`, `/Users/{userId}/Items/{id}`) describe the versions known when asked. With none known, they describe one placeholder source under the title's own identifier, which plays the first version. `PlaybackInfo` waits for every addon asked for the first time, joining the requests the details started, but never for an addon asked again.
-- `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder. Items other than movies and episodes answer `0` for both. Polyfin's web player script polls it every second while `Pending` is above `0`, for at most 90 seconds. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each). When `Count` is above what the version menu lists, or differs from it once `Pending` is `0`, the script asks for the item's details (`/Users/{userId}/Items/{id}`) and lists their media sources in the menu.
+- Item details (`/Items/{id}`, `/Users/{userId}/Items/{id}`) describe the versions known when asked, an expired list's included. With none known, they describe one placeholder source under the title's own identifier, which plays the first version. `PlaybackInfo` waits for every addon asked for the first time, or asked again because its list expired, joining the requests the details started, but never for an addon asked again after an answer.
+- `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder. It drops when the versions an addon's new answer lacked are no longer listed. Items other than movies and episodes answer `0` for both. Polyfin's web player script polls it every second while `Pending` is above `0`, for at most 90 seconds. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each). When `Count` is above what the version menu lists, or differs from it once `Pending` is `0`, the script asks for the item's details (`/Users/{userId}/Items/{id}`) and lists their media sources in the menu.
 - With **Prepare playback in advance** on, `GET /UserItems/Resume`, `GET /Users/{userId}/Items/Resume` and `GET /Shows/NextUp` queue the first 10 movies and episodes of their answer before answering, and never wait for them. Each queued title is listed as `PlaybackInfo` lists it, waiting for every addon and joining any request already under way.
 
 ## Chapters
