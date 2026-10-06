@@ -415,16 +415,16 @@ export default function ConversionSection({
           />
         </FieldRow>
         <FieldRow
-          anchor="ahead-segments"
-          label={c.aheadSegments}
-          help={c.aheadSegmentsHelp}
-          error={error('ahead-segments')}
+          anchor="ahead-seconds"
+          label={c.aheadSeconds}
+          help={c.aheadSecondsHelp(range('aheadSeconds'))}
+          error={error('ahead-seconds')}
         >
           <NumberInput
-            {...limits('aheadSegments')}
+            {...limits('aheadSeconds')}
             step={1}
-            {...number('ahead-segments', form.aheadSegments, (value) =>
-              update({ aheadSegments: Math.trunc(value) }),
+            {...number('ahead-seconds', form.aheadSeconds, (value) =>
+              update({ aheadSeconds: Math.trunc(value) }),
             )}
           />
         </FieldRow>

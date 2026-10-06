@@ -228,11 +228,11 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
-    anchor: 'ahead-segments',
-    label: (t) => c(t).aheadSegments,
-    help: (t) => c(t).aheadSegmentsHelp,
+    anchor: 'ahead-seconds',
+    label: (t) => c(t).aheadSeconds,
+    help: (t, r) => c(t).aheadSecondsHelp(r('aheadSeconds')),
     keywords: ['throttle'],
-    codes: ['invalid_ahead_segments'],
+    codes: ['invalid_ahead_seconds'],
   },
   // Content
   {
@@ -326,7 +326,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'thumbnails',
     anchor: 'trickplay-interval',
     label: (t) => s(t).trickplayInterval,
-    help: (t) => s(t).trickplayIntervalHelp,
+    help: (t, r) => s(t).trickplayIntervalHelp(r('trickplayInterval')),
     codes: ['invalid_trickplay_interval'],
   },
   {

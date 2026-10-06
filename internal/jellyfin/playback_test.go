@@ -348,8 +348,11 @@ func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
 	}
 	base := strings.Split(target, "master.m3u8")[0]
 	_, _, media := get(base + strings.TrimSpace(strings.Split(master, "\n")[2]))
-	for _, part := range []string{"#EXT-X-TARGETDURATION:7\n", "#EXT-X-MAP:URI=\"hls1/main/-1.mp4?DeviceId=",
-		"#EXTINF:6.000000, nodesc\nhls1/main/0.mp4?", "#EXTINF:6.500000, nodesc\nhls1/main/1.mp4?", "#EXTINF:2.508000, nodesc\nhls1/main/2.mp4?", "#EXT-X-ENDLIST"} {
+	// A first segment ending on the first keyframe 2 s in, then about 4 s
+	// ones.
+	for _, part := range []string{"#EXT-X-TARGETDURATION:5\n", "#EXT-X-MAP:URI=\"hls1/main/-1.mp4?DeviceId=",
+		"#EXTINF:3.125000, nodesc\nhls1/main/0.mp4?", "#EXTINF:4.583000, nodesc\nhls1/main/1.mp4?", "#EXTINF:4.792000, nodesc\nhls1/main/2.mp4?",
+		"#EXTINF:2.508000, nodesc\nhls1/main/3.mp4?", "#EXT-X-ENDLIST"} {
 		if !strings.Contains(media, part) {
 			t.Errorf("media playlist lacks %q:\n%s", part, media)
 		}
@@ -546,16 +549,17 @@ func TestRemuxesOfferSubtitlesAsRenditions(t *testing.T) {
 		t.Errorf("master playlist:\n%s", master)
 	}
 	_, _, playlist := fetchText(t, base+"hls1/subtitles0/main.m3u8?"+query)
-	for _, part := range []string{"#EXT-X-TARGETDURATION:7\n", "#EXTINF:6.000000,\n0.vtt?DeviceId=", "#EXTINF:2.508000,\n2.vtt?", "#EXT-X-ENDLIST"} {
+	// Cut like the video: a first segment ending on the first keyframe
+	// 2 s in, then about 4 s ones.
+	for _, part := range []string{"#EXT-X-TARGETDURATION:5\n", "#EXTINF:3.125000,\n0.vtt?DeviceId=", "#EXTINF:2.508000,\n3.vtt?", "#EXT-X-ENDLIST"} {
 		if !strings.Contains(playlist, part) {
 			t.Errorf("subtitle playlist lacks %q:\n%s", part, playlist)
 		}
 	}
-	// Cues keep the version's time; the map places them on the remux's.
-	for n, want := range []string{
-		"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:01.000 --> 00:00:04.000\nBonjour\n",
-		"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n",
-	} {
+	// Cues keep the version's time; the map places them on the remux's. A
+	// cue spanning two segments is in both.
+	bonjour := "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:01.000 --> 00:00:04.000\nBonjour\n"
+	for n, want := range []string{bonjour, bonjour, "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n"} {
 		status, header, segment := fetchText(t, base+"hls1/subtitles0/"+strconv.Itoa(n)+".vtt?"+query)
 		if status != http.StatusOK || header.Get("Content-Type") != "text/vtt" || segment != want {
 			t.Errorf("segment %d: %d %q", n, status, segment)

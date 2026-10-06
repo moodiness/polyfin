@@ -27,14 +27,27 @@ func thumbnailCount(duration, interval time.Duration) int {
 	return int((duration + interval - 1) / interval)
 }
 
-// spread returns n times spread evenly over duration, each in the middle
-// of its share.
-func spread(duration time.Duration, n int) []time.Duration {
-	times := make([]time.Duration, n)
+// thumbnailTimes are the times of the thumbnails of a version lasting
+// duration, one every interval from its start.
+func thumbnailTimes(duration, interval time.Duration) []time.Duration {
+	times := make([]time.Duration, thumbnailCount(duration, interval))
 	for i := range times {
-		times[i] = time.Duration((float64(i) + 0.5) * float64(duration) / float64(n))
+		times[i] = time.Duration(i) * interval
 	}
 	return times
+}
+
+// stepFor is the interval between the thumbnails of a version lasting
+// duration when reads keyframes may be read: the interval asked, unless
+// that makes more thumbnails than reads, whose images would repeat; then
+// the runtime divided among the reads, rounded up to the second, so that
+// each thumbnail shows a keyframe of its own.
+func stepFor(duration, asked time.Duration, reads int) time.Duration {
+	if reads < 1 || thumbnailCount(duration, asked) <= reads {
+		return asked
+	}
+	step := (duration + time.Duration(reads) - 1) / time.Duration(reads)
+	return max(asked, (step+time.Second-1)/time.Second*time.Second)
 }
 
 // chooseKeyframes returns the keyframes, by index, nearest the targets,

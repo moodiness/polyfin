@@ -14,15 +14,15 @@ func secondsOf(values ...float64) []time.Duration {
 	return durations
 }
 
-// The keyframes read are those nearest times spread over the runtime,
-// each once, coarse to fine: however many the budget lets through, they
-// cover the whole runtime.
+// The keyframes read are those nearest the thumbnails' times, each once,
+// coarse to fine: however many the budget lets through, they cover the
+// whole runtime.
 func TestChooseKeyframes(t *testing.T) {
 	keyframes := make([]time.Duration, 3600)
 	for i := range keyframes {
 		keyframes[i] = time.Duration(i) * time.Second
 	}
-	order := chooseKeyframes(keyframes, spread(time.Hour, 57))
+	order := chooseKeyframes(keyframes, thumbnailTimes(time.Hour, stepFor(time.Hour, 10*time.Second, 57)))
 	if len(order) != 57 {
 		t.Fatalf("%d keyframes chosen", len(order))
 	}
@@ -42,7 +42,7 @@ func TestChooseKeyframes(t *testing.T) {
 		}
 	}
 	// Sparse keyframes are read once each.
-	if got := chooseKeyframes(secondsOf(0, 100), spread(time.Minute, 20)); !slices.Equal(got, []int{0, 1}) {
+	if got := chooseKeyframes(secondsOf(0, 100), thumbnailTimes(time.Minute, 3*time.Second)); !slices.Equal(got, []int{0, 1}) {
 		t.Errorf("sparse: %v", got)
 	}
 	if got := coarseToFine(5); !slices.Equal(got, []int{0, 4, 2, 1, 3}) {
@@ -68,5 +68,35 @@ func TestShownCoversEveryThumbnail(t *testing.T) {
 	}
 	if got := thumbnailCount(24*time.Minute, 10*time.Second); got != 144 {
 		t.Errorf("%d thumbnails for 24 minutes", got)
+	}
+}
+
+// Thumbnails come every interval asked while the reads give each its own
+// keyframe; a longer version spreads them over its runtime, one per read,
+// in whole seconds, rather than repeating images.
+func TestTheStepGrowsWithTheRuntime(t *testing.T) {
+	for _, tc := range []struct {
+		duration time.Duration
+		reads    int
+		want     time.Duration
+	}{
+		{10 * time.Minute, 60, 10 * time.Second},
+		{9 * time.Minute, 54, 10 * time.Second},
+		{45 * time.Minute, 58, 47 * time.Second},
+		{2 * time.Hour, 58, 125 * time.Second},
+		{25 * time.Second, 2, 13 * time.Second},
+		// No read left keeps the interval asked.
+		{2 * time.Hour, 0, 10 * time.Second},
+	} {
+		step := stepFor(tc.duration, 10*time.Second, tc.reads)
+		if step != tc.want {
+			t.Errorf("%v with %d reads: a thumbnail every %v, want %v", tc.duration, tc.reads, step, tc.want)
+		}
+		if count := len(thumbnailTimes(tc.duration, step)); tc.reads > 0 && count > tc.reads {
+			t.Errorf("%v with %d reads: %d thumbnails", tc.duration, tc.reads, count)
+		}
+	}
+	if got := thumbnailTimes(25*time.Second, 10*time.Second); !slices.Equal(got, secondsOf(0, 10, 20)) {
+		t.Errorf("times %v", got)
 	}
 }

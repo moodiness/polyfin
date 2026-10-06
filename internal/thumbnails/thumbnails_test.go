@@ -265,11 +265,12 @@ func TestGenerateFromMatroska(t *testing.T) {
 	}
 
 	// One request for the size, one for the head and the Cues of so small
-	// a file, then one per keyframe, all eleven, as the budget allows more,
-	// and perhaps one more to learn how long Cluster headers are: each
-	// exactly what it needs.
+	// a file, then one per keyframe shown: five, for four thumbnails and
+	// three chapters, two of which share theirs, as the budget allows a
+	// keyframe for each, and perhaps one more to learn how long Cluster
+	// headers are: each exactly what it needs.
 	requests := ts.source.count()
-	if len(requests) < 13 || len(requests) > 14 {
+	if len(requests) < 7 || len(requests) > 8 {
 		t.Errorf("%d requests: %+v", len(requests), requests)
 	}
 	for _, r := range requests[2:] {
@@ -362,8 +363,8 @@ func referenceFrame(t *testing.T, ffmpeg, file string, at float64, width int) im
 }
 
 // The budget bounds the requests of a version, its index included: the
-// keyframes read are spread over its runtime, and every thumbnail shows
-// the one read nearest its time.
+// thumbnails are stretched over its runtime, one per keyframe the budget
+// lets read, each showing the one read nearest its time.
 func TestGenerateWithinTheBudget(t *testing.T) {
 	ts := newTestService(t, testFFmpeg(t))
 	ts.budget = 5
@@ -374,11 +375,11 @@ func TestGenerateWithinTheBudget(t *testing.T) {
 	if n := len(ts.source.count()); n != 5 {
 		t.Errorf("%d requests, for a budget of 5", n)
 	}
-	// The size and the index take two: the three left read the keyframes
-	// nearest 2.5, 7.5 and 12.5 s, at 2.917, 7.708 and 12.5 s. The
-	// thumbnails at 0, 5, 10 and 15 s show the nearest of those.
+	// The size and the index take two: the three left give three
+	// thumbnails rather than four every 5 s, one every 6 s, at 0, 6 and
+	// 12 s, which show the keyframes at 0, 6 and 12.5 s.
 	manifest, err := ts.Manifest(ctx, testVersion.Item)
-	if err != nil || manifest[testVersion.ID][240].ThumbnailCount != 4 {
+	if info := manifest[testVersion.ID][240]; err != nil || info.ThumbnailCount != 3 || info.Interval != 6000 {
 		t.Fatalf("manifest %+v, %v", manifest, err)
 	}
 	tile, err := ts.Tile(ctx, testVersion.ID, 240, 0)
@@ -391,13 +392,13 @@ func TestGenerateWithinTheBudget(t *testing.T) {
 	}
 	all := []float64{0, 1.333, 2.916, 3.125, 5.125, 6, 7.708, 9.708, 11, 12.5, 14.5}
 	ffmpeg := testFFmpeg(t)
-	for i, at := range []float64{2.916, 2.916, 7.708, 12.5} {
+	for i, at := range []float64{0, 6, 12.5} {
 		if closest := closestKeyframe(t, ffmpeg, "forced.mkv", img, image.Rect(i*240, 0, (i+1)*240, 240), 240, all); closest != at {
 			t.Errorf("thumbnail %d shows the keyframe at %vs, not %vs", i, closest, at)
 		}
 	}
 	// The chapters at 0, 5 and 12 s share the same reads.
-	for chapter, at := range []float64{2.916, 2.916, 12.5} {
+	for chapter, at := range []float64{0, 6, 12.5} {
 		got, err := ts.ChapterImageOf(ctx, testVersion.ID, chapter, "")
 		if err != nil {
 			t.Fatal(err)
@@ -538,9 +539,10 @@ var hevcKeyframes = []float64{0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 5
 
 // Every thumbnail and chapter image shows the keyframe read nearest its
 // time, whatever order the keyframes were read in (coarse to fine), one
-// range a request or several, and when the budget runs out partway: a
-// decoded frame is tied to its keyframe's time, not to its place in the
-// reads, nor in what the decoder outputs.
+// range a request or several, and with a budget too small for a thumbnail
+// every 5 s, which stretches their interval: a decoded frame is tied to
+// its keyframe's time, not to its place in the reads, nor in what the
+// decoder outputs.
 func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 	ffmpeg := testFFmpeg(t)
 	data := fixture(t, "hevc.mkv")
@@ -554,8 +556,8 @@ func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 	}{
 		{"one range a request", false, budget},
 		{"several ranges a request", true, budget},
-		{"one range a request, the budget running out", false, 8},
-		{"several ranges a request, the budget running out", true, 5},
+		{"one range a request, a small budget", false, 8},
+		{"several ranges a request, a small budget", true, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ts := newTestService(t, ffmpeg)
@@ -572,7 +574,15 @@ func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 			ts.generate(ctx, testJob)
 			manifest, err := ts.Manifest(ctx, testVersion.Item)
 			info := manifest[testVersion.ID][240]
-			if err != nil || info.ThumbnailCount != 12 {
+			step := time.Duration(info.Interval) * time.Millisecond
+			wantStep := 5 * time.Second
+			if tc.budget < budget {
+				wantStep = time.Duration(info.Interval/1000) * time.Second
+				if wantStep <= 5*time.Second || info.ThumbnailCount > tc.budget {
+					t.Errorf("a budget of %d: %d thumbnails every %v", tc.budget, info.ThumbnailCount, step)
+				}
+			}
+			if err != nil || step != wantStep || info.ThumbnailCount != thumbnailCount(analysis.Duration, step) {
 				t.Fatalf("manifest %+v, %v", manifest, err)
 			}
 			tile, err := ts.Tile(ctx, testVersion.ID, 240, 0)
@@ -620,8 +630,8 @@ func TestImagesFollowTheKeyframesTimes(t *testing.T) {
 				return best
 			}
 			for i, at := range shownAt {
-				if want := nearestRead(float64(i * 5)); at != want {
-					t.Errorf("thumbnail %d, at %ds, shows the keyframe at %vs, not %vs: %v", i, i*5, at, want, shownAt)
+				if want := nearestRead((time.Duration(i) * step).Seconds()); at != want {
+					t.Errorf("thumbnail %d, at %v, shows the keyframe at %vs, not %vs: %v", i, time.Duration(i)*step, at, want, shownAt)
 				}
 			}
 			for c, at := range chapters {
@@ -664,7 +674,7 @@ func TestOddAnswersAreAskedOnceMore(t *testing.T) {
 			}
 			// One more request than without the odd answer, after a pause of the
 			// host's pace (20 ms in tests, 3 s otherwise).
-			if len(requests) < 14 || len(requests) > 15 || requests[1].at.Sub(requests[0].at) < 19*time.Millisecond {
+			if len(requests) < 8 || len(requests) > 9 || requests[1].at.Sub(requests[0].at) < 19*time.Millisecond {
 				t.Errorf("%d requests, the second %v after the first", len(requests), requests[1].at.Sub(requests[0].at))
 			}
 

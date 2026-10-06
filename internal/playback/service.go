@@ -113,7 +113,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		return nil, fmt.Errorf("start the source server: %w", err)
 	}
 	segments.LimitConversions(func() int { return settings().MaxConversions })
-	segments.LimitAhead(func() int { return settings().AheadSegments })
+	segments.LimitAhead(func() time.Duration { return time.Duration(settings().AheadSeconds) * time.Second })
 	s := &Service{
 		db:          db,
 		opener:      opener,

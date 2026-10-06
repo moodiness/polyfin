@@ -1,6 +1,7 @@
 package hls
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -23,18 +24,26 @@ import (
 )
 
 const (
-	// defaultAhead is how many segments FFmpeg makes past the last one
-	// asked for before it waits, unless LimitAhead says otherwise: a
-	// player buffers about a minute ahead.
-	defaultAhead = 10
+	// defaultAhead is how far past the end of the last segment asked for
+	// FFmpeg makes segments before it waits, unless LimitAhead says
+	// otherwise: a player buffers a minute or two ahead, and FFmpeg working
+	// further keeps the source's connection busy.
+	defaultAhead = 120 * time.Second
 	// reach is how far past the segment being made a request waits for it,
-	// rather than starting FFmpeg again from the segment asked for.
+	// rather than starting FFmpeg again from the segment asked for: about
+	// 12 s of picture, which a remux makes in about the time a new run
+	// takes to start, and room for players asking a few segments at once.
 	reach = 3
 	// behind is how many segments are kept before the last one asked for,
 	// for a player that asks again for the segment it plays. Further back,
 	// FFmpeg makes them again from the source cache: a remuxed 4K segment
-	// weighs about 60 MB.
+	// weighs 10 to 30 MB.
 	behind = 3
+	// stallTimeout is how long a request waits for a job that makes no
+	// progress, reading or writing, before it is answered that the server
+	// is busy (ErrStalled): a player asks again, or moves on, rather than
+	// showing a frozen picture for minutes.
+	stallTimeout = 20 * time.Second
 	// idleTimeout stops an encoding no player asked anything of for that
 	// long, such as a paused one; it starts again on the next request.
 	idleTimeout = 3 * time.Minute
@@ -53,6 +62,9 @@ var (
 	ErrNotFound = errors.New("no such segment")
 	// ErrStopped reports an encoding stopped while a player waited for it.
 	ErrStopped = errors.New("the encoding was stopped")
+	// ErrStalled reports a segment FFmpeg made no progress towards for
+	// stallTimeout: its source is slow to answer, or stopped answering.
+	ErrStalled = errors.New("the encoding made no progress")
 	errStale   = errors.New("the job was replaced")
 )
 
@@ -93,6 +105,12 @@ type Remux struct {
 	// anyway.
 	Subtitles []int
 	Extracted Extracted
+	// Failed, when set, is closed once the input failed for good: its host
+	// stopped answering, refused it, or answers another file. Failure then
+	// tells why. The encoding ends at once, nothing it cut short is served,
+	// and the requests waiting for it get Failure's error. Nil never fails.
+	Failed  <-chan struct{}
+	Failure func() error
 }
 
 // VideoEncoding is what a job converts the video to: 8-bit, progressive,
@@ -145,8 +163,11 @@ type VideoEncoding struct {
 }
 
 // filters is the filter chain of the video: 8-bit, at the size asked, in
-// SDR, as the encoder takes it.
+// SDR, as the encoder takes it, on the GPU when its frames stay there.
 func (v *VideoEncoding) filters() string {
+	if v.pipeline() == onGPU {
+		return v.gpuFilters()
+	}
 	return v.convert() + "," + v.Hardware.output()
 }
 
@@ -342,12 +363,19 @@ type Manager struct {
 	hardware  atomic.Pointer[Hardware]
 	detecting sync.Mutex
 	detected  map[string]*Hardware
+	// measuring counts the timings of GPU chains under way (see
+	// measureLater); run, when set, runs FFmpeg in their place, for tests.
+	measuring sync.WaitGroup
+	run       func(ctx context.Context, args []string) (time.Duration, error)
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
-	// ahead returns how many segments FFmpeg makes past the last one asked
-	// for before it waits; nil, or a value below 1, keeps defaultAhead.
-	ahead atomic.Pointer[func() int]
+	// ahead returns how far past the end of the last segment asked for
+	// FFmpeg makes segments before it waits; nil, or a value not above
+	// zero, keeps defaultAhead.
+	ahead atomic.Pointer[func() time.Duration]
+	// stall is stallTimeout, which tests shorten.
+	stall time.Duration
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -370,7 +398,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath),
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
 	go m.stopIdle()
 	return m, nil
@@ -389,6 +417,7 @@ func (m *Manager) Close() {
 		cancel()
 	}
 	m.mu.Unlock()
+	m.measuring.Wait()
 	m.stopWhere(func(Key, *encoding) bool { return true })
 	m.stopLives(func(Key, *live) bool { return true })
 	m.stopAudios(func(AudioKey, *audioEncoding) bool { return true })
@@ -441,22 +470,32 @@ func (m *Manager) LimitConversions(limit func() int) {
 	m.conversions = limit
 }
 
-// LimitAhead bounds how many segments FFmpeg makes past the last one a
-// player asked for to what ahead returns, read whenever FFmpeg finishes a
-// segment: past it, FFmpeg waits for the player.
-func (m *Manager) LimitAhead(ahead func() int) {
+// LimitAhead bounds how far past the end of the last segment a player
+// asked for FFmpeg makes segments, as a length of picture, to what ahead
+// returns, read whenever FFmpeg finishes a segment: FFmpeg makes those
+// starting within it, and at least the next, then waits for the player.
+// Counting time rather than segments keeps the same picture ready, and
+// the source read as far, whatever the length of the version's segments.
+func (m *Manager) LimitAhead(ahead func() time.Duration) {
 	m.ahead.Store(&ahead)
 }
 
-// aheadSegments is how many segments FFmpeg makes past the last one asked
-// for (see LimitAhead).
-func (m *Manager) aheadSegments() int {
+// aheadDuration is how far FFmpeg makes segments past the end of the last
+// one asked for (see LimitAhead).
+func (m *Manager) aheadDuration() time.Duration {
 	if ahead := m.ahead.Load(); ahead != nil {
-		if n := (*ahead)(); n > 0 {
-			return n
+		if d := (*ahead)(); d > 0 {
+			return d
 		}
 	}
 	return defaultAhead
+}
+
+// aheadLimit is the last segment of plan FFmpeg makes while the player
+// last asked for segment n: the last starting within the ahead limit past
+// n's end, and at least the next.
+func (m *Manager) aheadLimit(plan Plan, n int) int {
+	return max(plan.Segment(plan.End(n)+m.aheadDuration()-time.Nanosecond), n+1)
 }
 
 // MayConvert reports whether an encoding converting the video of version
@@ -555,7 +594,7 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 			return nil, ErrBusy
 		}
 		e = &encoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}),
-			changed: make(chan struct{}), used: time.Now()}
+			changed: make(chan struct{}), quit: make(chan struct{}), used: time.Now()}
 		m.encodings[key] = e
 		m.mu.Unlock()
 		e.open(ctx, open)
@@ -599,6 +638,11 @@ type encoding struct {
 	requested int
 	used      time.Time
 	stopped   bool
+	// quit is closed once the encoding is stopped.
+	quit chan struct{}
+	// failure is why the input failed for good, nil while it did not (see
+	// Remux.Failed).
+	failure error
 }
 
 func (e *encoding) open(ctx context.Context, open Opener) {
@@ -615,6 +659,47 @@ func (e *encoding) open(ctx context.Context, open Opener) {
 	}
 	e.remux, e.release = remux, release
 	e.ready = make([]bool, remux.Plan.Len())
+	if remux.Failed != nil {
+		go e.watchInput()
+	}
+}
+
+// errInputFailed is the failure of an input that tells none.
+var errInputFailed = errors.New("the input failed")
+
+// watchInput ends the encoding once its input failed for good: the
+// requests waiting get the failure, and the next one opens the encoding
+// again, through an opener that knows the input failed.
+func (e *encoding) watchInput() {
+	select {
+	case <-e.remux.Failed:
+	case <-e.quit:
+		return
+	}
+	err := errInputFailed
+	if e.remux.Failure != nil {
+		err = cmp.Or(e.remux.Failure(), errInputFailed)
+	}
+	e.mu.Lock()
+	e.failure = err
+	e.mu.Unlock()
+	e.m.logger.Info("A remux was stopped: its source failed", "error", err)
+	e.m.mu.Lock()
+	if e.m.encodings[e.key] == e {
+		delete(e.m.encodings, e.key)
+	}
+	e.m.mu.Unlock()
+	e.stop()
+}
+
+// inputFailed reports whether the input failed for good.
+func (e *encoding) inputFailed() bool {
+	select {
+	case <-e.remux.Failed:
+		return true
+	default:
+		return false
+	}
 }
 
 // signal wakes whoever waits on the encoding. The caller holds e.mu.
@@ -636,6 +721,32 @@ func (e *encoding) wait(ctx context.Context) error {
 	}
 }
 
+// waitProgress waits for a change as wait does, or reports ErrStalled once
+// the running job made no progress for the stall timeout, counted from
+// since at the earliest: when the request began waiting.
+func (e *encoding) waitProgress(ctx context.Context, since time.Time) error {
+	last := since
+	if j := e.job; j != nil && j.progressed.After(last) {
+		last = j.progressed
+	}
+	left := time.Until(last.Add(e.m.stall))
+	if left <= 0 {
+		return ErrStalled
+	}
+	timer := time.NewTimer(left)
+	defer timer.Stop()
+	changed := e.changed
+	e.mu.Unlock()
+	defer e.mu.Lock()
+	select {
+	case <-changed:
+	case <-timer.C:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
 func (e *encoding) idle() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -650,17 +761,22 @@ func (e *encoding) path(n int) string {
 }
 
 // await opens segment n, or the initialization segment for n = -1, once
-// it is made.
+// it is made. A job that makes no progress for the stall timeout is not
+// waited for longer: ErrStalled.
 func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.used = time.Now()
+	since := time.Now()
+	e.used = since
 	if n >= 0 {
 		e.requested = n
 		e.prune(n)
 		e.signal()
 	}
 	for {
+		if e.failure != nil {
+			return nil, e.failure
+		}
 		if e.stopped {
 			return nil, ErrStopped
 		}
@@ -685,7 +801,7 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 		case j == nil || j.done || (n >= 0 && (n < j.next || n > j.next+reach)):
 			e.start(start)
 		}
-		if err := e.wait(ctx); err != nil {
+		if err := e.waitProgress(ctx, since); err != nil {
 			return nil, err
 		}
 	}
@@ -696,9 +812,13 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.used = time.Now()
+	since := time.Now()
+	e.used = since
 	plan := e.remux.Plan
 	for {
+		if e.failure != nil {
+			return e.failure
+		}
 		if e.stopped {
 			return ErrStopped
 		}
@@ -719,15 +839,17 @@ func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 			e.requested = n
 			e.signal()
 		}
-		if err := e.wait(ctx); err != nil {
+		if err := e.waitProgress(ctx, since); err != nil {
 			return err
 		}
 	}
 }
 
-// prune removes the segments far from segment n. The caller holds e.mu.
+// prune removes the segments far from segment n: more than behind before
+// it, or past what FFmpeg makes ahead of it and reach. The caller holds
+// e.mu.
 func (e *encoding) prune(n int) {
-	far := n + e.m.aheadSegments() + reach
+	far := e.m.aheadLimit(e.remux.Plan, n) + reach
 	for i, ready := range e.ready {
 		if ready && (i < n-behind || i > far) {
 			e.ready[i] = false
@@ -747,6 +869,7 @@ func (e *encoding) stop() {
 		return
 	}
 	e.stopped = true
+	close(e.quit)
 	if e.job != nil {
 		e.job.cancel()
 	}
@@ -771,6 +894,9 @@ type job struct {
 	err    error
 	// file receives the segment being made, once its first keyframe came.
 	file *os.File
+	// progressed is when FFmpeg last read or wrote, as far as it tells,
+	// or else when the job started.
+	progressed time.Time
 }
 
 // start replaces the running job with one starting at segment n. The
@@ -780,9 +906,16 @@ func (e *encoding) start(n int) {
 		e.job.cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	j := &job{start: n, next: n, cancel: cancel}
+	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now()}
 	e.job = j
 	go e.run(ctx, j)
+}
+
+// progress records that a job made progress.
+func (e *encoding) progress(j *job) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	j.progressed = time.Now()
 }
 
 // run runs FFmpeg for a job and files what it writes into segments, and
@@ -794,9 +927,9 @@ func (e *encoding) run(ctx context.Context, j *job) {
 	cmd.Stderr = stderr
 	output, err := cmd.StdoutPipe()
 	// Each extracted subtitle stream comes on a pipe of its own, from file
-	// descriptor 3 on.
+	// descriptor 3 on, then FFmpeg's progress (see Remux.args).
 	var readers []*os.File
-	for range e.remux.Subtitles {
+	for range len(e.remux.Subtitles) + 1 {
 		if err != nil {
 			break
 		}
@@ -820,7 +953,12 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		return
 	}
 	var extracting sync.WaitGroup
-	for i, r := range readers {
+	progress := readers[len(readers)-1]
+	extracting.Go(func() {
+		defer progress.Close()
+		watchProgress(progress, func() { e.progress(j) })
+	})
+	for i, r := range readers[:len(readers)-1] {
 		stream := e.remux.Subtitles[i]
 		extracting.Go(func() {
 			defer r.Close()
@@ -856,6 +994,10 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		err = errStale
 	case err == nil && waitErr != nil:
 		err = fmt.Errorf("FFmpeg failed: %w: %s", waitErr, bytes.TrimSpace(stderr.bytes()))
+	case err == nil && e.inputFailed():
+		// FFmpeg takes an input cut short for its end: what it wrote last
+		// is not the version's.
+		err = errInputFailed
 	}
 	switch {
 	case errors.Is(err, errStale):
@@ -875,6 +1017,7 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 	if e.job != j || e.stopped {
 		return errStale
 	}
+	j.progressed = time.Now()
 	if p.init {
 		if e.init {
 			return nil
@@ -899,8 +1042,8 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 		if err := e.close(j); err != nil {
 			return err
 		}
-		// Keep at most so many segments past the last one asked for.
-		for j.next > e.requested+e.m.aheadSegments() {
+		// Make segments as far ahead of the last one asked for as allowed.
+		for j.next > e.m.aheadLimit(plan, e.requested) {
 			if err := e.wait(ctx); err != nil {
 				return errStale
 			}
@@ -971,7 +1114,7 @@ func (e *encoding) cover(from, to time.Duration) {
 func (e *encoding) finish(j *job, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if err == nil && e.job == j && !e.stopped {
+	if err == nil && e.job == j && !e.stopped && !e.inputFailed() {
 		if err = e.close(j); err == nil {
 			plan := e.remux.Plan
 			e.cover(plan.Start(j.start), plan.End(plan.Len()-1))
@@ -999,13 +1142,23 @@ func writeFile(path string, data []byte) error {
 // args is FFmpeg's command line for a job starting at segment n. Segments
 // keep the source's timestamps, shifted by timestampOffset, so that those
 // of different jobs follow each other. Extracted subtitles keep the
-// source's own.
+// source's own. FFmpeg reports its progress on the pipe after the
+// subtitles'.
 func (r Remux) args(n int) []string {
-	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:" + strconv.Itoa(3+len(r.Subtitles))}
 	if n > 0 {
 		// Converted audio starts where the demuxer does, on the keyframe,
 		// as copied streams do, instead of at the time asked.
 		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
+		// The version was analyzed already: FFmpeg probes the head of the
+		// file again before it seeks, and 2 MB of it, which the analysis
+		// left in the source cache, describe the streams it copies or
+		// decodes. 0 would be FFmpeg's 5 s, not none. A burned image
+		// track may need more to know its size, and an MPEG-TS file to find
+		// every stream: both probe as usual.
+		if (r.Encode == nil || r.Encode.Burn == nil) && !r.Plan.Grid() {
+			args = append(args, "-probesize", "2M", "-analyzeduration", "1M")
+		}
 	}
 	if r.Encode != nil {
 		args = append(args, r.Encode.inputs()...)
@@ -1077,4 +1230,27 @@ func (t *tail) bytes() []byte {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return bytes.Clone(t.data)
+}
+
+// watchProgress reads what FFmpeg's -progress writes, a block of key=value
+// lines every half second ending with progress=, and calls progressed
+// after each block where FFmpeg wrote more, or moved its frames or its
+// output time on: blocks come on even while FFmpeg waits for its input.
+func watchProgress(r io.Reader, progressed func()) {
+	scanner := bufio.NewScanner(r)
+	var last, current string
+	for scanner.Scan() {
+		key, value, _ := strings.Cut(scanner.Text(), "=")
+		switch key {
+		case "frame", "total_size", "out_time_us":
+			current += key + "=" + value + ";"
+		case "progress":
+			if current != last {
+				progressed()
+			}
+			last, current = current, ""
+		}
+	}
+	// FFmpeg would wait for the pipe to be read.
+	_, _ = io.Copy(io.Discard, r)
 }

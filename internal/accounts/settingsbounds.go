@@ -47,7 +47,7 @@ func DefaultSettings() Settings {
 		DownmixAlgorithm:       DownmixAlgorithms[0],
 		DownmixBoost:           DefaultDownmixBoost,
 		MaxAudioChannels:       AudioChannelLimits[0],
-		AheadSegments:          DefaultAheadSegments,
+		AheadSeconds:           DefaultAheadSeconds,
 
 		Trickplay:          false,
 		TrickplayInterval:  DefaultTrickplayInterval,
@@ -147,7 +147,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"maxAudioChannels":       choice(d.MaxAudioChannels, anys(AudioChannelLimits)),
 		"audioBitratePerChannel": orZero(MinAudioBitratePerChannel, MaxAudioBitratePerChannel, d.AudioBitratePerChannel),
 		"encodingThreads":        between(0, MaxEncodingThreads, d.EncodingThreads),
-		"aheadSegments":          between(MinAheadSegments, MaxAheadSegments, d.AheadSegments),
+		"aheadSeconds":           between(MinAheadSeconds, MaxAheadSeconds, d.AheadSeconds),
 
 		"trickplay":          is(d.Trickplay),
 		"trickplayInterval":  between(MinTrickplayInterval, MaxTrickplayInterval, d.TrickplayInterval),

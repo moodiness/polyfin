@@ -92,8 +92,8 @@ const common: typeof en = {
       'Le débit audio par canal doit être 0, ou un nombre entier de kb/s de 32 à 320.',
     invalid_encoding_threads:
       'Le nombre de threads du processeur doit être un nombre entier de 0 à 64.',
-    invalid_ahead_segments:
-      'Le nombre de segments préparés à l’avance doit être un nombre entier de 1 à 60.',
+    invalid_ahead_seconds:
+      'Le nombre de secondes préparées à l’avance doit être un nombre entier de 30 à 600.',
     parental_control:
       'Le contrôle parental s’applique à ce compte : il garde les addons du serveur, qui donnent les classifications sur lesquelles il s’appuie.',
     invalid_parental_control:

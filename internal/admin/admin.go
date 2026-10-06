@@ -339,7 +339,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidMaxAudioChannels, http.StatusBadRequest, "invalid_max_audio_channels"},
 		{accounts.ErrInvalidAudioBitrate, http.StatusBadRequest, "invalid_audio_bitrate_per_channel"},
 		{accounts.ErrInvalidEncodingThreads, http.StatusBadRequest, "invalid_encoding_threads"},
-		{accounts.ErrInvalidAheadSegments, http.StatusBadRequest, "invalid_ahead_segments"},
+		{accounts.ErrInvalidAheadSeconds, http.StatusBadRequest, "invalid_ahead_seconds"},
 		{accounts.ErrInvalidTrickplayInterval, http.StatusBadRequest, "invalid_trickplay_interval"},
 		{accounts.ErrInvalidTrickplayWidth, http.StatusBadRequest, "invalid_trickplay_width"},
 		{accounts.ErrInvalidThumbnailStorage, http.StatusBadRequest, "invalid_thumbnail_storage_gb"},

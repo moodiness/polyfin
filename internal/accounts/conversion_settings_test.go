@@ -8,7 +8,8 @@ import (
 )
 
 // The settings tuning conversions start as Polyfin converted before they
-// were settings, and the administrator's setup keeps them.
+// were settings, the ahead limit at 120 s, and the administrator's setup
+// keeps them.
 func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 	store := newStore(t)
 	check := func(when string, got Settings) {
@@ -17,13 +18,13 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 			!slices.Equal(got.HardwareDecodingCodecs, HardwareDecodingCodecs) || !got.ToneMapping || got.ToneMappingAlgorithm != "auto" ||
 			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
-			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSegments != DefaultAheadSegments {
+			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds {
 			t.Errorf("%s: %+v", when, got)
 		}
 	}
 	check("defaults", store.Settings())
-	if DefaultDownmixBoost != 1 || DefaultAheadSegments != 10 {
-		t.Errorf("default constants: boost %v, %d segments ahead", DefaultDownmixBoost, DefaultAheadSegments)
+	if DefaultDownmixBoost != 1 || DefaultAheadSeconds != 120 || MinAheadSeconds != 30 || MaxAheadSeconds != 600 {
+		t.Errorf("default constants: boost %v, %d s ahead in [%d, %d]", DefaultDownmixBoost, DefaultAheadSeconds, MinAheadSeconds, MaxAheadSeconds)
 	}
 	if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", "fr"); err != nil {
 		t.Fatal(err)
@@ -61,8 +62,8 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		{"an audio bitrate above 320 kb/s", func(s *Settings) { s.AudioBitratePerChannel = MaxAudioBitratePerChannel + 1 }, ErrInvalidAudioBitrate},
 		{"negative threads", func(s *Settings) { s.EncodingThreads = -1 }, ErrInvalidEncodingThreads},
 		{"too many threads", func(s *Settings) { s.EncodingThreads = MaxEncodingThreads + 1 }, ErrInvalidEncodingThreads},
-		{"no segment ahead", func(s *Settings) { s.AheadSegments = MinAheadSegments - 1 }, ErrInvalidAheadSegments},
-		{"too many segments ahead", func(s *Settings) { s.AheadSegments = MaxAheadSegments + 1 }, ErrInvalidAheadSegments},
+		{"too little ahead", func(s *Settings) { s.AheadSeconds = MinAheadSeconds - 1 }, ErrInvalidAheadSeconds},
+		{"too much ahead", func(s *Settings) { s.AheadSeconds = MaxAheadSeconds + 1 }, ErrInvalidAheadSeconds},
 	} {
 		changed := store.Settings()
 		tc.change(&changed)
@@ -83,13 +84,13 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			s.ToneMapping, s.ToneMappingAlgorithm, s.ToneMappingPeak, s.ToneMappingDesat = false, "mobius", MinToneMappingPeak, 0.5
 			s.DeinterlaceMethod, s.DeinterlaceDoubleRate = "bwdif", true
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Dave750", MinDownmixBoost, 2, MinAudioBitratePerChannel
-			s.EncodingThreads, s.AheadSegments = MaxEncodingThreads, MinAheadSegments
+			s.EncodingThreads, s.AheadSeconds = MaxEncodingThreads, MinAheadSeconds
 		},
 		func(s *Settings) {
 			s.EncoderPreset, s.HardwareAcceleration, s.HardwareDecodingCodecs = "ultrafast", "none", []string{}
 			s.ToneMappingAlgorithm, s.ToneMappingPeak, s.ToneMappingDesat = "bt2390", MaxToneMappingPeak, MaxToneMappingDesat
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Ac4", MaxDownmixBoost, 6, MaxAudioBitratePerChannel
-			s.EncodingThreads, s.AheadSegments = 0, MaxAheadSegments
+			s.EncodingThreads, s.AheadSeconds = 0, MaxAheadSeconds
 		},
 	} {
 		changed := store.Settings()
@@ -113,7 +114,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'qsv'", "hardware_acceleration = ''",
 		"hardware_decoding_codecs = '{vp8}'", "tone_mapping_algorithm = 'gamma'", "tone_mapping_peak = 99", "tone_mapping_desat = 11",
 		"deinterlace_method = 'w3fdif'", "downmix_algorithm = 'dave750'", "downmix_boost = 0.4", "max_audio_channels = 8",
-		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_segments = 0"} {
+		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_seconds = 29", "ahead_seconds = 601"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}

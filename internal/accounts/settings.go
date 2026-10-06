@@ -144,7 +144,7 @@ var (
 	ErrInvalidMaxAudioChannels       = errors.New("invalid maximum of audio channels")
 	ErrInvalidAudioBitrate           = errors.New("invalid audio bitrate")
 	ErrInvalidEncodingThreads        = errors.New("invalid encoding threads")
-	ErrInvalidAheadSegments          = errors.New("invalid segments ahead")
+	ErrInvalidAheadSeconds           = errors.New("invalid seconds ahead")
 )
 
 // The choices of the settings tuning conversions, named as Jellyfin's
@@ -191,9 +191,15 @@ const (
 	MinAudioBitratePerChannel = 32
 	MaxAudioBitratePerChannel = 320
 	MaxEncodingThreads        = 64
-	MinAheadSegments          = 1
-	MaxAheadSegments          = 60
-	DefaultAheadSegments      = 10
+)
+
+// The bounds and default of Settings.AheadSeconds: a player buffers a
+// minute or two ahead, and FFmpeg working further keeps the source's
+// connection busy, absorbing its slowdowns.
+const (
+	MinAheadSeconds     = 30
+	MaxAheadSeconds     = 600
+	DefaultAheadSeconds = 120
 )
 
 // ErrInvalidTrickplayInterval reports a TrickplayInterval outside
@@ -498,10 +504,10 @@ type Settings struct {
 	// EncodingThreads is how many threads FFmpeg converts with, 0 letting
 	// it choose.
 	EncodingThreads int
-	// AheadSegments is how many segments, of about 6 seconds, a remux or
-	// conversion of a file makes past the last one the app asked for
+	// AheadSeconds is how many seconds of picture a remux or conversion of
+	// a file makes past the end of the last segment the app asked for
 	// before it waits.
-	AheadSegments int
+	AheadSeconds int
 	// Trickplay makes scrubbing thumbnails of the versions played, one
 	// every TrickplayInterval seconds, TrickplayWidth pixels wide, and
 	// ChapterImages an image of each of their chapters. Both read keyframes
@@ -589,7 +595,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, deinterlace_method, deinterlace_double_rate, " +
-	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_segments, " +
+	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
@@ -615,7 +621,7 @@ func (settings *Settings) fields() []any {
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
-		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSegments,
+		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
@@ -909,8 +915,8 @@ func validConversion(settings Settings) ([]string, error) {
 		return nil, ErrInvalidAudioBitrate
 	case settings.EncodingThreads < 0 || settings.EncodingThreads > MaxEncodingThreads:
 		return nil, ErrInvalidEncodingThreads
-	case settings.AheadSegments < MinAheadSegments || settings.AheadSegments > MaxAheadSegments:
-		return nil, ErrInvalidAheadSegments
+	case settings.AheadSeconds < MinAheadSeconds || settings.AheadSeconds > MaxAheadSeconds:
+		return nil, ErrInvalidAheadSeconds
 	}
 	codecs := []string{}
 	for _, codec := range HardwareDecodingCodecs {

@@ -29,7 +29,7 @@ func TestSettingsConversion(t *testing.T) {
 	administrator := api.signedIn("administrator", true)
 	keys := []string{"encoderPreset", "h264Quality", "hevcQuality", "allowHevcEncoding", "hardwareAcceleration", "hardwareDecodingCodecs",
 		"toneMapping", "toneMappingAlgorithm", "toneMappingPeak", "toneMappingDesat", "deinterlaceMethod", "deinterlaceDoubleRate",
-		"downmixAlgorithm", "downmixBoost", "maxAudioChannels", "audioBitratePerChannel", "encodingThreads", "aheadSegments"}
+		"downmixAlgorithm", "downmixBoost", "maxAudioChannels", "audioBitratePerChannel", "encodingThreads", "aheadSeconds"}
 	tuning := func(body map[string]any) map[string]any {
 		got := map[string]any{}
 		for _, key := range keys {
@@ -40,7 +40,7 @@ func TestSettingsConversion(t *testing.T) {
 	defaults := map[string]any{"encoderPreset": "auto", "h264Quality": 0.0, "hevcQuality": 0.0, "allowHevcEncoding": false, "hardwareAcceleration": "auto",
 		"hardwareDecodingCodecs": []any{"h264", "hevc", "hevc_10bit", "vp9", "av1", "mpeg2video", "vc1"}, "toneMapping": true, "toneMappingAlgorithm": "auto",
 		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
-		"downmixBoost": 1.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSegments": 10.0}
+		"downmixBoost": 1.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSeconds": 120.0}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	if got := tuning(body); !reflect.DeepEqual(got, defaults) {
 		t.Errorf("defaults: %v", got)
@@ -59,7 +59,7 @@ func TestSettingsConversion(t *testing.T) {
 	changed := map[string]any{"encoderPreset": "slow", "h264Quality": 21.0, "hevcQuality": 26.0, "allowHevcEncoding": true, "hardwareAcceleration": "none",
 		"hardwareDecodingCodecs": []any{"h264", "av1"}, "toneMapping": false, "toneMappingAlgorithm": "reinhard", "toneMappingPeak": 1000.0,
 		"toneMappingDesat": 0.5, "deinterlaceMethod": "bwdif", "deinterlaceDoubleRate": true, "downmixAlgorithm": "Rfc7845", "downmixBoost": 2.5,
-		"maxAudioChannels": 2.0, "audioBitratePerChannel": 96.0, "encodingThreads": 8.0, "aheadSegments": 20.0}
+		"maxAudioChannels": 2.0, "audioBitratePerChannel": 96.0, "encodingThreads": 8.0, "aheadSeconds": 300.0}
 	put := maps.Clone(base)
 	maps.Copy(put, changed)
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", put); status != http.StatusOK || !reflect.DeepEqual(tuning(body), changed) {
@@ -92,7 +92,8 @@ func TestSettingsConversion(t *testing.T) {
 		{"maxAudioChannels", 8, "invalid_max_audio_channels"},
 		{"audioBitratePerChannel", 1000, "invalid_audio_bitrate_per_channel"},
 		{"encodingThreads", 65, "invalid_encoding_threads"},
-		{"aheadSegments", 0, "invalid_ahead_segments"},
+		{"aheadSeconds", 29, "invalid_ahead_seconds"},
+		{"aheadSeconds", 601, "invalid_ahead_seconds"},
 	} {
 		refused := maps.Clone(base)
 		refused[tc.key] = tc.value
