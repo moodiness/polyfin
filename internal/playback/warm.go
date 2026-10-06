@@ -64,9 +64,13 @@ func (s *Service) Warm(version library.Version, start time.Duration) {
 }
 
 // warm is Warm; a warm that does not replace one under way, nor repeats
-// one done lately from any start, is what Plan starts.
+// one done lately from any start, nor runs while the version is remuxed,
+// is what Plan starts.
 func (s *Service) warm(version library.Version, start time.Duration, replace bool) {
 	if warmed, ok := s.warmed.Get(version.ID); ok && (warmed == start || !replace) {
+		return
+	}
+	if !replace && s.sources.Streamed(version.ID) {
 		return
 	}
 	s.warmMu.Lock()

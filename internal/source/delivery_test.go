@@ -629,6 +629,18 @@ func TestAnsweredTellsWhenTheSourceAnswered(t *testing.T) {
 	if !cache.Answered(accounts.ID{1}, link+"?other").IsZero() {
 		t.Error("another link answered")
 	}
+	// A streaming reader tells the source is being played.
+	if cache.Streamed(accounts.ID{1}) {
+		t.Error("an index read streams the source")
+	}
+	r := s.NewReader()
+	if !cache.Streamed(accounts.ID{1}) {
+		t.Error("a streaming reader does not stream the source")
+	}
+	r.Close()
+	if cache.Streamed(accounts.ID{1}) || cache.Streamed(accounts.ID{2}) {
+		t.Error("a closed reader still streams the source")
+	}
 }
 
 // A request of the loopback for a source that fails while it is sent is

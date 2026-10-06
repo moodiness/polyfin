@@ -268,6 +268,20 @@ func (c *Cache) Answered(id accounts.ID, origin string) time.Time {
 	return s.answeredAt
 }
 
+// Streamed reports whether a streaming reader reads the source of id now,
+// as FFmpeg does while it remuxes it.
+func (c *Cache) Streamed(id accounts.ID) bool {
+	c.mu.Lock()
+	s := c.sources[id]
+	c.mu.Unlock()
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attached > 0
+}
+
 // Usage tells the bytes the cache keeps on disk, the sources open, and its
 // limit (POLYFIN_CACHE_SIZE).
 func (c *Cache) Usage() (used int64, sources int, limit int64) {
@@ -375,8 +389,9 @@ type Source struct {
 	contentType string
 	present     []uint64
 	// sizeChecked tells that the first answer was checked against the
-	// size the addon announced.
-	sizeChecked bool
+	// size the addon announced, and sizeNoted that it counted in the
+	// addon's record.
+	sizeChecked, sizeNoted bool
 	// readers are the readers open, oldest first; window is the
 	// read-ahead window of the newest streaming one; warms are the spans
 	// Warm keeps read; wanted are the blocks readers wait for.
@@ -744,17 +759,19 @@ func (s *Source) learn(total int64, contentType string) error {
 
 // checkAnnounced compares the first size the source tells with the one
 // its addon announced, and refuses another while the addon's sizes are
-// trusted. The source's lock is held.
+// trusted. Each file counts once in the addon's record. The source's lock
+// is held.
 func (s *Source) checkAnnounced(total int64) error {
 	agrees := total == s.origin.Size
 	trusted := s.cache.sizeTrusted(s.origin.Announcer)
-	if agrees || !trusted {
-		s.sizeChecked = true
+	if !s.sizeNoted {
+		s.sizeNoted = true
+		s.cache.noteSize(s.origin.Announcer, agrees)
 	}
-	s.cache.noteSize(s.origin.Announcer, agrees)
 	if !agrees && trusted {
 		return fmt.Errorf("%w: %d bytes, not the %d its addon announced", errOtherFile, total, s.origin.Size)
 	}
+	s.sizeChecked = true
 	return nil
 }
 
