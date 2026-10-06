@@ -22,8 +22,12 @@ const (
 	// behind is dropped rather than holding the others back.
 	feedBuffer = 6 << 20
 	// feedJoin is how far back in what it keeps a reader joining a running
-	// feed starts: a few seconds, so that FFmpeg finds a keyframe at once.
+	// feed starts when the stream's keyframes are not known (see tsIndex):
+	// a few seconds, so that FFmpeg likely finds one.
 	feedJoin = 3 << 20
+	// keyframeWait is how much of an MPEG-TS stream is read for its first
+	// keyframe before readers start without one.
+	keyframeWait = 2 << 20
 	// A source must send sniffSize bytes; fewer than sniffLeast is no
 	// stream.
 	sniffSize  = 4 << 10
@@ -184,14 +188,21 @@ type feed struct {
 	readers map[*feedReader]bool
 	grace   *time.Timer
 	evicted bool
+	// index finds the stream's keyframes and tables as it arrives.
+	index tsIndex
 }
 
-// feedReader reads a feed from where it joined.
+// feedReader reads a feed from where it joined: once placed, from the
+// stream's tables (prefix), then its latest keyframe.
 type feedReader struct {
-	f    *feed
-	user accounts.ID
-	ctx  context.Context
-	pos  int64
+	f      *feed
+	user   accounts.ID
+	ctx    context.Context
+	pos    int64
+	placed bool
+	prefix []byte
+	// from is how much the feed had received when the reader joined.
+	from int64
 }
 
 type userKey struct{}
@@ -226,7 +237,7 @@ func (s *Service) openFeed(ctx context.Context, version library.Version) (*feedR
 		if f == nil {
 			f = &feed{s: s, version: version, source: version.Origin.Addon, opened: time.Now(), times: st.timingLocked(),
 				ready: make(chan struct{}), closed: make(chan struct{}), buf: make([]byte, feedBuffer), changed: make(chan struct{}),
-				readers: map[*feedReader]bool{}}
+				readers: map[*feedReader]bool{}, index: newTSIndex()}
 			st.feeds[version.ID] = f
 			st.mu.Unlock()
 			go f.open(user)
@@ -267,23 +278,47 @@ func (f *feed) finished() bool {
 	return f.done
 }
 
-// join adds a reader starting a few seconds back in what the feed keeps,
-// on a packet boundary; nil when the feed ended.
+// join adds a reader, placed on its first read (see place); nil when the
+// feed ended.
 func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.done && f.received > 0 || f.evicted {
 		return nil
 	}
-	start := max(f.received-feedJoin, f.received-int64(len(f.buf)), 0)
-	start = (start + tsPacket - 1) / tsPacket * tsPacket
-	r := &feedReader{f: f, user: user, ctx: ctx, pos: start}
+	r := &feedReader{f: f, user: user, ctx: ctx, from: f.received}
 	f.readers[r] = true
 	if f.grace != nil {
 		f.grace.Stop()
 		f.grace = nil
 	}
 	return r
+}
+
+// place sets where a reader starts, f.mu held: an MPEG-TS stream at its
+// first keyframe since the reader joined, else its latest one in the ring,
+// after its PAT and PMT, so that a reader joining at any time, the first
+// included, decodes from its first bytes.
+// It reports false while the first keyframe is awaited, keyframeWait at
+// most; a stream of no keyframe known starts feedJoin back, on a packet.
+func (r *feedReader) place() bool {
+	f := r.f
+	oldest := max(f.received-int64(len(f.buf)), 0)
+	if at, prefix, ok := f.index.start(max(oldest, 0), r.from); ok {
+		r.pos, r.prefix, r.placed = at, prefix, true
+		return true
+	}
+	if !f.done && f.index.awaiting(f.received) {
+		return false
+	}
+	start := max(f.received-feedJoin, oldest)
+	if sync := f.index.sync; sync >= 0 && start > sync {
+		start = sync + (start-sync+tsPacket-1)/tsPacket*tsPacket
+	} else if sync >= 0 {
+		start = sync
+	}
+	r.pos, r.placed = start, true
+	return true
 }
 
 // Read reads the feed, waiting for its next bytes.
@@ -298,6 +333,22 @@ func (r *feedReader) Read(p []byte) (int, error) {
 				return 0, ErrSlotsInUse
 			}
 			return 0, ErrSlowReader
+		}
+		if !r.placed && !r.place() {
+			changed := f.changed
+			f.mu.Unlock()
+			select {
+			case <-changed:
+			case <-r.ctx.Done():
+				return 0, r.ctx.Err()
+			}
+			continue
+		}
+		if len(r.prefix) > 0 {
+			n := copy(p, r.prefix)
+			r.prefix = r.prefix[n:]
+			f.mu.Unlock()
+			return n, nil
 		}
 		if oldest := f.received - int64(len(f.buf)); r.pos < oldest {
 			f.mu.Unlock()
@@ -473,10 +524,11 @@ func (f *feed) isEvicted() bool {
 	return f.evicted
 }
 
-// write adds bytes to the ring and wakes the readers.
+// write adds bytes to the ring, indexes them, and wakes the readers.
 func (f *feed) write(data []byte) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.index.add(f.received, data, f.received-int64(len(f.buf))+int64(len(data)))
 	for len(data) > 0 {
 		at := int(f.received % int64(len(f.buf)))
 		n := copy(f.buf[at:], data)
@@ -487,10 +539,6 @@ func (f *feed) write(data []byte) {
 	f.changed = make(chan struct{})
 }
 
-// makeRoom keeps a source within its connections before f opens one:
-// feeds of the source that no reader uses are closed first, then the
-// oldest only user reads; else it fails with ErrSlotsInUse. It reports
-// whether it closed one, which the provider may still count a moment.
 // closeIdle closes the source's other feeds that no one reads, kept for
 // their grace, and reports whether it closed one.
 func (s *Service) closeIdle(f *feed) bool {
@@ -513,6 +561,10 @@ func (s *Service) closeIdle(f *feed) bool {
 	return len(idle) > 0
 }
 
+// makeRoom keeps a source within its connections before f opens one:
+// feeds of the source that no reader uses are closed first, then the
+// oldest only user reads; else it fails with ErrSlotsInUse. It reports
+// whether it closed one, which the provider may still count a moment.
 func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool, error) {
 	st := &s.feeds
 	st.mu.Lock()
@@ -821,4 +873,231 @@ func (f flushing) Write(p []byte) (int, error) {
 		flusher.Flush()
 	}
 	return n, err
+}
+
+// tsIndex follows an MPEG-TS stream as a feed receives it: where its
+// packets start, its latest PAT and PMT, and where its video's random
+// access points start, by absolute position in the feed.
+type tsIndex struct {
+	// sync is where the first packet starts, -1 until known; off once the
+	// stream is found not to be MPEG-TS, or loses its packet boundaries.
+	sync int64
+	off  bool
+	// next is where the next packet starts; partial holds its first bytes.
+	next    int64
+	partial []byte
+	// pat and pmt are the latest tables, a packet each; pmtPID is told by
+	// the PAT, video and videoType by the PMT.
+	pat, pmt  []byte
+	pmtPID    int
+	video     int
+	videoType byte
+	// indicated is set once the video's packets mark random access points
+	// with the adaptation field's indicator: NAL units are no longer read.
+	indicated bool
+	// keys are the random access points within the ring, oldest first.
+	keys []int64
+}
+
+func newTSIndex() tsIndex {
+	return tsIndex{sync: -1, pmtPID: -1, video: -1}
+}
+
+// awaiting reports whether readers should wait for the first keyframe:
+// the stream is MPEG-TS, of a video whose keyframes can be found, and
+// less than keyframeWait of it came.
+func (x *tsIndex) awaiting(received int64) bool {
+	if x.off || len(x.keys) > 0 || received >= keyframeWait {
+		return false
+	}
+	// The PMT told of no video, or of a video of unknown keyframes.
+	if x.pmt != nil && x.video < 0 {
+		return false
+	}
+	return true
+}
+
+// start returns where a reader that joined when the feed had received
+// from starts, and the PAT and PMT to read before it: the first keyframe
+// since, else the latest before, at or after oldest.
+func (x *tsIndex) start(oldest, from int64) (int64, []byte, bool) {
+	if x.off || x.pat == nil || x.pmt == nil || len(x.keys) == 0 {
+		return 0, nil, false
+	}
+	i, _ := slices.BinarySearch(x.keys, from)
+	if i == len(x.keys) {
+		i--
+	}
+	if x.keys[i] < oldest {
+		return 0, nil, false
+	}
+	prefix := make([]byte, 0, 2*tsPacket)
+	return x.keys[i], append(append(prefix, x.pat...), x.pmt...), true
+}
+
+// add indexes data, which starts at position at; keyframes before oldest,
+// out of the ring once data is in, are forgotten.
+func (x *tsIndex) add(at int64, data []byte, oldest int64) {
+	if x.off {
+		return
+	}
+	if x.sync < 0 {
+		head := append(x.partial, data...)
+		offset, ok := tsStart(head)
+		if !ok {
+			if len(head) >= sniffSize {
+				x.off = true
+				x.partial = nil
+				return
+			}
+			x.partial = head
+			return
+		}
+		x.sync = at - int64(len(x.partial)) + int64(offset)
+		x.next = x.sync
+		x.partial = nil
+		data = head[offset:]
+	}
+	for len(data) > 0 && !x.off {
+		if len(x.partial) > 0 || len(data) < tsPacket {
+			n := min(tsPacket-len(x.partial), len(data))
+			x.partial = append(x.partial, data[:n]...)
+			data = data[n:]
+			if len(x.partial) < tsPacket {
+				break
+			}
+			x.packet(x.next, x.partial)
+			x.partial = x.partial[:0]
+			x.next += tsPacket
+			continue
+		}
+		x.packet(x.next, data[:tsPacket])
+		data = data[tsPacket:]
+		x.next += tsPacket
+	}
+	drop := 0
+	for drop < len(x.keys) && x.keys[drop] < oldest {
+		drop++
+	}
+	x.keys = x.keys[drop:]
+}
+
+// packet indexes one packet, which starts at position at.
+func (x *tsIndex) packet(at int64, p []byte) {
+	if p[0] != 0x47 {
+		// Lost packet boundaries: readers start as if no keyframe were known.
+		x.off = true
+		x.keys = nil
+		return
+	}
+	pid := int(p[1]&0x1f)<<8 | int(p[2])
+	start := p[1]&0x40 != 0
+	payload := tsPayload(p)
+	switch {
+	case pid == 0 && start:
+		x.pat = append(x.pat[:0], p...)
+		if section := psiSection(payload); len(section) >= 12 {
+			for i := 8; i+4 <= len(section)-4; i += 4 {
+				if program := int(section[i])<<8 | int(section[i+1]); program != 0 {
+					x.pmtPID = int(section[i+2]&0x1f)<<8 | int(section[i+3])
+					break
+				}
+			}
+		}
+	case pid == x.pmtPID && start:
+		x.pmt = append(x.pmt[:0], p...)
+		x.video, x.videoType = pmtVideo(psiSection(payload))
+	case pid == x.video && x.video >= 0:
+		if adaptation := p[3]&0x20 != 0; adaptation && p[4] > 0 && p[5]&0x40 != 0 {
+			x.indicated = true
+			x.keys = append(x.keys, at)
+			return
+		}
+		if start && !x.indicated && pesKeyframe(payload, x.videoType) {
+			x.keys = append(x.keys, at)
+		}
+	}
+}
+
+// tsPayload returns a packet's payload, after its adaptation field.
+func tsPayload(p []byte) []byte {
+	control := p[3] >> 4 & 3
+	if control&1 == 0 {
+		return nil
+	}
+	offset := 4
+	if control&2 != 0 {
+		offset += 1 + int(p[4])
+	}
+	if offset >= len(p) {
+		return nil
+	}
+	return p[offset:]
+}
+
+// psiSection returns the table section a packet starting one carries,
+// within its section_length.
+func psiSection(payload []byte) []byte {
+	if len(payload) < 1 || 1+int(payload[0]) >= len(payload) {
+		return nil
+	}
+	section := payload[1+int(payload[0]):]
+	if len(section) < 3 {
+		return nil
+	}
+	length := 3 + (int(section[1]&0x0f)<<8 | int(section[2]))
+	return section[:min(length, len(section))]
+}
+
+// Stream types of the videos whose keyframes are found.
+const (
+	streamMPEG2 = 0x02
+	streamH264  = 0x1b
+	streamHEVC  = 0x24
+)
+
+// pmtVideo returns the PID and type of a PMT's first video, -1 without
+// one: MPEG-2 video is marked by the random access indicator only.
+func pmtVideo(section []byte) (int, byte) {
+	if len(section) < 12 {
+		return -1, 0
+	}
+	end := len(section) - 4
+	i := 12 + (int(section[10]&0x0f)<<8 | int(section[11]))
+	for i+5 <= end {
+		kind, pid := section[i], int(section[i+1]&0x1f)<<8|int(section[i+2])
+		switch kind {
+		case streamH264, streamHEVC, streamMPEG2:
+			return pid, kind
+		}
+		i += 5 + (int(section[i+3]&0x0f)<<8 | int(section[i+4]))
+	}
+	return -1, 0
+}
+
+// pesKeyframe reports whether the first packet of a video PES holds a
+// parameter set or a keyframe: an H.264 SPS or IDR slice, an HEVC VPS, SPS
+// or IRAP picture.
+func pesKeyframe(payload []byte, kind byte) bool {
+	if len(payload) < 9 || payload[0] != 0 || payload[1] != 0 || payload[2] != 1 {
+		return false
+	}
+	es := payload[min(9+int(payload[8]), len(payload)):]
+	for i := 0; i+3 < len(es); i++ {
+		if es[i] != 0 || es[i+1] != 0 || es[i+2] != 1 {
+			continue
+		}
+		nal := es[i+3]
+		switch kind {
+		case streamH264:
+			if t := nal & 0x1f; t == 5 || t == 7 {
+				return true
+			}
+		case streamHEVC:
+			if t := nal >> 1 & 0x3f; t >= 16 && t <= 21 || t >= 32 && t <= 34 {
+				return true
+			}
+		}
+	}
+	return false
 }

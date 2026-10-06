@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -426,5 +428,175 @@ func TestPlaylistsHaveNoFeed(t *testing.T) {
 	}
 	if !s.manifest(version.ID) {
 		t.Errorf("the playlist is not remembered as one")
+	}
+}
+
+// generatedTS encodes 4 seconds of video with a keyframe every second and
+// audio, as MPEG-TS, with FFmpeg; without indicator, the random access
+// indicators are cleared so that keyframes are found by their NAL units.
+func generatedTS(t *testing.T, codec string, indicator bool) []byte {
+	t.Helper()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	out := filepath.Join(t.TempDir(), "live.ts")
+	command := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=25:duration=4",
+		"-f", "lavfi", "-i", "sine=duration=4", "-c:v", codec, "-g", "25", "-bf", "0", "-pix_fmt", "yuv420p", "-c:a", "aac",
+		"-f", "mpegts", out)
+	if output, err := command.CombinedOutput(); err != nil {
+		if codec != "libx264" {
+			t.Logf("%s cannot be encoded here: %v %s", codec, err, output)
+			return nil
+		}
+		t.Fatalf("encoding: %v %s", err, output)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !indicator {
+		for at := 0; at+tsPacket <= len(data); at += tsPacket {
+			if p := data[at:]; p[3]&0x20 != 0 && p[4] > 0 {
+				p[5] &^= 0x40
+			}
+		}
+	}
+	return data
+}
+
+// tsPID is the PID of the packet at at.
+func tsPID(data []byte, at int64) int {
+	return int(data[at+1]&0x1f)<<8 | int(data[at+2])
+}
+
+// tsVideo is the PID FFmpeg's muxer gives the first video.
+const tsVideo = 0x100
+
+// indicatedKeys lists the video packets the muxer marked as random access
+// points (it marks audio ones too).
+func indicatedKeys(data []byte) []int64 {
+	var keys []int64
+	for at := 0; at+tsPacket <= len(data); at += tsPacket {
+		if p := data[at:]; p[3]&0x20 != 0 && p[4] > 0 && p[5]&0x40 != 0 && tsPID(data, int64(at)) == tsVideo {
+			keys = append(keys, int64(at))
+		}
+	}
+	return keys
+}
+
+// feedOf writes data to a new feed as a source would send it: after junk
+// that is no packet, in chunks of odd sizes.
+func feedOf(data []byte, junk int) *feed {
+	f := &feed{buf: make([]byte, feedBuffer), changed: make(chan struct{}), readers: map[*feedReader]bool{}, index: newTSIndex(),
+		ready: make(chan struct{})}
+	f.write(bytes.Repeat([]byte{0xff}, junk))
+	for len(data) > 0 {
+		n := min(1000, len(data))
+		f.write(data[:n])
+		data = data[n:]
+	}
+	return f
+}
+
+// A feed finds where a stream's keyframes start, by their random access
+// indicator or, without one, by their NAL units, packets split across
+// writes included.
+func TestFeedsFindTheKeyframesOfTheirStream(t *testing.T) {
+	marked := generatedTS(t, "libx264", true)
+	want := indicatedKeys(marked)
+	if len(want) != 4 {
+		t.Fatalf("the generated stream has %d keyframes, want 4", len(want))
+	}
+	const junk = 100
+	for _, test := range []struct {
+		name string
+		data []byte
+	}{{"indicated", marked}, {"NAL units", generatedTS(t, "libx264", false)}} {
+		f := feedOf(test.data, junk)
+		var got []int64
+		for _, key := range f.index.keys {
+			got = append(got, key-junk)
+		}
+		if !slices.Equal(got, want) || f.index.sync != junk {
+			t.Errorf("%s: keyframes at %v (sync %d), want %v", test.name, got, f.index.sync, want)
+		}
+	}
+	if hevc := generatedTS(t, "libx265", false); hevc != nil {
+		if f := feedOf(hevc, 0); len(f.index.keys) != 4 {
+			t.Errorf("HEVC: %d keyframes found by their NAL units, want 4", len(f.index.keys))
+		}
+	}
+}
+
+// readSome reads n bytes of a reader.
+func readSome(t *testing.T, r *feedReader, n int) []byte {
+	t.Helper()
+	got := make([]byte, n)
+	if _, err := io.ReadFull(r, got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// A reader joining a running feed starts with the stream's PAT and PMT,
+// then its latest keyframe; the first reader of a new feed starts at its
+// first keyframe. What it reads decodes from its first bytes, with
+// FFmpeg's short probe.
+func TestReadersStartAtAKeyframe(t *testing.T) {
+	data := generatedTS(t, "libx264", true)
+	keys := indicatedKeys(data)
+	f := feedOf(data, 0)
+	r := f.join(t.Context(), accounts.ID{1})
+	head := readSome(t, r, 3*tsPacket)
+	if tsPID(head, 0) != 0 || tsPID(head, tsPacket) != f.index.pmtPID || !bytes.Equal(head[2*tsPacket:], data[keys[3]:keys[3]+tsPacket]) {
+		t.Fatalf("a joining reader starts with PIDs %d, %d, then %x, want 0, %d, then the last keyframe", tsPID(head, 0),
+			tsPID(head, tsPacket), head[2*tsPacket:2*tsPacket+8], f.index.pmtPID)
+	}
+	if r.pos != keys[3]+tsPacket {
+		t.Errorf("the reader is at %d, want just past the last keyframe, %d", r.pos, keys[3]+tsPacket)
+	}
+
+	// A new feed: its first reader waits for the first keyframe.
+	fresh := &feed{buf: make([]byte, feedBuffer), changed: make(chan struct{}), readers: map[*feedReader]bool{}, index: newTSIndex(),
+		ready: make(chan struct{})}
+	first := fresh.join(t.Context(), accounts.ID{1})
+	go func() {
+		for rest := data; len(rest) > 0; {
+			n := min(1316, len(rest))
+			fresh.write(rest[:n])
+			rest = rest[n:]
+		}
+	}()
+	head = readSome(t, first, 3*tsPacket)
+	if !bytes.Equal(head[2*tsPacket:], data[keys[0]:keys[0]+tsPacket]) {
+		t.Fatalf("the first reader does not start at the first keyframe")
+	}
+
+	// What the joining reader read decodes with FFmpeg's short probe.
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	joined := append(slices.Clone(head[:2*tsPacket]), data[keys[3]:r.pos]...)
+	joined = append(joined, readSome(t, r, len(data)-int(r.pos))...)
+	file := filepath.Join(t.TempDir(), "joined.ts")
+	if err := os.WriteFile(file, joined, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := append([]string{"-v", "error"}, shortProbe...)
+	output, err := exec.Command(ffmpeg, append(args, "-i", file, "-map", "0", "-c", "copy", "-f", "null", "-")...).CombinedOutput()
+	if err != nil || bytes.Contains(output, []byte("non-existing PPS")) || bytes.Contains(output, []byte("no frame")) {
+		t.Errorf("a joined stream read with the short probe: %v %s", err, output)
+	}
+}
+
+// Without a keyframe in its first keyframeWait bytes, or not MPEG-TS, a
+// feed's readers start feedJoin back, on a packet.
+func TestReadersOfStreamsWithoutKeyframesStillStart(t *testing.T) {
+	f := feedOf(bytes.Repeat([]byte("not a stream "), 1000), 0)
+	if !f.index.off {
+		t.Error("a stream of no packets is indexed")
+	}
+	r := f.join(t.Context(), accounts.ID{1})
+	if got := readSome(t, r, 4); string(got) != "not " {
+		t.Errorf("read %q", got)
 	}
 }
