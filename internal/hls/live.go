@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,10 +27,16 @@ const (
 	// long. Players reload a live playlist every few seconds while they
 	// play, so a player that went quiet has left.
 	liveIdle = time.Minute
-	// liveRetry is how long after a run starts a failed run may start
-	// again for the next request, so that a source that refuses does not
-	// make every player request start FFmpeg.
-	liveRetry = 10 * time.Second
+	// liveInitTime is the length of the first segments, in seconds, so
+	// that a player starts a second after FFmpeg does.
+	liveInitTime = 1
+	// A run that ends, cleanly or not, is started again: after 1, 2, then
+	// 4 seconds when the runs before it ended within liveQuickRun of their
+	// start, at most liveRestarts times within liveRestartWindow, past
+	// which the encoding gives up until a player asks again after it.
+	liveQuickRun      = 10 * time.Second
+	liveRestarts      = 5
+	liveRestartWindow = 2 * time.Minute
 	// liveWait bounds how long a request waits for the first segment.
 	liveWait     = time.Minute
 	livePlaylist = "live.m3u8"
@@ -41,12 +48,16 @@ const (
 	serverLives = 16
 )
 
+// ErrInterrupted reports a live stream whose input ended: a live stream
+// has no end, so it is read again.
+var ErrInterrupted = errors.New("the live stream was interrupted")
+
 // ErrBusy reports an encoding refused because the server runs as many as
 // it may: live encodings, or playbacks whose video is converted.
 var ErrBusy = errors.New("too many encodings")
 
 // liveFile matches the files of a live encoding a player may fetch.
-var liveFile = regexp.MustCompile(`^(\d+\.(ts|mp4)|init\.mp4)$`)
+var liveFile = regexp.MustCompile(`^(\d+\.(ts|mp4)|init(-\d+)?\.mp4)$`)
 
 // live is a live stream that FFmpeg converts into HLS segments as it
 // comes, for a play session. Unlike a remux, it has no plan: FFmpeg's own
@@ -60,10 +71,14 @@ type live struct {
 	opened  bool
 	remux   Remux
 	release func()
-	// run is the current or last run of FFmpeg, nil before the first.
-	run  *liveRun
-	next int
-	used time.Time
+	// run is the current or last run of FFmpeg, nil before the first;
+	// restarts are when runs started again lately, quick how many runs in
+	// a row ended within liveQuickRun.
+	run      *liveRun
+	restarts []time.Time
+	quick    int
+	next     int
+	used     time.Time
 	// created orders a user's live encodings, the oldest replaced first.
 	created time.Time
 	// stopped is set once the encoding is stopped for good.
@@ -72,8 +87,8 @@ type live struct {
 
 // liveRun is one run of FFmpeg.
 type liveRun struct {
-	started time.Time
-	cancel  context.CancelFunc
+	started, ended time.Time
+	cancel         context.CancelFunc
 	// done is closed when FFmpeg exits, err set before.
 	done chan struct{}
 	err  error
@@ -122,27 +137,31 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 	if replaced != nil {
 		replaced.stop()
 	}
-	run, err := l.ensure(ctx, open)
-	if err != nil {
-		return nil, err
-	}
 	ctx, cancel := context.WithTimeout(ctx, liveWait)
 	defer cancel()
 	for {
+		// A run that ended is started again (see ensure): the playlist
+		// keeps listing the last segments meanwhile.
+		run, err := l.ensure(ctx, open)
+		if err != nil {
+			return nil, err
+		}
 		data, err := os.ReadFile(filepath.Join(l.dir, livePlaylist))
 		if err == nil && bytes.Contains(data, []byte("#EXTINF")) {
 			return rewriteLive(data, uri), nil
 		}
 		select {
 		case <-run.done:
-			if run.err != nil {
+			// A stream that never played fails at once: the next request
+			// starts it again.
+			if run.err != nil && !errors.Is(run.err, ErrInterrupted) && !l.played() {
 				return nil, run.err
 			}
-			// FFmpeg reached the end of the stream: its playlist is final.
-			if data, err := os.ReadFile(filepath.Join(l.dir, livePlaylist)); err == nil {
-				return rewriteLive(data, uri), nil
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(200 * time.Millisecond):
 			}
-			return nil, ErrNotFound
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(200 * time.Millisecond):
@@ -174,13 +193,44 @@ func (m *Manager) LiveSegment(key Key, name string) (*os.File, error) {
 }
 
 // ensure opens the encoding's input on first use and starts FFmpeg unless
-// it runs, ran to the end of the stream, or failed moments ago.
+// it runs. A run that ended, as a live stream should not, is started again
+// once its backoff passed (see liveQuickRun): it returns the ended run
+// until then. Past liveRestarts within liveRestartWindow, it fails with
+// the last run's error, and so does the next request until the window
+// moved on. After a run that failed quickly the input is opened again,
+// which analyzes the stream again.
 func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.used = time.Now()
 	if l.stopped {
 		return nil, ErrStopped
+	}
+	reopen := false
+	run := l.run
+	if run != nil {
+		select {
+		case <-run.done:
+		default:
+			return run, nil
+		}
+		ended := time.Now()
+		if run.ended.Sub(run.started) < liveQuickRun {
+			if wait := liveBackoff(l.quick); ended.Before(run.ended.Add(wait)) {
+				return run, nil
+			}
+			reopen = run.err != nil && !errors.Is(run.err, ErrInterrupted)
+		}
+		l.restarts = slices.DeleteFunc(l.restarts, func(at time.Time) bool { return ended.Sub(at) > liveRestartWindow })
+		if len(l.restarts) >= liveRestarts {
+			return nil, fmt.Errorf("%w after %d restarts: %w", ErrStopped, len(l.restarts), run.err)
+		}
+		l.restarts = append(l.restarts, ended)
+		l.m.logger.Info("A live stream is read again", "reason", run.err, "restarts", len(l.restarts))
+	}
+	if reopen && l.opened {
+		l.release()
+		l.opened = false
 	}
 	if !l.opened {
 		remux, release, err := open(context.WithoutCancel(ctx))
@@ -189,34 +239,34 @@ func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 		}
 		l.remux, l.release, l.opened = remux, release, true
 	}
-	run := l.run
-	if run != nil {
-		select {
-		case <-run.done:
-			if run.err == nil || time.Since(run.started) < liveRetry {
-				return run, nil
-			}
-		default:
-			return run, nil
-		}
-	}
 	return l.start()
 }
 
-// start runs FFmpeg again into an empty directory, numbering segments on
-// from the last run's, so that a player that reloads the playlist does not
-// see the stream go back. The caller holds l.mu.
+// liveBackoff is how long after a run that ended quickly, the quick-th in
+// a row, the next one starts: 1, 2, then 4 seconds.
+func liveBackoff(quick int) time.Duration {
+	return time.Second << min(max(quick-1, 0), 2)
+}
+
+// start runs FFmpeg into the encoding's directory, emptied on the first
+// run only, numbering segments on from the last run's, so that a player
+// that reloads the playlist does not see the stream go back; a run after
+// the first starts its playlist with a discontinuity, and writes its own
+// initialization segment. The caller holds l.mu.
 func (l *live) start() (*liveRun, error) {
-	if err := os.RemoveAll(l.dir); err != nil {
-		return nil, err
+	if l.run == nil {
+		if err := os.RemoveAll(l.dir); err != nil {
+			return nil, err
+		}
 	}
 	if err := os.MkdirAll(l.dir, 0o700); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	previous := l.run
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
 	l.run = run
-	args := l.remux.liveArgs(l.dir, l.next)
+	args := l.remux.runArgs(l.dir, l.next, previous != nil)
 	go func() {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, l.m.ffmpeg, args...)
@@ -233,10 +283,18 @@ func (l *live) start() (*liveRun, error) {
 			err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
 			l.m.logger.Warn("A live encoding failed", "error", err)
 		default:
-			l.m.logger.Debug("A live stream ended")
+			// A live stream does not end: its input was interrupted.
+			err = ErrInterrupted
+			l.m.logger.Debug("A live stream was interrupted")
 		}
 		l.mu.Lock()
 		l.next = max(l.next, lastSegment(l.dir)+1)
+		run.ended = time.Now()
+		if run.ended.Sub(run.started) < liveQuickRun {
+			l.quick++
+		} else {
+			l.quick = 0
+		}
 		run.err = err
 		close(run.done)
 		l.mu.Unlock()
@@ -256,6 +314,13 @@ func lastSegment(dir string) int {
 		}
 	}
 	return last
+}
+
+// played reports whether a run wrote a segment.
+func (l *live) played() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.next > 0 || lastSegment(l.dir) >= 0
 }
 
 func (l *live) idle() bool {
@@ -301,6 +366,9 @@ func (m *Manager) stopLives(match func(Key, *live) bool) {
 	}
 }
 
+// liveMap is the initialization segment an FFmpeg playlist names.
+var liveMap = regexp.MustCompile(`URI="init(-\d+)?\.mp4"`)
+
 // rewriteLive names the files FFmpeg's playlist refers to by uri.
 func rewriteLive(playlist []byte, uri func(name string) string) []byte {
 	var out bytes.Buffer
@@ -310,7 +378,9 @@ func rewriteLive(playlist []byte, uri func(name string) string) []byte {
 		case line == "":
 			continue
 		case strings.HasPrefix(line, "#EXT-X-MAP:"):
-			line = strings.Replace(line, `URI="`+liveInit+`"`, `URI="`+uri(liveInit)+`"`, 1)
+			line = liveMap.ReplaceAllStringFunc(line, func(attribute string) string {
+				return `URI="` + uri(attribute[len(`URI="`):len(attribute)-1]) + `"`
+			})
 		case !strings.HasPrefix(line, "#"):
 			line = uri(line)
 		}
@@ -320,9 +390,17 @@ func rewriteLive(playlist []byte, uri func(name string) string) []byte {
 	return out.Bytes()
 }
 
-// liveArgs is FFmpeg's command line for a live encoding writing into dir,
-// its first segment numbered start.
+// liveArgs is FFmpeg's command line for the first run of a live encoding
+// writing into dir, its first segment numbered start (see runArgs).
 func (r Remux) liveArgs(dir string, start int) []string {
+	return r.runArgs(dir, start, false)
+}
+
+// runArgs is FFmpeg's command line for a run of a live encoding writing
+// into dir, its first segment numbered start; restart marks a run after
+// the first. The playlist never ends: a live stream that does is read
+// again.
+func (r Remux) runArgs(dir string, start int, restart bool) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	if r.Encode != nil {
 		args = append(args, r.Encode.inputs()...)
@@ -346,10 +424,16 @@ func (r Remux) liveArgs(dir string, start int) []string {
 		args = append(args, "-bsf:a", "aac_adtstoasc")
 	}
 	args = append(args, r.threadArgs()...)
-	args = append(args, "-f", "hls", "-hls_time", strconv.Itoa(liveSegment), "-hls_list_size", strconv.Itoa(liveWindow),
-		"-hls_flags", "delete_segments+independent_segments+temp_file", "-start_number", strconv.Itoa(start))
+	flags := "delete_segments+independent_segments+temp_file+omit_endlist"
+	init := liveInit
+	if restart {
+		flags += "+discont_start"
+		init = "init-" + strconv.Itoa(start) + ".mp4"
+	}
+	args = append(args, "-f", "hls", "-hls_init_time", strconv.Itoa(liveInitTime), "-hls_time", strconv.Itoa(liveSegment),
+		"-hls_list_size", strconv.Itoa(liveWindow), "-hls_flags", flags, "-start_number", strconv.Itoa(start))
 	if r.Format == FMP4 {
-		args = append(args, "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", liveInit)
+		args = append(args, "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", init)
 	} else {
 		args = append(args, "-hls_segment_type", "mpegts")
 	}
