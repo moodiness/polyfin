@@ -43,6 +43,16 @@ const users: typeof en = {
       'Permet à cet utilisateur d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion.',
     noTranscoding: 'Sans conversion',
     noDownloads: 'Sans téléchargement',
+    turnOffDownloads: 'Désactiver les téléchargements pour tous',
+    turnOffDownloadsConfirm:
+      'Tous les utilisateurs perdent l’autorisation de télécharger, y compris dans les applications Jellyfin déjà connectées. Vous pouvez la rendre à un utilisateur depuis sa page, dans Accès.',
+    turningOffDownloads: 'Désactivation…',
+    downloadsTurnedOff: (count: number) =>
+      count === 0
+        ? 'Personne ne pouvait télécharger.'
+        : count === 1
+          ? '1 utilisateur ne peut plus télécharger.'
+          : `${count} utilisateurs ne peuvent plus télécharger.`,
     lastAdminHelp:
       'Le dernier administrateur actif ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     updated: 'Modifications enregistrées.',

@@ -1,30 +1,7 @@
 import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import {
-  analysisTimeoutRange,
-  backupsKeptRange,
-  catalogLimitRange,
-  catalogRefreshMinutesRange,
-  channelLimitRange,
-  customCodeMaxBytes,
-  fetchStatus,
-  inactiveDeviceDaysRange,
-  liveTvRefreshHoursRange,
-  loginAttemptsRange,
-  loginDisclaimerMaxBytes,
-  playedPercentRange,
-  queryKeys,
-  recordingPaddingMinutesRange,
-  recordingRetentionDaysRange,
-  resumePercentRange,
-  revealServerSecret,
-  thumbnailStorageRange,
-  trickplayIntervalRange,
-  trickplayWidths,
-  versionAttemptsRange,
-  versionListMinutesRange,
-} from '@/api'
+import { fetchStatus, queryKeys, revealServerSecret } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
@@ -56,7 +33,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   diagnostics: (api) => <DiagnosticsFields {...api} />,
 }
 
-function General({ form, update, error }: SectionFormApi) {
+function General({ form, update, error, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -64,13 +41,13 @@ function General({ form, update, error }: SectionFormApi) {
       <FieldRow
         anchor="server-name"
         label={s.serverName}
-        help={s.serverNameHelp}
+        help={s.serverNameHelp(range('serverName'))}
         error={error('server-name')}
       >
         <TextInput
           value={form.serverName}
           onValue={(serverName) => update({ serverName })}
-          maxLength={64}
+          maxLength={limits('serverName').max}
           required
           className="max-w-sm"
         />
@@ -110,31 +87,17 @@ function General({ form, update, error }: SectionFormApi) {
   )
 }
 
-function Playback({ form, update, error, number }: SectionFormApi) {
+function Playback({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
     <SettingsGroup>
-      <SwitchRow
-        anchor="chapters"
-        label={s.chapters}
-        help={s.chaptersHelp}
-        checked={form.chapters}
-        onChange={(chapters) => update({ chapters })}
-      />
       <SwitchRow
         anchor="prepare-ahead"
         label={s.prepareAhead}
         help={s.prepareAheadHelp}
         checked={form.prepareAhead}
         onChange={(prepareAhead) => update({ prepareAhead })}
-      />
-      <SwitchRow
-        anchor="downloads"
-        label={s.downloads}
-        help={s.downloadsHelp}
-        checked={form.downloads}
-        onChange={(downloads) => update({ downloads })}
       />
       <SwitchRow
         anchor="prefer-direct-play"
@@ -146,12 +109,11 @@ function Playback({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="analysis-timeout"
         label={s.analysisTimeout}
-        help={s.analysisTimeoutHelp}
+        help={s.analysisTimeoutHelp(range('analysisTimeout'))}
         error={error('analysis-timeout')}
       >
         <NumberInput
-          min={analysisTimeoutRange.min}
-          max={analysisTimeoutRange.max}
+          {...limits('analysisTimeout')}
           step={1}
           {...number('analysis-timeout', form.analysisTimeout, (value) =>
             update({ analysisTimeout: Math.trunc(value) }),
@@ -161,12 +123,11 @@ function Playback({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="version-attempts"
         label={s.versionAttempts}
-        help={s.versionAttemptsHelp}
+        help={s.versionAttemptsHelp(range('versionAttempts'))}
         error={error('version-attempts')}
       >
         <NumberInput
-          min={versionAttemptsRange.min}
-          max={versionAttemptsRange.max}
+          {...limits('versionAttempts')}
           step={1}
           {...number('version-attempts', form.versionAttempts, (value) =>
             update({ versionAttempts: Math.trunc(value) }),
@@ -177,7 +138,7 @@ function Playback({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Content({ form, update, error, number }: SectionFormApi) {
+function Content({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const groups = t.settingsPage.groups
@@ -194,14 +155,15 @@ function Content({ form, update, error, number }: SectionFormApi) {
         <SettingRow anchor="segment-order">
           <SegmentSources
             order={form.segmentOrder}
-            defaultOrder={form.segmentOrderDefault}
             off={form.segmentSourcesOff}
             publicMetaDbKey={
               form.publicMetaDbKey === undefined
                 ? form.publicMetaDbKeySet
                 : form.publicMetaDbKey.trim() !== ''
             }
-            onOrder={(segmentOrder) => update({ segmentOrder })}
+            onChange={(segmentOrder, segmentSourcesOff) =>
+              update({ segmentOrder, segmentSourcesOff })
+            }
             error={error('segment-order')}
           />
         </SettingRow>
@@ -248,12 +210,11 @@ function Content({ form, update, error, number }: SectionFormApi) {
           <FieldRow
             anchor="played-percent"
             label={s.playedPercent}
-            help={s.playedPercentHelp}
+            help={s.playedPercentHelp(range('playedPercent'))}
             error={error('played-percent')}
           >
             <NumberInput
-              min={playedPercentRange.min}
-              max={playedPercentRange.max}
+              {...limits('playedPercent')}
               step={1}
               suffix="%"
               {...number('played-percent', form.playedPercent, (value) =>
@@ -264,12 +225,11 @@ function Content({ form, update, error, number }: SectionFormApi) {
           <FieldRow
             anchor="resume-percent"
             label={s.resumePercent}
-            help={s.resumePercentHelp}
+            help={s.resumePercentHelp(range('resumePercent'))}
             error={error('resume-percent')}
           >
             <NumberInput
-              min={resumePercentRange.min}
-              max={resumePercentRange.max}
+              {...limits('resumePercent')}
               step={1}
               suffix="%"
               // 0 is a valid threshold: it is shown, not left blank.
@@ -284,7 +244,7 @@ function Content({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Catalogs({ form, update, error, number }: SectionFormApi) {
+function Catalogs({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -292,12 +252,11 @@ function Catalogs({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="catalog-limit"
         label={s.catalogLimit}
-        help={s.catalogLimitHelp}
+        help={s.catalogLimitHelp(range('catalogLimit'))}
         error={error('catalog-limit')}
       >
         <NumberInput
-          min={catalogLimitRange.min}
-          max={catalogLimitRange.max}
+          {...limits('catalogLimit')}
           step={1}
           {...number('catalog-limit', form.catalogLimit, (value) =>
             update({ catalogLimit: Math.trunc(value) }),
@@ -307,12 +266,11 @@ function Catalogs({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="channel-limit"
         label={s.channelLimit}
-        help={s.channelLimitHelp}
+        help={s.channelLimitHelp(range('channelLimit'))}
         error={error('channel-limit')}
       >
         <NumberInput
-          min={channelLimitRange.min}
-          max={channelLimitRange.max}
+          {...limits('channelLimit')}
           step={1}
           {...number('channel-limit', form.channelLimit, (value) =>
             update({ channelLimit: Math.trunc(value) }),
@@ -322,12 +280,11 @@ function Catalogs({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="version-list-minutes"
         label={s.versionListMinutes}
-        help={s.versionListMinutesHelp}
+        help={s.versionListMinutesHelp(range('versionListMinutes'))}
         error={error('version-list-minutes')}
       >
         <NumberInput
-          min={versionListMinutesRange.min}
-          max={versionListMinutesRange.max}
+          {...limits('versionListMinutes')}
           step={1}
           {...number('version-list-minutes', form.versionListMinutes, (value) =>
             update({ versionListMinutes: Math.trunc(value) }),
@@ -341,8 +298,7 @@ function Catalogs({ form, update, error, number }: SectionFormApi) {
         error={error('catalog-refresh-minutes')}
       >
         <NumberInput
-          min={catalogRefreshMinutesRange.min}
-          max={catalogRefreshMinutesRange.max}
+          {...limits('catalogRefreshMinutes')}
           step={1}
           {...number('catalog-refresh-minutes', form.catalogRefreshMinutes, (value) =>
             update({ catalogRefreshMinutes: Math.trunc(value) }),
@@ -353,7 +309,7 @@ function Catalogs({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Thumbnails({ form, update, error, number }: SectionFormApi) {
+function Thumbnails({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -372,8 +328,7 @@ function Thumbnails({ form, update, error, number }: SectionFormApi) {
         error={error('trickplay-interval')}
       >
         <NumberInput
-          min={trickplayIntervalRange.min}
-          max={trickplayIntervalRange.max}
+          {...limits('trickplayInterval')}
           step={1}
           {...number('trickplay-interval', form.trickplayInterval, (value) =>
             update({ trickplayInterval: Math.trunc(value) }),
@@ -388,7 +343,10 @@ function Thumbnails({ form, update, error, number }: SectionFormApi) {
       >
         <Select
           value={form.trickplayWidth}
-          options={trickplayWidths.map((width) => ({ value: width, label: s.pixels(width) }))}
+          options={((form.bounds.trickplayWidth?.choices ?? []) as number[]).map((width) => ({
+            value: width,
+            label: s.pixels(width),
+          }))}
           onValue={(trickplayWidth) => update({ trickplayWidth })}
           className="max-w-xs"
         />
@@ -403,12 +361,11 @@ function Thumbnails({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="thumbnail-storage"
         label={s.thumbnailStorage}
-        help={s.thumbnailStorageHelp}
+        help={s.thumbnailStorageHelp(range('thumbnailStorageGB'))}
         error={error('thumbnail-storage')}
       >
         <NumberInput
-          min={thumbnailStorageRange.min}
-          max={thumbnailStorageRange.max}
+          {...limits('thumbnailStorageGB')}
           step={1}
           {...number('thumbnail-storage', form.thumbnailStorageGB, (value) =>
             update({ thumbnailStorageGB: Math.trunc(value) }),
@@ -419,7 +376,7 @@ function Thumbnails({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Security({ form, update, error, number }: SectionFormApi) {
+function Security({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -434,12 +391,11 @@ function Security({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="login-attempts"
         label={s.loginAttempts}
-        help={s.loginAttemptsHelp}
+        help={s.loginAttemptsHelp(range('loginAttempts'))}
         error={error('login-attempts')}
       >
         <NumberInput
-          min={0}
-          max={loginAttemptsRange.max}
+          {...limits('loginAttempts')}
           step={1}
           {...number('login-attempts', form.loginAttempts, (value) =>
             update({ loginAttempts: Math.trunc(value) }),
@@ -449,12 +405,11 @@ function Security({ form, update, error, number }: SectionFormApi) {
       <FieldRow
         anchor="inactive-device-days"
         label={s.inactiveDeviceDays}
-        help={s.inactiveDeviceDaysHelp}
+        help={s.inactiveDeviceDaysHelp(range('inactiveDeviceDays'))}
         error={error('inactive-device-days')}
       >
         <NumberInput
-          min={inactiveDeviceDaysRange.min}
-          max={inactiveDeviceDaysRange.max}
+          {...limits('inactiveDeviceDays')}
           step={1}
           {...number('inactive-device-days', form.inactiveDeviceDays, (value) =>
             update({ inactiveDeviceDays: Math.trunc(value) }),
@@ -532,7 +487,7 @@ function Tracking({ form, update, error }: SectionFormApi) {
   )
 }
 
-function LiveTv({ form, update, error, number }: SectionFormApi) {
+function LiveTv({ form, update, error, number, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -544,8 +499,7 @@ function LiveTv({ form, update, error, number }: SectionFormApi) {
         error={error('live-tv-refresh-hours')}
       >
         <NumberInput
-          min={liveTvRefreshHoursRange.min}
-          max={liveTvRefreshHoursRange.max}
+          {...limits('liveTvRefreshHours')}
           step={1}
           {...number('live-tv-refresh-hours', form.liveTvRefreshHours, (value) =>
             update({ liveTvRefreshHours: Math.trunc(value) }),
@@ -556,7 +510,7 @@ function LiveTv({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Recordings({ form, update, error, number }: SectionFormApi) {
+function Recordings({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -570,12 +524,11 @@ function Recordings({ form, update, error, number }: SectionFormApi) {
         <FieldRow
           anchor="recording-pre-padding"
           label={s.recordingPrePadding}
-          help={s.recordingPrePaddingHelp}
+          help={s.recordingPrePaddingHelp(range('recordingPrePadding', 1 / 60))}
           error={error('recording-pre-padding')}
         >
           <NumberInput
-            min={recordingPaddingMinutesRange.min}
-            max={recordingPaddingMinutesRange.max}
+            {...limits('recordingPrePadding', 1 / 60)}
             step={1}
             {...number(
               'recording-pre-padding',
@@ -587,12 +540,11 @@ function Recordings({ form, update, error, number }: SectionFormApi) {
         <FieldRow
           anchor="recording-post-padding"
           label={s.recordingPostPadding}
-          help={s.recordingPostPaddingHelp}
+          help={s.recordingPostPaddingHelp(range('recordingPostPadding', 1 / 60))}
           error={error('recording-post-padding')}
         >
           <NumberInput
-            min={recordingPaddingMinutesRange.min}
-            max={recordingPaddingMinutesRange.max}
+            {...limits('recordingPostPadding', 1 / 60)}
             step={1}
             {...number(
               'recording-post-padding',
@@ -604,12 +556,11 @@ function Recordings({ form, update, error, number }: SectionFormApi) {
         <FieldRow
           anchor="recording-retention-days"
           label={s.recordingRetentionDays}
-          help={s.recordingRetentionDaysHelp}
+          help={s.recordingRetentionDaysHelp(range('recordingRetentionDays'))}
           error={error('recording-retention-days')}
         >
           <NumberInput
-            min={recordingRetentionDaysRange.min}
-            max={recordingRetentionDaysRange.max}
+            {...limits('recordingRetentionDays')}
             step={1}
             {...number('recording-retention-days', form.recordingRetentionDays, (value) =>
               update({ recordingRetentionDays: Math.trunc(value) }),
@@ -621,7 +572,7 @@ function Recordings({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function Backups({ form, update, error, number }: SectionFormApi) {
+function Backups({ form, update, error, number, range, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
   return (
@@ -635,7 +586,7 @@ function Backups({ form, update, error, number }: SectionFormApi) {
         <FieldRow
           anchor="backup-hour"
           label={s.backupHour}
-          help={s.backupHourHelp}
+          help={s.backupHourHelp(formatHour(Number(form.bounds.backupHour?.default), language))}
           error={error('backup-hour')}
         >
           <Select
@@ -651,12 +602,11 @@ function Backups({ form, update, error, number }: SectionFormApi) {
         <FieldRow
           anchor="backups-kept"
           label={s.backupsKept}
-          help={s.backupsKeptHelp}
+          help={s.backupsKeptHelp(range('backupsKept'))}
           error={error('backups-kept')}
         >
           <NumberInput
-            min={backupsKeptRange.min}
-            max={backupsKeptRange.max}
+            {...limits('backupsKept')}
             step={1}
             {...number('backups-kept', form.backupsKept, (value) =>
               update({ backupsKept: Math.trunc(value) }),
@@ -669,7 +619,7 @@ function Backups({ form, update, error, number }: SectionFormApi) {
   )
 }
 
-function WebPlayer({ form, update, error }: SectionFormApi) {
+function WebPlayer({ form, update, error, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const status = useQuery({
@@ -697,7 +647,7 @@ function WebPlayer({ form, update, error }: SectionFormApi) {
           help={s.customCssHelp}
           value={form.customCss}
           onValue={(customCss) => update({ customCss })}
-          maxBytes={customCodeMaxBytes}
+          maxBytes={limits('customCss').max ?? 0}
           error={error('custom-css')}
         />
       </SettingRow>
@@ -707,7 +657,7 @@ function WebPlayer({ form, update, error }: SectionFormApi) {
           help={s.customJsHelp}
           value={form.customJs}
           onValue={(customJs) => update({ customJs })}
-          maxBytes={customCodeMaxBytes}
+          maxBytes={limits('customJs').max ?? 0}
           error={error('custom-js')}
         >
           <Notice tone="warn">
@@ -721,7 +671,7 @@ function WebPlayer({ form, update, error }: SectionFormApi) {
           help={s.loginDisclaimerHelp}
           value={form.loginDisclaimer}
           onValue={(loginDisclaimer) => update({ loginDisclaimer })}
-          maxBytes={loginDisclaimerMaxBytes}
+          maxBytes={limits('loginDisclaimer').max ?? 0}
           rows={4}
           error={error('login-disclaimer')}
         />

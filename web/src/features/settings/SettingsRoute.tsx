@@ -2,7 +2,7 @@ import { MagnifyingGlassIcon, TerminalIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
-import { fetchSettings, fetchVariables, queryKeys } from '@/api'
+import { fetchSettings, fetchVariables, queryKeys, type Settings } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import {
   isSettingsSection,
@@ -23,7 +23,8 @@ import {
   Skeleton,
   SkeletonText,
 } from '@/ui'
-import { settingEntries, variableAnchor } from './catalog'
+import { rangeText } from './bounds'
+import { settingEntries, variableAnchor, type RangeOf } from './catalog'
 import SectionForm from './SectionForm'
 import { sectionFields } from './sections'
 
@@ -98,7 +99,9 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
         />
       }
     >
-      {search.trim() !== '' && <SearchResults query={search.trim()} />}
+      {search.trim() !== '' && (
+        <SearchResults query={search.trim()} bounds={settings.data?.bounds} />
+      )}
       <div hidden={search.trim() !== ''}>
         <header className="max-md:pt-6">
           <h2 className="text-h2 text-ink">{t.nav.settingsSections[current.key]}</h2>
@@ -172,9 +175,19 @@ function sectionLede(
   }
 }
 
-/** The settings of every section that match the search, each opening at its anchor. */
-function SearchResults({ query }: { query: string }) {
-  const { t } = useI18n()
+/**
+ * The settings of every section that match the search, each opening at its anchor; their help
+ * texts give the bounds once the settings are loaded.
+ */
+function SearchResults({
+  query,
+  bounds,
+}: {
+  query: string
+  bounds: Settings['bounds'] | undefined
+}) {
+  const { t, language } = useI18n()
+  const range: RangeOf = (name, scale) => rangeText(bounds?.[name], language, scale)
   const text = t.settingsPage
   const variables = useQuery({
     queryKey: queryKeys.variables,
@@ -189,7 +202,7 @@ function SearchResults({ query }: { query: string }) {
         searchable(
           [
             entry.label(t),
-            entry.help?.(t) ?? '',
+            entry.help?.(t, range) ?? '',
             ...(entry.keywords ?? []),
             t.nav.settingsSections[sectionOf(entry.section).key],
           ].join(' '),

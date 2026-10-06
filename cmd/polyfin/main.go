@@ -2,7 +2,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -74,9 +73,9 @@ Environment:
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
   POLYFIN_CACHE_DIR     where sources being played and their remuxes are kept (default: a polyfin directory in the system's temporary directory)
   POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
-  POLYFIN_HWACCEL       GPU video is converted on unless the settings choose: auto, nvenc, vaapi or none (default auto)
+  POLYFIN_HWACCEL       GPU video is converted on, copied into the settings at the first start only: auto, nvenc, vaapi or none (default auto)
   POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
-  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first: theintrodb, introdb, publicmetadb or none (default theintrodb,introdb,publicmetadb)
+  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first, copied into the settings at the first start only: theintrodb, introdb, publicmetadb or none (default theintrodb,introdb,publicmetadb)
   POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
 `
 
@@ -147,6 +146,11 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
+	// POLYFIN_HWACCEL and POLYFIN_SEGMENTS are copied into the settings
+	// once; the settings decide from then on.
+	if err := store.AdoptEnvironment(ctx, cfg.Acceleration, cfg.Segments); err != nil {
+		return fmt.Errorf("copy POLYFIN_HWACCEL and POLYFIN_SEGMENTS into the settings: %w", err)
+	}
 	store.FollowLogLevel(level, cfg.LogLevel)
 	var setupCode string
 	if required, err := store.SetupRequired(ctx); err != nil {
@@ -164,6 +168,9 @@ func serve(ctx context.Context) error {
 	signIns := throttle.New(signInFailures, signInWindow)
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
+	// Addons and libraries are answered from memory while their changes
+	// are followed.
+	go addonStore.Watch(ctx, logger)
 	secret, err := database.Secret(ctx, pool)
 	if err != nil {
 		return err
@@ -184,8 +191,7 @@ func serve(ctx context.Context) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
-	// The settings choose the GPU, POLYFIN_HWACCEL when they leave it.
-	segments.SelectHardware(cmp.Or(store.Settings().HardwareAcceleration, cfg.Acceleration), cfg.VAAPIDevice)
+	segments.SelectHardware(store.Settings().HardwareAcceleration, cfg.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
@@ -232,7 +238,7 @@ func serve(ctx context.Context) error {
 	case cfg.WebDir != config.DefaultWebDir:
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
-	skipSegments := mediasegments.New(pool, mediasegments.Sources(cfg.Segments), version, logger, store.Settings)
+	skipSegments := mediasegments.New(pool, mediasegments.Sources(accounts.SegmentSources), version, logger, store.Settings)
 	userData := userdata.New(pool)
 	// Imported watch histories find their titles in the library and add to
 	// the users' data.
@@ -283,7 +289,6 @@ func serve(ctx context.Context) error {
 				Segments:      skipSegments,
 				Activity:      activityLog,
 				RecordingsDir: cfg.RecordingsDir,
-				Acceleration:  cfg.Acceleration,
 				VAAPIDevice:   cfg.VAAPIDevice,
 				WebClient:     webClient != nil,
 				Sessions:      jellyfinAPI,

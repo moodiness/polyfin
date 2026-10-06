@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -22,6 +23,12 @@ func readSubtitleText(data []byte) (subtitleText, error) {
 	}
 	cues, err := subtitles.Parse(data)
 	return subtitleText{cues: cues}, err
+}
+
+// size is about what t takes in memory, as the cache of subtitle texts
+// counts it: the length of its cues and script in JSON.
+func (t subtitleText) size() int {
+	return cache.JSONSize(t.cues) + cache.JSONSize(t.script)
 }
 
 // write gives the text from start in format, with its content type: an

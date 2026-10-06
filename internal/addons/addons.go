@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -165,10 +167,25 @@ type LibraryChoice struct {
 	Name        *string
 }
 
-// Store is the addons repository.
+// Store is the addons repository. Reads of the addons and libraries are
+// served from a snapshot of every scope, kept while Watch follows the
+// changes made to them (see current).
 type Store struct {
 	db     *pgxpool.Pool
 	client *stremio.Client
+
+	// changes counts the changes made to the addons, libraries and guides
+	// since the store was made: the store's own writes, once stored, and
+	// those the database notifies, whoever made them. A snapshot read
+	// after the count reached n holds every change counted up to n.
+	changes atomic.Uint64
+	// watching is set while Watch listens to the database's notifications;
+	// snapshots are only kept then, as no change would be missed.
+	watching atomic.Bool
+	// snapshot is the last snapshot read; loading serializes reads of the
+	// database, so that a burst of requests reads one snapshot.
+	snapshot atomic.Pointer[snapshot]
+	loading  sync.Mutex
 }
 
 func New(db *pgxpool.Pool, client *stremio.Client) *Store {
@@ -180,10 +197,12 @@ type queryer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-func scanAddon(row pgx.Row) (Addon, error) {
+// scanAddon reads a row of addonColumns, then the extra columns.
+func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
-	err := row.Scan(&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt)
+	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt},
+		extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -203,9 +222,18 @@ func scanAddon(row pgx.Row) (Addon, error) {
 
 const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at"
 
-// Addons lists the scope's addons in order.
+// Addons lists the scope's addons in order. The addons, their manifests
+// and settings are shared with other callers: they must not be changed.
 func (s *Store) Addons(ctx context.Context, scope Scope) ([]Addon, error) {
-	return addons(ctx, s.db, scope)
+	snap, err := s.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list := snap.scopes[ownerOf(scope)].addons
+	if list == nil {
+		return []Addon{}, nil
+	}
+	return slices.Clone(list), nil
 }
 
 func addons(ctx context.Context, db queryer, scope Scope) ([]Addon, error) {
@@ -221,8 +249,17 @@ func (s *Store) addon(ctx context.Context, db queryer, scope Scope, id accounts.
 }
 
 // Find returns an installed addon by identifier, whoever installed it.
+// Like Addons, it is shared with other callers.
 func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
-	return scanAddon(s.db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1", id))
+	snap, err := s.current(ctx)
+	if err != nil {
+		return Addon{}, err
+	}
+	addon, ok := snap.addons[id]
+	if !ok {
+		return Addon{}, ErrNotFound
+	}
+	return addon, nil
 }
 
 // fetched is a downloaded manifest: its normalized URL, the kind of addon
@@ -305,6 +342,7 @@ func eclipseManifestURL(raw string) (string, bool) {
 // Install adds an addon at the end of the scope and enables some of its
 // catalogs as libraries (see enableDefaults).
 func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confined bool) (Addon, error) {
+	defer s.changed()
 	f, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
 		return Addon{}, err
@@ -336,6 +374,7 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 // the source's reason to be.
 func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, build func(accounts.ID) stremio.Manifest,
 	setup func(pgx.Tx, Addon) error) (Addon, error) {
+	defer s.changed()
 	var addon Addon
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := lockScope(ctx, tx, scope); err != nil {
@@ -380,6 +419,7 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 // them. It answers ErrNotFound for an addon of another kind.
 func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, address string, manifest stremio.Manifest,
 	setup func(pgx.Tx) error) (Addon, error) {
+	defer s.changed()
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
 		return Addon{}, err
@@ -501,6 +541,7 @@ func lockScope(ctx context.Context, tx pgx.Tx, scope Scope) error {
 
 // SetEnabled turns an addon on or off; a disabled addon keeps its libraries.
 func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, enabled bool) (Addon, error) {
+	defer s.changed()
 	return scanAddon(s.db.QueryRow(ctx, "UPDATE addons SET enabled = $3 WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING "+addonColumns,
 		id, scope.Owner, enabled))
 }
@@ -509,6 +550,7 @@ func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, ena
 // checked against its manifest (see eclipse.Manifest.CheckSettings). A
 // setting left out is sent with its default.
 func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, values map[string]string) (Addon, error) {
+	defer s.changed()
 	var addon Addon
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		current, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
@@ -572,7 +614,9 @@ func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confin
 	return s.store(ctx, scope, id, f)
 }
 
+// store saves a manifest downloaded again: a new address, or a refresh.
 func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched) (Addon, error) {
+	defer s.changed()
 	manifestURL, encoded, manifest := f.url, f.encoded, f.manifest
 	var addon Addon
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -613,6 +657,7 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 
 // Remove uninstalls an addon with its libraries.
 func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) error {
+	defer s.changed()
 	tag, err := s.db.Exec(ctx, "DELETE FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner)
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -623,6 +668,7 @@ func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) error {
 // Reorder sets the order of the scope's addons; ids must list each of them
 // exactly once.
 func (s *Store) Reorder(ctx context.Context, scope Scope, ids []accounts.ID) error {
+	defer s.changed()
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
@@ -651,86 +697,130 @@ func (s *Store) Reorder(ctx context.Context, scope Scope, ids []accounts.ID) err
 // Libraries lists every catalog of the scope's addons: enabled libraries
 // first in their order, then the other catalogs by addon and manifest order.
 func (s *Store) Libraries(ctx context.Context, scope Scope) ([]Library, error) {
-	return libraries(ctx, s.db, scope)
+	snap, err := s.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(snap.scopes[ownerOf(scope)].libraries), nil
 }
 
+// libraries reads a scope's libraries, in db (see Libraries).
 func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) {
 	installed, err := addons(ctx, db, scope)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image FROM libraries l
-		JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1 ORDER BY l.position`, scope.Owner)
+	const ofScope = " WHERE a.owner_id IS NOT DISTINCT FROM $1"
+	rows, err := libraryRows(ctx, db, ofScope, scope.Owner)
 	if err != nil {
 		return nil, err
 	}
-	type key struct {
-		addon       accounts.ID
-		kind, catID string
+	guides, err := guideRows(ctx, db, ofScope, scope.Owner)
+	if err != nil {
+		return nil, err
+	}
+	return listLibraries(installed, rows, guides), nil
+}
+
+// libraryRow is a row of the libraries table, an enabled library, with
+// the owner of its addon.
+type libraryRow struct {
+	owner             *accounts.ID
+	key               LibraryKey
+	name              *string
+	channels, matched int
+	image             string
+}
+
+// libraryRows reads the libraries filter selects, l being the library
+// and a its addon, in order.
+func libraryRows(ctx context.Context, db queryer, filter string, args ...any) ([]libraryRow, error) {
+	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image
+		FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (libraryRow, error) {
+		var r libraryRow
+		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image)
+		return r, err
+	})
+}
+
+// guideRow is a row of live_guides, with its catalog and the owner of its
+// addon.
+type guideRow struct {
+	owner *accounts.ID
+	key   LibraryKey
+	guide Guide
+}
+
+// guideRows reads the guides filter selects, g being the guide and a its
+// addon, in order.
+func guideRows(ctx context.Context, db queryer, filter string, args ...any) ([]guideRow, error) {
+	rows, err := db.Query(ctx, `SELECT a.owner_id, g.addon_id, g.catalog_type, g.catalog_id, `+guideColumns+`
+		FROM live_guides g JOIN addons a ON a.id = g.addon_id`+filter+" ORDER BY g.position", args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (guideRow, error) {
+		var r guideRow
+		g := &r.guide
+		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &g.ID, &g.Position, &g.URL, &g.Generation,
+			&g.CheckedAt, &g.FetchedAt, &g.Channels, &g.Programmes, &g.Error)
+		return r, err
+	})
+}
+
+// listLibraries makes a scope's libraries from its addons, its library
+// rows and the guides of its catalogs, each in order: the enabled
+// libraries first, those whose addon and catalog still exist, then the
+// other catalogs by addon and manifest order.
+func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Library {
+	byID := make(map[accounts.ID]Addon, len(installed))
+	for _, addon := range installed {
+		byID[addon.ID] = addon
 	}
 	var enabled []Library
-	chosen := map[key]bool{}
-	var row struct {
-		addon             accounts.ID
-		kind, catID       string
-		name              *string
-		channels, matched int
-		image             string
-	}
-	if _, err := pgx.ForEachRow(rows, []any{&row.addon, &row.kind, &row.catID, &row.name, &row.channels, &row.matched, &row.image}, func() error {
-		index := slices.IndexFunc(installed, func(a Addon) bool { return a.ID == row.addon })
-		if index < 0 {
-			return nil
-		}
-		addon := installed[index]
-		catalog, ok := addon.Manifest.Catalog(row.kind, row.catID)
+	chosen := map[LibraryKey]int{} // index in enabled
+	for _, row := range rows {
+		addon, ok := byID[row.key.AddonID]
 		if !ok {
-			return nil
+			continue
 		}
-		chosen[key{row.addon, row.kind, row.catID}] = true
+		catalog, ok := addon.Manifest.Catalog(row.key.CatalogType, row.key.CatalogID)
+		if !ok {
+			continue
+		}
+		chosen[row.key] = len(enabled)
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Image: row.image}
 		if catalog.Type == "tv" {
 			library.Guides, library.GuideChannels, library.GuideMapped = []Guide{}, row.channels, row.matched
 		}
 		enabled = append(enabled, library)
-		return nil
-	}); err != nil {
-		return nil, err
 	}
-	rows, err = db.Query(ctx, `SELECT g.addon_id, g.catalog_type, g.catalog_id, `+guideColumns+` FROM live_guides g
-		JOIN addons a ON a.id = g.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1 ORDER BY g.position`, scope.Owner)
-	if err != nil {
-		return nil, err
-	}
-	var g Guide
-	var k key
-	if _, err := pgx.ForEachRow(rows, []any{&k.addon, &k.kind, &k.catID, &g.ID, &g.Position, &g.URL, &g.Generation, &g.CheckedAt,
-		&g.FetchedAt, &g.Channels, &g.Programmes, &g.Error}, func() error {
-		for i := range enabled {
-			if l := &enabled[i]; l.AddonID == k.addon && l.Catalog.Type == k.kind && l.Catalog.ID == k.catID && l.Guides != nil {
-				l.Guides = append(l.Guides, g)
-			}
+	for _, g := range guides {
+		if i, ok := chosen[g.key]; ok && enabled[i].Guides != nil {
+			enabled[i].Guides = append(enabled[i].Guides, g.guide)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 	result := enabled
 	for _, addon := range installed {
 		for _, catalog := range addon.Manifest.Catalogs {
-			if chosen[key{addon.ID, catalog.Type, catalog.ID}] {
+			if _, ok := chosen[LibraryKey{AddonID: addon.ID, CatalogType: catalog.Type, CatalogID: catalog.ID}]; ok {
 				continue
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
 				AddonActive: addon.Enabled, Image: LibraryImageNone})
 		}
 	}
-	return result, nil
+	return result
 }
 
 // SetLibraries replaces the scope's libraries with choices, in order.
 func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []LibraryChoice) ([]Library, error) {
+	defer s.changed()
 	for i, choice := range choices {
 		if choice.Name == nil {
 			continue
@@ -808,6 +898,7 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 // that is not an enabled library of the scope, or a live TV catalog, which
 // makes none.
 func (s *Store) SetLibraryImage(ctx context.Context, scope Scope, key LibraryKey, image string) error {
+	defer s.changed()
 	if image != LibraryImageNone && image != LibraryImageAutomatic {
 		return ErrInvalidLibrary
 	}
@@ -859,6 +950,7 @@ func catalogGuides(ctx context.Context, db queryer, key LibraryKey) ([]Guide, er
 // address forgets what the previous one gave. It reports whether the
 // address changed.
 func (s *Store) SetGuide(ctx context.Context, scope Scope, key LibraryKey, rawURL string) (bool, error) {
+	defer s.changed()
 	guideURL := strings.TrimSpace(rawURL)
 	if guideURL != "" && !validGuideURL(guideURL) {
 		return false, ErrInvalidGuideURL
@@ -909,6 +1001,7 @@ type GuideAddress struct {
 // already in the list, keeps what it downloaded. It reports the guides
 // that are new.
 func (s *Store) SetGuides(ctx context.Context, scope Scope, key LibraryKey, list []GuideAddress) ([]accounts.ID, error) {
+	defer s.changed()
 	if len(list) > MaxGuides {
 		return nil, ErrTooManyGuides
 	}
@@ -1075,17 +1168,4 @@ func validName(name string) bool {
 		}
 	}
 	return true
-}
-
-// UsesSharedAddons reports whether a user sees the server's addons.
-func (s *Store) UsesSharedAddons(ctx context.Context, user accounts.ID) (bool, error) {
-	var uses bool
-	err := s.db.QueryRow(ctx, "SELECT use_shared_addons FROM users WHERE id = $1", user).Scan(&uses)
-	return uses, err
-}
-
-// SetUsesSharedAddons chooses whether a user sees the server's addons.
-func (s *Store) SetUsesSharedAddons(ctx context.Context, user accounts.ID, uses bool) error {
-	_, err := s.db.Exec(ctx, "UPDATE users SET use_shared_addons = $2 WHERE id = $1", user, uses)
-	return err
 }

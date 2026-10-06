@@ -1,8 +1,16 @@
+import type { Settings } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import type en from '@/i18n/en/settings'
+import type { RangeText } from '@/i18n/en/settings'
 
 /** The messages a setting's words come from: the settings area file of one language. */
 export type SettingsText = typeof en
+
+/**
+ * The bounds and default of a setting, by its name in Settings, as help texts show them; `scale`
+ * converts the server's unit to the one the field shows.
+ */
+export type RangeOf = (name: keyof Settings, scale?: number) => RangeText
 
 /**
  * One setting, wherever it is found: the section search, the command palette and the field
@@ -13,7 +21,7 @@ export type SettingEntry = {
   /** The id of the setting's row on its section page, the `#anchor` of its address. */
   anchor: string
   label: (text: SettingsText) => string
-  help?: (text: SettingsText) => string
+  help?: (text: SettingsText, range: RangeOf) => string
   /** More words that find it: service names, technical terms. */
   keywords?: readonly string[]
   /** Server error codes about this setting, shown under it. */
@@ -31,7 +39,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'general',
     anchor: 'server-name',
     label: (t) => s(t).serverName,
-    help: (t) => s(t).serverNameHelp,
+    help: (t, r) => s(t).serverNameHelp(r('serverName')),
     codes: ['invalid_server_name'],
   },
   {
@@ -57,21 +65,9 @@ export const settingEntries: readonly SettingEntry[] = [
   // Playback
   {
     section: 'playback',
-    anchor: 'chapters',
-    label: (t) => s(t).chapters,
-    help: (t) => s(t).chaptersHelp,
-  },
-  {
-    section: 'playback',
     anchor: 'prepare-ahead',
     label: (t) => s(t).prepareAhead,
     help: (t) => s(t).prepareAheadHelp,
-  },
-  {
-    section: 'playback',
-    anchor: 'downloads',
-    label: (t) => s(t).downloads,
-    help: (t) => s(t).downloadsHelp,
   },
   {
     section: 'playback',
@@ -83,14 +79,14 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'playback',
     anchor: 'analysis-timeout',
     label: (t) => s(t).analysisTimeout,
-    help: (t) => s(t).analysisTimeoutHelp,
+    help: (t, r) => s(t).analysisTimeoutHelp(r('analysisTimeout')),
     codes: ['invalid_analysis_timeout'],
   },
   {
     section: 'playback',
     anchor: 'version-attempts',
     label: (t) => s(t).versionAttempts,
-    help: (t) => s(t).versionAttemptsHelp,
+    help: (t, r) => s(t).versionAttemptsHelp(r('versionAttempts')),
     codes: ['invalid_version_attempts'],
   },
   // Conversion
@@ -104,7 +100,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'conversion',
     anchor: 'max-conversions',
     label: (t) => s(t).maxConversions,
-    help: (t) => s(t).maxConversionsHelp,
+    help: (t, r) => s(t).maxConversionsHelp(r('maxConversions')),
     codes: ['invalid_max_conversions'],
   },
   {
@@ -148,7 +144,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'conversion',
     anchor: 'video-quality',
     label: (t) => `${c(t).h264Quality}, ${c(t).hevcQuality}`,
-    help: (t) => c(t).qualityHelp,
+    help: (t, r) => c(t).qualityHelp(r('h264Quality')),
     keywords: ['crf'],
     codes: ['invalid_video_quality'],
   },
@@ -177,7 +173,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'conversion',
     anchor: 'tone-mapping-peak',
     label: (t) => `${c(t).toneMappingPeak}, ${c(t).toneMappingDesat}`,
-    help: (t) => c(t).toneMappingPeakHelp,
+    help: (t, r) => c(t).toneMappingPeakHelp(r('toneMappingPeak'), r('toneMappingDesat')),
     codes: ['invalid_tone_mapping_peak', 'invalid_tone_mapping_desat'],
   },
   {
@@ -206,7 +202,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'conversion',
     anchor: 'downmix-boost',
     label: (t) => c(t).downmixBoost,
-    help: (t) => c(t).downmixBoostHelp,
+    help: (t, r) => c(t).downmixBoostHelp(r('downmixBoost')),
     codes: ['invalid_downmix_boost'],
   },
   {
@@ -220,14 +216,14 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'conversion',
     anchor: 'audio-bitrate-per-channel',
     label: (t) => c(t).audioBitratePerChannel,
-    help: (t) => c(t).audioBitratePerChannelHelp,
+    help: (t, r) => c(t).audioBitratePerChannelHelp(r('audioBitratePerChannel')),
     codes: ['invalid_audio_bitrate_per_channel'],
   },
   {
     section: 'conversion',
     anchor: 'encoding-threads',
     label: (t) => c(t).encodingThreads,
-    help: (t) => c(t).encodingThreadsHelp,
+    help: (t, r) => c(t).encodingThreadsHelp(r('encodingThreads')),
     codes: ['invalid_encoding_threads'],
   },
   {
@@ -251,7 +247,7 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).segmentSources.label,
     help: (t) => s(t).segmentSources.help,
     keywords: ['TheIntroDB', 'IntroDB', 'PublicMetaDB', 'POLYFIN_SEGMENTS'],
-    codes: ['invalid_segment_order'],
+    codes: ['invalid_segment_order', 'invalid_segment_sources_off'],
   },
   {
     section: 'content',
@@ -279,14 +275,14 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'content',
     anchor: 'played-percent',
     label: (t) => s(t).playedPercent,
-    help: (t) => s(t).playedPercentHelp,
+    help: (t, r) => s(t).playedPercentHelp(r('playedPercent')),
     codes: ['invalid_played_percent'],
   },
   {
     section: 'content',
     anchor: 'resume-percent',
     label: (t) => s(t).resumePercent,
-    help: (t) => s(t).resumePercentHelp,
+    help: (t, r) => s(t).resumePercentHelp(r('resumePercent')),
     codes: ['invalid_resume_percent', 'resume_not_below_played'],
   },
   // Catalogs
@@ -294,21 +290,21 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'catalogs',
     anchor: 'catalog-limit',
     label: (t) => s(t).catalogLimit,
-    help: (t) => s(t).catalogLimitHelp,
+    help: (t, r) => s(t).catalogLimitHelp(r('catalogLimit')),
     codes: ['invalid_catalog_limit'],
   },
   {
     section: 'catalogs',
     anchor: 'channel-limit',
     label: (t) => s(t).channelLimit,
-    help: (t) => s(t).channelLimitHelp,
+    help: (t, r) => s(t).channelLimitHelp(r('channelLimit')),
     codes: ['invalid_channel_limit'],
   },
   {
     section: 'catalogs',
     anchor: 'version-list-minutes',
     label: (t) => s(t).versionListMinutes,
-    help: (t) => s(t).versionListMinutesHelp,
+    help: (t, r) => s(t).versionListMinutesHelp(r('versionListMinutes')),
     codes: ['invalid_version_list_minutes'],
   },
   {
@@ -350,7 +346,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'thumbnails',
     anchor: 'thumbnail-storage',
     label: (t) => s(t).thumbnailStorage,
-    help: (t) => s(t).thumbnailStorageHelp,
+    help: (t, r) => s(t).thumbnailStorageHelp(r('thumbnailStorageGB')),
     codes: ['invalid_thumbnail_storage_gb'],
   },
   // Security
@@ -364,14 +360,14 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'security',
     anchor: 'login-attempts',
     label: (t) => s(t).loginAttempts,
-    help: (t) => s(t).loginAttemptsHelp,
+    help: (t, r) => s(t).loginAttemptsHelp(r('loginAttempts')),
     codes: ['invalid_login_attempts'],
   },
   {
     section: 'security',
     anchor: 'inactive-device-days',
     label: (t) => s(t).inactiveDeviceDays,
-    help: (t) => s(t).inactiveDeviceDaysHelp,
+    help: (t, r) => s(t).inactiveDeviceDaysHelp(r('inactiveDeviceDays')),
     codes: ['invalid_inactive_device_days'],
   },
   // Tracking
@@ -412,21 +408,21 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'recordings',
     anchor: 'recording-pre-padding',
     label: (t) => s(t).recordingPrePadding,
-    help: (t) => s(t).recordingPrePaddingHelp,
+    help: (t, r) => s(t).recordingPrePaddingHelp(r('recordingPrePadding', 1 / 60)),
     codes: ['invalid_recording_padding'],
   },
   {
     section: 'recordings',
     anchor: 'recording-post-padding',
     label: (t) => s(t).recordingPostPadding,
-    help: (t) => s(t).recordingPostPaddingHelp,
+    help: (t, r) => s(t).recordingPostPaddingHelp(r('recordingPostPadding', 1 / 60)),
     codes: ['invalid_recording_padding'],
   },
   {
     section: 'recordings',
     anchor: 'recording-retention-days',
     label: (t) => s(t).recordingRetentionDays,
-    help: (t) => s(t).recordingRetentionDaysHelp,
+    help: (t, r) => s(t).recordingRetentionDaysHelp(r('recordingRetentionDays')),
     codes: ['invalid_recording_retention_days'],
   },
   // Backups
@@ -434,14 +430,14 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'backups',
     anchor: 'backup-hour',
     label: (t) => s(t).backupHour,
-    help: (t) => s(t).backupHourHelp,
+    help: (t, r) => s(t).backupHourHelp(r('backupHour').default),
     codes: ['invalid_backup_hour'],
   },
   {
     section: 'backups',
     anchor: 'backups-kept',
     label: (t) => s(t).backupsKept,
-    help: (t) => s(t).backupsKeptHelp,
+    help: (t, r) => s(t).backupsKeptHelp(r('backupsKept')),
     codes: ['invalid_backups_kept'],
   },
   {

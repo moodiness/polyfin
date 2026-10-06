@@ -76,6 +76,13 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Playback is prepared ahead, the default, only in the tests that turn
+	// it on: the others count every request to the sources.
+	settings := store.Settings()
+	settings.PrepareAhead = false
+	if _, err := store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := stremio.NewClient("test")
 	addonStore := addons.New(pool, client)

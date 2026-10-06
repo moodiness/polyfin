@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/eclipse"
 )
 
 // musicService is a service with only what music caching needs, on a
@@ -40,7 +41,7 @@ func TestStaleMusicPagesAreServedWhileTheAddonIsAskedAgain(t *testing.T) {
 		asked.Add(1)
 		return <-answers, nil
 	}
-	cache := newMusicCache[string](10, func() time.Duration { return time.Hour }, staleMusic, s.now)
+	cache := newMusicCache(10, 1<<20, func(string) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
 	answers <- "first"
 	if got, err := remember(t.Context(), s, cache, key, fetch); got != "first" || err != nil {
 		t.Fatalf("first read: %q %v", got, err)
@@ -85,7 +86,7 @@ func TestStaleMusicPagesAreServedWhileTheAddonIsAskedAgain(t *testing.T) {
 func TestAStalePageStaysWhenTheAddonFails(t *testing.T) {
 	s, clock := musicService(t)
 	key := musicKey{addon: accounts.ID{1}, resource: "album", id: "a"}
-	cache := newMusicCache[string](10, func() time.Duration { return time.Hour }, staleMusic, s.now)
+	cache := newMusicCache(10, 1<<20, func(string) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
 	if _, err := remember(t.Context(), s, cache, key, func(context.Context) (string, error) { return "kept", nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestAStalePageStaysWhenTheAddonFails(t *testing.T) {
 
 func TestRequestsToOneAddonAreBounded(t *testing.T) {
 	s, _ := musicService(t)
-	cache := newMusicCache[int](100, func() time.Duration { return time.Hour }, staleMusic, s.now)
+	cache := newMusicCache(100, 1<<20, func(int) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
 	var mu sync.Mutex
 	running, most := map[accounts.ID]int{}, map[accounts.ID]int{}
 	fetch := func(addon accounts.ID) func(context.Context) (int, error) {
@@ -184,5 +185,24 @@ func TestALinkJustGivenIsUsedUntilItExpires(t *testing.T) {
 	}
 	if !(Version{Expires: now.Add(2 * time.Minute)}).fresh(now) || (Version{Expires: now.Add(30 * time.Second)}).fresh(now) {
 		t.Error("the margin before expiry changed")
+	}
+}
+
+func TestMusicAnswersAreBoundedInBytes(t *testing.T) {
+	s, _ := musicService(t)
+	playlists := newMusicCaches(s).playlists
+	// Playlists of about 1 MB each: past 16 MB, the oldest go.
+	long := eclipse.Playlist{ID: "p", Title: string(make([]byte, 1<<20))}
+	for i := range 40 {
+		playlists.answers.Put(musicKey{addon: accounts.ID{1}, resource: "playlist", id: string(rune('a' + i))}, answered[eclipse.Playlist]{value: long})
+	}
+	if bytes := playlists.answers.Bytes(); bytes > 16<<20 || bytes < 8<<20 {
+		t.Errorf("playlists kept: %d bytes", bytes)
+	}
+	if _, ok := playlists.answers.Get(musicKey{addon: accounts.ID{1}, resource: "playlist", id: "a"}); ok {
+		t.Error("the first playlist is still kept")
+	}
+	if _, ok := playlists.answers.Get(musicKey{addon: accounts.ID{1}, resource: "playlist", id: string(rune('a' + 39))}); !ok {
+		t.Error("the last playlist is not kept")
 	}
 }

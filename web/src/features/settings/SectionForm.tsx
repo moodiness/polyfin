@@ -5,7 +5,9 @@ import { ApiError, queryClient, queryKeys, saveSettings, type Settings } from '@
 import type { SettingsSectionId } from '@/app/navigation'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import type { RangeText } from '@/i18n/en/settings'
 import { ConfirmDialog, SaveBar, useToast } from '@/ui'
+import { numberLimits, rangeText } from './bounds'
 import { settingEntries } from './catalog'
 
 /** What a section page draws its fields from. */
@@ -23,6 +25,13 @@ export type SectionFormApi = {
     value: number,
     set: (value: number) => void,
   ) => { value: number | null; onValue: (value: number | null) => void }
+  /**
+   * The bounds and default of a setting, by its name in Settings, as its help text shows them;
+   * `scale` converts the server's unit to the field's.
+   */
+  range: (name: keyof Settings, scale?: number) => RangeText
+  /** The smallest and largest values of a setting's number field, from the server's bounds. */
+  limits: (name: keyof Settings, scale?: number) => { min?: number; max?: number }
 }
 
 /**
@@ -38,7 +47,7 @@ export default function SectionForm({
   initial: Settings
   children: (api: SectionFormApi) => ReactNode
 }) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const toast = useToast()
   const [saved, setSaved] = useState(initial)
   const [form, setForm] = useState(initial)
@@ -97,9 +106,6 @@ export default function SectionForm({
       serverName: form.serverName.trim(),
       traktClientId: form.traktClientId.trim(),
       simklClientId: form.simklClientId.trim(),
-      // The order POLYFIN_SEGMENTS gives is not saved, so that it keeps following the variable.
-      segmentOrder:
-        form.segmentOrder.join() === form.segmentOrderDefault.join() ? [] : form.segmentOrder,
     })
   }
 
@@ -127,6 +133,8 @@ export default function SectionForm({
             else set(next)
           },
         }),
+        range: (name, scale) => rangeText(form.bounds[name], language, scale),
+        limits: (name, scale) => numberLimits(form.bounds[name], scale),
       })}
       <SaveBar
         dirty={dirty}

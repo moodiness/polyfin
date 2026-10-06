@@ -270,7 +270,7 @@ func TestSyncPlaySessionMatchesJellyfin(t *testing.T) {
 	}
 	// The restricted user sees no addon, hence none of the episodes.
 	restricted, _ := tr.store.Authenticate(t.Context(), "restricted", "correct horse")
-	if err := tr.addons.SetUsesSharedAddons(t.Context(), restricted.ID, false); err != nil {
+	if _, err := tr.store.UpdateUser(t.Context(), restricted.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	apps := map[string]syncPlayApp{
@@ -882,7 +882,7 @@ func TestSyncPlayKeepsToWhatMembersMaySee(t *testing.T) {
 	p := newSyncPlayers(t)
 	p.testServer.user("carol", nil)
 	carol, _ := p.store.Authenticate(t.Context(), "carol", "correct horse")
-	if err := p.addons.SetUsesSharedAddons(t.Context(), carol.ID, false); err != nil {
+	if _, err := p.store.UpdateUser(t.Context(), carol.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	c := p.syncPlayApp(t, "carol", "carol-tv")

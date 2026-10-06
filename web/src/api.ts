@@ -136,20 +136,28 @@ export type QuickConnectRequest = {
 /** The skip marker sources, by the names POLYFIN_SEGMENTS gives them. */
 export type SegmentSource = 'theintrodb' | 'introdb' | 'publicmetadb'
 
+/** What the server accepts for a setting, and its default. */
+export type SettingBounds = {
+  default: unknown
+  /** The bounds of a number, or of a text's length. */
+  min?: number
+  max?: number
+  /** Whether 0 is accepted too, below min, turning the setting off. */
+  zero?: boolean
+  /** The values the setting takes, or a list holds. */
+  choices?: unknown[]
+}
+
 export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
   legacyAuthorization: boolean
   /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
   language: Language
-  /** Sends apps the chapters of analyzed versions. */
-  chapters: boolean
   /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
   prepareAhead: boolean
   /** Whether the server converts (transcodes) video and audio for apps that need it. */
   transcoding: boolean
-  /** Whether users allowed to download may do so. */
-  downloads: boolean
   /** Items read at most from one movie or series catalog (any catalog but a Live TV one). */
   catalogLimit: number
   /** Items read at most from one Live TV catalog: its channels, or one day of its guide. */
@@ -164,14 +172,9 @@ export type Settings = {
   theIntroDbKeySet: boolean
   /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
   theIntroDbKey?: string
-  /**
-   * The order of preference of the skip marker sources in effect, all three. Saved as sent; an empty
-   * list goes back to the order POLYFIN_SEGMENTS gives.
-   */
+  /** The order of preference of the skip marker sources, all three. */
   segmentOrder: SegmentSource[]
-  /** The order POLYFIN_SEGMENTS gives, which an empty segmentOrder follows; read only. */
-  segmentOrderDefault: SegmentSource[]
-  /** The sources POLYFIN_SEGMENTS turns off, whatever the order; read only. */
+  /** The skip marker sources never asked, wherever they are in the order. */
   segmentSourcesOff: SegmentSource[]
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
@@ -208,7 +211,7 @@ export type Settings = {
   hevcQuality: number
   /** Converts to HEVC for the apps that list it before H.264. */
   allowHevcEncoding: boolean
-  /** GPU conversions run on; empty follows POLYFIN_HWACCEL. */
+  /** GPU conversions run on, set from POLYFIN_HWACCEL at the first start. */
   hardwareAcceleration: HardwareAcceleration
   /** Codecs the GPU decodes. */
   hardwareDecodingCodecs: HardwareDecodingCodec[]
@@ -273,90 +276,29 @@ export type Settings = {
   backupsKept: number
   /** Folder backups are written to (read-only); empty when backups are off. */
   backupFolder: string
+  /** What each setting accepts, and its default, by its name here (read-only). */
+  bounds: Record<string, SettingBounds>
 }
 
-/** The largest custom CSS and script, and login disclaimer, the server accepts, in bytes. */
-export const customCodeMaxBytes = 2 * 1024 * 1024
-export const loginDisclaimerMaxBytes = 8 * 1024
-
-/** The range the server accepts for Settings.liveTvRefreshHours. */
-export const liveTvRefreshHoursRange = { min: 1, max: 168 }
-
-/** The ranges the server accepts for the recording settings, padding in minutes here. */
-export const recordingPaddingMinutesRange = { min: 0, max: 60 }
-export const recordingRetentionDaysRange = { min: 0, max: 3650 }
-
-/** The range the server accepts for Settings.backupsKept. */
-export const backupsKeptRange = { min: 1, max: 90 }
-
-/** The ranges the server accepts for Settings.catalogLimit and channelLimit. */
-export const catalogLimitRange = { min: 100, max: 20000 }
-export const channelLimitRange = { min: 100, max: 50000 }
-/** The ranges the server accepts for Settings.loginAttempts (besides 0) and inactiveDeviceDays. */
-export const loginAttemptsRange = { min: 3, max: 20 }
-export const inactiveDeviceDaysRange = { min: 0, max: 365 }
-
-/** The ranges the server accepts for the content settings. */
-export const playedPercentRange = { min: 50, max: 100 }
-export const resumePercentRange = { min: 0, max: 50 }
-export const versionListMinutesRange = { min: 1, max: 360 }
-export const catalogRefreshMinutesRange = { min: 1, max: 1440 }
-
-/** The ranges the server accepts for Settings.analysisTimeout, versionAttempts and maxConversions. */
-export const analysisTimeoutRange = { min: 5, max: 120 }
-export const versionAttemptsRange = { min: 1, max: 10 }
-export const maxConversionsRange = { min: 0, max: 32 }
-/** The values the server accepts for Settings.maxConversionHeight, 0 keeping the original height. */
-export const conversionHeights = [0, 480, 720, 1080, 1440, 2160]
-
-/** The values the server accepts for the conversion settings. */
-export const encoderPresets = [
-  'auto',
-  'veryslow',
-  'slower',
-  'slow',
-  'medium',
-  'fast',
-  'faster',
-  'veryfast',
-  'superfast',
-  'ultrafast',
-] as const
-export type EncoderPreset = (typeof encoderPresets)[number]
-export const hardwareAccelerations = ['', 'auto', 'nvenc', 'vaapi', 'none'] as const
-export type HardwareAcceleration = (typeof hardwareAccelerations)[number]
-export const hardwareDecodingCodecs = [
-  'h264',
-  'hevc',
-  'hevc_10bit',
-  'vp9',
-  'av1',
-  'mpeg2video',
-  'vc1',
-] as const
-export type HardwareDecodingCodec = (typeof hardwareDecodingCodecs)[number]
-export const toneMappingAlgorithms = [
-  'auto',
-  'bt2390',
-  'hable',
-  'reinhard',
-  'mobius',
-  'clip',
-  'linear',
-] as const
-export type ToneMappingAlgorithm = (typeof toneMappingAlgorithms)[number]
-export const deinterlaceMethods = ['yadif', 'bwdif'] as const
-export type DeinterlaceMethod = (typeof deinterlaceMethods)[number]
-export const downmixAlgorithms = ['None', 'Dave750', 'NightmodeDialogue', 'Rfc7845', 'Ac4'] as const
-export type DownmixAlgorithm = (typeof downmixAlgorithms)[number]
-export const audioChannelLimits = [0, 1, 2, 6]
-export const videoQualityRange = { min: 1, max: 51 }
-export const toneMappingPeakRange = { min: 100, max: 10000 }
-export const toneMappingDesatRange = { min: 0, max: 10 }
-export const downmixBoostRange = { min: 0.5, max: 3 }
-export const audioBitratePerChannelRange = { min: 32, max: 320 }
-export const encodingThreadsRange = { min: 0, max: 64 }
-export const aheadSegmentsRange = { min: 1, max: 60 }
+/** The values of the conversion settings; the server lists them in Settings.bounds. */
+export type EncoderPreset =
+  | 'auto'
+  | 'veryslow'
+  | 'slower'
+  | 'slow'
+  | 'medium'
+  | 'fast'
+  | 'faster'
+  | 'veryfast'
+  | 'superfast'
+  | 'ultrafast'
+export type HardwareAcceleration = 'auto' | 'nvenc' | 'vaapi' | 'none'
+export type HardwareDecodingCodec =
+  'h264' | 'hevc' | 'hevc_10bit' | 'vp9' | 'av1' | 'mpeg2video' | 'vc1'
+export type ToneMappingAlgorithm =
+  'auto' | 'bt2390' | 'hable' | 'reinhard' | 'mobius' | 'clip' | 'linear'
+export type DeinterlaceMethod = 'yadif' | 'bwdif'
+export type DownmixAlgorithm = 'None' | 'Dave750' | 'NightmodeDialogue' | 'Rfc7845' | 'Ac4'
 
 /** A GPU conversions run on. */
 export type ConversionGPU = {
@@ -371,8 +313,6 @@ export type ConversionGPU = {
 
 /** What conversions run on. */
 export type ConversionHardware = {
-  /** The GPU POLYFIN_HWACCEL asks for, which the settings fall back on. */
-  default: string
   /** The GPU chosen, null for none. */
   gpu: ConversionGPU | null
   /** Software video encoders FFmpeg has. */
@@ -382,10 +322,6 @@ export type ConversionHardware = {
   /** Whether FFmpeg has the bwdif deinterlacer. */
   bwdif: boolean
 }
-/** The ranges and values the server accepts for the thumbnail settings. */
-export const trickplayIntervalRange = { min: 5, max: 60 }
-export const trickplayWidths = [240, 320, 480]
-export const thumbnailStorageRange = { min: 1, max: 50 }
 
 export type NewUser = {
   name: string
@@ -1009,6 +945,9 @@ export const signOutUserDevice = (id: string, deviceId: string) =>
 /** Ends the block of a user's account for wrong passwords. */
 export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(id)}/unblock`)
 
+/** Takes the permission to download away from every user; answers with those who had it. */
+export const turnOffDownloads = () => request<User[]>('POST', '/users/downloads/off')
+
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
 
@@ -1018,7 +957,9 @@ export const fetchUserContentChoices = (signal?: AbortSignal) =>
 export const fetchSettings = (signal?: AbortSignal) =>
   request<Settings>('GET', '/settings', undefined, signal)
 
-export const saveSettings = (settings: Settings) => request<Settings>('PUT', '/settings', settings)
+/** Saves the settings; their bounds are the server's, and are not sent. */
+export const saveSettings = (settings: Settings) =>
+  request<Settings>('PUT', '/settings', { ...settings, bounds: undefined })
 
 /** The server's secrets an administrator can read again. */
 export type ServerSecretName = 'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret'

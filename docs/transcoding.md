@@ -15,16 +15,9 @@ Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through
 
 ## Turning conversion and downloads on or off
 
-Two switches apply to the whole server:
+The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app. Image subtitles the app cannot show are left out.
 
-- **Conversion (transcoding)** under **Settings › Conversion**.
-- **Downloads** under **Settings › Playback**.
-
-With **Conversion (transcoding)** off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app. Image subtitles the app cannot show are left out.
-
-With **Downloads** off, nobody can download: apps hide their download button.
-
-On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Both the server's switch and the user's permission must be on. See [Users](users.md).
+On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user at once, also in the apps already signed in. See [Users](users.md).
 
 **Compared with Jellyfin:**
 
@@ -34,7 +27,7 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 **For app developers:**
 
 - With conversion off, PlaybackInfo picks the next version that plays without conversion.
-- With **Downloads** off, `/Items/{id}/Download` answers 403.
+- Without the user's **Can download** permission, `/Items/{id}/Download` answers 403.
 - Administrators' Jellyfin apps set the same permissions through the user policy (`EnableVideoPlaybackTranscoding`, `EnableAudioPlaybackTranscoding`, `EnableContentDownloading`), where video and audio conversion can be allowed separately.
 - The policy shows the user's own permissions, whatever the server's switches.
 
@@ -42,7 +35,7 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 
 ### Detection
 
-At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** or `POLYFIN_HWACCEL` chooses a GPU. See [Configuration](configuration.md) for `POLYFIN_HWACCEL` and `POLYFIN_VAAPI_DEVICE`.
+At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU, which `POLYFIN_HWACCEL` sets at the first start. See [Configuration](configuration.md) for `POLYFIN_HWACCEL` and `POLYFIN_VAAPI_DEVICE`.
 
 ### Giving the container an NVIDIA GPU
 
@@ -77,7 +70,7 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Graphics card used to convert** | **Settings › Conversion** | Follows `POLYFIN_HWACCEL` | **Automatic**, **NVIDIA (NVENC)**, **AMD or Intel (VAAPI)** or **None** overrides the variable once saved. |
+| **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic**, **NVIDIA (NVENC)**, **AMD or Intel (VAAPI)** or **None**, applied once saved. |
 | **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping. |
 | **Read these formats on the graphics card** | **Settings › Conversion** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
 
@@ -101,8 +94,8 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 |---|---|---|---|
 | **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's 720p cap, and Dolby Vision without an HDR10 layer is not converted. |
 | **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on the card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on the card only: the processor's filter has none and uses Hable. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; libplacebo on the card does not take it. |
-| **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only; libplacebo on the card does not take it. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; libplacebo on the card does not take it, so it shows only when the card does not tone map. |
+| **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only, shown as the peak is. |
 
 ### Audio
 

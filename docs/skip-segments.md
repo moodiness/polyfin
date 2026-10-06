@@ -46,23 +46,17 @@ A version not analyzed yet gets the databases' segments as they are.
 - An intro: intro, introduction, opening, OP, or "générique de début". "Opening Credits" is an intro.
 - Credits: credits (end or closing credits), ending, ED, outro, or "générique de fin".
 
-OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with **Show chapters** turned off, and with no database asked.
+OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with no database asked.
 
 **Why credits stop early:** jellyfin-web shows no skip button for credits that reach the runtime the title is listed with, when something follows in its queue. Its video page shows its "Up Next" card instead, but only for credits that reach the end of the version it plays. Credits count as running to the end when they end within 2 seconds of it. They stop early only when the listed runtime is at least the version's length, and when they still last 3 seconds, as jellyfin-web ignores shorter segments.
 
 ## Source order
 
-By default the databases are preferred in the order TheIntroDB, IntroDB, PublicMetaDB, unless `POLYFIN_SEGMENTS` gives another. `POLYFIN_SEGMENTS` also chooses which databases are used at all; see [Configuration](configuration.md).
+By default the databases are preferred in the order TheIntroDB, IntroDB, PublicMetaDB, all on. At the first start, `POLYFIN_SEGMENTS` gives the order and which are on; see [Configuration](configuration.md).
 
-**Order of the skip marker sources**, under **Settings › Content** below the skip buttons, lists the three databases with arrows to move them. Each is marked as one of:
+**Skip marker sources**, under **Settings › Content** below the skip buttons, lists the three databases with arrows to move them and a switch to turn each on or off. PublicMetaDB, on without a key, is marked as needing one.
 
-- on;
-- needing a key (PublicMetaDB without one);
-- turned off by `POLYFIN_SEGMENTS`.
-
-The order saved there replaces the one `POLYFIN_SEGMENTS` gives, at once, and for the answers already kept too. It does not replace the choice of databases: a database `POLYFIN_SEGMENTS` leaves out is never asked, wherever it is in the list.
-
-**Reset to the default order** follows `POLYFIN_SEGMENTS` again. So does saving the order `POLYFIN_SEGMENTS` gives.
+The order and the switches apply at once when saved, to the answers already kept too. A database turned off is never asked, wherever it is in the list.
 
 ## PublicMetaDB key
 

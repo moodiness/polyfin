@@ -71,17 +71,14 @@ type Options struct {
 	// RecordingsDir is the folder Live TV recordings are written to, empty
 	// when recording is off.
 	RecordingsDir string
-	// Acceleration is the GPU POLYFIN_HWACCEL asks for, which the settings
-	// fall back on, and VAAPIDevice the render node POLYFIN_VAAPI_DEVICE
-	// names, empty for any.
-	Acceleration string
-	VAAPIDevice  string
+	// VAAPIDevice is the render node POLYFIN_VAAPI_DEVICE names, empty for
+	// any, which the GPU the settings choose opens.
+	VAAPIDevice string
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
 	// Segments checks the keys of the segment databases before the settings
-	// save them, and tells the order they are preferred in; nil saves no
-	// key and asks no database.
+	// save them; nil saves no key.
 	Segments *mediasegments.Service
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
@@ -159,6 +156,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
+	mux.Handle("POST /admin/api/users/downloads/off", h.administrator(h.turnOffDownloads))
 	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
 	mux.Handle("GET /admin/api/api-keys", h.administrator(h.apiKeys))
 	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
@@ -321,6 +319,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPublicMetaDBKey, http.StatusBadRequest, "invalid_publicmetadb_key"},
 		{accounts.ErrInvalidTheIntroDBKey, http.StatusBadRequest, "invalid_theintrodb_key"},
 		{accounts.ErrInvalidSegmentOrder, http.StatusBadRequest, "invalid_segment_order"},
+		{accounts.ErrInvalidSegmentSourcesOff, http.StatusBadRequest, "invalid_segment_sources_off"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
 		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
 		{accounts.ErrInvalidAnalysisTimeout, http.StatusBadRequest, "invalid_analysis_timeout"},

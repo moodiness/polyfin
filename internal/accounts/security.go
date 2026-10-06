@@ -25,6 +25,7 @@ func (user User) Blocked(now time.Time) bool {
 // count is read and written in one statement, so that wrong passwords sent
 // at once all count.
 func (s *Store) countWrongPassword(ctx context.Context, user ID, limit int, now time.Time) error {
+	defer s.forgetSignIns()
 	_, err := s.db.Exec(ctx, `UPDATE users SET
 			invalid_login_attempts = CASE WHEN blocked_until <= $2 THEN 1 ELSE invalid_login_attempts + 1 END,
 			blocked_until = CASE
@@ -38,6 +39,7 @@ func (s *Store) countWrongPassword(ctx context.Context, user ID, limit int, now 
 // Unblock ends the block of an account for wrong passwords and starts their
 // count again.
 func (s *Store) Unblock(ctx context.Context, id ID) (User, error) {
+	defer s.forgetSignIns()
 	return scanUser(s.db.QueryRow(ctx,
 		"UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1 RETURNING "+userColumns, id))
 }
@@ -53,6 +55,7 @@ func (s *Store) SignOutInactiveDevices(ctx context.Context) (int, error) {
 	}
 	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE last_activity_at < $1 RETURNING id",
 		s.now().AddDate(0, 0, -days)))
+	s.forgetSignIns()
 	if err != nil {
 		return 0, err
 	}

@@ -543,11 +543,11 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	} else {
 		response.Body.Close()
 	}
-	s.setting(t, func(settings *accounts.Settings) { settings.Downloads = false })
+	s.permit(t, user, true, true, false)
 	if status, _ := s.call(http.MethodGet, "/Items/"+recording.Id+"/File", app("tv", token), nil); status != http.StatusForbidden {
-		t.Errorf("the recording's file while downloads are off: %d", status)
+		t.Errorf("the recording's file while the user may not download: %d", status)
 	}
-	s.setting(t, func(settings *accounts.Settings) { settings.Downloads = true })
+	s.permit(t, user, true, true, true)
 	// Other app routes answer without failing; subtitle files are refused.
 	for _, route := range [][2]string{{http.MethodGet, "/Items/" + recording.Id + "/Images"}, {http.MethodPost, "/Items/" + recording.Id + "/Refresh"}} {
 		if status, body := s.call(route[0], route[1], app("tv", token), nil); status >= http.StatusInternalServerError {

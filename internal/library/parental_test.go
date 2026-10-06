@@ -279,9 +279,11 @@ func TestOnlyTheServersAddonsRateTitles(t *testing.T) {
 	// The child's own addon is left out of their libraries and of the
 	// descriptions they get, and they keep the server's addons.
 	e.install(addons.Personal(child.ID), fakeRatings())
-	if err := e.addons.SetUsesSharedAddons(t.Context(), child.ID, false); err != nil {
+	updated, err := e.users.UpdateUser(t.Context(), child.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
+	child = updated
 	libraries, _ := e.service.Libraries(t.Context(), child)
 	if got := names(libraries); slices.Contains(got, "Mine") || !slices.Contains(got, "Top") {
 		t.Errorf("child's libraries: %v", got)

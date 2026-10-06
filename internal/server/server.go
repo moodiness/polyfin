@@ -46,7 +46,8 @@ type Options struct {
 	Logger   *slog.Logger
 }
 
-// New returns the handler serving every Polyfin route.
+// New returns the handler serving every Polyfin route. Answers that gain
+// from it go gzip-compressed to clients that accept it (see compress).
 func New(options Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -88,7 +89,7 @@ func New(options Options) http.Handler {
 	}
 	mux.Handle("/", options.Jellyfin)
 
-	return securityHeaders(mux)
+	return securityHeaders(compress(mux))
 }
 
 func databaseReady(ctx context.Context, db Pinger) bool {
@@ -109,8 +110,10 @@ func setUp(ctx context.Context, setupRequired func(context.Context) (bool, error
 // adminApp serves the single-page application. Paths without a file
 // extension are client-side routes and receive index.html; a missing file
 // with an extension is a real 404, so a stale asset never loads the page.
+// Text files go compressed to clients that take gzip, compressed once each.
 func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
 	fileServer := http.StripPrefix(adminPrefix, http.FileServerFS(files))
+	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -128,7 +131,9 @@ func adminApp(files fs.FS, logger *slog.Logger) http.Handler {
 			} else {
 				w.Header().Set("Cache-Control", "no-cache")
 			}
-			fileServer.ServeHTTP(w, r)
+			if !compressed.serve(w, r, name, info, "") {
+				fileServer.ServeHTTP(w, r)
+			}
 			return
 		}
 		if path.Ext(name) != "" {

@@ -38,6 +38,16 @@ const users = {
     canDownloadHelp: 'Lets this user save titles in Jellyfin apps to watch offline.',
     noTranscoding: 'No conversion',
     noDownloads: 'No downloads',
+    turnOffDownloads: 'Turn off downloads for everyone',
+    turnOffDownloadsConfirm:
+      'Every user loses the permission to download, also in the Jellyfin apps already signed in. You can give it back to a user on their page, under Access.',
+    turningOffDownloads: 'Turning off…',
+    downloadsTurnedOff: (count: number) =>
+      count === 0
+        ? 'Nobody could download.'
+        : count === 1
+          ? '1 user can no longer download.'
+          : `${count} users can no longer download.`,
     lastAdminHelp: 'The last enabled administrator cannot be deleted, demoted or disabled.',
     updated: 'Changes saved.',
     parentalTitle: 'Parental control',

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/media"
 )
 
@@ -123,7 +122,7 @@ func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
 	expect("playing the second version", nowPlaying(p.versions[1].ID.String()), nil)
 }
 
-func TestChaptersFollowTheSetting(t *testing.T) {
+func TestChaptersAreAlwaysSent(t *testing.T) {
 	p := playing(t)
 	probe, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "chapters", "probe.json"))
 	if err != nil {
@@ -194,22 +193,16 @@ func TestChaptersFollowTheSetting(t *testing.T) {
 		return counts
 	}
 
-	p.setting(t, func(s *accounts.Settings) { s.Chapters = false })
-	off := seen()
-	for where, count := range off {
-		if count != 0 {
-			t.Errorf("chapters off: %d chapters in %s", count, where)
-		}
-	}
-	p.setting(t, func(s *accounts.Settings) { s.Chapters = true })
-	on := seen()
-	for where, count := range on {
+	// Every place an app reads an item shows the chapters the analysis
+	// kept, with no setting to hide them.
+	counts := seen()
+	for where, count := range counts {
 		if count != len(analysis.Chapters) {
-			t.Errorf("chapters back on: %d chapters in %s, want %d", count, where, len(analysis.Chapters))
+			t.Errorf("%d chapters in %s, want %d", count, where, len(analysis.Chapters))
 		}
 	}
-	if len(off) != 4 || len(on) != 4 {
-		t.Errorf("places checked: %v, then %v", off, on)
+	if len(counts) != 4 {
+		t.Errorf("places checked: %v", counts)
 	}
 	if after := analyzedAt(); !after.Equal(before) {
 		t.Errorf("the version was analyzed again: %v, then %v", before, after)

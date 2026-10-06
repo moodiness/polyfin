@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"encoding/json"
+	"maps"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -55,43 +58,86 @@ func TestAdministratorsSetConversionAndDownloadPermissions(t *testing.T) {
 	}
 }
 
-func TestSettingsSwitchConversionAndDownloads(t *testing.T) {
+func TestSettingsSwitchConversion(t *testing.T) {
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, settings, _ := administrator.call(http.MethodGet, "/settings", nil)
-	if settings["transcoding"] != true || settings["downloads"] != true {
+	if settings["transcoding"] != true {
 		t.Fatalf("default settings: %v", settings)
 	}
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	put := func(changes map[string]any) map[string]any {
 		t.Helper()
-		body := map[string]any{}
-		for key, value := range base {
-			body[key] = value
-		}
-		for key, value := range changes {
-			body[key] = value
-		}
+		body := maps.Clone(base)
+		maps.Copy(body, changes)
 		status, saved, _ := administrator.call(http.MethodPut, "/settings", body)
 		if status != http.StatusOK {
 			t.Fatalf("saving %v: %d %v", changes, status, saved)
 		}
 		return saved
 	}
-	if saved := put(map[string]any{"transcoding": false, "downloads": false}); saved["transcoding"] != false || saved["downloads"] != false {
-		t.Errorf("turning both off: %v", saved)
+	if saved := put(map[string]any{"transcoding": false}); saved["transcoding"] != false {
+		t.Errorf("turning conversion off: %v", saved)
 	}
-	if current := api.store.Settings(); current.Transcoding || current.Downloads {
+	if current := api.store.Settings(); current.Transcoding {
 		t.Errorf("stored: %+v", current)
 	}
-	// An admin app that does not know them keeps them.
-	if saved := put(map[string]any{"serverName": "Maison"}); saved["transcoding"] != false || saved["downloads"] != false || saved["serverName"] != "Maison" {
-		t.Errorf("saving without them: %v", saved)
+	// An admin app that does not know it keeps it.
+	if saved := put(map[string]any{"serverName": "Maison"}); saved["transcoding"] != false || saved["serverName"] != "Maison" {
+		t.Errorf("saving without it: %v", saved)
 	}
-	if saved := put(map[string]any{"transcoding": true}); saved["transcoding"] != true || saved["downloads"] != false {
+	if saved := put(map[string]any{"transcoding": true}); saved["transcoding"] != true {
 		t.Errorf("turning conversion on: %v", saved)
 	}
-	if current := api.store.Settings(); !current.Transcoding || current.Downloads {
-		t.Errorf("stored: %+v", current)
+}
+
+func TestAdministratorsTurnDownloadsOffForEveryone(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	member := api.signedIn("member", false)
+	_, child, _ := administrator.call(http.MethodPost, "/users", map[string]any{"name": "child", "password": "correct horse"})
+	if status, _, _ := administrator.call(http.MethodPatch, "/users/"+child["id"].(string), map[string]any{"downloads": false}); status != http.StatusOK {
+		t.Fatalf("child's downloads: %d", status)
+	}
+	if status, _, _ := member.call(http.MethodPost, "/users/downloads/off", nil); status != http.StatusForbidden {
+		t.Errorf("a member turning downloads off: %d", status)
+	}
+	// turnOff answers with the names of the users who had the permission.
+	turnOff := func() []string {
+		t.Helper()
+		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, api.url+"/admin/api/users/downloads/off", nil)
+		answer, err := administrator.client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer answer.Body.Close()
+		var users []map[string]any
+		if err := json.NewDecoder(answer.Body).Decode(&users); err != nil || answer.StatusCode != http.StatusOK {
+			t.Fatalf("turning downloads off: %d %v", answer.StatusCode, err)
+		}
+		names := []string{}
+		for _, user := range users {
+			if user["downloads"] != false {
+				t.Errorf("%v answered with downloads %v", user["name"], user["downloads"])
+			}
+			names = append(names, user["name"].(string))
+		}
+		slices.Sort(names)
+		return names
+	}
+	if names := turnOff(); !slices.Equal(names, []string{"administrator", "member"}) {
+		t.Errorf("turned off for %v", names)
+	}
+	users, err := api.store.Users(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range users {
+		if user.ContentDownloading {
+			t.Errorf("%s may still download", user.Name)
+		}
+	}
+	if names := turnOff(); len(names) != 0 {
+		t.Errorf("turned off again for %v", names)
 	}
 }

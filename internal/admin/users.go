@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"cmp"
 	"errors"
 	"net/http"
 	"slices"
@@ -255,23 +254,19 @@ type deviceJSON struct {
 	LastActivityAt time.Time `json:"lastActivityAt"`
 }
 
-// settingsJSON are the settings the admin interface reads and saves.
-// Chapters and PrepareAhead are always sent; a save without them keeps
-// their current value, so that a page or script older than them leaves them
-// alone.
+// settingsJSON are the settings the admin interface reads and saves. A
+// save leaving a setting out keeps its current value, so that a page or
+// script older than it leaves it alone; one sending a setting that no
+// longer exists, such as chapters or downloads, is not refused.
 type settingsJSON struct {
 	ServerName          string `json:"serverName"`
 	QuickConnectEnabled bool   `json:"quickConnectEnabled"`
 	LegacyAuthorization bool   `json:"legacyAuthorization"`
 	Language            string `json:"language"`
-	Chapters            *bool  `json:"chapters"`
 	PrepareAhead        *bool  `json:"prepareAhead"`
-	// Transcoding, Downloads, CatalogLimit and ChannelLimit keep their
-	// current values when a PUT leaves them out.
-	Transcoding  *bool `json:"transcoding"`
-	Downloads    *bool `json:"downloads"`
-	CatalogLimit *int  `json:"catalogLimit"`
-	ChannelLimit *int  `json:"channelLimit"`
+	Transcoding         *bool  `json:"transcoding"`
+	CatalogLimit        *int   `json:"catalogLimit"`
+	ChannelLimit        *int   `json:"channelLimit"`
 	// The content settings keep their current values too when a PUT
 	// leaves them out.
 	SkipButtons *bool `json:"skipButtons"`
@@ -285,20 +280,17 @@ type settingsJSON struct {
 	// optional key.
 	TheIntroDBKeySet bool    `json:"theIntroDbKeySet"`
 	TheIntroDBKey    *string `json:"theIntroDbKey,omitempty"`
-	// SegmentOrder is the order of preference of the segment databases in
-	// effect, every one of them; SegmentOrderDefault, the one POLYFIN_SEGMENTS
-	// gives, which a reset returns to; and SegmentSourcesOff, those
-	// POLYFIN_SEGMENTS turns off. A PUT saves SegmentOrder, every database
-	// once, or follows POLYFIN_SEGMENTS again with an empty one; leaving it
-	// out (or null) keeps the saved one. It ignores the other two.
-	SegmentOrder          []string `json:"segmentOrder"`
-	SegmentOrderDefault   []string `json:"segmentOrderDefault"`
-	SegmentSourcesOff     []string `json:"segmentSourcesOff"`
-	SimilarTitles         *bool    `json:"similarTitles"`
-	PlayedPercent         *int     `json:"playedPercent"`
-	ResumePercent         *int     `json:"resumePercent"`
-	VersionListMinutes    *int     `json:"versionListMinutes"`
-	CatalogRefreshMinutes *int     `json:"catalogRefreshMinutes"`
+	// SegmentOrder is the order of preference of the segment databases,
+	// every one of them once, and SegmentSourcesOff those never asked. A
+	// PUT leaving either out keeps it; an empty order, which older pages
+	// sent to follow POLYFIN_SEGMENTS, keeps it too.
+	SegmentOrder          []string  `json:"segmentOrder"`
+	SegmentSourcesOff     *[]string `json:"segmentSourcesOff"`
+	SimilarTitles         *bool     `json:"similarTitles"`
+	PlayedPercent         *int      `json:"playedPercent"`
+	ResumePercent         *int      `json:"resumePercent"`
+	VersionListMinutes    *int      `json:"versionListMinutes"`
+	CatalogRefreshMinutes *int      `json:"catalogRefreshMinutes"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -371,7 +363,35 @@ type settingsJSON struct {
 	BackupHour   *int   `json:"backupHour"`
 	BackupsKept  *int   `json:"backupsKept"`
 	BackupFolder string `json:"backupFolder"`
+	// Bounds are what each setting accepts, and its default, by its name
+	// here; a PUT ignores them.
+	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
 }
+
+// settingBoundsJSON is what a setting accepts, and its default (see
+// accounts.SettingBounds): min and max for a number, or the length of a
+// text, zero when 0 is accepted below min, and choices for a setting taking
+// one of them, or a list holding some.
+type settingBoundsJSON struct {
+	Default any      `json:"default"`
+	Min     *float64 `json:"min,omitempty"`
+	Max     *float64 `json:"max,omitempty"`
+	Zero    bool     `json:"zero,omitempty"`
+	Choices []any    `json:"choices,omitempty"`
+}
+
+// settingsBounds are accounts.SettingsBounds as the admin API sends them.
+var settingsBounds = func() map[string]settingBoundsJSON {
+	result := map[string]settingBoundsJSON{}
+	for name, bounds := range accounts.SettingsBounds() {
+		entry := settingBoundsJSON{Default: bounds.Default, Zero: bounds.Zero, Choices: bounds.Choices}
+		if bounds.Bounded {
+			entry.Min, entry.Max = &bounds.Min, &bounds.Max
+		}
+		result[name] = entry
+	}
+	return result
+}()
 
 func newSettingsJSON(settings accounts.Settings) settingsJSON {
 	return settingsJSON{
@@ -379,16 +399,16 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		QuickConnectEnabled: settings.QuickConnectEnabled,
 		LegacyAuthorization: settings.LegacyAuthorization,
 		Language:            settings.Language,
-		Chapters:            &settings.Chapters,
 		PrepareAhead:        &settings.PrepareAhead,
 		Transcoding:         &settings.Transcoding,
-		Downloads:           &settings.Downloads,
 		CatalogLimit:        &settings.CatalogLimit,
 		ChannelLimit:        &settings.ChannelLimit,
 
 		SkipButtons:           &settings.SkipButtons,
 		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
 		TheIntroDBKeySet:      settings.TheIntroDBKey != "",
+		SegmentOrder:          settings.SegmentOrder,
+		SegmentSourcesOff:     &settings.SegmentSourcesOff,
 		SimilarTitles:         &settings.SimilarTitles,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
@@ -764,19 +784,38 @@ func (h *handler) unblockUser(w http.ResponseWriter, r *http.Request) {
 	h.writeUser(w, r, http.StatusOK, user)
 }
 
+// turnOffDownloads takes the permission to download away from every user,
+// and answers with those who had it.
+func (h *handler) turnOffDownloads(w http.ResponseWriter, r *http.Request) {
+	changed, err := h.Accounts.TurnOffDownloads(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	result := make([]userJSON, 0, len(changed))
+	for _, user := range changed {
+		h.Activity.UserChanged(r.Context(), user)
+		result = append(result, newUserJSON(user))
+	}
+	if result, err = h.withPins(r, result...); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
 }
 
-// settingsJSON describes settings with what the configuration sets, and
-// what conversions run on.
+// settingsJSON describes settings with what the configuration sets, what
+// conversions run on, and the bounds of each setting.
 func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	body := newSettingsJSON(settings)
-	body.SegmentOrder, body.SegmentSourcesOff = h.Segments.Order(settings.SegmentOrder)
-	body.SegmentOrderDefault, _ = h.Segments.Order(nil)
+	body.Bounds = settingsBounds
 	body.RecordingsFolder = h.RecordingsDir
 	body.BackupFolder = h.Backups.Dir()
-	body.ConversionHardware = conversionHardwareJSON{Default: h.Acceleration, Encoders: []string{}}
+	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
 			body.ConversionHardware.GPU = newHardwareJSON(hw)
@@ -792,12 +831,10 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	return body
 }
 
-// conversionHardwareJSON is what conversions run on: the GPU
-// POLYFIN_HWACCEL asks for, which the settings fall back on, the GPU
-// chosen, null for none, and, in software, the video encoders, the filters
-// tone mapping HDR and the bwdif deinterlacer.
+// conversionHardwareJSON is what conversions run on: the GPU chosen, null
+// for none, and, in software, the video encoders, the filters tone mapping
+// HDR and the bwdif deinterlacer.
 type conversionHardwareJSON struct {
-	Default     string        `json:"default"`
 	GPU         *hardwareJSON `json:"gpu"`
 	Encoders    []string      `json:"encoders"`
 	ToneMapping bool          `json:"toneMapping"`
@@ -819,8 +856,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// An empty order is what older pages sent to follow POLYFIN_SEGMENTS,
+	// which the settings now hold: it keeps the saved one.
 	segmentOrder := current.SegmentOrder
-	if body.SegmentOrder != nil {
+	if len(body.SegmentOrder) > 0 {
 		segmentOrder = body.SegmentOrder
 	}
 	settings, err := h.Accounts.UpdateSettings(r.Context(), accounts.Settings{
@@ -828,10 +867,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		QuickConnectEnabled: body.QuickConnectEnabled,
 		LegacyAuthorization: body.LegacyAuthorization,
 		Language:            body.Language,
-		Chapters:            valueOr(body.Chapters, current.Chapters),
 		PrepareAhead:        valueOr(body.PrepareAhead, current.PrepareAhead),
 		Transcoding:         valueOr(body.Transcoding, current.Transcoding),
-		Downloads:           valueOr(body.Downloads, current.Downloads),
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 
@@ -839,6 +876,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PublicMetaDBKey:       publicMetaDBKey,
 		TheIntroDBKey:         theIntroDBKey,
 		SegmentOrder:          segmentOrder,
+		SegmentSourcesOff:     valueOr(body.SegmentSourcesOff, current.SegmentSourcesOff),
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
@@ -909,7 +947,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	// A GPU chosen anew is detected, or switched to, before the answer
 	// shows what was found.
 	if encoder := h.Health.Encoder; encoder != nil && settings.HardwareAcceleration != current.HardwareAcceleration {
-		encoder.SelectHardware(cmp.Or(settings.HardwareAcceleration, h.Acceleration), h.VAAPIDevice)
+		encoder.SelectHardware(settings.HardwareAcceleration, h.VAAPIDevice)
 	}
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }

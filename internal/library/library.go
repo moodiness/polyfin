@@ -242,9 +242,7 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	scopes := []addons.Scope{addons.Shared()}
 	if !user.Restricted() && user.ID != (accounts.ID{}) && settings.PersonalAddonsAllowed(user) {
 		scopes = []addons.Scope{addons.Personal(user.ID)}
-		if shared, err := s.addons.UsesSharedAddons(ctx, user.ID); err != nil {
-			return view{}, err
-		} else if shared {
+		if user.UseSharedAddons {
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 		}
 	}

@@ -15,11 +15,11 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
-// switches sets the server's conversion and download switches.
-func (s testServer) switches(t *testing.T, transcoding, downloads bool) {
+// switches sets the server's conversion switch.
+func (s testServer) switches(t *testing.T, transcoding bool) {
 	t.Helper()
 	settings := s.store.Settings()
-	settings.Transcoding, settings.Downloads = transcoding, downloads
+	settings.Transcoding = transcoding
 	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 		name string
 		set  func(on bool)
 	}{
-		{"server", func(on bool) { p.switches(t, on, true) }},
+		{"server", func(on bool) { p.switches(t, on) }},
 		{"user", func(on bool) { p.permit(t, p.user, on, on, true) }},
 	} {
 		off.set(false)
@@ -165,7 +165,7 @@ func TestImageSubtitlesAreLeftOutWhenTheVideoMayNotBeConverted(t *testing.T) {
 	}
 	for _, off := range []func(on bool){
 		func(on bool) { p.permit(t, p.user, on, true, true) },
-		func(on bool) { p.switches(t, on, true) },
+		func(on bool) { p.switches(t, on) },
 	} {
 		off(false)
 		answer := p.ask(t, p.token, p.movie, chrome, request)
@@ -206,7 +206,7 @@ func TestHLSRefusesConversionsThatAreNotAllowed(t *testing.T) {
 		set          func(on bool)
 		video, audio bool
 	}{
-		{"server off", func(on bool) { p.switches(t, on, true) }, false, false},
+		{"server off", func(on bool) { p.switches(t, on) }, false, false},
 		{"user's video off", func(on bool) { p.permit(t, p.user, on, true, true) }, false, true},
 		{"user's audio off", func(on bool) { p.permit(t, p.user, true, on, true) }, true, false},
 	} {
@@ -257,7 +257,7 @@ func TestLiveConversionsFollowThePermissions(t *testing.T) {
 		name string
 		set  func(on bool)
 	}{
-		{"server", func(on bool) { s.switches(t, on, true) }},
+		{"server", func(on bool) { s.switches(t, on) }},
 		{"user", func(on bool) { s.permit(t, user, true, on, true) }},
 	} {
 		off.set(false)
@@ -327,14 +327,17 @@ func TestDownloadsFollowThePermissions(t *testing.T) {
 			}
 		}
 	}
-	check("both allowed", true)
-	p.switches(t, true, false)
-	check("server off", false)
-	p.switches(t, true, true)
+	check("allowed", true)
 	p.permit(t, p.user, true, true, false)
 	check("user off", false)
 	p.permit(t, p.user, true, true, true)
 	check("allowed again", true)
+	// Turning downloads off for everyone takes the user's permission away
+	// at once, for the apps already signed in too.
+	if _, err := p.store.TurnOffDownloads(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	check("off for everyone", false)
 }
 
 func TestPolicyCarriesConversionAndDownloadPermissions(t *testing.T) {
@@ -371,10 +374,10 @@ func TestPolicyCarriesConversionAndDownloadPermissions(t *testing.T) {
 	if err != nil || stored.VideoTranscoding || !stored.AudioTranscoding || stored.ContentDownloading {
 		t.Errorf("stored: %+v %v", stored, err)
 	}
-	// The policy is the user's own: the server's switches do not show.
-	s.switches(t, false, false)
+	// The policy is the user's own: the server's switch does not show.
+	s.switches(t, false)
 	if got := flags(policy()); got != [4]any{false, true, false, true} {
-		t.Errorf("policy with the server's switches off: %v", got)
+		t.Errorf("policy with the server's conversion off: %v", got)
 	}
 	// Like Jellyfin's, a policy that leaves them out grants them.
 	if status, body := s.postRaw(path+"/Policy", app("tv", adminToken), `{"IsHidden":true}`); status != http.StatusNoContent {

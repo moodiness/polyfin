@@ -36,14 +36,17 @@ type Config struct {
 	CacheDir  string
 	CacheSize int64
 	// Acceleration is the GPU video is converted on: auto, the first of
-	// NVIDIA and VAAPI that works, nvenc, vaapi, or none.
+	// NVIDIA and VAAPI that works, nvenc, vaapi, or none. It is copied
+	// into the settings at the first start only (see
+	// accounts.Store.AdoptEnvironment), which choose the GPU from then on.
 	Acceleration string
 	// VAAPIDevice is the render node VAAPI opens, such as
 	// /dev/dri/renderD128; empty tries each in turn.
 	VAAPIDevice string
 	// Segments are the databases asked where titles' intros and credits
 	// are, of theintrodb, introdb and publicmetadb, the preferred first;
-	// empty asks none.
+	// empty asks none. Like Acceleration, they are copied into the
+	// settings at the first start only.
 	Segments []string
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
 	// with the folders within.

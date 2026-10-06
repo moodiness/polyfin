@@ -239,28 +239,34 @@ func TestSettingsLanguage(t *testing.T) {
 func TestSettingsPlaybackSwitches(t *testing.T) {
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["chapters"] != true || body["prepareAhead"] != false {
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["prepareAhead"] != true {
 		t.Errorf("default settings: %v", body)
 	}
+	// A page older than the removal of chapters and downloads still sends
+	// them: the save goes through, and they are not answered.
 	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en",
-		"chapters": false, "prepareAhead": true}
-	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
-		body["chapters"] != false || body["prepareAhead"] != true {
+		"chapters": false, "downloads": false, "prepareAhead": false}
+	status, body, _ := administrator.call(http.MethodPut, "/settings", settings)
+	if status != http.StatusOK || body["prepareAhead"] != false {
 		t.Fatalf("saving the switches: %d %v", status, body)
 	}
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["chapters"] != false || body["prepareAhead"] != true {
+	for _, removed := range []string{"chapters", "downloads"} {
+		if _, found := body[removed]; found {
+			t.Errorf("%s answered: %v", removed, body[removed])
+		}
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["prepareAhead"] != false {
 		t.Errorf("settings after saving: %v", body)
 	}
-	// A page or script older than the switches leaves them as they are.
-	delete(settings, "chapters")
+	// A page or script older than the switch leaves it as it is.
 	delete(settings, "prepareAhead")
 	settings["serverName"] = "Maison"
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
-		body["serverName"] != "Maison" || body["chapters"] != false || body["prepareAhead"] != true {
-		t.Errorf("saving without the switches: %d %v", status, body)
+		body["serverName"] != "Maison" || body["prepareAhead"] != false {
+		t.Errorf("saving without the switch: %d %v", status, body)
 	}
-	if got := api.store.Settings(); got.Chapters || !got.PrepareAhead {
-		t.Errorf("stored switches after a save without them: %+v", got)
+	if got := api.store.Settings(); got.PrepareAhead {
+		t.Errorf("stored switch after a save without it: %+v", got)
 	}
 }
 
@@ -317,7 +323,7 @@ func TestSettingsContent(t *testing.T) {
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	defaults := map[string]any{"skipButtons": true, "similarTitles": true, "playedPercent": float64(90), "resumePercent": float64(5),
-		"versionListMinutes": float64(10), "catalogRefreshMinutes": float64(10)}
+		"versionListMinutes": float64(10), "catalogRefreshMinutes": float64(60)}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	for key, want := range defaults {
 		if body[key] != want {

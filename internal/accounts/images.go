@@ -103,6 +103,8 @@ func opaque(picture image.Image) bool {
 // WebP image, normalized (see normalizeImage). It returns the user with
 // their new ImageTag.
 func (s *Store) SetImage(ctx context.Context, id ID, data []byte) (User, error) {
+	// Apps show the picture by the user's ImageTag.
+	defer s.forgetSignIns()
 	normalized, err := NormalizeImage(data, MaxImageBytes, MaxImageSide)
 	if err != nil {
 		return User{}, err
@@ -113,6 +115,7 @@ func (s *Store) SetImage(ctx context.Context, id ID, data []byte) (User, error) 
 
 // DeleteImage removes a user's profile picture, if they have one.
 func (s *Store) DeleteImage(ctx context.Context, id ID) (User, error) {
+	defer s.forgetSignIns()
 	return scanUser(s.db.QueryRow(ctx, "UPDATE users SET image = NULL, image_type = NULL, image_tag = '' WHERE id = $1 RETURNING "+userColumns, id))
 }
 
