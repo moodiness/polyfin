@@ -342,8 +342,10 @@ type musicPage struct {
 // musicCaches keep what music addons answered: catalog pages as long as
 // other catalogs' pages (the settings' CatalogRefreshMinutes), album,
 // artist and playlist pages as long as descriptions, then, stale,
-// staleMusic more (see remember); searches briefly. fetches bounds the
-// requests for them under way to each addon.
+// staleMusic more (see remember); searches briefly. Each is bounded in
+// bytes too, as the JSON of its answers measures them: a playlist can hold
+// hundreds of tracks. fetches bounds the requests for them under way to
+// each addon.
 type musicCaches struct {
 	pages     musicCache[musicPage]
 	albums    musicCache[eclipse.Album]
@@ -357,11 +359,11 @@ func newMusicCaches(s *Service) musicCaches {
 	clock := func() time.Time { return s.now() }
 	fixed := func(life time.Duration) func() time.Duration { return func() time.Duration { return life } }
 	return musicCaches{
-		pages:     newMusicCache[musicPage](2000, s.catalogLife, staleMusic, clock),
-		albums:    newMusicCache[eclipse.Album](2000, fixed(metaTTL), staleMusic, clock),
-		artists:   newMusicCache[eclipse.Artist](2000, fixed(metaTTL), staleMusic, clock),
-		playlists: newMusicCache[eclipse.Playlist](1000, fixed(metaTTL), staleMusic, clock),
-		searches:  newMusicCache[eclipse.Results](500, fixed(searchTTL), 0, clock),
+		pages:     newMusicCache(2000, 16<<20, func(p musicPage) int { return cache.JSONSize(p.items) }, s.catalogLife, staleMusic, clock),
+		albums:    newMusicCache(2000, 8<<20, cache.JSONSize[eclipse.Album], fixed(metaTTL), staleMusic, clock),
+		artists:   newMusicCache(2000, 8<<20, cache.JSONSize[eclipse.Artist], fixed(metaTTL), staleMusic, clock),
+		playlists: newMusicCache(1000, 16<<20, cache.JSONSize[eclipse.Playlist], fixed(metaTTL), staleMusic, clock),
+		searches:  newMusicCache(500, 4<<20, cache.JSONSize[eclipse.Results], fixed(searchTTL), 0, clock),
 		fetches:   &addonSlots{slots: map[accounts.ID]chan struct{}{}},
 	}
 }
@@ -379,8 +381,13 @@ type answered[V any] struct {
 	at    time.Time
 }
 
-func newMusicCache[V any](capacity int, life func() time.Duration, stale time.Duration, now func() time.Time) musicCache[V] {
-	return musicCache[V]{answers: cache.NewLasting[musicKey, answered[V]](capacity, func() time.Duration { return life() + stale }, now), life: life}
+// newMusicCache returns a cache of at most capacity answers and maxBytes,
+// as size measures each answer.
+func newMusicCache[V any](capacity, maxBytes int, size func(V) int, life func() time.Duration, stale time.Duration,
+	now func() time.Time) musicCache[V] {
+	answers := cache.NewLasting[musicKey, answered[V]](capacity, func() time.Duration { return life() + stale }, now).
+		Sized(maxBytes, func(a answered[V]) int { return size(a.value) })
+	return musicCache[V]{answers: answers, life: life}
 }
 
 // addonSlots bounds the requests under way to each addon.
