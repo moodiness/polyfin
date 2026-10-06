@@ -19,7 +19,13 @@ The Docker image includes jellyfin-web 12.1. Polyfin serves it at `/web/`, as Je
 
 In the web client, the **Dashboard** (from the menu or the user menu), every dashboard page, the metadata manager, plugin pages and the startup wizard open Polyfin's [admin app](administration.md) at `/admin/` instead.
 
-Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. The same script adds a title's versions to its page's version menu as the addons answer, without reloading the page (see [Title pages](playback.md#title-pages)).
+Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. On a movie's or an episode's page, the same script:
+
+- adds the title's versions to the page's version menu as the addons answer, without reloading the page;
+- keeps the Play, Resume and Play from the start buttons disabled, with a spinner and the tooltip "Looking for sources…", until a version is known, then gives them back in place;
+- when every addon has answered without a version, says "No source is available for this title." under the buttons, with a **Try again** button that has Polyfin ask the addons again.
+
+Its words follow the web client's language: English or French, English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. See [Title pages](playback.md#title-pages).
 
 ### Signing in to the admin app
 
