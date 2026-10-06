@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -323,6 +324,162 @@ process.stdout.write(JSON.stringify(results))
 		}
 		if replaced != want {
 			t.Errorf("%s: went to %q, want %q", key, replaced, want)
+		}
+	}
+}
+
+// On a title's page, the script asks Polyfin every second for the title's
+// versions while addons are pending, and reloads the visible page when it
+// lists fewer versions than there are, as jellyfin-web reloads a page shown
+// again. It runs in Node.js, in a context that stands for the browser and
+// jellyfin-web: a title page whose version menu lists what the details
+// gave when it was last loaded, a clock and timers the harness moves on.
+func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	const title = "#/details?id=0123456789abcdef0123456789abcdef&serverId=fedcba9876543210fedcba9876543210"
+	const ask = "ask http://polyfin.test/Polyfin/Items/0123456789abcdef0123456789abcdef/Versions"
+	type answer struct{ Pending, Count int }
+	type scenario struct {
+		// listed is how many versions the menu lists; hidden hides it, as
+		// jellyfin-web does with one version or none.
+		listed int
+		hidden bool
+		video  bool
+		// answers are Polyfin's, in order; then it fails, unless forever
+		// keeps the last.
+		answers []answer
+		forever bool
+		// steps: a route the router moves to, or "tick" to run the next
+		// timer, logging "idle" when there is none.
+		steps []string
+		want  []string
+	}
+	reloads := []string{"viewbeforehide", "viewshow false"}
+	ticks := func(n int) []string { return slices.Repeat([]string{"tick"}, n) }
+	scenarios := map[string]scenario{
+		"versions come as addons answer": {listed: 1, hidden: true, answers: []answer{{2, 1}, {1, 2}, {0, 4}},
+			steps: append([]string{title}, ticks(4)...),
+			want:  slices.Concat([]string{ask, ask}, reloads, []string{ask}, reloads, []string{"idle"})},
+		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2}, {0, 2}, {0, 2}},
+			steps: append([]string{title}, ticks(4)...), want: []string{ask, ask, ask, "idle"}},
+		"leaving the page stops": {listed: 1, answers: []answer{{2, 1}, {2, 1}},
+			steps: []string{title, "tick", "#/home", "tick"}, want: []string{ask, "idle"}},
+		"other routes ask nothing": {listed: 1, answers: []answer{{2, 3}},
+			steps: []string{"#/details?id=dashboard", "#/home", "#/list?parentId=0123456789abcdef0123456789abcdef", "tick"}, want: []string{"idle"}},
+		"never during a video": {listed: 1, video: true, answers: []answer{{1, 1}, {1, 3}, {0, 3}},
+			steps: append([]string{title}, ticks(4)...), want: []string{ask, ask, ask, "idle"}},
+		// A menu that cannot list the versions, hidden, is reloaded once
+		// for each count, not every second.
+		"a hidden menu counts one": {listed: 0, hidden: true, answers: []answer{{1, 1}, {1, 2}, {0, 2}},
+			steps: append([]string{title}, ticks(4)...), want: slices.Concat([]string{ask, ask}, reloads, []string{ask, "idle"})},
+		"an error stops": {listed: 1, steps: []string{title, "tick", "tick"}, want: []string{ask, "idle"}},
+	}
+	ninety := slices.Repeat([]string{ask}, 90)
+	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1}}, forever: true,
+		// The 91st second asks nothing, and the polling ends.
+		steps: append([]string{title}, ticks(92)...), want: append(ninety, "idle")}
+
+	const harness = `
+const vm = require('node:vm')
+const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+async function run(scenario) {
+  const log = []
+  let now = 0
+  const timers = []
+  const listeners = {}
+  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  let count = scenario.listed
+  const menu = { options: { length: scenario.listed }, closest: () => (scenario.hidden ? {} : null) }
+  const page = {
+    querySelector: (selector) => (selector === '.selectSource' ? menu : null),
+    dispatchEvent: (event) => {
+      log.push(event.type + (event.detail && 'isRestored' in event.detail ? ' ' + event.detail.isRestored : ''))
+      // Reloaded, the page lists what the details give now.
+      if (event.type === 'viewshow') menu.options.length = count
+    },
+  }
+  const document = {
+    querySelector: (selector) => {
+      if (selector === '.videoPlayerContainer') return scenario.video ? {} : null
+      return selector === '.page.itemDetailPage:not(.hide)' ? page : null
+    },
+  }
+  const answers = (scenario.answers || []).slice()
+  const ApiClient = {
+    getUrl: (path) => 'http://polyfin.test/' + path,
+    getJSON: (url) => {
+      log.push('ask ' + url)
+      const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
+      if (!answer) return Promise.reject(new Error('down'))
+      count = answer.Count
+      return Promise.resolve(answer)
+    },
+  }
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
+  vm.runInNewContext(script, {
+    location, history, URL, document, CustomEvent, window: { ApiClient },
+    Date: { now: () => now },
+    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
+    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  for (const step of scenario.steps) {
+    if (step !== 'tick') {
+      history.pushState(null, '', step)
+      continue
+    }
+    let next = -1
+    timers.forEach((timer, i) => { if (timer && (next < 0 || timer.at < timers[next].at)) next = i })
+    if (next < 0) {
+      log.push('idle')
+      continue
+    }
+    const timer = timers[next]
+    timers[next] = null
+    now = timer.at
+    timer.run()
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) results[name] = await run(scenario)
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		Listed  int      `json:"listed"`
+		Hidden  bool     `json:"hidden"`
+		Video   bool     `json:"video"`
+		Answers []answer `json:"answers"`
+		Forever bool     `json:"forever"`
+		Steps   []string `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		inputs[name] = input{s.listed, s.hidden, s.video, s.answers, s.forever, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
 		}
 	}
 }
