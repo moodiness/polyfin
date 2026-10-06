@@ -103,9 +103,11 @@ func (c *customScripts) current() hashedScript {
 // administrator's when there is one; files whose name or query carries a
 // build or content hash are cached for good. Other files are revalidated
 // (Jellyfin sends no Cache-Control for them, which leaves browsers guessing
-// a lifetime for config.json and the like).
+// a lifetime for config.json and the like). Text files go compressed to
+// clients that take gzip, compressed once each (see gzipFiles).
 func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, api http.Handler, logger *slog.Logger) http.Handler {
 	custom := &customScripts{get: customJs}
+	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			api.ServeHTTP(w, r)
@@ -153,12 +155,24 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			api.ServeHTTP(w, r)
 			return
 		}
+		header := w.Header()
+		if hashedName.MatchString(path.Base(name)) || buildQuery.MatchString(r.URL.RawQuery) {
+			header.Set("Cache-Control", immutableCache)
+		} else {
+			header.Set("Cache-Control", "no-cache")
+		}
+		contentType := webTypes[path.Ext(name)]
+		if contentType != "" {
+			header.Set("Content-Type", contentType)
+		}
+		if compressed.serve(w, r, name, info, contentType) {
+			return
+		}
 		file, err := files.Open(name)
 		if err != nil {
 			api.ServeHTTP(w, r)
 			return
 		}
-		defer file.Close()
 		content, ok := file.(io.ReadSeeker)
 		if !ok {
 			data, err := io.ReadAll(file)
@@ -168,15 +182,6 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 				return
 			}
 			content = bytes.NewReader(data)
-		}
-		header := w.Header()
-		if hashedName.MatchString(path.Base(name)) || buildQuery.MatchString(r.URL.RawQuery) {
-			header.Set("Cache-Control", immutableCache)
-		} else {
-			header.Set("Cache-Control", "no-cache")
-		}
-		if contentType, ok := webTypes[path.Ext(name)]; ok {
-			header.Set("Content-Type", contentType)
 		}
 		http.ServeContent(w, r, name, info.ModTime(), content)
 	})

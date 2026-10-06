@@ -9,6 +9,7 @@ The Docker image includes jellyfin-web 12.1. Polyfin serves it at `/web/`, as Je
 - Once an administrator exists, `http://<server>:8096/` opens the web client.
 - Before that, `/` and `/web/` lead to the setup page in the admin app, since no account could sign in yet. See [getting started](getting-started.md).
 - `POLYFIN_WEB_DIR` can name another copy of jellyfin-web. Outside the image, without one, there is no web client and `/` leads to the admin app.
+- The web client's scripts, styles and other text files go gzip-compressed to browsers that accept it. Each file is compressed once, on its first request, and kept in memory.
 
 **Compared with Jellyfin:**
 
