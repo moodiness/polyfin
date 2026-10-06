@@ -7,7 +7,7 @@ import (
 )
 
 // Dashboard features Polyfin does without answer as an unconfigured
-// Jellyfin 12.1: empty lists, defaults and Jellyfin's own refusals, to
+// Jellyfin 12.2: empty lists, defaults and Jellyfin's own refusals, to
 // administrators only where Jellyfin requires one.
 func TestAbsentFeaturesAnswerAsAnUnconfiguredJellyfin(t *testing.T) {
 	s, admin, member := administrated(t)

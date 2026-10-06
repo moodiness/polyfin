@@ -197,7 +197,7 @@ func TestSavedConfigurationMatchesJellyfin(t *testing.T) {
 		t.Fatalf("saving: %d", status)
 	}
 	_, body := s.call(http.MethodGet, "/Users/Me", app("tv", token), nil)
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "user-configured.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "user-configured.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 func (api testAPI) jellyfinToken(user accounts.User) string {
 	api.t.Helper()
 	token, _, err := api.store.SignInDevice(api.t.Context(), user.ID, accounts.DeviceInfo{
-		DeviceID: "browser-" + user.Name, DeviceName: "Browser", Client: "Jellyfin Web", ClientVersion: "12.1.0",
+		DeviceID: "browser-" + user.Name, DeviceName: "Browser", Client: "Jellyfin Web", ClientVersion: "12.2.0",
 	})
 	if err != nil {
 		api.t.Fatal(err)
@@ -35,7 +35,7 @@ func (api testAPI) createUser(name string, administrator bool) accounts.User {
 func (b browser) exchange(token string) (int, map[string]any) {
 	b.api.t.Helper()
 	status, body, _ := b.call(http.MethodPost, "/session/jellyfin", nil,
-		"Authorization", `MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="browser", Version="12.1.0", Token="`+token+`"`)
+		"Authorization", `MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="browser", Version="12.2.0", Token="`+token+`"`)
 	return status, body
 }
 

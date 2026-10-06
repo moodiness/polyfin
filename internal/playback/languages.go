@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// language is an entry of Jellyfin 12.1's language list, in the order its
+// language is an entry of Jellyfin 12.2's language list, in the order its
 // /Localization/Cultures endpoint returned it on the oracle. Jellyfin finds
 // a stream's LocalizedLanguage in it.
 type language struct {
@@ -166,7 +166,7 @@ func isSpecialLanguage(language string) bool {
 	return false
 }
 
-// languages is Jellyfin 12.1's language list, observed through
+// languages is Jellyfin 12.2's language list, observed through
 // /Localization/Cultures, with French names from the Unicode CLDR.
 var languages = [...]language{
 	{"abk", "", "ab", "Abkhazian", "abkhaze"},

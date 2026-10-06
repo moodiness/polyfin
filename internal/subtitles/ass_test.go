@@ -138,7 +138,7 @@ Dialogue: 0,0:00:09.00,0:00:10.00,Default,,0,0,0,,{\an8}
 	}
 }
 
-// Jellyfin 12.1 writes an ASS track as WebVTT with override blocks
+// Jellyfin 12.2 writes an ASS track as WebVTT with override blocks
 // removed, \N as line breaks and \h as a space: Cues gives the same text.
 func TestScriptCuesMatchJellyfin(t *testing.T) {
 	ass, err := os.ReadFile("testdata/ass-track.ass")

@@ -1,5 +1,5 @@
 /**
- * jellyfin-web 12.1, which Polyfin serves at /web/ on this same origin, keeps its sign-ins in
+ * jellyfin-web 12.2, which Polyfin serves at /web/ on this same origin, keeps its sign-ins in
  * localStorage under this key, as `{"Servers": [{"Id": serverId, "AccessToken": token, …}]}`.
  */
 const credentialsKey = 'jellyfin_credentials'

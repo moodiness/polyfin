@@ -1,0 +1,35 @@
+{
+  "Items": [
+    {
+      "AlbumCount": 0,
+      "ArtistCount": 0,
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "ChildCount": 0,
+      "EpisodeCount": 0,
+      "Id": "",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ae1a922a27872d1eaf2ad3a3563fccd2": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "LocationType": "",
+      "MediaType": "",
+      "MovieCount": 0,
+      "MusicVideoCount": 0,
+      "Name": "",
+      "PrimaryImageAspectRatio": 0,
+      "ProgramCount": 0,
+      "SeriesCount": 0,
+      "ServerId": "",
+      "SongCount": 0,
+      "TrailerCount": 0,
+      "Type": ""
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

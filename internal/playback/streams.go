@@ -9,7 +9,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 )
 
-// Rules below were observed on Jellyfin 12.1, with the oracle's media and
+// Rules below were observed on Jellyfin 12.2, with the oracle's media and
 // with clips made for the purpose, under UICulture en-US and fr. Those
 // marked [INFERENCE] could not be observed: ffmpeg cannot produce Dolby
 // Vision, HDR10+, Atmos or DTS:X tracks, nor DVD or DVB subtitles.

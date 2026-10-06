@@ -8,7 +8,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// The types below reproduce the JSON Jellyfin 12.1 returns, field for field.
+// The types below reproduce the JSON Jellyfin 12.2 returns, field for field.
 // Jellyfin omits null values; Go nil slices would encode as null, so every
 // list is initialized.
 

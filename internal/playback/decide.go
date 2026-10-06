@@ -21,7 +21,7 @@ type Options struct {
 	// EnableDirectPlay false refuses direct play, with DirectPlayError when
 	// nothing else would refuse it.
 	EnableDirectPlay bool
-	// EnableDirectStream changes nothing on its own: Jellyfin 12.1 answers
+	// EnableDirectStream changes nothing on its own: Jellyfin 12.2 answers
 	// the same whether it is set or not.
 	EnableDirectStream bool
 	// ConvertAudio converts the audio of a remux even when the app could
@@ -103,7 +103,7 @@ type SubtitleDelivery struct {
 //	UnknownVideoStreamInfo, UnknownAudioStreamInfo, DirectPlayError,
 //	VideoRangeTypeNotSupported, StreamCountExceedsLimit.
 //
-// Jellyfin 12.1's answers confirm the relative order of the first four,
+// Jellyfin 12.2's answers confirm the relative order of the first four,
 // of AudioCodec before SecondaryAudio and VideoCodecTag, of VideoProfile
 // before VideoResolution, and of AudioCodec before
 // ContainerBitrateExceedsLimit.
@@ -168,7 +168,7 @@ func (r reason) names() []string {
 	return names
 }
 
-// Decide answers like Jellyfin 12.1 whether the app behind profile can
+// Decide answers like Jellyfin 12.2 whether the app behind profile can
 // direct play source.
 //
 // The audio track checked against the profile is the one asked for, else
@@ -762,7 +762,7 @@ func (s subject) property(name string) (value, reason) {
 	case "VideoRangeType":
 		return text(video.VideoRangeType), videoRangeTypeNotSupported
 	case "VideoCodecTag":
-		// Jellyfin 12.1 never knows a source's codec tag: it reports none,
+		// Jellyfin 12.2 never knows a source's codec tag: it reports none,
 		// even for MP4.
 		if s.codecTag != "" {
 			return text(s.codecTag), videoCodecTagNotSupported

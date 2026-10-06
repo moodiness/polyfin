@@ -24,7 +24,7 @@ var recordedClip = media.Analysis{Format: "matroska,webm", Streams: []media.Stre
 }}
 
 func TestAttachedFilesAreListedAsJellyfinListsThem(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "ass", "media-source.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "ass", "media-source.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

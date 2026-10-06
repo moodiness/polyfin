@@ -1,3 +1,0 @@
-#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=128000,AVERAGE-BANDWIDTH=128000,CODECS="mp4a.40.2"
-main.m3u8?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=3e6d2f00f0564167b515adb571e3e02d&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=d938648dbf77f00246cfac13994cfd1f&TranscodeReasons=ContainerBitrateExceedsLimit

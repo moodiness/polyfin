@@ -107,7 +107,7 @@ func (s testServer) postRaw(path, authorization, body string) (int, []byte) {
 	return response.StatusCode, payload
 }
 
-// parentalAnswer is how Jellyfin 12.1 answered a restricted user's request.
+// parentalAnswer is how Jellyfin 12.2 answered a restricted user's request.
 type parentalAnswer struct {
 	Status int
 	Body   json.RawMessage
@@ -116,7 +116,7 @@ type parentalAnswer struct {
 
 func recordedParental(t *testing.T) map[string]parentalAnswer {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "parental", "answers.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "parental", "answers.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestParentalControlMatchesJellyfin(t *testing.T) {
 	check("ChildUser", status, body)
 	var dto struct{ Policy map[string]any }
 	_ = json.Unmarshal(body, &dto)
-	raw, _ := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "parental", "policy.json"))
+	raw, _ := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "parental", "policy.json"))
 	var wantPolicy map[string]any
 	_ = json.Unmarshal(raw, &wantPolicy)
 	for key, value := range wantPolicy {
@@ -239,7 +239,7 @@ func TestParentalControlMatchesJellyfin(t *testing.T) {
 			t.Errorf("policy %s: %v, Jellyfin has %v", key, dto.Policy[key], value)
 		}
 	}
-	shape, _ := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "user-restricted.json"))
+	shape, _ := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "user-restricted.json"))
 	var want, got any
 	_ = json.Unmarshal(shape, &want)
 	_ = json.Unmarshal(body, &got)

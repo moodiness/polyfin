@@ -25,7 +25,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-const playbackFixtures = "testdata/jellyfin-12.1/playback"
+const playbackFixtures = "testdata/jellyfin-12.2/playback"
 
 // streamingAddon serves two movies with two streams each, the first with a
 // SubRip subtitle, and the bytes of the streams.
@@ -704,7 +704,7 @@ func TestSessionsShowWhatDevicesPlay(t *testing.T) {
 }
 
 // TestPlaybackResponsesMatchJellyfin compares playback responses with those
-// recorded from Jellyfin 12.1 by scripts/jellyfin-fixtures.sh, for versions
+// recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, for versions
 // analyzed as the clips Jellyfin played.
 func TestPlaybackResponsesMatchJellyfin(t *testing.T) {
 	p := playing(t)
@@ -729,7 +729,7 @@ func TestPlaybackResponsesMatchJellyfin(t *testing.T) {
 		"playback-info-remote": remoteInfo,
 		"sessions-now-playing": sessions,
 	} {
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

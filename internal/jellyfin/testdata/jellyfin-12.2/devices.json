@@ -1,0 +1,37 @@
+{
+  "Items": [
+    {
+      "AppName": "t",
+      "AppVersion": "1",
+      "Capabilities": {
+        "PlayableMediaTypes": [],
+        "SupportedCommands": [],
+        "SupportsMediaControl": false,
+        "SupportsPersistentIdentifier": true
+      },
+      "CustomName": "Living room",
+      "DateLastActivity": "2026-10-06T16:38:55.9928324Z",
+      "Id": "dev1",
+      "LastUserId": "ab44156ab5c64f209477afb19454ce39",
+      "LastUserName": "admin",
+      "Name": "d"
+    },
+    {
+      "AppName": "Polyfin fixtures",
+      "AppVersion": "1.0.0",
+      "Capabilities": {
+        "PlayableMediaTypes": [],
+        "SupportedCommands": [],
+        "SupportsMediaControl": false,
+        "SupportsPersistentIdentifier": true
+      },
+      "DateLastActivity": "2026-10-06T16:38:39.7476083Z",
+      "Id": "polyfin-fixtures",
+      "LastUserId": "ab44156ab5c64f209477afb19454ce39",
+      "LastUserName": "admin",
+      "Name": "Fixtures"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

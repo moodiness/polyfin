@@ -273,7 +273,7 @@ func TestBitrates(t *testing.T) {
 }
 
 func TestVideoSizes(t *testing.T) {
-	// Observed on Jellyfin 12.1 with clips of each size.
+	// Observed on Jellyfin 12.2 with clips of each size.
 	for _, c := range []struct {
 		width, height int
 		fieldOrder    string

@@ -95,7 +95,7 @@ func lossless(codec string) bool {
 	return false
 }
 
-// DecideAudio answers like Jellyfin 12.1 whether the app behind profile
+// DecideAudio answers like Jellyfin 12.2 whether the app behind profile
 // can play a track as it is: a direct-play profile of type Audio must take
 // its container and codec, the source must be within the bitrate limit,
 // and the Audio codec profiles' conditions must hold. Otherwise it is

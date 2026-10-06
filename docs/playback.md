@@ -35,7 +35,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.1 lists first the version an app opens as an item. jellyfin-web's version menu does this once a version is picked, so the menu reorders itself there. Polyfin keeps the menu as it was.
+- Jellyfin 12.2 lists first the version an app opens as an item. jellyfin-web's version menu does this once a version is picked, so the menu reorders itself there. Polyfin keeps the menu as it was.
 - Jellyfin lists all versions in PlaybackInfo, including the ones that cannot be read or played.
 
 **For app developers:**
@@ -135,7 +135,7 @@ Five more settings change how Polyfin picks a version and how much video the ser
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.1 keeps the version opened first however it plays, as Polyfin does with this setting off.
+- Jellyfin 12.2 keeps the version opened first however it plays, as Polyfin does with this setting off.
 
 ### Video conversions at once
 

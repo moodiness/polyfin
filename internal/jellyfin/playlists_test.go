@@ -317,7 +317,7 @@ var playlistShapes = shapeRules{
 }
 
 // TestPlaylistResponsesMatchJellyfin compares playlist responses and
-// statuses with those recorded from Jellyfin 12.1 by
+// statuses with those recorded from Jellyfin 12.2 by
 // scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPlaylistResponsesMatchJellyfin(t *testing.T) {
 	s, token, views := browsing(t)
@@ -325,7 +325,7 @@ func TestPlaylistResponsesMatchJellyfin(t *testing.T) {
 	member, _ := s.store.Authenticate(t.Context(), "member", "correct horse")
 	viewer := s.user("viewer", nil)
 	user := member.ID.String()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "next-statuses.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "next-statuses.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestPlaylistResponsesMatchJellyfin(t *testing.T) {
 		"playlist-users":       "PlaylistUsers",
 		"playlist-user":        "PlaylistUser",
 	} {
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

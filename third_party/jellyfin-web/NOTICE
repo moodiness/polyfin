@@ -1,12 +1,12 @@
-jellyfin-web 12.1, the web client of Jellyfin, by the Jellyfin contributors.
+jellyfin-web 12.2, the web client of Jellyfin, by the Jellyfin contributors.
 Licensed under the GNU General Public License, version 2: see LICENSE.
 
-The Polyfin image contains jellyfin-web 12.1, unmodified, as a separate
+The Polyfin image contains jellyfin-web 12.2, unmodified, as a separate
 program, in /usr/share/polyfin/jellyfin-web: its built files, copied from
-the official jellyfin/jellyfin:12.1 image. Its complete source code is
+the official jellyfin/jellyfin:12.2 image. Its complete source code is
 attached to every Polyfin release on GitHub, as
-jellyfin-web-12.1-source.tar.gz, and is also at
-https://github.com/jellyfin/jellyfin-web/tree/v12.1
+jellyfin-web-12.2-source.tar.gz, and is also at
+https://github.com/jellyfin/jellyfin-web/tree/v12.2
 
 Polyfin is a separate program, released under the MIT License. It serves
 these files at /web/ and adds to the page one script of its own,

@@ -1,0 +1,15 @@
+#EXTM3U
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:3
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-MAP:URI="hls1/main/-1.mp4?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=544bef50fc8043eaab94d478f920e9b9&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=a5cbc553968c15870c6192636408d95a&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=0&actualSegmentLengthTicks=0"
+#EXTINF:3.000000, nodesc
+hls1/main/0.mp4?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=544bef50fc8043eaab94d478f920e9b9&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=a5cbc553968c15870c6192636408d95a&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=0&actualSegmentLengthTicks=30000000
+#EXTINF:3.000000, nodesc
+hls1/main/1.mp4?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=544bef50fc8043eaab94d478f920e9b9&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=a5cbc553968c15870c6192636408d95a&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=30000000&actualSegmentLengthTicks=30000000
+#EXTINF:3.000000, nodesc
+hls1/main/2.mp4?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=544bef50fc8043eaab94d478f920e9b9&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=a5cbc553968c15870c6192636408d95a&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=60000000&actualSegmentLengthTicks=30000000
+#EXTINF:1.000000, nodesc
+hls1/main/3.mp4?DeviceId=polyfin-fixtures&MediaSourceId=aae64f94ed55531cc68f81051ff9853a&AudioCodec=aac&AudioBitrate=128000&SegmentContainer=mp4&MinSegments=2&PlaySessionId=544bef50fc8043eaab94d478f920e9b9&ApiKey=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=a5cbc553968c15870c6192636408d95a&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=90000000&actualSegmentLengthTicks=10000000
+#EXT-X-ENDLIST

@@ -28,7 +28,7 @@ func TestLocalizationListsMatchJellyfin(t *testing.T) {
 		if status != http.StatusOK {
 			t.Fatalf("%s: %d %s", path, status, body)
 		}
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -79,10 +79,10 @@ func TestLocalizationListsHoldTheStandardsEntries(t *testing.T) {
 		t.Errorf("countries: %d, France or Bolivia missing", len(countries))
 	}
 
-	// The ratings and their scores are those of a Jellyfin 12.1 server whose
+	// The ratings and their scores are those of a Jellyfin 12.2 server whose
 	// metadata country is the United States, its default.
 	_, got := s.call(http.MethodGet, "/Localization/ParentalRatings", app("tv", token), nil)
-	recorded, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "parental", "parental-ratings.json"))
+	recorded, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "parental", "parental-ratings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

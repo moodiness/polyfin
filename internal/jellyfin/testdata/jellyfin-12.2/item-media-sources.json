@@ -1,0 +1,187 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "Container": "",
+  "DateCreated": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "Etag": "",
+  "ExternalUrls": [
+    {
+      "Name": "",
+      "Url": ""
+    }
+  ],
+  "GenreItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Genres": [
+    ""
+  ],
+  "HasSubtitles": false,
+  "Height": 0,
+  "Id": "",
+  "ImageBlurHashes": {
+    "Primary": {
+      "55e2b6114227cd459fcd5767e7d3ae06": ""
+    }
+  },
+  "ImageTags": {
+    "Primary": ""
+  },
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaSources": [
+    {
+      "Bitrate": 0,
+      "Container": "",
+      "DefaultAudioStreamIndex": 0,
+      "DefaultSubtitleStreamIndex": 0,
+      "ETag": "",
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": false,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [
+        {
+          "AudioSpatialFormat": "",
+          "Codec": "",
+          "DisplayTitle": "",
+          "Index": 0,
+          "IsDefault": false,
+          "IsExternal": false,
+          "IsForced": false,
+          "IsHearingImpaired": false,
+          "IsInterlaced": false,
+          "IsOriginal": false,
+          "IsTextSubtitleStream": false,
+          "Language": "",
+          "LocalizedDefault": "",
+          "LocalizedExternal": "",
+          "LocalizedForced": "",
+          "LocalizedHearingImpaired": "",
+          "LocalizedLanguage": "",
+          "LocalizedUndefined": "",
+          "Path": "",
+          "Score": 0,
+          "SupportsExternalStream": false,
+          "TimeBase": "",
+          "Type": "",
+          "VideoRange": "",
+          "VideoRangeType": ""
+        }
+      ],
+      "Name": "",
+      "Path": "",
+      "Protocol": "",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "RunTimeTicks": 0,
+      "Size": 0,
+      "SupportsDirectPlay": false,
+      "SupportsDirectStream": false,
+      "SupportsProbing": false,
+      "SupportsTranscoding": false,
+      "TranscodingSubProtocol": "",
+      "Type": "",
+      "UseMostCompatibleTranscodingProfile": false,
+      "VideoType": ""
+    }
+  ],
+  "MediaStreams": [
+    {
+      "AudioSpatialFormat": "",
+      "Codec": "",
+      "DisplayTitle": "",
+      "Index": 0,
+      "IsDefault": false,
+      "IsExternal": false,
+      "IsForced": false,
+      "IsHearingImpaired": false,
+      "IsInterlaced": false,
+      "IsOriginal": false,
+      "IsTextSubtitleStream": false,
+      "Language": "",
+      "LocalizedDefault": "",
+      "LocalizedExternal": "",
+      "LocalizedForced": "",
+      "LocalizedHearingImpaired": "",
+      "LocalizedLanguage": "",
+      "LocalizedUndefined": "",
+      "Path": "",
+      "Score": 0,
+      "SupportsExternalStream": false,
+      "TimeBase": "",
+      "Type": "",
+      "VideoRange": "",
+      "VideoRangeType": ""
+    }
+  ],
+  "MediaType": "",
+  "Name": "",
+  "OriginalLanguage": "",
+  "OriginalTitle": "",
+  "Overview": "",
+  "ParentId": "",
+  "Path": "",
+  "People": [
+    {
+      "Id": "",
+      "ImageBlurHashes": {
+        "Primary": {
+          "5089966a07aaa6f1610fd5387f662f7f": ""
+        }
+      },
+      "Name": "",
+      "PrimaryImageTag": "",
+      "Role": "",
+      "Type": ""
+    }
+  ],
+  "PlayAccess": "",
+  "PremiereDate": "",
+  "PrimaryImageAspectRatio": 0,
+  "ProductionLocations": [],
+  "ProductionYear": 0,
+  "ProviderIds": {
+    "Imdb": "",
+    "Tmdb": ""
+  },
+  "RemoteTrailers": [],
+  "RunTimeTicks": 0,
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Trickplay": {},
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  },
+  "VideoType": "",
+  "Width": 0
+}

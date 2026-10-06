@@ -9,7 +9,7 @@ import (
 // which the server settings default to.
 var jellyfin = Thresholds{Resume: 5, Played: 90}
 
-// These cases are what a Jellyfin 12.1 server did with the same reports,
+// These cases are what a Jellyfin 12.2 server did with the same reports,
 // on 6-minute and 1-minute items.
 func TestPlaybackReportsFollowJellyfin(t *testing.T) {
 	const long, short = 6 * time.Minute, time.Minute
@@ -107,7 +107,7 @@ func TestPlayedPercentage(t *testing.T) {
 	}
 }
 
-// These cases are what a Jellyfin 12.1 server did when users marked items
+// These cases are what a Jellyfin 12.2 server did when users marked items
 // played or unplayed from an app.
 func TestPlayedMarksFollowJellyfin(t *testing.T) {
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)

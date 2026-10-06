@@ -124,7 +124,7 @@ func customPrefKeys(t *testing.T, body []byte) []string {
 	return keys
 }
 
-// Responses recorded from Jellyfin 12.1.
+// Responses recorded from Jellyfin 12.2.
 const (
 	unsavedUserSettings = `{"Id":"3ce5b65d-e116-d731-65d1-efc4a30ec35c","SortBy":"SortName","RememberIndexing":false,` +
 		`"PrimaryImageHeight":250,"PrimaryImageWidth":250,"CustomPrefs":{"chromecastVersion":"stable",` +

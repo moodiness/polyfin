@@ -1,0 +1,142 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "ChannelNumber": "7",
+  "ChannelType": "TV",
+  "Chapters": [],
+  "CurrentProgram": {
+    "BackdropImageTags": [],
+    "ChannelId": "1389fe91b085df332d82d93f2de0e153",
+    "ChannelName": "Fixture One",
+    "ChannelNumber": "7",
+    "ChannelPrimaryImageTag": "41ee58389f2c20f09015623c9276ed41",
+    "Chapters": [],
+    "DateCreated": "2026-10-06T16:27:50.8709999Z",
+    "EnableMediaSourceDisplay": true,
+    "EndDate": "2026-10-06T17:27:47.0000000Z",
+    "ExternalUrls": [],
+    "GenreItems": [
+      {
+        "Id": "ed1edc90e96b1ecda3342a652ebf213b",
+        "Name": "News"
+      }
+    ],
+    "Genres": [
+      "News"
+    ],
+    "Id": "c44bb03b8da28cae10254e411d416ce3",
+    "ImageBlurHashes": {},
+    "ImageTags": {},
+    "IsNews": true,
+    "LocalTrailerCount": 0,
+    "LockData": false,
+    "LockedFields": [],
+    "MediaType": "Video",
+    "Name": "Fixture News",
+    "Overview": "The news of the fixtures.",
+    "ParentId": "1389fe91b085df332d82d93f2de0e153",
+    "People": [],
+    "PlayAccess": "Full",
+    "ProviderIds": {
+      "ProgramEtag": "xmltv-sha256-v1:3D6D32D9A9D204CB995D1B12C3547B7EC5E6BA3FCD7C7DFA0639D06303619C16"
+    },
+    "RemoteTrailers": [],
+    "RunTimeTicks": 72000000000,
+    "ServerId": "574a53f8e8e74e61a31e8432e0d356dc",
+    "SortName": "fixture news",
+    "SpecialFeatureCount": 0,
+    "StartDate": "2026-10-06T15:27:47.0000000Z",
+    "Studios": [],
+    "Taglines": [],
+    "Tags": [
+      "News"
+    ],
+    "Type": "Program",
+    "UserData": {
+      "IsFavorite": false,
+      "ItemId": "c44bb03b8da28cae10254e411d416ce3",
+      "Key": "c44bb03b-8da2-8cae-1025-4e411d416ce3",
+      "PlayCount": 0,
+      "PlaybackPositionTicks": 0,
+      "Played": false
+    }
+  },
+  "DateCreated": "2026-10-06T16:27:43.148948Z",
+  "DisplayPreferencesId": "b5f10d1557c81848cb2d3b2fda19134d",
+  "EnableMediaSourceDisplay": true,
+  "Etag": "072dd36b5f3c82d843e06b67badfd681",
+  "ExternalUrls": [],
+  "GenreItems": [],
+  "Genres": [],
+  "Id": "1389fe91b085df332d82d93f2de0e153",
+  "ImageBlurHashes": {
+    "Primary": {
+      "41ee58389f2c20f09015623c9276ed41": "e20036fYfQfYfQfYfRfQfRfQfQfQfQfQfQfYfRfQfRfQfQfQfQfQfQ"
+    }
+  },
+  "ImageTags": {
+    "Primary": "41ee58389f2c20f09015623c9276ed41"
+  },
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "Remote",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaSources": [
+    {
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "1389fe91b085df332d82d93f2de0e153",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": true,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [],
+      "Name": "Fixture One",
+      "Protocol": "File",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "SupportsDirectPlay": true,
+      "SupportsDirectStream": true,
+      "SupportsProbing": true,
+      "SupportsTranscoding": true,
+      "TranscodingSubProtocol": "http",
+      "Type": "Placeholder",
+      "UseMostCompatibleTranscodingProfile": false
+    }
+  ],
+  "MediaStreams": [],
+  "MediaType": "Video",
+  "Name": "Fixture One",
+  "Number": "7",
+  "ParentId": "54c4e8dbdc43511d9b3a452c48adf58a",
+  "People": [],
+  "PlayAccess": "Full",
+  "PrimaryImageAspectRatio": 1,
+  "ProviderIds": {
+    "ExternalServiceId": "Emby"
+  },
+  "RemoteTrailers": [],
+  "ServerId": "574a53f8e8e74e61a31e8432e0d356dc",
+  "SortName": "0000000007.00000-Fixture One",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "TvChannel",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "1389fe91b085df332d82d93f2de0e153",
+    "Key": "1389fe91-b085-df33-2d82-d93f2de0e153",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

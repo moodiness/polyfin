@@ -1,0 +1,61 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": "1389fe91b085df332d82d93f2de0e153",
+  "ChannelName": "Fixture One",
+  "ChannelNumber": "7",
+  "ChannelPrimaryImageTag": "41ee58389f2c20f09015623c9276ed41",
+  "Chapters": [],
+  "DateCreated": "2026-10-06T16:27:50.8709999Z",
+  "DisplayPreferencesId": "8cab5e5f60ae4830c47f6431bbe4c3cb",
+  "EnableMediaSourceDisplay": true,
+  "EndDate": "2026-10-06T17:27:47.0000000Z",
+  "Etag": "543b6ca4c9f21c87d81daf7a932499c0",
+  "ExternalUrls": [],
+  "GenreItems": [
+    {
+      "Id": "ed1edc90e96b1ecda3342a652ebf213b",
+      "Name": "News"
+    }
+  ],
+  "Genres": [
+    "News"
+  ],
+  "Id": "c44bb03b8da28cae10254e411d416ce3",
+  "ImageBlurHashes": {},
+  "ImageTags": {},
+  "IsNews": true,
+  "LocalTrailerCount": 0,
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "Video",
+  "Name": "Fixture News",
+  "Overview": "The news of the fixtures.",
+  "ParentId": "1389fe91b085df332d82d93f2de0e153",
+  "People": [],
+  "PlayAccess": "Full",
+  "ProviderIds": {
+    "ProgramEtag": "xmltv-sha256-v1:3D6D32D9A9D204CB995D1B12C3547B7EC5E6BA3FCD7C7DFA0639D06303619C16"
+  },
+  "RemoteTrailers": [],
+  "RunTimeTicks": 72000000000,
+  "ServerId": "574a53f8e8e74e61a31e8432e0d356dc",
+  "SortName": "fixture news",
+  "SpecialFeatureCount": 0,
+  "StartDate": "2026-10-06T15:27:47.0000000Z",
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [
+    "News"
+  ],
+  "Type": "Program",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "c44bb03b8da28cae10254e411d416ce3",
+    "Key": "c44bb03b-8da2-8cae-1025-4e411d416ce3",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}

@@ -361,7 +361,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// With PreferDirectPlay, and no version asked for, the version chosen
 	// is the first that plays without conversion, as it is or repackaged
 	// with its tracks copied, among those analyzed now; else the first that
-	// plays at all. Jellyfin 12.1 keeps the version opened first however
+	// plays at all. Jellyfin 12.2 keeps the version opened first however
 	// it plays: the setting departs from it, and is off by default.
 	prefer := settings.PreferDirectPlay && !explicit
 	c := plan(p.versions)
@@ -403,7 +403,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// first source is then the one chosen, which apps play unless the user
 	// picks another.
 	// The one chosen is described as decided; the others as item details
-	// describe them, and decided when an app asks for one. Jellyfin 12.1
+	// describe them, and decided when an app asks for one. Jellyfin 12.2
 	// lists every version and puts the source of a version opened as an
 	// item first; Polyfin never moves one.
 	passed := map[int]bool{}

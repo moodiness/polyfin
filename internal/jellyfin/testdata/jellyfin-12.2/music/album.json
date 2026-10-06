@@ -1,0 +1,89 @@
+{
+  "AlbumArtist": "",
+  "AlbumArtists": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "ArtistItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Artists": [
+    ""
+  ],
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "ChildCount": 0,
+  "CumulativeRunTimeTicks": 0,
+  "DateCreated": "",
+  "DateLastMediaAdded": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "Etag": "",
+  "ExternalUrls": [],
+  "GenreItems": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "Genres": [
+    ""
+  ],
+  "Id": "",
+  "ImageBlurHashes": {
+    "Primary": {
+      "7b997bb74d28f1c869e4d8cd753df85f": ""
+    }
+  },
+  "ImageTags": {
+    "Primary": ""
+  },
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "",
+  "Name": "",
+  "ParentId": "",
+  "Path": "",
+  "People": [
+    {
+      "Id": "",
+      "Name": "",
+      "Role": "",
+      "Type": ""
+    }
+  ],
+  "PlayAccess": "",
+  "PremiereDate": "",
+  "PrimaryImageAspectRatio": 0,
+  "ProductionYear": 0,
+  "ProviderIds": {},
+  "RecursiveItemCount": 0,
+  "RemoteTrailers": [],
+  "RunTimeTicks": 0,
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false
+  }
+}
