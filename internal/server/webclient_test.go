@@ -363,6 +363,11 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"versions come as addons answer": {listed: 1, hidden: true, answers: []answer{{2, 1}, {1, 2}, {0, 4}},
 			steps: append([]string{title}, ticks(4)...),
 			want:  slices.Concat([]string{ask, ask}, reloads, []string{ask}, reloads, []string{"idle"})},
+		// An addon asked again lists more: a page already listing its
+		// first versions is reloaded when Count grows.
+		"a follow-up adds versions": {listed: 2, answers: []answer{{1, 2}, {1, 2}, {1, 4}, {0, 4}},
+			steps: append([]string{title}, ticks(5)...),
+			want:  slices.Concat([]string{ask, ask, ask}, reloads, []string{ask, "idle"})},
 		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2}, {0, 2}, {0, 2}},
 			steps: append([]string{title}, ticks(4)...), want: []string{ask, ask, ask, "idle"}},
 		"leaving the page stops": {listed: 1, answers: []answer{{2, 1}, {2, 1}},

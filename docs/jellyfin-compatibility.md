@@ -24,7 +24,7 @@ Jellyfin apps get the rest of what they ask a movie, series and Live TV server f
 
 A title's page opens as soon as its description is ready, with the versions Polyfin already knows, while it asks the other stream addons in the background. The web player adds their versions as each addon answers. Other apps show the versions known when the page opened, and get them all when the user presses Play or opens the page again. See [Title pages](playback.md#title-pages).
 
-**For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked and how many media sources the title's details list now.
+**For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked, for the first time or again, and how many media sources the title's details list now.
 
 ### Profile pictures
 
@@ -119,7 +119,7 @@ On a user's page under **Users**, the **Access** section's **Can manage subtitle
 
 ### Refresh metadata
 
-**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists and the rating it looked up. It then asks the addons for the description again at once.
+**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists and the rating it looked up, and stop asking addons again for those lists. It then asks the addons for the description again at once.
 
 **For app developers:** `POST /Items/{id}/Refresh`.
 

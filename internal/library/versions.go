@@ -186,13 +186,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		}
 		return []Version{version}, true, nil
 	}
-	var serving []installed
-	for _, entry := range v.addons {
-		// An IPTV source's channel is only its source's to play.
-		if entry.addon.Manifest.Serves("stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
-			serving = append(serving, entry)
-		}
-	}
+	serving := streamServing(v, t)
 	lists := make([][]stremio.Stream, len(serving))
 	var unknown []installed
 	if mode == waitAll {
@@ -346,7 +340,8 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 
 // streams lists an addon's streams for a title: those remembered, else
 // its answer, which every caller asking meanwhile shares, item details'
-// background requests included (see VersionsNow).
+// background requests included (see VersionsNow). An answer stored is
+// followed up (see followUpList).
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
 	// An IPTV source's line-up changes its streams at once.
 	if entry.addon.IPTV() {
@@ -362,8 +357,21 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 			return nil, err
 		}
 		s.streamLists.Put(key, streams)
+		s.followStreams(ctx, entry, key)
 		return streams, nil
 	})
+}
+
+// streamServing lists the addons of v that list streams for t.
+func streamServing(v view, t target) []installed {
+	var serving []installed
+	for _, entry := range v.addons {
+		// An IPTV source's channel is only its source's to play.
+		if entry.addon.Manifest.Serves("stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
+			serving = append(serving, entry)
+		}
+	}
+	return serving
 }
 
 // shared runs fetch once for every caller asking for key at the same time.
@@ -505,18 +513,25 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 }
 
 // subtitleList lists an addon's subtitles for a title: those remembered,
-// else its answer, which every caller asking meanwhile shares.
+// else its answer, which every caller asking meanwhile shares. An answer
+// stored is followed up (see followUpList).
 func (s *Service) subtitleList(ctx context.Context, entry installed, t target) ([]stremio.Subtitle, error) {
 	key := streamKey{entry.addon.ID, t.metaType, t.id}
 	if subtitles, ok := s.subtitleLists.Get(key); ok {
 		return subtitles, nil
 	}
 	return shared(ctx, &s.flight, "subtitles "+key.addon.String()+" "+t.metaType+" "+t.id, func(ctx context.Context) ([]stremio.Subtitle, error) {
-		subtitles, err := s.client.Subtitles(ctx, entry.addon.ManifestURL, t.metaType, t.id, nil, entry.confined)
+		subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
 		if err != nil {
 			return nil, err
 		}
 		s.subtitleLists.Put(key, subtitles)
+		s.followSubtitles(ctx, entry, key)
 		return subtitles, nil
 	})
+}
+
+// fetchSubtitles asks an addon for the subtitles of a title.
+func (s *Service) fetchSubtitles(ctx context.Context, entry installed, contentType, id string) ([]stremio.Subtitle, error) {
+	return s.client.Subtitles(ctx, entry.addon.ManifestURL, contentType, id, nil, entry.confined)
 }

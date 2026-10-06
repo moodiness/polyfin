@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -103,15 +104,12 @@ type heldSetup struct {
 	movie string
 }
 
-// heldOn installs the metadata addon, then the stream addons in order, and
-// signs a member in.
-func heldOn(t *testing.T, s testServer, streams ...*heldAddon) heldSetup {
+// heldOn installs the metadata addon, then the stream addons, by their
+// manifest addresses, in order, and signs a member in.
+func heldOn(t *testing.T, s testServer, streams ...string) heldSetup {
 	t.Helper()
 	user := s.user("member", nil)
-	urls := []string{oneMovieAddon(t)}
-	for _, a := range streams {
-		urls = append(urls, a.url)
-	}
+	urls := append([]string{oneMovieAddon(t)}, streams...)
 	for _, url := range urls {
 		if _, err := s.addons.Install(t.Context(), addons.Shared(), url, false); err != nil {
 			t.Fatal(err)
@@ -168,9 +166,44 @@ func (h heldSetup) reaches(t *testing.T, want VersionProgress, names ...string) 
 	}
 }
 
+// heldAnswer is PlaybackInfo's answer, or why it failed.
+type heldAnswer struct {
+	status int
+	info   playbackInfoResponse
+	err    error
+}
+
+// askPlaybackInfo asks for the movie's PlaybackInfo, as jellyfin-web
+// does, and gives its answer on the channel it returns.
+func (h heldSetup) askPlaybackInfo(t *testing.T) <-chan heldAnswer {
+	t.Helper()
+	profile, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]any{"UserId": h.user.ID.String(), "DeviceProfile": json.RawMessage(profile)})
+	answered := make(chan heldAnswer, 1)
+	go func() {
+		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Items/"+h.movie+"/PlaybackInfo", bytes.NewReader(body))
+		request.Header.Set("Authorization", app("tv", h.token))
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			answered <- heldAnswer{err: err}
+			return
+		}
+		defer response.Body.Close()
+		data, _ := io.ReadAll(response.Body)
+		a := heldAnswer{status: response.StatusCode}
+		a.err = json.Unmarshal(data, &a.info)
+		answered <- a
+	}()
+	return answered
+}
+
 func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 	first, second := newHeldAddon(t, "First", false), newHeldAddon(t, "Second", false)
-	h := heldOn(t, newTestServer(t, 10), first, second)
+	h := heldOn(t, newTestServer(t, 10), first.url, second.url)
 
 	// Both addons are held: details answer with the placeholder, the
 	// title's own identifier, and ask them in the background.
@@ -208,7 +241,7 @@ func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 
 func TestAFailingAddonLeavesNothingPending(t *testing.T) {
 	first, broken := newHeldAddon(t, "First", false), newHeldAddon(t, "Broken", true)
-	h := heldOn(t, newTestServer(t, 10), first, broken)
+	h := heldOn(t, newTestServer(t, 10), first.url, broken.url)
 
 	h.sources(t)
 	broken.answer()
@@ -220,37 +253,12 @@ func TestAFailingAddonLeavesNothingPending(t *testing.T) {
 func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
 	probe := newFakeProbe(t, true)
 	first, second := newHeldAddon(t, "First", false), newHeldAddon(t, "Second", false)
-	h := heldOn(t, newProbingServer(t, 10, probe.path), first, second)
+	h := heldOn(t, newProbingServer(t, 10, probe.path), first.url, second.url)
 	t.Cleanup(func() { h.settle(t) })
 
 	h.sources(t)
 	eventually(t, "both addons to be asked", func() bool { return first.asked.Load() == 1 && second.asked.Load() == 1 })
-	profile, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := json.Marshal(map[string]any{"UserId": h.user.ID.String(), "DeviceProfile": json.RawMessage(profile)})
-	type answer struct {
-		status int
-		info   playbackInfoResponse
-		err    error
-	}
-	answered := make(chan answer, 1)
-	go func() {
-		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Items/"+h.movie+"/PlaybackInfo", bytes.NewReader(body))
-		request.Header.Set("Authorization", app("tv", h.token))
-		request.Header.Set("Content-Type", "application/json")
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			answered <- answer{err: err}
-			return
-		}
-		defer response.Body.Close()
-		data, _ := io.ReadAll(response.Body)
-		a := answer{status: response.StatusCode}
-		a.err = json.Unmarshal(data, &a.info)
-		answered <- a
-	}()
+	answered := h.askPlaybackInfo(t)
 	for _, a := range []*heldAddon{first, second} {
 		select {
 		case got := <-answered:
@@ -272,5 +280,104 @@ func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
 	}
 	if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 4}) {
 		t.Errorf("once played: %+v", got)
+	}
+}
+
+// scriptedAddon lists, for every movie, as many streams named after it as
+// the next count sent on replies, holding each request until it comes, as
+// an addon that gathers other addons' streams answers with more of them
+// once they came into its cache.
+type scriptedAddon struct {
+	url     string
+	asked   atomic.Int32
+	replies chan int
+}
+
+func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
+	t.Helper()
+	a := &scriptedAddon{replies: make(chan int, 10)}
+	closing := make(chan struct{})
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: strings.ToLower(name), Name: name, Version: "1",
+				Types: []string{"movie"}, IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
+		case strings.HasPrefix(path, "/stream/movie/"):
+			a.asked.Add(1)
+			var n int
+			select {
+			case n = <-a.replies:
+			case <-r.Context().Done():
+				return
+			case <-closing:
+				return
+			}
+			streams := make([]stremio.Stream, n)
+			for i := range streams {
+				file := fmt.Sprintf("%s.%d.mkv", name, i+1)
+				streams[i] = stremio.Stream{Name: fmt.Sprintf("%s %d", name, i+1), URL: server.URL + "/files/" + file,
+					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number(1_000_000_000 * (i + 1))}}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	// Requests still held end first, so that the server closes.
+	t.Cleanup(func() {
+		close(closing)
+		server.Close()
+	})
+	a.url = server.URL + "/manifest.json"
+	return a
+}
+
+// An addon that answers first with part of a title's streams is asked
+// again: the title stays pending meanwhile, its open page then lists the
+// streams that came later, and PlaybackInfo never waits for it.
+func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
+	probe := newFakeProbe(t, true)
+	gathering := newScriptedAddon(t, "Gathering")
+	s := newProbingServer(t, 10, probe.path)
+	s.library.SetFollowUps(time.Second, 200*time.Millisecond)
+	h := heldOn(t, s, gathering.url)
+	t.Cleanup(func() { h.settle(t) })
+
+	h.sources(t)
+	gathering.replies <- 1
+	eventually(t, "the first answer", func() bool {
+		sources := h.sources(t)
+		return len(sources) == 1 && strings.HasPrefix(sources[0].Name, "Gathering ")
+	})
+	// The follow-up is scheduled: the title is still pending.
+	if got, asked := h.progress(t), gathering.asked.Load(); got != (VersionProgress{Pending: 1, Count: 1}) || asked != 1 {
+		t.Errorf("follow-up scheduled: %+v, addon asked %d times", got, asked)
+	}
+	// It runs, held: PlaybackInfo answers at once with the version known.
+	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 2 })
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1}) {
+		t.Errorf("follow-up running: %+v", got)
+	}
+	select {
+	case got := <-h.askPlaybackInfo(t):
+		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 1 {
+			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("PlaybackInfo waited for the follow-up")
+	}
+	// Its answer lists more: details list them, and the addon is asked once
+	// more, which lists no more and ends it.
+	gathering.replies <- 3
+	h.reaches(t, VersionProgress{Pending: 1, Count: 3}, "Gathering", "Gathering", "Gathering")
+	eventually(t, "the second follow-up", func() bool { return gathering.asked.Load() == 3 })
+	gathering.replies <- 3
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering", "Gathering", "Gathering")
+	if got := gathering.asked.Load(); got != 3 {
+		t.Errorf("addon asked %d times, want 3", got)
 	}
 }

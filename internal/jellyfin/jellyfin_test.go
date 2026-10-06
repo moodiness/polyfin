@@ -89,6 +89,9 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	}
 	t.Cleanup(func() { _ = sources.Close() })
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
+	// Follow-ups ask addons again, while tests count their requests: only
+	// the tests of follow-ups turn them on (see followedOn).
+	lib.SetFollowUps()
 	channels := iptv.New(pool, addonStore, client, logger, store.Settings)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)

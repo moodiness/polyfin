@@ -18,12 +18,16 @@
 // Second, on a title's page (#/details?id=…), it adds the versions of the
 // addons that answer after the page opened. Item details list the versions
 // Polyfin knows when they are asked, while it asks the other addons in the
-// background; /Polyfin/Items/{id}/Versions tells how many addons it still
-// asks (Pending) and how many versions details list now (Count). It asks
-// every second while addons are pending, for at most 90 seconds. When the
-// page lists fewer versions than Count, it reloads the page's details as
-// jellyfin-web does when the page is shown again, which keeps the version
-// picked. It never does while a video plays. Any error just stops it.
+// background, and asks each addon again 10 seconds after its first answer,
+// then 30 seconds later while its answers grow; /Polyfin/Items/{id}/Versions
+// tells how many addons it still asks (Pending) and how many versions
+// details list now (Count). It asks every second while addons are pending,
+// for at most 90 seconds: a first answer, which takes at most 15 seconds,
+// and both follow-ups, 10 and 30 seconds later and as long each, end within
+// 85. When the page lists fewer versions than Count, it reloads the page's
+// details as jellyfin-web does when the page is shown again, which keeps
+// the version picked. It never does while a video plays. Any error just
+// stops it.
 ;(function () {
   var adminRoute = /^#!?\/(dashboard|metadata|configurationpage|wizard)(?:[/?#]|$)/i
   var titleRoute = /^#!?\/details\?(?:[^#]*&)?id=([0-9a-f]{32})(?:[&#]|$)/i
