@@ -166,6 +166,23 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 	})
 }
 
+// prepareListed prepares as prepareOpened does once the title's versions
+// are all in, for details that answered before some addons did (see
+// knownPlayable): waiting for them joins the requests the details started,
+// asking nothing more, within preparationTimeout.
+func (h *Handler) prepareListed(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) {
+	if !h.Accounts.Settings().PrepareAhead {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), preparationTimeout)
+		defer cancel()
+		if p, err := h.playable(ctx, user, item); err == nil {
+			h.prepareOpened(ctx, user, item, p.versions, opened)
+		}
+	}()
+}
+
 // nextEpisodeLead is how long before an episode ends the next one is
 // prepared: a minute less than version lists are kept (the settings'
 // VersionListMinutes), so they still are when it starts, and at most

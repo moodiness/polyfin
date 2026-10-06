@@ -112,6 +112,7 @@ func playingOn(t *testing.T, s testServer) playbackSetup {
 	}
 	p := playbackSetup{testServer: s, token: token, user: user, movie: ids["Movie"], remote: ids["Remote"]}
 	p.versions = p.versionsOf(t, p.movie)
+	p.listed(t, user, p.movie)
 	p.analyzed(t, p.versions[1], "h264-aac-mp4")
 	return p
 }

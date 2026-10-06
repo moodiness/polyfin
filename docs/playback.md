@@ -20,7 +20,7 @@ Whether a version plays directly or is converted decides how much bandwidth the 
 
 ## Versions and analysis
 
-A title's details list every stream the addons offer as a version. The first time a version is played, Polyfin analyzes it with ffprobe, which takes a few seconds, and keeps the result. It then tells the app whether the app can play the version as it is, as a Jellyfin server would.
+A title's details list every stream the addons offer as a version (see [Title pages](#title-pages) for when). The first time a version is played, Polyfin analyzes it with ffprobe, which takes a few seconds, and keeps the result. It then tells the app whether the app can play the version as it is, as a Jellyfin server would.
 
 - Versions always keep the addons' order. Picking or playing one never moves it.
 - When the app has not picked a version, a version that cannot be read, or does not play on the app, is skipped in favor of the next one. It is also left out of the versions Polyfin lists, which keep their order starting from the one chosen, for apps that let the user pick at that point.
@@ -38,6 +38,25 @@ A title's details list every stream the addons offer as a version. The first tim
 **For app developers:**
 
 - Unreadable or unplayable versions are left out of the versions `PlaybackInfo` lists only when the app has not picked a version.
+
+### Title pages
+
+A title's page opens as soon as its description is ready, without waiting for the stream addons, some of which are slow. It lists the versions Polyfin already knows: those of the addons that answered for the title within **Keep version lists for (minutes)**, and those of IPTV sources. Polyfin asks the other addons in the background meanwhile.
+
+- In the web player, the versions appear in the page's version menu as each addon answers. A version already picked stays picked.
+- Other Jellyfin apps cannot be told to refresh the page. They show the versions known when it opened, and get every version when the user presses Play, or when the page is opened again.
+- Until a version is known, the title still shows as playable. Play waits for the addons still answering, then picks among all the versions, as before.
+- An addon that fails, or does not answer within 15 seconds, only leaves its versions out.
+- Subtitles from the addons follow the same way: those known show at once, and the others with Play or the next opening.
+
+**Compared with Jellyfin:**
+
+- Jellyfin knows every version of its titles beforehand, so its pages list them all at once.
+
+**For app developers:**
+
+- Item details (`/Items/{id}`, `/Users/{userId}/Items/{id}`) describe the versions known when asked. With none known, they describe one placeholder source under the title's own identifier, which plays the first version. `PlaybackInfo` waits for every addon, joining the requests the details started.
+- `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. `Count` includes the placeholder. Items other than movies and episodes answer `0` for both. Polyfin's web player script polls it every second while `Pending` is above `0`, for at most 90 seconds, and reloads the page when `Count` is above what the version menu lists.
 
 ## Chapters
 

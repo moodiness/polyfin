@@ -162,6 +162,25 @@ func (s testServer) setting(t *testing.T, change func(*accounts.Settings)) {
 	}
 }
 
+// listed asks the addons for the versions and subtitles of titles and
+// waits for them, as PlaybackInfo does: item details then describe them
+// all, instead of those known when they opened.
+func (s testServer) listed(t *testing.T, user accounts.User, items ...string) {
+	t.Helper()
+	for _, item := range items {
+		id, err := accounts.ParseID(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.library.Versions(t.Context(), user, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.library.Subtitles(t.Context(), user, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func (s testServer) user(name string, change func(*accounts.UserChanges)) accounts.User {
 	s.t.Helper()
 	user, err := s.store.CreateUser(s.t.Context(), accounts.NewUser{Name: name, Password: "correct horse", IsHidden: true})

@@ -88,9 +88,28 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 		}
 	})
 	wg.Wait()
-	p.versions = h.inGroup(ctx, user, slices.DeleteFunc(p.versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
+	p.versions = h.offered(ctx, user, p.versions)
 	h.subtitleFiles.Put(item.ID, p.subtitles)
 	return p, versionsErr
+}
+
+// knownPlayable is what item details show of a movie or an episode: the
+// versions and subtitles known now, without waiting for addons, which are
+// asked for the others in the background (see library.Service.VersionsNow).
+// complete reports whether every addon's versions were known. Like
+// playable, it leaves out versions that recently failed and those taller
+// than the user's group.
+func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item) (playable, bool, error) {
+	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	versions, complete, err := h.Library.VersionsNow(ctx, user, item.ID)
+	p.versions = h.offered(ctx, user, versions)
+	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
+		p.subtitles = subtitles
+		if listed {
+			h.subtitleFiles.Put(item.ID, subtitles)
+		}
+	}
+	return p, complete, err
 }
 
 // cachedPlayable is what listings show of a title's versions: only what is
@@ -103,10 +122,16 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 		return p
 	}
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
-		p.versions = h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
+		p.versions = h.offered(ctx, user, versions)
 	}
 	p.subtitles, _ = h.subtitleFiles.Get(item.ID)
 	return p
+}
+
+// offered leaves out of a title's versions those that recently failed, and
+// those taller than the user's quality group while one fits (see inGroup).
+func (h *Handler) offered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
+	return h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 }
 
 func (p playable) externals() []playback.ExternalSubtitle {
@@ -172,9 +197,9 @@ func (h *Handler) describedSource(r *http.Request, p playable, version library.V
 	return source
 }
 
-// placeholderSource stands for a title's versions in a listing when they are
-// not known yet: its identifier is the item's, which plays the first
-// version.
+// placeholderSource stands for a title's versions in a listing or its
+// details when none is known yet: its identifier is the item's, which plays
+// the first version.
 func (h *Handler) placeholderSource(r *http.Request, item library.Item) MediaSourceInfo {
 	version := library.Version{ID: item.ID, Item: item.ID, Name: item.Name, Runtime: item.Runtime}
 	source := h.baseSource(r, playable{item: item}, version, item.ID, media.Analysis{}, false)

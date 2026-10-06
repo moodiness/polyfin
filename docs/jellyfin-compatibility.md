@@ -20,6 +20,12 @@ Polyfin targets the apps that connect to a Jellyfin server, including:
 
 Jellyfin apps get the rest of what they ask a movie, series and Live TV server for.
 
+### Title pages
+
+A title's page opens as soon as its description is ready, with the versions Polyfin already knows, while it asks the other stream addons in the background. The web player adds their versions as each addon answers. Other apps show the versions known when the page opened, and get them all when the user presses Play or opens the page again. See [Title pages](playback.md#title-pages).
+
+**For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked and how many media sources the title's details list now.
+
 ### Profile pictures
 
 A user changes their own profile picture from their app; an administrator can change anyone's.

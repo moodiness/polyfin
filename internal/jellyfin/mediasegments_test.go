@@ -306,6 +306,7 @@ func TestSkipButtonsSettingTurnsSegmentsOff(t *testing.T) {
 // version's identifier, only when the version says it has some.
 func TestVersionsSayTheyHaveSegments(t *testing.T) {
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
+	p.listed(t, p.user, p.movie)
 	sources := func() []MediaSourceInfo {
 		t.Helper()
 		var movie BaseItemDto
