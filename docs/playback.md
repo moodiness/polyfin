@@ -55,6 +55,7 @@ In apps:
 
 - In the web player, the versions appear in the page's version menu as each addon answers, then as an addon asked again lists more. A version already picked stays picked.
 - Other Jellyfin apps cannot be told to refresh the page. They show the versions known when it opened, and get every version when the user presses Play, or when the page is opened again.
+- With [Prepare playback in advance](#preparing-playback-in-advance) on, Polyfin lists the versions of the titles of Continue Watching and Next Up as soon as an app asks for these rows. Once they are listed, every app opens those titles with all their versions.
 - Until a version is known, the title still shows as playable. Play waits for the addons still answering for the first time, then picks among all the versions, as before.
 - An addon that fails, or does not answer within 15 seconds, only leaves its versions out.
 - Subtitles from the addons follow the same way: those known show at once, and the others with Play or the next opening.
@@ -67,6 +68,7 @@ In apps:
 
 - Item details (`/Items/{id}`, `/Users/{userId}/Items/{id}`) describe the versions known when asked. With none known, they describe one placeholder source under the title's own identifier, which plays the first version. `PlaybackInfo` waits for every addon asked for the first time, joining the requests the details started, but never for an addon asked again.
 - `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder. Items other than movies and episodes answer `0` for both. Polyfin's web player script polls it every second while `Pending` is above `0`, for at most 90 seconds, and reloads the page when `Count` is above what the version menu lists. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each).
+- With **Prepare playback in advance** on, `GET /UserItems/Resume`, `GET /Users/{userId}/Items/Resume` and `GET /Shows/NextUp` queue the first 10 movies and episodes of their answer before answering, and never wait for them. Each queued title is listed as `PlaybackInfo` lists it, waiting for every addon and joining any request already under way.
 
 ## Chapters
 
@@ -80,11 +82,12 @@ Chapters come without chapter images unless you turn those on (see [Scrubbing th
 
 ## Preparing playback in advance
 
-The first play of a version waits for some reads. **Prepare playback in advance** does them as soon as the title's details open in an app:
+The first play of a version waits for some reads. **Prepare playback in advance** does them before the user presses Play:
 
-- it analyzes the version the title would play;
+- as soon as a title's details open in an app, it analyzes the version the title would play;
 - it then reads the version's keyframe index and where its subtitle tracks sit, which HLS playback needs;
-- it readies the next episode the same way, with its versions and subtitles, once the episode playing has 9 minutes left.
+- it readies the next episode the same way, with its versions and subtitles, once the episode playing has 9 minutes left;
+- when an app asks for Continue Watching or Next Up, it asks the addons, in the background, for the versions of the first 10 movies and episodes of each row. A title opened from these rows then lists its versions at once, instead of a placeholder while the addons answer (see [Title pages](#title-pages)). Only the versions are listed: the file is read when the page opens.
 
 Playback then starts at once instead of waiting a second or two for these reads.
 
@@ -96,7 +99,8 @@ It costs a few more requests to the sources, also for titles opened but not play
 
 - at most 2 preparations run at once;
 - at most 6 start per user each minute; beyond that they are skipped;
-- a title is prepared once per user every 10 minutes.
+- a title is prepared once per user every 10 minutes;
+- the titles of Continue Watching and Next Up are listed 2 at a time over the server, apart from the preparations above, in the order the rows asked for them. A title waiting or being listed is not queued again, and a title whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 
 ## Choosing a version
 
