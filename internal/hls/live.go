@@ -152,9 +152,11 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 		}
 		select {
 		case <-run.done:
-			// A stream that never played fails at once: the next request
-			// starts it again.
-			if run.err != nil && !errors.Is(run.err, ErrInterrupted) && !l.played() {
+			// A stream that never played, even reopened with a full
+			// probe, fails at once: the next request starts it again. A
+			// first run may fail on a short probe, as when it joins a
+			// feed between keyframes.
+			if run.err != nil && !errors.Is(run.err, ErrInterrupted) && !l.played() && l.reopened() {
 				return nil, run.err
 			}
 			select {
@@ -314,6 +316,13 @@ func lastSegment(dir string) int {
 		}
 	}
 	return last
+}
+
+// reopened reports whether the input was opened again after a run failed.
+func (l *live) reopened() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.restarts) > 0
 }
 
 // played reports whether a run wrote a segment.

@@ -354,6 +354,35 @@ func TestAnOpenRefusedAfterARoomWasMadeIsTriedAgain(t *testing.T) {
 	_ = second.Close()
 }
 
+// A source of unknown limit that refuses a stream while another, read by
+// no one, waits out its grace has that one closed, and is asked again.
+func TestARefusalClosesStreamsNoOneReads(t *testing.T) {
+	source := accounts.ID{7}
+	src := &liveSource{interval: 5 * time.Millisecond}
+	s := liveService(t, src, "ffprobe-not-installed")
+	s.feeds.times.grace = time.Minute
+	ctx := ForUser(t.Context(), accounts.ID{1})
+	first, err := s.openFeed(ctx, channelVersion(1, "1.ts", source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = first.Close()
+	src.mu.Lock()
+	src.refuse = 1
+	src.mu.Unlock()
+	second, err := s.openFeed(ctx, channelVersion(2, "2.ts", source))
+	if err != nil {
+		t.Fatalf("refused while an idle stream was kept: %v", err)
+	}
+	_ = second.Close()
+	s.feeds.mu.Lock()
+	_, kept := s.feeds.feeds[channelVersion(1, "1.ts", source).ID]
+	s.feeds.mu.Unlock()
+	if kept {
+		t.Error("the idle stream was kept")
+	}
+}
+
 // What a channel's stream holds is kept: the next start, even after a
 // restart, needs neither the source nor ffprobe.
 func TestLiveShapesAreKept(t *testing.T) {

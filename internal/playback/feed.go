@@ -414,6 +414,11 @@ func (f *feed) open(user accounts.ID) {
 		deadline := time.Now().Add(f.times.slotWait)
 		for {
 			body, head, err = f.s.sniff(ctx, f.version, f.times)
+			if errors.Is(err, ErrLiveRefused) && !freed {
+				// A source of unknown limit refusing: the streams no one
+				// reads any more, kept for their grace, may be why.
+				freed = f.s.closeIdle(f)
+			}
 			if !freed || !errors.Is(err, ErrLiveRefused) || time.Now().After(deadline) {
 				break
 			}
@@ -486,6 +491,28 @@ func (f *feed) write(data []byte) {
 // feeds of the source that no reader uses are closed first, then the
 // oldest only user reads; else it fails with ErrSlotsInUse. It reports
 // whether it closed one, which the provider may still count a moment.
+// closeIdle closes the source's other feeds that no one reads, kept for
+// their grace, and reports whether it closed one.
+func (s *Service) closeIdle(f *feed) bool {
+	st := &s.feeds
+	st.mu.Lock()
+	var idle []*feed
+	for _, other := range st.feeds {
+		if other != f && other.source == f.source && !other.finished() {
+			other.mu.Lock()
+			if len(other.readers) == 0 {
+				idle = append(idle, other)
+			}
+			other.mu.Unlock()
+		}
+	}
+	st.mu.Unlock()
+	for _, other := range idle {
+		other.evict()
+	}
+	return len(idle) > 0
+}
+
 func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool, error) {
 	st := &s.feeds
 	st.mu.Lock()
