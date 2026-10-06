@@ -8,6 +8,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // A play chooses among a title's versions, in their order: the first that
@@ -64,11 +65,18 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
 	// The analyses and keyframe indexes started are kept whatever the app
-	// does meanwhile, for the next play.
+	// does meanwhile, for the next play. The first candidate is read as the
+	// play's; the others, read alongside in case it does not play, in the
+	// background, giving way to playbacks (see playback.Background).
 	detached := r.WithContext(context.WithoutCancel(r.Context()))
+	aside := r.WithContext(playback.Background(detached.Context()))
 	try := func(n int, analyze bool) tried {
 		i := c.order[n]
 		version := p.versions[i]
+		detached := detached
+		if n > 0 {
+			detached = aside
+		}
 		var analysis media.Analysis
 		if analyze {
 			var err error

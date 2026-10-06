@@ -92,10 +92,11 @@ func (s *Service) cacheable(ctx context.Context, version library.Version) bool {
 // and the remuxes read are served without a request, the others are read
 // through the address its origin redirected the server's reads to, and
 // kept for the next seek. A player's seek is a reader of its own, which
-// the cache serves first.
+// the cache serves first, as a playback.
 func (s *Service) relayCached(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
 	src := s.open(version)
 	defer src.Release()
+	defer src.Urge()()
 	if delivery.ContentType != "" {
 		w.Header().Set("Content-Type", delivery.ContentType)
 	}

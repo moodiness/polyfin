@@ -346,3 +346,57 @@ func TestSourcesFailingDuringARemuxFailTheirVersion(t *testing.T) {
 		t.Error("the version is still offered")
 	}
 }
+
+// busyHost answers every request 429, asking to come back at once, as a
+// debrid proxy refusing a burst.
+type busyHost struct{}
+
+func (busyHost) Open(ctx context.Context, method, target string, _ http.Header, _ bool) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusTooManyRequests, Header: http.Header{"Retry-After": {"0"}},
+		Body: http.NoBody, Request: httptest.NewRequestWithContext(ctx, method, target, nil)}, nil
+}
+
+// A host asking to slow down past every try fails a read, never the
+// version: neither its analysis, its index, its playback, nor the check
+// before a player is sent to it keep it as failed, so that it is offered
+// again at the next play rather than hidden for 15 minutes.
+func TestVersionsAreNeverHiddenForARateLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ffprobe")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := newService(t, busyHost{}, path, nil)
+	version := library.Version{ID: accounts.ID{41}, URL: "https://93.184.216.34/movie.mkv", Filename: "movie.mkv"}
+	// Something reads the file while it is analyzed, as ffprobe does.
+	src := s.OpenSource(version)
+	defer src.Release()
+	go func() { _, _ = src.ReadAt(context.Background(), make([]byte, 10), 0) }()
+	started := time.Now()
+	_, err := s.Analyze(t.Context(), version)
+	if !errors.Is(err, source.ErrSlowDown) || source.Answer(err) != "HTTP 429" {
+		t.Fatalf("the analysis: %v (%q)", err, source.Answer(err))
+	}
+	if took := time.Since(started); took > 5*time.Second {
+		t.Errorf("the analysis stopped after %v", took)
+	}
+	if s.Failed(version.ID) {
+		t.Error("the analysis kept the version as failed")
+	}
+	if _, err := s.keyframes(t.Context(), version, media.Analysis{}); !errors.Is(err, source.ErrSlowDown) {
+		t.Fatalf("the index: %v", err)
+	}
+	if _, kept := s.unindexed.Get(version.ID); kept || s.Failed(version.ID) {
+		t.Error("the index kept the version as failed")
+	}
+	// While it plays: the source's failure is reported at once.
+	s.watchSource(version, src, make(chan struct{}))
+	if s.Failed(version.ID) {
+		t.Error("the playback kept the version as failed")
+	}
+	if _, err := s.check(t.Context(), version); err == nil {
+		t.Fatal("a host refusing was checked")
+	}
+	if s.Failed(version.ID) {
+		t.Error("the check kept the version as failed")
+	}
+}

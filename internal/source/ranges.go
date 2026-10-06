@@ -330,7 +330,9 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 // when the source asks to slow down or fails, when it breaks, or when it
 // takes longer than an attempt may: a host that stalls must not hold a
 // read for minutes. With once, it is sent once, and a source asking to
-// slow down or overloaded fails it with ErrSlowDown.
+// slow down or overloaded fails it with ErrSlowDown. Each request holds a
+// slot of its host (see slots.go): read once, it is background work, which
+// waits for one.
 func (s *Source) exchange(ctx context.Context, ranges string, length int64, once bool, read func(*http.Response) error) error {
 	timeout := s.cache.attemptTime + time.Duration(float64(length)/attemptRate*float64(time.Second))
 	renewed := once
@@ -338,11 +340,22 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 	if once {
 		tries = 1
 	}
+	var held *slot
+	defer func() { s.cache.release(held) }()
+	cl := claim{state: func() (bool, bool) { return !once, ctx.Err() != nil }, done: ctx.Done(), firm: true}
 	for attempt := 1; ; attempt++ {
+		s.cache.release(held)
+		held = nil
 		if err := s.pace(ctx); err != nil {
 			return err
 		}
 		to := s.target()
+		if held = s.cache.acquire(s, to.host, cl); held == nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return fmt.Errorf("%w: the source was closed", ErrUnavailable)
+		}
 		header := to.header
 		header.Set("Range", ranges)
 		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -358,6 +371,12 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 			}
 			s.holdOff(backoff(attempt, ""))
 			continue
+		}
+		s.cache.rehome(held, answerHost(to, response))
+		if status := response.StatusCode; status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+			// The host's connections are fewer for a while.
+			s.slowedDown(answerHost(to, response))
+			s.cache.press(held)
 		}
 		retryAfter := ""
 		switch status := response.StatusCode; {

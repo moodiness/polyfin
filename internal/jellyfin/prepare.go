@@ -9,6 +9,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // With playback prepared ahead in the settings, Polyfin does before a play
@@ -311,11 +312,13 @@ func (h *Handler) unanalyzed(ctx context.Context, version library.Version) bool 
 // segment, which Plan warms into the source cache, and where its subtitle
 // tracks sit in the index. Each is kept like the analysis, and a
 // PlaybackInfo arriving meanwhile waits for the read under way rather than
-// starting another.
+// starting another. All of it is background work, which gives way to the
+// playbacks reading the same hosts (see playback.Background).
 func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 	if h.Playback.Failed(version.ID) {
 		return
 	}
+	ctx = playback.Background(ctx)
 	started := time.Now()
 	analysis, err := h.Playback.Analyze(ctx, version)
 	if err != nil {

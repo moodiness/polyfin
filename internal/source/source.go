@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,14 +30,23 @@ const (
 	// block ahead of it, rather than opening a new connection.
 	skipLimit = 8
 	// attempts bounds the tries to reach a source before readers get an
-	// error.
-	attempts = 4
+	// error, and slowTries those to reach one asking to slow down (429,
+	// 503): a host's burst passes within seconds.
+	attempts  = 4
+	slowTries = 5
 	// cooldown is how long a failure is reported to new readers before the
-	// source is tried again.
-	cooldown = 30 * time.Second
-	// maxWait bounds how long a source asking to come back later is
-	// waited for.
-	maxWait = 30 * time.Second
+	// source is tried again, and slowCooldown how long one asking to slow
+	// down past every try is.
+	cooldown     = 30 * time.Second
+	slowCooldown = 5 * time.Second
+	// maxWait bounds how long a source asking to come back later
+	// (Retry-After) is waited for, and maxBackoff the growing delay
+	// between tries otherwise: 0.5 s, 1 s, then 2 s.
+	maxWait    = 5 * time.Second
+	maxBackoff = 2 * time.Second
+	// sizeTolerance is how far, as a share of it, the size an addon
+	// announces may be from the file's: some addons' are a little off.
+	sizeTolerance = 0.01
 	// fetchInterval spaces the requests of Fetch and FetchRanges to a
 	// source: hosts answer 429 to bursts of them, then refuse every file
 	// of the account for minutes.
@@ -51,9 +61,9 @@ const (
 // ErrUnavailable reports a source that did not answer with its content.
 var ErrUnavailable = errors.New("source unavailable")
 
-// ErrSlowDown reports a source that asked to slow down or was overloaded
-// (429, 502, 503 or 504) on a request that is not tried again. It is an
-// ErrUnavailable.
+// ErrSlowDown reports a source that asked to slow down (429, or 503), past
+// the tries made, or, read once, was overloaded (502, 504 too). It tells
+// the host's state, not the file's. It is an ErrUnavailable.
 var ErrSlowDown = fmt.Errorf("%w: the source asked to slow down", ErrUnavailable)
 
 // ErrExpired reports a link a source refused (401, 403, 404 or 410) on a
@@ -166,10 +176,11 @@ type Cache struct {
 	// the wait for the headers of the connection replacing a stalled one,
 	// and linger and attachedLinger how long an idle connection stays open
 	// for more, longer while a reader is attached; connections bounds the
-	// connections to a file.
+	// connections to a file, and hostConnections those to a host (see
+	// slots.go).
 	headerTimeout, stallTimeout, recoveryTimeout time.Duration
 	linger, attachedLinger                       time.Duration
-	connections                                  int
+	connections, hostConnections                 int
 
 	mu      sync.Mutex
 	sources map[accounts.ID]*Source
@@ -177,10 +188,16 @@ type Cache struct {
 	used    int64
 
 	// hosts and sizes are what the cache learned of hosts and of the sizes
-	// addons announce, under their own lock, taken with a source's.
+	// addons announce, under their own lock, taken with a source's or
+	// slotsMu.
 	learned sync.Mutex
 	hosts   map[string]*hostState
 	sizes   map[string]*sizeRecord
+
+	// slots are the connections held of each host, under slotsMu, which
+	// may take a source's lock, never the other way round.
+	slotsMu sync.Mutex
+	slots   map[string]*hostSlots
 }
 
 // protectedFor spares the chunks read lately from eviction.
@@ -214,9 +231,9 @@ func New(dir string, limit int64, opener Opener, logger *slog.Logger) (*Cache, e
 	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32,
 		aheadBudget: aheadBudget(limit), now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
 		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout,
-		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections,
+		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections, hostConnections: hostConnections,
 		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{},
-		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}}, nil
+		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, slots: map[string]*hostSlots{}}, nil
 }
 
 // aheadBudget is how many blocks a reader streaming long has read ahead:
@@ -426,6 +443,83 @@ type Source struct {
 	answeredAt time.Time
 	// attached counts the streaming readers open.
 	attached int
+	// urged counts the playbacks reading the source (see Urge);
+	// heldBack is when its host last asked it to slow down, or a
+	// connection of it stopped waiting for a slot, and slotWaits counts
+	// those waiting now.
+	urged     int
+	heldBack  time.Time
+	slotWaits int
+}
+
+// Urge has the source read for a playback until done is called, as a
+// remux, a relay, or the analysis of the version a play chose: its first
+// connection never waits for its host's other connections, and those of
+// background reads give way to it (see slots.go). Without, the source is
+// read in the background.
+func (s *Source) Urge() (done func()) {
+	s.mu.Lock()
+	s.urged++
+	s.nudgeConns()
+	s.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			s.urged--
+			s.mu.Unlock()
+		})
+	}
+}
+
+// HeldBack reports whether the source's reads were held back since a
+// time, or are now: its host asked to slow down (429, 503), or they
+// waited for the host's other connections. What fails meanwhile, such as
+// an analysis out of time, tells nothing of the file.
+func (s *Source) HeldBack(since time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.slotWaits > 0 || !s.heldBack.Before(since)
+}
+
+// slowedDown records that the source's host asked to slow down: it is
+// given fewer connections for a while.
+func (s *Source) slowedDown(host string) {
+	s.mu.Lock()
+	s.heldBack = time.Now()
+	s.mu.Unlock()
+	s.cache.crowd(host)
+}
+
+// waitingSlot counts a connection of the source starting (1) or ending
+// (-1) a wait for a slot.
+func (s *Source) waitingSlot(delta int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slotWaits += delta
+	s.heldBack = time.Now()
+}
+
+// slotState tells whether connection c reads for a playback, as the
+// first of a source urged, and whether it is to read nothing more.
+func (s *Source) slotState(c *conn) (playback, gone bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c.dropped || s.ctx.Err() != nil {
+		return false, true
+	}
+	return s.urged > 0 && len(s.conns) > 0 && s.conns[0] == c, false
+}
+
+// nudgeConns has the connections waiting for a slot look again whether
+// they read for a playback. The source's lock is held.
+func (s *Source) nudgeConns() {
+	for _, c := range s.conns {
+		select {
+		case c.nudge <- struct{}{}:
+		default:
+		}
+	}
 }
 
 type want struct {
@@ -563,13 +657,17 @@ func (s *Source) wait(ctx context.Context, r *Reader, block int64) error {
 }
 
 // coolingLocked reports whether a failure is reported to readers still;
-// one older is forgotten, and the source tried again. The source's lock
-// is held.
+// one older is forgotten, and the source tried again, sooner when its
+// host asked to slow down. The source's lock is held.
 func (s *Source) coolingLocked() bool {
 	if s.failure == nil {
 		return false
 	}
-	if time.Since(s.failedAt) < cooldown {
+	wait := cooldown
+	if errors.Is(s.failure, ErrSlowDown) {
+		wait = slowCooldown
+	}
+	if time.Since(s.failedAt) < wait {
 		return true
 	}
 	s.failure, s.failed = nil, make(chan struct{})
@@ -734,9 +832,9 @@ func (s *Source) Failure() error {
 
 // learn records what a response tells about the source: its total size,
 // when known, and its media type. errOtherFile when the size is not the
-// one an earlier response told, or the first one tells another than the
-// size its addon announced while that addon's sizes are trusted: the
-// response is not the file's, and nothing is recorded.
+// one an earlier response told, or the first one tells a size more than
+// 1% from the one its addon announced while that addon's sizes are
+// trusted: the response is not the file's, and nothing is recorded.
 func (s *Source) learn(total int64, contentType string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -758,11 +856,11 @@ func (s *Source) learn(total int64, contentType string) error {
 }
 
 // checkAnnounced compares the first size the source tells with the one
-// its addon announced, and refuses another while the addon's sizes are
-// trusted. Each file counts once in the addon's record. The source's lock
-// is held.
+// its addon announced, and refuses one more than 1% off while the
+// addon's sizes are trusted. Within 1%, the size told is the file's. Each
+// file counts once in the addon's record. The source's lock is held.
 func (s *Source) checkAnnounced(total int64) error {
-	agrees := total == s.origin.Size
+	agrees := nearSize(total, s.origin.Size)
 	trusted := s.cache.sizeTrusted(s.origin.Announcer)
 	if !s.sizeNoted {
 		s.sizeNoted = true
@@ -775,22 +873,19 @@ func (s *Source) checkAnnounced(total int64) error {
 	return nil
 }
 
-func (s *Source) sleep(d time.Duration) {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-s.ctx.Done():
-	}
+// nearSize reports whether a file's size is within sizeTolerance of the
+// one its addon announced.
+func nearSize(size, announced int64) bool {
+	return math.Abs(float64(size-announced)) <= sizeTolerance*float64(announced)
 }
 
 // backoff is how long to wait before the next attempt: what the source
-// asks for, within reason, or a growing delay.
+// asks for, up to maxWait, or a growing delay, up to maxBackoff.
 func backoff(attempt int, retryAfter string) time.Duration {
 	if seconds, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && seconds >= 0 {
 		return min(time.Duration(seconds)*time.Second, maxWait)
 	}
-	return min(time.Duration(1<<attempt)*250*time.Millisecond, maxWait)
+	return min(time.Duration(1<<min(attempt, 8))*250*time.Millisecond, maxBackoff)
 }
 
 // withoutURL is err without the request's URL, which may hold credentials.

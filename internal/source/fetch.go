@@ -25,7 +25,9 @@ import (
 // stretches it will need, shorter near it and longer further, as long as
 // they read more than one connection alone did. A host asking to slow
 // down, refusing a connection more, or not serving several faster, is
-// read over one for a while.
+// read over one for a while. A host asking to slow down (429, 503) is
+// asked again a few times, its readers waiting meanwhile, and a host's
+// connections over every file are bounded (see slots.go).
 
 const (
 	// maxConnections bounds the connections reading a file.
@@ -79,19 +81,32 @@ type conn struct {
 	host                string
 	// via is the address pinned the connection reads, nil for the origin.
 	via *pin
-	// The fetch's own: the body read, the failures since the last block,
-	// and whether the last read stalled.
+	// The fetch's own: the slot held of the host, the body read, the
+	// failures since the last block, and whether the last read stalled.
+	slot     *slot
 	body     io.ReadCloser
 	failures int
 	stalled  bool
+	// nudge has the connection, waiting for a slot, look again whether it
+	// reads for a playback.
+	nudge chan struct{}
 }
 
-// drop stops the connection: its reads fail at once. The source's lock is
-// held.
+// newConn returns a connection to open.
+func newConn() *conn {
+	return &conn{next: -1, nudge: make(chan struct{}, 1)}
+}
+
+// drop stops the connection: its reads fail at once, and its wait for a
+// slot ends. The source's lock is held.
 func (c *conn) drop() {
 	c.dropped = true
 	if c.cancel != nil {
 		c.cancel()
+	}
+	select {
+	case c.nudge <- struct{}{}:
+	default:
 	}
 }
 
@@ -109,7 +124,7 @@ func (c *conn) closeBody() {
 // source's lock is held.
 func (s *Source) kick() {
 	if len(s.conns) == 0 {
-		c := &conn{next: -1}
+		c := newConn()
 		s.conns = append(s.conns, c)
 		go s.work(c)
 		return
@@ -123,13 +138,14 @@ func (s *Source) kick() {
 
 // spawn opens one connection more when the host allows it and something a
 // reader needs is not on the way: once the size is known, one connection
-// opening at a time, and none while one lingers. The source's lock is
-// held.
+// opening at a time, none while one lingers, and none while the host's
+// slots are all held. The source's lock is held.
 func (s *Source) spawn() {
 	if s.failure != nil || s.size < 0 || s.rangeless || s.ctx.Err() != nil {
 		return
 	}
-	if len(s.conns) >= s.cache.connectionsFor(s.host()) {
+	host := s.host()
+	if len(s.conns) >= s.cache.connectionsFor(host) || !s.cache.roomFor(host) {
 		return
 	}
 	for _, o := range s.conns {
@@ -137,7 +153,7 @@ func (s *Source) spawn() {
 			return
 		}
 	}
-	c := &conn{next: -1}
+	c := newConn()
 	target, end, split, ok := s.pick(c, true)
 	if !ok {
 		return
@@ -151,8 +167,11 @@ func (s *Source) spawn() {
 }
 
 // work reads blocks over one connection until there is nothing left to
-// read, the source fails, or the connection is not needed.
+// read, the source fails, or the connection is not needed. It holds a slot
+// of its host while it reads, and gives it up when asked to: a connection
+// more then ends, the first of a source waits for a slot again.
 func (s *Source) work(c *conn) {
+	defer func() { s.cache.release(c.slot) }()
 	defer c.closeBody()
 	buffer := make([]byte, blockSize)
 	for {
@@ -169,11 +188,22 @@ func (s *Source) work(c *conn) {
 		if reconnect {
 			c.closeBody()
 		}
+		if s.yielded(c) && s.giveUp(c) {
+			return
+		}
 		if c.body == nil {
+			if !s.hold(c) {
+				return
+			}
 			err := s.connect(c, target)
 			switch {
 			case s.dropped(c):
 				return
+			case s.yielded(c):
+				if s.giveUp(c) {
+					return
+				}
+				continue
 			case errors.Is(err, io.EOF):
 				continue
 			case err != nil && s.extraFailed(c, err, true):
@@ -192,6 +222,12 @@ func (s *Source) work(c *conn) {
 		n, err := s.readBlock(c, buffer[:length])
 		if s.dropped(c) {
 			return
+		}
+		if n < length && s.yielded(c) {
+			if s.giveUp(c) {
+				return
+			}
+			continue
 		}
 		switch {
 		case n == length:
@@ -448,7 +484,8 @@ func (s *Source) needed(block int64) bool {
 
 // idle waits a little, with the connection open, for a reader to want
 // more, and tells whether one did. Only the last connection lingers; the
-// others end at once.
+// others end at once. A background connection lingering gives its slot up
+// to a connection waiting for one.
 func (s *Source) idle(c *conn) bool {
 	s.mu.Lock()
 	if c.dropped || !c.connected || len(s.conns) > 1 {
@@ -462,6 +499,12 @@ func (s *Source) idle(c *conn) bool {
 		delay = s.cache.attachedLinger
 	}
 	s.mu.Unlock()
+	var yielding <-chan struct{}
+	if c.slot != nil {
+		yielding = c.slot.ctx.Done()
+	}
+	s.cache.lingering(c.slot, true)
+	defer s.cache.lingering(c.slot, false)
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
@@ -469,6 +512,7 @@ func (s *Source) idle(c *conn) bool {
 		return true
 	case <-timer.C:
 	case <-s.ctx.Done():
+	case <-yielding:
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -483,6 +527,57 @@ func (s *Source) idle(c *conn) bool {
 func (s *Source) removeConn(c *conn) {
 	c.dropped = true
 	s.conns = slices.DeleteFunc(s.conns, func(o *conn) bool { return o == c })
+	// The first connection now may read for a playback.
+	s.nudgeConns()
+}
+
+// hold has connection c hold a slot of its host before it connects,
+// waiting for one as slots.go says, and reports whether it got one: not
+// once it is to read nothing more, nor as a connection more of its file
+// when none is free, which then ends.
+func (s *Source) hold(c *conn) bool {
+	if c.slot != nil {
+		return true
+	}
+	s.mu.Lock()
+	host, extra := s.host(), len(s.conns) > 0 && s.conns[0] != c
+	s.mu.Unlock()
+	cl := claim{state: func() (bool, bool) { return s.slotState(c) }, nudge: c.nudge, extra: extra}
+	if c.slot = s.cache.acquire(s, host, cl); c.slot != nil {
+		return true
+	}
+	s.mu.Lock()
+	s.removeConn(c)
+	s.mu.Unlock()
+	return false
+}
+
+// yielded reports whether connection c is to give its slot up, for a
+// playback's connection or one waiting while it lingered.
+func (s *Source) yielded(c *conn) bool {
+	return c.slot != nil && c.slot.ctx.Err() != nil && s.ctx.Err() == nil
+}
+
+// giveUp has connection c give its slot up, its request ended, and
+// reports whether it ends: a connection more of the file does, the first
+// waits for a slot again.
+func (s *Source) giveUp(c *conn) bool {
+	c.closeBody()
+	s.cache.release(c.slot)
+	c.slot = nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c.connected = false
+	if len(s.conns) > 0 && s.conns[0] == c {
+		return false
+	}
+	s.removeConn(c)
+	// What it was to read is the others' now.
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+	return true
 }
 
 // nearest reports whether no other connection reads a block before c's.
@@ -700,12 +795,14 @@ func (s *Source) unpinFrom(via *pin) {
 	}
 }
 
-// connect opens a connection yielding block for c. An expired link goes
-// back to the origin, then is renewed, once. An answer of another size
-// than the file is asked again once, at the origin, after a renewal when
-// the file was known: a link answering another file does not fix itself.
-// A source asking to wait is waited for. A connection more is not retried:
-// its failure is the host's refusal.
+// connect opens a connection yielding block for c, which holds a slot of
+// its host. An expired link goes back to the origin, then is renewed,
+// once. An answer of another size than the file is asked again once, at
+// the origin, after a renewal when the file was known: a link answering
+// another file does not fix itself. A source asking to wait is waited for,
+// longer when it asks to slow down (429, 503), which also gives its host
+// fewer connections. A connection more is not retried: its failure is the
+// host's refusal.
 func (s *Source) connect(c *conn, block int64) error {
 	offset := block * blockSize
 	renewed, retried := false, false
@@ -721,7 +818,7 @@ func (s *Source) connect(c *conn, block int64) error {
 		s.mu.Unlock()
 		header := t.header
 		header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
-		ctx, cancel := context.WithCancel(s.ctx)
+		ctx, cancel := context.WithCancel(c.slot.ctx)
 		timer := time.AfterFunc(timeout, cancel)
 		response, err := s.cache.opener.Open(ctx, http.MethodGet, t.url, header, t.confined)
 		if !timer.Stop() {
@@ -734,12 +831,12 @@ func (s *Source) connect(c *conn, block int64) error {
 			cancel()
 			s.unpin(t)
 			switch {
-			case s.ctx.Err() != nil:
-				return fmt.Errorf("%w: %v", ErrUnavailable, s.ctx.Err())
+			case c.slot.ctx.Err() != nil:
+				return fmt.Errorf("%w: %v", ErrUnavailable, c.slot.ctx.Err())
 			case !alone || errors.Is(err, errNoAnswer) || attempt >= attempts:
 				return fmt.Errorf("%w: %w", ErrUnavailable, withoutURL(err))
 			}
-			s.sleep(backoff(attempt, ""))
+			_ = pause(c.slot.ctx, backoff(attempt, ""))
 			continue
 		}
 		status := response.StatusCode
@@ -754,6 +851,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			}
 			if other = s.learn(total, response.Header.Get("Content-Type")); other == nil {
 				s.answered(t, response)
+				s.cache.rehome(c.slot, answerHost(t, response))
 				s.connected(c, response.Body, cancel, block, t.pinned)
 				return nil
 			}
@@ -773,6 +871,7 @@ func (s *Source) connect(c *conn, block int64) error {
 					s.mu.Unlock()
 				}
 				s.answered(t, response)
+				s.cache.rehome(c.slot, answerHost(t, response))
 				s.connected(c, response.Body, cancel, 0, t.pinned)
 				return nil
 			}
@@ -814,16 +913,23 @@ func (s *Source) connect(c *conn, block int64) error {
 		case status == http.StatusTooManyRequests || status >= 500:
 			response.Body.Close()
 			cancel()
+			tries, kind := attempts, ErrUnavailable
 			if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+				// The host is busy, not the file gone: its connections are
+				// fewer for a while, the background ones over that giving
+				// their slots up, and the file is asked again.
+				tries, kind = slowTries, ErrSlowDown
+				s.slowedDown(answerHost(t, response))
+				s.cache.press(c.slot)
 				go s.cache.limitHost(t.host, "HTTP "+strconv.Itoa(status))
 			}
-			if !alone || attempt >= attempts {
-				return &StatusError{Status: status, Kind: ErrUnavailable}
+			if !alone || attempt >= tries {
+				return &StatusError{Status: status, Kind: kind}
 			}
-			if attempt >= 2 {
+			if attempt >= 2 && kind != ErrSlowDown {
 				s.unpin(t)
 			}
-			s.sleep(backoff(attempt, response.Header.Get("Retry-After")))
+			_ = pause(c.slot.ctx, backoff(attempt, response.Header.Get("Retry-After")))
 			continue
 		default:
 			response.Body.Close()
@@ -847,8 +953,17 @@ func (s *Source) connect(c *conn, block int64) error {
 				return fmt.Errorf("%w, and the link could not be renewed: %v", other, err)
 			}
 		}
-		s.sleep(otherFileWait)
+		_ = pause(c.slot.ctx, otherFileWait)
 	}
+}
+
+// answerHost is the host that answered a request sent to t: where the
+// origin redirected it, if it did.
+func answerHost(t target, response *http.Response) string {
+	if response.Request != nil && response.Request.URL != nil {
+		return response.Request.URL.Host
+	}
+	return t.host
 }
 
 // connected records connection c's body, which yields next, read from via.

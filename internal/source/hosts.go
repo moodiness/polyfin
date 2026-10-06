@@ -18,9 +18,13 @@ const gainFactor = 1.2
 // hostState is what the cache learned of a host.
 type hostState struct {
 	// single is how fast one connection alone read from it, in bytes a
-	// second; limited, until when it is given one connection per file.
+	// second; limited, until when it is given one connection per file;
+	// crowded, until when it is given fewer connections (see slotCap);
+	// full whether all its slots were held, as last known.
 	single  float64
 	limited time.Time
+	crowded time.Time
+	full    bool
 }
 
 // hostOf is the host a URL names, port included: what the cache learns
@@ -87,7 +91,7 @@ func (c *Cache) host(host string) *hostState {
 }
 
 // sizeRecord counts the files whose first answer agreed with the size an
-// addon announced, and those whose answer did not.
+// addon announced, within 1%, and those whose answer did not.
 type sizeRecord struct {
 	agreed, disagreed int
 	// ignored tells that the addon's sizes were found wrong, which was
@@ -97,8 +101,8 @@ type sizeRecord struct {
 
 // sizeTrusted reports whether the sizes an addon announces are trusted to
 // catch another file at the first byte: once one of its files had the size
-// it announced, and as long as most did. An addon whose sizes are rounded
-// or wrong never refuses a file this way.
+// it announced, within 1%, and as long as most did. An addon whose sizes
+// are wrong never refuses a file this way.
 func (c *Cache) sizeTrusted(announcer string) bool {
 	c.learned.Lock()
 	defer c.learned.Unlock()

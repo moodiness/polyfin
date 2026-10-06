@@ -216,8 +216,11 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 
 // Analyze returns what ffprobe finds in a version, analyzing it on its
 // first use. A version that cannot be analyzed is not tried again for a
-// while. The keyframe index of a Matroska file is read meanwhile, as an
-// HLS play reads it next (see indexAhead).
+// while, unless its host held the reads back (see rateLimited). The
+// keyframe index of a Matroska file is read meanwhile, as an HLS play
+// reads it next (see indexAhead). An analysis for a playback, ctx not
+// marked Background, reads its source as a playback, even when it joins
+// one started in the background.
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
@@ -238,6 +241,11 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	}
 	if err, failed := s.failures.Get(version.ID); failed {
 		return media.Analysis{}, err
+	}
+	if !background(ctx) {
+		src := s.open(version)
+		defer src.Release()
+		defer src.Urge()()
 	}
 	result, err, _ := s.flight.Do("analyze "+version.ID.String(), func() (any, error) {
 		// Requests for the version share this analysis, and it is kept: it
@@ -272,7 +280,9 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
 		}
 		if err != nil {
-			s.failures.Put(version.ID, err)
+			if !rateLimited(src, started, err) {
+				s.failures.Put(version.ID, err)
+			}
 			return nil, err
 		}
 		if analysis.Size == 0 {
@@ -307,6 +317,32 @@ func failureOf(src *source.Source, failed <-chan struct{}) error {
 	default:
 		return nil
 	}
+}
+
+// rateLimited reports whether err, met reading src since a time, comes of
+// its host's limits rather than of the file: the host asked to slow down
+// (429, 503), or, for what is not the source's own failure, as an
+// analysis out of time, the reads were held back meanwhile. A version is
+// not kept as failed for it.
+func rateLimited(src *source.Source, since time.Time, err error) bool {
+	return errors.Is(err, source.ErrSlowDown) || !errors.Is(err, source.ErrUnavailable) && src.HeldBack(since)
+}
+
+// backgroundKey marks a context as background work's (see Background).
+type backgroundKey struct{}
+
+// Background marks ctx as the context of background work: reading ahead
+// of a play to come, or analyzing a version a play may not choose. The
+// sources it reads wait for their hosts' other connections, and give way
+// to the playbacks' (see source.Source.Urge).
+func Background(ctx context.Context) context.Context {
+	return context.WithValue(ctx, backgroundKey{}, true)
+}
+
+// background reports whether ctx is background work's.
+func background(ctx context.Context) bool {
+	marked, _ := ctx.Value(backgroundKey{}).(bool)
+	return marked
 }
 
 // standIn reports whether an analysis is of a clip too short to be the
@@ -402,8 +438,8 @@ func tokenByte(c byte) bool {
 // players give up on the first failure, and returns the version with the
 // link that answered. A source that answered the server's own reads at
 // that link lately, as PlaybackInfo's analysis, is not asked again. A
-// link that could not be renewed is not kept as the file's failure: that
-// tells nothing of the file.
+// link that could not be renewed, or a host asking to slow down (429,
+// 503), is not kept as the file's failure: that tells nothing of the file.
 func (s *Service) check(ctx context.Context, version library.Version) (library.Version, error) {
 	if _, ok := s.live.Get(version.ID); ok {
 		return version, nil
@@ -424,6 +460,9 @@ func (s *Service) check(ctx context.Context, version library.Version) (library.V
 	}
 	if err == nil && status != http.StatusOK && status != http.StatusPartialContent {
 		err = fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, status)
+		if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+			return library.Version{}, err
+		}
 	}
 	if err != nil {
 		s.failures.Put(version.ID, err)

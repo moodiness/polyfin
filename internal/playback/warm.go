@@ -46,10 +46,12 @@ const (
 	indexAheadTime = time.Minute
 )
 
-// warmRun is a warm under way.
+// warmRun is a warm under way, for a playback (urgent) or in the
+// background.
 type warmRun struct {
 	start   time.Duration
 	started time.Time
+	urgent  bool
 	cancel  context.CancelFunc
 }
 
@@ -58,15 +60,17 @@ type warmRun struct {
 // segment playing at start up to the next one's keyframe, within a bound.
 // A warm of the version from another start under way is replaced, one
 // from the same start or done lately is not repeated, and at most a few
-// run at once, the newest. It returns at once.
+// run at once, the newest. It returns at once. The version is the one a
+// play chose: its source is read as a playback's.
 func (s *Service) Warm(version library.Version, start time.Duration) {
-	s.warm(version, start, true)
+	s.warm(version, start, true, true)
 }
 
 // warm is Warm; a warm that does not replace one under way, nor repeats
 // one done lately from any start, nor runs while the version is remuxed,
-// is what Plan starts.
-func (s *Service) warm(version library.Version, start time.Duration, replace bool) {
+// is what Plan starts, urgent unless Plan was asked in the background. An
+// urgent warm replaces one in the background from the same start.
+func (s *Service) warm(version library.Version, start time.Duration, replace, urgent bool) {
 	if warmed, ok := s.warmed.Get(version.ID); ok && (warmed == start || !replace) {
 		return
 	}
@@ -75,7 +79,7 @@ func (s *Service) warm(version library.Version, start time.Duration, replace boo
 	}
 	s.warmMu.Lock()
 	if run := s.warming[version.ID]; run != nil {
-		if run.start == start || !replace {
+		if (run.start == start || !replace) && (run.urgent || !urgent) {
 			s.warmMu.Unlock()
 			return
 		}
@@ -93,7 +97,10 @@ func (s *Service) warm(version library.Version, start time.Duration, replace boo
 		delete(s.warming, oldest)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), warmTime)
-	run := &warmRun{start: start, started: time.Now(), cancel: cancel}
+	if !urgent {
+		ctx = Background(ctx)
+	}
+	run := &warmRun{start: start, started: time.Now(), urgent: urgent, cancel: cancel}
 	s.warming[version.ID] = run
 	s.warmMu.Unlock()
 	go func() {
@@ -114,7 +121,8 @@ func (s *Service) warm(version library.Version, start time.Duration, replace boo
 	}()
 }
 
-// warmFrom reads what a play of version from start reads first.
+// warmFrom reads what a play of version from start reads first, as a
+// playback's reads unless ctx is marked Background.
 func (s *Service) warmFrom(ctx context.Context, version library.Version, start time.Duration) error {
 	plan, err := s.plan(ctx, version)
 	if err != nil || plan.Grid() {
@@ -126,6 +134,9 @@ func (s *Service) warmFrom(ctx context.Context, version library.Version, start t
 	}
 	src := s.open(version)
 	defer src.Release()
+	if !background(ctx) {
+		defer src.Urge()()
+	}
 	var spans []source.Span
 	err = s.readSized(ctx, version, analysis, src, func(size int64) error {
 		offsets, err := s.keyframeOffsets(ctx, version, src, size)
@@ -194,7 +205,8 @@ var ebmlMagic = []byte{0x1A, 0x45, 0xDF, 0xA3}
 // indexAhead reads a version's keyframe index while it is analyzed, when it
 // is a Matroska file, by its name or its first bytes: its index needs only
 // its size, and an HLS play reads it next. The read is shared with Plan's,
-// and kept the same way.
+// and kept the same way. It is background work: a play reading the index
+// meanwhile has it read as a playback.
 func (s *Service) indexAhead(version library.Version) {
 	if _, ok := s.indexes.Get(version.ID); ok {
 		return
@@ -203,7 +215,7 @@ func (s *Service) indexAhead(version library.Version) {
 		return
 	}
 	s.flight.DoChan("index ahead "+version.ID.String(), func() (any, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), indexAheadTime)
+		ctx, cancel := context.WithTimeout(Background(context.Background()), indexAheadTime)
 		defer cancel()
 		src := s.open(version)
 		defer src.Release()
@@ -232,13 +244,14 @@ func matroskaName(name string) bool {
 }
 
 // watchSource keeps a version as failed once its source fails, until done
-// is closed: the next PlaybackInfo plays another version.
+// is closed: the next PlaybackInfo plays another version. A host asking to
+// slow down tells nothing of the file: the version is kept.
 func (s *Service) watchSource(version library.Version, src *source.Source, done <-chan struct{}) {
 	failed := src.Failed()
 	select {
 	case <-failed:
 		err := failureOf(src, failed)
-		if errors.Is(err, source.ErrUnavailable) {
+		if errors.Is(err, source.ErrUnavailable) && !errors.Is(err, source.ErrSlowDown) {
 			s.failures.Put(version.ID, err)
 		}
 		s.logger.Info("A version's source failed while it played", "addon", version.Addon, "answer", source.Answer(err))

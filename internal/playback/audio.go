@@ -289,8 +289,9 @@ func (s *Service) audioInput(version library.Version) (input string, options []s
 		return version.URL, nil, func() {}, nil
 	}
 	src := s.open(version)
+	unurge := src.Urge()
 	target, free := s.loopback.register(src)
-	return target, nil, func() { free(); src.Release() }, nil
+	return target, nil, func() { free(); unurge(); src.Release() }, nil
 }
 
 // audio describes a conversion to target, read from version.

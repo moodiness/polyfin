@@ -465,7 +465,8 @@ func TestAnotherFileFailsAfterOneRetry(t *testing.T) {
 
 // The size an addon announces catches another file at the first answer,
 // once the addon's sizes proved right; an addon whose sizes are wrong
-// refuses nothing.
+// refuses nothing. A size within 1% of the file's is the file's, as some
+// addons' are a little off: the file's own size is taken.
 func TestAnnouncedSizesCatchAnotherFile(t *testing.T) {
 	_, server := newOrigin(t, 2*blockSize)
 	cache := newCache(t, 1<<30)
@@ -479,25 +480,41 @@ func TestAnnouncedSizesCatchAnotherFile(t *testing.T) {
 		return err
 	}
 	// Unknown yet: the answer is taken.
-	if err := read(open(1, 2*blockSize+1, "rounding")); err != nil {
+	if err := read(open(1, 3*blockSize, "wrong")); err != nil {
 		t.Fatalf("an unknown addon's size refused a file: %v", err)
 	}
 	for id := byte(2); id < 6; id++ {
-		if err := read(open(id, 2*blockSize-100, "rounding")); err != nil {
+		if err := read(open(id, 2*blockSize-blockSize/10, "wrong")); err != nil {
 			t.Fatalf("a wrong addon's size refused a file: %v", err)
 		}
 	}
-	// Right once: another size is another file.
+	// Right once: within 1%, either way, a file is read, its own size
+	// taken, and its addon's sizes trusted all the same.
 	if err := read(open(10, 2*blockSize, "exact")); err != nil {
 		t.Fatal(err)
 	}
-	other := open(11, 5*blockSize, "exact")
-	err := read(other)
-	if !errors.Is(err, ErrUnavailable) || Answer(err) != "an answer of another size than the file" {
-		t.Fatalf("another file: %v", err)
+	for id, size := range map[byte]int64{11: 2*blockSize + 2*blockSize/100, 12: 2*blockSize - 1000} {
+		near := open(id, size, "exact")
+		if err := read(near); err != nil {
+			t.Fatalf("announced %d bytes for %d: %v", size, 2*blockSize, err)
+		}
+		if known, _ := near.KnownSize(); known != 2*blockSize {
+			t.Errorf("announced %d bytes: %d taken", size, known)
+		}
 	}
-	if _, known := other.KnownSize(); known {
-		t.Error("the other file's size was taken")
+	// Further, another size is another file.
+	for id, size := range map[byte]int64{20: 5 * blockSize, 21: 2*blockSize + 2*blockSize/50, 22: 2*blockSize - 2*blockSize/50} {
+		other := open(id, size, "exact")
+		err := read(other)
+		if !errors.Is(err, ErrUnavailable) || Answer(err) != "an answer of another size than the file" {
+			t.Fatalf("announced %d bytes for %d: %v", size, 2*blockSize, err)
+		}
+		if _, known := other.KnownSize(); known {
+			t.Error("the other file's size was taken")
+		}
+	}
+	if cache.sizeTrusted("wrong") {
+		t.Error("wrong sizes are trusted")
 	}
 }
 
