@@ -357,7 +357,7 @@ func (s *Service) AudioDuration(ctx context.Context, version library.Version) (t
 	if version.Runtime > 0 {
 		return version.Runtime, nil
 	}
-	analysis, err := s.Analyze(ctx, version)
+	analysis, err := s.AnalyzeAudio(ctx, version)
 	if err != nil {
 		return 0, err
 	}

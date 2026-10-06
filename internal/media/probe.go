@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +142,15 @@ func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
 }
 
 func (p Prober) probe(ctx context.Context, url string, options ...string) (Analysis, error) {
+	data, err := p.run(ctx, url, options...)
+	if err != nil {
+		return Analysis{}, err
+	}
+	return Parse(data)
+}
+
+// run runs ffprobe on url and returns its JSON output.
+func (p Prober) run(ctx context.Context, url string, options ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
 	args := append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters"}, options...)
@@ -149,7 +159,7 @@ func (p Prober) probe(ctx context.Context, url string, options ...string) (Analy
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if err := command.Run(); err != nil {
 		if ctx.Err() != nil {
-			return Analysis{}, fmt.Errorf("ffprobe: %w", ctx.Err())
+			return nil, fmt.Errorf("ffprobe: %w", ctx.Err())
 		}
 		// ffprobe's message may quote the URL: keep only its last line, and
 		// only once the URL is removed.
@@ -158,13 +168,26 @@ func (p Prober) probe(ctx context.Context, url string, options ...string) (Analy
 			message = message[i+1:]
 		}
 		message = strings.ReplaceAll(message, url, "<source>")
-		return Analysis{}, fmt.Errorf("%w: ffprobe: %v: %s", ErrNotMedia, err, message)
+		return nil, fmt.Errorf("%w: ffprobe: %v: %s", ErrNotMedia, err, message)
 	}
-	return Parse(stdout.Bytes())
+	return stdout.Bytes(), nil
 }
 
-// Parse reads ffprobe's JSON output.
+// Parse reads ffprobe's JSON output of a video: one without a video track
+// is not one.
 func Parse(data []byte) (Analysis, error) {
+	analysis, err := parse(data)
+	if err != nil {
+		return Analysis{}, err
+	}
+	if !slices.ContainsFunc(analysis.Streams, func(s Stream) bool { return s.Type == "video" && !s.AttachedPicture }) {
+		return Analysis{}, fmt.Errorf("%w: no video track", ErrNotMedia)
+	}
+	return analysis, nil
+}
+
+// parse reads ffprobe's JSON output, whatever its tracks.
+func parse(data []byte) (Analysis, error) {
 	var raw probeOutput
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Analysis{}, fmt.Errorf("%w: unreadable ffprobe output: %v", ErrNotMedia, err)
@@ -176,7 +199,6 @@ func Parse(data []byte) (Analysis, error) {
 		Size:     integer(raw.Format.Size),
 		Bitrate:  integer(raw.Format.BitRate),
 	}
-	hasVideo := false
 	for _, s := range raw.Streams {
 		stream := Stream{
 			Index:           s.Index,
@@ -242,9 +264,6 @@ func Parse(data []byte) (Analysis, error) {
 				stream.HDR10Plus = true
 			}
 		}
-		if stream.Type == "video" && !stream.AttachedPicture {
-			hasVideo = true
-		}
 		analysis.Streams = append(analysis.Streams, stream)
 	}
 	for _, c := range raw.Chapters {
@@ -253,9 +272,6 @@ func Parse(data []byte) (Analysis, error) {
 			End:   seconds(c.EndTime),
 			Title: tag(c.Tags, "title"),
 		})
-	}
-	if !hasVideo {
-		return Analysis{}, fmt.Errorf("%w: no video track", ErrNotMedia)
 	}
 	return analysis, nil
 }
