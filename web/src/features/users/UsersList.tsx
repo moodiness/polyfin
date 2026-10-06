@@ -1,7 +1,14 @@
-import { CaretRightIcon, PlusIcon, UsersIcon } from '@phosphor-icons/react'
-import { useQuery } from '@tanstack/react-query'
+import { CaretRightIcon, DownloadSimpleIcon, PlusIcon, UsersIcon } from '@phosphor-icons/react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { fetchUsers, queryKeys, userImageUrl, type User } from '@/api'
+import {
+  fetchUsers,
+  queryClient,
+  queryKeys,
+  turnOffDownloads,
+  userImageUrl,
+  type User,
+} from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
@@ -11,6 +18,7 @@ import {
   Badge,
   Block,
   Button,
+  ConfirmDialog,
   EmptyState,
   InlineError,
   Row,
@@ -18,25 +26,53 @@ import {
   SkeletonRows,
   StatusPill,
   RelativeTime,
+  useToast,
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { clockTime, useRestrictions } from './shared'
 
-/** `/users`: every account, each opening its page, and the button to create one. */
+/**
+ * `/users`: every account, each opening its page, the button to create one, and the one turning
+ * downloads off for everyone.
+ */
 export default function UsersList() {
   const { t } = useI18n()
+  const toast = useToast()
   const [creating, setCreating] = useState(false)
+  const [stoppingDownloads, setStoppingDownloads] = useState(false)
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
+  const downloadsOff = useMutation({
+    mutationFn: turnOffDownloads,
+    onSuccess: (changed) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+      setStoppingDownloads(false)
+      toast(t.users.downloadsTurnedOff(changed.length), { tone: 'ok' })
+    },
+  })
 
   const create = (
     <Button variant="primary" icon={PlusIcon} onClick={() => setCreating(true)}>
       {t.users.createTitle}
     </Button>
   )
+  const actions = (
+    <span className="flex flex-wrap gap-2">
+      <Button
+        icon={DownloadSimpleIcon}
+        onClick={() => {
+          downloadsOff.reset()
+          setStoppingDownloads(true)
+        }}
+      >
+        {t.users.turnOffDownloads}
+      </Button>
+      {create}
+    </span>
+  )
 
   return (
     <>
-      <PageLayout title={t.users.title} lede={t.users.description} actions={create}>
+      <PageLayout title={t.users.title} lede={t.users.description} actions={actions}>
         <Block title={t.users.listTitle} count={users.data?.length}>
           {users.isPending ? (
             <SkeletonRows rows={3} boxed label={t.common.loading} />
@@ -59,6 +95,19 @@ export default function UsersList() {
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the panel down. */}
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
+      <ConfirmDialog
+        open={stoppingDownloads}
+        onClose={() => setStoppingDownloads(false)}
+        onConfirm={() => downloadsOff.mutate()}
+        title={t.users.turnOffDownloads}
+        confirmLabel={
+          downloadsOff.isPending ? t.users.turningOffDownloads : t.users.turnOffDownloads
+        }
+        busy={downloadsOff.isPending}
+        error={downloadsOff.isError ? errorMessage(t, downloadsOff.error) : undefined}
+      >
+        {t.users.turnOffDownloadsConfirm}
+      </ConfirmDialog>
     </>
   )
 }

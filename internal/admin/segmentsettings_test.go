@@ -28,42 +28,45 @@ func names(value any) []string {
 	return out
 }
 
-// The order of the segment databases: the one in effect always lists all
-// three, those POLYFIN_SEGMENTS turns off after the others; a saved one
-// replaces it until an empty one goes back to POLYFIN_SEGMENTS'.
-func TestSettingsSegmentOrder(t *testing.T) {
-	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
-		// POLYFIN_SEGMENTS=introdb,theintrodb
-		o.Segments = mediasegments.New(deps.pool, mediasegments.Sources([]string{"introdb", "theintrodb"}), "test", o.Logger, o.Accounts.Settings)
-	})
+// The segment databases: every one of them in the order, each turned on or
+// off. A save keeps what it leaves out, and an empty order, which older
+// pages sent to follow POLYFIN_SEGMENTS, keeps the saved one too.
+func TestSettingsSegmentSources(t *testing.T) {
+	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
-	byDefault := []string{"introdb", "theintrodb", "publicmetadb"}
-	order := func(body map[string]any) ([]string, []string, []string) {
-		return names(body["segmentOrder"]), names(body["segmentOrderDefault"]), names(body["segmentSourcesOff"])
+	byDefault := []string{"theintrodb", "introdb", "publicmetadb"}
+	sources := func(body map[string]any) ([]string, []string) {
+		return names(body["segmentOrder"]), names(body["segmentSourcesOff"])
 	}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
-	if inEffect, def, off := order(body); !slices.Equal(inEffect, byDefault) || !slices.Equal(def, byDefault) || !slices.Equal(off, []string{"publicmetadb"}) {
-		t.Errorf("default: %v, %v, %v", inEffect, def, off)
+	if order, off := sources(body); !slices.Equal(order, byDefault) || len(off) != 0 {
+		t.Errorf("default: %v, off %v", order, off)
+	}
+	if _, found := body["segmentOrderDefault"]; found {
+		t.Error("the order POLYFIN_SEGMENTS gave is still answered")
 	}
 
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
-	saved := []string{"publicmetadb", "theintrodb", "introdb"}
+	saved, off := []string{"publicmetadb", "theintrodb", "introdb"}, []string{"introdb"}
 	set := maps.Clone(base)
-	set["segmentOrder"] = saved
+	set["segmentOrder"], set["segmentSourcesOff"] = saved, off
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", set); status != http.StatusOK {
-		t.Fatalf("saving an order: %d %v", status, body)
-	} else if inEffect, def, _ := order(body); !slices.Equal(inEffect, saved) || !slices.Equal(def, byDefault) {
-		t.Errorf("saved: %v, default %v", inEffect, def)
+		t.Fatalf("saving the sources: %d %v", status, body)
+	} else if order, gotOff := sources(body); !slices.Equal(order, saved) || !slices.Equal(gotOff, off) {
+		t.Errorf("saved: %v, off %v", order, gotOff)
 	}
-	if got := api.store.Settings().SegmentOrder; !slices.Equal(got, saved) {
-		t.Errorf("stored %v", got)
+	if got := api.store.Settings(); !slices.Equal(got.SegmentOrder, saved) || !slices.Equal(got.SegmentSourcesOff, off) {
+		t.Errorf("stored %v, off %v", got.SegmentOrder, got.SegmentSourcesOff)
 	}
-	// Left out, or null, the order is kept.
+	// Left out, null, or an empty order, they are kept.
 	keep := maps.Clone(base)
-	keep["segmentOrder"] = nil
-	for _, body := range []map[string]any{base, keep} {
-		if status, answer, _ := administrator.call(http.MethodPut, "/settings", body); status != http.StatusOK || !slices.Equal(names(answer["segmentOrder"]), saved) {
-			t.Errorf("left out: %d %v", status, answer["segmentOrder"])
+	keep["segmentOrder"], keep["segmentSourcesOff"] = nil, nil
+	older := maps.Clone(base)
+	older["segmentOrder"] = []string{}
+	for _, body := range []map[string]any{base, keep, older} {
+		status, answer, _ := administrator.call(http.MethodPut, "/settings", body)
+		if order, gotOff := sources(answer); status != http.StatusOK || !slices.Equal(order, saved) || !slices.Equal(gotOff, off) {
+			t.Errorf("left out: %d %v, off %v", status, order, gotOff)
 		}
 	}
 	for _, refused := range [][]string{
@@ -80,17 +83,15 @@ func TestSettingsSegmentOrder(t *testing.T) {
 			t.Errorf("%v: %d %v", refused, status, answer)
 		}
 	}
-	if got := api.store.Settings().SegmentOrder; !slices.Equal(got, saved) {
-		t.Errorf("refused orders changed it: %v", got)
+	for _, refused := range [][]string{{"other"}, {"introdb", "introdb"}} {
+		body := maps.Clone(base)
+		body["segmentSourcesOff"] = refused
+		if status, answer, _ := administrator.call(http.MethodPut, "/settings", body); status != http.StatusBadRequest || answer["error"] != "invalid_segment_sources_off" {
+			t.Errorf("off %v: %d %v", refused, status, answer)
+		}
 	}
-	// Empty goes back to POLYFIN_SEGMENTS' order.
-	reset := maps.Clone(base)
-	reset["segmentOrder"] = []string{}
-	if status, body, _ := administrator.call(http.MethodPut, "/settings", reset); status != http.StatusOK || !slices.Equal(names(body["segmentOrder"]), byDefault) {
-		t.Errorf("reset: %d %v", status, body["segmentOrder"])
-	}
-	if got := api.store.Settings().SegmentOrder; len(got) != 0 {
-		t.Errorf("stored after a reset: %v", got)
+	if got := api.store.Settings(); !slices.Equal(got.SegmentOrder, saved) || !slices.Equal(got.SegmentSourcesOff, off) {
+		t.Errorf("refused sources changed them: %v, off %v", got.SegmentOrder, got.SegmentSourcesOff)
 	}
 }
 

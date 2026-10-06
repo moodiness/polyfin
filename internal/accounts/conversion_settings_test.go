@@ -13,7 +13,7 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 	store := newStore(t)
 	check := func(when string, got Settings) {
 		t.Helper()
-		if got.EncoderPreset != "auto" || got.H264Quality != 0 || got.HevcQuality != 0 || got.AllowHevcEncoding || got.HardwareAcceleration != "" ||
+		if got.EncoderPreset != "auto" || got.H264Quality != 0 || got.HevcQuality != 0 || got.AllowHevcEncoding || got.HardwareAcceleration != "auto" ||
 			!slices.Equal(got.HardwareDecodingCodecs, HardwareDecodingCodecs) || !got.ToneMapping || got.ToneMappingAlgorithm != "auto" ||
 			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
@@ -44,6 +44,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		{"a negative H.264 quality", func(s *Settings) { s.H264Quality = -1 }, ErrInvalidVideoQuality},
 		{"an HEVC quality above 51", func(s *Settings) { s.HevcQuality = MaxVideoQuality + 1 }, ErrInvalidVideoQuality},
 		{"an unknown GPU", func(s *Settings) { s.HardwareAcceleration = "qsv" }, ErrInvalidHardwareAcceleration},
+		{"no GPU choice, which followed POLYFIN_HWACCEL", func(s *Settings) { s.HardwareAcceleration = "" }, ErrInvalidHardwareAcceleration},
 		{"an unknown decoded codec", func(s *Settings) { s.HardwareDecodingCodecs = []string{"h264", "vp8"} }, ErrInvalidHardwareDecodingCodecs},
 		{"a decoded codec twice", func(s *Settings) { s.HardwareDecodingCodecs = []string{"h264", "h264"} }, ErrInvalidHardwareDecodingCodecs},
 		{"an unknown curve", func(s *Settings) { s.ToneMappingAlgorithm = "gamma" }, ErrInvalidToneMappingAlgorithm},
@@ -109,7 +110,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		}
 	}
 	// The database refuses what the store refuses, whoever writes it.
-	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'qsv'",
+	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'qsv'", "hardware_acceleration = ''",
 		"hardware_decoding_codecs = '{vp8}'", "tone_mapping_algorithm = 'gamma'", "tone_mapping_peak = 99", "tone_mapping_desat = 11",
 		"deinterlace_method = 'w3fdif'", "downmix_algorithm = 'dave750'", "downmix_boost = 0.4", "max_audio_channels = 8",
 		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_segments = 0"} {

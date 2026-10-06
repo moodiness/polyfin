@@ -56,7 +56,8 @@ var ErrInvalidCatalogRefreshMinutes = errors.New("invalid catalog refresh minute
 
 // The bounds and defaults of Settings.PlayedPercent, ResumePercent,
 // VersionListMinutes and CatalogRefreshMinutes. The percents default to
-// those of a Jellyfin server (MaxResumePct and MinResumePct).
+// those of a Jellyfin server (MaxResumePct and MinResumePct); catalogs are
+// read again every hour by default.
 const (
 	MinPlayedPercent             = 50
 	MaxPlayedPercent             = 100
@@ -69,7 +70,7 @@ const (
 	DefaultVersionListMinutes    = 10
 	MinCatalogRefreshMinutes     = 1
 	MaxCatalogRefreshMinutes     = 1440
-	DefaultCatalogRefreshMinutes = 10
+	DefaultCatalogRefreshMinutes = 60
 )
 
 // ErrInvalidLoginAttempts reports a LoginAttempts other than 0 outside
@@ -107,12 +108,13 @@ var ErrInvalidMaxConversions = errors.New("invalid maximum of conversions")
 var ErrInvalidMaxConversionHeight = errors.New("invalid maximum height of converted video")
 
 // The bounds and defaults of Settings.AnalysisTimeout, in seconds,
-// VersionAttempts and MaxConversions. The defaults are what Polyfin did
-// before they were settings.
+// VersionAttempts and MaxConversions. A source that does not answer within
+// 20 seconds is given up by default, which still lets a slow 2160p file be
+// analyzed; the others are what Polyfin did before they were settings.
 const (
 	MinAnalysisTimeout     = 5
 	MaxAnalysisTimeout     = 120
-	DefaultAnalysisTimeout = 45
+	DefaultAnalysisTimeout = 20
 	MinVersionAttempts     = 1
 	MaxVersionAttempts     = 10
 	DefaultVersionAttempts = 3
@@ -152,9 +154,9 @@ var (
 	// EncoderPresets are the values of Settings.EncoderPreset: auto lets
 	// Polyfin choose each encoder's, then from the slowest to the fastest.
 	EncoderPresets = []string{"auto", "veryslow", "slower", "slow", "medium", "fast", "faster", "veryfast", "superfast", "ultrafast"}
-	// HardwareAccelerations are the values of Settings.HardwareAcceleration:
-	// empty follows POLYFIN_HWACCEL, whose values the others are.
-	HardwareAccelerations = []string{"", "auto", "nvenc", "vaapi", "none"}
+	// HardwareAccelerations are the values of Settings.HardwareAcceleration,
+	// those POLYFIN_HWACCEL takes: auto tries NVIDIA, then VAAPI.
+	HardwareAccelerations = []string{"auto", "nvenc", "vaapi", "none"}
 	// HardwareDecodingCodecs are the values Settings.HardwareDecodingCodecs
 	// holds, all by default: FFmpeg's codec names, and hevc_10bit for HEVC
 	// in 10 bits, which HEVC needs too.
@@ -298,24 +300,27 @@ func ValidSegmentKey(key string) bool {
 }
 
 // SegmentSources are the segment databases, by the names POLYFIN_SEGMENTS
-// gives them, in its default order of preference.
+// gives them, in the default order of preference.
 var SegmentSources = []string{"theintrodb", "introdb", "publicmetadb"}
 
-// ErrInvalidSegmentOrder reports a Settings.SegmentOrder that is neither
-// empty nor every one of SegmentSources once.
-var ErrInvalidSegmentOrder = errors.New("invalid segment order")
+// ErrInvalidSegmentOrder reports a Settings.SegmentOrder that is not every
+// one of SegmentSources once, and ErrInvalidSegmentSourcesOff a
+// SegmentSourcesOff holding another name, or one twice.
+var (
+	ErrInvalidSegmentOrder      = errors.New("invalid segment order")
+	ErrInvalidSegmentSourcesOff = errors.New("invalid segment sources turned off")
+)
 
-// validSegmentOrder reports whether order is empty or SegmentSources in
-// any order.
+// validSegmentOrder reports whether order is SegmentSources in any order.
 func validSegmentOrder(order []string) bool {
-	if len(order) == 0 {
-		return true
-	}
-	if len(order) != len(SegmentSources) {
-		return false
-	}
-	for i, name := range order {
-		if !slices.Contains(SegmentSources, name) || slices.Contains(order[:i], name) {
+	return len(order) == len(SegmentSources) && validSegmentSources(order)
+}
+
+// validSegmentSources reports whether names are some of SegmentSources,
+// each once.
+func validSegmentSources(names []string) bool {
+	for i, name := range names {
+		if !slices.Contains(SegmentSources, name) || slices.Contains(names[:i], name) {
 			return false
 		}
 	}
@@ -372,10 +377,6 @@ type Settings struct {
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.
 	Language string
-	// Chapters sends apps the chapters of the versions Polyfin analyzed.
-	// They are read with the analysis every first play needs, so they cost
-	// nothing: turning them off only hides them.
-	Chapters bool
 	// PrepareAhead analyzes the version a title would play as soon as its
 	// details open, and readies the next episode near the end of the one
 	// playing, so that playback starts at once.
@@ -384,8 +385,6 @@ type Settings struct {
 	// the users allowed to have them converted; files still play as they
 	// are or repackaged without it.
 	Transcoding bool
-	// Downloads lets the users allowed to download titles do so.
-	Downloads bool
 	// CatalogLimit is how many items one read of a movie or series catalog
 	// (any catalog but a live TV one) fetches at most: some catalogs are
 	// nearly endless.
@@ -405,9 +404,11 @@ type Settings struct {
 	// TheIntroDB is asked without one. A secret, like PublicMetaDBKey.
 	TheIntroDBKey string
 	// SegmentOrder is the order of preference of the segment databases,
-	// every one of SegmentSources once; empty follows POLYFIN_SEGMENTS.
-	// It only orders them: POLYFIN_SEGMENTS still chooses which are asked.
-	SegmentOrder []string
+	// every one of SegmentSources once, and SegmentSourcesOff those never
+	// asked, wherever they are in it. Both come from POLYFIN_SEGMENTS at
+	// the first start (see AdoptEnvironment).
+	SegmentOrder      []string
+	SegmentSourcesOff []string
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
@@ -465,8 +466,8 @@ type Settings struct {
 	// before H.264; off, HEVC is only for apps taking no H.264, as with
 	// Jellyfin's option of the same name.
 	AllowHevcEncoding bool
-	// HardwareAcceleration chooses the GPU, one of HardwareAccelerations:
-	// empty follows POLYFIN_HWACCEL. HardwareDecodingCodecs are the
+	// HardwareAcceleration chooses the GPU, one of HardwareAccelerations,
+	// from POLYFIN_HWACCEL at the first start. HardwareDecodingCodecs are the
 	// codecs, of HardwareDecodingCodecs, the GPU decodes; the others are
 	// decoded in software.
 	HardwareAcceleration   string
@@ -582,8 +583,8 @@ func validWebText(text string, max int) bool {
 
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
-const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, chapters, prepare_ahead, transcoding, downloads, catalog_limit, channel_limit, " +
-	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
+	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -607,8 +608,8 @@ var updateSettingsQuery = func() string {
 // settingsColumns: what a row scans into, and what an update writes.
 func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
-		&settings.Chapters, &settings.PrepareAhead, &settings.Transcoding, &settings.Downloads, &settings.CatalogLimit, &settings.ChannelLimit,
-		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder,
+		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
+		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
 		&settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
@@ -683,6 +684,44 @@ func (s *Store) Settings() Settings {
 	return *s.settings.Load()
 }
 
+// AdoptEnvironment copies into the settings, once, what POLYFIN_HWACCEL
+// and POLYFIN_SEGMENTS gave before they were settings: hardware is the GPU
+// POLYFIN_HWACCEL names (auto when it is not set), segments the databases
+// POLYFIN_SEGMENTS asks, the preferred first. The database lists the
+// settings still to be copied, those of a new server or of one that left
+// them to the variables before; once they are copied, the variables are not
+// read again for them, and what an administrator chooses stays chosen.
+func (s *Store) AdoptEnvironment(ctx context.Context, hardware string, segments []string) error {
+	if !slices.Contains(HardwareAccelerations, hardware) {
+		return ErrInvalidHardwareAcceleration
+	}
+	if !validSegmentSources(segments) {
+		return ErrInvalidSegmentSourcesOff
+	}
+	// The databases asked, in the order given, then the others, turned off.
+	order, off := slices.Clone(segments), []string{}
+	for _, name := range SegmentSources {
+		if !slices.Contains(segments, name) {
+			order, off = append(order, name), append(off, name)
+		}
+	}
+	adopted, err := s.db.Exec(ctx, `UPDATE settings SET
+		hardware_acceleration = CASE WHEN 'hardware_acceleration' = ANY(environment_pending) THEN $1 ELSE hardware_acceleration END,
+		segment_order = CASE WHEN 'segment_order' = ANY(environment_pending) THEN $2 ELSE segment_order END,
+		segment_sources_off = CASE WHEN 'segment_sources_off' = ANY(environment_pending) THEN $3 ELSE segment_sources_off END,
+		environment_pending = '{}'
+		WHERE environment_pending <> '{}'`, hardware, order, off)
+	if err != nil || adopted.RowsAffected() == 0 {
+		return err
+	}
+	settings, err := s.loadSettings(ctx)
+	if err != nil {
+		return err
+	}
+	s.settings.Store(&settings)
+	return nil
+}
+
 // UpdateSettings replaces the settings.
 func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings, error) {
 	settings.ServerName = strings.TrimSpace(settings.ServerName)
@@ -722,8 +761,19 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !validSegmentOrder(settings.SegmentOrder) {
 		return Settings{}, ErrInvalidSegmentOrder
 	}
-	// The column holds no NULL: no order is an empty one.
-	settings.SegmentOrder = append([]string{}, settings.SegmentOrder...)
+	if !validSegmentSources(settings.SegmentSourcesOff) {
+		return Settings{}, ErrInvalidSegmentSourcesOff
+	}
+	// The databases turned off are kept in the order of SegmentSources,
+	// none being an empty list: the column holds no NULL.
+	settings.SegmentOrder = slices.Clone(settings.SegmentOrder)
+	off := []string{}
+	for _, name := range SegmentSources {
+		if slices.Contains(settings.SegmentSourcesOff, name) {
+			off = append(off, name)
+		}
+	}
+	settings.SegmentSourcesOff = off
 	if settings.LoginAttempts != 0 && (settings.LoginAttempts < MinLoginAttempts || settings.LoginAttempts > MaxLoginAttempts) {
 		return Settings{}, ErrInvalidLoginAttempts
 	}
@@ -789,9 +839,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
-		if _, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
-			"WHERE invalid_login_attempts <> 0 OR blocked_until IS NOT NULL"); err != nil {
+		unblocked, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
+			"WHERE invalid_login_attempts <> 0 OR blocked_until IS NOT NULL")
+		if err != nil {
 			return Settings{}, err
+		}
+		if unblocked.RowsAffected() > 0 {
+			s.forgetSignIns()
 		}
 	}
 	s.secretsMu.Lock()

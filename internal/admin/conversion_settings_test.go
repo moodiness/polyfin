@@ -24,7 +24,7 @@ func TestSettingsConversion(t *testing.T) {
 	}
 	t.Cleanup(encoder.Close)
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
-		o.Health.Encoder, o.Acceleration = encoder, "auto"
+		o.Health.Encoder = encoder
 	})
 	administrator := api.signedIn("administrator", true)
 	keys := []string{"encoderPreset", "h264Quality", "hevcQuality", "allowHevcEncoding", "hardwareAcceleration", "hardwareDecodingCodecs",
@@ -37,7 +37,7 @@ func TestSettingsConversion(t *testing.T) {
 		}
 		return got
 	}
-	defaults := map[string]any{"encoderPreset": "auto", "h264Quality": 0.0, "hevcQuality": 0.0, "allowHevcEncoding": false, "hardwareAcceleration": "",
+	defaults := map[string]any{"encoderPreset": "auto", "h264Quality": 0.0, "hevcQuality": 0.0, "allowHevcEncoding": false, "hardwareAcceleration": "auto",
 		"hardwareDecodingCodecs": []any{"h264", "hevc", "hevc_10bit", "vp9", "av1", "mpeg2video", "vc1"}, "toneMapping": true, "toneMappingAlgorithm": "auto",
 		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
 		"downmixBoost": 1.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSegments": 10.0}
@@ -45,10 +45,10 @@ func TestSettingsConversion(t *testing.T) {
 	if got := tuning(body); !reflect.DeepEqual(got, defaults) {
 		t.Errorf("defaults: %v", got)
 	}
-	// What conversions run on shows, read only: POLYFIN_HWACCEL's choice,
-	// no GPU here, and the software encoders FFmpeg has.
+	// What conversions run on shows, read only: no GPU here, and the
+	// software encoders FFmpeg has.
 	detected, _ := body["conversionHardware"].(map[string]any)
-	if detected["default"] != "auto" || detected["gpu"] != nil {
+	if _, found := detected["default"]; found || detected["gpu"] != nil {
 		t.Errorf("conversion hardware: %v", detected)
 	}
 	if want := slices.Contains(encoder.Encoders(), "libx264"); slices.Contains(detected["encoders"].([]any), any("libx264")) != want {
@@ -81,6 +81,7 @@ func TestSettingsConversion(t *testing.T) {
 		{"h264Quality", 52, "invalid_video_quality"},
 		{"hevcQuality", -1, "invalid_video_quality"},
 		{"hardwareAcceleration", "qsv", "invalid_hardware_acceleration"},
+		{"hardwareAcceleration", "", "invalid_hardware_acceleration"},
 		{"hardwareDecodingCodecs", []string{"vp8"}, "invalid_hardware_decoding_codecs"},
 		{"toneMappingAlgorithm", "gamma", "invalid_tone_mapping_algorithm"},
 		{"toneMappingPeak", 50, "invalid_tone_mapping_peak"},

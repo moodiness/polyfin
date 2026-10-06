@@ -82,11 +82,7 @@ In apps:
 
 The analysis also reads the version's chapters, which apps show and let you skip through. Apps get the chapters of the version the title was opened or played as. A version never played has no chapters yet. Chapters named as an intro or as credits also give that version's skip buttons (see [Segments of each version](skip-segments.md#segments-of-each-version)).
 
-Chapters come without chapter images unless you turn those on (see [Scrubbing thumbnails and chapter images](#scrubbing-thumbnails-and-chapter-images)).
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Show chapters** | **Settings › Playback** | On | Sends apps the chapters of the versions Polyfin analyzed. Chapters are read along with the analysis every first play needs, so they never delay playback. Turning this off only hides them from apps. |
+Chapters come without chapter images unless you turn those on (see [Scrubbing thumbnails and chapter images](#scrubbing-thumbnails-and-chapter-images)). Chapters are always sent: they are read along with the analysis every first play needs, so they never delay playback.
 
 ## Preparing playback in advance
 
@@ -102,7 +98,7 @@ Playback then starts at once instead of waiting a second or two for these reads.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Prepare playback in advance** | **Settings › Playback** | Off | Analyzes and reads ahead as described above. |
+| **Prepare playback in advance** | **Settings › Playback** | On | Analyzes and reads ahead as described above. |
 
 It costs a few more requests to the sources, also for titles opened but not played. Limits:
 
@@ -117,7 +113,7 @@ Five more settings change how Polyfin picks a version and how much video the ser
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Maximum time to analyze a version** | **Settings › Playback** | 45 seconds (5 to 120) | Bounds every ffprobe analysis, of files and of live streams. A source that does not answer in time is given up for 15 minutes, and Polyfin moves on to the next version sooner. |
+| **Maximum time to analyze a version** | **Settings › Playback** | 20 seconds (5 to 120) | Bounds every ffprobe analysis, of files and of live streams; a channel is analyzed for 8 seconds at most. A source that does not answer in time is given up for 15 minutes, and Polyfin moves on to the next version sooner. |
 | **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none, for titles and channels alike. Later versions analyzed before are still tried, as they cost nothing. |
 | **Prefer versions the app plays without conversion** | **Settings › Playback** | Off | Goes on through those versions until one plays on the app as it is or remuxed with its tracks copied. If none does, falls back to the first that plays at all. |
 | **Video conversions at once (0 = no limit)** | **Settings › Conversion** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |

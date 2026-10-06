@@ -368,7 +368,7 @@ func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
 		t.Errorf("without the user's permission, nor a device profile: %+v", answer)
 	}
 	p.permit(t, p.user, true, true, true)
-	p.switches(t, false, true)
+	p.switches(t, false)
 	if answer := p.ask(t, p.token, p.movie, chrome, nil); !answer.refused() {
 		t.Errorf("with the server's conversion off: %+v", answer)
 	}
@@ -379,7 +379,7 @@ func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
 	}
 	// Both allowed again, under 720p, a version plays converted.
 	needsEncoders(t)
-	p.switches(t, true, true)
+	p.switches(t, true)
 	p.group(t, p.user, 720)
 	if answer := p.ask(t, p.token, p.movie, chrome, nil); len(answer.MediaSources) == 0 || answer.MediaSources[0].SupportsDirectPlay {
 		t.Errorf("with conversion: %+v", answer)

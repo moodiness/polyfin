@@ -6,13 +6,13 @@ import (
 	"testing"
 )
 
-// The playback choices start as Polyfin played before they were settings:
-// 45 s per analysis, three versions tried, the first version that plays,
+// The playback choices start with playback prepared in advance, 20 s per
+// analysis, three versions tried, the first version that plays, and
 // conversions neither counted nor scaled down.
-func TestPlaybackChoicesDefaultToWhatPolyfinDidBefore(t *testing.T) {
+func TestPlaybackChoicesDefaults(t *testing.T) {
 	store := newStore(t)
 	got := store.Settings()
-	if got.AnalysisTimeout != 45 || got.VersionAttempts != 3 || got.PreferDirectPlay || got.MaxConversions != 0 || got.MaxConversionHeight != 0 {
+	if !got.PrepareAhead || got.AnalysisTimeout != 20 || got.VersionAttempts != 3 || got.PreferDirectPlay || got.MaxConversions != 0 || got.MaxConversionHeight != 0 {
 		t.Errorf("defaults: %+v", got)
 	}
 	if DefaultAnalysisTimeout != got.AnalysisTimeout || DefaultVersionAttempts != got.VersionAttempts || DefaultMaxConversions != got.MaxConversions {
@@ -22,7 +22,7 @@ func TestPlaybackChoicesDefaultToWhatPolyfinDidBefore(t *testing.T) {
 	if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", "fr"); err != nil {
 		t.Fatal(err)
 	}
-	if after := store.Settings(); after.AnalysisTimeout != 45 || after.VersionAttempts != 3 || after.PreferDirectPlay ||
+	if after := store.Settings(); !after.PrepareAhead || after.AnalysisTimeout != 20 || after.VersionAttempts != 3 || after.PreferDirectPlay ||
 		after.MaxConversions != 0 || after.MaxConversionHeight != 0 {
 		t.Errorf("after the setup: %+v", after)
 	}

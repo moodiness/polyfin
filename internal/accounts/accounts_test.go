@@ -94,16 +94,16 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if got := store.Settings(); got.Language != "en" || !got.Chapters || got.PrepareAhead ||
+	if got := store.Settings(); got.Language != "en" || !got.PrepareAhead ||
 		got.CatalogLimit != DefaultCatalogLimit || got.ChannelLimit != DefaultChannelLimit {
-		t.Errorf("defaults: language %q, chapters %v, prepare ahead %v, catalog limit %d, channel limit %d",
-			got.Language, got.Chapters, got.PrepareAhead, got.CatalogLimit, got.ChannelLimit)
+		t.Errorf("defaults: language %q, prepare ahead %v, catalog limit %d, channel limit %d",
+			got.Language, got.PrepareAhead, got.CatalogLimit, got.ChannelLimit)
 	}
 	if DefaultCatalogLimit != 2000 || DefaultChannelLimit != 10000 {
 		t.Errorf("default limits: %d and %d", DefaultCatalogLimit, DefaultChannelLimit)
 	}
 	want := store.Settings()
-	want.ServerName, want.QuickConnectEnabled, want.LegacyAuthorization, want.Language, want.Chapters, want.PrepareAhead = "Maison", false, true, "fr", false, true
+	want.ServerName, want.QuickConnectEnabled, want.LegacyAuthorization, want.Language, want.PrepareAhead = "Maison", false, true, "fr", false
 	want.CatalogLimit, want.ChannelLimit = 5000, 30000
 	want.PlayedPercent, want.ResumePercent = DefaultPlayedPercent, DefaultResumePercent
 	want.VersionListMinutes, want.CatalogRefreshMinutes = DefaultVersionListMinutes, DefaultCatalogRefreshMinutes
@@ -176,11 +176,11 @@ func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
 	ctx := t.Context()
 	defaults := store.Settings()
 	if !defaults.SkipButtons || !defaults.SimilarTitles || defaults.PlayedPercent != 90 || defaults.ResumePercent != 5 ||
-		defaults.VersionListMinutes != 10 || defaults.CatalogRefreshMinutes != 10 {
+		defaults.VersionListMinutes != 10 || defaults.CatalogRefreshMinutes != 60 {
 		t.Errorf("defaults: %+v", defaults)
 	}
-	if DefaultPlayedPercent != 90 || DefaultResumePercent != 5 || DefaultVersionListMinutes != 10 || DefaultCatalogRefreshMinutes != 10 {
-		t.Error("the default constants are not today's behavior")
+	if DefaultPlayedPercent != 90 || DefaultResumePercent != 5 || DefaultVersionListMinutes != 10 || DefaultCatalogRefreshMinutes != 60 {
+		t.Error("the default constants changed")
 	}
 	want := defaults
 	want.SkipButtons, want.SimilarTitles = false, false

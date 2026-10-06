@@ -625,13 +625,7 @@ func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
 		t.Errorf("asked %d, %d and %d times", a, b, len(d.publicMetaDB()))
 	}
 
-	// The order does not bring back a database POLYFIN_SEGMENTS leaves
-	// out, nor PublicMetaDB without a key.
-	s, _ = service(t, d, IntroDB, TheIntroDB)
-	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: []string{PublicMetaDB, TheIntroDB, IntroDB}})
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB}) || len(d.publicMetaDB()) != 1 {
-		t.Errorf("without PublicMetaDB: %+v, asked %d times", got, len(d.publicMetaDB()))
-	}
+	// The order does not bring PublicMetaDB in without a key.
 	s, _ = service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
 	useSettings(s, accounts.Settings{SegmentOrder: []string{PublicMetaDB, IntroDB, TheIntroDB}})
 	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{introDB}) || len(d.publicMetaDB()) != 1 {
@@ -639,22 +633,45 @@ func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
 	}
 }
 
-func TestOrderListsEveryDatabase(t *testing.T) {
-	for _, tc := range []struct {
-		on, saved, order, off []string
-	}{
-		{[]string{TheIntroDB, IntroDB, PublicMetaDB}, nil, []string{TheIntroDB, IntroDB, PublicMetaDB}, []string{}},
-		{[]string{PublicMetaDB, TheIntroDB}, nil, []string{PublicMetaDB, TheIntroDB, IntroDB}, []string{IntroDB}},
-		{[]string{PublicMetaDB, TheIntroDB}, []string{IntroDB, TheIntroDB, PublicMetaDB}, []string{IntroDB, TheIntroDB, PublicMetaDB}, []string{IntroDB}},
-		{nil, nil, []string{TheIntroDB, IntroDB, PublicMetaDB}, []string{TheIntroDB, IntroDB, PublicMetaDB}},
-	} {
-		order, off := New(nil, Sources(tc.on), "test", nil, nil).Order(tc.saved)
-		if !slices.Equal(order, tc.order) || !slices.Equal(off, tc.off) {
-			t.Errorf("%v, saved %v: order %v, off %v", tc.on, tc.saved, order, off)
-		}
+func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(introDBPath, http.StatusOK, `{"imdb_id":"tt0903747","intro":{"start_ms":40000,"end_ms":70000},"recap":null,"outro":null}`)
+	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
+	s, _ := service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
+	order := []string{PublicMetaDB, TheIntroDB, IntroDB}
+	// PublicMetaDB, first in the order but turned off, is never asked:
+	// TheIntroDB, the next one on, wins.
+	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order, SegmentSourcesOff: []string{PublicMetaDB}})
+	if !s.Asks() {
+		t.Error("asks nothing with two databases on")
 	}
-	if order, off := (*Service)(nil).Order(nil); len(order) != 3 || len(off) != 3 {
-		t.Errorf("no service: %v, %v", order, off)
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) ||
+		len(d.publicMetaDB()) != 0 {
+		t.Errorf("PublicMetaDB off: %+v, asked %d times", got, len(d.publicMetaDB()))
+	}
+	if a, b := d.calls(); a != 1 || b != 1 {
+		t.Errorf("asked %d and %d times", a, b)
+	}
+	// Turned back on, it is asked, and wins where it has segments.
+	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order, SegmentSourcesOff: []string{}})
+	if got := s.Segments(t.Context(), episode); len(got) == 0 || got[1] != (Segment{Type: Intro, Start: at(15), End: at(62)}) ||
+		len(d.publicMetaDB()) != 1 {
+		t.Errorf("PublicMetaDB back on: %+v, asked %d times", got, len(d.publicMetaDB()))
+	}
+	// With every database off, nothing is asked nor found.
+	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order, SegmentSourcesOff: order})
+	if s.Asks() {
+		t.Error("asks with every database off")
+	}
+	if got := s.Segments(t.Context(), Title{Item: accounts.ID{9}, IMDb: "tt0111161"}); got != nil {
+		t.Errorf("every database off: %+v", got)
+	}
+	if a, b := d.calls(); a != 1 || b != 1 || len(d.publicMetaDB()) != 1 {
+		t.Errorf("every database off: asked %d, %d and %d times", a, b, len(d.publicMetaDB()))
+	}
+	if (*Service)(nil).Asks() {
+		t.Error("no service asks")
 	}
 }
 

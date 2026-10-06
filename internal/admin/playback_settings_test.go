@@ -14,13 +14,13 @@ func TestSettingsPlaybackChoices(t *testing.T) {
 	choices := func(body map[string]any) [5]any {
 		return [5]any{body["analysisTimeout"], body["versionAttempts"], body["preferDirectPlay"], body["maxConversions"], body["maxConversionHeight"]}
 	}
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); choices(body) != [5]any{float64(45), float64(3), false, float64(0), float64(0)} {
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); choices(body) != [5]any{float64(20), float64(3), false, float64(0), float64(0)} {
 		t.Errorf("default settings: %v", body)
 	}
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	settings := maps.Clone(base)
-	maps.Copy(settings, map[string]any{"analysisTimeout": 20, "versionAttempts": 6, "preferDirectPlay": true, "maxConversions": 2, "maxConversionHeight": 720})
-	saved := [5]any{float64(20), float64(6), true, float64(2), float64(720)}
+	maps.Copy(settings, map[string]any{"analysisTimeout": 30, "versionAttempts": 6, "preferDirectPlay": true, "maxConversions": 2, "maxConversionHeight": 720})
+	saved := [5]any{float64(30), float64(6), true, float64(2), float64(720)}
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || choices(body) != saved {
 		t.Fatalf("saving the playback choices: %d %v", status, body)
 	}
@@ -31,7 +31,7 @@ func TestSettingsPlaybackChoices(t *testing.T) {
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || choices(body) != saved {
 		t.Errorf("saving without the playback choices: %d %v", status, body)
 	}
-	if got := api.store.Settings(); got.AnalysisTimeout != 20 || got.VersionAttempts != 6 || !got.PreferDirectPlay || got.MaxConversions != 2 || got.MaxConversionHeight != 720 {
+	if got := api.store.Settings(); got.AnalysisTimeout != 30 || got.VersionAttempts != 6 || !got.PreferDirectPlay || got.MaxConversions != 2 || got.MaxConversionHeight != 720 {
 		t.Errorf("stored after a save without them: %+v", got)
 	}
 	for _, tc := range []struct {

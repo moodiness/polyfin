@@ -127,7 +127,7 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		if !streams {
 			dto.MediaStreams = nil
 		}
-	} else if dto.Chapters != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) && h.Accounts.Settings().Chapters {
+	} else if dto.Chapters != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
 		// Only what is known: a listing never asks addons for streams.
 		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
 	}

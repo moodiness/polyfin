@@ -1,4 +1,5 @@
 import type en from '../en/settings'
+import type { RangeText } from '../en/settings'
 
 const settings: typeof en = {
   settings: {
@@ -23,7 +24,8 @@ const settings: typeof en = {
     title: 'Paramètres',
     description: 'Options qui s’appliquent à l’ensemble du serveur.',
     serverName: 'Nom du serveur',
-    serverNameHelp: 'De 1 à 64 caractères, affiché dans les applications Jellyfin.',
+    serverNameHelp: (r: RangeText) =>
+      `De ${r.min} à ${r.max} caractères, affiché dans les applications Jellyfin.`,
     quickConnect: 'Autoriser Quick Connect',
     quickConnectHelp:
       'Permet aux applications TV et mobiles de se connecter avec un code à 6 chiffres autorisé ici.',
@@ -36,30 +38,24 @@ const settings: typeof en = {
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
-    chapters: 'Afficher les chapitres',
-    chaptersHelp:
-      'Polyfin lit les chapitres en même temps qu’il analyse le fichier, ce qu’il fait de toute façon avant une première lecture : ils ne retardent donc jamais la lecture. Désactivés, ils sont simplement masqués dans les applications.',
     prepareAhead: 'Préparer la lecture à l’avance',
     prepareAheadHelp:
       'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. Il liste aussi à l’avance les versions des titres de « Continuer de regarder » et « À suivre », pour que leur page les affiche aussitôt. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
     transcoding: 'Conversion (transcodage)',
     transcodingHelp:
       'Convertit l’image et le son pour les applications qui ne savent pas lire un fichier tel quel. Si cette option est désactivée, les fichiers sont lus tels quels ou simplement présentés autrement, sans toucher à l’image ni au son. Un titre qu’une application ne peut pas lire ainsi ne démarrera pas sur cette application.',
-    downloads: 'Téléchargements',
-    downloadsHelp:
-      'Permet aux utilisateurs d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion. Si cette option est désactivée, personne ne peut télécharger, quelle que soit son autorisation personnelle.',
     analysisTimeout: 'Temps max pour analyser une version',
-    analysisTimeoutHelp:
-      'Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. De 5 à 120 secondes ; 45 par défaut.',
+    analysisTimeoutHelp: (r: RangeText) =>
+      `Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. Une chaîne est analysée 8 secondes au plus. De ${r.min} à ${r.max} secondes ; ${r.default} par défaut.`,
     versionAttempts: 'Versions essayées quand une ne marche pas',
-    versionAttemptsHelp:
-      'Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De 1 à 10 ; 3 par défaut.',
+    versionAttemptsHelp: (r: RangeText) =>
+      `Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
-    maxConversionsHelp:
-      'Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De 0 à 32 ; 0 par défaut.',
+    maxConversionsHelp: (r: RangeText) =>
+      `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     maxConversionHeight: 'Qualité max des vidéos converties',
     maxConversionHeightHelp:
       'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p.',
@@ -79,8 +75,7 @@ const settings: typeof en = {
       },
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
-        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. La variable d’environnement POLYFIN_HWACCEL donne toujours la valeur par défaut ; un choix fait ici la remplace dès l’enregistrement, sans redémarrer.',
-      hardwareDefault: (value: string) => `Par défaut, selon POLYFIN_HWACCEL (${value})`,
+        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Un changement s’applique dès l’enregistrement, sans redémarrer.',
       hardware: {
         auto: 'Automatique : NVIDIA, sinon AMD ou Intel',
         nvenc: 'NVIDIA (NVENC)',
@@ -130,8 +125,8 @@ const settings: typeof en = {
       },
       h264Quality: 'Qualité H.264 (0 = selon le débit)',
       hevcQuality: 'Qualité HEVC (0 = selon le débit)',
-      qualityHelp:
-        'Un nombre plus petit donne une meilleure image, mais plus de données ; le débit reste le maximum. 0 vise seulement le débit. Jellyfin utilise 23 pour H.264 et 28 pour HEVC. 0, ou de 1 à 51 ; 0 par défaut.',
+      qualityHelp: (r: RangeText) =>
+        `Un nombre plus petit donne une meilleure image, mais plus de données ; le débit reste le maximum. 0 vise seulement le débit. Jellyfin utilise 23 pour H.264 et 28 pour HEVC. 0, ou de ${r.min} à ${r.max} ; ${r.default} par défaut.`,
       qualityIgnored:
         'Cette carte graphique n’accepte pas de niveau de qualité : elle continue de viser le débit.',
       allowHevcEncoding: 'Autoriser la conversion en HEVC',
@@ -157,8 +152,8 @@ const settings: typeof en = {
       },
       toneMappingPeak: 'Luminosité max en nits (0 = celle de la vidéo)',
       toneMappingDesat: 'Désaturation des zones claires (0 = aucune)',
-      toneMappingPeakHelp:
-        'Sur le processeur seulement. La luminosité max remplace le niveau le plus clair annoncé par la vidéo : 0, ou de 100 à 10 000. La désaturation atténue la couleur des parties très claires : de 0 à 10. Les deux valent 0 par défaut.',
+      toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>
+        `Seulement quand le processeur convertit le HDR en SDR : une carte graphique qui le fait les ignore. La luminosité max remplace le niveau le plus clair annoncé par la vidéo : 0, ou de ${peak.min} à ${peak.max} ; ${peak.default} par défaut. La désaturation atténue la couleur des parties très claires : de ${desat.min} à ${desat.max} ; ${desat.default} par défaut.`,
       processorCannotToneMap:
         'FFmpeg ne sait pas convertir le HDR sur le processeur de ce serveur.',
       deinterlaceMethod: 'Méthode de désentrelacement',
@@ -180,8 +175,8 @@ const settings: typeof en = {
         Ac4: 'AC-4',
       },
       downmixBoost: 'Volume du mixage stéréo',
-      downmixBoostHelp:
-        'Un mixage en stéréo sonne souvent moins fort : le volume est multiplié par ce nombre. De 0,5 à 3 ; 1 (aucun changement) par défaut. Jellyfin utilise 2.',
+      downmixBoostHelp: (r: RangeText) =>
+        `Un mixage en stéréo sonne souvent moins fort : le volume est multiplié par ce nombre. De ${r.min} à ${r.max} ; ${r.default} (aucun changement) par défaut. Jellyfin utilise 2.`,
       maxAudioChannels: 'Nombre max de canaux audio',
       maxAudioChannelsHelp:
         'Le son converti garde au plus ce nombre de canaux, même si l’application en accepte plus.',
@@ -194,22 +189,22 @@ const settings: typeof en = {
               ? 'Stéréo'
               : '5.1',
       audioBitratePerChannel: 'Débit audio par canal en kb/s (0 = automatique)',
-      audioBitratePerChannelHelp:
-        'Automatique donne 192 kb/s en stéréo, et 64 kb/s par canal au-delà. 0, ou de 32 à 320 ; 0 par défaut.',
+      audioBitratePerChannelHelp: (r: RangeText) =>
+        `Automatique donne 192 kb/s en stéréo, et 64 kb/s par canal au-delà. 0, ou de ${r.min} à ${r.max} ; ${r.default} par défaut.`,
       encodingThreads: 'Threads du processeur par conversion (0 = automatique)',
-      encodingThreadsHelp:
-        'Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De 0 à 64 ; 0 laisse FFmpeg choisir.',
+      encodingThreadsHelp: (r: RangeText) =>
+        `Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De ${r.min} à ${r.max} ; 0 laisse FFmpeg choisir.`,
       aheadSegments: 'Segments préparés à l’avance',
       aheadSegmentsHelp:
         'Polyfin prépare une vidéo au plus ce nombre de segments, d’environ 6 secondes chacun, au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De 1 à 60 ; 10 par défaut.',
     },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
-    catalogLimitHelp:
-      'Certains catalogues sont presque sans fin : Polyfin arrête donc de lire un catalogue après ce nombre de titres. Un nombre plus élevé affiche plus de titres, mais les listes se chargent plus lentement et l’addon reçoit plus de demandes. De 100 à 20 000 ; 2 000 par défaut.',
+    catalogLimitHelp: (r: RangeText) =>
+      `Certains catalogues sont presque sans fin : Polyfin arrête donc de lire un catalogue après ce nombre de titres. Un nombre plus élevé affiche plus de titres, mais les listes se chargent plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     channelLimit: 'Chaînes lues par catalogue de TV en direct',
-    channelLimitHelp:
-      'Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De 100 à 50 000 ; 10 000 par défaut.',
+    channelLimitHelp: (r: RangeText) =>
+      `Polyfin arrête de lire un catalogue de TV en direct après ce nombre de chaînes, et lit au plus ce nombre de programmes par jour pour le guide. Un nombre plus élevé affiche plus de contenu, mais se charge plus lentement et l’addon reçoit plus de demandes. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     skipButtons: 'Boutons « Passer l’intro » et « Passer le générique »',
     skipButtonsHelp:
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
@@ -220,28 +215,23 @@ const settings: typeof en = {
     theIntroDbKeyHelp:
       'Relève la limite quotidienne de TheIntroDB et inclut vos propres contributions. La lecture fonctionne sans elle.',
     segmentSources: {
-      label: 'Ordre des sources de repères',
-      help: 'Pour chaque type de passage (intro, résumé, générique, aperçu), la première source de cette liste qui le connaît l’emporte ; les suivantes complètent.',
-      offHelp:
-        'Les sources désactivées par POLYFIN_SEGMENTS ne sont jamais consultées, quelle que soit leur place.',
-      on: 'Active',
+      label: 'Sources de repères',
+      help: 'Pour chaque type de passage (intro, résumé, générique, aperçu), la première source activée de cette liste qui le connaît l’emporte ; les suivantes complètent. Les sources désactivées ne sont jamais consultées.',
+      turnOn: (name: string) => `Consulter ${name}`,
       needsKey: 'Clé requise',
-      off: 'Désactivée (POLYFIN_SEGMENTS)',
-      reset: 'Rétablir l’ordre par défaut',
-      resetDone: 'Ordre par défaut rétabli. Enregistrez pour l’appliquer.',
     },
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
     playedPercent: 'Marqué comme vu après (%)',
-    playedPercentHelp:
-      'Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De 50 à 100 ; 90 par défaut, comme dans Jellyfin.',
+    playedPercentHelp: (r: RangeText) =>
+      `Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin.`,
     resumePercent: 'Point de reprise gardé après (%)',
-    resumePercentHelp:
-      'L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de « Marqué comme vu après ». De 0 à 50 ; 5 par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.',
+    resumePercentHelp: (r: RangeText) =>
+      `L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de « Marqué comme vu après ». De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.`,
     versionListMinutes: 'Garder les listes de versions pendant (minutes)',
-    versionListMinutesHelp:
-      'Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De 1 à 360 ; 10 par défaut.',
+    versionListMinutesHelp: (r: RangeText) =>
+      `Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
     catalogRefreshMinutesHelp:
       'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',
@@ -249,11 +239,11 @@ const settings: typeof en = {
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
-    loginAttemptsHelp:
-      'Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de 3 à 20.',
+    loginAttemptsHelp: (r: RangeText) =>
+      `Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
     inactiveDeviceDays: 'Déconnecter les appareils inutilisés depuis (jours, 0 = jamais)',
-    inactiveDeviceDaysHelp:
-      'Les applications Jellyfin qui n’ont pas servi depuis ce nombre de jours sont déconnectées et doivent se reconnecter. La vérification a lieu toutes les heures. La connexion à cette page d’administration n’est pas concernée. De 0 à 365.',
+    inactiveDeviceDaysHelp: (r: RangeText) =>
+      `Les applications Jellyfin qui n’ont pas servi depuis ce nombre de jours sont déconnectées et doivent se reconnecter. La vérification a lieu toutes les heures. La connexion à cette page d’administration n’est pas concernée. De ${r.min} à ${r.max}.`,
     detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
@@ -274,21 +264,21 @@ const settings: typeof en = {
     chapterImagesHelp:
       'Les applications montrent une image pour chaque chapitre d’un titre, dans sa liste de scènes. Polyfin prend l’image lue la plus proche du début de chaque chapitre, avec les mêmes lectures que les miniatures, une fois le titre regardé.',
     thumbnailStorage: 'Place pour les images (Go)',
-    thumbnailStorageHelp:
-      'Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De 1 à 50 ; 2 par défaut.',
+    thumbnailStorageHelp: (r: RangeText) =>
+      `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     recordingsTitle: 'Enregistrements',
     recordingsFolder: (folder: string) => `Les enregistrements sont gardés dans ${folder}.`,
     recordingsOff:
       'L’enregistrement est désactivé. Indiquez un dossier dans POLYFIN_RECORDINGS_DIR pour l’activer.',
     recordingPrePadding: 'Commencer les enregistrements avant (minutes)',
-    recordingPrePaddingHelp:
-      'Combien de minutes avant l’émission un enregistrement commence. De 0 à 60 ; 0 par défaut.',
+    recordingPrePaddingHelp: (r: RangeText) =>
+      `Combien de minutes avant l’émission un enregistrement commence. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     recordingPostPadding: 'Continuer les enregistrements après (minutes)',
-    recordingPostPaddingHelp:
-      'Combien de minutes après l’émission un enregistrement continue. De 0 à 60 ; 0 par défaut.',
+    recordingPostPaddingHelp: (r: RangeText) =>
+      `Combien de minutes après l’émission un enregistrement continue. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
-    recordingRetentionDaysHelp:
-      'Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De 0 à 3 650.',
+    recordingRetentionDaysHelp: (r: RangeText) =>
+      `Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De ${r.min} à ${r.max}.`,
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp:
       'À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. De 1 à 168 ; 12 par défaut.',
@@ -297,10 +287,10 @@ const settings: typeof en = {
     backupsOff:
       'Les sauvegardes sont désactivées. Indiquez dans POLYFIN_BACKUP_DIR un dossier du conteneur, monté depuis le serveur, puis redémarrez Polyfin pour les activer.',
     backupHour: 'Sauvegarder chaque jour à',
-    backupHourHelp: 'Dans le fuseau horaire du serveur. 4:00 par défaut.',
+    backupHourHelp: (hour: string) => `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     backupsKept: 'Sauvegardes à conserver',
-    backupsKeptHelp:
-      'Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De 1 à 90 ; 7 par défaut.',
+    backupsKeptHelp: (r: RangeText) =>
+      `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     lastBackup: 'Dernière sauvegarde',
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
@@ -328,7 +318,7 @@ const settings: typeof en = {
       variables: 'Variables d’environnement',
     },
     variablesHelp:
-      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
+      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. POLYFIN_HWACCEL et POLYFIN_SEGMENTS ne sont lues qu’au premier démarrage, comme valeurs par défaut de la carte graphique et des sources de repères : modifiez celles-ci dans les paramètres. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
     value: 'Valeur utilisée',
     defaultValue: 'Par défaut',
     setValue: 'Définie',

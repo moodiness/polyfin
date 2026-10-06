@@ -1,21 +1,12 @@
 import type { ReactNode } from 'react'
-import {
-  aheadSegmentsRange,
-  audioBitratePerChannelRange,
-  audioChannelLimits,
-  conversionHeights,
-  deinterlaceMethods,
-  downmixAlgorithms,
-  downmixBoostRange,
-  encoderPresets,
-  encodingThreadsRange,
-  hardwareAccelerations,
-  hardwareDecodingCodecs,
-  maxConversionsRange,
-  toneMappingAlgorithms,
-  toneMappingDesatRange,
-  toneMappingPeakRange,
-  videoQualityRange,
+import type {
+  DeinterlaceMethod,
+  DownmixAlgorithm,
+  EncoderPreset,
+  HardwareAcceleration,
+  HardwareDecodingCodec,
+  Settings,
+  ToneMappingAlgorithm,
 } from '@/api'
 import { useI18n } from '@/i18n'
 import { Checkbox, Field, FieldError, NumberInput, Select, StatusPill } from '@/ui'
@@ -25,9 +16,17 @@ import type { SectionFormApi } from './SectionForm'
 /**
  * The Conversion section: whether and how much the server converts, the graphics card and what
  * it was found to do, then video, HDR, interlaced video, audio and performance. Options the
- * hardware cannot do are disabled.
+ * hardware cannot do are disabled; the tone mapping peak and desaturation, which only the
+ * processor uses, show only when no graphics card tone maps.
  */
-export default function ConversionSection({ form, update, error, number }: SectionFormApi) {
+export default function ConversionSection({
+  form,
+  update,
+  error,
+  number,
+  range,
+  limits,
+}: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const c = s.conversion
@@ -36,9 +35,12 @@ export default function ConversionSection({ form, update, error, number }: Secti
   const encodesHevc =
     hardware.encoders.includes('libx265') ||
     (gpu?.encoders.some((encoder) => encoder.startsWith('hevc_')) ?? false)
-  const toneMapsAnywhere = hardware.toneMapping || (gpu?.toneMapping ?? false)
+  const gpuToneMaps = gpu?.toneMapping ?? false
+  const toneMapsAnywhere = hardware.toneMapping || gpuToneMaps
   const decodedOnGpu = (codec: string) =>
     form.hardwareDecodingCodecs.some((decoded) => decoded === codec)
+  /** The values the server accepts for a setting. */
+  const choices = <T,>(name: keyof Settings) => (form.bounds[name]?.choices ?? []) as T[]
 
   return (
     <>
@@ -53,12 +55,11 @@ export default function ConversionSection({ form, update, error, number }: Secti
         <FieldRow
           anchor="max-conversions"
           label={s.maxConversions}
-          help={s.maxConversionsHelp}
+          help={s.maxConversionsHelp(range('maxConversions'))}
           error={error('max-conversions')}
         >
           <NumberInput
-            min={maxConversionsRange.min}
-            max={maxConversionsRange.max}
+            {...limits('maxConversions')}
             step={1}
             {...number('max-conversions', form.maxConversions, (value) =>
               update({ maxConversions: Math.trunc(value) }),
@@ -73,7 +74,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.maxConversionHeight}
-            options={conversionHeights.map((height) => ({
+            options={choices<number>('maxConversionHeight').map((height) => ({
               value: height,
               label: height === 0 ? s.conversionHeightOriginal : s.conversionHeight(height),
             }))}
@@ -92,12 +93,9 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.hardwareAcceleration}
-            options={hardwareAccelerations.map((choice) => ({
+            options={choices<HardwareAcceleration>('hardwareAcceleration').map((choice) => ({
               value: choice,
-              label:
-                choice === ''
-                  ? c.hardwareDefault(c.hardware[hardware.default as 'auto'] ?? hardware.default)
-                  : c.hardware[choice],
+              label: c.hardware[choice],
             }))}
             onValue={(hardwareAcceleration) => update({ hardwareAcceleration })}
           />
@@ -145,7 +143,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
               {gpu === null ? c.hardwareDecodingNoGpu : c.hardwareDecodingHelp}
             </p>
             <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {hardwareDecodingCodecs.map((codec) => (
+              {choices<HardwareDecodingCodec>('hardwareDecodingCodecs').map((codec, _, all) => (
                 <Checkbox
                   key={codec}
                   label={c.codecs[codec]}
@@ -153,7 +151,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
                   disabled={gpu === null || (codec === 'hevc_10bit' && !decodedOnGpu('hevc'))}
                   onChange={(checked) =>
                     update({
-                      hardwareDecodingCodecs: hardwareDecodingCodecs.filter((other) =>
+                      hardwareDecodingCodecs: all.filter((other) =>
                         other === codec ? checked : decodedOnGpu(other),
                       ),
                     })
@@ -179,7 +177,10 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.encoderPreset}
-            options={encoderPresets.map((preset) => ({ value: preset, label: c.presets[preset] }))}
+            options={choices<EncoderPreset>('encoderPreset').map((preset) => ({
+              value: preset,
+              label: c.presets[preset],
+            }))}
             onValue={(encoderPreset) => update({ encoderPreset })}
             className="max-w-xs"
           />
@@ -192,8 +193,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
               className="[&_label]:text-[15px]"
             >
               <NumberInput
-                min={0}
-                max={videoQualityRange.max}
+                {...limits('h264Quality')}
                 step={1}
                 {...number('h264-quality', form.h264Quality, (value) =>
                   update({ h264Quality: Math.trunc(value) }),
@@ -206,8 +206,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
               className="[&_label]:text-[15px]"
             >
               <NumberInput
-                min={0}
-                max={videoQualityRange.max}
+                {...limits('hevcQuality')}
                 step={1}
                 {...number('hevc-quality', form.hevcQuality, (value) =>
                   update({ hevcQuality: Math.trunc(value) }),
@@ -215,7 +214,9 @@ export default function ConversionSection({ form, update, error, number }: Secti
               />
             </Field>
           </div>
-          <p className="mt-2 max-w-[60ch] text-small text-ink-3">{c.qualityHelp}</p>
+          <p className="mt-2 max-w-[60ch] text-small text-ink-3">
+            {c.qualityHelp(range('h264Quality'))}
+          </p>
           {gpu?.method === 'vaapi' && !gpu.qvbr && (
             <p className="mt-1 text-small text-warn">{c.qualityIgnored}</p>
           )}
@@ -252,60 +253,60 @@ export default function ConversionSection({ form, update, error, number }: Secti
           <Select
             value={form.toneMappingAlgorithm}
             disabled={!form.toneMapping || !toneMapsAnywhere}
-            options={toneMappingAlgorithms.map((algorithm) => ({
+            options={choices<ToneMappingAlgorithm>('toneMappingAlgorithm').map((algorithm) => ({
               value: algorithm,
               label: c.algorithms[algorithm],
               disabled:
-                algorithm === 'bt2390' &&
-                !(gpu?.toneMapping ?? false) &&
-                form.toneMappingAlgorithm !== 'bt2390',
+                algorithm === 'bt2390' && !gpuToneMaps && form.toneMappingAlgorithm !== 'bt2390',
             }))}
             onValue={(toneMappingAlgorithm) => update({ toneMappingAlgorithm })}
             className="max-w-xs"
           />
         </FieldRow>
-        <SettingRow anchor="tone-mapping-peak">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field
-              label={c.toneMappingPeak}
-              error={error('tone-mapping-peak-value')}
-              className="[&_label]:text-[15px]"
-            >
-              <NumberInput
-                min={0}
-                max={toneMappingPeakRange.max}
-                step={1}
-                disabled={!form.toneMapping || !hardware.toneMapping}
-                {...number('tone-mapping-peak-value', form.toneMappingPeak, (value) =>
-                  update({ toneMappingPeak: Math.trunc(value) }),
-                )}
-              />
-            </Field>
-            <Field
-              label={c.toneMappingDesat}
-              error={error('tone-mapping-desat')}
-              className="[&_label]:text-[15px]"
-            >
-              <NumberInput
-                min={toneMappingDesatRange.min}
-                max={toneMappingDesatRange.max}
-                step={0.1}
-                disabled={!form.toneMapping || !hardware.toneMapping}
-                {...number('tone-mapping-desat', form.toneMappingDesat, (value) =>
-                  update({ toneMappingDesat: value }),
-                )}
-              />
-            </Field>
-          </div>
-          <p className="mt-2 max-w-[60ch] text-small text-ink-3">
-            {hardware.toneMapping ? c.toneMappingPeakHelp : c.processorCannotToneMap}
-          </p>
-          {error('tone-mapping-peak') && (
-            <div className="mt-2">
-              <FieldError>{error('tone-mapping-peak')}</FieldError>
+        {!gpuToneMaps && (
+          <SettingRow anchor="tone-mapping-peak">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label={c.toneMappingPeak}
+                error={error('tone-mapping-peak-value')}
+                className="[&_label]:text-[15px]"
+              >
+                <NumberInput
+                  {...limits('toneMappingPeak')}
+                  step={1}
+                  disabled={!form.toneMapping || !hardware.toneMapping}
+                  {...number('tone-mapping-peak-value', form.toneMappingPeak, (value) =>
+                    update({ toneMappingPeak: Math.trunc(value) }),
+                  )}
+                />
+              </Field>
+              <Field
+                label={c.toneMappingDesat}
+                error={error('tone-mapping-desat')}
+                className="[&_label]:text-[15px]"
+              >
+                <NumberInput
+                  {...limits('toneMappingDesat')}
+                  step={0.1}
+                  disabled={!form.toneMapping || !hardware.toneMapping}
+                  {...number('tone-mapping-desat', form.toneMappingDesat, (value) =>
+                    update({ toneMappingDesat: value }),
+                  )}
+                />
+              </Field>
             </div>
-          )}
-        </SettingRow>
+            <p className="mt-2 max-w-[60ch] text-small text-ink-3">
+              {hardware.toneMapping
+                ? c.toneMappingPeakHelp(range('toneMappingPeak'), range('toneMappingDesat'))
+                : c.processorCannotToneMap}
+            </p>
+            {error('tone-mapping-peak') && (
+              <div className="mt-2">
+                <FieldError>{error('tone-mapping-peak')}</FieldError>
+              </div>
+            )}
+          </SettingRow>
+        )}
       </SettingsGroup>
 
       <SettingsGroup title={c.groups.interlaced}>
@@ -317,7 +318,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.deinterlaceMethod}
-            options={deinterlaceMethods.map((method) => ({
+            options={choices<DeinterlaceMethod>('deinterlaceMethod').map((method) => ({
               value: method,
               label: c.deinterlacers[method],
               disabled: method === 'bwdif' && !hardware.bwdif && form.deinterlaceMethod !== 'bwdif',
@@ -344,7 +345,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.downmixAlgorithm}
-            options={downmixAlgorithms.map((algorithm) => ({
+            options={choices<DownmixAlgorithm>('downmixAlgorithm').map((algorithm) => ({
               value: algorithm,
               label: c.downmixes[algorithm],
             }))}
@@ -355,12 +356,11 @@ export default function ConversionSection({ form, update, error, number }: Secti
         <FieldRow
           anchor="downmix-boost"
           label={c.downmixBoost}
-          help={c.downmixBoostHelp}
+          help={c.downmixBoostHelp(range('downmixBoost'))}
           error={error('downmix-boost')}
         >
           <NumberInput
-            min={downmixBoostRange.min}
-            max={downmixBoostRange.max}
+            {...limits('downmixBoost')}
             step={0.1}
             {...number('downmix-boost', form.downmixBoost, (value) =>
               update({ downmixBoost: value }),
@@ -375,7 +375,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
         >
           <Select
             value={form.maxAudioChannels}
-            options={audioChannelLimits.map((channels) => ({
+            options={choices<number>('maxAudioChannels').map((channels) => ({
               value: channels,
               label: c.audioChannels(channels),
             }))}
@@ -386,12 +386,11 @@ export default function ConversionSection({ form, update, error, number }: Secti
         <FieldRow
           anchor="audio-bitrate-per-channel"
           label={c.audioBitratePerChannel}
-          help={c.audioBitratePerChannelHelp}
+          help={c.audioBitratePerChannelHelp(range('audioBitratePerChannel'))}
           error={error('audio-bitrate-per-channel')}
         >
           <NumberInput
-            min={0}
-            max={audioBitratePerChannelRange.max}
+            {...limits('audioBitratePerChannel')}
             step={1}
             {...number('audio-bitrate-per-channel', form.audioBitratePerChannel, (value) =>
               update({ audioBitratePerChannel: Math.trunc(value) }),
@@ -404,12 +403,11 @@ export default function ConversionSection({ form, update, error, number }: Secti
         <FieldRow
           anchor="encoding-threads"
           label={c.encodingThreads}
-          help={c.encodingThreadsHelp}
+          help={c.encodingThreadsHelp(range('encodingThreads'))}
           error={error('encoding-threads')}
         >
           <NumberInput
-            min={encodingThreadsRange.min}
-            max={encodingThreadsRange.max}
+            {...limits('encodingThreads')}
             step={1}
             {...number('encoding-threads', form.encodingThreads, (value) =>
               update({ encodingThreads: Math.trunc(value) }),
@@ -423,8 +421,7 @@ export default function ConversionSection({ form, update, error, number }: Secti
           error={error('ahead-segments')}
         >
           <NumberInput
-            min={aheadSegmentsRange.min}
-            max={aheadSegmentsRange.max}
+            {...limits('aheadSegments')}
             step={1}
             {...number('ahead-segments', form.aheadSegments, (value) =>
               update({ aheadSegments: Math.trunc(value) }),

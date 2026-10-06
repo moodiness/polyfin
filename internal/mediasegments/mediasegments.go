@@ -126,11 +126,11 @@ var ErrKeyRefused = errors.New("API key refused")
 // Service finds the segments of titles.
 type Service struct {
 	db *pgxpool.Pool
-	// sources are the databases asked, in the order of preference
-	// POLYFIN_SEGMENTS gives them.
+	// sources are the databases the service knows, at their addresses;
+	// the settings choose which are asked, and in what order.
 	sources []Source
-	// settings hold the keys and the saved order of preference, read at
-	// each request so that a change applies at once.
+	// settings hold the keys, the order of preference and the databases
+	// turned off, read at each request so that a change applies at once.
 	settings  func() accounts.Settings
 	client    *http.Client
 	userAgent string
@@ -147,42 +147,30 @@ type Service struct {
 	limited map[string]time.Time
 }
 
-// New returns a service asking sources, in order of preference unless the
-// settings save another, and keeping their answers in db. Without sources
-// it finds nothing. PublicMetaDB is asked only while settings hold a key
-// for it.
+// New returns a service asking those of sources the settings turn on, in
+// the order of preference they save, and keeping their answers in db.
+// PublicMetaDB is asked only while settings hold a key for it.
 func New(db *pgxpool.Pool, sources []Source, version string, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, sources: sources, settings: settings, client: &http.Client{}, userAgent: "Polyfin/" + version, logger: logger,
 		now: time.Now, refused: map[string]string{}, limited: map[string]time.Time{}}
 }
 
-// Asks reports whether a segment database is asked at all; a nil service
-// asks none.
+// Asks reports whether the settings turn a segment database on; a nil
+// service asks none.
 func (s *Service) Asks() bool {
-	return s != nil && len(s.sources) > 0
+	return s != nil && len(s.on(s.settings())) > 0
 }
 
-// Order returns the order of preference of every segment database: saved
-// when it is not empty, else that of the sources asked followed by the
-// others; and off, the databases not asked whatever the order, in the
-// order of accounts.SegmentSources. A nil service asks none.
-func (s *Service) Order(saved []string) (order, off []string) {
-	var on []string
-	if s != nil {
-		for _, source := range s.sources {
-			on = append(on, source.Name)
-		}
-	}
-	off = []string{}
-	for _, name := range accounts.SegmentSources {
-		if !slices.Contains(on, name) {
-			off = append(off, name)
-		}
-	}
-	if len(saved) > 0 {
-		return slices.Clone(saved), off
-	}
-	return append(on, off...), off
+// on are the sources settings turn on, in the order of preference they
+// save; an empty order keeps that of the sources known.
+func (s *Service) on(settings accounts.Settings) []Source {
+	sources := slices.DeleteFunc(slices.Clone(s.sources), func(source Source) bool {
+		return slices.Contains(settings.SegmentSourcesOff, source.Name)
+	})
+	slices.SortStableFunc(sources, func(a, b Source) int {
+		return cmp.Compare(rank(settings.SegmentOrder, a.Name), rank(settings.SegmentOrder, b.Name))
+	})
+	return sources
 }
 
 // mark is a segment as a database gave it.
@@ -233,18 +221,12 @@ func (s *Service) Segments(ctx context.Context, title Title) []Segment {
 	return merge(answers, sources, title.Runtime)
 }
 
-// used are the sources whose answers count, in the order of preference the
-// settings save, if any: all of them, but PublicMetaDB while no key for it
-// is saved.
+// used are the sources whose answers count: those the settings turn on, in
+// their order, but PublicMetaDB while no key for it is saved.
 func (s *Service) used(settings accounts.Settings) []Source {
-	sources := slices.Clone(s.sources)
+	sources := s.on(settings)
 	if settings.PublicMetaDBKey == "" {
 		sources = slices.DeleteFunc(sources, func(source Source) bool { return source.Name == PublicMetaDB })
-	}
-	if len(settings.SegmentOrder) > 0 {
-		slices.SortStableFunc(sources, func(a, b Source) int {
-			return cmp.Compare(rank(settings.SegmentOrder, a.Name), rank(settings.SegmentOrder, b.Name))
-		})
 	}
 	return sources
 }

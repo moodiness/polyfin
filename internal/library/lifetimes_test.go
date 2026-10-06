@@ -120,22 +120,22 @@ func TestVersionListsAreKeptForTheirSetLife(t *testing.T) {
 
 func TestCatalogPagesAreKeptForTheirSetLife(t *testing.T) {
 	e := newLifetimeEnv(t)
-	if got := e.users.Settings().CatalogRefreshMinutes; got != 10 {
+	if got := e.users.Settings().CatalogRefreshMinutes; got != 60 {
 		t.Fatalf("default refresh: %d minutes", got)
 	}
 	e.list()
 	if got := e.requests("catalog/"); got != 1 {
 		t.Fatalf("first listing: %d catalog requests", got)
 	}
-	e.wait(9 * time.Minute)
+	e.wait(59 * time.Minute)
 	e.list()
 	if got := e.requests("catalog/"); got != 1 {
-		t.Errorf("9 minutes later, by default: %d catalog requests", got)
+		t.Errorf("59 minutes later, by default: %d catalog requests", got)
 	}
 	e.wait(2 * time.Minute)
 	e.list()
 	if got := e.requests("catalog/"); got != 2 {
-		t.Errorf("11 minutes later, by default: %d catalog requests", got)
+		t.Errorf("61 minutes later, by default: %d catalog requests", got)
 	}
 
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 24 * 60 })
