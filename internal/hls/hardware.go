@@ -11,14 +11,15 @@ import (
 	"time"
 )
 
-// Hardware is a GPU FFmpeg decodes and encodes video on. Where it can,
-// decoded frames stay in the GPU's memory until they are encoded: scaled
-// there in SDR (see Resident), tone mapped there from Vulkan frames (see
-// VulkanDecoding). Otherwise, and for burned subtitles, tone mapping on
-// the processor and decoding left to the processor, frames come back to
-// memory for the filters and go to the GPU again to be encoded. A GPU that
-// cannot decode a codec leaves it to FFmpeg's own decoder, and the
-// conversion looks the same either way.
+// Hardware is a GPU FFmpeg decodes and encodes video on. Decoded frames
+// either stay in the GPU's memory until they are encoded, scaled there in
+// SDR (see Resident) and tone mapped there from Vulkan frames (see
+// VulkanDecoding), or come back to memory for the filters and go to the
+// GPU again to be encoded: Polyfin times both at startup and keeps the
+// faster for each kind of conversion. Burned subtitles, tone mapping on
+// the processor and decoding left to the processor always go through
+// memory. A GPU that cannot decode a codec leaves it to FFmpeg's own
+// decoder, and the conversion looks the same either way.
 type Hardware struct {
 	// Method is cuda, for NVIDIA GPUs, or vaapi, for AMD and Intel ones.
 	Method string
@@ -35,30 +36,34 @@ type Hardware struct {
 	// maximum rate, which a quality set in the settings needs there: AMD's
 	// drivers often lack it.
 	QVBR bool
-	// Resident is set when frames the GPU decoded stay in its memory to be
-	// scaled, by scale_cuda or scale_vaapi, and encoded, which a test
-	// conversion showed at startup. Deinterlacers are the deinterlacing
-	// filters FFmpeg has for such frames: yadif_cuda and bwdif_cuda, or
-	// deinterlace_vaapi.
+	// Resident is set when SDR frames the GPU decoded stay in its memory to
+	// be scaled, by scale_cuda or scale_vaapi, and encoded, which worked and
+	// was faster than going through memory at startup. Deinterlacers are
+	// the deinterlacing filters FFmpeg has for such frames: yadif_cuda and
+	// bwdif_cuda, or deinterlace_vaapi.
 	Resident      bool
 	Deinterlacers []string
 	// VulkanDecoding is set when the GPU of ToneMapping also decodes HEVC
 	// in 10 bits into Vulkan frames, which libplacebo tone maps as they
-	// are, rather than into memory it uploads them from again. FFmpeg maps
-	// no CUDA frame to Vulkan, nor back: libplacebo's output, at the size
-	// converted to, goes to NVENC through memory.
+	// are, rather than into memory it uploads them from again, and that
+	// was faster at startup. FFmpeg maps no CUDA frame to Vulkan, nor back:
+	// libplacebo's output, at the size converted to, goes to NVENC through
+	// memory.
 	VulkanDecoding bool
 }
 
-// hardwareMethods are the GPU methods by preference, named as
-// POLYFIN_HWACCEL names them, with the encoders Polyfin uses, the filter
-// scaling frames in the GPU's memory and the deinterlacers taking them.
-var hardwareMethods = []struct {
+// gpuMethod is a GPU method, named as POLYFIN_HWACCEL names it, with the
+// encoders Polyfin uses, the filter scaling frames in the GPU's memory and
+// the deinterlacers taking them.
+type gpuMethod struct {
 	name, method  string
 	encoders      []string
 	scaler        string
 	deinterlacers []string
-}{
+}
+
+// hardwareMethods are the GPU methods by preference.
+var hardwareMethods = []gpuMethod{
 	{"nvenc", "cuda", []string{"h264_nvenc", "hevc_nvenc"}, "scale_cuda", []string{"yadif_cuda", "bwdif_cuda"}},
 	{"vaapi", "vaapi", []string{"h264_vaapi", "hevc_vaapi"}, "scale_vaapi", []string{"deinterlace_vaapi"}},
 }
@@ -69,6 +74,8 @@ var hardwareMethods = []struct {
 // nvenc or vaapi, that one only; with none, none. Each want is detected
 // once: choosing it again switches to what was found, encodings already
 // running going on as they started. It reports false when no GPU encodes.
+// The GPU's conversion chains are then timed in the background (see
+// measure): conversions starting before that ends go through memory.
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.detecting.Lock()
 	defer m.detecting.Unlock()
@@ -78,6 +85,9 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 		m.detected[want] = hw
 	}
 	m.hardware.Store(hw)
+	if !done {
+		m.measureLater(want, hw)
+	}
 	if hw == nil {
 		return Hardware{}, false
 	}
@@ -90,8 +100,7 @@ func (m *Manager) SelectHardware(want, device string) {
 	switch hw, ok := m.DetectHardware(want, device); {
 	case ok:
 		m.logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders,
-			"tone_mapping", hw.ToneMapping, "qvbr", hw.QVBR, "resident", hw.Resident, "deinterlacers", hw.Deinterlacers,
-			"vulkan_decoding", hw.VulkanDecoding)
+			"tone_mapping", hw.ToneMapping, "qvbr", hw.QVBR)
 	case want == "auto":
 		m.logger.Info("Video is converted in software: no GPU encodes")
 	case want != "none":
@@ -119,7 +128,6 @@ func (m *Manager) detect(want, device string) *Hardware {
 			if len(hw.Encoders) > 0 {
 				hw.ToneMapping = hw.Method == "cuda" && slices.Contains(m.can.filters, "libplacebo") && m.toneMaps(hw)
 				hw.QVBR = hw.Method == "vaapi" && m.encodes(hw, hw.Encoders[0], "-rc_mode", "QVBR", "-global_quality", "25", "-b:v", "1000000", "-maxrate", "1500000")
-				m.detectResidence(&hw, candidate.scaler, candidate.deinterlacers)
 				return &hw
 			}
 		}
@@ -143,42 +151,118 @@ func (m *Manager) toneMaps(hw Hardware) bool {
 // hdrTags tags test pattern as HDR10.
 const hdrTags = "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc"
 
-// detectResidence finds whether frames hw decodes may stay in its memory
-// until they are encoded: FFmpeg has scaler, and a second of video the GPU
-// encoded converts so, decoded on it into its memory (see Resident). On a
-// GPU that tone maps, it finds whether a second of HDR10 video in HEVC
-// decodes into Vulkan frames on it, and converts so (see VulkanDecoding).
-// Every failure leaves frames going through memory, as they always did.
-func (m *Manager) detectResidence(hw *Hardware, scaler string, deinterlacers []string) {
-	if !m.HasFilters(scaler, "hwupload") {
+// sampleLength is how long the samples timed at startup last: 4K at 24
+// frames a second, about half a second to convert each way on a GPU.
+const sampleLength = 2 * time.Second
+
+// measureLater times hw's conversion chains in the background (see
+// measure), then puts what it found in hw's place, as the choice of want
+// and as the GPU chosen, unless another was chosen meanwhile. Close stops
+// it.
+func (m *Manager) measureLater(want string, hw *Hardware) {
+	if hw == nil {
 		return
 	}
-	dir, err := os.MkdirTemp(m.dir, "probe-")
+	ctx, cancel := context.WithCancel(context.Background())
+	m.measuring.Add(1)
+	go func() {
+		defer m.measuring.Done()
+		defer cancel()
+		go func() {
+			select {
+			case <-m.done:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+		measured := m.measure(ctx, *hw)
+		m.detecting.Lock()
+		if m.detected[want] == hw {
+			m.detected[want] = &measured
+		}
+		m.detecting.Unlock()
+		m.hardware.CompareAndSwap(hw, &measured)
+	}()
+}
+
+// timing is how long a sample took to convert through memory and kept on
+// the GPU, with how each failed, if it did.
+type timing struct {
+	memory, gpu       time.Duration
+	memoryErr, gpuErr error
+}
+
+// gpuWins reports whether frames kept on the GPU convert faster: they
+// converted, and through memory failed or took longer.
+func (t timing) gpuWins() bool {
+	return t.gpuErr == nil && (t.memoryErr != nil || t.gpu < t.memory)
+}
+
+// speed is how many times real time a sample converted in d, or failed.
+func speed(d time.Duration, err error) string {
 	if err != nil {
-		return
+		return "failed"
+	}
+	return strconv.FormatFloat(sampleLength.Seconds()/max(d, time.Millisecond).Seconds(), 'f', 1, 64) + "x"
+}
+
+// measure converts a sample through memory and on the GPU, for each kind
+// of conversion hw may keep there, and keeps the faster: SDR H.264 scaled
+// by scale_cuda or scale_vaapi (Resident), and on a GPU that tone maps,
+// HDR10 HEVC in 10 bits decoded into Vulkan frames for libplacebo
+// (VulkanDecoding), once Vulkan proved to decode it. Every failure leaves
+// frames going through memory. It logs what it timed.
+func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
+	i := slices.IndexFunc(hardwareMethods, func(c gpuMethod) bool { return c.method == hw.Method })
+	if i < 0 || len(hw.Encoders) == 0 {
+		return hw
+	}
+	method := hardwareMethods[i]
+	dir, err := os.MkdirTemp(m.dir, "measure-")
+	if err != nil {
+		m.logger.Warn("The GPU's conversions could not be timed", "error", err)
+		return hw
 	}
 	defer os.RemoveAll(dir)
-	pattern := []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "1"}
-	sdr := filepath.Join(dir, "sdr.mkv")
-	upload := []string{}
-	if hw.Method == "vaapi" {
-		upload = []string{"-vf", "format=nv12,hwupload"}
+	pattern := []string{"-f", "lavfi", "-i", "testsrc2=size=3840x2160:rate=24", "-t", strconv.FormatFloat(sampleLength.Seconds(), 'f', -1, 64)}
+	// The encoder converting the samples: H.264 on the GPU, as the
+	// conversions most apps get.
+	encoder := hw.Encoders[0]
+	for _, e := range hw.Encoders {
+		if strings.HasPrefix(e, "h264_") {
+			encoder = e
+		}
 	}
-	if m.succeeds(slices.Concat(probeStart, hw.devices(), pattern, upload, []string{"-c:v", hw.Encoders[0], sdr})...) {
-		probe := *hw
-		probe.Resident = true
-		v := VideoEncoding{Encoder: hw.Encoders[0], Width: 160, Height: 90, Hardware: &probe}
-		hw.Resident = m.succeeds(slices.Concat(probeStart, v.inputs(), []string{"-i", sdr, "-vf", v.filters(), "-c:v", v.Encoder, "-f", "null", "-"})...)
+	if m.HasFilters(method.scaler, "hwupload") {
+		sdr := filepath.Join(dir, "sdr.mkv")
+		var encode []string
+		switch {
+		case strings.HasPrefix(encoder, "h264_") && hw.Method == "vaapi":
+			encode = slices.Concat(hw.devices(), pattern, []string{"-vf", "format=nv12,hwupload", "-c:v", encoder})
+		case strings.HasPrefix(encoder, "h264_"):
+			encode = slices.Concat(pattern, []string{"-c:v", encoder})
+		case slices.Contains(m.can.encoders, "libx264"):
+			encode = slices.Concat(pattern, []string{"-c:v", "libx264", "-preset", "ultrafast"})
+		}
+		if encode != nil {
+			if _, err := m.timed(ctx, slices.Concat(probeStart, encode, []string{sdr})); err == nil {
+				memory, gpu := hw, hw
+				gpu.Resident = true
+				t := m.timeChains(ctx, sdr, encoder, VideoEncoding{Hardware: &memory}, VideoEncoding{Hardware: &gpu})
+				hw.Resident = t.gpuWins()
+				m.logChoice("SDR", hw.Resident, t)
+			}
+		}
 	}
 	if hw.Resident {
-		for _, name := range deinterlacers {
+		for _, name := range method.deinterlacers {
 			if m.HasFilters(name) {
 				hw.Deinterlacers = append(hw.Deinterlacers, name)
 			}
 		}
 	}
-	if !hw.ToneMapping {
-		return
+	if !hw.ToneMapping || ctx.Err() != nil {
+		return hw
 	}
 	// The HDR sample is HEVC in 10 bits, as HDR files are, from the GPU's
 	// encoder or else x265's.
@@ -188,32 +272,77 @@ func (m *Manager) detectResidence(hw *Hardware, scaler string, deinterlacers []s
 	case slices.Contains(hw.Encoders, "hevc_nvenc"):
 		encode = []string{"-vf", "format=p010le," + hdrTags, "-c:v", "hevc_nvenc", "-profile:v", "main10"}
 	case slices.Contains(m.can.encoders, "libx265"):
-		encode = []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-x265-params", "log-level=error"}
+		encode = []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error"}
 	default:
-		return
+		return hw
 	}
-	if !m.succeeds(slices.Concat(probeStart, pattern, encode, []string{hdr})...) {
-		return
+	if _, err := m.timed(ctx, slices.Concat(probeStart, pattern, encode, []string{hdr})); err != nil {
+		return hw
 	}
-	probe := *hw
-	probe.VulkanDecoding = true
-	v := VideoEncoding{Encoder: hw.Encoders[0], Width: 160, Height: 90, ToneMap: true, Hardware: &probe}
+	memory, gpu := hw, hw
+	gpu.VulkanDecoding = true
 	// The frames must come from the GPU's decoder: FFmpeg would decode in
 	// software, unseen, a codec Vulkan does not, and libplacebo take the
 	// frames from memory. Only Vulkan frames can be downloaded.
-	hw.VulkanDecoding = m.succeeds(slices.Concat(probeStart, v.inputs(), []string{"-i", hdr, "-vf", "hwdownload,format=p010le", "-f", "null", "-"})...) &&
-		m.succeeds(slices.Concat(probeStart, v.inputs(), []string{"-i", hdr, "-vf", v.filters(), "-c:v", v.Encoder, "-f", "null", "-"})...)
+	check := VideoEncoding{ToneMap: true, Hardware: &gpu}
+	if _, err := m.timed(ctx, slices.Concat(probeStart, check.inputs(), []string{"-i", hdr, "-vf", "hwdownload,format=p010le", "-f", "null", "-"})); err != nil {
+		m.logChoice("HDR", false, timing{gpuErr: err})
+		return hw
+	}
+	t := m.timeChains(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &memory}, VideoEncoding{ToneMap: true, Hardware: &gpu})
+	hw.VulkanDecoding = t.gpuWins()
+	m.logChoice("HDR", hw.VulkanDecoding, t)
+	return hw
+}
+
+// timeChains times the conversion of sample to 1080p by encoder, through
+// memory then on the GPU, as the two encodings say.
+func (m *Manager) timeChains(ctx context.Context, sample, encoder string, memory, gpu VideoEncoding) timing {
+	var t timing
+	for _, run := range []struct {
+		v    VideoEncoding
+		took *time.Duration
+		err  *error
+	}{{memory, &t.memory, &t.memoryErr}, {gpu, &t.gpu, &t.gpuErr}} {
+		run.v.Encoder, run.v.Width, run.v.Height = encoder, 1920, 1080
+		*run.took, *run.err = m.timed(ctx, slices.Concat(probeStart, run.v.inputs(),
+			[]string{"-i", sample, "-vf", run.v.filters(), "-c:v", encoder, "-f", "null", "-"}))
+	}
+	return t
+}
+
+// logChoice logs the chain chosen for a kind of conversion, and the speed
+// of each.
+func (m *Manager) logChoice(kind string, gpu bool, t timing) {
+	chain := "memory"
+	if gpu {
+		chain = "gpu"
+	}
+	m.logger.Info("Timed the GPU's conversion chains", "kind", kind, "chain", chain,
+		"memory_speed", speed(t.memory, t.memoryErr), "gpu_speed", speed(t.gpu, t.gpuErr))
 }
 
 // probeStart opens FFmpeg's command lines testing the GPU.
 var probeStart = []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 
+// timed runs FFmpeg with args, within 20 s, and reports how long it took,
+// through m.run when tests set it.
+func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, error) {
+	if m.run != nil {
+		return m.run(ctx, args)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	started := time.Now()
+	err := exec.CommandContext(ctx, m.ffmpeg, args...).Run()
+	return time.Since(started), err
+}
+
 // succeeds reports whether FFmpeg ends well with args within 20 s. A GPU
 // or driver that fails makes FFmpeg fail, or abort.
 func (m *Manager) succeeds(args ...string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	return exec.CommandContext(ctx, m.ffmpeg, args...).Run() == nil
+	_, err := m.timed(context.Background(), args)
+	return err == nil
 }
 
 // toneMappingDevices open the NVIDIA GPU for CUDA and its Vulkan device

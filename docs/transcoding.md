@@ -37,16 +37,18 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 
 At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU, which `POLYFIN_HWACCEL` sets at the first start. See [Configuration](configuration.md) for `POLYFIN_HWACCEL` and `POLYFIN_VAAPI_DEVICE`.
 
-It then converts a second of video on that GPU to learn whether the frames it decodes can stay in its memory until they are encoded, and logs the answer (`resident`, and on NVIDIA `vulkan_decoding`).
+It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
 
 ### Frames on the GPU
 
-Where the GPU can do every step of a conversion, the frames it decodes stay in its memory until it encodes them:
+A GPU's decoded frames can stay in its memory until it encodes them, or come back to memory for the filters and go to the GPU again. Depending on the card and its driver, either may be faster, so Polyfin measures both ways at startup and uses the faster one for each kind of conversion:
 
-- **SDR video:** scaled on the GPU (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel), and deinterlaced there when FFmpeg has the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`).
-- **HDR video on NVIDIA:** decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
+- **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel), and deinterlaced there when FFmpeg has the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`).
+- **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
 
-Frames still go through memory for burned-in subtitles, for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the test conversion failed.
+Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory.
+
+Frames always go through memory for burned-in subtitles, for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
 
 ### Giving the container an NVIDIA GPU
 
@@ -66,7 +68,7 @@ The container runs as user 65532. When the render nodes in `/dev/dri` are not op
 
 When HDR video is converted to SDR, Polyfin tone maps it:
 
-- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when the GPU can (see [Frames on the GPU](#frames-on-the-gpu)).
+- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when that is faster (see [Frames on the GPU](#frames-on-the-gpu)).
 - **Elsewhere:** on the processor, up to 720p, without Dolby Vision profile 5.
 
 You can turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).

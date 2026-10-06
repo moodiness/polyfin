@@ -363,6 +363,10 @@ type Manager struct {
 	hardware  atomic.Pointer[Hardware]
 	detecting sync.Mutex
 	detected  map[string]*Hardware
+	// measuring counts the timings of GPU chains under way (see
+	// measureLater); run, when set, runs FFmpeg in their place, for tests.
+	measuring sync.WaitGroup
+	run       func(ctx context.Context, args []string) (time.Duration, error)
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
@@ -413,6 +417,7 @@ func (m *Manager) Close() {
 		cancel()
 	}
 	m.mu.Unlock()
+	m.measuring.Wait()
 	m.stopWhere(func(Key, *encoding) bool { return true })
 	m.stopLives(func(Key, *live) bool { return true })
 	m.stopAudios(func(AudioKey, *audioEncoding) bool { return true })
