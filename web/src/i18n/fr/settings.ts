@@ -241,7 +241,7 @@ const settings: typeof en = {
       'L’endroit où la lecture s’est arrêtée est gardé, pour reprendre de là, dès qu’il dépasse cette part de la durée du titre. Ce nombre doit être plus petit que celui de « Marqué comme vu après ». De 0 à 50 ; 5 par défaut, comme dans Jellyfin. Un titre de moins de 5 minutes est marqué comme vu dès qu’il dépasse ce point.',
     versionListMinutes: 'Garder les listes de versions pendant (minutes)',
     versionListMinutesHelp:
-      'Combien de temps Polyfin garde les versions et les sous-titres que les addons donnent pour un titre. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De 1 à 360 ; 10 par défaut.',
+      'Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De 1 à 360 ; 10 par défaut.',
     catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
     catalogRefreshMinutesHelp:
       'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',

@@ -233,7 +233,7 @@ const settings = {
       'Where playback stopped is kept, to resume from there, once past this share of a title’s length. It must be lower than the played threshold. From 0 to 50; 5 by default, like Jellyfin. A title shorter than 5 minutes is marked played as soon as it is past this point.',
     versionListMinutes: 'Keep version lists for (minutes)',
     versionListMinutesHelp:
-      'How long Polyfin keeps the versions and subtitles the addons list for a title. Keeping lists longer sends fewer requests to the stream addon, which helps with providers that refuse too many requests, but new versions show up later. From 1 to 360; 10 by default.',
+      'How long Polyfin uses the versions and subtitles the addons list for a title before asking them again. An older list still shows at once when the title is opened again, while Polyfin asks. Keeping lists longer sends fewer requests to the stream addon, which helps with providers that refuse too many requests, but new versions show up later. From 1 to 360; 10 by default.',
     catalogRefreshMinutes: 'Refresh catalogs every (minutes)',
     catalogRefreshMinutesHelp:
       'How long Polyfin keeps the catalog pages it reads from addons, the Live TV guide included, before reading them again. A longer time sends fewer requests to the addons, but new titles show up later. From 1 to 1,440 (one day); 10 by default.',

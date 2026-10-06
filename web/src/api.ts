@@ -179,7 +179,7 @@ export type Settings = {
   playedPercent: number
   /** Percent of a title's runtime past which a reported position is kept to resume; below playedPercent. */
   resumePercent: number
-  /** Minutes a title's version and subtitle lists from the addons are kept. */
+  /** Minutes a title's version and subtitle lists from the addons are used before the addons are asked again. */
   versionListMinutes: number
   /** Minutes catalog pages are kept. */
   catalogRefreshMinutes: number
