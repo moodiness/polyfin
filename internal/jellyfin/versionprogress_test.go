@@ -400,7 +400,12 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 // its request held.
 func expiredOn(t *testing.T) (heldSetup, *scriptedAddon) {
 	t.Helper()
-	probe := newFakeProbe(t, true)
+	return expiredOnProbe(t, newFakeProbe(t, true))
+}
+
+// expiredOnProbe is expiredOn with analyses run by probe.
+func expiredOnProbe(t *testing.T, probe fakeProbe) (heldSetup, *scriptedAddon) {
+	t.Helper()
 	gathering := newScriptedAddon(t, "Gathering")
 	s := newProbingServer(t, 10, probe.path)
 	s.library.SetFollowUps(100 * time.Millisecond)
@@ -426,32 +431,59 @@ func expiredOn(t *testing.T) (heldSetup, *scriptedAddon) {
 	return h, gathering
 }
 
-func TestPlaybackInfoWaitsForTheAnswerReplacingExpiredVersions(t *testing.T) {
+// A play does not wait for the addon asked again for an expired list when
+// a version of that list plays.
+func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T) {
 	h, gathering := expiredOn(t)
-	answered := h.askPlaybackInfo(t, "")
+	started := time.Now()
 	select {
-	case got := <-answered:
-		t.Fatalf("PlaybackInfo answered from the expired versions: %d %+v", got.status, got.info.MediaSources)
-	case <-time.After(200 * time.Millisecond):
+	case got := <-h.askPlaybackInfo(t, ""):
+		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 3 || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 1") {
+			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("PlaybackInfo waited for the addon")
 	}
-	// It joins the request details started, which it does not repeat, and
-	// whose answer lists one stream: the two others stay listed after it
-	// while it is followed up.
+	if elapsed := time.Since(started); elapsed > subtitleGrace+time.Second {
+		t.Errorf("PlaybackInfo answered after %s", elapsed)
+	}
+	// It joins the request details started, which it does not repeat.
 	if got := gathering.asked.Load(); got != 3 {
 		t.Errorf("addon asked %d times, want 3", got)
 	}
-	gathering.replies <- 1
+	gathering.replies <- 3
+	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
+	gathering.replies <- 3
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+}
+
+// When no version of an expired list plays, a play waits for the addon's
+// new answer, joining the request under way, and plays one of its
+// versions.
+func TestPlaybackInfoWaitsForTheAnswerWhenNoExpiredVersionPlays(t *testing.T) {
+	// The three versions listed before cannot be read; another can.
+	h, gathering := expiredOnProbe(t, scriptedProbe(t, "[ $n -gt 3 ] || { echo 'Invalid data found when processing input' >&2; exit 1; }\nexec cat \"$0.json\"\n"))
+	answered := h.askPlaybackInfo(t, "")
 	select {
 	case got := <-answered:
-		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 3 || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 1") {
-			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
+		t.Fatalf("PlaybackInfo answered from the expired versions: %d %q %+v", got.status, got.code, got.info.MediaSources)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if got := gathering.asked.Load(); got != 3 {
+		t.Errorf("addon asked %d times, want 3", got)
+	}
+	gathering.replies <- 4
+	select {
+	case got := <-answered:
+		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 1 || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 4") {
+			t.Fatalf("PlaybackInfo: %d %v %q %+v", got.status, got.err, got.code, got.info.MediaSources)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("PlaybackInfo did not answer")
 	}
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
-	gathering.replies <- 1
-	h.reaches(t, VersionProgress{Pending: 0, Count: 1}, "Gathering 1")
+	gathering.replies <- 4
+	eventually(t, "the follow-ups to end", func() bool { return h.progress(t).Pending == 0 })
 }
 
 func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) {

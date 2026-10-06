@@ -2,11 +2,14 @@ package jellyfin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,17 +82,12 @@ func (f fakeProbe) sized(t *testing.T, size int64) {
 	}
 }
 
-// settle waits for the preparations under way to end. They are admitted
-// before the request that triggers them is answered, so once settled, what
-// a request started is done.
+// settle waits for the preparations under way, and those waiting, to end.
+// They are queued before the request that triggers them is answered, so
+// once settled, what a request started is done.
 func (s testServer) settle(t *testing.T) {
 	t.Helper()
-	eventually(t, "preparations to end", func() bool {
-		p := s.handler.preparations
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		return p.running == 0
-	})
+	eventually(t, "preparations to end", s.handler.preparations.idle)
 }
 
 // eventually waits for done to hold.
@@ -174,20 +172,20 @@ func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
 		versions, _ := tr.library.CachedVersions(t.Context(), member, next)
 		return versions
 	}
-	started := func() int {
+	prepared := func() int {
 		p := tr.handler.preparations
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		return len(p.starts[member.ID])
+		return len(p.prepared)
 	}
 
 	progress(40 * time.Minute)
-	if len(listed()) != 0 || probe.runs() != 0 || started() != 0 {
+	if len(listed()) != 0 || probe.runs() != 0 || prepared() != 0 {
 		t.Fatalf("switched off: %d versions listed, %d runs", len(listed()), probe.runs())
 	}
 	tr.setting(t, func(s *accounts.Settings) { s.PrepareAhead = true })
 	progress(30 * time.Minute)
-	if len(listed()) != 0 || probe.runs() != 0 || started() != 0 {
+	if len(listed()) != 0 || probe.runs() != 0 || prepared() != 0 {
 		t.Fatalf("15 minutes left: %d versions listed, %d runs", len(listed()), probe.runs())
 	}
 
@@ -207,8 +205,8 @@ func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
 	}
 
 	progress(38 * time.Minute)
-	if started() != 1 || probe.runs() != 1 {
-		t.Errorf("a repeat report prepared again: %d preparations, %d runs", started(), probe.runs())
+	if prepared() != 1 || probe.runs() != 1 {
+		t.Errorf("a repeat report prepared again: %d preparations, %d runs", prepared(), probe.runs())
 	}
 }
 
@@ -283,62 +281,79 @@ func TestEpisodeAfter(t *testing.T) {
 	}
 }
 
-func TestPreparationsAreBounded(t *testing.T) {
-	p := newPreparations()
+// Two preparations run at once over the server; the others wait, the
+// newest first, and beyond four waiting the oldest is dropped. A
+// preparation done is not done again for ten minutes; one that failed may
+// be.
+func TestPreparationsQueueTheNewestFirst(t *testing.T) {
+	p := newPreparations(nil)
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	p.now = func() time.Time { return now }
-	alice, bob, carol := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
-	title := func(n byte) accounts.ID { return accounts.ID{0xff, n} }
-
-	// Two run at once over the server; a third is dropped, not queued.
-	if p.start(preparationKey{user: alice, title: title(1)}) != nil || p.start(preparationKey{user: bob, title: title(1)}) != nil {
-		t.Fatal("the first two preparations were refused")
+	var clock sync.Mutex
+	p.now = func() time.Time {
+		clock.Lock()
+		defer clock.Unlock()
+		return now
 	}
-	if err := p.start(preparationKey{user: carol, title: title(1)}); err != errTooMany {
-		t.Errorf("a third at once: %v", err)
-	}
-	p.finish()
-	if err := p.start(preparationKey{user: carol, title: title(1)}); err != nil {
-		t.Errorf("once one ended: %v", err)
-	}
-	p.finish()
-	p.finish()
-
-	// Six start per user in a minute.
-	for n := byte(2); n <= 6; n++ {
-		if err := p.start(preparationKey{user: alice, title: title(n)}); err != nil {
-			t.Fatalf("preparation %d of the minute: %v", n, err)
+	alice := accounts.ID{1}
+	key := func(n byte) preparationKey { return preparationKey{user: alice, title: accounts.ID{0xff, n}} }
+	var mu sync.Mutex
+	var ran []byte
+	// The first two hold until released, the first first.
+	release := map[byte]chan struct{}{1: make(chan struct{}), 2: make(chan struct{})}
+	// work records its preparation, holds if it is one of the first two,
+	// and reports done unless failing.
+	work := func(n byte, failing bool) func(context.Context) bool {
+		return func(context.Context) bool {
+			mu.Lock()
+			ran = append(ran, n)
+			mu.Unlock()
+			if held, ok := release[n]; ok {
+				<-held
+			}
+			return !failing
 		}
-		p.finish()
 	}
-	if err := p.start(preparationKey{user: alice, title: title(7)}); err != errTooMany {
-		t.Errorf("a seventh in the minute: %v", err)
+	p.add(key(1), work(1, false))
+	p.add(key(2), work(2, false))
+	eventually(t, "two preparations to run", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(ran) == 2
+	})
+	// Running, the same preparation is not queued again.
+	p.add(key(1), work(1, false))
+	for n := byte(3); n <= 7; n++ {
+		p.add(key(n), work(n, n == 7))
 	}
-	if err := p.start(preparationKey{user: bob, title: title(7)}); err != nil {
-		t.Errorf("another user in the same minute: %v", err)
+	// Queued again, a waiting preparation moves to the front.
+	p.add(key(5), work(5, false))
+	// The worker freed first runs those waiting, the newest first.
+	close(release[1])
+	eventually(t, "the waiting preparations to run", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(ran) == 6
+	})
+	close(release[2])
+	eventually(t, "preparations to end", p.idle)
+	if want := []byte{5, 7, 6, 4}; !slices.Equal(ran[2:], want) {
+		t.Errorf("ran %v after the first two, want %v: the oldest, 3, dropped", ran[2:], want)
 	}
-	p.finish()
-	now = now.Add(time.Minute)
-	if err := p.start(preparationKey{user: alice, title: title(7)}); err != nil {
-		t.Errorf("a minute later: %v", err)
+	release = nil
+	ran = nil
+	// Done, a preparation is not done again for ten minutes; failed, it is.
+	p.add(key(5), work(5, false))
+	p.add(key(7), work(7, false))
+	eventually(t, "preparations to end", p.idle)
+	if !slices.Equal(ran, []byte{7}) {
+		t.Errorf("again: ran %v, want the one that failed", ran)
 	}
-	p.finish()
-
-	// A title is prepared once per user in ten minutes, the next episode
-	// after a title apart from the title.
-	if err := p.start(preparationKey{user: alice, title: title(1)}); err != errPrepared {
-		t.Errorf("the same title again: %v", err)
-	}
-	if err := p.start(preparationKey{user: alice, title: title(1), next: true}); err != nil {
-		t.Errorf("the episode after it: %v", err)
-	}
-	p.finish()
-	if p.claim(preparationKey{user: alice, title: title(2)}) || !p.claim(preparationKey{user: alice, title: title(8)}) {
-		t.Error("claims ignore what was prepared")
-	}
+	clock.Lock()
 	now = now.Add(preparedFor)
-	if err := p.start(preparationKey{user: alice, title: title(1)}); err != nil {
-		t.Errorf("ten minutes later: %v", err)
+	clock.Unlock()
+	p.add(key(5), work(5, false))
+	eventually(t, "preparations to end", p.idle)
+	if !slices.Equal(ran, []byte{7, 5}) {
+		t.Errorf("ten minutes later: ran %v", ran)
 	}
-	p.finish()
 }

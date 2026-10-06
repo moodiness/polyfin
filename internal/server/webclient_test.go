@@ -381,7 +381,10 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// user does, which jellyfin-web answers with the version's tracks
 		// ("tracks <id>"), or an error for a version missing from its own
 		// copy of the versions; "menu" logs the menu: its versions, "*"
-		// before the one picked, then whether it is shown. The title's own
+		// before the one picked, then whether it is shown; "push <pending>
+		// <count>" has Polyfin push the title's progress on the socket,
+		// details then listing count versions, and "push other" another
+		// title's; "clock" logs the time, in seconds. The title's own
 		// identifier is written "t".
 		steps []string
 		want  []string
@@ -460,6 +463,18 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"no addon pending with another count": {listed: 3, answers: []answer{{1, 2, nil}, {0, 2, nil}, {0, 2, nil}},
 			steps: steps(4, "menu"),
 			want:  []string{ask, ask, details, ask, "idle", "menu *t v1 shown"}},
+		// A push is taken as an answer at once; the script then asks only
+		// every 10 seconds, as long as addons are pending.
+		"pushed versions come at once": {listed: 1, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
+			steps: []string{title, "tick", "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
+			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 2", ask, "clock 12", "idle"}},
+		"a push for another title changes nothing": {listed: 1, answers: []answer{{1, 1, nil}, {1, 1, nil}, {0, 1, nil}},
+			steps: []string{title, "push other", "tick", "tick", "tick", "clock", "tick", "menu"},
+			want:  []string{ask, ask, ask, "clock 3", "idle", "menu *t hidden"}},
+		// Pushes still come once the script no longer asks.
+		"a push after the last answer": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
+			steps: []string{title, "tick", "tick", "tick", "tick", "push 0 3", "menu"},
+			want:  []string{ask, ask, ask, "idle", details, "menu *t v1 v2 shown"}},
 	}
 	ninety := slices.Repeat([]string{ask}, 90)
 	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
@@ -596,6 +611,14 @@ async function run(scenario) {
     } else if (step === 'menu') {
       const options = menu.children.map((option) => (option.selected ? '*' : '') + short(option.value))
       log.push(['menu', ...options, container.hidden ? 'hidden' : 'shown'].join(' '))
+    } else if (step === 'clock') log.push('clock ' + now / 1000)
+    else if (step.startsWith('push ')) {
+      // As jellyfin-web's events trigger ApiClient's message event.
+      const [, pending, count] = step.split(' ')
+      const data = pending === 'other' ? { ItemId: 'f'.repeat(32), Pending: 0, Count: 5 } : { ItemId: TITLE.toUpperCase(), Pending: +pending, Count: +count }
+      if (pending !== 'other') sources = versions(+count)
+      const message = { MessageType: 'PolyfinVersions', MessageId: 'm', Data: data }
+      for (const callback of ((ApiClient._callbacks || {}).message || []).slice()) callback.apply(ApiClient, [{ type: 'message' }, message])
     } else if (step !== 'tick') history.pushState(null, '', step)
     else {
       let next = -1

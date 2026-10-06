@@ -71,7 +71,8 @@ func newRowsAddon(t *testing.T, held bool) *rowsAddon {
 		}
 		return list[i], true
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
 		case path == "/manifest.json":
@@ -108,7 +109,9 @@ func newRowsAddon(t *testing.T, held bool) *rowsAddon {
 			}
 			defer a.inFlight.Add(-1)
 			<-a.release
-			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "1080p", URL: "https://example.com/" + id + ".mkv"}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "1080p", URL: server.URL + "/files/" + id + ".mkv"}}})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
 			http.NotFound(w, r)
 		}
@@ -143,7 +146,12 @@ type rowsSetup struct {
 
 func rowsOn(t *testing.T, held bool) rowsSetup {
 	t.Helper()
-	s := newTestServer(t, 10)
+	return rowsOnServer(t, newTestServer(t, 10), held)
+}
+
+// rowsOnServer is rowsOn on a given test server.
+func rowsOnServer(t *testing.T, s testServer, held bool) rowsSetup {
+	t.Helper()
 	member := s.user("member", nil)
 	a := newRowsAddon(t, held)
 	// Registered after the server's and the addon's, this runs first: the
@@ -239,7 +247,10 @@ func onceEach(ids []string) map[string]int {
 }
 
 func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
-	rs := rowsOn(t, false)
+	// The first titles of each row are analyzed too (see
+	// TestHomeRowsPrepareTheirFirstTitles).
+	rs := rowsOnServer(t, newProbingServer(t, 10, newFakeProbe(t, true).path), false)
+	t.Cleanup(func() { rs.listedAhead(t); rs.settle(t) })
 	resume := "/UserItems/Resume"
 	nextUp := "/Shows/NextUp"
 
@@ -280,21 +291,61 @@ func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
 	}
 
 	// Only movies and episodes are listed: channels and music are not.
+	// The first two of them are prepared too.
 	var mu sync.Mutex
-	var listed []accounts.ID
-	rs.handler.listings = newListings(func(_ accounts.User, title accounts.ID) {
+	var listed, prepared []accounts.ID
+	rs.handler.listings = newListings(func(_ accounts.User, title accounts.ID, prepare bool) {
 		mu.Lock()
 		defer mu.Unlock()
 		listed = append(listed, title)
+		if prepare {
+			prepared = append(prepared, title)
+		}
 	})
-	movie := accounts.ID{3}
+	movies3 := []accounts.ID{{3}, {4}, {5}}
 	rs.handler.listAhead(rs.member, []library.Item{{ID: accounts.ID{1}, Kind: library.KindChannel},
-		{ID: accounts.ID{2}, Kind: library.KindTrack}, {ID: movie, Kind: library.KindMovie}})
+		{ID: accounts.ID{2}, Kind: library.KindTrack}, {ID: movies3[0], Kind: library.KindMovie},
+		{ID: movies3[1], Kind: library.KindEpisode}, {ID: movies3[2], Kind: library.KindMovie}})
 	rs.listedAhead(t)
 	mu.Lock()
 	defer mu.Unlock()
-	if !slices.Equal(listed, []accounts.ID{movie}) {
-		t.Errorf("listed %v", listed)
+	slices.SortFunc(listed, func(a, b accounts.ID) int { return int(a[0]) - int(b[0]) })
+	slices.SortFunc(prepared, func(a, b accounts.ID) int { return int(a[0]) - int(b[0]) })
+	if !slices.Equal(listed, movies3) || !slices.Equal(prepared, movies3[:2]) {
+		t.Errorf("listed %v, prepared %v", listed, prepared)
+	}
+}
+
+// Continue Watching and Next Up have the first version of their first two
+// titles analyzed once listed, so that resuming from them starts at once.
+func TestHomeRowsPrepareTheirFirstTitles(t *testing.T) {
+	probe := newFakeProbe(t, true)
+	rs := rowsOnServer(t, newProbingServer(t, 10, probe.path), false)
+	t.Cleanup(func() { rs.listedAhead(t); rs.settle(t) })
+	rs.setting(t, func(s *accounts.Settings) { s.PrepareAhead = true })
+	var page QueryResult
+	rs.get(t, "/UserItems/Resume", rs.token, &page)
+	rs.listedAhead(t)
+	rs.settle(t)
+	if probe.runs() != homeRowPrepared {
+		t.Fatalf("%d analyses, want %d", probe.runs(), homeRowPrepared)
+	}
+	for i, item := range page.Items[:homeRowTitles] {
+		id, _ := accounts.ParseID(item.Id)
+		versions, err := rs.library.Versions(t.Context(), rs.member, id)
+		if err != nil || len(versions) != 1 {
+			t.Fatalf("%s: %v %v", item.Name, versions, err)
+		}
+		if _, analyzed := rs.handler.Playback.Analyzed(t.Context(), versions[0].ID); analyzed != (i < homeRowPrepared) {
+			t.Errorf("title %d of the row analyzed: %v", i, analyzed)
+		}
+	}
+	// Asked again, the row prepares nothing more.
+	rs.get(t, "/UserItems/Resume", rs.token, nil)
+	rs.listedAhead(t)
+	rs.settle(t)
+	if probe.runs() != homeRowPrepared {
+		t.Errorf("asked again: %d analyses", probe.runs())
 	}
 }
 
