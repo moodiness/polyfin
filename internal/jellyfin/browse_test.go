@@ -375,6 +375,9 @@ var browseShapes = shapeRules{
 		// Polyfin has no files; the test addon has no streams, so the
 		// format and size of the titles are unknown.
 		"Path": {"*"}, "Container": {"*"}, "Width": {"*"}, "Height": {"*"},
+		// Without versions, details describe a placeholder, whose size,
+		// bitrate and tracks are unknown.
+		"Size": {"movie", "episode"}, "Bitrate": {"movie", "episode"}, "DefaultAudioStreamIndex": {"movie", "episode"},
 		// Metadata addons do not provide these.
 		"OriginalLanguage": {"*"}, "ProductionLocations": {"*"}, "SeriesStudio": {"*"},
 		"CommunityRating": {"episode", "episodes"},

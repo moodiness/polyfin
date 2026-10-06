@@ -27,6 +27,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Items/{itemId}", h.item)
 	signedIn(http.MethodGet, "/Users/{userId}/Items/{itemId}", h.item)
 	signedIn(http.MethodGet, "/Items/{itemId}/Ancestors", h.ancestors)
+	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Versions", h.versionProgress)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Seasons", h.seasons)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Episodes", h.episodes)
 	signedIn(http.MethodGet, "/Items/Filters", h.filters)

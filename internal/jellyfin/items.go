@@ -189,7 +189,10 @@ type BaseItemDto struct {
 // addMediaSources describes a movie's or episode's versions in its DTO, as
 // Jellyfin does in item details and, when asked, in listings. opened is the
 // identifier the item was asked by: its own, or one of its versions'. Item
-// details ask the addons for streams; listings only show what is known.
+// details describe the versions known now and ask the addons for the others
+// in the background (see knownPlayable); listings only show what is known.
+// Both describe a placeholder while no version is known, so that apps see
+// the title as playable.
 // A channel's details describe its streams as a placeholder, as Jellyfin's
 // do: PlaybackInfo describes them once the channel plays.
 func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, opened accounts.ID, detail bool) {
@@ -210,17 +213,31 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 	}
 	var sources []MediaSourceInfo
 	var p playable
-	if detail {
+	if detail && item.Kind == library.KindRecording {
 		var err error
 		p, err = h.playable(r.Context(), user, item)
 		if err != nil && r.Context().Err() == nil {
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)
-		if item.Kind != library.KindRecording {
-			h.setDownload(r, user, dto, item, p.versions, opened, true)
-		}
 		h.prepareOpened(r.Context(), user, item, p.versions, opened)
+	} else if detail {
+		var complete bool
+		var err error
+		p, complete, err = h.knownPlayable(r.Context(), user, item)
+		if err != nil && r.Context().Err() == nil {
+			h.Logger.Warn("The versions of a title could not be listed", "error", err)
+		}
+		sources = h.mediaSources(r, p, opened)
+		if len(sources) == 0 {
+			sources = []MediaSourceInfo{h.placeholderSource(r, item)}
+		}
+		h.setDownload(r, user, dto, item, p.versions, opened, true)
+		if complete {
+			h.prepareOpened(r.Context(), user, item, p.versions, opened)
+		} else {
+			h.prepareListed(r.Context(), user, item, opened)
+		}
 	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)
 	} else {

@@ -58,6 +58,9 @@ type Service struct {
 	streamLists   *cache.Cache[streamKey, []stremio.Stream]
 	subtitleLists *cache.Cache[streamKey, []stremio.Subtitle]
 	versions      *cache.Cache[accounts.ID, Version]
+	// asked counts, for each user's title, the addons still asked for its
+	// streams in the background (see VersionsNow).
+	asked *cache.Cache[askedKey, *asked]
 	// ratingLookups holds a place for each rating looked up (see visible);
 	// ratingWait bounds how long a request waits for them.
 	ratingLookups chan struct{}
@@ -131,6 +134,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		settings:       settings,
 		metas:          cache.New[metaKey, stremio.Meta](4000, metaTTL),
 		versions:       cache.New[accounts.ID, Version](20000, versionsTTL),
+		asked:          cache.New[askedKey, *asked](maxAsked, askedFor),
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
 		music:          eclipse.NewClient(client),
