@@ -111,6 +111,8 @@ type Handler struct {
 	syncPlay *syncPlay
 	// preparations bounds the preparations of playback made ahead of it.
 	preparations *preparations
+	// listings lists the versions of home rows' titles ahead of a play.
+	listings *listings
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
@@ -139,6 +141,7 @@ func New(options Options) *Handler {
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
+	h.listings = newListings(h.listVersions)
 	options.Accounts.OnSignOut(h.signedOut)
 	if options.Thumbnails != nil {
 		options.Thumbnails.WatchPlaybacks(h.thumbnailPlaybacks)

@@ -130,6 +130,9 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		// Jellyfin then counts what it returns.
 		total = len(page)
 	}
+	// The titles are queued before the answer, which never waits for their
+	// lists.
+	h.listAhead(user, page)
 	h.writeItems(w, r, user, page, start, total)
 }
 
@@ -270,6 +273,7 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	if !countAll {
 		total = 0
 	}
+	h.listAhead(user, page)
 	h.writeItems(w, r, user, page, start, total)
 }
 

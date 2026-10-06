@@ -37,7 +37,7 @@ const settings = {
       'Chapters are read along with the file analysis Polyfin does anyway before a first play, so they never delay playback. Turning this off only hides them from apps.',
     prepareAhead: 'Prepare playback in advance',
     prepareAheadHelp:
-      'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. This sends a few more requests to your sources, also for titles that are opened but not played.',
+      'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. It also lists in advance the versions of the titles in Continue Watching and Next Up, so their pages show them at once. This sends a few more requests to your sources, also for titles that are opened but not played.',
     transcoding: 'Conversion (transcoding)',
     transcodingHelp:
       'Re-encodes video and audio for apps that cannot play a file as it is. When off, apps play files as they are or simply repackaged without re-encoding, and a title an app cannot play that way will not start on that app.',
