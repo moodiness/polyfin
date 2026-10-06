@@ -85,6 +85,22 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 		t.Errorf("posted query: %d %s", status, raw)
 	}
 
+	// Upcoming, by start time, limited without a count: read no further.
+	s.get(t, "/LiveTv/Programs/Recommended?IsAiring=false&HasAired=false&Limit=1&EnableTotalRecordCount=false", token, &programs)
+	if names := programNames(programs); !slices.Equal(names, []string{"Next"}) && !slices.Equal(names, []string{"Late Movie"}) {
+		t.Errorf("the next programme: %q", names)
+	}
+	s.get(t, "/LiveTv/Programs?Limit=1&EnableTotalRecordCount=false&MinStartDate="+now.Add(30*time.Minute).Format(time.RFC3339), token, &programs)
+	if len(programs.Items) != 1 {
+		t.Errorf("one programme of a listing: %q", programNames(programs))
+	}
+	// A guide's programmes are no items: they are read from the guide. The
+	// two kept are the Native EPG programmes listed.
+	var kept int
+	if err := s.pool.QueryRow(t.Context(), "SELECT count(*) FROM items WHERE kind = 'program'").Scan(&kept); err != nil || kept != 2 {
+		t.Errorf("%d programmes stored, want the 2 of Native EPG (%v)", kept, err)
+	}
+
 	for _, path := range []string{"/LiveTv/Programs/" + talk.Id, "/Items/" + talk.Id} {
 		var detail BaseItemDto
 		if status := s.get(t, path, token, &detail); status != http.StatusOK || detail.Name != "Talk Show" ||

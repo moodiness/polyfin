@@ -180,8 +180,8 @@ type libraryGuideJSON struct {
 	Matched   int        `json:"matched"`
 	Error     string     `json:"error"`
 	// NextAt is when the guide is fetched again: the settings'
-	// LiveTvRefreshHours after its last attempt, within the half hour the
-	// guides due are looked for.
+	// LiveTvRefreshHours after its last attempt, sooner after a failure,
+	// within the 5 minutes the guides due are looked for.
 	NextAt *time.Time `json:"nextAt"`
 }
 
@@ -200,6 +200,10 @@ type guideJSON struct {
 }
 
 func nextGuideFetch(guide addons.Guide, refreshHours int) *time.Time {
+	// A failed download is tried again sooner (see iptv.Backoff).
+	if at, ok := library.GuideRetry(guide.ID); ok {
+		return &at
+	}
 	if guide.CheckedAt == nil {
 		return nil
 	}

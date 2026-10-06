@@ -287,6 +287,46 @@ func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 	}
 }
 
+// A guide whose server asks to slow down is tried again after 5 minutes,
+// then 15, then hourly, not at the next refresh, and tells it was rate
+// limited; a success clears it.
+func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now().UTC().Truncate(time.Minute)
+	e.service.now = func() time.Time { return now }
+	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
+	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel></tv>`)
+	guide.set("", http.StatusTooManyRequests)
+	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		after     time.Duration
+		downloads int32
+	}{{0, 1}, {4 * time.Minute, 1}, {time.Minute, 2}, {14 * time.Minute, 2}, {time.Minute, 3}, {59 * time.Minute, 3}, {time.Minute, 4}} {
+		now = now.Add(step.after)
+		if err := e.service.RefreshGuides(t.Context(), false); err != nil {
+			t.Fatal(err)
+		}
+		if got := guide.downloads.Load(); got != step.downloads {
+			t.Fatalf("after %v more: %d downloads, want %d", step.after, got, step.downloads)
+		}
+	}
+	status := e.guideOf(addons.Shared(), key)
+	if at, ok := GuideRetry(status.ID); status.Error != guideRateLimited || !ok || !at.Equal(now.Add(time.Hour)) {
+		t.Errorf("a rate-limited guide: %q, next try %v %v", status.Error, at, ok)
+	}
+	guide.set(`<tv><channel id="1"><display-name>One</display-name></channel></tv>`, 0)
+	now = now.Add(time.Hour)
+	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
+		t.Fatal(err)
+	}
+	status = e.guideOf(addons.Shared(), key)
+	if _, ok := GuideRetry(status.ID); status.Error != "" || ok {
+		t.Errorf("after a success: %q, retry known %v", status.Error, ok)
+	}
+}
+
 // A guide published as a ZIP archive is spooled in the cache folder while
 // it is read, then removed, after a success as after a failure.
 func TestXMLTVGuidesInZIPArchives(t *testing.T) {

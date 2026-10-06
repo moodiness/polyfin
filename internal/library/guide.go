@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,9 +23,13 @@ import (
 )
 
 const (
-	// GuideCheck is how often the guides due are looked for (see
-	// RefreshGuides); they are due after the settings' LiveTvRefreshHours.
-	GuideCheck = 30 * time.Minute
+	// GuideCheck is how often the lists and guides due are looked for
+	// (see RefreshGuides): they are due after the settings'
+	// LiveTvRefreshHours, or 5 minutes after a first failure (see
+	// iptv.Backoff).
+	GuideCheck = 5 * time.Minute
+	// programSweep is how often past programmes kept are deleted.
+	programSweep = time.Hour
 	// A guide download must answer within guideAnswer, send something at
 	// least every guideStall and end within guideTimeout.
 	guideAnswer  = 30 * time.Second
@@ -46,6 +53,7 @@ const (
 	guidePrivateNetwork = "private_network"
 	guideTooLarge       = "too_large"
 	guideMalformed      = "malformed"
+	guideRateLimited    = "rate_limited"
 	// guideChannelsUnreachable is a guide fetched for a catalog whose
 	// channels could not be listed to map them.
 	guideChannelsUnreachable = "channels_unreachable"
@@ -69,9 +77,11 @@ func (s *Service) SpoolGuidesIn(dir string) error {
 }
 
 // RefreshGuides fetches the XMLTV guides not fetched for the settings'
-// LiveTvRefreshHours, or every guide when all is set, one after the other:
-// each costs its source a download. A catalog that fetched one maps its
-// channels to its guides again. The task scheduler runs it every
+// LiveTvRefreshHours, or whose failure's backoff ended (see iptv.Backoff),
+// or every guide when all is set, one after the other: each costs its
+// source a download. A catalog that fetched one maps its channels to its
+// guides again. The past programmes kept are deleted then (see
+// SweepPrograms). The task scheduler runs it every
 // GuideCheck, and an administrator runs it with all.
 func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 	catalogs, err := s.addons.LiveCatalogs(ctx, true)
@@ -79,9 +89,13 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 		return err
 	}
 	interval := time.Duration(s.settings().LiveTvRefreshHours) * time.Hour
+	retries, err := s.guideRetries(ctx)
+	if err != nil {
+		return err
+	}
 	for _, c := range catalogs {
 		due := slices.DeleteFunc(slices.Clone(c.Guides), func(g addons.Guide) bool {
-			return !all && g.CheckedAt != nil && s.now().Sub(*g.CheckedAt) < interval
+			return !all && !iptv.Due(g.CheckedAt, retries[g.ID], interval, s.now())
 		})
 		if len(due) > 0 {
 			if err := s.refreshCatalog(ctx, c, due); err != nil {
@@ -89,7 +103,83 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 			}
 		}
 	}
+	if !sweepDue(s.now()) {
+		return nil
+	}
+	if deleted, err := s.SweepPrograms(ctx); err != nil {
+		return err
+	} else if deleted > 0 {
+		s.logger.Info("Deleted past programmes", "programmes", deleted)
+	}
 	return nil
+}
+
+// guideRetries maps the guides whose last download failed to their next
+// try, and remembers them for GuideRetry.
+func (s *Service) guideRetries(ctx context.Context) (map[accounts.ID]*time.Time, error) {
+	rows, err := s.db.Query(ctx, "SELECT id, next_try_at FROM live_guides WHERE next_try_at IS NOT NULL")
+	if err != nil {
+		return nil, err
+	}
+	retries := map[accounts.ID]*time.Time{}
+	var id accounts.ID
+	var at time.Time
+	_, err = pgx.ForEachRow(rows, []any{&id, &at}, func() error {
+		retries[id] = &at
+		return nil
+	})
+	if err == nil {
+		retriesMu.Lock()
+		knownRetries = map[accounts.ID]time.Time{}
+		for id, at := range retries {
+			knownRetries[id] = *at
+		}
+		retriesMu.Unlock()
+	}
+	return retries, err
+}
+
+// lastSweep is when past programmes were last deleted.
+var lastSweep struct {
+	sync.Mutex
+	at time.Time
+}
+
+// sweepDue reports whether past programmes are deleted now, at most every
+// programSweep, and takes the turn.
+func sweepDue(now time.Time) bool {
+	lastSweep.Lock()
+	defer lastSweep.Unlock()
+	if now.Sub(lastSweep.at) < programSweep {
+		return false
+	}
+	lastSweep.at = now
+	return true
+}
+
+var (
+	retriesMu    sync.Mutex
+	knownRetries = map[accounts.ID]time.Time{}
+)
+
+// GuideRetry returns when a guide whose last download failed is tried
+// again, as known since the guides were last looked for.
+func GuideRetry(guide accounts.ID) (time.Time, bool) {
+	retriesMu.Lock()
+	defer retriesMu.Unlock()
+	at, ok := knownRetries[guide]
+	return at, ok
+}
+
+// rememberRetry records a guide's next try, the zero time after a success.
+func rememberRetry(guide accounts.ID, at time.Time) {
+	retriesMu.Lock()
+	defer retriesMu.Unlock()
+	if at.IsZero() {
+		delete(knownRetries, guide)
+	} else {
+		knownRetries[guide] = at
+	}
 }
 
 // RefreshGuide fetches every XMLTV guide of one of the scope's live TV
@@ -155,6 +245,8 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			code = guideTooLarge
 		case errors.Is(err, xmltv.ErrMalformed):
 			code = guideMalformed
+		case errors.Is(err, iptv.ErrRateLimited):
+			code = guideRateLimited
 		default:
 			var pgErr interface{ SQLState() string }
 			if errors.As(err, &pgErr) {
@@ -169,15 +261,27 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 					return nil, err
 				}
 			}
-			_, err := s.db.Exec(ctx, "UPDATE live_guides SET checked_at = $2, error = $3 WHERE id = $1", g.ID, at, code)
+			var after time.Duration
+			if limited, ok := errors.AsType[*iptv.RateLimitError](err); ok {
+				after = limited.RetryAfter
+			}
+			var failures int
+			if err := s.db.QueryRow(ctx, "SELECT failures FROM live_guides WHERE id = $1", g.ID).Scan(&failures); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return nil, err
+			}
+			next := at.Add(iptv.Backoff(failures+1, time.Duration(s.settings().LiveTvRefreshHours)*time.Hour, after))
+			_, err := s.db.Exec(ctx, "UPDATE live_guides SET checked_at = $2, error = $3, failures = failures + 1, next_try_at = $4 WHERE id = $1",
+				g.ID, at, code, next)
+			rememberRetry(g.ID, next)
 			return nil, err
 		}
 		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx, `UPDATE live_guides SET generation = $2, checked_at = $3, fetched_at = $3, error = '', channels = $4,
-				programmes = $5 WHERE id = $1`, g.ID, generation, at, channels, programmes)
+				programmes = $5, failures = 0, next_try_at = NULL WHERE id = $1`, g.ID, generation, at, channels, programmes)
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
+			rememberRetry(g.ID, time.Time{})
 			for _, table := range []string{"live_guide_programmes", "live_guide_channels"} {
 				if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE guide_id = $1 AND generation <> $2", g.ID, generation); err != nil {
 					return err
@@ -308,11 +412,20 @@ func positive(n int) *int {
 }
 
 // readGuide downloads a guide and reads it (see xmltv.Read). The address
-// never appears in errors: it may embed credentials.
+// never appears in errors: it may embed credentials. A provider that asks
+// to slow down fails it with an iptv.RateLimitError, retried after a
+// backoff (see RefreshGuides).
 func (s *Service) readGuide(ctx context.Context, c addons.LiveCatalog, address string, options xmltv.Options,
 	channel func(xmltv.Channel) error, programme func(xmltv.Programme) error) error {
 	ctx, cancel := context.WithTimeout(ctx, guideTimeout)
 	defer cancel()
+	// The guide of an IPTV source is mostly its provider's, whose host its
+	// list was just asked of: it waits for the host's turn.
+	if c.Addon.IPTV() {
+		if err := iptv.Hosts.Wait(ctx, address); err != nil {
+			return err
+		}
+	}
 	answered := time.AfterFunc(guideAnswer, cancel)
 	response, err := s.client.Open(ctx, http.MethodGet, address, http.Header{"Accept": {"application/xml, text/xml, */*"}}, c.Confined)
 	answered.Stop()
@@ -320,6 +433,10 @@ func (s *Service) readGuide(ctx context.Context, c addons.LiveCatalog, address s
 		return err
 	}
 	defer response.Body.Close()
+	if limited := iptv.RateLimited(response); limited != nil {
+		iptv.Hosts.Delay(address, cmp.Or(limited.RetryAfter, 2*iptv.RequestGap))
+		return limited
+	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: HTTP %d", stremio.ErrUnreachable, response.StatusCode)
 	}
@@ -344,12 +461,16 @@ func (r *stallReader) Read(p []byte) (int, error) {
 }
 
 // guidePrograms lists the programmes the XMLTV guides of the view's live
-// TV catalogs give the channels that overlap [from, to), but those of
-// skip, which have Native EPG programmes: those of the guide channel each
-// channel is mapped to. A channel two catalogs list takes the programmes
-// of the first one's mapping; a channel has one programme from each
-// start.
-func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string]Item, skip map[string]bool, from, to time.Time) ([]Item, []record, error) {
+// TV catalogs give the channels that overlap [q.From, q.To) and that keep
+// accepts, by start time then channel number, but those of skip, which
+// have Native EPG programmes: those of the guide channel each channel is
+// mapped to. A channel two catalogs list takes the programmes of the first
+// one's mapping; a channel has one programme from each start. With a limit,
+// the guide is read a window at a time from q.From until enough are kept.
+// Every programme read is remembered by its identifier (see
+// unsavedProgram).
+func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string]Item, skip map[string]bool, q GuideQuery,
+	keep func(Item) bool) ([]Item, error) {
 	order := map[addons.LibraryKey]int{}
 	for i, src := range v.channels {
 		if src.guide {
@@ -360,7 +481,7 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 		}
 	}
 	if len(order) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 	byID := map[accounts.ID]Item{}
 	ids := make([]accounts.ID, 0, len(channels))
@@ -371,64 +492,103 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 		}
 	}
 	if len(ids) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
-	rows, err := s.db.Query(ctx, `SELECT m.channel_id, m.addon_id, m.catalog_type, m.catalog_id, p.starts_at, p.ends_at, p.title, p.subtitle,
-		p.description, p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon
-		FROM live_guide_maps m JOIN live_guides g ON g.id = m.guide_id
-		JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = m.xmltv_id
-		WHERE m.channel_id = ANY($1::uuid[]) AND p.ends_at > $2 AND p.starts_at < $3 ORDER BY p.starts_at`, ids, from, to)
+	// Each channel's mapping: that of the first of its catalogs.
+	rows, err := s.db.Query(ctx, `SELECT channel_id, addon_id, catalog_type, catalog_id, guide_id, xmltv_id FROM live_guide_maps
+		WHERE channel_id = ANY($1::uuid[]) AND guide_id IS NOT NULL`, ids)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	type row struct {
-		xmltv.Programme
-		channel accounts.ID
+	type mapping struct {
+		guide   accounts.ID
+		xmltvID string
 		catalog int
 	}
-	var found []row
-	first := map[accounts.ID]int{}
-	var r row
+	mapped := map[accounts.ID]mapping{}
+	var channel accounts.ID
 	var key addons.LibraryKey
-	if _, err := pgx.ForEachRow(rows, []any{&r.channel, &key.AddonID, &key.CatalogType, &key.CatalogID, &r.Start, &r.Stop, &r.Title,
-		&r.SubTitle, &r.Description, &r.Categories, &r.Season, &r.Episode, &r.Icon}, func() error {
+	var m mapping
+	if _, err := pgx.ForEachRow(rows, []any{&channel, &key.AddonID, &key.CatalogType, &key.CatalogID, &m.guide, &m.xmltvID}, func() error {
 		index, ok := order[key]
-		if !ok {
-			return nil
+		if current, seen := mapped[channel]; ok && (!seen || index < current.catalog) {
+			m.catalog = index
+			mapped[channel] = m
 		}
-		r.catalog = index
-		if current, seen := first[r.channel]; !seen || index < current {
-			first[r.channel] = index
-		}
-		found = append(found, r)
 		return nil
 	}); err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	if len(mapped) == 0 {
+		return nil, nil
+	}
+	var channelIDs, guideIDs []accounts.ID
+	var xmltvIDs []string
+	var numbers []int
+	for id, m := range mapped {
+		number, _ := strconv.Atoi(byID[id].Number)
+		channelIDs, guideIDs, xmltvIDs, numbers = append(channelIDs, id), append(guideIDs, m.guide), append(xmltvIDs, m.xmltvID), append(numbers, number)
 	}
 	var items []Item
-	var records []record
 	type start struct {
 		channel accounts.ID
 		at      int64
 	}
 	starts := map[start]bool{}
-	for _, r := range found {
-		if first[r.channel] != r.catalog || starts[start{r.channel, r.Start.UnixNano()}] {
-			continue
+	read := func(from, to time.Time) error {
+		rows, err := s.db.Query(ctx, `SELECT c.channel_id, p.guide_id, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description,
+			p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon
+			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, number)
+			JOIN live_guides g ON g.id = c.guide_id
+			JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = c.xmltv_id
+			WHERE p.ends_at > $5 AND p.starts_at < $6 ORDER BY p.starts_at, c.number, c.channel_id`, channelIDs, guideIDs, xmltvIDs, numbers, from, to)
+		if err != nil {
+			return err
 		}
-		starts[start{r.channel, r.Start.UnixNano()}] = true
-		channel := byID[r.channel]
-		video := guideVideo(r.Programme)
-		program, ok := programItem(channel, video, r.SubTitle)
-		if !ok {
-			continue
-		}
-		items = append(items, program)
-		records = append(records, record{ID: program.ID, Key: programKey(channel.StremioID, programmeID(video)), Kind: KindProgram,
-			Parent: &channel.ID, Channel: channel.StremioID, Video: &video, Confined: v.channels[r.catalog].addon.confined,
-			EpisodeTitle: r.SubTitle})
+		var p xmltv.Programme
+		var channel, guide accounts.ID
+		var xmltvID string
+		_, err = pgx.ForEachRow(rows, []any{&channel, &guide, &xmltvID, &p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories,
+			&p.Season, &p.Episode, &p.Icon}, func() error {
+			if starts[start{channel, p.Start.UnixNano()}] || q.Limit > 0 && len(items) >= q.Limit {
+				return nil
+			}
+			starts[start{channel, p.Start.UnixNano()}] = true
+			video := guideVideo(p)
+			program, ok := programItem(byID[channel], video, p.SubTitle)
+			if !ok {
+				return nil
+			}
+			rememberProgram(program.ID, programRef{channel: byID[channel].StremioID, guide: guide, xmltvID: xmltvID, start: p.Start})
+			if keep(program) {
+				items = append(items, program)
+			}
+			return nil
+		})
+		return err
 	}
-	return items, records, nil
+	if q.Limit <= 0 {
+		return items, read(q.From, q.To)
+	}
+	// A limited listing reads 6 hours, then a day, then the rest, which
+	// keeps each read's sort small.
+	from := q.From
+	for _, span := range []time.Duration{6 * time.Hour, 24 * time.Hour, q.To.Sub(q.From)} {
+		to := q.From.Add(span)
+		if to.After(q.To) {
+			to = q.To
+		}
+		if !to.After(from) {
+			continue
+		}
+		// A programme that started before from is read with the window it
+		// started in, and its start keeps it from being listed twice.
+		if err := read(from, to); err != nil || len(items) >= q.Limit || !to.Before(q.To) {
+			return items, err
+		}
+		from = to
+	}
+	return items, nil
 }
 
 // guideVideo describes an XMLTV programme as the Native EPG does, which
