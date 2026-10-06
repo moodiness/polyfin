@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -316,6 +317,26 @@ func TestKeptPagesAndDescriptionsSurviveARestart(t *testing.T) {
 	}
 	if got := len(addon.requests) - before; got != 0 {
 		t.Errorf("after a restart, the addon was asked %d times: %v", got, addon.requests[before:])
+	}
+
+	// An addon given another address, another configuration, answers anew:
+	// what was kept for the old one is not served.
+	moved := httptest.NewServer(addon)
+	t.Cleanup(moved.Close)
+	if _, err := e.service.db.Exec(t.Context(), "UPDATE addons SET manifest_url = $1", moved.URL+"/manifest.json"); err != nil {
+		t.Fatal(err)
+	}
+	e = e.restarted()
+	catalogs, metas := len(addon.catalogRequests()), addon.metaRequests()
+	e.children(e.member, "Top", 0, 10)
+	if _, err := e.service.Item(t.Context(), e.member, page.Items[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(addon.catalogRequests()) - catalogs; got != 1 {
+		t.Errorf("another address read %d catalog pages", got)
+	}
+	if got := addon.metaRequests() - metas; got != 1 {
+		t.Errorf("another address read %d descriptions", got)
 	}
 }
 
