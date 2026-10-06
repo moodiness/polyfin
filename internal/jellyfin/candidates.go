@@ -8,6 +8,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // A play chooses among a title's versions, in their order: the first that
@@ -64,11 +65,18 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
 	// The analyses and keyframe indexes started are kept whatever the app
-	// does meanwhile, for the next play.
+	// does meanwhile, for the next play. The first candidate is read as the
+	// play's; the others, read alongside in case it does not play, in the
+	// background, giving way to playbacks (see playback.Background).
 	detached := r.WithContext(context.WithoutCancel(r.Context()))
+	aside := r.WithContext(playback.Background(detached.Context()))
 	try := func(n int, analyze bool) tried {
 		i := c.order[n]
 		version := p.versions[i]
+		detached := detached
+		if n > 0 {
+			detached = aside
+		}
 		var analysis media.Analysis
 		if analyze {
 			var err error
@@ -215,17 +223,3 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 // subtitleGrace is how long a play waits for the addons' subtitles once
 // its versions are in.
 const subtitleGrace = time.Second
-
-// warmer is what warms the start of a version's first HLS segment ahead
-// of the player's request.
-type warmer interface {
-	Warm(version library.Version, start time.Duration)
-}
-
-// warm has the bytes of the version chosen for an HLS play read from
-// start, where the play begins, while the app reads the answer.
-func (h *Handler) warm(version library.Version, start time.Duration) {
-	if w, ok := any(h.Playback).(warmer); ok {
-		w.Warm(version, start)
-	}
-}

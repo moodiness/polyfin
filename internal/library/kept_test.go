@@ -253,8 +253,7 @@ func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
 		t.Errorf("9 minutes later, refreshed after 10: %d catalog requests", got)
 	}
 	e.wait(2 * time.Minute)
-	e.list()
-	eventually(t, "refreshing after 11 minutes", func() bool { return e.requests("catalog/") == 2 })
+	refreshed(t, e, "refreshing after 11 minutes", 2)
 
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 24 * 60 })
 	e.wait(23 * time.Hour)
@@ -264,19 +263,41 @@ func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
 		t.Errorf("23 hours later, refreshed daily: %d catalog requests", got)
 	}
 	e.wait(2 * time.Hour)
-	e.list()
-	eventually(t, "refreshing after 25 hours", func() bool { return e.requests("catalog/") == 3 })
+	refreshed(t, e, "refreshing after 25 hours", 3)
 
 	// A shorter age applies at once, to the page kept too.
 	e.wait(3 * time.Minute)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 2 })
-	e.list()
-	eventually(t, "refreshing after 3 minutes, every 2", func() bool { return e.requests("catalog/") == 4 })
+	refreshed(t, e, "refreshing after 3 minutes, every 2", 4)
 	e.wait(time.Minute)
 	e.list()
 	time.Sleep(50 * time.Millisecond)
 	if got := e.requests("catalog/"); got != 4 {
 		t.Errorf("1 minute later, refreshed every 2 minutes: %d catalog requests", got)
+	}
+}
+
+// refreshed lists the Top library until the addon was asked requests
+// times in all. A read past the age starts a refresh unless one is under
+// way, and the previous refresh may still be storing what it fetched: the
+// read joins it then, so the library is read again until its own starts.
+// When it does not come, it tells every request the addon had and what
+// the service logged.
+func refreshed(t *testing.T, e lifetimeEnv, what string, requests int) {
+	t.Helper()
+	for deadline := time.Now().Add(holdLimit); ; time.Sleep(10 * time.Millisecond) {
+		e.list()
+		got := e.requests("catalog/")
+		if got == requests {
+			return
+		}
+		if got > requests || time.Now().After(deadline) {
+			e.addon.mu.Lock()
+			asked := slices.Clone(e.addon.requests)
+			e.addon.mu.Unlock()
+			t.Fatalf("%s: %d catalog requests, want %d; now %v, catalog life %v; requests %q; log:\n%s",
+				what, got, requests, e.service.now().Sub(time.Now()).Round(time.Second), e.service.catalogLife(), asked, e.log.String())
+		}
 	}
 }
 

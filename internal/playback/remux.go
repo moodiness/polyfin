@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // ErrNotRemuxable reports a version that cannot be cut into segments on
@@ -49,7 +50,18 @@ type Remux struct {
 // index on first use. An MPEG-TS file, which has no index, is cut every
 // few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
 // Jellyfin plays such files, with FFmpeg reading it from the time asked.
+// The bytes of its first segment are warmed meanwhile, unless a warm of
+// the version ran lately (see Warm), in the background when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
+	plan, err := s.plan(ctx, version)
+	if err == nil && !plan.Grid() {
+		s.warm(version, 0, false, !background(ctx))
+	}
+	return plan, err
+}
+
+// plan is Plan, without warming.
+func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	analysis, err := s.Analyze(ctx, version)
 	if err != nil {
 		return hls.Plan{}, err
@@ -73,13 +85,23 @@ func transportStream(analysis media.Analysis) bool {
 }
 
 // keyframes returns a version's keyframe times: remembered, saved, or read
-// from its container's index through the source cache.
+// from its container's index through the source cache, with where each
+// keyframe starts in the file, kept for Warm. A version whose index cannot
+// be read, for what its file holds, is not read again for a while; one
+// whose host failed is read again at the next play, and one whose host
+// held the reads back is not kept as failed. A read for a playback, ctx
+// not marked Background, reads the source as a playback.
 func (s *Service) keyframes(ctx context.Context, version library.Version, analysis media.Analysis) ([]time.Duration, error) {
 	if times, ok := s.indexes.Get(version.ID); ok {
 		return times, nil
 	}
 	if err, failed := s.unindexed.Get(version.ID); failed {
 		return nil, err
+	}
+	if !background(ctx) {
+		src := s.open(version)
+		defer src.Release()
+		defer src.Urge()()
 	}
 	result, err, _ := s.flight.Do("keyframes "+version.ID.String(), func() (any, error) {
 		// Shared and kept like an analysis: read to the end, and saved, even
@@ -101,17 +123,30 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		var times []time.Duration
 		err = s.readSized(ctx, version, analysis, src, func(size int64) error {
 			var err error
-			times, err = container.Keyframes(ctx, src, size)
+			if times, err = container.Keyframes(ctx, src, size); err == nil {
+				// From the blocks just read: no request more.
+				if offsets, err := container.KeyframeOffsets(ctx, src, size); err == nil {
+					s.offsets.Put(version.ID, offsets)
+				}
+			}
 			return err
 		})
 		if errors.Is(err, container.ErrNoIndex) {
 			err = fmt.Errorf("%w: %w", ErrNotRemuxable, err)
 		}
-		if err != nil || len(times) == 0 {
-			if err == nil {
-				err = fmt.Errorf("%w: the index lists no keyframe", ErrNotRemuxable)
+		if err == nil && len(times) == 0 {
+			err = fmt.Errorf("%w: the index lists no keyframe", ErrNotRemuxable)
+		}
+		if err != nil {
+			switch failure := src.Failure(); {
+			case errors.Is(err, ErrNotRemuxable) || errors.Is(err, container.ErrUnreadable):
+				s.unindexed.Put(version.ID, err)
+			case failure != nil && !errors.Is(failure, source.ErrSlowDown):
+				// The source failed, as when an analysis meets it: the
+				// version is not offered for a while. A host asking to slow
+				// down tells nothing of the file.
+				s.failures.Put(version.ID, failure)
 			}
-			s.unindexed.Put(version.ID, err)
 			return nil, err
 		}
 		if _, err := s.db.Exec(ctx, `INSERT INTO media_keyframes (version_id, keyframes) VALUES ($1, $2)
@@ -362,7 +397,9 @@ func (r Remux) key() hls.Key {
 
 // remuxOpener reads the version through the source cache, which keeps
 // what FFmpeg reads for the next seek. FFmpeg extracts the version's text
-// subtitles at the same time, until the version's are all extracted.
+// subtitles at the same time, until the version's are all extracted. A
+// source failing meanwhile has the version kept as failed, so that the
+// next PlaybackInfo plays another.
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -383,15 +420,25 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if !x.Covers(0, analysis.Duration) {
 			streams = textSubtitles(analysis)
 		}
+		// A remux is a playback: its reads never wait behind background
+		// ones of the host.
 		src := s.open(remux.Version)
+		unurge := src.Urge()
 		target, unregister := s.loopback.register(src)
+		done := make(chan struct{})
+		go s.watchSource(remux.Version, src, done)
 		release := func() {
+			close(done)
 			unregister()
+			unurge()
 			src.Release()
 			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
+		// The encoding stops as soon as the source fails, rather than
+		// taking a body cut short for the end of the file.
+		failed := src.Failed()
 		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
-			Subtitles: streams, Extracted: x}
+			Subtitles: streams, Extracted: x, Failed: failed, Failure: func() error { return failureOf(src, failed) }}
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
 			r.ADTS = true
 		}

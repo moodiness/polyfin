@@ -1,7 +1,10 @@
 package library
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,11 +14,31 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
+// lockedBuffer keeps what a logger writes, from any goroutine.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // lifetimeEnv serves one movie with a stream, on a clock the test moves.
+// The service logs into log, which tests show when they fail.
 type lifetimeEnv struct {
 	env
 	addon   *fakeAddon
 	elapsed *atomic.Int64
+	log     *lockedBuffer
 }
 
 func newLifetimeEnv(t *testing.T) lifetimeEnv {
@@ -23,6 +46,8 @@ func newLifetimeEnv(t *testing.T) lifetimeEnv {
 	e := newEnv(t)
 	elapsed := new(atomic.Int64)
 	e.service.now = func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) }
+	log := &lockedBuffer{}
+	e.service.logger = slog.New(slog.NewTextHandler(log, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	movies := titles("movie", 1)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie"},
@@ -33,7 +58,7 @@ func newLifetimeEnv(t *testing.T) lifetimeEnv {
 		streams:  map[string][]stremio.Stream{"movie/" + movies[0].ID: {{Name: "1080p", URL: "https://cdn.example/movie"}}},
 	}
 	e.install(addons.Shared(), addon)
-	return lifetimeEnv{env: e, addon: addon, elapsed: elapsed}
+	return lifetimeEnv{env: e, addon: addon, elapsed: elapsed, log: log}
 }
 
 // requests counts the requests whose path starts with prefix.

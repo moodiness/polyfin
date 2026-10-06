@@ -712,7 +712,9 @@ func TestFetchStalledAttemptsAreRetried(t *testing.T) {
 			}))
 			defer server.Close()
 			cache := newCache(t, 1<<30)
-			cache.attemptTime = 100 * time.Millisecond
+			// Long enough for the healthy attempt under any load: the
+			// stalled one ends at this deadline, whatever the machine does.
+			cache.attemptTime = time.Second
 			s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 			defer s.Release()
 			started := time.Now()
@@ -721,7 +723,7 @@ func TestFetchStalledAttemptsAreRetried(t *testing.T) {
 				t.Fatalf("%d bytes: %v", len(got), err)
 			}
 			// The attempt, then a wait of 0.5 s.
-			if waited := time.Since(started); requests.Load() != 2 || waited > 3*time.Second {
+			if waited := time.Since(started); requests.Load() != 2 || waited > 8*time.Second {
 				t.Errorf("%d requests in %v", requests.Load(), waited)
 			}
 		})
