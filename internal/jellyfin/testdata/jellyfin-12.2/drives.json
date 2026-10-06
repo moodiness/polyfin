@@ -1,0 +1,17 @@
+[
+  {
+    "Name": "/",
+    "Path": "/",
+    "Type": "Directory"
+  },
+  {
+    "Name": "/cache",
+    "Path": "/cache",
+    "Type": "Directory"
+  },
+  {
+    "Name": "/config",
+    "Path": "/config",
+    "Type": "Directory"
+  }
+]

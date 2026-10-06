@@ -1,0 +1,47 @@
+{
+  "Items": [
+    {
+      "Date": "2026-10-06T16:38:56.2634277Z",
+      "Id": 9,
+      "Name": "Password has been changed for user dave",
+      "Severity": "Information",
+      "Type": "UserPasswordChanged",
+      "UserId": "b13d7f6160544d709a4f3dd0065e97c6"
+    },
+    {
+      "Date": "2026-10-06T16:38:56.1560479Z",
+      "Id": 8,
+      "Name": "User dave has been created",
+      "Severity": "Information",
+      "Type": "UserCreated",
+      "UserId": "b13d7f6160544d709a4f3dd0065e97c6"
+    },
+    {
+      "Date": "2026-10-06T16:38:56.1463481Z",
+      "Id": 7,
+      "Name": "Password has been changed for user carol",
+      "Severity": "Information",
+      "Type": "UserPasswordChanged",
+      "UserId": "ea0301e65c6f4694bd2874114f3a6a54"
+    },
+    {
+      "Date": "2026-10-06T16:38:56.0404406Z",
+      "Id": 6,
+      "Name": "User carol has been created",
+      "Severity": "Information",
+      "Type": "UserCreated",
+      "UserId": "ea0301e65c6f4694bd2874114f3a6a54"
+    },
+    {
+      "Date": "2026-10-06T16:38:55.9944985Z",
+      "Id": 5,
+      "Name": "admin successfully authenticated",
+      "Severity": "Information",
+      "ShortOverview": "IP address: 172.17.0.1",
+      "Type": "AuthenticationSucceeded",
+      "UserId": "ab44156ab5c64f209477afb19454ce39"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 9
+}

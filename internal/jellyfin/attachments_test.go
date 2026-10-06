@@ -11,20 +11,24 @@ import (
 )
 
 // recordedClip is how FFmpeg describes the clip the attachment fixtures
-// were recorded with: two subtitle tracks, three fonts, then cover art.
+// were recorded with: two subtitle tracks, three fonts, then cover art,
+// each tagged with the zero bytes of Matroska's empty codec tags.
 var recordedClip = media.Analysis{Format: "matroska,webm", Streams: []media.Stream{
-	{Index: 0, Type: "video", Codec: "h264"},
-	{Index: 1, Type: "audio", Codec: "aac"},
-	{Index: 2, Type: "subtitle", Codec: "subrip", Language: "fre"},
-	{Index: 3, Type: "subtitle", Codec: "ass", Language: "eng"},
-	{Index: 4, Type: "attachment", Codec: "ttf", FileName: "Test.ttf", MimeType: "application/x-truetype-font"},
-	{Index: 5, Type: "attachment", Codec: "otf", FileName: "Test.otf", MimeType: "application/vnd.ms-opentype"},
-	{Index: 6, Type: "attachment", Codec: "ttf", FileName: "Odd.ttf", MimeType: "application/x-font-ttf"},
-	{Index: 7, Type: "video", Codec: "mjpeg", AttachedPicture: true, FileName: "cover.jpg", MimeType: "image/jpeg"},
+	{Index: 0, Type: "video", Codec: "h264", CodecTag: matroskaTag},
+	{Index: 1, Type: "audio", Codec: "aac", CodecTag: matroskaTag},
+	{Index: 2, Type: "subtitle", Codec: "subrip", CodecTag: matroskaTag, Language: "fre"},
+	{Index: 3, Type: "subtitle", Codec: "ass", CodecTag: matroskaTag, Language: "eng"},
+	{Index: 4, Type: "attachment", Codec: "ttf", CodecTag: matroskaTag, FileName: "Test.ttf", MimeType: "application/x-truetype-font"},
+	{Index: 5, Type: "attachment", Codec: "otf", CodecTag: matroskaTag, FileName: "Test.otf", MimeType: "application/vnd.ms-opentype"},
+	{Index: 6, Type: "attachment", Codec: "ttf", CodecTag: matroskaTag, FileName: "Odd.ttf", MimeType: "application/x-font-ttf"},
+	{Index: 7, Type: "video", Codec: "mjpeg", CodecTag: matroskaTag, AttachedPicture: true, FileName: "cover.jpg", MimeType: "image/jpeg"},
 }}
 
+// matroskaTag is ffprobe's codec_tag_string of a Matroska track.
+const matroskaTag = "[0][0][0][0]"
+
 func TestAttachedFilesAreListedAsJellyfinListsThem(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "ass", "media-source.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "ass", "media-source.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

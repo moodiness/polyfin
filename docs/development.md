@@ -28,6 +28,6 @@ make check                    # formatting, vet and tests
 
 ## Jellyfin fixtures
 
-Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.1 server, recorded in `internal/jellyfin/testdata/`.
+Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.2 server, recorded in `internal/jellyfin/testdata/`.
 
 `scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container. It requires Docker, curl and jq.

@@ -87,9 +87,9 @@ func TestSeasonsShowTheirOwnImages(t *testing.T) {
 		}
 	}
 
-	// Described as Jellyfin 12.1 describes a season.
+	// Described as Jellyfin 12.2 describes a season.
 	status, body := s.call(http.MethodGet, "/Users/"+user+"/Items/"+seasons.Items[0].Id, app("tv", token), nil)
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "season.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "season.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

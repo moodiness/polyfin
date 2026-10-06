@@ -1,0 +1,64 @@
+{
+  "CacheFolder": {
+    "DeviceId": "/cache",
+    "FreeSpace": 767898238976,
+    "Path": "/cache",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  },
+  "ImageCacheFolder": {
+    "FreeSpace": -1,
+    "Path": "/cache/images",
+    "UsedSpace": -1
+  },
+  "InternalMetadataFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 767898238976,
+    "Path": "/config/metadata",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  },
+  "Libraries": [
+    {
+      "Folders": [
+        {
+          "DeviceId": "/media",
+          "FreeSpace": 51065651200000,
+          "Path": "/media/movies",
+          "StorageType": "Unknown",
+          "UsedSpace": 203567970385920
+        }
+      ],
+      "Id": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+      "Name": "Movies"
+    }
+  ],
+  "LogFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 767898238976,
+    "Path": "/config/log",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  },
+  "ProgramDataFolder": {
+    "DeviceId": "/config",
+    "FreeSpace": 767898238976,
+    "Path": "/config",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  },
+  "TranscodingTempFolder": {
+    "DeviceId": "/cache",
+    "FreeSpace": 767898238976,
+    "Path": "/cache/transcodes",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  },
+  "WebFolder": {
+    "DeviceId": "/",
+    "FreeSpace": 767898238976,
+    "Path": "/jellyfin/jellyfin-web",
+    "StorageType": "Fixed",
+    "UsedSpace": 209997885440
+  }
+}

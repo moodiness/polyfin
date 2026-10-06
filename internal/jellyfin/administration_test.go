@@ -16,10 +16,10 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 )
 
-// matchesFixture compares body with a recorded Jellyfin 12.1 answer.
+// matchesFixture compares body with a recorded Jellyfin 12.2 answer.
 func matchesFixture(t *testing.T, fixture string, body []byte, rules shapeRules) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", fixture+".json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}

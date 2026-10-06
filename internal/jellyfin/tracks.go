@@ -88,7 +88,7 @@ func (t trackPreferences) audio(streams []playback.MediaStream) *int {
 }
 
 // subtitle is the subtitle shown unless the app asks for another, -1 for
-// none, following the subtitle mode as Jellyfin 12.1 does, with tracks
+// none, following the subtitle mode as Jellyfin 12.2 does, with tracks
 // ranked as subtitleRank ranks them:
 //
 //   - Default shows the first track flagged default or forced.
@@ -187,7 +187,7 @@ func (t trackPreferences) matches(s playback.MediaStream) bool {
 	return t.subtitleLanguage == "" || localization.SameLanguage(s.Language, t.subtitleLanguage)
 }
 
-// subtitleRank places a subtitle in Jellyfin 12.1's order, higher first:
+// subtitleRank places a subtitle in Jellyfin 12.2's order, higher first:
 // embedded before files (Polyfin's, see subtitle), flagged default, full
 // in the preferred language, forced in the preferred language, forced of
 // no stated language, forced. Last comes a forced track in the audio's
@@ -246,7 +246,7 @@ func bestSubtitle(subtitles []playback.MediaStream, score func(playback.MediaStr
 }
 
 // undeterminedLanguage reports whether a track states no language, as
-// Jellyfin 12.1 counts them: none, undetermined, multiple languages, or no
+// Jellyfin 12.2 counts them: none, undetermined, multiple languages, or no
 // linguistic content.
 func undeterminedLanguage(language string) bool {
 	switch localization.LanguageCode(language) {

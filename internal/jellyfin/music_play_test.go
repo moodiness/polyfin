@@ -191,6 +191,9 @@ func TestAudiobookAddonsMakeBooksLibraries(t *testing.T) {
 			// Described from the stream reply, as songs are (see musicShapes).
 			"Bitrate": {"*"}, "Size": {"*"}, "BitRate": {"*"}, "Channels": {"*"}, "ChannelLayout": {"*"}, "TimeBase": {"*"},
 			"Profile": {"*"}, "Language": {"*"}, "LocalizedLanguage": {"*"},
+			// Jellyfin 12.2 reads the tag of the recorded book's MP4 audio
+			// (mp4a) from ffprobe; the stream reply tells no tag.
+			"CodecTag": {"*"},
 			// The addon gives these books no year; Jellyfin dated its file
 			// with the zero date.
 			"PremiereDate": {"*"},

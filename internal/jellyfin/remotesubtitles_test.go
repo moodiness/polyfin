@@ -231,7 +231,7 @@ func TestRemoteSubtitlesOfUnknownItems(t *testing.T) {
 	}
 }
 
-// remoteSubtitleInfoTypes are the properties of Jellyfin 12.1's
+// remoteSubtitleInfoTypes are the properties of Jellyfin 12.2's
 // RemoteSubtitleInfo schema, with the JSON type of each: the recorded
 // search found nothing to show them.
 var remoteSubtitleInfoTypes = map[string]string{
@@ -243,7 +243,7 @@ var remoteSubtitleInfoTypes = map[string]string{
 
 func TestRemoteSubtitleSearchMatchesJellyfin(t *testing.T) {
 	p := remoteSubtitles(t)
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "remote-subtitles.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "remote-subtitles.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

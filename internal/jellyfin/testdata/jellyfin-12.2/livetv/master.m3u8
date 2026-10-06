@@ -1,0 +1,3 @@
+#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=30128000,AVERAGE-BANDWIDTH=30128000,VIDEO-RANGE=SDR,CODECS="avc1.64001E,mp4a.40.2",RESOLUTION=640x360,FRAME-RATE=24
+live.m3u8?DeviceId=<redacted>&MediaSourceId=97bf5354c4b8ea8d37076c54ec5d7e35&VideoCodec=h264&AudioCodec=copy&AudioStreamIndex=-1&VideoBitrate=119808000&AudioBitrate=192000&MaxFramerate=24&SegmentContainer=ts&MinSegments=2&PlaySessionId=<redacted>&ApiKey=<redacted>&LiveStreamId=<redacted>&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&h264-level=30&h264-videobitdepth=8&h264-profile=high&h264-rangetype=SDR&h264-deinterlace=true&TranscodeReasons=AudioCodecNotSupported

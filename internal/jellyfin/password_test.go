@@ -9,11 +9,11 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// passwordStatuses returns the statuses Jellyfin 12.1 answered to a
+// passwordStatuses returns the statuses Jellyfin 12.2 answered to a
 // successful password change and to a wrong current password.
 func passwordStatuses(t *testing.T) (changed, wrongCurrent int) {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/jellyfin-12.1/next-statuses.json")
+	raw, err := os.ReadFile("testdata/jellyfin-12.2/next-statuses.json")
 	if err != nil {
 		t.Fatal(err)
 	}

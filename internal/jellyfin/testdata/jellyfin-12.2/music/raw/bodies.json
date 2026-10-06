@@ -1,0 +1,76 @@
+{
+  "InstantMixAlbum": {
+    "TotalRecordCount": 5,
+    "names": [
+      "Duet",
+      "First Light",
+      "Saw Tooth",
+      "Second Wind",
+      "Third Way"
+    ]
+  },
+  "InstantMixArtist": {
+    "TotalRecordCount": 5,
+    "names": [
+      "Duet",
+      "First Light",
+      "Saw Tooth",
+      "Second Wind",
+      "Third Way"
+    ]
+  },
+  "InstantMixArtistQuery": {
+    "TotalRecordCount": 5,
+    "names": [
+      "Duet",
+      "First Light",
+      "Saw Tooth",
+      "Second Wind",
+      "Third Way"
+    ]
+  },
+  "InstantMixNone": {
+    "TotalRecordCount": 5,
+    "names": []
+  },
+  "InstantMixSong": {
+    "TotalRecordCount": 5,
+    "names": [
+      "Duet",
+      "First Light",
+      "Saw Tooth",
+      "Second Wind",
+      "Third Way"
+    ]
+  },
+  "InstantMixSongs": {
+    "TotalRecordCount": 5,
+    "names": [
+      "Duet",
+      "First Light",
+      "Saw Tooth",
+      "Second Wind",
+      "Third Way"
+    ]
+  },
+  "InstantMixUnknown": {
+    "status": 404,
+    "title": "Not Found",
+    "traceId": "00-22d07caf0db03ea0770f3e7b34a9a97d-36320b443d21df36-00",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+  },
+  "LyricProviders": "",
+  "Lyrics": {
+    "status": 404,
+    "title": "Not Found",
+    "traceId": "00-db907b744c819fa11f22889077d763f8-eb1cbffa904bb17d-00",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+  },
+  "LyricsUnknown": {
+    "status": 404,
+    "title": "Not Found",
+    "traceId": "00-c180527364ea6843f64a0f8134c50c6a-25241ed9039a67b0-00",
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+  },
+  "RemoteLyrics": []
+}

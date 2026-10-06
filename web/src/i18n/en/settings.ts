@@ -31,7 +31,7 @@ const settings = {
       'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
-      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.1.',
+      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.2.',
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',

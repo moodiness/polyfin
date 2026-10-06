@@ -1,0 +1,43 @@
+[
+  {
+    "BackdropImageTags": [
+      ""
+    ],
+    "ChannelId": null,
+    "CommunityRating": 0,
+    "Container": "",
+    "Id": "",
+    "ImageBlurHashes": {
+      "Backdrop": {
+        "a492f1b0a7f310f3ae5cf1499cd703ae": ""
+      },
+      "Primary": {
+        "cc0d1290dbdd0cbe999a1aff8aef2504": ""
+      }
+    },
+    "ImageTags": {
+      "Primary": ""
+    },
+    "IsFolder": false,
+    "LocationType": "",
+    "MediaType": "",
+    "Name": "",
+    "OriginalLanguage": "",
+    "Path": "",
+    "PremiereDate": "",
+    "PrimaryImageAspectRatio": 0,
+    "ProductionYear": 0,
+    "RunTimeTicks": 0,
+    "ServerId": "",
+    "Type": "",
+    "UserData": {
+      "IsFavorite": false,
+      "ItemId": "",
+      "Key": "",
+      "PlayCount": 0,
+      "PlaybackPositionTicks": 0,
+      "Played": false
+    },
+    "VideoType": ""
+  }
+]

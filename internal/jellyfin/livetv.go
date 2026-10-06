@@ -701,6 +701,11 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	request playbackInfoRequest, session string, relay bool, allowed accounts.Conversions) (MediaSourceInfo, bool) {
 	streams := slices.DeleteFunc(playback.MediaStreams(analysis, nil, h.Accounts.Settings().Language),
 		func(s playback.MediaStream) bool { return s.Type == "Subtitle" })
+	// Jellyfin 12.2 reports no codec tag of a live stream: MPEG-TS tags
+	// are zero bytes, and HLS ones it does not read.
+	for i := range streams {
+		streams[i].CodecTag = ""
+	}
 	container := playback.Container(analysis)
 	source := MediaSourceInfo{
 		Protocol: "Http", Id: id.String(), Type: "Default", Container: container, Name: version.Name, IsRemote: true,

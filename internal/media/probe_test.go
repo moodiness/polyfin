@@ -70,7 +70,7 @@ func TestParseRefusesWhatIsNotAVideo(t *testing.T) {
 // The clip Jellyfin's chapters were recorded from, as upstream ffprobe sees
 // it.
 func TestParseReadsChapters(t *testing.T) {
-	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.1", "chapters", "probe.json"))
+	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.2", "chapters", "probe.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

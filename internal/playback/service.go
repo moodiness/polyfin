@@ -145,7 +145,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
 		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
 		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
-		tracks:      cache.New[trackKey, Track](100, time.Hour),
+		tracks:      cache.New[trackKey, Track](100, time.Hour).Sized(maxKeptTracks, func(t Track) int { return len(t.Data) }),
 		untracked:   cache.New[trackKey, error](2000, failureTTL),
 		trackReads:  make(chan struct{}, maxTrackReads),
 		rangeHosts:  cache.New[string, bool](500, 24*time.Hour),

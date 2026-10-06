@@ -1,6 +1,6 @@
 # Jellyfin compatibility
 
-Polyfin targets the Jellyfin 12.1 API, so standard Jellyfin apps sign in, browse, search and play. This page lists the compatible apps, what they get from Polyfin, and the Jellyfin features Polyfin does without.
+Polyfin targets the Jellyfin 12.2 API, so standard Jellyfin apps sign in, browse, search and play. This page lists the compatible apps, what they get from Polyfin, and the Jellyfin features Polyfin does without.
 
 ## Compatible apps
 
@@ -117,6 +117,23 @@ On a user's page under **Users**, the **Access** section's **Can manage subtitle
 - Add: `POST /Videos/{id}/Subtitles`.
 - Delete: `DELETE /Videos/{id}/Subtitles/{index}`; addon subtitles and embedded tracks answer 400.
 
+### Picture subtitles drawn by the app
+
+When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matroska file reaches it as a SUP file, as Jellyfin 12.2 serves its raw file. Polyfin reads the track whole through the file's index, as it does for text tracks, and keeps it for later playbacks. The app reads the file by ranges as it plays.
+
+- A track the index does not list block by block, or larger than 32 MB, is not offered as a file.
+- DVD (VobSub) tracks are not offered as files.
+
+**For app developers:** `GET /Videos/{id}/{mediaSourceId}/Subtitles/{index}/0/Stream.pgssub` (or `.sup`) answers `application/octet-stream` and supports `Range`.
+
+### Jellyfin 12.2 details
+
+- **Codec tags:** each track's `CodecTag` is the tag ffprobe reads, such as `avc1` or `mp4a` in MP4. Matroska's empty tags are left out, and live channels report none. Attached files report theirs as they are, `[0][0][0][0]` in Matroska. Direct play checks a profile's `VideoCodecTag` conditions against the file's tag.
+- **Rewatching:** starting a played movie, episode or audiobook again does not change its last played date. The date changes once the position passes the start, or when the title is played to the end. Next Up therefore does not move past an episode that was only just started.
+- **Letter filters:** `nameStartsWith`, `nameLessThan` and `nameStartsWithOrGreater` ignore letter case. They narrow people, music, favorites and other personal lists, and playlists. Movie and series libraries come from addons' catalogs, so they are not narrowed.
+- **People counts:** `/Persons` counts only the people it can list.
+- **Downmix:** music and audiobooks converted to stereo go through the downmix chosen in the server settings, as the audio of converted video does.
+
 ### Refresh metadata
 
 **Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists, expired ones included, and the rating it looked up, and stop asking addons again for those lists. It then asks the addons for the description again at once.
@@ -129,7 +146,7 @@ API keys, devices, user management, server configuration, the activity log, logs
 
 ## Jellyfin features Polyfin does without
 
-These dashboard features answer as a Jellyfin 12.1 on which nothing of the kind is configured:
+These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind is configured:
 
 - plugins, packages and plugin repositories;
 - browsing the server's folders;

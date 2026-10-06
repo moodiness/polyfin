@@ -204,10 +204,8 @@ func (h *Handler) musicListing(w http.ResponseWriter, r *http.Request, user acco
 // state filters, and sorted as it asks, else by sorting.
 func (h *Handler) writeMusic(w http.ResponseWriter, r *http.Request, user accounts.User, items []library.Item, start, limit int, sorting []string) {
 	keep := itemTypeFilter(r)
-	prefix := strings.ToLower(query(r, "nameStartsWith"))
-	items = slices.DeleteFunc(items, func(item library.Item) bool {
-		return !keep(item) || prefix != "" && !strings.HasPrefix(sortName(item), prefix)
-	})
+	inRange := letterRange(r)
+	items = slices.DeleteFunc(items, func(item library.Item) bool { return !keep(item) || !inRange(sortName(item)) })
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {
 		h.internalError(w, r, err)
@@ -233,6 +231,20 @@ func sortName(item library.Item) string {
 		return strings.ToLower(item.SortName)
 	}
 	return strings.ToLower(strings.TrimSpace(item.Name))
+}
+
+// letterRange is what the alphabet pickers of Jellyfin apps narrow a list
+// to, by sort name and without regard to case, as Jellyfin does:
+// nameStartsWith keeps the names starting with it, nameLessThan those
+// sorting before it ("A" for "#"), nameStartsWithOrGreater those sorting
+// at or after it. name is lower case.
+func letterRange(r *http.Request) func(name string) bool {
+	prefix := strings.ToLower(query(r, "nameStartsWith"))
+	before := strings.ToLower(query(r, "nameLessThan"))
+	from := strings.ToLower(query(r, "nameStartsWithOrGreater"))
+	return func(name string) bool {
+		return (prefix == "" || strings.HasPrefix(name, prefix)) && (before == "" || name < before) && (from == "" || name >= from)
+	}
 }
 
 // sortMusic sorts music by Jellyfin's sort keys, in order, each ascending

@@ -47,7 +47,9 @@ func AudioPlan(duration time.Duration) Plan {
 
 // Audio is what a track is converted to: the FFmpeg encoder (aac,
 // libmp3lame, libopus, flac, pcm_s16le…), its bitrate (zero for lossless
-// codecs), sample rate and channels, zero keeping the source's.
+// codecs), sample rate and channels, zero keeping the source's, and the
+// filter graph it goes through, such as a downmix to stereo, empty for
+// none.
 type Audio struct {
 	// Input is the URL FFmpeg reads the track from, with InputOptions
 	// before it, such as those of the HLS demuxer.
@@ -57,6 +59,7 @@ type Audio struct {
 	Bitrate      int64
 	SampleRate   int
 	Channels     int
+	Filter       string
 }
 
 // args are FFmpeg's options converting the track's first audio stream.
@@ -70,6 +73,9 @@ func (a Audio) args() []string {
 	}
 	if a.Channels > 0 {
 		args = append(args, "-ac", strconv.Itoa(a.Channels))
+	}
+	if a.Filter != "" {
+		args = append(args, "-af", a.Filter)
 	}
 	return args
 }

@@ -12,7 +12,7 @@ Any Jellyfin app connects to it like a regular Jellyfin server, with real user a
 
 ## Features
 
-- **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.1 API.
+- **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.2 API.
 - **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
 - **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV movies and series become libraries.
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapping.

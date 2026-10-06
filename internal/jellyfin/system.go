@@ -110,7 +110,7 @@ type EncodingOptions struct {
 	HlsAudioSeekStrategy                                      string
 }
 
-// encodingOptions are Jellyfin 12.1's defaults, as a new server answers
+// encodingOptions are Jellyfin 12.2's defaults, as a new server answers
 // them; encodingConfiguration enables the fallback fonts when there are
 // some.
 // Polyfin's own encoding settings, under the admin app's Conversion

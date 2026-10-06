@@ -403,11 +403,11 @@ func TestVersionsWithoutSegmentDatabases(t *testing.T) {
 }
 
 // TestMediaSegmentsMatchJellyfin compares the answers with the one
-// recorded from Jellyfin 12.1, which had no segments, and the segments
+// recorded from Jellyfin 12.2, which had no segments, and the segments
 // with the fields of Jellyfin's MediaSegmentDto.
 func TestMediaSegmentsMatchJellyfin(t *testing.T) {
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "media-segments.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "media-segments.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

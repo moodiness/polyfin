@@ -459,15 +459,16 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	_, err = h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
 		switch {
 		case event == playbackStarted:
-			d.Start(now)
+			// Songs keep no resume point; videos and audiobooks do.
+			d.Start(now, item.Kind != library.KindTrack)
 		case positionKnown && item.Kind == library.KindTrack:
-			d.ReachSong(state.Position, runtime, thresholds)
+			d.Reached(d.ReachSong(state.Position, runtime, thresholds), now)
 		case positionKnown && item.Kind == library.KindAudiobook:
-			d.ReachAudiobook(state.Position, runtime)
+			d.Reached(d.ReachAudiobook(state.Position, runtime), now)
 		case positionKnown:
-			d.Reach(state.Position, runtime, thresholds)
+			d.Reached(d.Reach(state.Position, runtime, thresholds), now)
 		case event == playbackStopped:
-			d.Finish()
+			d.Finish(now)
 		}
 	})
 	if err != nil {

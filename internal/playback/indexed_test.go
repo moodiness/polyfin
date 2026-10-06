@@ -187,6 +187,29 @@ func TestTracksAreReadWholeThroughTheIndex(t *testing.T) {
 	}
 }
 
+// A PGS track is read whole through the index as the SUP file FFmpeg
+// copies out of the version, for the apps that draw PGS: never as cues.
+func TestPGSTracksAreReadWholeAsSUPFiles(t *testing.T) {
+	dir := filepath.Join("..", "container", "testdata")
+	s, _, version, analysis := served(t, dir, "pgs")
+	ctx := t.Context()
+	const pgsStream = 1
+	if !PGSSubtitle(analysis, pgsStream) || PGSSubtitle(analysis, 0) || ExtractableSubtitle(analysis, pgsStream) {
+		t.Fatal("the PGS stream is not told apart")
+	}
+	if located := s.SubtitlesLocated(ctx, version, analysis); !located[pgsStream] || len(located) != 1 {
+		t.Fatalf("located: %v", located)
+	}
+	track, err := s.SubtitleTrack(ctx, version, analysis, pgsStream)
+	want, _ := os.ReadFile(filepath.Join(dir, "pgs.sup"))
+	if err != nil || track.Format != "sup" || !bytes.Equal(track.Data, want) {
+		t.Fatalf("PGS track: %s %v, %d bytes, want %d", track.Format, err, len(track.Data), len(want))
+	}
+	if _, ok := s.keptCues(ctx, trackKey{version.ID, pgsStream}); ok {
+		t.Error("a PGS track read as cues")
+	}
+}
+
 func TestTracksOutsideAMatroskaIndexAreNotRead(t *testing.T) {
 	s, opener, version, analysis := subtitled(t)
 	mp4 := analysis
@@ -417,8 +440,20 @@ func TestTracksBecomeTheFilesTheirBlocksMake(t *testing.T) {
 		t.Errorf("ASS: %s %v\n%s\nwant\n%s", script.Format, err, script.Data, wantScript)
 	}
 
-	if _, err := trackFile(container.Track{CodecID: "S_HDMV/PGS"}, text); err == nil {
-		t.Error("an image track made a text file")
+	// A PGS track's display sets, each segment behind a "PG" header with
+	// its block's time in 90 kHz ticks; a truncated segment ends its block.
+	sup, err := trackFile(container.Track{CodecID: "S_HDMV/PGS"}, []container.Block{
+		{Start: seconds(1), Data: []byte{0x16, 0, 2, 'a', 'b', 0x80, 0, 0}},
+		{Start: seconds(2), Data: []byte{0x15, 0, 1, 'c', 0x80, 0, 9, 'd'}},
+	})
+	wantSUP := []byte{'P', 'G', 0, 1, 0x5f, 0x90, 0, 1, 0x5f, 0x90, 0x16, 0, 2, 'a', 'b',
+		'P', 'G', 0, 1, 0x5f, 0x90, 0, 1, 0x5f, 0x90, 0x80, 0, 0,
+		'P', 'G', 0, 2, 0xbf, 0x20, 0, 2, 0xbf, 0x20, 0x15, 0, 1, 'c'}
+	if err != nil || sup.Format != "sup" || !bytes.Equal(sup.Data, wantSUP) {
+		t.Errorf("PGS: %s %v\n%x\nwant\n%x", sup.Format, err, sup.Data, wantSUP)
+	}
+	if _, err := trackFile(container.Track{CodecID: "S_VOBSUB"}, text); err == nil {
+		t.Error("a VobSub track made a file")
 	}
 }
 

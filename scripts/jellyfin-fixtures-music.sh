@@ -57,7 +57,7 @@ music_fixtures() {
 	duet=$(get "/Items?userId=$user&recursive=true&includeItemTypes=Audio&searchTerm=Duet" | jq --exit-status --raw-output '.Items[0].Id')
 	book=$(get "/Items?userId=$user&recursive=true&includeItemTypes=AudioBook" | jq --exit-status --raw-output '.Items[0].Id')
 
-	# The music library as jellyfin-web 12.1 lists it: its tabs, an album,
+	# The music library as jellyfin-web 12.2 lists it: its tabs, an album,
 	# an artist and a song, with the web client's parameters.
 	local list="/Users/$user/Items?SortBy=SortName&SortOrder=Ascending&Recursive=true&Fields=PrimaryImageAspectRatio,SortName&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Banner,Thumb&StartIndex=0&Limit=100&ParentId=$music"
 	get "/UserViews?userId=$user" | jq '{Items: [.Items[] | select(.CollectionType == "music")], TotalRecordCount, StartIndex}' | msave views
@@ -90,7 +90,7 @@ music_fixtures() {
 			song: (\$song | $kinds + {SongStream: (.MediaSources[0].MediaStreams[0] | {Type, Codec, Channels, SampleRate, BitDepth, BitRate, DisplayTitle})}),
 			audiobook: (\$book | $kinds), listedAlbum: (\$listed | $kinds)}" >"$raw/values.json"
 
-	# Search, the way jellyfin-web 12.1 asks for each kind, and the hints.
+	# Search, the way jellyfin-web 12.2 asks for each kind, and the hints.
 	get "/Users/$user/Items?searchTerm=wind&IncludeItemTypes=Audio&Recursive=true&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-songs
 	get "/Users/$user/Items?searchTerm=sine&IncludeItemTypes=MusicAlbum&Recursive=true&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-albums
 	get "/Artists?userId=$user&searchTerm=tone&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-artists
@@ -130,7 +130,7 @@ music_fixtures() {
 	post "$base/UserFavoriteItems/$artist?userId=$user" --header "Authorization: $signed" >/dev/null
 	post "$base/UserPlayedItems/$song?userId=$user" --header "Authorization: $signed" | jq --sort-keys . >"$raw/played-song.json"
 
-	# Playback of a FLAC song as jellyfin-web 12.1 on Chrome asks it: as it
+	# Playback of a FLAC song as jellyfin-web 12.2 on Chrome asks it: as it
 	# is, then held below the bitrate of FLAC, which converts it. The
 	# answers are kept unscrubbed, tokens redacted, with the HLS playlists
 	# the conversion offers and the headers of the static stream.

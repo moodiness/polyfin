@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records the JSON shapes a real Jellyfin 12.1 server returns, as fixtures for
+# Records the JSON shapes a real Jellyfin 12.2 server returns, as fixtures for
 # internal/jellyfin tests. Values are replaced by their type ("" for strings,
 # 0 for numbers, false for booleans; arrays keep one element), so fixtures
 # hold no identifier, date or token from the disposable server.
@@ -36,8 +36,8 @@ for tool in docker curl jq ffmpeg ffprobe; do
 	command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
-image='jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e'
-out="$(cd "$(dirname "$0")/.." && pwd)/internal/jellyfin/testdata/jellyfin-12.1"
+image='jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037'
+out="$(cd "$(dirname "$0")/.." && pwd)/internal/jellyfin/testdata/jellyfin-12.2"
 container="polyfin-jellyfin-fixtures-$$"
 # The .strm movie's file server, reachable from Jellyfin by name on a network
 # of their own.
@@ -300,7 +300,7 @@ vpost "/Users/$viewer/PlayedItems/$episode?DatePlayed=$(jq --null-input --raw-ou
 resume_at "$tears" 3600
 resume_at "$episode" 120
 resume_at "$s02e01" 60
-# The home page's rows and the Favorites tab, with jellyfin-web 12.1's
+# The home page's rows and the Favorites tab, with jellyfin-web 12.2's
 # parameters; its Next Up cutoff is a date, 365 days back by default.
 vget "/UserItems/Resume?userId=$viewer&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false" |
 	save_led_by resume-items "$s02e01"

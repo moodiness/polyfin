@@ -361,7 +361,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// With PreferDirectPlay, and no version asked for, the version chosen
 	// is the first that plays without conversion, as it is or repackaged
 	// with its tracks copied, among those analyzed now; else the first that
-	// plays at all. Jellyfin 12.1 keeps the version opened first however
+	// plays at all. Jellyfin 12.2 keeps the version opened first however
 	// it plays: the setting departs from it, and is off by default.
 	prefer := settings.PreferDirectPlay && !explicit
 	c := plan(p.versions)
@@ -403,7 +403,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// first source is then the one chosen, which apps play unless the user
 	// picks another.
 	// The one chosen is described as decided; the others as item details
-	// describe them, and decided when an app asks for one. Jellyfin 12.1
+	// describe them, and decided when an app asks for one. Jellyfin 12.2
 	// lists every version and puts the source of a version opened as an
 	// item first; Polyfin never moves one.
 	passed := map[int]bool{}
@@ -689,10 +689,11 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what
 // Polyfin delivers: subtitles in the container reach the app embedded in
-// what it plays as it is; subtitle files, and the embedded text tracks that
+// what it plays as it is; subtitle files, the embedded text tracks that
 // remuxes extracted whole or that the version's index lists block by block,
-// as external files; text subtitles as HLS renditions; and the image track
-// chosen burned into converted video. Any other is left out.
+// and the PGS tracks it lists so, as external files; text subtitles as HLS
+// renditions; and the image track chosen burned into converted video. Any
+// other is left out.
 func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, streamed bool) {
 	files := subtitleFiles(streams)
 	whole := h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration)
@@ -713,9 +714,11 @@ func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, s
 			continue
 		}
 		extractable := !stream.IsExternal && playback.ExtractableSubtitle(analysis, stream.Index-files)
+		pgs := !stream.IsExternal && playback.PGSSubtitle(analysis, stream.Index-files)
 		switch {
 		case delivery.Method == "Embed" && !stream.IsExternal && decision.DirectPlay:
-		case delivery.Method == "External" && (stream.IsExternal || (extractable && (whole || locate(stream.Index-files)))):
+		case delivery.Method == "External" && (stream.IsExternal || (extractable && (whole || locate(stream.Index-files))) ||
+			(pgs && locate(stream.Index-files))):
 		case delivery.Method == "Hls" && streamed && (stream.IsExternal || extractable):
 		case delivery.Method == "Encode" && streamed && decision.Video != nil && stream.Index == decision.SubtitleStreamIndex &&
 			burnable(streams, analysis, stream.Index):
@@ -743,8 +746,11 @@ func subtitleFiles(streams []playback.MediaStream) int {
 func (h *Handler) prefetchSubtitle(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis) {
 	files := subtitleFiles(streams)
 	delivery, ok := decision.Subtitles[decision.SubtitleStreamIndex]
-	if !ok || delivery.Method != "External" || decision.SubtitleStreamIndex < files ||
-		h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration) {
+	if !ok || delivery.Method != "External" || decision.SubtitleStreamIndex < files {
+		return
+	}
+	// Remuxes extract text tracks whole, never PGS ones.
+	if !playback.PGSSubtitle(analysis, decision.SubtitleStreamIndex-files) && h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration) {
 		return
 	}
 	if stream := decision.SubtitleStreamIndex - files; h.Playback.SubtitlesLocated(ctx, version, analysis)[stream] {
@@ -947,11 +953,22 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		files = p.subtitles
 	}
 	// External subtitles come first among a version's streams; embedded
-	// tracks follow, served whole (see embeddedTrack).
+	// tracks follow, served whole (see embeddedTrack and pgsTrack).
 	var text subtitleText
 	switch {
 	case index < 0:
 		processingError(w, http.StatusInternalServerError)
+		return
+	case index >= len(files) && pgsFormat(format):
+		data, found := h.pgsTrack(r, item, index-len(files))
+		if !found {
+			processingError(w, http.StatusInternalServerError)
+			return
+		}
+		// As Jellyfin 12.2 serves the raw file: apps that draw PGS read
+		// it by ranges as they play.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
 		return
 	case index >= len(files):
 		var found bool
@@ -1015,6 +1032,38 @@ func (h *Handler) embeddedTrack(r *http.Request, item accounts.ID, stream int) (
 	}
 	cues, ok := h.Playback.ExtractedTrack(r.Context(), version.ID, analysis.Duration, stream)
 	return subtitleText{cues: cues}, ok
+}
+
+// pgsFormat reports whether a subtitle URL asks for PGS, as Jellyfin
+// names it: "pgssub", "pgs" or "sup".
+func pgsFormat(format string) bool {
+	return strings.Contains(strings.ToLower(format), "pgs") || strings.EqualFold(format, "sup")
+}
+
+// pgsTrack returns an embedded PGS track of the version a subtitle URL
+// names, stream being its FFmpeg index, as a SUP file read whole through
+// the version's index, and whether it could be.
+func (h *Handler) pgsTrack(r *http.Request, item accounts.ID, stream int) ([]byte, bool) {
+	user, _, signedIn := h.streamAccess(r)
+	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
+	if !signedIn || !ok {
+		return nil, false
+	}
+	version, err := h.Library.Version(r.Context(), user, item, wanted)
+	if err != nil {
+		return nil, false
+	}
+	analysis, ok := h.Playback.Analyzed(r.Context(), version.ID)
+	if !ok || !playback.PGSSubtitle(analysis, stream) {
+		return nil, false
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), trackWait)
+	defer cancel()
+	track, err := h.Playback.SubtitleTrack(ctx, version, analysis, stream)
+	if err != nil || track.Format != "sup" {
+		return nil, false
+	}
+	return track.Data, true
 }
 
 // maxSubtitleBytes bounds subtitle downloads.

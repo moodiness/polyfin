@@ -5,7 +5,10 @@ package playback
 // API; fields Jellyfin leaves out when unknown are pointers or omitted when
 // empty.
 type MediaStream struct {
-	Codec                     string `json:",omitempty"`
+	Codec string `json:",omitempty"`
+	// CodecTag is ffprobe's tag of the track, such as avc1 in MP4. Tags
+	// made of zero bytes, Matroska's, are not reported.
+	CodecTag                  string `json:",omitempty"`
 	Language                  string `json:",omitempty"`
 	ColorRange                string `json:",omitempty"`
 	ColorSpace                string `json:",omitempty"`

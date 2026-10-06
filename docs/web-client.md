@@ -4,7 +4,7 @@ Polyfin's Docker image includes jellyfin-web, Jellyfin's own web client. This pa
 
 ## The built-in web client
 
-The Docker image includes jellyfin-web 12.1. Polyfin serves it at `/web/`, as Jellyfin does, and it connects to the server that served it.
+The Docker image includes jellyfin-web 12.2. Polyfin serves it at `/web/`, as Jellyfin does, and it connects to the server that served it.
 
 - Once an administrator exists, `http://<server>:8096/` opens the web client.
 - Before that, `/` and `/web/` lead to the setup page in the admin app, since no account could sign in yet. See [getting started](getting-started.md).
@@ -107,8 +107,8 @@ The script runs in the browser of every user who opens the web client, with thei
 
 jellyfin-web is free software by the Jellyfin contributors, and a separate program from Polyfin. Polyfin stays under the [MIT License](../LICENSE).
 
-- The image contains jellyfin-web 12.1, unmodified, under the GNU General Public License, version 2.
-- It is copied from the official `jellyfin/jellyfin:12.1` image into `/usr/share/polyfin/jellyfin-web`.
+- The image contains jellyfin-web 12.2, unmodified, under the GNU General Public License, version 2.
+- It is copied from the official `jellyfin/jellyfin:12.2` image into `/usr/share/polyfin/jellyfin-web`.
 - Its license and a notice are in `/usr/share/doc/jellyfin-web` (from [`third_party/jellyfin-web`](../third_party/jellyfin-web)).
-- Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.1-source.tar.gz`, and is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.1>.
+- Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.2-source.tar.gz`, and is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.2>.
 - The Dockerfile pins both, side by side, to be changed together when the client is updated.

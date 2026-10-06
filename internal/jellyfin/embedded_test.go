@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -123,7 +124,7 @@ func TestBrowsersGetTheTracksInsideFilesWithTheirFonts(t *testing.T) {
 	if source.DefaultSubtitleStreamIndex == nil || *source.DefaultSubtitleStreamIndex != 2 {
 		t.Errorf("default subtitle: %v", source.DefaultSubtitleStreamIndex)
 	}
-	wantFont := MediaAttachment{Codec: "ttf", Index: 3, FileName: "Dummy.ttf", MimeType: "application/x-truetype-font",
+	wantFont := MediaAttachment{Codec: "ttf", CodecTag: "[0][0][0][0]", Index: 3, FileName: "Dummy.ttf", MimeType: "application/x-truetype-font",
 		DeliveryUrl: "/Videos/" + hyphenated(id) + "/" + source.Id + "/Attachments/3?ApiKey=" + token}
 	if len(source.MediaAttachments) != 1 || source.MediaAttachments[0] != wantFont {
 		t.Errorf("attachments: %+v\nwant %+v", source.MediaAttachments, wantFont)
@@ -179,6 +180,55 @@ func TestBrowsersGetTheTracksInsideFilesWithTheirFonts(t *testing.T) {
 	}
 	if status, _, body := fetchText(t, s.url+strings.Replace(wantFont.DeliveryUrl, hyphenated(id), hyphenated(accounts.ID{9}), 1)); status != http.StatusNotFound || !strings.Contains(body, `"title":"Not Found"`) {
 		t.Errorf("wrong item: %d %s", status, body)
+	}
+}
+
+// TestBrowsersDrawingPGSGetItsRawFile plays a file with a PGS track as
+// jellyfin-web does when it draws PGS itself: the track goes out as a SUP
+// file, read whole through the file's index, served by ranges as Jellyfin
+// 12.2 serves its raw file.
+func TestBrowsersDrawingPGSGetItsRawFile(t *testing.T) {
+	file := filepath.Join("..", "container", "testdata", "pgs.mkv")
+	s, user, token, id := playingFile(t, file)
+	raw, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile map[string]any
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		t.Fatal(err)
+	}
+	profile["SubtitleProfiles"] = append(profile["SubtitleProfiles"].([]any), map[string]any{"Format": "pgssub", "Method": "External"})
+	status, body := s.call(http.MethodPost, "/Items/"+id.String()+"/PlaybackInfo", app("tv", token),
+		map[string]any{"UserId": user.ID.String(), "DeviceProfile": profile})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(body, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("PlaybackInfo: %d %s", status, body)
+	}
+	var pgs playback.MediaStream
+	for _, stream := range response.MediaSources[0].MediaStreams {
+		if stream.Type == "Subtitle" {
+			pgs = stream
+		}
+	}
+	if pgs.Codec != "PGSSUB" || pgs.DeliveryMethod != "External" || !strings.Contains(pgs.DeliveryUrl, "/Subtitles/1/0/Stream.pgssub?ApiKey=") {
+		t.Fatalf("PGS track: %s %s %s", pgs.Codec, pgs.DeliveryMethod, pgs.DeliveryUrl)
+	}
+	want, _ := os.ReadFile(filepath.Join("..", "container", "testdata", "pgs.sup"))
+	status, header, served := fetchText(t, s.url+pgs.DeliveryUrl)
+	if status != http.StatusOK || served != string(want) || header.Get("Accept-Ranges") != "bytes" {
+		t.Errorf("SUP file: %d %v, %d bytes, want %d", status, header, len(served), len(want))
+	}
+	request, _ := http.NewRequest(http.MethodGet, s.url+pgs.DeliveryUrl, nil)
+	request.Header.Set("Range", "bytes=13-24")
+	response2, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response2.Body.Close()
+	part, _ := io.ReadAll(response2.Body)
+	if response2.StatusCode != http.StatusPartialContent || string(part) != string(want[13:25]) {
+		t.Errorf("a range of the SUP file: %d %x", response2.StatusCode, part)
 	}
 }
 

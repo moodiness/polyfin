@@ -524,8 +524,8 @@ func (h *Handler) stateListing(w http.ResponseWriter, r *http.Request, user acco
 		h.excludingListing(w, r, user, f, parent, hasParent, start, limit)
 		return
 	}
-	keep := itemTypeFilter(r)
-	items = slices.DeleteFunc(items, func(item library.Item) bool { return !keep(item) })
+	keep, inRange := itemTypeFilter(r), letterRange(r)
+	items = slices.DeleteFunc(items, func(item library.Item) bool { return !keep(item) || !inRange(sortName(item)) })
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {
 		h.internalError(w, r, err)

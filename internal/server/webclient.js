@@ -5,7 +5,7 @@
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
 // watches the route only, never the page, so that a new jellyfin-web keeps
-// working with it. jellyfin-web 12.1 routes after the "#", matched without
+// working with it. jellyfin-web 12.2 routes after the "#", matched without
 // regard to case as its router does, "#!/" being an older form:
 //   #/dashboard and every #/dashboard/… page (users, libraries, playback,
 //     Live TV, devices, activity, logs, API keys, scheduled tasks, plugins…);

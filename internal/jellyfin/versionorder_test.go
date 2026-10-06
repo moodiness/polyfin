@@ -51,7 +51,7 @@ func threeVersionsAddon(t *testing.T) string {
 // Picking a version, playing it, a version failing and asking PlaybackInfo
 // again never move a version: item details and PlaybackInfo keep the
 // addon's order. jellyfin-web's version menu opens the version picked as an
-// item, which Jellyfin 12.1 would answer with that version first.
+// item, which Jellyfin 12.2 would answer with that version first.
 func TestVersionsKeepTheirOrder(t *testing.T) {
 	s := newTestServer(t, 10)
 	user := s.user("member", nil)

@@ -11,7 +11,7 @@ import (
 // absentRoutes registers dashboard features Polyfin does without: plugins,
 // packages and their repositories, browsing the server's file system,
 // library folders and metadata providers, Live TV tuners and listing
-// providers, the startup wizard and backups. Each answers as a Jellyfin 12.1
+// providers, the startup wizard and backups. Each answers as a Jellyfin 12.2
 // on which nothing of the kind is configured, so that apps probing them get
 // empty lists and defaults rather than 404, and writes are refused the way
 // Jellyfin refuses them for things that do not exist. No write here claims

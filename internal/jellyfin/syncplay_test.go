@@ -245,13 +245,13 @@ func delay(t *testing.T, message socketMessage) time.Duration {
 }
 
 // TestSyncPlaySessionMatchesJellyfin replays the session recorded from
-// Jellyfin 12.1 by scripts/jellyfin-fixtures.sh: A creates a group, B
+// Jellyfin 12.2 by scripts/jellyfin-fixtures.sh: A creates a group, B
 // joins, they set a queue, get ready, play, pause, seek, wait for B
 // buffering, change items, and C, who may see none of them, is kept out.
 // Every answer and every message each session receives must be Jellyfin's,
 // identifiers, dates and the positions playing moves on aside.
 func TestSyncPlaySessionMatchesJellyfin(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "syncplay-session.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "syncplay-session.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func (c credentials) complete() bool {
 	return c.Client != "" && c.Device != "" && c.DeviceID != "" && c.Version != ""
 }
 
-// readCredentials extracts credentials the way Jellyfin 12.1 does. The
+// readCredentials extracts credentials the way Jellyfin 12.2 does. The
 // official forms are the "MediaBrowser" Authorization scheme and the ApiKey
 // query parameter. Legacy forms (the "Emby" scheme, X-Emby-Authorization,
 // X-Emby-Token, X-MediaBrowser-Token and api_key) count only when legacy is

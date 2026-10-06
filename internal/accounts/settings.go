@@ -378,7 +378,7 @@ type Settings struct {
 	ServerName          string
 	QuickConnectEnabled bool
 	// LegacyAuthorization accepts the X-Emby-* headers, the api_key query
-	// parameter and the Emby scheme, which Jellyfin 12.1 refuses by default.
+	// parameter and the Emby scheme, which Jellyfin 12.2 refuses by default.
 	LegacyAuthorization bool
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.

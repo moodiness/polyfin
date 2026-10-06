@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,8 +52,11 @@ const (
 	hostTrackReads = 2
 	maxTrackReads  = 4
 	// maxTrackBytes bounds a track's file: dialogue takes a few hundred
-	// kilobytes, heavy ASS typesetting a few megabytes.
+	// kilobytes, heavy ASS typesetting a few megabytes, PGS images a few
+	// to tens of megabytes; a larger track is not offered as a file.
 	maxTrackBytes = 32 << 20
+	// maxKeptTracks bounds the bytes of the tracks kept in memory.
+	maxKeptTracks = 128 << 20
 )
 
 // ErrNotLocated reports a subtitle stream its version's index does not
@@ -61,7 +65,7 @@ var ErrNotLocated = errors.New("the subtitle track is not located by the index")
 
 // Track is a subtitle track read whole: the file it makes, in its format.
 type Track struct {
-	// Format is "srt", "vtt" or "ass".
+	// Format is "srt", "vtt" or "ass" for text, "sup" for PGS images.
 	Format string
 	Data   []byte
 }
@@ -76,7 +80,8 @@ type trackKey struct {
 // to the FFmpeg codecs analyses name them by. FFmpeg reads SSA as ASS, and
 // plain text tracks as text, which is written out as SubRip. It cannot
 // read mkvmerge's WebVTT tracks, S_TEXT/WEBVTT, and names their codec
-// unknown: they are not read whole, as no app is told what they hold.
+// unknown: they are not read whole, as no app is told what they hold. PGS
+// tracks are read whole for the apps that draw them, as a SUP file.
 var indexedCodecs = map[string]string{
 	"S_TEXT/UTF8":        "subrip",
 	"S_TEXT/ASCII":       "text",
@@ -86,6 +91,7 @@ var indexedCodecs = map[string]string{
 	"S_TEXT/SSA":         "ass",
 	"S_ASS":              "ass",
 	"S_SSA":              "ass",
+	"S_HDMV/PGS":         "hdmv_pgs_subtitle",
 }
 
 // matroska reports whether an analysis is of a Matroska or WebM file.
@@ -155,10 +161,11 @@ func indexedStreams(analysis media.Analysis) bool {
 	})
 }
 
-// SubtitlesLocated returns the text subtitle streams of a version, by FFmpeg
-// index, whose blocks its Matroska index lists, so that they can be read
-// whole: remembered, kept, or read from the version's head and Cues now.
-// None when the version is not a Matroska file or its index lists none.
+// SubtitlesLocated returns the text and PGS subtitle streams of a version,
+// by FFmpeg index, whose blocks its Matroska index lists, so that they can
+// be read whole: remembered, kept, or read from the version's head and Cues
+// now. None when the version is not a Matroska file or its index lists
+// none.
 func (s *Service) SubtitlesLocated(ctx context.Context, version library.Version, analysis media.Analysis) map[int]bool {
 	if !indexedStreams(analysis) {
 		return nil
@@ -364,9 +371,9 @@ func (s *Service) correctSize(ctx context.Context, version accounts.ID, analysis
 	s.unindexed.Delete(version)
 }
 
-// SubtitleTrack returns a version's text subtitle stream, by FFmpeg index,
-// read whole through its index: remembered, kept, or read now, which may
-// take a while. ErrNotLocated when the index does not list its blocks.
+// SubtitleTrack returns a version's text or PGS subtitle stream, by FFmpeg
+// index, read whole through its index: remembered, kept, or read now, which
+// may take a while. ErrNotLocated when the index does not list its blocks.
 func (s *Service) SubtitleTrack(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	key := trackKey{version.ID, stream}
 	if track, ok := s.tracks.Get(key); ok {
@@ -592,7 +599,8 @@ func hostOf(target string) string {
 }
 
 // trackFile writes a track's blocks as the file they make: an ASS track's
-// script as its muxer split it, header and events, styles kept.
+// script as its muxer split it, header and events, styles kept; a PGS
+// track's display sets as a SUP file.
 func trackFile(track container.Track, blocks []container.Block) (Track, error) {
 	switch indexedCodecs[track.CodecID] {
 	case "subrip", "text":
@@ -616,8 +624,42 @@ func trackFile(track container.Track, blocks []container.Block) (Track, error) {
 			return Track{}, err
 		}
 		return Track{Format: "ass", Data: script.Bytes()}, nil
+	case "hdmv_pgs_subtitle":
+		return Track{Format: "sup", Data: supFile(blocks)}, nil
 	}
 	return Track{}, ErrNotLocated
+}
+
+// supFile writes PGS blocks as FFmpeg's SUP muxer does: each segment of a
+// block's display set behind a "PG" header with the block's time, as its
+// presentation and decoding timestamps, in 90 kHz ticks. A segment running
+// past its block ends the block.
+func supFile(blocks []container.Block) []byte {
+	segments := func(data []byte, each func(segment []byte)) {
+		for len(data) >= 3 {
+			n := 3 + int(binary.BigEndian.Uint16(data[1:3]))
+			if n > len(data) {
+				return
+			}
+			each(data[:n])
+			data = data[n:]
+		}
+	}
+	size := 0
+	for _, block := range blocks {
+		segments(block.Data, func(segment []byte) { size += 10 + len(segment) })
+	}
+	file := make([]byte, 0, size)
+	for _, block := range blocks {
+		ticks := uint32(block.Start.Microseconds() * 9 / 100)
+		segments(block.Data, func(segment []byte) {
+			file = append(file, 'P', 'G')
+			file = binary.BigEndian.AppendUint32(file, ticks)
+			file = binary.BigEndian.AppendUint32(file, ticks)
+			file = append(file, segment...)
+		})
+	}
+	return file
 }
 
 // cueText is the text of a WebM WebVTT block, after the cue's identifier
@@ -663,8 +705,11 @@ func (s *Service) keptCues(ctx context.Context, key trackKey) ([]subtitles.Cue, 
 			return nil, false
 		}
 	}
-	// The file of a track read whole is SubRip, WebVTT or ASS, which Parse
-	// all reads.
+	// The file of a text track read whole is SubRip, WebVTT or ASS, which
+	// Parse all reads.
+	if track.Format == "sup" {
+		return nil, false
+	}
 	cues, err := subtitles.Parse(track.Data)
 	if err != nil {
 		return nil, false

@@ -1,0 +1,2615 @@
+[
+  {
+    "Answer": {
+      "RequestReceptionTime": "date",
+      "ResponseTransmissionTime": "date"
+    },
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/GetUtcTime",
+    "Status": 200,
+    "Step": "The server's time"
+  },
+  {
+    "Answer": [],
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/List",
+    "Status": 200,
+    "Step": "A lists no group"
+  },
+  {
+    "Answer": {
+      "GroupId": "group",
+      "GroupName": "Fixture group",
+      "LastUpdatedAt": "date",
+      "Participants": [
+        "fixtures"
+      ],
+      "State": "Idle"
+    },
+    "Body": {
+      "GroupName": "Fixture group"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "GroupId": "group",
+              "GroupName": "Fixture group",
+              "LastUpdatedAt": "date",
+              "Participants": [
+                "fixtures"
+              ],
+              "State": "Idle"
+            },
+            "GroupId": "group",
+            "Type": "GroupJoined"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        },
+        {
+          "Data": {
+            "Command": "Stop",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "00000000000000000000000000000000",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/New",
+    "Status": 200,
+    "Step": "A creates a group"
+  },
+  {
+    "Answer": [
+      {
+        "GroupId": "group",
+        "GroupName": "Fixture group",
+        "LastUpdatedAt": "date",
+        "Participants": [
+          "fixtures"
+        ],
+        "State": "Idle"
+      }
+    ],
+    "Body": null,
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/List",
+    "Status": 200,
+    "Step": "B lists the group"
+  },
+  {
+    "Answer": {
+      "GroupId": "group",
+      "GroupName": "Fixture group",
+      "LastUpdatedAt": "date",
+      "Participants": [
+        "fixtures"
+      ],
+      "State": "Idle"
+    },
+    "Body": null,
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/{group}",
+    "Status": 200,
+    "Step": "B reads the group"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "GroupId": "{group}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": "partner",
+            "GroupId": "group",
+            "Type": "UserJoined"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "GroupId": "group",
+              "GroupName": "Fixture group",
+              "LastUpdatedAt": "date",
+              "Participants": [
+                "fixtures",
+                "partner"
+              ],
+              "State": "Idle"
+            },
+            "GroupId": "group",
+            "Type": "GroupJoined"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        },
+        {
+          "Data": {
+            "Command": "Stop",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "00000000000000000000000000000000",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Join",
+    "Status": 204,
+    "Step": "B joins"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PlayingItemPosition": 0,
+      "PlayingQueue": [
+        "{title-1}"
+      ],
+      "StartPositionTicks": 0
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                }
+              ],
+              "Reason": "NewPlaylist",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                }
+              ],
+              "Reason": "NewPlaylist",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetNewQueue",
+    "Status": 204,
+    "Step": "A sets a queue"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Pause",
+              "State": "Paused"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Pause",
+              "State": "Paused"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Pause",
+    "Status": 204,
+    "Step": "A pauses"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Unpause",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Unpause",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Unpause",
+    "Status": 204,
+    "Step": "A unpauses"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PositionTicks": 10000000
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Seek",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Seek",
+              "State": "Waiting"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Seek",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Seek",
+              "State": "Waiting"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Seek",
+    "Status": 204,
+    "Step": "A seeks"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 10000000,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready after seeking"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 10000000,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready after seeking"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": true,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 10000000,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Buffer",
+              "State": "Waiting"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Buffer",
+              "State": "Waiting"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Buffering",
+    "Status": 204,
+    "Step": "B buffers"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": "{group-position}",
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 10000000,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready after buffering"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": "partner",
+            "GroupId": "group",
+            "Type": "UserLeft"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": "group (hyphenated)",
+            "GroupId": "group",
+            "Type": "GroupLeft"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Leave",
+    "Status": 204,
+    "Step": "B leaves while playing"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "GroupId": "{group}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": "partner",
+            "GroupId": "group",
+            "Type": "UserJoined"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        },
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 18720200,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "GroupId": "group",
+              "GroupName": "Fixture group",
+              "LastUpdatedAt": "date",
+              "Participants": [
+                "fixtures",
+                "partner"
+              ],
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "GroupJoined"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        },
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                }
+              ],
+              "Reason": "NewPlaylist",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 18720200
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Join",
+    "Status": 204,
+    "Step": "B joins while playing"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": "{group-position}",
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 18720200,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 18720200,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready after joining"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "ItemIds": [
+        "{title-2}"
+      ],
+      "Mode": "Queue"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                }
+              ],
+              "Reason": "Queue",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 18720200
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                }
+              ],
+              "Reason": "Queue",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 18720200
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Queue",
+    "Status": 204,
+    "Step": "A queues a title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "ItemIds": [
+        "{title-3}"
+      ],
+      "Mode": "QueueNext"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                }
+              ],
+              "Reason": "QueueNext",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 27508442
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                }
+              ],
+              "Reason": "QueueNext",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 27508442
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Queue",
+    "Status": 204,
+    "Step": "A queues a title next"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "NewIndex": 1,
+      "PlaylistItemId": "{playlist-item-2}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "MoveItem",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 36909846
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "MoveItem",
+              "RepeatMode": "RepeatNone",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 36909846
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/MovePlaylistItem",
+    "Status": 204,
+    "Step": "A moves a title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "Mode": "RepeatAll"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "RepeatMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 46453008
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "RepeatMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 46453008
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetRepeatMode",
+    "Status": 204,
+    "Step": "A repeats all"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "Mode": "Shuffle"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "ShuffleMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Shuffle",
+              "StartPositionTicks": 55901807
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "ShuffleMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Shuffle",
+              "StartPositionTicks": 55901807
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetShuffleMode",
+    "Status": 204,
+    "Step": "A shuffles"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "Mode": "Sorted"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "ShuffleMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 65177593
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "ShuffleMode",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 65177593
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetShuffleMode",
+    "Status": 204,
+    "Step": "A sorts"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PlaylistItemId": "{playlist-item-1}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "NextItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "NextItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/NextItem",
+    "Status": 204,
+    "Step": "A skips to the next title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-2}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-2",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready on the next title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-2}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-2",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-2",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready on the next title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PlaylistItemId": "{playlist-item-2}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "PreviousItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 0,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "PreviousItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/PreviousItem",
+    "Status": 204,
+    "Step": "A goes back"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready on the previous title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-1}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-1",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready on the previous title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PlaylistItemId": "{playlist-item-3}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 2,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "SetCurrentItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 2,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-2",
+                  "PlaylistItemId": "playlist-item-2"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "SetCurrentItem",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetPlaylistItem",
+    "Status": 204,
+    "Step": "A picks a title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-3}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Pause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready on the picked title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-3}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready on the picked title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "PlaylistItemIds": [
+        "{playlist-item-2}"
+      ]
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "RemoveItems",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": true,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "RemoveItems",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/RemoveFromPlaylist",
+    "Status": 204,
+    "Step": "A removes a title"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "Ping": 50
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ping",
+    "Status": 204,
+    "Step": "B pings"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IgnoreWait": true
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetIgnoreWait",
+    "Status": 204,
+    "Step": "B stops waiting for others"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Stop",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Stop",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Stop",
+    "Status": 204,
+    "Step": "A stops"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "NewPlaylist",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": {
+              "IsPlaying": false,
+              "LastUpdate": "date",
+              "PlayingItemIndex": 1,
+              "Playlist": [
+                {
+                  "ItemId": "title-1",
+                  "PlaylistItemId": "playlist-item-1"
+                },
+                {
+                  "ItemId": "title-3",
+                  "PlaylistItemId": "playlist-item-3"
+                }
+              ],
+              "Reason": "NewPlaylist",
+              "RepeatMode": "RepeatAll",
+              "ShuffleMode": "Sorted",
+              "StartPositionTicks": 0
+            },
+            "GroupId": "group",
+            "Type": "PlayQueue"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Unpause",
+    "Status": 204,
+    "Step": "A plays again"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-3}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        },
+        {
+          "Data": {
+            "Data": {
+              "Reason": "Ready",
+              "State": "Playing"
+            },
+            "GroupId": "group",
+            "Type": "StateUpdate"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "A is ready to play again"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IsPlaying": false,
+      "PlaylistItemId": "{playlist-item-3}",
+      "PositionTicks": 0,
+      "When": "{now}"
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [
+        {
+          "Data": {
+            "Command": "Unpause",
+            "EmittedAt": "date",
+            "GroupId": "group",
+            "PlaylistItemId": "playlist-item-3",
+            "PositionTicks": 0,
+            "When": "date"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayCommand"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ready",
+    "Status": 204,
+    "Step": "B is ready to play again"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "IgnoreWait": false
+    },
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/SetIgnoreWait",
+    "Status": 204,
+    "Step": "B waits for others again"
+  },
+  {
+    "Answer": [],
+    "Body": null,
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/List",
+    "Status": 200,
+    "Step": "C lists no group"
+  },
+  {
+    "Answer": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "trace-id",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "Body": null,
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/{group}",
+    "Status": 404,
+    "Step": "C cannot read the group"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "GroupId": "{group}"
+    },
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": [
+        {
+          "Data": {
+            "Data": "",
+            "GroupId": "group",
+            "Type": "LibraryAccessDenied"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ]
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Join",
+    "Status": 204,
+    "Step": "C cannot join"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "Ping": 10
+    },
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": [
+        {
+          "Data": {
+            "Data": "",
+            "GroupId": "00000000000000000000000000000000",
+            "Type": "NotInGroup"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ]
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Ping",
+    "Status": 204,
+    "Step": "C pings outside a group"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Pause",
+    "Status": 403,
+    "Step": "C cannot pause outside a group"
+  },
+  {
+    "Answer": null,
+    "Body": {
+      "GroupId": "{unknown-group}"
+    },
+    "Client": "C",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": [
+        {
+          "Data": {
+            "Data": "",
+            "GroupId": "00000000000000000000000000000000",
+            "Type": "GroupDoesNotExist"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ]
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Join",
+    "Status": 204,
+    "Step": "C joins an unknown group"
+  },
+  {
+    "Answer": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "trace-id",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/{unknown-group}",
+    "Status": 404,
+    "Step": "A reads an unknown group"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/not-a-group",
+    "Status": 404,
+    "Step": "A reads what is no group"
+  },
+  {
+    "Answer": {
+      "errors": {
+        "": [
+          "A non-empty request body is required."
+        ],
+        "requestData": [
+          "The requestData field is required."
+        ]
+      },
+      "status": 400,
+      "title": "One or more validation errors occurred.",
+      "traceId": "trace-id",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+    },
+    "Body": "",
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/New",
+    "Status": 400,
+    "Step": "A creates a group without a body"
+  },
+  {
+    "Answer": {
+      "errors": {
+        "GroupName": [
+          "Group name must not exceed 200 characters."
+        ]
+      },
+      "status": 400,
+      "title": "One or more validation errors occurred.",
+      "traceId": "trace-id",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+    },
+    "Body": {
+      "GroupName": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/New",
+    "Status": 400,
+    "Step": "A creates a group with a long name"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "B",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": "partner",
+            "GroupId": "group",
+            "Type": "UserLeft"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [
+        {
+          "Data": {
+            "Data": "group (hyphenated)",
+            "GroupId": "group",
+            "Type": "GroupLeft"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Leave",
+    "Status": 204,
+    "Step": "B leaves"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "B",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Leave",
+    "Status": 403,
+    "Step": "B cannot leave twice"
+  },
+  {
+    "Answer": null,
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [
+        {
+          "Data": {
+            "Data": "group (hyphenated)",
+            "GroupId": "group",
+            "Type": "GroupLeft"
+          },
+          "MessageId": "message-id",
+          "MessageType": "SyncPlayGroupUpdate"
+        }
+      ],
+      "B": [],
+      "C": []
+    },
+    "Method": "POST",
+    "Path": "/SyncPlay/Leave",
+    "Status": 204,
+    "Step": "A leaves"
+  },
+  {
+    "Answer": [],
+    "Body": null,
+    "Client": "A",
+    "Messages": {
+      "A": [],
+      "B": [],
+      "C": []
+    },
+    "Method": "GET",
+    "Path": "/SyncPlay/List",
+    "Status": 200,
+    "Step": "A lists no group after leaving"
+  }
+]

@@ -68,3 +68,18 @@ Polyfin's analysis reads, for the tests that play it end to end:
 ffprobe -v error -print_format json -show_format -show_streams subtitles.mkv |
   jq --arg name subtitles.mkv '.format.filename = $name' >subtitles.ffprobe.json
 ```
+
+`pgs.mkv` holds a video track and the PGS track `pgs.sup`: three captions,
+at 1 s, 4.5 s and 8 s, each a 40x8 box shown for 2 s, written segment by
+segment (presentation composition, window, palette, object, end, then a
+composition and a window clearing it). FFmpeg copies it back out as it
+was, which the tests check the SUP files Polyfin writes against:
+
+```sh
+ffmpeg $Q -f lavfi -i testsrc2=size=64x64:rate=24:duration=12 -i pgs.sup -map 0:v -map 1 \
+  -c:v libx264 -preset veryfast -crf 40 -g 48 -pix_fmt yuv420p -c:s copy -copyts \
+  -metadata:s:s:0 language=eng pgs.mkv
+ffmpeg $Q -copyts -i pgs.mkv -map 0:s -c copy -f sup - | cmp - pgs.sup
+ffprobe -v error -print_format json -show_format -show_streams pgs.mkv |
+  jq --arg name pgs.mkv '.format.filename = $name' >pgs.ffprobe.json
+```

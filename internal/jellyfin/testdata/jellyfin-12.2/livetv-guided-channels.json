@@ -1,0 +1,58 @@
+{
+  "Items": [
+    {
+      "ChannelId": null,
+      "ChannelNumber": "",
+      "ChannelType": "",
+      "CurrentProgram": {
+        "ChannelId": "",
+        "EndDate": "",
+        "Id": "",
+        "ImageBlurHashes": {},
+        "ImageTags": {},
+        "IsNews": false,
+        "MediaType": "",
+        "Name": "",
+        "RunTimeTicks": 0,
+        "ServerId": "",
+        "StartDate": "",
+        "Type": "",
+        "UserData": {
+          "IsFavorite": false,
+          "ItemId": "",
+          "Key": "",
+          "PlayCount": 0,
+          "PlaybackPositionTicks": 0,
+          "Played": false
+        }
+      },
+      "Id": "",
+      "ImageBlurHashes": {
+        "Primary": {
+          "41ee58389f2c20f09015623c9276ed41": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "IsFolder": false,
+      "LocationType": "",
+      "MediaType": "",
+      "Name": "",
+      "Number": "",
+      "PrimaryImageAspectRatio": 0,
+      "ServerId": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

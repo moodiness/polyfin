@@ -177,7 +177,7 @@ func sourceID(opened accounts.ID, version library.Version, stands bool) accounts
 // mediaSources describes an item's versions for item details and listings,
 // where Jellyfin evaluates no device profile: every version is playable.
 // opened is the identifier the item was asked by. The versions keep their
-// order whatever version the item was opened as: Jellyfin 12.1 puts the
+// order whatever version the item was opened as: Jellyfin 12.2 puts the
 // source of a version opened as an item first, which jellyfin-web's version
 // menu, opening the version picked, shows as the list reordering itself.
 func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) []MediaSourceInfo {

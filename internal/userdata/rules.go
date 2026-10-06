@@ -25,10 +25,25 @@ func (t Thresholds) Reaches(position, runtime time.Duration) bool {
 	return percent >= float64(t.Resume) && (percent > float64(t.Played) || runtime < MinResumeDuration)
 }
 
-// Start records that playback began at now: one more play.
-func (d *Data) Start(now time.Time) {
+// Start records that playback began at now: one more play. As in Jellyfin
+// 12.2, a played item that keeps a resume point (resumable: a video or an
+// audiobook) is not dated by the start, only once a position gets past
+// the start of it (see Reached): rewatching an episode and stopping at
+// once does not move Next Up on from it.
+func (d *Data) Start(now time.Time, resumable bool) {
 	d.PlayCount++
-	d.LastPlayed = &now
+	if !d.Played || !resumable {
+		d.LastPlayed = &now
+	}
+}
+
+// Reached dates the play at now after a reported position, as Jellyfin
+// 12.2 does, when the position completed the item (completed, as Reach
+// and the others report) or left a resume point.
+func (d *Data) Reached(completed bool, now time.Time) {
+	if completed || d.Position > 0 {
+		d.LastPlayed = &now
+	}
 }
 
 // Reach records the position a player reported while playing or when it
@@ -36,12 +51,13 @@ func (d *Data) Start(now time.Time) {
 // the Resume threshold) there is nothing to resume; near the end (past the
 // Played threshold), or anywhere past the start of a short item, the item
 // is played and there is nothing to resume either. Without a runtime, the
-// position is kept as it is.
-func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
+// position is kept as it is. It reports whether the position completed the
+// item.
+func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) bool {
 	d.Runtime = runtime
 	if runtime <= 0 {
 		d.Position = max(position, 0)
-		return
+		return false
 	}
 	percent := float64(position) / float64(runtime) * 100
 	switch {
@@ -50,9 +66,11 @@ func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) {
 	case thresholds.Reaches(position, runtime):
 		d.Position = 0
 		d.Played = true
+		return true
 	default:
 		d.Position = position
 	}
+	return false
 }
 
 // AudiobookResume is how far into an audiobook a position must be to keep
@@ -64,15 +82,17 @@ const AudiobookResume = 5 * time.Minute
 // ReachSong records the position a player reported in a song, which keeps
 // no resume point, as Jellyfin's songs do not: past the start, a song is
 // played as an item of its runtime would be (see Reach).
-func (d *Data) ReachSong(position, runtime time.Duration, thresholds Thresholds) {
-	d.Reach(position, runtime, thresholds)
+func (d *Data) ReachSong(position, runtime time.Duration, thresholds Thresholds) bool {
+	completed := d.Reach(position, runtime, thresholds)
 	d.Position = 0
+	return completed
 }
 
 // ReachAudiobook records the position a player reported in an audiobook,
 // with Jellyfin's thresholds for audiobooks, in time rather than percent:
-// nothing to resume in its first AudiobookResume, played in its last.
-func (d *Data) ReachAudiobook(position, runtime time.Duration) {
+// nothing to resume in its first AudiobookResume, played in its last. It
+// reports whether the position completed the book.
+func (d *Data) ReachAudiobook(position, runtime time.Duration) bool {
 	d.Runtime = runtime
 	switch {
 	case runtime <= 0:
@@ -82,17 +102,20 @@ func (d *Data) ReachAudiobook(position, runtime time.Duration) {
 	case runtime-position < AudiobookResume:
 		d.Position = 0
 		d.Played = true
+		return true
 	default:
 		d.Position = position
 	}
+	return false
 }
 
-// Finish records a stop reported without a position: the item was played
-// through, which counts as one more play.
-func (d *Data) Finish() {
+// Finish records a stop reported without a position at now: the item was
+// played through, which counts as one more play.
+func (d *Data) Finish(now time.Time) {
 	d.Position = 0
 	d.Played = true
 	d.PlayCount++
+	d.LastPlayed = &now
 }
 
 // MarkPlayed marks the item played, as a user does from an app, and drops

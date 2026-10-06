@@ -239,7 +239,7 @@ func TestTrickplayRoutes(t *testing.T) {
 // Jellyfin serves images, by the item or the version opened.
 func TestChapterImages(t *testing.T) {
 	s := withThumbnails(t)
-	probe, err := os.ReadFile("testdata/jellyfin-12.1/chapters/probe.json")
+	probe, err := os.ReadFile("testdata/jellyfin-12.2/chapters/probe.json")
 	if err != nil {
 		t.Fatal(err)
 	}

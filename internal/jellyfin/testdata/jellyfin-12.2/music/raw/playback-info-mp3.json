@@ -1,0 +1,63 @@
+{
+  "MediaSources": [
+    {
+      "Bitrate": 128713,
+      "Container": "mp3",
+      "ETag": "d1a52280287de8640a169e53ee1e31d9",
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "d0f72fc6f07f585b51259f92c8442cf4",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": false,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [
+        {
+          "AudioSpatialFormat": "None",
+          "BitRate": 128000,
+          "ChannelLayout": "stereo",
+          "Channels": 2,
+          "Codec": "mp3",
+          "DisplayTitle": "MP3 - Stereo",
+          "Index": 0,
+          "IsDefault": false,
+          "IsExternal": false,
+          "IsForced": false,
+          "IsHearingImpaired": false,
+          "IsInterlaced": false,
+          "IsOriginal": false,
+          "IsTextSubtitleStream": false,
+          "LocalizedDefault": "Default",
+          "LocalizedExternal": "External",
+          "LocalizedOriginal": "Original",
+          "SampleRate": 44100,
+          "SupportsExternalStream": false,
+          "TimeBase": "1/14112000",
+          "Type": "Audio",
+          "VideoRange": "Unknown",
+          "VideoRangeType": "Unknown"
+        }
+      ],
+      "Name": "03 Third Way",
+      "Path": "/media/music/Tone Quartet/Sine Studies/03 Third Way.mp3",
+      "Protocol": "File",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "RunTimeTicks": 100000000,
+      "Size": 160892,
+      "SupportsDirectPlay": true,
+      "SupportsDirectStream": true,
+      "SupportsProbing": true,
+      "SupportsTranscoding": true,
+      "TranscodingSubProtocol": "http",
+      "Type": "Default",
+      "UseMostCompatibleTranscodingProfile": false
+    }
+  ],
+  "PlaySessionId": "f20dcb81f379497eb210ba6bf92506cf"
+}

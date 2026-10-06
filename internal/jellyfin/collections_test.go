@@ -201,7 +201,7 @@ func TestCollectionsAreMadeChangedAndDeletedAsInJellyfin(t *testing.T) {
 		if status != http.StatusOK {
 			t.Fatalf("%s: %d %s", fixture, status, body)
 		}
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

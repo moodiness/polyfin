@@ -1,0 +1,32 @@
+{
+  "Items": [
+    {
+      "ChannelId": "1389fe91b085df332d82d93f2de0e153",
+      "EndDate": "2026-10-06T17:27:47.0000000Z",
+      "Id": "c44bb03b8da28cae10254e411d416ce3",
+      "ImageBlurHashes": {},
+      "IsNews": true,
+      "MediaType": "Unknown",
+      "Name": "Fixture News",
+      "RunTimeTicks": 72000000000,
+      "ServerId": "574a53f8e8e74e61a31e8432e0d356dc",
+      "StartDate": "2026-10-06T15:27:47.0000000Z",
+      "Type": "Program"
+    },
+    {
+      "ChannelId": "1389fe91b085df332d82d93f2de0e153",
+      "EndDate": "2026-10-06T19:27:47.0000000Z",
+      "Id": "e2f4e0b4a4a361910ce6f1d79bf51e06",
+      "ImageBlurHashes": {},
+      "IsMovie": true,
+      "MediaType": "Unknown",
+      "Name": "Fixture Movie",
+      "RunTimeTicks": 72000000000,
+      "ServerId": "574a53f8e8e74e61a31e8432e0d356dc",
+      "StartDate": "2026-10-06T17:27:47.0000000Z",
+      "Type": "Program"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

@@ -10,7 +10,7 @@ import (
 )
 
 // recordedAnswer is an answer of answers.json: status, content type and
-// body as Jellyfin 12.1 gave them. The body is JSON when Jellyfin answered
+// body as Jellyfin 12.2 gave them. The body is JSON when Jellyfin answered
 // JSON, else a string of the text.
 type recordedAnswer struct {
 	Status      int
@@ -29,7 +29,7 @@ func (a recordedAnswer) text() string {
 
 func recordedAnswers(t *testing.T) map[string]recordedAnswer {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.1", "ass", "answers.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "ass", "answers.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

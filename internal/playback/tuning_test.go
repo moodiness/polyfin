@@ -87,6 +87,24 @@ func TestTuningChangesConversions(t *testing.T) {
 		}
 	}
 
+	// A track converted on its own, progressively or into HLS segments,
+	// is mixed down to stereo the same way, as Jellyfin 12.2 does.
+	profile := &DeviceProfile{TranscodingProfiles: []TranscodingProfile{{Type: "Audio", Container: "mp3", AudioCodec: "mp3",
+		Protocol: "http", MaxAudioChannels: "2"}}}
+	source := AudioSource{Container: "flac", Codec: "flac", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 48_000}
+	decision := DecideAudio(profile, source, AudioOptions{Can: Capabilities{Encoders: []string{"libmp3lame"}, Tuning: Tuning{Downmix: "Dave750"}}})
+	if decision.Target == nil || decision.Target.Channels != 2 || decision.Target.Filter != dave {
+		t.Fatalf("progressive downmix: %+v", decision.Target)
+	}
+	if a := audioConversion("http://127.0.0.1:1/a.flac", nil, decision.Target); a.Channels != 2 || a.Filter != dave {
+		t.Errorf("progressive downmix conversion: %+v", a)
+	}
+	stereo := source
+	stereo.Channels, stereo.ChannelLayout = 2, "stereo"
+	if d := DecideAudio(profile, stereo, AudioOptions{Can: Capabilities{Encoders: []string{"libmp3lame"}, Tuning: Tuning{Downmix: "Dave750"}}}); d.Target == nil || d.Target.Filter != "" {
+		t.Errorf("stereo mixed down: %+v", d.Target)
+	}
+
 	// The encoding takes the preset, the quality of its codec, the curve,
 	// the deinterlacer, frame doubling up to 30 frames a second, the GPU's
 	// decoding and the threads.
