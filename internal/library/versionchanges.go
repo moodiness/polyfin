@@ -102,7 +102,7 @@ func (s *Service) FollowedProgress(ctx context.Context, user accounts.User, id a
 	if !ok {
 		return 0, nil, false
 	}
-	pending = s.askedFor(user.ID, item) + s.streamFollowUps(page.serving, page.t)
+	pending = s.pendingOf(user.ID, page.t, page.serving)
 	versions, _ = s.listVersions(ctx, page.t, page.serving, knownOnly)
 	return pending, versions, true
 }

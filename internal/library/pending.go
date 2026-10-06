@@ -2,7 +2,7 @@ package library
 
 import (
 	"context"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -26,9 +26,35 @@ type askedKey struct {
 	user, item accounts.ID
 }
 
-// asked counts the addons still asked for a user's title.
+// asked holds the addons still asked for a user's title.
 type asked struct {
-	pending atomic.Int32
+	mu     sync.Mutex
+	addons map[accounts.ID]bool
+}
+
+// asking returns a copy of the addons still asked.
+func (a *asked) asking() map[accounts.ID]bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	asking := make(map[accounts.ID]bool, len(a.addons))
+	for addon := range a.addons {
+		asking[addon] = true
+	}
+	return asking
+}
+
+// done records that an addon is no longer asked.
+func (a *asked) done(addon accounts.ID) {
+	a.mu.Lock()
+	delete(a.addons, addon)
+	a.mu.Unlock()
+}
+
+// busy reports whether any addon is still asked.
+func (a *asked) busy() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.addons) > 0
 }
 
 // VersionsNow lists, as Versions does, the versions of a movie or an
@@ -57,29 +83,38 @@ func (s *Service) KnownVersions(ctx context.Context, user accounts.User, id acco
 // those of its stale list, which item details keep listing. The title's
 // page follows its versions from then on (see FollowedProgress).
 func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.ID) (int, error) {
-	// The addons asked for the first time are counted first: one that
-	// answers meanwhile has its follow-up scheduled before it stops being
-	// asked, so it is counted at least once.
-	pending := s.askedFor(user.ID, id)
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return 0, err
 	}
 	if AudioKind(t.kind) {
-		return pending, nil
+		return 0, nil
 	}
 	serving := streamServing(v, t)
 	s.tracked().pages.Put(askedKey{user.ID, t.item}, titlePage{t: t, serving: serving})
-	return pending + s.streamFollowUps(serving, t), nil
+	return s.pendingOf(user.ID, t, serving), nil
 }
 
-// askedFor counts the addons still asked for a user's title for the first
-// time, or since their list expired.
-func (s *Service) askedFor(user, item accounts.ID) int {
-	if a, ok := s.asked.Get(askedKey{user, item}); ok {
-		return int(a.pending.Load())
+// pendingOf counts the addons among serving still asked for a user's
+// title: for the first time, since their list expired, or again, their
+// follow-ups scheduled or running. Each counts once, whichever way it is
+// asked. Those asked are read first: one that answers meanwhile has its
+// follow-up scheduled before it stops being asked, so it is never missed.
+func (s *Service) pendingOf(user accounts.ID, t target, serving []installed) int {
+	var asking map[accounts.ID]bool
+	if a, ok := s.asked.Get(askedKey{user, t.item}); ok {
+		asking = a.asking()
 	}
-	return 0
+	s.followUps.mu.Lock()
+	defer s.followUps.mu.Unlock()
+	n := 0
+	for _, entry := range serving {
+		_, following := s.followUps.running[followKey{listStreams, streamKey{entry.addon.ID, t.metaType, t.id}}]
+		if asking[entry.addon.ID] || following {
+			n++
+		}
+	}
+	return n
 }
 
 // askStreams asks addons for a user's title's streams in the background,
@@ -93,17 +128,19 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 		return
 	}
 	key := askedKey{user.ID, t.item}
-	if a, ok := s.asked.Get(key); ok && a.pending.Load() > 0 {
+	if a, ok := s.asked.Get(key); ok && a.busy() {
 		return
 	}
-	a := &asked{}
-	a.pending.Store(int32(len(unknown)))
+	a := &asked{addons: make(map[accounts.ID]bool, len(unknown))}
+	for _, entry := range unknown {
+		a.addons[entry.addon.ID] = true
+	}
 	s.asked.Put(key, a)
 	detached := context.WithoutCancel(ctx)
 	for _, entry := range unknown {
 		go func() {
 			defer s.versionsChanged(t.item)
-			defer a.pending.Add(-1)
+			defer a.done(entry.addon.ID)
 			if _, err := s.streams(detached, entry, t.metaType, t.id); err != nil {
 				s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
 			}

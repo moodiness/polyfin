@@ -344,17 +344,3 @@ func (s *Service) forgetLists(ctx context.Context, key streamKey) {
 	s.subtitleLists.Delete(key)
 	s.deleteSavedStreams(ctx, key)
 }
-
-// streamFollowUps counts the addons among serving whose streams for a
-// title have a schedule running.
-func (s *Service) streamFollowUps(serving []installed, t target) int {
-	s.followUps.mu.Lock()
-	defer s.followUps.mu.Unlock()
-	n := 0
-	for _, entry := range serving {
-		if _, ok := s.followUps.running[followKey{listStreams, streamKey{entry.addon.ID, t.metaType, t.id}}]; ok {
-			n++
-		}
-	}
-	return n
-}
