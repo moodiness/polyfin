@@ -610,6 +610,11 @@ func TestChapterKinds(t *testing.T) {
 		"Générique de fin": mediasegments.Outro, "End-Credits": mediasegments.Outro,
 		"Chapter 2": "", "": "", "Introspection": "", "Opera": "", "Edge": "", "Credited": "",
 		"Generic": "", "Générique": "", "The End": "", "Fin": "", "Openings": "",
+		// The short forms count only as the whole name, maybe numbered.
+		"OP2": mediasegments.Intro, "Op - 1": mediasegments.Intro, "ED2": mediasegments.Outro,
+		"ed 1": mediasegments.Outro, "ED - 2": mediasegments.Outro, "(ED)": mediasegments.Outro,
+		"Ed's Story": "", "Ed Wood": "", "OP Center": "", "The ED Report": "", "ED 2 Part": "",
+		"OPA": "", "EDx2": "", "Edited": "",
 	} {
 		if got := chapterKind(name); got != want {
 			t.Errorf("%q: got %q, want %q", name, got, want)

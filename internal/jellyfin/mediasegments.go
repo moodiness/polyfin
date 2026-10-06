@@ -207,13 +207,15 @@ func chapterSegments(chapters []media.Chapter) []mediasegments.Segment {
 // Chapter names that mark an intro or credits, as whole words in lower
 // case. "Credits" covers end and closing credits.
 var (
-	introNames   = []string{"intro", "introduction", "opening", "op", "générique de début"}
-	creditsNames = []string{"credits", "ending", "ed", "outro", "générique de fin"}
+	introNames   = []string{"intro", "introduction", "opening", "générique de début"}
+	creditsNames = []string{"credits", "ending", "outro", "générique de fin"}
 )
 
 // chapterKind tells the segment a chapter's name marks, Intro or Outro,
 // matching its whole words in any letter case; none for other names, such
 // as "Chapter 2". Intro names win, so that "Opening Credits" is an intro.
+// The short forms OP and ED count only as the whole name (see shortName),
+// as words such as "Ed" in "Ed Wood" are often something else.
 func chapterKind(name string) mediasegments.Type {
 	words := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	text := " " + strings.Join(words, " ") + " "
@@ -221,12 +223,26 @@ func chapterKind(name string) mediasegments.Type {
 		return slices.ContainsFunc(names, func(n string) bool { return strings.Contains(text, " "+n+" ") })
 	}
 	switch {
-	case named(introNames):
+	case named(introNames) || shortName(words, "op"):
 		return mediasegments.Intro
-	case named(creditsNames):
+	case named(creditsNames) || shortName(words, "ed"):
 		return mediasegments.Outro
 	}
 	return ""
+}
+
+// shortName reports whether a name's words are only a short form, maybe
+// followed by a number, with or without a space or a sign before it: "OP",
+// "op 1", "ED2", "ED - 2".
+func shortName(words []string, short string) bool {
+	switch len(words) {
+	case 1:
+		rest, ok := strings.CutPrefix(words[0], short)
+		return ok && (rest == "" || decimalDigits(rest))
+	case 2:
+		return words[0] == short && decimalDigits(words[1])
+	}
+	return false
 }
 
 // segmentTitle identifies a movie or an episode to the segment databases:

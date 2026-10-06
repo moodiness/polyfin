@@ -46,7 +46,7 @@ A version not analyzed yet gets the databases' segments as they are.
 - An intro: intro, introduction, opening, OP, or "générique de début". "Opening Credits" is an intro.
 - Credits: credits (end or closing credits), ending, ED, outro, or "générique de fin".
 
-Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with **Show chapters** turned off, and with no database asked.
+OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with **Show chapters** turned off, and with no database asked.
 
 **Why credits stop early:** jellyfin-web shows no skip button for credits that reach the runtime the title is listed with, when something follows in its queue. Its video page shows its "Up Next" card instead, but only for credits that reach the end of the version it plays. Credits count as running to the end when they end within 2 seconds of it. They stop early only when the listed runtime is at least the version's length, and when they still last 3 seconds, as jellyfin-web ignores shorter segments.
 
