@@ -67,6 +67,9 @@ type Service struct {
 	// readAhead); readAhead turns reading ahead on.
 	prefetches chan struct{}
 	readAhead  bool
+	// iptvHosts tells the hosts of IPTV sources and of their logos (see
+	// IPTVHost).
+	iptvHosts iptvHosts
 
 	// streamLists and subtitleLists are the addons' lists for each title,
 	// kept stale once expired (see staleLists).
@@ -1681,6 +1684,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		case lineupErr == nil && logo == "":
 			return "", false, ErrNotFound
 		case lineupErr == nil:
+			s.iptvHosts.logo(logo)
 			return logo, confined, nil
 		case !errors.Is(lineupErr, stremio.ErrNotFound):
 			return "", false, lineupErr

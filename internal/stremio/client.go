@@ -141,7 +141,7 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 		if errors.Is(err, ErrPrivateNetwork) {
 			return nil, ErrPrivateNetwork
 		}
-		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+		return nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	return response, nil
 }
@@ -185,6 +185,13 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 type httpStatus int
 
 func (s httpStatus) Error() string { return fmt.Sprintf("HTTP %d", int(s)) }
+
+// StatusOf returns the HTTP status of an answer that was not a success,
+// 0 when err is not one.
+func StatusOf(err error) int {
+	status, _ := errors.AsType[httpStatus](err)
+	return int(status)
+}
 
 // Fetch downloads a resource of an addon of another protocol than
 // Stremio's, through the same rules: bounded, confined when asked, its URL
@@ -250,7 +257,7 @@ func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byt
 	defer response.Body.Close()
 	contentType := response.Header.Get("Content-Type")
 	if response.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
-		return nil, "", fmt.Errorf("%w: HTTP %d %s", ErrUnreachable, response.StatusCode, contentType)
+		return nil, "", fmt.Errorf("%w: %w %s", ErrUnreachable, httpStatus(response.StatusCode), contentType)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes+1))
 	if err != nil {

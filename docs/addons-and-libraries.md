@@ -258,7 +258,7 @@ The change applies at once.
 
 Polyfin relays images from the addons' artwork servers, IPTV channel logos included, so Jellyfin apps only ever talk to Polyfin.
 
-- Polyfin downloads an image once, however many apps ask for it at once, and asks one artwork server for at most 4 images at a time.
+- Polyfin downloads an image once, however many apps ask for it at once, and asks one artwork server for at most 16 images at a time. It asks for at most 4 at a time from the servers of IPTV sources and of their logos, often the provider's panel, and for 10 minutes from a server that reset a connection or answered 429, 502, 503 or 504.
 - It keeps the images it relayed in memory (128 MB) and in the `images` folder of `POLYFIN_CACHE_DIR` (1 GB), the least recently used going first. They are not downloaded again after a restart.
 - An image that could not be downloaded is not asked for again for 2 minutes.
 - An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too.

@@ -42,8 +42,12 @@ func newArtServer(t *testing.T, picture []byte) *artServer {
 			s.mu.Unlock()
 		}()
 		time.Sleep(100 * time.Millisecond)
-		if r.URL.Path == "/missing.jpg" {
+		switch r.URL.Path {
+		case "/missing.jpg":
 			http.NotFound(w, r)
+			return
+		case "/busy.jpg":
+			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
@@ -51,6 +55,25 @@ func newArtServer(t *testing.T, picture []byte) *artServer {
 	}))
 	t.Cleanup(s.Close)
 	return s
+}
+
+// mostAtOnce returns the most requests answered at once since the last
+// call.
+func (s *artServer) mostAtOnce() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	most := s.most
+	s.most = 0
+	return most
+}
+
+// burst downloads count different images from art at once.
+func burst(t *testing.T, h *Handler, art *artServer, name string, count int, iptv bool) {
+	var wg sync.WaitGroup
+	for i := range count {
+		wg.Go(func() { _, _ = h.fetchArtwork(t.Context(), fmt.Sprintf("%s/%s-%d.jpg", art.URL, name, i), false, iptv) })
+	}
+	wg.Wait()
 }
 
 func jpegOf(t *testing.T, width, height int) []byte {
@@ -76,7 +99,7 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 5 {
 		wg.Go(func() {
-			if _, err := h.fetchArtwork(t.Context(), art.URL+"/one.jpg", false); err != nil {
+			if _, err := h.fetchArtwork(t.Context(), art.URL+"/one.jpg", false, false); err != nil {
 				t.Error(err)
 			}
 		})
@@ -86,19 +109,32 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 		t.Errorf("5 apps at once: %d downloads", got)
 	}
 
-	// One host gets at most 4 downloads at once.
-	for i := range 10 {
-		wg.Go(func() { _, _ = h.fetchArtwork(t.Context(), fmt.Sprintf("%s/%d.jpg", art.URL, i), false) })
+	// One host gets at most imageHostFetches downloads at once.
+	art.mostAtOnce()
+	burst(t, h, art, "first", 24, false)
+	if most := art.mostAtOnce(); most <= imageSlowHostFetches || most > imageHostFetches {
+		t.Errorf("%d downloads at once from one host", most)
 	}
-	wg.Wait()
-	if art.most > imageHostFetches {
-		t.Errorf("%d downloads at once from one host", art.most)
+	// A host that answers 503 is spared for a while.
+	if _, err := h.fetchArtwork(t.Context(), art.URL+"/busy.jpg", false, false); err == nil {
+		t.Error("a busy host answered")
+	}
+	art.mostAtOnce()
+	burst(t, h, art, "spared", 12, false)
+	if most := art.mostAtOnce(); most > imageSlowHostFetches {
+		t.Errorf("%d downloads at once from a busy host", most)
+	}
+	// So is a host that serves an IPTV source.
+	logos := newArtServer(t, jpegOf(t, 40, 40))
+	burst(t, h, logos, "logo", 12, true)
+	if most := logos.mostAtOnce(); most > imageSlowHostFetches {
+		t.Errorf("%d downloads at once from an IPTV host", most)
 	}
 
 	// A failed download is not asked again for a while.
 	before := art.requests.Load()
 	for range 2 {
-		if _, err := h.fetchArtwork(t.Context(), art.URL+"/missing.jpg", false); err == nil {
+		if _, err := h.fetchArtwork(t.Context(), art.URL+"/missing.jpg", false, false); err == nil {
 			t.Error("a missing image was found")
 		}
 	}
@@ -109,7 +145,7 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 	// The disk keeps the images across a restart.
 	before = art.requests.Load()
 	restarted := imageHandler(dir)
-	if image, err := restarted.fetchArtwork(t.Context(), art.URL+"/one.jpg", false); err != nil || image.contentType != "image/jpeg" {
+	if image, err := restarted.fetchArtwork(t.Context(), art.URL+"/one.jpg", false, false); err != nil || image.contentType != "image/jpeg" {
 		t.Errorf("after a restart: %v %v", image.contentType, err)
 	}
 	if got := art.requests.Load() - before; got != 0 {

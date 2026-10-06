@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
@@ -41,7 +42,10 @@ import (
 // Each image is downloaded once for every request that asks for it at
 // once, on a context of its own: an app that gives up does not cut the
 // download short for the others. At most imageHostFetches downloads go to
-// one host at once. A download that failed answers the same for
+// one host at once, imageSlowHostFetches to a host that serves an IPTV
+// source or its logos, often the provider's panel, and to a host that
+// showed it was overloaded, for imageSlowDown. A download that failed
+// answers the same for
 // imageFailureLife without asking again. Downloaded images are kept in
 // memory, the most recently used up to imageCacheBytes, and on disk under
 // the cache folder's images folder, up to imageDiskBytes, which a restart
@@ -53,8 +57,13 @@ const (
 	imageCacheBytes = 128 << 20
 	// imageDiskBytes bounds the artwork kept on disk.
 	imageDiskBytes = 1 << 30
-	// imageHostFetches bounds the downloads from one host at once.
-	imageHostFetches = 4
+	// imageHostFetches bounds the downloads from one host at once, and
+	// imageSlowHostFetches those from a host to spare (see host);
+	// imageSlowDown is how long a host that showed it was overloaded is
+	// spared.
+	imageHostFetches     = 16
+	imageSlowHostFetches = 4
+	imageSlowDown        = 10 * time.Minute
 	// imageFailureLife is how long a failed download answers again without
 	// asking.
 	imageFailureLife = 2 * time.Minute
@@ -93,8 +102,8 @@ type imageCache struct {
 	// bytes.
 	disk     map[string]*diskImage
 	diskSize int64
-	// hosts holds a place for each download from a host.
-	hosts map[string]chan struct{}
+	// hosts are the downloads under way from each host.
+	hosts map[string]*hostFetches
 }
 
 type memoryImage struct {
@@ -116,7 +125,7 @@ func (c *imageCache) open(dir string, logger *slog.Logger) {
 		c.failures = cache.New[string, int](5000, imageFailureLife)
 		c.resizes = make(chan struct{}, imageResizes)
 		c.memory, c.order = map[string]*list.Element{}, list.New()
-		c.disk, c.hosts = map[string]*diskImage{}, map[string]chan struct{}{}
+		c.disk, c.hosts = map[string]*diskImage{}, map[string]*hostFetches{}
 		if dir == "" {
 			return
 		}
@@ -320,26 +329,75 @@ func (c *imageCache) fetch(ctx context.Context, key string, produce func(context
 	}
 }
 
+// hostFetches are the downloads under way from a host: active of them,
+// those waiting woken when one ends, and the host spared until slowUntil.
+type hostFetches struct {
+	active    int
+	slowUntil time.Time
+	ended     chan struct{}
+}
+
 // host waits for a place among the downloads from target's host, and
-// returns what gives it back.
-func (c *imageCache) host(ctx context.Context, target string) (func(), error) {
+// returns what gives it back: imageHostFetches places, imageSlowHostFetches
+// for a host to spare, iptv telling a host that serves an IPTV source.
+func (c *imageCache) host(ctx context.Context, target string, iptv bool) (func(), error) {
 	parsed, err := url.Parse(target)
 	if err != nil {
 		return func() {}, nil
 	}
+	for {
+		c.mu.Lock()
+		fetches, ok := c.hosts[parsed.Host]
+		if !ok {
+			fetches = &hostFetches{ended: make(chan struct{})}
+			c.hosts[parsed.Host] = fetches
+		}
+		places := imageHostFetches
+		if iptv || time.Now().Before(fetches.slowUntil) {
+			places = imageSlowHostFetches
+		}
+		if fetches.active < places {
+			fetches.active++
+			c.mu.Unlock()
+			return func() {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				fetches.active--
+				close(fetches.ended)
+				fetches.ended = make(chan struct{})
+			}, nil
+		}
+		ended := fetches.ended
+		c.mu.Unlock()
+		select {
+		case <-ended:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// spare limits the downloads from target's host for imageSlowDown.
+func (c *imageCache) spare(target string) {
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return
+	}
 	c.mu.Lock()
-	places, ok := c.hosts[parsed.Host]
-	if !ok {
-		places = make(chan struct{}, imageHostFetches)
-		c.hosts[parsed.Host] = places
+	defer c.mu.Unlock()
+	if fetches, ok := c.hosts[parsed.Host]; ok {
+		fetches.slowUntil = time.Now().Add(imageSlowDown)
 	}
-	c.mu.Unlock()
-	select {
-	case places <- struct{}{}:
-		return func() { <-places }, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+}
+
+// overloaded reports a download failure by which a host shows it gets too
+// many requests: a reset connection, or a 429, 502, 503 or 504.
+func overloaded(err error) bool {
+	switch stremio.StatusOf(err) {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
 	}
+	return errors.Is(err, syscall.ECONNRESET)
 }
 
 // downloadError is a download that failed, with the status it answers.
@@ -351,13 +409,13 @@ type downloadError struct {
 func (e downloadError) Error() string { return e.err.Error() }
 
 // fetchArtwork returns the artwork at target, downloaded once (see
-// imageCache).
-func (h *Handler) fetchArtwork(ctx context.Context, target string, confined bool) (artwork, error) {
+// imageCache); iptv tells that its host serves an IPTV source.
+func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, iptv bool) (artwork, error) {
 	if status, failed := h.images.failures.Get(target); failed {
 		return artwork{}, downloadError{status, errors.New("the last download failed")}
 	}
 	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
-		release, err := h.images.host(ctx, target)
+		release, err := h.images.host(ctx, target, iptv)
 		if err != nil {
 			return artwork{}, err
 		}
@@ -368,11 +426,21 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined bool
 			if errors.Is(err, stremio.ErrPrivateNetwork) {
 				status = http.StatusForbidden
 			}
+			if overloaded(err) {
+				h.images.spare(target)
+			}
 			h.images.failures.Put(target, status)
 			return artwork{}, downloadError{status, err}
 		}
 		return artwork{body: body, contentType: contentType}, nil
 	})
+}
+
+// iptvHost reports whether target's host serves an IPTV source or its
+// logos (see library.Service.IPTVHost).
+func (h *Handler) iptvHost(ctx context.Context, target string) bool {
+	parsed, err := url.Parse(target)
+	return err == nil && h.Library != nil && h.Library.IPTVHost(ctx, parsed.Host)
 }
 
 // widthSteps are the widths images are resized to: the one asked for,
@@ -532,7 +600,7 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.images.open(h.imageDir(), h.Logger)
-	image, err := h.fetchArtwork(r.Context(), url, confined)
+	image, err := h.fetchArtwork(r.Context(), url, confined, h.iptvHost(r.Context(), url))
 	if err != nil {
 		header.Del("ETag")
 		header.Del("Cache-Control")
