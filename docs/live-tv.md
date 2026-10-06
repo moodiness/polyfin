@@ -28,7 +28,20 @@ Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enable
 A channel plays as the addon streams it when the app takes it.
 
 - An HLS stream is relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself. jellyfin-web always gets it relayed, as browsers cannot read other sites' playlists.
-- Otherwise FFmpeg remuxes the stream into HLS as it comes, or converts what the app cannot take (see [Transcoding](transcoding.md)). This runs from the moment the app opens the channel until it leaves it. A minute without requests stops it.
+- Otherwise FFmpeg remuxes the stream into HLS as it comes, or converts what the app cannot take (see [Transcoding](transcoding.md)). This runs from the moment the app opens the channel until it leaves it. A minute without requests stops it. Its first segment lasts one second, so playback starts about a second after FFmpeg does.
+- An MPEG-TS stream played as it is (apps such as Android TV) is relayed from the same connection, unless the app can reach the source itself and the source has no connection limit, in which case the app is sent to it.
+
+Each channel's stream is read through one connection to its source, whoever reads it: the check at its start, FFmpeg, apps relayed, a recording, several users watching it. The connection stays open 20 seconds after the last of them left, so a quick return to the channel starts at once. A reader that falls more than a few seconds behind is dropped rather than holding the others back.
+
+An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
+
+#### Starting a channel
+
+Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 3 seconds (5 for its answer) fails as silent. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with half a second of probing; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
+
+A live stream has no end: when its source closes the connection, or sends nothing for 10 seconds, FFmpeg reads it again after 1, 2, then 4 seconds, and the playlist goes on with a discontinuity instead of ending. Past 5 restarts in 2 minutes it gives up, until the app asks again.
+
+How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#stream-health)): a stream found dead is left out of its channel for a while, so the next start goes to a stream that works.
 
 ## Programme guide
 
@@ -60,12 +73,13 @@ Some IPTV addons publish no Native EPG guide, while their provider publishes one
 Polyfin fetches a guide:
 
 - when its address is saved;
-- again once **Refresh Live TV lists and guides every** hours have passed (Polyfin looks for the guides due every 30 minutes);
+- again once **Refresh Live TV lists and guides every** hours have passed (Polyfin looks for the guides due every 5 minutes);
+- after a failed download, again after 5 minutes, then 15 minutes, then every hour (never later than the setting), or later when the server asked to wait;
 - when you press **Download again** on the **Guides** page, which fetches every guide of the catalog.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Refresh Live TV lists and guides every (hours)** | **Settings › Live TV** | 12 hours (as before the setting existed); 1 to 168 | How often guides, and IPTV lists, are downloaded again. |
+| **Refresh Live TV lists and guides every (hours)** | **Settings › Live TV** | 12 hours (as before the setting existed); 1 to 168 | How often guides, and IPTV lists, are downloaded again. Failed downloads are tried again sooner. |
 
 The catalog's row then shows when its first guide was last fetched, when it will be fetched next, how many of its channels are mapped to a guide channel, and why the last fetch failed, if it did. The guide page shows the same for each guide, with the channels and programmes it held.
 
@@ -115,6 +129,10 @@ A choice made by hand survives downloads, refreshes and **Map channels without a
 #### Where XMLTV programmes appear
 
 XMLTV programmes appear wherever Native EPG programmes do, with the same filters: the programme listings, recommended programmes, a programme's details, and the programme each channel airs now. A guide category such as "Movie", "News" or "Sports" marks programmes as a Native EPG genre does.
+
+XMLTV programmes are read from the guide when asked: a guide page reads only its channels' programmes, and a listing by start time (such as the upcoming rows of the Live TV page) reads no further than it shows. They are not stored apart from the guide; a programme opened by its identifier is found again in the guide. Native EPG programmes listed are kept, and deleted two days after they end, unless a recording or a timer names them.
+
+Recommended programmes airing now are listed by channel number; those to come, by start time.
 
 **For app developers:**
 - Programmes from either guide give apps their episode title and their season and episode numbers, as Jellyfin's do.
