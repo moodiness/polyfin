@@ -329,12 +329,13 @@ process.stdout.write(JSON.stringify(results))
 	}
 }
 
-// On a title's page, the script asks Polyfin every second for the title's
-// versions while addons are pending. When the page lists fewer versions than
-// there are, or a different number once none is pending, it asks for the
-// title's details and lists their versions in the version menu, in place,
-// keeping the version picked; it reloads the page as jellyfin-web reloads a
-// page shown again when the version picked is gone or no longer the same.
+// On a title's page, the script asks Polyfin for the title's versions at
+// once, then every second while addons are pending. When the page lists
+// fewer versions than there are, or a different number once none is
+// pending, it asks for the title's details and lists their versions in the
+// version menu, in place, keeping the version picked; it reloads the page
+// as jellyfin-web reloads a page shown again when the version picked is gone
+// or no longer the same.
 // It runs in Node.js, in a context that stands for the browser and
 // jellyfin-web: a title page whose version menu lists what the details gave
 // when it was last loaded, a clock and timers the harness moves on.
@@ -391,7 +392,8 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 	}
 	reloads := []string{"viewbeforehide", "viewshow false"}
 	ticks := func(n int) []string { return slices.Repeat([]string{"tick"}, n) }
-	steps := func(n int, more ...string) []string { return slices.Concat([]string{title}, ticks(n), more) }
+	// The route asks at once; each tick after it runs the next timer.
+	steps := func(n int, more ...string) []string { return slices.Concat([]string{title}, ticks(n-1), more) }
 	versions := func(sizes ...int64) []source {
 		list := make([]source, len(sizes))
 		for i, size := range sizes {
@@ -418,7 +420,7 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
 			steps: steps(4), want: []string{ask, ask, ask, "idle"}},
 		"leaving the page stops": {listed: 1, answers: []answer{{2, 1, nil}, {2, 1, nil}},
-			steps: []string{title, "tick", "#/home", "tick"}, want: []string{ask, "idle"}},
+			steps: []string{title, "#/home", "tick"}, want: []string{ask, "idle"}},
 		"other routes ask nothing": {listed: 1, answers: []answer{{2, 3, nil}},
 			steps: []string{"#/details?id=dashboard", "#/home", "#/list?parentId=" + id, "tick"}, want: []string{"idle"}},
 		"never during a video": {listed: 1, video: true, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
@@ -456,7 +458,7 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// The menu may be open while it has focus: the versions wait for it
 		// to lose focus, even once Polyfin is no longer asked.
 		"not while the menu has focus": {listed: 2, picked: "v1", answers: []answer{{1, 3, nil}, {0, 3, nil}, {0, 3, nil}},
-			steps: slices.Concat([]string{title, "focus"}, ticks(4), []string{"menu", "blur", "menu", "tick"}),
+			steps: slices.Concat([]string{"focus", title}, ticks(3), []string{"menu", "blur", "menu", "tick"}),
 			want:  []string{ask, ask, ask, "idle", "menu t *v1 shown", details, "menu t *v1 v2 shown", "idle"}},
 		// Once no addon is pending, the menu lists the versions details
 		// list, even fewer.
@@ -466,20 +468,21 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// A push is taken as an answer at once; the script then asks only
 		// every 10 seconds, as long as addons are pending.
 		"pushed versions come at once": {listed: 1, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
-			steps: []string{title, "tick", "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
-			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 2", ask, "clock 12", "idle"}},
+			steps: []string{title, "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
+			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 1", ask, "clock 11", "idle"}},
 		"a push for another title changes nothing": {listed: 1, answers: []answer{{1, 1, nil}, {1, 1, nil}, {0, 1, nil}},
-			steps: []string{title, "push other", "tick", "tick", "tick", "clock", "tick", "menu"},
-			want:  []string{ask, ask, ask, "clock 3", "idle", "menu *t hidden"}},
+			steps: []string{title, "push other", "tick", "tick", "clock", "tick", "menu"},
+			want:  []string{ask, ask, ask, "clock 2", "idle", "menu *t hidden"}},
 		// Pushes still come once the script no longer asks.
 		"a push after the last answer": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
-			steps: []string{title, "tick", "tick", "tick", "tick", "push 0 3", "menu"},
+			steps: []string{title, "tick", "tick", "tick", "push 0 3", "menu"},
 			want:  []string{ask, ask, ask, "idle", details, "menu *t v1 v2 shown"}},
 	}
 	ninety := slices.Repeat([]string{ask}, 90)
 	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
-		// The 91st second asks nothing, and the polling ends.
-		steps: append([]string{title}, ticks(92)...), want: append(ninety, "idle")}
+		// Asked at 0 to 89 seconds; the 90th asks nothing, and the polling
+		// ends.
+		steps: append([]string{title}, ticks(91)...), want: append(ninety, "idle")}
 
 	const harness = `
 const vm = require('node:vm')
@@ -679,10 +682,12 @@ async function run(scenario) {
 // a tooltip, greyed, with a spinner; once a version is known, by an answer
 // or a push, they are as jellyfin-web made them; once no addon is left to
 // search, a line under them says no source is available, with a button that
-// has Polyfin search again. jellyfin-web's renders find them held again; a
-// video is never touched, and leaving the page gives everything back. It
-// runs in Node.js, in a context that stands for the browser: a small
-// document holding the title page, whose buttons jellyfin-web titled
+// has Polyfin search again. The first answer, asked as the route changes,
+// never says no source; before it, the buttons wait only when the version
+// menu lists the placeholder alone. jellyfin-web's renders find them held
+// again; a video is never touched, and leaving the page gives everything
+// back. It runs in Node.js, in a context that stands for the browser: a
+// small document holding the title page, whose buttons jellyfin-web titled
 // "Resume" and "Play", a clock and timers the harness moves on.
 func TestPlayButtonsWaitForASource(t *testing.T) {
 	node, err := exec.LookPath("node")
@@ -706,14 +711,21 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		lang     string
 		answers  []progress
 		searches []searchAnswer
+		// deferred answers wait for an "answer" step.
+		deferred bool
+		// menu lists the version menu's options at first, "t" standing for
+		// the title's own identifier; none without it.
+		menu []string
 		// steps: a route the router moves to; "tick" runs the next timer,
-		// logging "idle" when there is none; "push <pending> <count>
-		// <known>" has Polyfin push the title's progress; "show" logs the
-		// buttons, each "free" or "held", "+spin" with a spinner, then its
-		// tooltip, and the line under them, "+wait" when its button waits;
-		// "render" has jellyfin-web title the buttons again, as it does when
-		// it shows the page, and "rebuild" replace them; "again" clicks the
-		// line's button; "video" and "end video" start and end a video.
+		// logging "idle" when there is none; "answer" gives the oldest
+		// deferred answer; "push <pending> <count> <known>" has Polyfin push
+		// the title's progress; "show" logs the buttons, each "free" or
+		// "held", "+spin" with a spinner, then its tooltip, and the line
+		// under them, "+wait" when its button waits; "render" has
+		// jellyfin-web title the buttons again, as it does when it shows the
+		// page, and "rebuild" replace them; "list <option>…" has it list the
+		// version menu's options; "again" clicks the line's button; "video"
+		// and "end video" start and end a video.
 		steps []string
 		want  []string
 	}
@@ -727,42 +739,56 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 	looking, found, empty := progress{1, 1, 0}, progress{0, 1, 1}, progress{0, 1, 0}
 	scenarios := map[string]scenario{
 		"searching, then a version by an answer": {answers: []progress{looking, found, found},
-			steps: []string{title, "show", "tick", "show", "tick", "show", "tick", "tick"},
-			want:  []string{free, ask, searching, ask, free, ask, "idle"}},
+			steps: []string{title, "show", "tick", "show", "tick", "tick"},
+			want:  []string{ask, searching, ask, free, ask, "idle"}},
 		"a pushed version frees them at once": {answers: []progress{looking, looking},
-			steps: []string{title, "tick", "show", "push 1 1 0", "show", "push 0 2 2", "show"},
+			steps: []string{title, "show", "push 1 1 0", "show", "push 0 2 2", "show"},
 			want:  []string{ask, searching, searching, "reload", free}},
+		// The first answer may come before the details asked any addon:
+		// the next one tells that no source is available.
 		"no source, then searching again": {answers: []progress{empty, empty, empty, looking, {0, 3, 3}, {0, 3, 3}},
 			searches: []searchAnswer{{progress: looking}},
-			steps:    []string{title, "tick", "show", "tick", "tick", "tick", "again", "show", "tick", "show", "tick", "show", "tick", "tick"},
-			want:     []string{ask, none, ask, ask, "idle", search, searching, ask, searching, ask, "reload", free, ask, "idle"}},
+			steps:    []string{title, "show", "tick", "show", "tick", "tick", "again", "show", "tick", "show", "tick", "show", "tick", "tick"},
+			want:     []string{ask, searching, ask, none, ask, "idle", search, searching, ask, searching, ask, "reload", free, ask, "idle"}},
 		"searching again too soon waits": {answers: []progress{empty, empty, empty},
 			searches: []searchAnswer{{RetryAfter: 7}, {progress: looking}},
-			steps:    []string{title, "tick", "tick", "tick", "tick", "again", "show", "again", "tick", "show", "again", "show"},
+			steps:    []string{title, "tick", "tick", "tick", "again", "show", "again", "tick", "show", "again", "show"},
 			want:     []string{ask, ask, ask, "idle", search, none + " +wait", none, search, searching}},
 		"jellyfin-web's renders find them held": {answers: []progress{looking, empty},
-			steps: []string{title, "tick", "render", "show", "rebuild", "show", "tick", "rebuild", "show", "render", "show", "push 0 1 1", "show"},
+			steps: []string{title, "render", "show", "rebuild", "show", "tick", "rebuild", "show", "render", "show", "push 0 1 1", "show"},
 			want: []string{ask, searching, searching, ask, none, none,
 				// A render titled the play button anew: it keeps that title.
 				`show play free "Play" replay free "Play"`}},
 		"never during a video": {answers: []progress{looking, looking, looking},
-			steps: []string{"video", title, "tick", "show", "end video", "tick", "show", "video", "push 0 1 1", "show", "end video", "push 0 1 1", "show"},
+			steps: []string{"video", title, "show", "end video", "tick", "show", "video", "push 0 1 1", "show", "end video", "push 0 1 1", "show"},
 			want:  []string{ask, free, ask, searching, searching, free}},
-		"leaving gives everything back": {answers: []progress{empty},
+		"leaving gives everything back": {answers: []progress{empty, empty},
 			steps: []string{title, "tick", "show", "#/home", "show", "tick"},
-			want:  []string{ask, none, free, "idle"}},
+			want:  []string{ask, ask, none, free, "idle"}},
 		"leaving while searching": {answers: []progress{looking, looking},
-			steps: []string{title, "tick", "#/home", "show", "tick"},
+			steps: []string{title, "#/home", "show", "tick"},
 			want:  []string{ask, free, "idle"}},
 		"other items are left alone": {answers: []progress{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
-			steps: []string{title, "tick", "show"},
+			steps: []string{title, "show"},
 			want:  []string{ask, free}},
 		"in French": {lang: "fr-FR", answers: []progress{looking, empty, empty},
-			steps: []string{title, "tick", "show", "tick", "show"},
+			steps: []string{title, "show", "tick", "show"},
 			want:  []string{ask, frSearching, ask, frNone}},
 		"in another language, English": {lang: "de", answers: []progress{looking},
-			steps: []string{title, "tick", "show"},
+			steps: []string{title, "show"},
 			want:  []string{ask, searching}},
+		// Before the first answer: item details list the placeholder alone,
+		// a single source under the title's own identifier, while no
+		// version is known.
+		"held from the start with only the placeholder": {deferred: true, menu: []string{"t"}, answers: []progress{found},
+			steps: []string{title, "show", "answer", "show"},
+			want:  []string{ask, searching, free}},
+		"held as the page lists only the placeholder": {deferred: true, answers: []progress{looking},
+			steps: []string{title, "show", "list t", "show", "answer", "show"},
+			want:  []string{ask, free, searching, searching}},
+		"untouched while real versions are listed": {deferred: true, menu: []string{"t", "v1"}, answers: []progress{found},
+			steps: []string{title, "show", "list v1", "show", "answer", "show"},
+			want:  []string{ask, free, free, free}},
 	}
 
 	const harness = `
@@ -854,6 +880,8 @@ async function run(scenario) {
       for (const listener of this.listeners[event.type] || []) listener(event)
     }
     click() { if (!this.hasAttribute('disabled')) this.dispatchEvent({ type: 'click' }) }
+    get options() { return this.children }
+    get value() { return this.getAttribute('value') || '' }
   }
   const element = (tag, className, parent) => { const e = new Element(tag); e.className = className; if (parent) parent.appendChild(e); return e }
   const root = element('html', '')
@@ -880,9 +908,18 @@ async function run(scenario) {
   }
   build()
   element('div', 'overview', detail)
+  // jellyfin-web's version menu, which lists the sources of the details.
+  let menu = null
+  function list(values) {
+    if (menu) menu.remove()
+    menu = element('select', 'selectSource', detail)
+    for (const value of values) element('option', '', menu).setAttribute('value', value === 't' ? TITLE : value)
+  }
+  if (scenario.menu) list(scenario.menu)
   const document = {
     documentElement: root,
     head,
+    body,
     createElement: (tag) => new Element(tag),
     getElementById: (id) => [root, ...root.querySelectorAll('*')].find((e) => e.id === id) || null,
     querySelector: (selector) => {
@@ -919,13 +956,16 @@ async function run(scenario) {
   }
   const answers = scenario.answers.slice()
   const searches = (scenario.searches || []).slice()
+  const deferred = []
   const ApiClient = {
     getUrl: (path) => 'http://polyfin.test/' + path,
     getCurrentUserId: () => 'user',
     getJSON: (url) => {
       log.push('ask ' + url)
       const answer = answers.shift()
-      return answer ? Promise.resolve({ ...answer }) : Promise.reject(new Error('down'))
+      if (!answer) return Promise.reject(new Error('down'))
+      if (scenario.deferred) return new Promise((resolve) => deferred.push(() => resolve({ ...answer })))
+      return Promise.resolve({ ...answer })
     },
     ajax: (request) => {
       log.push('search ' + request.url + (request.type === 'POST' ? '' : ' with ' + request.type))
@@ -948,6 +988,11 @@ async function run(scenario) {
   })
   for (const step of scenario.steps) {
     if (step === 'show') show()
+    else if (step === 'answer') {
+      const give = deferred.shift()
+      if (give) give()
+      else log.push('no answer')
+    } else if (step.startsWith('list ')) list(step.split(' ').slice(1))
     else if (step === 'video') video = true
     else if (step === 'end video') video = false
     else if (step === 'render') {
@@ -995,11 +1040,13 @@ async function run(scenario) {
 		Lang     string         `json:"lang,omitempty"`
 		Answers  []progress     `json:"answers"`
 		Searches []searchAnswer `json:"searches,omitempty"`
+		Deferred bool           `json:"deferred"`
+		Menu     []string       `json:"menu,omitempty"`
 		Steps    []string       `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.lang, s.answers, s.searches, s.steps}
+		inputs[name] = input{s.lang, s.answers, s.searches, s.deferred, s.menu, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

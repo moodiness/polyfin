@@ -24,8 +24,9 @@
 // details list now (Count). Polyfin also pushes it, as it changes, on the
 // socket jellyfin-web keeps open, in a PolyfinVersions message whose Data
 // names the page's identifier (ItemId): the script hears it through
-// ApiClient's message event. It asks every second while addons are pending,
-// every 10 seconds once a push came, the socket then telling the changes,
+// ApiClient's message event. It asks at once as the route changes, then
+// every second while addons are pending, every 10 seconds once a push came,
+// the socket then telling the changes,
 // for at most 90 seconds: a first answer, which takes at most 15 seconds,
 // and both follow-ups, 10 and 30 seconds later and as long each, end within
 // 85. When the page lists fewer versions than Count, or a different number
@@ -43,8 +44,12 @@
 // its push tell (Known, the placeholder left out). While none is known and
 // addons are asked (Pending), they are disabled, greyed, with a spinner and
 // the tooltip "Looking for sources…"; as soon as one is known, they are given
-// back as jellyfin-web made them. Once no addon is left to ask, they stay
-// disabled and a line under them says that no source is available, with a
+// back as jellyfin-web made them. Until the first answer, they are held as
+// searching when the version menu lists only the placeholder, a single
+// source under the title's own identifier; the first answer may come before
+// the title's details asked any addon, so it never tells that no source is
+// available. Once no addon is left to ask, they stay disabled and a line
+// under them says that no source is available, with a
 // "Try again" button: it posts to /Polyfin/Items/{id}/Versions/Search, which
 // has Polyfin ask the title's addons again, then follows the versions anew;
 // asked too soon, Polyfin answers 429 with Retry-After, and the button waits
@@ -215,7 +220,14 @@
     var progress = message.Data
     if (!title || String(progress.ItemId).toLowerCase() !== title) return
     pushed = true
+    unsure = false
+    take(progress)
+  }
+  // take brings the page to an answer.
+  function take(progress) {
     latest = progress
+    if (early) early.disconnect()
+    early = null
     hold()
     update(progress)
   }
@@ -231,21 +243,36 @@
   }
   // The play buttons held, each with what the script changed as it was
   // before and the tooltip it gave; the line telling that no source is
-  // available; the page watched for jellyfin-web's renders; and when the
-  // title's addons may be asked again.
+  // available; the page watched for jellyfin-web's renders, and the document
+  // until the first answer; whether the latest answer may have come before
+  // the title's details asked any addon; and when the title's addons may be
+  // asked again.
   var held = []
   var note = null
   var watched = null
   var watcher = null
+  var early = null
+  var unsure = false
   var againAt = 0
   var againTimer = null
-  // waiting tells what the title's play buttons wait for: "searching" while
+  // waiting tells what the play buttons of page wait for: "searching" while
   // no version is known and addons are asked, "none" once none is left to
   // ask, "" when a version is known or the item is not a movie or an
-  // episode, which counts no source at all.
-  function waiting(progress) {
-    if (!progress || !(progress.Count >= 1) || typeof progress.Known !== 'number' || progress.Known > 0) return ''
-    return progress.Pending > 0 ? 'searching' : 'none'
+  // episode, which counts no source at all. The first answer for a title
+  // opened is asked as the route changes, before its details may have asked
+  // any addon: no source then counts as searching until the next answer.
+  // Before any answer, the buttons wait as searching when the version menu
+  // lists only the placeholder, as item details do while no version is
+  // known: a single source under the title's own identifier.
+  function waiting(page) {
+    var progress = latest
+    if (!progress) return placeholder(page) ? 'searching' : ''
+    if (!(progress.Count >= 1) || typeof progress.Known !== 'number' || progress.Known > 0) return ''
+    return progress.Pending > 0 || unsure ? 'searching' : 'none'
+  }
+  function placeholder(page) {
+    var menu = page.querySelector('.selectSource')
+    return !!menu && menu.options.length === 1 && String(menu.options[0].value).toLowerCase() === title
   }
   // hold brings the play buttons of the title page shown to the latest
   // answer: disabled, with a tooltip, greyed and a spinner while addons are
@@ -255,10 +282,10 @@
   // and changes only what differs. It never changes the page during a video.
   function hold() {
     try {
-      var state = waiting(latest)
-      if (!state && !held.length && !note) return
       var page = shownPage()
       if (!page) return
+      var state = waiting(page)
+      if (!state && !held.length && !note) return
       watch(page)
       if (!state) return release()
       style()
@@ -367,10 +394,9 @@
     api.ajax({ type: 'POST', url: api.getUrl('Polyfin/Items/' + id + '/Versions/Search'), dataType: 'json' }).then(
       function (progress) {
         if (title !== id) return
-        latest = progress
-        hold()
-        update(progress)
-        poll(id)
+        unsure = false
+        take(progress)
+        poll(id, 1000)
       },
       function (response) {
         var seconds = Number(response && response.headers && response.headers.get('Retry-After'))
@@ -421,15 +447,25 @@
     if (watcher) watcher.disconnect()
     watcher = null
     watched = null
+    if (early) early.disconnect()
+    early = null
+    unsure = true
     clearTimeout(againTimer)
     againTimer = null
     againAt = 0
     if (!id) return
-    listen()
-    poll(id)
+    // Until the first answer, the page is looked for as jellyfin-web renders
+    // it, in case it lists only the placeholder.
+    if (document.body) {
+      early = new MutationObserver(hold)
+      early.observe(document.body, { childList: true, subtree: true })
+    }
+    hold()
+    poll(id, 0)
   }
-  // poll asks for the title's versions for 90 seconds, from scratch.
-  function poll(id) {
+  // poll asks for the title's versions for 90 seconds, from scratch, first
+  // after delay, then every second, or every 10 once a push came.
+  function poll(id, delay) {
     clearTimeout(timer)
     timer = null
     var round = ++polls
@@ -437,16 +473,19 @@
     var answers = 0
     function ask() {
       timer = null
-      if (title !== id || round !== polls || Date.now() > until) return
+      if (title !== id || round !== polls || Date.now() >= until) return
       var api = window.ApiClient
+      // jellyfin-web may not have made its client yet, on a page opened at
+      // a title's address.
+      if (!api) return next()
+      listen()
       api
         .getJSON(api.getUrl('Polyfin/Items/' + id + '/Versions'))
         .then(function (progress) {
           if (title !== id || round !== polls) return
           answers++
-          latest = progress
-          hold()
-          update(progress)
+          if (answers > 1) unsure = false
+          take(progress)
           // The page asks for its details as the route changes: the first
           // answers may come before Polyfin asks any addon.
           if (progress.Pending > 0 || answers < 3) next()
@@ -454,16 +493,15 @@
         .catch(function () {})
     }
     function next() {
-      timer = setTimeout(
-        function () {
-          try {
-            ask()
-          } catch (error) {}
-        },
-        pushed ? 10000 : 1000
-      )
+      timer = setTimeout(attempt, pushed ? 10000 : 1000)
     }
-    next()
+    function attempt() {
+      try {
+        ask()
+      } catch (error) {}
+    }
+    if (delay) timer = setTimeout(attempt, delay)
+    else attempt()
   }
   // jellyfin-web keeps its own copy of the versions it listed, and fills the
   // track menus from it as soon as a version is picked, before it asks for
