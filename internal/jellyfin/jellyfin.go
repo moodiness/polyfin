@@ -130,8 +130,8 @@ func New(options Options) *Handler {
 	h := &Handler{
 		Options:        options,
 		sessions:       playback.NewSessions(),
-		subtitleFiles:  cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour),
-		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour),
+		subtitleFiles:  cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour).Sized(16<<20, cache.JSONSize),
+		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour).Sized(32<<20, subtitleText.size),
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
