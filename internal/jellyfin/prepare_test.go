@@ -356,4 +356,9 @@ func TestPreparationsQueueTheNewestFirst(t *testing.T) {
 	if !slices.Equal(ran, []byte{7, 5}) {
 		t.Errorf("ten minutes later: ran %v", ran)
 	}
+	// A running preparation claims what it also prepares, unless done
+	// recently.
+	if p.claim(key(5)) || !p.claim(key(8)) || p.claim(key(8)) {
+		t.Error("claims ignore what was prepared")
+	}
 }

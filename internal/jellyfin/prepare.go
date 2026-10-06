@@ -137,6 +137,19 @@ func (p *preparations) idle() bool {
 	return p.workers == 0
 }
 
+// claim records that a running preparation also prepares key, unless key
+// was prepared recently.
+func (p *preparations) claim(key preparationKey) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	if p.recentlyPrepared(key, now) {
+		return false
+	}
+	p.prepared[key] = now
+	return true
+}
+
 func (p *preparations) recentlyPrepared(key preparationKey, now time.Time) bool {
 	at, ok := p.prepared[key]
 	return ok && now.Sub(at) < preparedFor
