@@ -12,7 +12,7 @@ import (
 // are still asked for its streams in the background, for the first time
 // or again (see library.Service.Pending), Count how many media sources its
 // details would list now, the placeholder included. Polyfin's jellyfin-web
-// script polls it to reload the title page as versions come.
+// script polls it to add versions to the title page as they come.
 type VersionProgress struct {
 	Pending int
 	Count   int
