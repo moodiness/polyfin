@@ -60,7 +60,7 @@ A title's page opens as soon as its description is ready, without waiting for th
 
 ## Chapters
 
-The analysis also reads the version's chapters, which apps show and let you skip through. Apps get the chapters of the version the title was opened or played as. A version never played has no chapters yet.
+The analysis also reads the version's chapters, which apps show and let you skip through. Apps get the chapters of the version the title was opened or played as. A version never played has no chapters yet. Chapters named as an intro or as credits also give that version's skip buttons (see [Segments of each version](skip-segments.md#segments-of-each-version)).
 
 Chapters come without chapter images unless you turn those on (see [Scrubbing thumbnails and chapter images](#scrubbing-thumbnails-and-chapter-images)).
 

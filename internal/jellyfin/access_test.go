@@ -114,13 +114,13 @@ func (p playbackSetup) withBitrate(t *testing.T, version library.Version, clip s
 }
 
 // storeAnalysis replaces the analysis of a version.
-func (p playbackSetup) storeAnalysis(t *testing.T, version library.Version, analysis media.Analysis) {
+func (s testServer) storeAnalysis(t *testing.T, version library.Version, analysis media.Analysis) {
 	t.Helper()
 	data, _ := json.Marshal(analysis)
-	if _, err := p.pool.Exec(t.Context(), "DELETE FROM media_analyses WHERE version_id = $1", version.ID); err != nil {
+	if _, err := s.pool.Exec(t.Context(), "DELETE FROM media_analyses WHERE version_id = $1", version.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", version.ID, data); err != nil {
+	if _, err := s.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", version.ID, data); err != nil {
 		t.Fatal(err)
 	}
 }
