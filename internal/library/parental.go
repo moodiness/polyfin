@@ -214,19 +214,20 @@ func ratingTTL(rating string) time.Duration {
 
 // learnTraits keeps the rating and genres a description by one of the
 // server's addons gives, none included, so that listings know them
-// without asking again.
-func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta) {
+// without asking again. at is when the addon gave the description: a
+// description kept past its refresh age dates the traits as old as it
+// is, so that they are asked again (see meta).
+func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta, at time.Time) {
 	rating, genres := certification(meta), []string(meta.Genres)
 	if genres == nil {
 		genres = []string{}
 	}
-	now := s.now()
 	// Traits confirmed recently are not written again.
 	if r.Rating != nil && *r.Rating == rating && r.Genres != nil && slices.Equal(*r.Genres, genres) &&
-		r.RatedAt != nil && now.Sub(*r.RatedAt) < unratedTTL {
+		r.RatedAt != nil && at.Sub(*r.RatedAt) < unratedTTL {
 		return
 	}
-	r.Rating, r.Genres, r.RatedAt = &rating, &genres, &now
+	r.Rating, r.Genres, r.RatedAt = &rating, &genres, &at
 	if err := s.save(ctx, []record{r}); err != nil && ctx.Err() == nil {
 		s.logger.Warn("The rating and genres of a title could not be kept", "item", r.ID, "error", err)
 	}

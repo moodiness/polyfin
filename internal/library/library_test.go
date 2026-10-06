@@ -36,6 +36,11 @@ type fakeAddon struct {
 	short map[int]int
 	// metaGate, when set, holds every meta request until it is closed.
 	metaGate chan struct{}
+	// catalogGate, when set, holds every catalog request until it is
+	// closed; hold holds them until enough of them wait (see
+	// holdCatalogs).
+	catalogGate chan struct{}
+	hold        *catalogHold
 	// reply, when set, answers the stream and subtitle requests instead
 	// (see scriptedReplies).
 	reply func(w http.ResponseWriter, r *http.Request, resource string)
@@ -68,7 +73,31 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				extra.Set(name, value)
 			}
 		}
+		a.mu.Lock()
 		items := a.catalogs[parts[1]+"/"+catalogID]
+		gate, hold := a.catalogGate, a.hold
+		if hold != nil {
+			hold.arrived++
+			if hold.arrived == hold.count {
+				close(hold.reached)
+			}
+		}
+		a.mu.Unlock()
+		if gate != nil {
+			select {
+			case <-gate:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		if hold != nil {
+			select {
+			case <-hold.reached:
+			case <-time.After(holdLimit):
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if search := extra.Get("search"); search != "" {
 			items = slices.DeleteFunc(slices.Clone(items), func(m stremio.Meta) bool {
 				return !strings.Contains(strings.ToLower(m.Name), strings.ToLower(search))
@@ -158,9 +187,11 @@ func newEnv(t *testing.T) env {
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
 	service := New(pool, store, client, slog.New(slog.NewTextHandler(io.Discard, nil)), users.Settings)
-	// Follow-ups ask addons again, while tests count their requests: only
-	// the tests of follow-ups turn them on.
+	// Follow-ups and reading ahead ask addons again, while tests count
+	// their requests: only the tests of follow-ups and reading ahead turn
+	// them on.
 	service.followUpDelays = nil
+	service.readAhead = false
 	return env{t: t, service: service, addons: store, users: users, admin: admin, member: member}
 }
 
@@ -489,7 +520,7 @@ func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
 	// The member's own addon only reaches public addresses; its page comes
 	// from cache, as from an addon on a public host.
 	mine := stremio.Meta{ID: "tt-own", Type: "movie", Name: "movie own", Poster: "http://192.168.1.2/poster.jpg"}
-	e.service.pages.Put(pageKey{own.ID, "movie", "mine", "", "movie", "", 0}, []stremio.Meta{mine})
+	e.service.searchPages.Put(pageKey{own.ID, "movie", "mine", "", "movie", "", 0}, fetched[[]stremio.Meta]{[]stremio.Meta{mine}, time.Now()})
 	found, err := e.service.Search(t.Context(), e.member, "movie", []Kind{KindMovie}, 10)
 	if got := names(found); err != nil || !slices.Equal(got, []string{"movie 0", "movie own"}) {
 		t.Fatalf("search: %v %v", got, err)

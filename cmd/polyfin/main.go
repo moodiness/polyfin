@@ -397,6 +397,19 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			return lib.RefreshGuides(ctx, tasks.ByHand(ctx))
 		},
 	})
+	// Home screens then show the libraries' first pages at once, after a
+	// restart too.
+	registry.Register(tasks.Task{
+		Key:      "WarmLibraries",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Read the libraries' first pages", Description: "Reads the first page of each library from the addons when it is older than Refresh catalogs after (minutes), so that home screens never wait for them, and forgets the catalog pages and descriptions no one read for long."},
+			"fr": {Name: "Lire la première page des médiathèques", Description: "Relit auprès des addons la première page de chaque médiathèque plus ancienne que Rafraîchir les catalogues après (minutes), pour que les écrans d’accueil ne les attendent jamais, et oublie les pages de catalogue et les descriptions que personne n’a lues depuis longtemps."},
+		},
+		Interval: library.WarmInterval,
+		AtStart:  true,
+		Run:      lib.Warm,
+	})
 	// Asking for ratings costs requests to addons: this runs only when an
 	// administrator starts it.
 	registry.Register(tasks.Task{

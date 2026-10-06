@@ -232,9 +232,9 @@ const settings: typeof en = {
     versionListMinutes: 'Garder les listes de versions pendant (minutes)',
     versionListMinutesHelp: (r: RangeText) =>
       `Combien de temps Polyfin utilise les versions et les sous-titres que les addons donnent pour un titre avant de leur redemander. Une liste plus ancienne s’affiche quand même tout de suite quand on rouvre le titre, le temps que Polyfin redemande. Les garder plus longtemps envoie moins de demandes à l’addon qui donne les versions, ce qui aide avec les fournisseurs qui refusent trop de demandes, mais les nouvelles versions apparaissent plus tard. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
-    catalogRefreshMinutes: 'Rafraîchir les catalogues toutes les (minutes)',
-    catalogRefreshMinutesHelp:
-      'Combien de temps Polyfin garde les pages de catalogue lues auprès des addons, guide de la TV en direct compris, avant de les relire. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De 1 à 1 440 (un jour) ; 10 par défaut.',
+    catalogRefreshMinutes: 'Rafraîchir les catalogues après (minutes)',
+    catalogRefreshMinutesHelp: (r: RangeText) =>
+      `L’âge qu’une page de catalogue lue auprès d’un addon, guide de la TV en direct compris, peut atteindre avant que Polyfin la relise. Les applis ne l’attendent jamais : une page plus ancienne s’affiche quand même tout de suite pendant que Polyfin la relit en arrière-plan, et elle est gardée un jour de plus. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De ${r.min} à ${r.max} (un jour) ; ${r.default} par défaut.`,
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',

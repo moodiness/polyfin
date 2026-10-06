@@ -294,7 +294,7 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
       <FieldRow
         anchor="catalog-refresh-minutes"
         label={s.catalogRefreshMinutes}
-        help={s.catalogRefreshMinutesHelp}
+        help={s.catalogRefreshMinutesHelp(range('catalogRefreshMinutes'))}
         error={error('catalog-refresh-minutes')}
       >
         <NumberInput

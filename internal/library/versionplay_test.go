@@ -194,10 +194,12 @@ func TestStreamListsOutliveARestart(t *testing.T) {
 		versions, complete, _ := s.VersionsNow(t.Context(), e.member, e.movie)
 		return complete && len(versions) == 2
 	})
-	// The new answer is saved in turn.
-	if versions, _ := e.restarted().KnownVersions(t.Context(), e.member, e.movie); !slices.Equal(versionNames(versions), []string{"Source 1", "Source 2"}) {
-		t.Errorf("after another restart: %q", versionNames(versions))
-	}
+	// The new answer is saved in turn, once the follow-ups end; the list
+	// kept in memory is trimmed just before it is saved.
+	e.eventually("the new answer saved", func() bool {
+		versions, _ := e.restarted().KnownVersions(t.Context(), e.member, e.movie)
+		return slices.Equal(versionNames(versions), []string{"Source 1", "Source 2"})
+	})
 	// A day after the list expired, it is gone.
 	e.wait(24*time.Hour + 11*time.Minute)
 	if versions, _ := e.restarted().KnownVersions(t.Context(), e.member, e.movie); len(versions) != 0 {

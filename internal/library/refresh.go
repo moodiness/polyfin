@@ -61,11 +61,17 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	for _, entry := range v.addons {
 		key := metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}
 		if r.Kind == KindSeries || r.Kind == KindSeason {
-			if meta, ok := s.metas.Get(key); ok {
-				lists = append(lists, videoIDs(meta, r)...)
+			kept, ok := s.metas.Get(key)
+			if !ok {
+				kept, ok = s.loadMeta(ctx, entry, key)
+			}
+			if ok {
+				lists = append(lists, videoIDs(kept.value, r)...)
 			}
 		}
-		s.metas.Delete(key)
+		if err := s.forgetMeta(ctx, key); err != nil {
+			return err
+		}
 	}
 	for _, entry := range v.addons {
 		for _, video := range lists {
