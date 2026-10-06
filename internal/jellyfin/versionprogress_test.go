@@ -166,22 +166,29 @@ func (h heldSetup) reaches(t *testing.T, want VersionProgress, names ...string) 
 	}
 }
 
-// heldAnswer is PlaybackInfo's answer, or why it failed.
+// heldAnswer is PlaybackInfo's answer, or why it failed; code is the
+// ErrorCode of an answer that plays nothing.
 type heldAnswer struct {
 	status int
 	info   playbackInfoResponse
+	code   string
 	err    error
 }
 
 // askPlaybackInfo asks for the movie's PlaybackInfo, as jellyfin-web
-// does, and gives its answer on the channel it returns.
-func (h heldSetup) askPlaybackInfo(t *testing.T) <-chan heldAnswer {
+// does, for the media source named source, any when empty, and gives its
+// answer on the channel it returns.
+func (h heldSetup) askPlaybackInfo(t *testing.T, source string) <-chan heldAnswer {
 	t.Helper()
 	profile, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := json.Marshal(map[string]any{"UserId": h.user.ID.String(), "DeviceProfile": json.RawMessage(profile)})
+	fields := map[string]any{"UserId": h.user.ID.String(), "DeviceProfile": json.RawMessage(profile)}
+	if source != "" {
+		fields["MediaSourceId"] = source
+	}
+	body, _ := json.Marshal(fields)
 	answered := make(chan heldAnswer, 1)
 	go func() {
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Items/"+h.movie+"/PlaybackInfo", bytes.NewReader(body))
@@ -195,7 +202,11 @@ func (h heldSetup) askPlaybackInfo(t *testing.T) <-chan heldAnswer {
 		defer response.Body.Close()
 		data, _ := io.ReadAll(response.Body)
 		a := heldAnswer{status: response.StatusCode}
-		a.err = json.Unmarshal(data, &a.info)
+		var failed noCompatibleStream
+		if a.err = json.Unmarshal(data, &failed); a.err == nil {
+			a.code = failed.ErrorCode
+			a.err = json.Unmarshal(data, &a.info)
+		}
 		answered <- a
 	}()
 	return answered
@@ -258,7 +269,7 @@ func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
 
 	h.sources(t)
 	eventually(t, "both addons to be asked", func() bool { return first.asked.Load() == 1 && second.asked.Load() == 1 })
-	answered := h.askPlaybackInfo(t)
+	answered := h.askPlaybackInfo(t, "")
 	for _, a := range []*heldAddon{first, second} {
 		select {
 		case got := <-answered:
@@ -363,7 +374,7 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 		t.Errorf("follow-up running: %+v", got)
 	}
 	select {
-	case got := <-h.askPlaybackInfo(t):
+	case got := <-h.askPlaybackInfo(t, ""):
 		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 1 {
 			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
 		}
@@ -379,5 +390,97 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering", "Gathering", "Gathering")
 	if got := gathering.asked.Load(); got != 3 {
 		t.Errorf("addon asked %d times, want 3", got)
+	}
+}
+
+// expiredOn serves a movie from an addon that gathers other addons'
+// streams, on a library clock the test moves: the addon's first answer,
+// three streams, is followed up once, then expires. The title is opened
+// again: its versions are listed at once while the addon is asked again,
+// its request held.
+func expiredOn(t *testing.T) (heldSetup, *scriptedAddon) {
+	t.Helper()
+	probe := newFakeProbe(t, true)
+	gathering := newScriptedAddon(t, "Gathering")
+	s := newProbingServer(t, 10, probe.path)
+	s.library.SetFollowUps(100 * time.Millisecond)
+	elapsed := new(atomic.Int64)
+	s.library.SetClock(func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) })
+	h := heldOn(t, s, gathering.url)
+	t.Cleanup(func() { h.settle(t) })
+
+	h.sources(t)
+	gathering.replies <- 3
+	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 2 })
+	gathering.replies <- 3
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+	// Lists are kept ten minutes by default.
+	elapsed.Add(int64(11 * time.Minute))
+	if sources := h.sources(t); len(sources) != 3 || sources[0].Id != h.movie {
+		t.Fatalf("details once the versions expired: %+v", sources)
+	}
+	eventually(t, "the addon to be asked again", func() bool { return gathering.asked.Load() == 3 })
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 3}) {
+		t.Errorf("asked again: %+v", got)
+	}
+	return h, gathering
+}
+
+func TestPlaybackInfoWaitsForTheAnswerReplacingExpiredVersions(t *testing.T) {
+	h, gathering := expiredOn(t)
+	answered := h.askPlaybackInfo(t, "")
+	select {
+	case got := <-answered:
+		t.Fatalf("PlaybackInfo answered from the expired versions: %d %+v", got.status, got.info.MediaSources)
+	case <-time.After(200 * time.Millisecond):
+	}
+	// It joins the request details started, which it does not repeat, and
+	// whose answer lists one stream: the two others stay listed after it
+	// while it is followed up.
+	if got := gathering.asked.Load(); got != 3 {
+		t.Errorf("addon asked %d times, want 3", got)
+	}
+	gathering.replies <- 1
+	select {
+	case got := <-answered:
+		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 3 || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 1") {
+			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("PlaybackInfo did not answer")
+	}
+	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
+	gathering.replies <- 1
+	h.reaches(t, VersionProgress{Pending: 0, Count: 1}, "Gathering 1")
+}
+
+func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) {
+	h, gathering := expiredOn(t)
+	extra := h.sources(t)[2]
+	// The new answer lists one stream: the version of the third stays
+	// listed, and playable, while the addon is followed up.
+	gathering.replies <- 1
+	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
+	h.reaches(t, VersionProgress{Pending: 1, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+	select {
+	case got := <-h.askPlaybackInfo(t, extra.Id):
+		if got.err != nil || got.status != http.StatusOK || got.code != "" || len(got.info.MediaSources) != 1 ||
+			got.info.MediaSources[0].Id != extra.Id || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 3") {
+			t.Fatalf("PlaybackInfo of the third version: %d %v %q %+v", got.status, got.err, got.code, got.info.MediaSources)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("PlaybackInfo did not answer")
+	}
+	// The follow-up lists the one stream again: the others are no longer
+	// offered.
+	gathering.replies <- 1
+	h.reaches(t, VersionProgress{Pending: 0, Count: 1}, "Gathering 1")
+	select {
+	case got := <-h.askPlaybackInfo(t, extra.Id):
+		if got.err != nil || got.code != "NoCompatibleStream" {
+			t.Errorf("PlaybackInfo of the third version once the follow-ups ended: %d %v %q", got.status, got.err, got.code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("PlaybackInfo did not answer")
 	}
 }

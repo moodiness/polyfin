@@ -135,10 +135,12 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 |---|---|---|---|
 | **Titles read per movie and series catalog** | **Settings › Catalogs** | 2,000 (100 to 20,000) | Item limit for every catalog except Live TV ones. |
 | **Channels read per Live TV catalog** | **Settings › Catalogs** | 10,000 (100 to 50,000) | Item limit for Live TV catalogs (see [Live TV](live-tv.md)). |
-| **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are kept. |
+| **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are used before Polyfin asks the addons again. |
 | **Refresh catalogs every (minutes)** | **Settings › Catalogs** | 10 (1 to 1,440) | How long catalog pages are kept, the Live TV guide's included. |
 
 A longer **Keep version lists for (minutes)** sends fewer requests to the stream addon, which helps with providers that refuse too many. But new versions show up later. Preparing playback ahead readies the next episode a minute before that time ends: at most 9 minutes and at least 1 minute before the end of the episode. Whatever the setting, Polyfin asks an addon again 10 seconds after its first answer for a title, and once more 30 seconds later while its answers grow, for addons that gather other addons' streams (see [Title pages](playback.md#title-pages)).
+
+Once that time has passed, a title opened again still shows the versions known before at once, even old ones, while Polyfin asks the addons again: Polyfin keeps the old lists 24 hours more for this. Versions missing from a new answer that lists only part of them stay listed until Polyfin stops asking that addon again.
 
 Every change applies at once, to what is already kept too.
 

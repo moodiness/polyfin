@@ -11,8 +11,9 @@ import (
 // Refresh forgets what Polyfin keeps of a title for the user's addons, and
 // asks them to describe it again: its description (a season's or an
 // episode's is their series'), the version and subtitle lists of the movie
-// or of the series' episodes, and the rating and genres looked up for
-// parental control. Items that are not titles have nothing to forget.
+// or of the series' episodes, stale ones included, and the rating and
+// genres looked up for parental control. Items that are not titles have
+// nothing to forget.
 // ErrNotFound is returned for an item the user cannot reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
 	v, err := s.view(ctx, user)
