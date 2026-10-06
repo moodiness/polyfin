@@ -50,11 +50,19 @@ func (a *asked) done(addon accounts.ID) {
 	a.mu.Unlock()
 }
 
-// busy reports whether any addon is still asked.
-func (a *asked) busy() bool {
+// add records the addons of entries not asked yet as asked, and returns
+// them.
+func (a *asked) add(entries []installed) []installed {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return len(a.addons) > 0
+	var added []installed
+	for _, entry := range entries {
+		if !a.addons[entry.addon.ID] {
+			a.addons[entry.addon.ID] = true
+			added = append(added, entry)
+		}
+	}
+	return added
 }
 
 // VersionsNow lists, as Versions does, the versions of a movie or an
@@ -117,8 +125,42 @@ func (s *Service) pendingOf(user accounts.ID, t target, serving []installed) int
 	return n
 }
 
+// AskAgain asks the user's addons again for the streams of a movie or an
+// episode, as a refresh of the title does for its streams only: each
+// addon's stream list for it is forgotten, the one saved included, its
+// follow-ups stop, and the addons are asked in the background, as item
+// details ask them (see VersionsNow). Addons still asked for the title are
+// left to answer. ErrNotFound is returned for an item the user cannot
+// reach, or that is neither a movie nor an episode.
+func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.ID) error {
+	t, v, err := s.target(ctx, user, id)
+	if err != nil {
+		return err
+	}
+	if t.kind != KindMovie && t.kind != KindEpisode {
+		return ErrNotFound
+	}
+	serving := streamServing(v, t)
+	known, _ := s.listVersions(ctx, t, serving, knownOnly)
+	for _, version := range known {
+		s.versions.Delete(version.ID)
+	}
+	for _, entry := range serving {
+		// An IPTV source's streams are Polyfin's own, never kept.
+		if !entry.addon.IPTV() {
+			s.forgetStreams(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
+		}
+	}
+	if _, _, err := s.VersionsNow(ctx, user, id); err != nil {
+		return err
+	}
+	// The title's other pages hear that its addons are asked again.
+	s.versionsChanged(t.item)
+	return nil
+}
+
 // askStreams asks addons for a user's title's streams in the background,
-// detached from the request, unless they are already asked for it. Each
+// detached from the request, but for those already asked for it. Each
 // addon is asked once at a time whoever asks (see streams), so a request
 // that waits for every version, such as PlaybackInfo, joins them. Each
 // addon done, answering or not, is told to whoever follows the title's
@@ -128,16 +170,14 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 		return
 	}
 	key := askedKey{user.ID, t.item}
-	if a, ok := s.asked.Get(key); ok && a.busy() {
-		return
+	a, ok := s.asked.Get(key)
+	if !ok {
+		a = &asked{addons: make(map[accounts.ID]bool, len(unknown))}
 	}
-	a := &asked{addons: make(map[accounts.ID]bool, len(unknown))}
-	for _, entry := range unknown {
-		a.addons[entry.addon.ID] = true
-	}
+	// Put again, so that it is kept as long as its latest addons are asked.
 	s.asked.Put(key, a)
 	detached := context.WithoutCancel(ctx)
-	for _, entry := range unknown {
+	for _, entry := range a.add(unknown) {
 		go func() {
 			defer s.versionsChanged(t.item)
 			defer a.done(entry.addon.ID)

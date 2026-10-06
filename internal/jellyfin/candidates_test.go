@@ -237,8 +237,8 @@ func TestVersionsArePushedToTheTitlePage(t *testing.T) {
 			if pushed.ItemId != h.movie {
 				t.Fatalf("pushed for %s", pushed.ItemId)
 			}
-			if pushed.Pending == 0 && pushed.Count == 2 {
-				if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 2}) {
+			if pushed.Pending == 0 && pushed.Count == 2 && pushed.Known == 2 {
+				if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 2, Known: 2}) {
 					t.Errorf("asked once pushed: %+v", got)
 				}
 				return
@@ -331,7 +331,7 @@ func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
 	addon.replies <- []string{"A", "B", "C", "D"}
 	eventually(t, "the version now first to be prepared", func() bool { return analyzed("A") })
 	addon.replies <- []string{"A", "B", "C", "D"}
-	h.reaches(t, VersionProgress{Pending: 0, Count: 4}, "A", "B", "C", "D")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 4, Known: 4}, "A", "B", "C", "D")
 	h.settle(t)
 	if probe.runs() != 3 || analyzed("D") {
 		t.Errorf("%d analyses, the fourth analyzed: %v", probe.runs(), analyzed("D"))

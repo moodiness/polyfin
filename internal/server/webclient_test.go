@@ -329,12 +329,13 @@ process.stdout.write(JSON.stringify(results))
 	}
 }
 
-// On a title's page, the script asks Polyfin every second for the title's
-// versions while addons are pending. When the page lists fewer versions than
-// there are, or a different number once none is pending, it asks for the
-// title's details and lists their versions in the version menu, in place,
-// keeping the version picked; it reloads the page as jellyfin-web reloads a
-// page shown again when the version picked is gone or no longer the same.
+// On a title's page, the script asks Polyfin for the title's versions at
+// once, then every second while addons are pending. When the page lists
+// fewer versions than there are, or a different number once none is
+// pending, it asks for the title's details and lists their versions in the
+// version menu, in place, keeping the version picked; it reloads the page
+// as jellyfin-web reloads a page shown again when the version picked is gone
+// or no longer the same.
 // It runs in Node.js, in a context that stands for the browser and
 // jellyfin-web: a title page whose version menu lists what the details gave
 // when it was last loaded, a clock and timers the harness moves on.
@@ -391,7 +392,8 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 	}
 	reloads := []string{"viewbeforehide", "viewshow false"}
 	ticks := func(n int) []string { return slices.Repeat([]string{"tick"}, n) }
-	steps := func(n int, more ...string) []string { return slices.Concat([]string{title}, ticks(n), more) }
+	// The route asks at once; each tick after it runs the next timer.
+	steps := func(n int, more ...string) []string { return slices.Concat([]string{title}, ticks(n-1), more) }
 	versions := func(sizes ...int64) []source {
 		list := make([]source, len(sizes))
 		for i, size := range sizes {
@@ -418,7 +420,7 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
 			steps: steps(4), want: []string{ask, ask, ask, "idle"}},
 		"leaving the page stops": {listed: 1, answers: []answer{{2, 1, nil}, {2, 1, nil}},
-			steps: []string{title, "tick", "#/home", "tick"}, want: []string{ask, "idle"}},
+			steps: []string{title, "#/home", "tick"}, want: []string{ask, "idle"}},
 		"other routes ask nothing": {listed: 1, answers: []answer{{2, 3, nil}},
 			steps: []string{"#/details?id=dashboard", "#/home", "#/list?parentId=" + id, "tick"}, want: []string{"idle"}},
 		"never during a video": {listed: 1, video: true, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
@@ -456,7 +458,7 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// The menu may be open while it has focus: the versions wait for it
 		// to lose focus, even once Polyfin is no longer asked.
 		"not while the menu has focus": {listed: 2, picked: "v1", answers: []answer{{1, 3, nil}, {0, 3, nil}, {0, 3, nil}},
-			steps: slices.Concat([]string{title, "focus"}, ticks(4), []string{"menu", "blur", "menu", "tick"}),
+			steps: slices.Concat([]string{"focus", title}, ticks(3), []string{"menu", "blur", "menu", "tick"}),
 			want:  []string{ask, ask, ask, "idle", "menu t *v1 shown", details, "menu t *v1 v2 shown", "idle"}},
 		// Once no addon is pending, the menu lists the versions details
 		// list, even fewer.
@@ -466,20 +468,21 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// A push is taken as an answer at once; the script then asks only
 		// every 10 seconds, as long as addons are pending.
 		"pushed versions come at once": {listed: 1, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
-			steps: []string{title, "tick", "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
-			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 2", ask, "clock 12", "idle"}},
+			steps: []string{title, "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
+			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 1", ask, "clock 11", "idle"}},
 		"a push for another title changes nothing": {listed: 1, answers: []answer{{1, 1, nil}, {1, 1, nil}, {0, 1, nil}},
-			steps: []string{title, "push other", "tick", "tick", "tick", "clock", "tick", "menu"},
-			want:  []string{ask, ask, ask, "clock 3", "idle", "menu *t hidden"}},
+			steps: []string{title, "push other", "tick", "tick", "clock", "tick", "menu"},
+			want:  []string{ask, ask, ask, "clock 2", "idle", "menu *t hidden"}},
 		// Pushes still come once the script no longer asks.
 		"a push after the last answer": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
-			steps: []string{title, "tick", "tick", "tick", "tick", "push 0 3", "menu"},
+			steps: []string{title, "tick", "tick", "tick", "push 0 3", "menu"},
 			want:  []string{ask, ask, ask, "idle", details, "menu *t v1 v2 shown"}},
 	}
 	ninety := slices.Repeat([]string{ask}, 90)
 	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
-		// The 91st second asks nothing, and the polling ends.
-		steps: append([]string{title}, ticks(92)...), want: append(ninety, "idle")}
+		// Asked at 0 to 89 seconds; the 90th asks nothing, and the polling
+		// ends.
+		steps: append([]string{title}, ticks(91)...), want: append(ninety, "idle")}
 
 	const harness = `
 const vm = require('node:vm')
@@ -655,6 +658,395 @@ async function run(scenario) {
 	inputs := map[string]input{}
 	for name, s := range scenarios {
 		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
+		}
+	}
+}
+
+// On a movie's or an episode's page, the play buttons wait for a source:
+// while no version is known and addons are searched, they are disabled with
+// a tooltip, greyed, with a spinner; once a version is known, by an answer
+// or a push, they are as jellyfin-web made them; once no addon is left to
+// search, a line under them says no source is available, with a button that
+// has Polyfin search again. The first answer, asked as the route changes,
+// never says no source; before it, the buttons wait only when the version
+// menu lists the placeholder alone. jellyfin-web's renders find them held
+// again; a video is never touched, and leaving the page gives everything
+// back. It runs in Node.js, in a context that stands for the browser: a
+// small document holding the title page, whose buttons jellyfin-web titled
+// "Resume" and "Play", a clock and timers the harness moves on.
+func TestPlayButtonsWaitForASource(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	const (
+		id     = "0123456789abcdef0123456789abcdef"
+		title  = "#/details?id=" + id + "&serverId=fedcba9876543210fedcba9876543210"
+		ask    = "ask http://polyfin.test/Polyfin/Items/" + id + "/Versions"
+		search = "search http://polyfin.test/Polyfin/Items/" + id + "/Versions/Search"
+	)
+	type progress struct{ Pending, Count, Known int }
+	// A search answers a progress, or asks to wait RetryAfter seconds.
+	type searchAnswer struct {
+		progress
+		RetryAfter int `json:",omitempty"`
+	}
+	type scenario struct {
+		// lang is jellyfin-web's language, "en-US" by default.
+		lang     string
+		answers  []progress
+		searches []searchAnswer
+		// deferred answers wait for an "answer" step.
+		deferred bool
+		// menu lists the version menu's options at first, "t" standing for
+		// the title's own identifier; none without it.
+		menu []string
+		// steps: a route the router moves to; "tick" runs the next timer,
+		// logging "idle" when there is none; "answer" gives the oldest
+		// deferred answer; "push <pending> <count> <known>" has Polyfin push
+		// the title's progress; "show" logs the buttons, each "free" or
+		// "held", "+spin" with a spinner, then its tooltip, and the line
+		// under them, "+wait" when its button waits; "render" has
+		// jellyfin-web title the buttons again, as it does when it shows the
+		// page, and "rebuild" replace them; "list <option>…" has it list the
+		// version menu's options; "again" clicks the line's button; "video"
+		// and "end video" start and end a video.
+		steps []string
+		want  []string
+	}
+	const (
+		searching   = `show play held+spin "Looking for sources…" replay held+spin "Looking for sources…"`
+		none        = `show play held "No source is available for this title." replay held "No source is available for this title." note "No source is available for this title." "Try again"`
+		free        = `show play free "Resume" replay free "Play"`
+		frSearching = `show play held+spin "Recherche des sources…" replay held+spin "Recherche des sources…"`
+		frNone      = `show play held "Aucune source disponible pour ce titre." replay held "Aucune source disponible pour ce titre." note "Aucune source disponible pour ce titre." "Réessayer"`
+	)
+	looking, found, empty := progress{1, 1, 0}, progress{0, 1, 1}, progress{0, 1, 0}
+	scenarios := map[string]scenario{
+		"searching, then a version by an answer": {answers: []progress{looking, found, found},
+			steps: []string{title, "show", "tick", "show", "tick", "tick"},
+			want:  []string{ask, searching, ask, free, ask, "idle"}},
+		"a pushed version frees them at once": {answers: []progress{looking, looking},
+			steps: []string{title, "show", "push 1 1 0", "show", "push 0 2 2", "show"},
+			want:  []string{ask, searching, searching, "reload", free}},
+		// The first answer may come before the details asked any addon:
+		// the next one tells that no source is available.
+		"no source, then searching again": {answers: []progress{empty, empty, empty, looking, {0, 3, 3}, {0, 3, 3}},
+			searches: []searchAnswer{{progress: looking}},
+			steps:    []string{title, "show", "tick", "show", "tick", "tick", "again", "show", "tick", "show", "tick", "show", "tick", "tick"},
+			want:     []string{ask, searching, ask, none, ask, "idle", search, searching, ask, searching, ask, "reload", free, ask, "idle"}},
+		"searching again too soon waits": {answers: []progress{empty, empty, empty},
+			searches: []searchAnswer{{RetryAfter: 7}, {progress: looking}},
+			steps:    []string{title, "tick", "tick", "tick", "again", "show", "again", "tick", "show", "again", "show"},
+			want:     []string{ask, ask, ask, "idle", search, none + " +wait", none, search, searching}},
+		"jellyfin-web's renders find them held": {answers: []progress{looking, empty},
+			steps: []string{title, "render", "show", "rebuild", "show", "tick", "rebuild", "show", "render", "show", "push 0 1 1", "show"},
+			want: []string{ask, searching, searching, ask, none, none,
+				// A render titled the play button anew: it keeps that title.
+				`show play free "Play" replay free "Play"`}},
+		"never during a video": {answers: []progress{looking, looking, looking},
+			steps: []string{"video", title, "show", "end video", "tick", "show", "video", "push 0 1 1", "show", "end video", "push 0 1 1", "show"},
+			want:  []string{ask, free, ask, searching, searching, free}},
+		"leaving gives everything back": {answers: []progress{empty, empty},
+			steps: []string{title, "tick", "show", "#/home", "show", "tick"},
+			want:  []string{ask, ask, none, free, "idle"}},
+		"leaving while searching": {answers: []progress{looking, looking},
+			steps: []string{title, "#/home", "show", "tick"},
+			want:  []string{ask, free, "idle"}},
+		"other items are left alone": {answers: []progress{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
+			steps: []string{title, "show"},
+			want:  []string{ask, free}},
+		"in French": {lang: "fr-FR", answers: []progress{looking, empty, empty},
+			steps: []string{title, "show", "tick", "show"},
+			want:  []string{ask, frSearching, ask, frNone}},
+		"in another language, English": {lang: "de", answers: []progress{looking},
+			steps: []string{title, "show"},
+			want:  []string{ask, searching}},
+		// Before the first answer: item details list the placeholder alone,
+		// a single source under the title's own identifier, while no
+		// version is known.
+		"held from the start with only the placeholder": {deferred: true, menu: []string{"t"}, answers: []progress{found},
+			steps: []string{title, "show", "answer", "show"},
+			want:  []string{ask, searching, free}},
+		"held as the page lists only the placeholder": {deferred: true, answers: []progress{looking},
+			steps: []string{title, "show", "list t", "show", "answer", "show"},
+			want:  []string{ask, free, searching, searching}},
+		"untouched while real versions are listed": {deferred: true, menu: []string{"t", "v1"}, answers: []progress{found},
+			steps: []string{title, "show", "list v1", "show", "answer", "show"},
+			want:  []string{ask, free, free, free}},
+	}
+
+	const harness = `
+const vm = require('node:vm')
+const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+const TITLE = '0123456789abcdef0123456789abcdef'
+async function run(scenario) {
+  const log = []
+  let now = 0
+  let video = false
+  const timers = []
+  const listeners = {}
+  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
+  // Observers hear the changes within what they observe once the code that
+  // made them is done.
+  const observers = new Set()
+  const queued = new Set()
+  const changed = (element) => {
+    for (const observer of observers) {
+      if (!observer.target.contains(element) || queued.has(observer)) continue
+      queued.add(observer)
+      queueMicrotask(() => { queued.delete(observer); if (observers.has(observer)) observer.callback([]) })
+    }
+  }
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe(target, options) { if (!options.subtree) throw new Error('not the subtree'); this.target = target; observers.add(this) }
+    disconnect() { observers.delete(this) }
+  }
+  // A small document: elements with attributes, classes, children and text,
+  // found by their classes.
+  class Element {
+    constructor(tag) { this.tagName = tag; this.attributes = {}; this.children = []; this.parentNode = null; this.text = ''; this.listeners = {} }
+    getAttribute(name) { return name in this.attributes ? this.attributes[name] : null }
+    hasAttribute(name) { return name in this.attributes }
+    setAttribute(name, value) { this.attributes[name] = String(value); changed(this) }
+    removeAttribute(name) { if (name in this.attributes) { delete this.attributes[name]; changed(this) } }
+    get className() { return this.getAttribute('class') || '' }
+    set className(value) { this.setAttribute('class', value) }
+    get id() { return this.getAttribute('id') || '' }
+    set id(value) { this.setAttribute('id', value) }
+    get classList() {
+      const names = () => this.className.split(' ').filter(Boolean)
+      return {
+        contains: (name) => names().includes(name),
+        add: (name) => { if (!names().includes(name)) this.className = names().concat(name).join(' ') },
+        remove: (name) => { if (names().includes(name)) this.className = names().filter((n) => n !== name).join(' ') },
+        toggle: (name, force) => { if (force ?? !names().includes(name)) this.classList.add(name); else this.classList.remove(name) },
+      }
+    }
+    get textContent() { return this.text + this.children.map((child) => child.textContent).join('') }
+    set textContent(value) { this.children = []; this.text = value; changed(this) }
+    get firstChild() { return this.children[0] || null }
+    get lastChild() { return this.children[this.children.length - 1] || null }
+    get nextSibling() { const siblings = this.parentNode ? this.parentNode.children : []; return siblings[siblings.indexOf(this) + 1] || null }
+    contains(element) { for (let e = element; e; e = e.parentNode) if (e === this) return true; return false }
+    insertBefore(child, before) {
+      if (child.parentNode) child.remove()
+      child.parentNode = this
+      this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, child)
+      changed(this)
+      return child
+    }
+    appendChild(child) { return this.insertBefore(child, null) }
+    remove() { const parent = this.parentNode; if (!parent) return; parent.children.splice(parent.children.indexOf(this), 1); this.parentNode = null; changed(parent) }
+    matches(selector) {
+      return selector.split(',').some((one) => {
+        const [classes, not] = one.trim().split(':not(')
+        const names = classes.split('.').filter(Boolean)
+        if (names.some((name) => !this.classList.contains(name))) return false
+        return !not || !this.classList.contains(not.replace(/^\.|\)$/g, ''))
+      })
+    }
+    querySelectorAll(selector) {
+      const found = []
+      const walk = (element) => element.children.forEach((child) => { if (child.matches(selector)) found.push(child); walk(child) })
+      walk(this)
+      return found
+    }
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null }
+    closest(selector) { for (let e = this; e; e = e.parentNode) if (e.matches && e.matches(selector)) return e; return null }
+    addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener) }
+    dispatchEvent(event) {
+      if (event.type === 'viewshow') log.push('reload')
+      for (const listener of this.listeners[event.type] || []) listener(event)
+    }
+    click() { if (!this.hasAttribute('disabled')) this.dispatchEvent({ type: 'click' }) }
+    get options() { return this.children }
+    get value() { return this.getAttribute('value') || '' }
+  }
+  const element = (tag, className, parent) => { const e = new Element(tag); e.className = className; if (parent) parent.appendChild(e); return e }
+  const root = element('html', '')
+  root.lang = scenario.lang || 'en-US'
+  const head = element('head', '', root)
+  const body = element('body', '', root)
+  const page = element('div', 'page itemDetailPage', body)
+  const detail = element('div', 'detailPagePrimaryContainer', page)
+  // The buttons share the ribbon with the title's name; the line goes
+  // under the ribbon.
+  const ribbon = element('div', 'detailRibbon padded-left padded-right', detail)
+  element('div', 'infoWrapper', ribbon)
+  let row
+  // jellyfin-web's buttons, as its details template has them: resuming,
+  // the play button is titled Resume, and the replay button is shown.
+  function build() {
+    if (row) row.remove()
+    row = element('div', 'mainDetailButtons focuscontainer-x', ribbon)
+    for (const [name, tooltip] of [['btnPlay', 'Resume'], ['btnReplay', 'Play'], ['btnDownload', 'Download']]) {
+      const button = element('button', 'button-flat ' + name + ' detailButton', row)
+      button.setAttribute('title', tooltip)
+      element('div', 'detailButton-content', button)
+    }
+  }
+  build()
+  element('div', 'overview', detail)
+  // jellyfin-web's version menu, which lists the sources of the details.
+  let menu = null
+  function list(values) {
+    if (menu) menu.remove()
+    menu = element('select', 'selectSource', detail)
+    for (const value of values) element('option', '', menu).setAttribute('value', value === 't' ? TITLE : value)
+  }
+  if (scenario.menu) list(scenario.menu)
+  const document = {
+    documentElement: root,
+    head,
+    body,
+    createElement: (tag) => new Element(tag),
+    getElementById: (id) => [root, ...root.querySelectorAll('*')].find((e) => e.id === id) || null,
+    querySelector: (selector) => {
+      if (selector === '.videoPlayerContainer') return video ? {} : null
+      return body.querySelector(selector)
+    },
+  }
+  root.querySelectorAll = (function (original) {
+    return function (selector) {
+      if (selector !== '*') return original.call(this, selector)
+      const all = []
+      const walk = (e) => e.children.forEach((child) => { all.push(child); walk(child) })
+      walk(this)
+      return all
+    }
+  })(root.querySelectorAll)
+  function describe(button) {
+    const held = button.hasAttribute('disabled') && button.getAttribute('aria-disabled') === 'true' && button.classList.contains('polyfinHeld')
+    const free = !button.hasAttribute('disabled') && !button.hasAttribute('aria-disabled') && !button.classList.contains('polyfinHeld')
+    const spinner = button.querySelector('.polyfinSpinner')
+    const state = held ? 'held' + (spinner ? '+spin' : '') : free && !spinner ? 'free' : 'broken'
+    return state + ' "' + button.getAttribute('title') + '"'
+  }
+  function show() {
+    const words = ['show', 'play', describe(page.querySelector('.btnPlay')), 'replay', describe(page.querySelector('.btnReplay'))]
+    const notes = body.querySelectorAll('.polyfinNoSource')
+    if (notes.length > 1 || (notes.length && ribbon.nextSibling !== notes[0])) words.push('misplaced')
+    if (notes.length === 1) {
+      const [text, again] = notes[0].children
+      words.push('note', '"' + text.textContent + '"', '"' + again.textContent + '"')
+      if (again.hasAttribute('disabled')) words.push('+wait')
+    }
+    log.push(words.join(' '))
+  }
+  const answers = scenario.answers.slice()
+  const searches = (scenario.searches || []).slice()
+  const deferred = []
+  const ApiClient = {
+    getUrl: (path) => 'http://polyfin.test/' + path,
+    getCurrentUserId: () => 'user',
+    getJSON: (url) => {
+      log.push('ask ' + url)
+      const answer = answers.shift()
+      if (!answer) return Promise.reject(new Error('down'))
+      if (scenario.deferred) return new Promise((resolve) => deferred.push(() => resolve({ ...answer })))
+      return Promise.resolve({ ...answer })
+    },
+    ajax: (request) => {
+      log.push('search ' + request.url + (request.type === 'POST' ? '' : ' with ' + request.type))
+      const answer = searches.shift()
+      if (!answer) return Promise.reject(new Error('down'))
+      if (answer.RetryAfter) return Promise.reject({ status: 429, headers: { get: (name) => (name === 'Retry-After' ? String(answer.RetryAfter) : null) } })
+      return Promise.resolve({ Pending: answer.Pending, Count: answer.Count, Known: answer.Known })
+    },
+    getItem: (user, id) => {
+      log.push('details')
+      return Promise.resolve({ Id: id, MediaSources: [] })
+    },
+  }
+  vm.runInNewContext(script, {
+    location, history, URL, document, CustomEvent, MutationObserver, window: { ApiClient },
+    Date: { now: () => now },
+    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
+    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  for (const step of scenario.steps) {
+    if (step === 'show') show()
+    else if (step === 'answer') {
+      const give = deferred.shift()
+      if (give) give()
+      else log.push('no answer')
+    } else if (step.startsWith('list ')) list(step.split(' ').slice(1))
+    else if (step === 'video') video = true
+    else if (step === 'end video') video = false
+    else if (step === 'render') {
+      // As jellyfin-web titles the play button when it shows the page.
+      page.querySelector('.btnPlay').setAttribute('title', 'Play')
+      page.querySelector('.btnReplay').classList.toggle('hide', false)
+    } else if (step === 'rebuild') build()
+    else if (step === 'again') {
+      const again = body.querySelector('.polyfinAgain')
+      if (again) again.click()
+      else log.push('no button')
+    } else if (step.startsWith('push ')) {
+      const [, pending, count, known] = step.split(' ').map(Number)
+      const message = { MessageType: 'PolyfinVersions', MessageId: 'm', Data: { ItemId: TITLE.toUpperCase(), Pending: pending, Count: count, Known: known } }
+      for (const callback of ((ApiClient._callbacks || {}).message || []).slice()) callback.apply(ApiClient, [{ type: 'message' }, message])
+    } else if (step !== 'tick') history.pushState(null, '', step)
+    else {
+      let next = -1
+      timers.forEach((timer, i) => { if (timer && (next < 0 || timer.at < timers[next].at)) next = i })
+      if (next < 0) log.push('idle')
+      else {
+        const timer = timers[next]
+        timers[next] = null
+        now = timer.at
+        timer.run()
+      }
+    }
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    try {
+      results[name] = await run(scenario)
+    } catch (error) {
+      results[name] = ['harness: ' + error.stack]
+    }
+  }
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		Lang     string         `json:"lang,omitempty"`
+		Answers  []progress     `json:"answers"`
+		Searches []searchAnswer `json:"searches,omitempty"`
+		Deferred bool           `json:"deferred"`
+		Menu     []string       `json:"menu,omitempty"`
+		Steps    []string       `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		inputs[name] = input{s.lang, s.answers, s.searches, s.deferred, s.menu, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

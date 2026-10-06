@@ -46,7 +46,8 @@ func (s *Service) automaticImage(ctx context.Context, entry installed, catalog s
 	key := pageKey{addon: entry.addon.ID, catalogType: catalog.Type, catalogID: catalog.ID}
 	if kept, ok := s.libraryImages.Get(key); ok {
 		if !kept.fresh(s.now(), s.catalogLife()) {
-			s.background(ctx, imageLookup(entry, catalog), func(ctx context.Context) error {
+			due := func() bool { return !replacedSince(s.libraryImages, key, kept.at) }
+			s.background(ctx, imageLookup(entry, catalog), due, func(ctx context.Context) error {
 				s.findImage(ctx, entry, catalog)
 				return nil
 			})
@@ -60,7 +61,8 @@ func (s *Service) automaticImage(ctx context.Context, entry installed, catalog s
 			return url
 		}
 	}
-	s.background(ctx, imageLookup(entry, catalog), func(ctx context.Context) error {
+	due := func() bool { _, found := s.libraryImages.Get(key); return !found }
+	s.background(ctx, imageLookup(entry, catalog), due, func(ctx context.Context) error {
 		s.findImage(ctx, entry, catalog)
 		return nil
 	})

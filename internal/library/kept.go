@@ -79,10 +79,23 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 }
 
 // background runs fetch for key on its own, unless it runs already, and
-// does not wait for it.
-func (s *Service) background(ctx context.Context, key string, fetch func(context.Context) error) {
+// does not wait for it. due, checked once it runs, tells whether it is
+// still to be done: a refresh that ended between the caller's read and
+// this one already did it.
+func (s *Service) background(ctx context.Context, key string, due func() bool, fetch func(context.Context) error) {
 	detached := context.WithoutCancel(ctx)
-	s.flight.DoChan(key, func() (any, error) { return nil, fetch(detached) })
+	s.flight.DoChan(key, func() (any, error) {
+		if !due() {
+			return nil, nil
+		}
+		return nil, fetch(detached)
+	})
+}
+
+// replacedSince reports whether c keeps for key a value newer than seen.
+func replacedSince[K comparable, T any](c *cache.Cache[K, fetched[T]], key K, seen time.Time) bool {
+	kept, ok := c.Get(key)
+	return ok && kept.at.After(seen)
 }
 
 // configOf names the address an addon is asked at, its configuration
@@ -141,7 +154,7 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 	key := src.key(skip)
 	if kept, ok := s.pagesOf(key).Get(key); ok {
 		if key.search == "" && !kept.fresh(s.now(), s.catalogLife()) {
-			s.refreshPage(ctx, src, key)
+			s.refreshPage(ctx, src, key, kept.at)
 		}
 		return kept.value, nil
 	}
@@ -157,7 +170,7 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 	result, err := s.shared(ctx, fmt.Sprintf("page %v", key), func(ctx context.Context) (any, error) {
 		if kept, ok := s.loadPage(ctx, src, key); ok {
 			if !kept.fresh(s.now(), s.catalogLife()) {
-				s.refreshPage(ctx, src, key)
+				s.refreshPage(ctx, src, key, kept.at)
 			}
 			return kept.value, nil
 		}
@@ -204,9 +217,10 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 }
 
 // refreshPage asks the addon for a page again in the background; the page
-// kept stays until it answers.
-func (s *Service) refreshPage(ctx context.Context, src source, key pageKey) {
-	s.background(ctx, fmt.Sprintf("refresh page %v", key), func(ctx context.Context) error {
+// kept, given at seen, stays until it answers.
+func (s *Service) refreshPage(ctx context.Context, src source, key pageKey, seen time.Time) {
+	due := func() bool { return !replacedSince(s.pagesOf(key), key, seen) }
+	s.background(ctx, fmt.Sprintf("refresh page %v", key), due, func(ctx context.Context) error {
 		_, err := s.fetchPage(ctx, src, key)
 		if err != nil {
 			s.logger.Debug("A catalog page could not be refreshed", "catalog", src.catalog.ID, "error", err)
@@ -278,14 +292,14 @@ func (s *Service) keptMeta(ctx context.Context, addon installed, metaType, id st
 	key := metaKey{addon.addon.ID, metaType, id}
 	if kept, ok := s.metas.Get(key); ok {
 		if s.metaStale(ctx, kept) {
-			s.refreshMeta(ctx, addon, key)
+			s.refreshMeta(ctx, addon, key, kept.at)
 		}
 		return kept, nil
 	}
 	result, err := s.shared(ctx, fmt.Sprintf("meta %v", key), func(ctx context.Context) (any, error) {
 		if kept, ok := s.loadMeta(ctx, addon, key); ok {
 			if s.metaStale(ctx, kept) {
-				s.refreshMeta(ctx, addon, key)
+				s.refreshMeta(ctx, addon, key, kept.at)
 			}
 			return kept, nil
 		}
@@ -324,9 +338,10 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 }
 
 // refreshMeta asks the addon for a description again in the background;
-// the one kept stays until it answers.
-func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey) {
-	s.background(ctx, fmt.Sprintf("refresh meta %v", key), func(ctx context.Context) error {
+// the one kept, given at seen, stays until it answers.
+func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey, seen time.Time) {
+	due := func() bool { return !replacedSince(s.metas, key, seen) }
+	s.background(ctx, fmt.Sprintf("refresh meta %v", key), due, func(ctx context.Context) error {
 		_, err := s.fetchKeptMeta(ctx, addon, key)
 		if err != nil {
 			s.logger.Debug("A description could not be refreshed", "addon", addon.addon.Manifest.Name, "error", err)

@@ -454,13 +454,19 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // followed up; until the follow-ups end, it is listed with the items it
 // lacks of the stale list it replaced (see followUpList).
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
-	return shared(ctx, &s.flight, "streams "+key.addon.String()+" "+key.contentType+" "+key.id, func(ctx context.Context) ([]stremio.Stream, error) {
+	return shared(ctx, &s.flight, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
 		}
 		return s.followStreams(ctx, entry, key, streams), nil
 	})
+}
+
+// streamsFlight names the request asking an addon for its streams for a
+// title, which callers share (see streamAnswer).
+func streamsFlight(key streamKey) string {
+	return "streams " + key.addon.String() + " " + key.contentType + " " + key.id
 }
 
 // streamServing lists the addons of v that list streams for t.

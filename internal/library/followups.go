@@ -326,21 +326,31 @@ func endFollowUp[T any](s *Service, lists *cache.Cache[streamKey, list[T]], key 
 	})
 }
 
-// stopFollowUps stops the schedules of an addon's lists for a title, which
-// a refresh forgets.
-func (s *Service) stopFollowUps(key streamKey) {
+// stopFollowUps stops the schedules of an addon's lists for a title, of
+// the kinds given, which a refresh forgets.
+func (s *Service) stopFollowUps(key streamKey, kinds ...string) {
 	s.followUps.mu.Lock()
 	defer s.followUps.mu.Unlock()
-	delete(s.followUps.running, followKey{listStreams, key})
-	delete(s.followUps.running, followKey{listSubtitles, key})
+	for _, kind := range kinds {
+		delete(s.followUps.running, followKey{kind, key})
+	}
 }
 
 // forgetLists forgets an addon's lists for a title, which a refresh asks
 // for: their follow-ups stop, and the stream list saved is deleted too, so
 // that a restart does not bring it back (see savedStreams).
 func (s *Service) forgetLists(ctx context.Context, key streamKey) {
-	s.stopFollowUps(key)
-	s.streamLists.Delete(key)
+	s.stopFollowUps(key, listSubtitles)
 	s.subtitleLists.Delete(key)
+	s.forgetStreams(ctx, key)
+}
+
+// forgetStreams forgets an addon's stream list for a title as forgetLists
+// does, its subtitle list kept (see AskAgain). A request asking the addon
+// since before is not joined any more: the next one asks it anew.
+func (s *Service) forgetStreams(ctx context.Context, key streamKey) {
+	s.stopFollowUps(key, listStreams)
+	s.flight.Forget(streamsFlight(key))
+	s.streamLists.Delete(key)
 	s.deleteSavedStreams(ctx, key)
 }

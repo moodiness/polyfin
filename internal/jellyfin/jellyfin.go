@@ -116,6 +116,9 @@ type Handler struct {
 	// watched are the title pages that follow their versions as addons
 	// answer (see versionsChanged).
 	watched *watchedPages
+	// searches bounds how often users have titles' addons asked again
+	// (see searchVersions).
+	searches versionSearches
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
