@@ -65,19 +65,41 @@ func requestsTo(addon *fakeAddon, prefix string) int {
 	return count
 }
 
-// mostAtOnce returns the most catalog requests addon answered at once
-// since the last call.
-func mostAtOnce(addon *fakeAddon) int {
+// holdLimit bounds how long a held request waits for the others (see
+// holdCatalogs): long, so that a slow machine never answers before the
+// requests asked together arrived.
+const holdLimit = 10 * time.Second
+
+// catalogHold holds catalog requests until count of them arrived.
+type catalogHold struct {
+	count   int
+	arrived int
+	reached chan struct{}
+}
+
+// holdCatalogs holds the catalog requests addon receives from now on
+// until count of them wait together, or holdLimit passed; requests that
+// arrive afterwards answer at once. together reports whether count
+// requests did wait together: they were asked at once, whatever the
+// machine's speed.
+func holdCatalogs(addon *fakeAddon, count int) (together func() bool) {
+	hold := &catalogHold{count: count, reached: make(chan struct{})}
 	addon.mu.Lock()
-	defer addon.mu.Unlock()
-	most := addon.mostInFlight
-	addon.mostInFlight = 0
-	return most
+	addon.hold = hold
+	addon.mu.Unlock()
+	return func() bool {
+		select {
+		case <-hold.reached:
+			return true
+		default:
+			return false
+		}
+	}
 }
 
 func eventually(t *testing.T, what string, done func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(5 * time.Second); !done(); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(holdLimit); !done(); time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("%s never happened", what)
 		}
@@ -112,18 +134,17 @@ func TestNextPagesAreReadAhead(t *testing.T) {
 func TestReadsAskForTheMissingPagesAtOnce(t *testing.T) {
 	e := newEnv(t)
 	addon := pagedAddon(200, 10)
-	addon.catalogDelay = 50 * time.Millisecond
 	e.install(addons.Shared(), addon)
 	e.children(e.member, "Top", 0, 30)
-	mostAtOnce(addon)
 	before := len(addon.catalogRequests())
 	// 11 pages are needed, 3 of them kept: the 8 others are asked at once.
+	together := holdCatalogs(addon, 8)
 	page := e.children(e.member, "Top", 0, 110)
 	if len(page.Items) != 110 || page.Items[109].Name != "movie 109" {
 		t.Fatalf("listing: %d items", len(page.Items))
 	}
-	if requests, most := len(addon.catalogRequests())-before, mostAtOnce(addon); requests != 8 || most != 8 {
-		t.Errorf("pages asked: %d, %d at once", requests, most)
+	if requests := len(addon.catalogRequests()) - before; requests != 8 || !together() {
+		t.Errorf("pages asked: %d, all at once: %t", requests, together())
 	}
 
 	// After a restart, the page size is remembered: a listing whose pages
@@ -133,11 +154,12 @@ func TestReadsAskForTheMissingPagesAtOnce(t *testing.T) {
 	}
 	e = e.restarted()
 	before = len(addon.catalogRequests())
+	together = holdCatalogs(addon, 5)
 	if page := e.children(e.member, "Top", 0, 50); len(page.Items) != 50 {
 		t.Fatalf("listing after a restart: %d items", len(page.Items))
 	}
-	if requests, most := len(addon.catalogRequests())-before, mostAtOnce(addon); requests != 5 || most != 5 {
-		t.Errorf("pages asked after a restart: %d, %d at once", requests, most)
+	if requests := len(addon.catalogRequests()) - before; requests != 5 || !together() {
+		t.Errorf("pages asked after a restart: %d, all at once: %t", requests, together())
 	}
 }
 
@@ -581,17 +603,16 @@ func TestColdCollectionsReadTheirCatalogsInOneWave(t *testing.T) {
 	}
 	e = e.restarted()
 	addon.mu.Lock()
-	addon.catalogDelay = 50 * time.Millisecond
 	addon.requests = nil
-	addon.mostInFlight = 0
 	addon.mu.Unlock()
+	// Each of the two catalogs is read for 26 titles: 3 pages of 10.
+	together := holdCatalogs(addon, 6)
 	page, err := e.service.Children(t.Context(), e.member, set.ID, 0, 40, "")
 	if err != nil || len(page.Items) != 40 {
 		t.Fatalf("collection after a restart: %d items, %v", len(page.Items), err)
 	}
-	requests := len(addon.catalogRequests())
-	if most := mostAtOnce(addon); most != requests || addon.metaRequests() != 0 {
-		t.Errorf("after a restart: %d pages, %d at once, %d descriptions", requests, most, addon.metaRequests())
+	if requests := len(addon.catalogRequests()); requests != 6 || !together() || addon.metaRequests() != 0 {
+		t.Errorf("after a restart: %d pages, all at once: %t, %d descriptions", requests, together(), addon.metaRequests())
 	}
 }
 

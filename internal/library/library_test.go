@@ -37,12 +37,10 @@ type fakeAddon struct {
 	// metaGate, when set, holds every meta request until it is closed.
 	metaGate chan struct{}
 	// catalogGate, when set, holds every catalog request until it is
-	// closed; catalogDelay delays every catalog answer. inFlight counts
-	// the catalog requests being answered, mostInFlight the most at once.
-	catalogGate  chan struct{}
-	catalogDelay time.Duration
-	inFlight     int
-	mostInFlight int
+	// closed; hold holds them until enough of them wait (see
+	// holdCatalogs).
+	catalogGate chan struct{}
+	hold        *catalogHold
 	// reply, when set, answers the stream and subtitle requests instead
 	// (see scriptedReplies).
 	reply func(w http.ResponseWriter, r *http.Request, resource string)
@@ -77,15 +75,14 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Lock()
 		items := a.catalogs[parts[1]+"/"+catalogID]
-		gate, delay := a.catalogGate, a.catalogDelay
-		a.inFlight++
-		a.mostInFlight = max(a.mostInFlight, a.inFlight)
+		gate, hold := a.catalogGate, a.hold
+		if hold != nil {
+			hold.arrived++
+			if hold.arrived == hold.count {
+				close(hold.reached)
+			}
+		}
 		a.mu.Unlock()
-		defer func() {
-			a.mu.Lock()
-			a.inFlight--
-			a.mu.Unlock()
-		}()
 		if gate != nil {
 			select {
 			case <-gate:
@@ -93,7 +90,14 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		time.Sleep(delay)
+		if hold != nil {
+			select {
+			case <-hold.reached:
+			case <-time.After(holdLimit):
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if search := extra.Get("search"); search != "" {
 			items = slices.DeleteFunc(slices.Clone(items), func(m stremio.Meta) bool {
 				return !strings.Contains(strings.ToLower(m.Name), strings.ToLower(search))

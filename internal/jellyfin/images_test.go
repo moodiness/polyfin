@@ -18,30 +18,61 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// artServer is an artwork server answering slowly, counting its requests
-// and the most it answers at once; /missing.jpg is not found.
+// holdLimit bounds how long a held request waits for the others of its
+// wave (see artServer.holdWaves): long, so that a slow machine never
+// answers a wave before its requests all arrived.
+const holdLimit = 10 * time.Second
+
+// artServer is an artwork server counting its requests and the most it
+// answers at once; /missing.jpg is not found, /busy.jpg answers 503.
 type artServer struct {
 	*httptest.Server
 	requests atomic.Int32
 	mu       sync.Mutex
 	current  int
 	most     int
+	// hold, when set, holds requests in waves: until hold of them wait,
+	// waiting counting them; released is closed when a wave completes.
+	hold     int
+	waiting  int
+	released chan struct{}
 }
 
 func newArtServer(t *testing.T, picture []byte) *artServer {
-	s := &artServer{}
+	s := &artServer{released: make(chan struct{})}
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.requests.Add(1)
 		s.mu.Lock()
 		s.current++
 		s.most = max(s.most, s.current)
+		if s.hold > 0 {
+			s.waiting++
+			if s.waiting == s.hold {
+				s.waiting = 0
+				close(s.released)
+				s.released = make(chan struct{})
+			} else {
+				released := s.released
+				s.mu.Unlock()
+				select {
+				case <-released:
+				case <-time.After(holdLimit):
+				case <-r.Context().Done():
+				}
+				s.mu.Lock()
+				if !isClosed(released) {
+					s.waiting--
+				}
+			}
+		}
 		s.mu.Unlock()
-		defer func() {
-			s.mu.Lock()
-			s.current--
-			s.mu.Unlock()
-		}()
-		time.Sleep(100 * time.Millisecond)
+		// Downloads more than allowed would arrive meanwhile.
+		time.Sleep(20 * time.Millisecond)
+		// The answer is counted out before it is sent: the next download
+		// the server allows can only start once it is received.
+		s.mu.Lock()
+		s.current--
+		s.mu.Unlock()
 		switch r.URL.Path {
 		case "/missing.jpg":
 			http.NotFound(w, r)
@@ -57,14 +88,29 @@ func newArtServer(t *testing.T, picture []byte) *artServer {
 	return s
 }
 
+func isClosed(c chan struct{}) bool {
+	select {
+	case <-c:
+		return true
+	default:
+		return false
+	}
+}
+
+// holdWaves holds the requests to come in waves of size, 0 answering
+// them at once, and forgets the most answered at once.
+func (s *artServer) holdWaves(size int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hold, s.waiting, s.most = size, 0, 0
+}
+
 // mostAtOnce returns the most requests answered at once since the last
-// call.
+// holdWaves.
 func (s *artServer) mostAtOnce() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	most := s.most
-	s.most = 0
-	return most
+	return s.most
 }
 
 // burst downloads count different images from art at once.
@@ -109,25 +155,29 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 		t.Errorf("5 apps at once: %d downloads", got)
 	}
 
-	// One host gets at most imageHostFetches downloads at once.
-	art.mostAtOnce()
-	burst(t, h, art, "first", 24, false)
-	if most := art.mostAtOnce(); most <= imageSlowHostFetches || most > imageHostFetches {
+	// One host gets imageHostFetches downloads at once: waves of that many
+	// all arrive, whatever the machine's speed, and never more.
+	art.holdWaves(imageHostFetches)
+	burst(t, h, art, "first", 2*imageHostFetches, false)
+	if most := art.mostAtOnce(); most != imageHostFetches {
 		t.Errorf("%d downloads at once from one host", most)
 	}
 	// A host that answers 503 is spared for a while.
+	art.holdWaves(0)
 	if _, err := h.fetchArtwork(t.Context(), art.URL+"/busy.jpg", false, false); err == nil {
 		t.Error("a busy host answered")
 	}
-	art.mostAtOnce()
-	burst(t, h, art, "spared", 12, false)
-	if most := art.mostAtOnce(); most > imageSlowHostFetches {
+	art.holdWaves(imageSlowHostFetches)
+	burst(t, h, art, "spared", 3*imageSlowHostFetches, false)
+	if most := art.mostAtOnce(); most != imageSlowHostFetches {
 		t.Errorf("%d downloads at once from a busy host", most)
 	}
+	art.holdWaves(0)
 	// So is a host that serves an IPTV source.
 	logos := newArtServer(t, jpegOf(t, 40, 40))
-	burst(t, h, logos, "logo", 12, true)
-	if most := logos.mostAtOnce(); most > imageSlowHostFetches {
+	logos.holdWaves(imageSlowHostFetches)
+	burst(t, h, logos, "logo", 3*imageSlowHostFetches, true)
+	if most := logos.mostAtOnce(); most != imageSlowHostFetches {
 		t.Errorf("%d downloads at once from an IPTV host", most)
 	}
 
