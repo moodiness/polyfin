@@ -130,8 +130,13 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 			err = fmt.Errorf("%w: the index lists no keyframe", ErrNotRemuxable)
 		}
 		if err != nil {
-			if errors.Is(err, ErrNotRemuxable) || errors.Is(err, container.ErrUnreadable) {
+			switch failure := src.Failure(); {
+			case errors.Is(err, ErrNotRemuxable) || errors.Is(err, container.ErrUnreadable):
 				s.unindexed.Put(version.ID, err)
+			case failure != nil:
+				// The source failed, as when an analysis meets it: the
+				// version is not offered for a while.
+				s.failures.Put(version.ID, failure)
 			}
 			return nil, err
 		}

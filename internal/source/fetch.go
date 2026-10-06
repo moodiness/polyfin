@@ -77,6 +77,8 @@ type conn struct {
 	runBytes, runBlocks int64
 	rate                float64
 	host                string
+	// via is the address pinned the connection reads, nil for the origin.
+	via *pin
 	// The fetch's own: the body read, the failures since the last block,
 	// and whether the last read stalled.
 	body     io.ReadCloser
@@ -210,7 +212,8 @@ func (s *Source) work(c *conn) {
 		default:
 			// The connection broke or stalled: reconnect, within limits. A
 			// stall right after one fails at once: the host stopped
-			// answering.
+			// answering. A pinned address breaking again sends the next
+			// connection to the origin.
 			stalledAgain := errors.Is(err, errStalled) && c.stalled
 			c.stalled = c.stalled || errors.Is(err, errStalled)
 			if c.failures++; c.failures >= attempts || stalledAgain {
@@ -220,6 +223,9 @@ func (s *Source) work(c *conn) {
 				}
 				s.fail(err)
 				return
+			}
+			if c.failures >= 2 {
+				s.unpinFrom(c.via)
 			}
 		}
 		c.closeBody()
@@ -517,11 +523,12 @@ func (s *Source) disconnected(c *conn) {
 // extraFailed takes a connection that failed out of the source when
 // another one reads it: a connection more the host refused, which has it
 // read over one connection per file, or one that broke after reading
-// well. It reports whether it did; the source fails otherwise.
+// well. It reports whether it did; the source fails otherwise, and always
+// when another file answered: that is the link's, not the connection's.
 func (s *Source) extraFailed(c *conn, err error, connecting bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.alone(c) {
+	if s.alone(c) || errors.Is(err, errOtherFile) {
 		return false
 	}
 	s.removeConn(c)
@@ -680,9 +687,15 @@ func (s *Source) answered(t target, response *http.Response) {
 // unpin sends the source's next requests to its origin again, when t went
 // to the address pinned.
 func (s *Source) unpin(t target) {
+	s.unpinFrom(t.pinned)
+}
+
+// unpinFrom sends the source's next requests to its origin again, when
+// they go to via.
+func (s *Source) unpinFrom(via *pin) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if t.pinned != nil && s.pinned == t.pinned {
+	if via != nil && s.pinned == via {
 		s.pinned = nil
 	}
 }
@@ -741,7 +754,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			}
 			if other = s.learn(total, response.Header.Get("Content-Type")); other == nil {
 				s.answered(t, response)
-				s.connected(c, response.Body, cancel, block)
+				s.connected(c, response.Body, cancel, block, t.pinned)
 				return nil
 			}
 			response.Body.Close()
@@ -760,7 +773,7 @@ func (s *Source) connect(c *conn, block int64) error {
 					s.mu.Unlock()
 				}
 				s.answered(t, response)
-				s.connected(c, response.Body, cancel, 0)
+				s.connected(c, response.Body, cancel, 0, t.pinned)
 				return nil
 			}
 			response.Body.Close()
@@ -821,7 +834,7 @@ func (s *Source) connect(c *conn, block int64) error {
 		if !errors.Is(other, ErrUnavailable) {
 			other = fmt.Errorf("%w: %w", ErrUnavailable, other)
 		}
-		if !alone || retried {
+		if retried {
 			s.unpin(t)
 			return other
 		}
@@ -838,11 +851,11 @@ func (s *Source) connect(c *conn, block int64) error {
 	}
 }
 
-// connected records connection c's body, which yields next.
-func (s *Source) connected(c *conn, body io.ReadCloser, cancel context.CancelFunc, next int64) {
+// connected records connection c's body, which yields next, read from via.
+func (s *Source) connected(c *conn, body io.ReadCloser, cancel context.CancelFunc, next int64, via *pin) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c.body, c.cancel, c.next, c.connected = body, cancel, next, true
+	c.body, c.cancel, c.next, c.connected, c.via = body, cancel, next, true, via
 	c.runStart, c.runBytes, c.runBlocks = time.Now(), 0, 0
 	if c.dropped {
 		cancel()
