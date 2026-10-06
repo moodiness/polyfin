@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -101,5 +102,18 @@ func TestDefaultSettingsKeepTheArguments(t *testing.T) {
 		if got := c.args(); !reflect.DeepEqual(got, want[c.name]) {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, want[c.name])
 		}
+	}
+}
+
+// A track converted on its own goes through its downmix after -ac, as
+// converted video's audio does.
+func TestAudioConversionsTakeTheirDownmix(t *testing.T) {
+	filter := "pan=stereo|c0=c0+0.707*c2+0.707*c4|c1=c1+0.707*c2+0.707*c5"
+	args := Audio{Encoder: "libmp3lame", Bitrate: 192_000, Channels: 2, Filter: filter}.args()
+	if !slices.Equal(args[len(args)-4:], []string{"-ac", "2", "-af", filter}) {
+		t.Errorf("arguments: %q", args)
+	}
+	if args := (Audio{Encoder: "libmp3lame", Channels: 2}).args(); slices.Contains(args, "-af") {
+		t.Errorf("a filter without a downmix: %q", args)
 	}
 }

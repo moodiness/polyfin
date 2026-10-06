@@ -21,13 +21,16 @@ import (
 // codec, and what is known of its bitrate, channels, sample rate and bit
 // depth, zero when unknown.
 type AudioSource struct {
-	Container  string
-	Codec      string
-	Profile    string
-	Bitrate    int64
-	Channels   int
-	SampleRate int
-	BitDepth   int
+	Container string
+	Codec     string
+	Profile   string
+	Bitrate   int64
+	Channels  int
+	// ChannelLayout is FFmpeg's layout of the channels, such as "5.1(side)",
+	// empty when unknown.
+	ChannelLayout string
+	SampleRate    int
+	BitDepth      int
 }
 
 // AudioOptions are what a PlaybackInfo request chose for a track.
@@ -60,11 +63,13 @@ type AudioDecision struct {
 // AudioTarget is what a track is converted to: Codec is Jellyfin's codec
 // name (aac, mp3, opus, flac, wav…), Bitrate in bits per second (zero for
 // lossless codecs), SampleRate and Channels zero to keep the source's.
+// Filter is the downmix to stereo, empty for FFmpeg's own.
 type AudioTarget struct {
 	Codec      string
 	Bitrate    int64
 	SampleRate int
 	Channels   int
+	Filter     string
 }
 
 // audioCodecEncoders are the FFmpeg encoders of the codecs tracks are
@@ -235,6 +240,7 @@ func DecideAudio(profile *DeviceProfile, source AudioSource, options AudioOption
 	case target.Codec == "mp3" && target.SampleRate > 48_000:
 		target.SampleRate = 48_000
 	}
+	target.Downmix(source.Channels, source.ChannelLayout, options.Can.Tuning)
 	d.Target = target
 	return d
 }
@@ -299,8 +305,20 @@ func audioConversion(input string, options []string, target *AudioTarget) hls.Au
 	a := hls.Audio{Input: input, InputOptions: options, Encoder: "copy"}
 	if target != nil {
 		a.Encoder, a.Bitrate, a.SampleRate, a.Channels = AudioEncoder(target.Codec), target.Bitrate, target.SampleRate, target.Channels
+		a.Filter = target.Filter
 	}
 	return a
+}
+
+// Downmix sets the filter a track of channels in layout goes through when
+// it is mixed down to stereo: the server's downmix, as for converted
+// video's audio. Like Jellyfin 12.2, progressive and HLS audio get it
+// alike, as -ac 2 alone drops the LFE channel.
+func (target *AudioTarget) Downmix(channels int, layout string, t Tuning) {
+	target.Filter = ""
+	if target.Channels == 2 && channels > 2 {
+		target.Filter = t.downmix(channels, layout)
+	}
 }
 
 // ConvertAudio streams a track converted to target in format, an FFmpeg

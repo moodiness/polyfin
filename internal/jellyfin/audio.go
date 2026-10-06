@@ -111,6 +111,7 @@ func analyzedAudio(analysis media.Analysis) describedAudio {
 		if s.Type == "audio" {
 			d.source.Codec, d.source.Profile, d.source.Channels, d.source.SampleRate = s.Codec, s.Profile, s.Channels, s.SampleRate
 			d.source.BitDepth = cmp.Or(s.BitDepth, s.SampleBits)
+			d.source.ChannelLayout = s.ChannelLayout
 			if d.source.Bitrate == 0 {
 				d.source.Bitrate = s.Bitrate
 			}
@@ -382,6 +383,15 @@ func (h *Handler) audioOf(w http.ResponseWriter, r *http.Request, converted bool
 	target.Channels = int(min(number("audioChannels", "maxAudioChannels", "transcodingMaxAudioChannels"), 8))
 	if codec == "opus" {
 		target.SampleRate = 48_000
+	}
+	// The source's channels, when it was analyzed, choose the downmix.
+	if analysis, ok := h.Playback.Analyzed(r.Context(), version.ID); ok {
+		for _, s := range analysis.Streams {
+			if s.Type == "audio" {
+				target.Downmix(s.Channels, s.ChannelLayout, h.Playback.Capabilities().Tuning)
+				break
+			}
+		}
 	}
 	req.target = target
 	return req, true
