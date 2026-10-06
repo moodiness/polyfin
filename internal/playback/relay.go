@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -35,8 +36,12 @@ var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 // replaces the source's: players recognize media by it, and sources often
 // answer application/octet-stream. When the source cannot be reached or
 // does not answer with content, the player receives a 502 and the error is
-// returned for logging.
+// returned for logging. A file analyzed as one, not a live stream, is
+// served from the source cache, which reads it the way remuxes do.
 func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	if s.cacheable(r.Context(), version) {
+		return s.relayCached(w, r, version, delivery)
+	}
 	response, err := s.openForPlayer(r, version)
 	if err == nil && expired(response.StatusCode) && s.renew != nil {
 		response.Body.Close()
@@ -74,6 +79,31 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 	defer copyBuffers.Put(buffer)
 	_, err = io.CopyBuffer(w, response.Body, buffer[:])
 	return err
+}
+
+// cacheable reports whether a version is a file the source cache keeps:
+// analyzed, with a size and a duration, and not a live stream or playlist.
+func (s *Service) cacheable(ctx context.Context, version library.Version) bool {
+	analysis, ok := s.Analyzed(ctx, version.ID)
+	return ok && analysis.Duration > 0 && analysis.Size > 0 && !Manifest(analysis)
+}
+
+// relayCached serves a version from the source cache: the bytes ffprobe
+// and the remuxes read are served without a request, the others are read
+// through the address its origin redirected the server's reads to, and
+// kept for the next seek. A player's seek is a reader of its own, which
+// the cache serves first.
+func (s *Service) relayCached(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	src := s.open(version)
+	defer src.Release()
+	if delivery.ContentType != "" {
+		w.Header().Set("Content-Type", delivery.ContentType)
+	}
+	setAttachment(w, delivery.Attachment)
+	if err := src.Relay(w, r); err != nil {
+		return fmt.Errorf("%w: %w", ErrSourceUnavailable, err)
+	}
+	return nil
 }
 
 // openForPlayer requests a version as the player asked, with the headers

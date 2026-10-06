@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,6 +62,24 @@ func (f *fakeSource) Open(_ context.Context, _, target string, header http.Heade
 		},
 		Body: io.NopCloser(bytes.NewReader(f.body)),
 	}, nil
+}
+
+// fileSource serves a file the way a host does, byte ranges included,
+// counting requests.
+type fileSource struct {
+	data  []byte
+	count atomic.Int32
+}
+
+func (f *fileSource) Open(ctx context.Context, method, target string, header http.Header, _ bool) (*http.Response, error) {
+	f.count.Add(1)
+	request := httptest.NewRequestWithContext(ctx, method, target, nil)
+	request.Header = header.Clone()
+	recorder := httptest.NewRecorder()
+	http.ServeContent(recorder, request, "", time.Time{}, bytes.NewReader(f.data))
+	response := recorder.Result()
+	response.Request = request
+	return response, nil
 }
 
 func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewer) *Service {
@@ -220,7 +239,7 @@ func TestAnalysesAreKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, runs := fakeProbe(t, string(probe), false)
-	s := newService(t, &fakeSource{}, path, nil)
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	version := library.Version{ID: accounts.ID{3}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
 	first, err := s.Analyze(t.Context(), version)
 	if err != nil {
@@ -250,7 +269,7 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, _ := fakeProbe(t, string(probe), false)
-	s := newService(t, &fakeSource{}, path, nil)
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	version := library.Version{ID: accounts.ID{8}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
 	// The app stopped waiting before the analysis ended.
 	ctx, cancel := context.WithCancel(t.Context())
@@ -273,7 +292,7 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 	clip := `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "30.000000"},
 		"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 3840, "height": 2160}]}`
 	path, runs := fakeProbe(t, clip, false)
-	s := newService(t, &fakeSource{}, path, nil)
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	movie := library.Version{ID: accounts.ID{5}, URL: "https://93.184.216.34/movie.mkv", Runtime: 2 * time.Hour}
 	if _, err := s.Analyze(t.Context(), movie); !errors.Is(err, ErrStandIn) {
 		t.Fatalf("a 30 s clip for a 2 h movie: %v", err)
@@ -294,7 +313,7 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 
 func TestUnreadableVersionsAreNotAnalyzedAgain(t *testing.T) {
 	path, runs := fakeProbe(t, "", true)
-	s := newService(t, &fakeSource{}, path, nil)
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	version := library.Version{ID: accounts.ID{4}, URL: "https://93.184.216.34/page.html"}
 	for range 2 {
 		if _, err := s.Analyze(t.Context(), version); !errors.Is(err, media.ErrNotMedia) {

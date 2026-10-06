@@ -70,10 +70,16 @@ type Service struct {
 	failures *cache.Cache[accounts.ID, error]
 	live     *cache.Cache[accounts.ID, struct{}]
 	hosts    *cache.Cache[string, bool]
-	// indexes are keyframe times, and unindexed the versions whose index
-	// could not be read.
+	// indexes are keyframe times, unindexed the versions whose index
+	// cannot be read, and offsets where the keyframes start in the file.
 	indexes   *cache.Cache[accounts.ID, []time.Duration]
 	unindexed *cache.Cache[accounts.ID, error]
+	offsets   *cache.Cache[accounts.ID, []container.Keyframe]
+	// warming are the warms under way, by version, and warmed the start
+	// each version was warmed from lately (see Warm).
+	warmMu  sync.Mutex
+	warming map[accounts.ID]*warmRun
+	warmed  *cache.Cache[accounts.ID, time.Duration]
 	// extractions are the subtitles remuxes extract, shared by the remuxes
 	// of a version.
 	extractedMu sync.Mutex
@@ -133,6 +139,9 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		hosts:       cache.New[string, bool](500, 5*time.Minute),
 		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour),
 		unindexed:   cache.New[accounts.ID, error](2000, failureTTL),
+		offsets:     cache.New[accounts.ID, []container.Keyframe](50, time.Hour),
+		warming:     map[accounts.ID]*warmRun{},
+		warmed:      cache.New[accounts.ID, time.Duration](500, warmedFor),
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
 		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
 		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
@@ -165,8 +174,12 @@ func (s *Service) open(version library.Version) *source.Source {
 	return s.sources.Open(version.ID, locationOf(version), renew)
 }
 
+// locationOf is where a version's bytes are, with the size its addon
+// announced: the source cache refuses another file at the first byte once
+// the addon's sizes prove right.
 func locationOf(version library.Version) source.Location {
-	return source.Location{URL: version.URL, Headers: version.Headers, Confined: version.Confined}
+	return source.Location{URL: version.URL, Headers: version.Headers, Confined: version.Confined, Size: version.Size,
+		Announcer: version.Addon}
 }
 
 // OpenSource opens a version's source as playback reads it, through the
@@ -203,12 +216,22 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 
 // Analyze returns what ffprobe finds in a version, analyzing it on its
 // first use. A version that cannot be analyzed is not tried again for a
-// while.
+// while. The keyframe index of a Matroska file is read meanwhile, as an
+// HLS play reads it next (see indexAhead).
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
+	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
+		return analysis, nil
+	}
+	if _, failed := s.failures.Get(version.ID); !failed {
+		s.indexAhead(version)
+	}
 	return s.analyze(ctx, version, media.Prober.Probe)
 }
 
-// analyze is Analyze, the version read with probe.
+// analyze is Analyze, the version read with probe. ffprobe is stopped as
+// soon as the version's source fails, rather than left to its deadline,
+// and the source's failure is the analysis's: what is kept as the
+// version's failure tells what its host answered.
 func (s *Service) analyze(ctx context.Context, version library.Version, probe func(media.Prober, context.Context, string) (media.Analysis, error)) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
@@ -229,7 +252,22 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		target, release := s.loopback.register(src)
 		defer release()
 		started := time.Now()
-		analysis, err := probe(s.ffprobe(), ctx, target)
+		probing, stop := context.WithCancel(ctx)
+		failed := src.Failed()
+		go func() {
+			select {
+			case <-failed:
+				stop()
+			case <-probing.Done():
+			}
+		}()
+		analysis, err := probe(s.ffprobe(), probing, target)
+		stop()
+		if err != nil {
+			if failure := failureOf(src, failed); failure != nil {
+				err = failure
+			}
+		}
 		if err == nil && standIn(analysis, version.Runtime) {
 			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
 		}
@@ -256,6 +294,19 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		return media.Analysis{}, err
 	}
 	return result.(media.Analysis), nil
+}
+
+// failureOf is why src failed, when failed, its Failed channel, closed.
+func failureOf(src *source.Source, failed <-chan struct{}) error {
+	select {
+	case <-failed:
+		if failure := src.Failure(); failure != nil {
+			return failure
+		}
+		return source.ErrUnavailable
+	default:
+		return nil
+	}
 }
 
 // standIn reports whether an analysis is of a clip too short to be the
@@ -349,9 +400,15 @@ func tokenByte(c byte) bool {
 
 // check makes sure a source answers before a player is sent to it, as some
 // players give up on the first failure, and returns the version with the
-// link that answered.
+// link that answered. A source that answered the server's own reads at
+// that link lately, as PlaybackInfo's analysis, is not asked again. A
+// link that could not be renewed is not kept as the file's failure: that
+// tells nothing of the file.
 func (s *Service) check(ctx context.Context, version library.Version) (library.Version, error) {
 	if _, ok := s.live.Get(version.ID); ok {
+		return version, nil
+	}
+	if answered := s.sources.Answered(version.ID, version.URL); time.Since(answered) < liveTTL {
 		return version, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
@@ -360,11 +417,10 @@ func (s *Service) check(ctx context.Context, version library.Version) (library.V
 	if err == nil && expired(status) && s.renew != nil {
 		fresh, renewErr := s.renew(ctx, version)
 		if renewErr != nil {
-			err = fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrSourceUnavailable, status, renewErr)
-		} else {
-			version = fresh
-			status, err = s.firstByte(ctx, version)
+			return library.Version{}, fmt.Errorf("%w: HTTP %d, and the link could not be renewed: %v", ErrSourceUnavailable, status, renewErr)
 		}
+		version = fresh
+		status, err = s.firstByte(ctx, version)
 	}
 	if err == nil && status != http.StatusOK && status != http.StatusPartialContent {
 		err = fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, status)

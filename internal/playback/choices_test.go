@@ -24,8 +24,9 @@ func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The channel answers with a live playlist: its start is checked
-	// before ffprobe reads it.
-	s := newService(t, &fakeSource{body: []byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nsegment.ts\n")}, path, nil)
+	// before ffprobe reads it. The file is read with ranges, as its
+	// keyframe index is read during the analysis.
+	s := newService(t, &fileSource{data: []byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nsegment.ts\n")}, path, nil)
 	settings := s.settings()
 	settings.AnalysisTimeout = accounts.MinAnalysisTimeout
 	s.settings = func() accounts.Settings { return settings }
