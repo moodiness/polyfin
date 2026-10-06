@@ -9,42 +9,49 @@ import (
 // which the server settings default to.
 var jellyfin = Thresholds{Resume: 5, Played: 90}
 
-// These cases are what a Jellyfin 12.2 server did with the same reports,
-// on 6-minute and 1-minute items.
+// These cases are what a Jellyfin 12.2 server does with the same reports,
+// on 6-minute and 1-minute items: a position dates the play when it leaves
+// a resume point or completes the item, and a start dates it unless the
+// item was played and keeps a resume point.
 func TestPlaybackReportsFollowJellyfin(t *testing.T) {
 	const long, short = 6 * time.Minute, time.Minute
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	played := Data{Played: true, PlayCount: 1}
+	reach := func(d *Data, position, runtime time.Duration) { d.Reached(d.Reach(position, runtime, jellyfin), now) }
 	for _, tc := range []struct {
 		name   string
 		before Data
 		report func(*Data)
 		want   Data
 	}{
-		{"starting counts a play", Data{}, func(d *Data) { d.Start(now) },
+		{"starting counts a play", Data{}, func(d *Data) { d.Start(now, true) },
 			Data{PlayCount: 1, LastPlayed: &now}},
-		{"halfway is a resume point", Data{}, func(d *Data) { d.Reach(long/2, long, jellyfin) },
-			Data{Position: long / 2, Runtime: long}},
-		{"just after the start is kept", Data{}, func(d *Data) { d.Reach(long*6/100, long, jellyfin) },
-			Data{Position: long * 6 / 100, Runtime: long}},
-		{"just before the end is kept", Data{}, func(d *Data) { d.Reach(long*89/100, long, jellyfin) },
-			Data{Position: long * 89 / 100, Runtime: long}},
-		{"the very start leaves nothing to resume", Data{Position: long / 2, Runtime: long}, func(d *Data) { d.Reach(long*3/100, long, jellyfin) },
+		{"halfway is a resume point", Data{}, func(d *Data) { reach(d, long/2, long) },
+			Data{Position: long / 2, Runtime: long, LastPlayed: &now}},
+		{"just after the start is kept", Data{}, func(d *Data) { reach(d, long*6/100, long) },
+			Data{Position: long * 6 / 100, Runtime: long, LastPlayed: &now}},
+		{"just before the end is kept", Data{}, func(d *Data) { reach(d, long*89/100, long) },
+			Data{Position: long * 89 / 100, Runtime: long, LastPlayed: &now}},
+		{"the very start leaves nothing to resume", Data{Position: long / 2, Runtime: long}, func(d *Data) { reach(d, long*3/100, long) },
 			Data{Runtime: long}},
-		{"the end plays the item without another play", Data{PlayCount: 1}, func(d *Data) { d.Reach(long*91/100, long, jellyfin) },
+		{"the end plays the item without another play", Data{PlayCount: 1}, func(d *Data) { reach(d, long*91/100, long) },
+			Data{Played: true, PlayCount: 1, Runtime: long, LastPlayed: &now}},
+		{"the start of a played item keeps it played", played, func(d *Data) { reach(d, long*2/100, long) },
 			Data{Played: true, PlayCount: 1, Runtime: long}},
-		{"the start of a played item keeps it played", played, func(d *Data) { d.Reach(long*2/100, long, jellyfin) },
-			Data{Played: true, PlayCount: 1, Runtime: long}},
-		{"replaying a played item resumes it", played, func(d *Data) { d.Start(now); d.Reach(long/2, long, jellyfin) },
+		{"replaying a played item resumes it", played, func(d *Data) { d.Start(now, true); reach(d, long/2, long) },
 			Data{Played: true, PlayCount: 2, LastPlayed: &now, Position: long / 2, Runtime: long}},
-		{"a short item is played past its start", Data{}, func(d *Data) { d.Reach(short/2, short, jellyfin) },
-			Data{Played: true, Runtime: short}},
-		{"a short item is not played at its very start", Data{}, func(d *Data) { d.Reach(short*3/100, short, jellyfin) },
+		{"a played item barely started again is not dated", played, func(d *Data) { d.Start(now, true); reach(d, long*2/100, long) },
+			Data{Played: true, PlayCount: 2, Runtime: long}},
+		{"a played song started again is dated", played, func(d *Data) { d.Start(now, false) },
+			Data{Played: true, PlayCount: 2, LastPlayed: &now}},
+		{"a short item is played past its start", Data{}, func(d *Data) { reach(d, short/2, short) },
+			Data{Played: true, Runtime: short, LastPlayed: &now}},
+		{"a short item is not played at its very start", Data{}, func(d *Data) { reach(d, short*3/100, short) },
 			Data{Runtime: short}},
-		{"a stop without a position plays the item once more", Data{PlayCount: 1}, func(d *Data) { d.Finish() },
-			Data{Played: true, PlayCount: 2}},
-		{"without a runtime the position is kept", Data{}, func(d *Data) { d.Reach(long/2, 0, jellyfin) },
-			Data{Position: long / 2}},
+		{"a stop without a position plays the item once more", Data{PlayCount: 1}, func(d *Data) { d.Finish(now) },
+			Data{Played: true, PlayCount: 2, LastPlayed: &now}},
+		{"without a runtime the position is kept", Data{}, func(d *Data) { reach(d, long/2, 0) },
+			Data{Position: long / 2, LastPlayed: &now}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data := tc.before

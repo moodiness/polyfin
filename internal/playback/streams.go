@@ -184,6 +184,7 @@ func appendExternals(streams []MediaStream, externals []ExternalSubtitle, w *wor
 func videoStream(s media.Stream, index int, remote bool) MediaStream {
 	stream := MediaStream{
 		Codec:             s.Codec,
+		CodecTag:          codecTag(s.CodecTag),
 		Language:          streamLanguage(s.Language),
 		ColorSpace:        s.ColorSpace,
 		ColorTransfer:     s.ColorTransfer,
@@ -263,6 +264,7 @@ func videoStream(s media.Stream, index int, remote bool) MediaStream {
 func audioStream(s media.Stream, index int, w *words) MediaStream {
 	stream := MediaStream{
 		Codec:              s.Codec,
+		CodecTag:           codecTag(s.CodecTag),
 		Language:           streamLanguage(s.Language),
 		TimeBase:           s.TimeBase,
 		Title:              s.Title,
@@ -323,6 +325,7 @@ func subtitleStream(s media.Stream, index int, w *words) MediaStream {
 	codec := subtitleCodec(s.Codec)
 	stream := MediaStream{
 		Codec:                codec,
+		CodecTag:             codecTag(s.CodecTag),
 		Language:             streamLanguage(s.Language),
 		TimeBase:             s.TimeBase,
 		Title:                s.Title,
@@ -385,6 +388,7 @@ func finishSubtitle(stream *MediaStream, w *words) {
 func imageStream(s media.Stream, index int) MediaStream {
 	stream := MediaStream{
 		Codec:              s.Codec,
+		CodecTag:           codecTag(s.CodecTag),
 		Language:           streamLanguage(s.Language),
 		TimeBase:           s.TimeBase,
 		Title:              s.Title,
@@ -407,6 +411,7 @@ func imageStream(s media.Stream, index int) MediaStream {
 func dataStream(s media.Stream, index int) MediaStream {
 	return MediaStream{
 		Codec:              s.Codec,
+		CodecTag:           codecTag(s.CodecTag),
 		Language:           streamLanguage(s.Language),
 		TimeBase:           s.TimeBase,
 		Title:              s.Title,
@@ -546,14 +551,15 @@ func frameRate(rate float64) *float64 {
 
 // videoRange is a video's dynamic range and its kind. Dolby Vision comes
 // from the configuration record when it describes a base layer with
-// metadata: profile 5 is DOVI, 7 DOVIWithEL, 8 and 10 depend on their
-// base layer's compatibility. Without it, the transfer function decides:
-// PQ is HDR10 (HDR10Plus with dynamic metadata), HLG is HLG, the rest SDR.
-// [INFERENCE]: every Dolby Vision and HDR10+ case, as no such stream could
-// be observed; a record Jellyfin would not classify falls back to the
-// transfer function.
+// metadata, or when the track is tagged as Dolby Vision (dvh1, dvhe, dav1
+// or dovi), which Jellyfin 12.2 reads: profile 5 is DOVI, 7 DOVIWithEL, 8
+// and 10 depend on their base layer's compatibility. Without it, the
+// transfer function decides: PQ is HDR10 (HDR10Plus with dynamic
+// metadata), HLG is HLG, the rest SDR. [INFERENCE]: every Dolby Vision and
+// HDR10+ case, as no such stream could be observed; a record Jellyfin
+// would not classify falls back to the transfer function.
 func videoRange(s media.Stream) (videoRange, rangeType string) {
-	if dv := s.DolbyVision; dv != nil && dv.RPU && dv.BL {
+	if dv := s.DolbyVision; dv != nil && (dv.RPU && dv.BL || doviTag(s.CodecTag)) {
 		switch dv.Profile {
 		case 5:
 			return "HDR", "DOVI"
@@ -639,6 +645,25 @@ func profile(name string) string {
 		return ""
 	}
 	return name
+}
+
+// codecTag is the codec tag Jellyfin reports of a track: ffprobe's, but
+// none for the tags made of zero bytes ("[0][0][0][0]") Matroska and WebM
+// tracks have.
+func codecTag(tag string) string {
+	if strings.TrimSpace(tag) == "" || strings.Contains(tag, "[0]") {
+		return ""
+	}
+	return tag
+}
+
+// doviTag reports a codec tag naming Dolby Vision.
+func doviTag(tag string) bool {
+	switch strings.ToLower(tag) {
+	case "dovi", "dvh1", "dvhe", "dav1":
+		return true
+	}
+	return false
 }
 
 // channelLayout drops the speaker variant: "5.1(side)" is "5.1".

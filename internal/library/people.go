@@ -303,8 +303,9 @@ type PeopleQuery struct {
 
 // peopleFilter selects the people matching $1 to $13 (see People): those
 // credited in a title the user reaches, among the titles of $13 when it is
-// set.
-const peopleFilter = `FROM items AS person WHERE person.kind = 'person'
+// set. Like Jellyfin 12.2, it keeps only the people People can list, so
+// that the count it reports is theirs.
+const peopleFilter = `FROM items AS person WHERE person.kind = 'person' AND jsonb_typeof(person.data->'person') = 'object'
 	AND ($1 = '' OR strpos(lower(person.data->'person'->>'name'), lower($1)) > 0)
 	AND ($2 = '' OR starts_with(lower(person.data->'person'->>'name'), lower($2)))
 	AND ($3 = '' OR lower(person.data->'person'->>'name') < lower($3))

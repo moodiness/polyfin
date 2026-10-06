@@ -43,6 +43,16 @@ func ExtractableSubtitle(analysis media.Analysis, index int) bool {
 	return slices.Contains(textSubtitles(analysis), index)
 }
 
+// PGSSubtitle reports whether the subtitle stream of a version with FFmpeg
+// index index is a PGS one, which apps that draw PGS take as a SUP file
+// read whole through the version's index, as Jellyfin 12.2 serves its raw
+// file.
+func PGSSubtitle(analysis media.Analysis, index int) bool {
+	return slices.ContainsFunc(analysis.Streams, func(stream media.Stream) bool {
+		return stream.Index == index && stream.Type == "subtitle" && stream.Codec == "hdmv_pgs_subtitle"
+	})
+}
+
 // imageSubtitleCodecs are the subtitle codecs FFmpeg draws onto video.
 var imageSubtitleCodecs = []string{"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle"}
 

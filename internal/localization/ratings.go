@@ -37,13 +37,16 @@ func Ratings() []Rating {
 }
 
 // RatingScore returns the score of a title's rating. It reads the US
-// ratings above, those of France (TP, -10 to -18), Germany (FSK 0 to FSK
-// 18), the United Kingdom (U, 12A, R18), and plain ages ("12", "16+"),
-// written in any case and possibly preceded by "Rated" or by the country
-// ("US:PG-13", "FR-12", "DE-FSK-16"). Where systems share a name, as PG,
-// the US meaning wins, as the addons' ratings are mostly the US ones. ok is
-// false for a title without a rating, which includes the ratings that say
-// so (NR, Unrated) and those Polyfin does not know.
+// ratings above, those of France (TP, -10 to -18, also written with an en
+// dash or as "Interdit aux moins de 12 ans"), Germany (FSK 0 to FSK 18,
+// "ab 12"), the United Kingdom (U, 12A, R18), P for adult works, and plain
+// ages ("12", "16+"), written in any case and possibly preceded by "Rated"
+// or by the country ("US:PG-13", "FR-12", "DE-FSK-16"). Where systems share
+// a name, as PG, the US meaning wins, as the addons' ratings are mostly the
+// US ones. As in Jellyfin 12.2, a list of ratings separated by "/" ("PG-13
+// / 12") has the score of the first one known, when the whole is not one.
+// ok is false for a title without a rating, which includes the ratings
+// that say so (NR, Unrated) and those Polyfin does not know.
 func RatingScore(rating string) (score Score, ok bool) {
 	value := strings.ToLower(strings.TrimSpace(rating))
 	value = strings.TrimSpace(strings.TrimPrefix(value, "rated "))
@@ -53,10 +56,22 @@ func RatingScore(rating string) (score Score, ok bool) {
 	if age, ok := plainAge(value); ok {
 		return Score{Score: age}, true
 	}
-	if rest, ok := strings.CutPrefix(value, "fsk"); ok {
-		if age, ok := plainAge(strings.TrimLeft(rest, " -")); ok {
-			return Score{Score: age}, true
+	for _, prefix := range []string{"fsk", "ab ", "interdit aux moins de "} {
+		if rest, ok := strings.CutPrefix(value, prefix); ok {
+			if age, ok := plainAge(strings.TrimSuffix(strings.TrimLeft(rest, " -"), " ans")); ok {
+				return Score{Score: age}, true
+			}
 		}
+	}
+	if strings.Contains(value, "/") {
+		for part := range strings.SplitSeq(value, "/") {
+			if part = strings.TrimSpace(part); part != "" {
+				if score, ok := RatingScore(part); ok {
+					return score, true
+				}
+			}
+		}
+		return Score{}, false
 	}
 	for _, country := range []string{"us", "fr", "de", "gb", "uk"} {
 		if rest, ok := strings.CutPrefix(value, country); ok && rest != "" && strings.ContainsRune(":- ", rune(rest[0])) {
@@ -67,9 +82,11 @@ func RatingScore(rating string) (score Score, ok bool) {
 }
 
 // plainAge reads an age written alone, as Germany and the United Kingdom
-// do, with the "+" some systems add or the "-" of French television.
+// do, with the "+" some systems add or the "-" of French television,
+// which is also written with an en dash.
 func plainAge(value string) (int, bool) {
-	value = strings.TrimSuffix(strings.TrimPrefix(value, "-"), "+")
+	value = strings.TrimPrefix(value, "-")
+	value = strings.TrimSuffix(strings.TrimPrefix(value, "–"), "+")
 	age, err := strconv.Atoi(value)
 	if err != nil || age < 0 || age > 99 || value[0] == '+' {
 		return 0, false
@@ -150,6 +167,8 @@ var scores = func() map[string]Score {
 		"u":   {Score: 0},
 		"12a": {Score: 12},
 		"r18": {Score: 1000},
+		// P, for adult works, which Jellyfin 12.2 reads in every country.
+		"p": {Score: 1000},
 	}
 	for _, rating := range ratings {
 		if rating.Score != nil {

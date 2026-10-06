@@ -376,9 +376,14 @@ func (d *decider) codecProfileReasons(kind string, stream *MediaStream, containe
 	return why
 }
 
-// subject is what conditions see of the source.
+// subject is what conditions see of the source: its tracks, and its
+// video's codec tag, which Jellyfin 12.2 reads from ffprobe (Jellyfin 12.1
+// read none).
 func (d *decider) subject() subject {
 	s := subject{video: d.video, audio: d.checked}
+	if d.video != nil {
+		s.codecTag = d.video.CodecTag
+	}
 	if d.checked != nil {
 		s.secondary = d.checked.Index != d.firstAudio
 	}
@@ -679,8 +684,8 @@ type subject struct {
 	video, audio *MediaStream
 	// secondary is set when audio is not the source's first audio track.
 	secondary bool
-	// codecTag is the video's codec tag when it is known: only a remux's,
-	// which writes it.
+	// codecTag is the video's codec tag when it is known: the source's,
+	// or for a remux the one it writes.
 	codecTag string
 }
 
@@ -762,8 +767,6 @@ func (s subject) property(name string) (value, reason) {
 	case "VideoRangeType":
 		return text(video.VideoRangeType), videoRangeTypeNotSupported
 	case "VideoCodecTag":
-		// Jellyfin 12.2 never knows a source's codec tag: it reports none,
-		// even for MP4.
 		if s.codecTag != "" {
 			return text(s.codecTag), videoCodecTagNotSupported
 		}

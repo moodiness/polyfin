@@ -23,9 +23,12 @@ import (
 
 // MediaAttachment is a file attached to a version, as Jellyfin lists it.
 type MediaAttachment struct {
-	Codec   string `json:",omitempty"`
-	Comment string `json:",omitempty"`
-	Index   int
+	Codec string `json:",omitempty"`
+	// CodecTag is ffprobe's tag of the attachment, which Jellyfin 12.2
+	// reports as it is, "[0][0][0][0]" in Matroska.
+	CodecTag string `json:",omitempty"`
+	Comment  string `json:",omitempty"`
+	Index    int
 	// FileName and MimeType describe the file; jellyfin-web loads the
 	// fonts it recognizes by their MIME type.
 	FileName string `json:",omitempty"`
@@ -40,8 +43,8 @@ func mediaAttachments(analysis media.Analysis) []MediaAttachment {
 	attachments := []MediaAttachment{}
 	for _, stream := range analysis.Streams {
 		if playback.Attached(stream) {
-			attachments = append(attachments, MediaAttachment{Codec: stream.Codec, Comment: stream.Comment, Index: stream.Index,
-				FileName: stream.FileName, MimeType: attachmentMimeType(stream)})
+			attachments = append(attachments, MediaAttachment{Codec: stream.Codec, CodecTag: strings.TrimSpace(stream.CodecTag),
+				Comment: stream.Comment, Index: stream.Index, FileName: stream.FileName, MimeType: attachmentMimeType(stream)})
 		}
 	}
 	return attachments

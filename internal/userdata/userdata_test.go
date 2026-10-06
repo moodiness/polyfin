@@ -37,7 +37,7 @@ func TestDataIsKeptPerUser(t *testing.T) {
 	movie := accounts.ID{1}
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
 	changed, err := store.Change(t.Context(), alice, []Item{{ID: movie}}, func(d *Data) {
-		d.Start(now)
+		d.Start(now, true)
 		d.Reach(time.Hour, 2*time.Hour, jellyfin)
 		d.Favorite = true
 		d.Like(true)
@@ -95,7 +95,7 @@ func TestListsFollowWhatUsersDid(t *testing.T) {
 	resume := func(id accounts.ID, at time.Time) {
 		t.Helper()
 		if _, err := store.Change(t.Context(), alice, []Item{{ID: id}}, func(d *Data) {
-			d.Start(at)
+			d.Start(at, true)
 			d.Reach(time.Hour, 2*time.Hour, jellyfin)
 		}); err != nil {
 			t.Fatal(err)

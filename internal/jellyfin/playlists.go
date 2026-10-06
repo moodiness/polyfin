@@ -763,6 +763,8 @@ func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user a
 		h.internalError(w, r, err)
 		return true
 	}
+	inRange := letterRange(r)
+	lists = slices.DeleteFunc(lists, func(p playlists.Playlist) bool { return !inRange(strings.ToLower(strings.TrimSpace(p.Name))) })
 	from, to := bounds(len(lists), start, limit)
 	dtos, err := h.playlistDtos(r, user, lists[from:to], requestedFields(r), false)
 	if err != nil {
