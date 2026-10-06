@@ -148,6 +148,18 @@ func (s *Service) CachedVersions(ctx context.Context, user accounts.User, id acc
 	return versions, err == nil && complete
 }
 
+// VersionsToPlay lists the versions of a movie or an episode for a play:
+// it waits for the addons whose streams are not remembered, as Versions
+// does, but lists a stale list as it is (see staleLists) while its addon is
+// asked again in the background, for a play not to wait for an addon when
+// the versions it lists, already analyzed, can start at once. complete
+// reports whether no list was stale; when none of the versions plays, the
+// caller waits for the new answers with Versions, which joins the requests
+// under way.
+func (s *Service) VersionsToPlay(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
+	return s.versionsOf(ctx, user, id, staleNow)
+}
+
 // listing is how far versionsOf and subtitlesOf go for the addons whose
 // lists for a title are not remembered, or stale (see staleLists).
 type listing int
@@ -158,6 +170,10 @@ const (
 	// askLater asks them in the background, for later requests (see
 	// VersionsNow), and lists a stale list meanwhile.
 	askLater
+	// staleNow waits for the addons whose lists are not remembered, and
+	// lists a stale list as it is while its addon is asked again in the
+	// background, as askLater does (see VersionsToPlay).
+	staleNow
 	// waitAll asks them, those of stale lists included, and waits for
 	// their answers.
 	waitAll
@@ -175,7 +191,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		if version, ok := s.versions.Get(trackVersionID(id)); ok && version.fresh(s.now()) {
 			return []Version{version}, true, nil
 		}
-		if mode != waitAll {
+		if mode != waitAll && mode != staleNow {
 			return nil, false, nil
 		}
 		r, err := s.load(ctx, id)
@@ -189,12 +205,49 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		return []Version{version}, true, nil
 	}
 	serving := streamServing(v, t)
+	tracked := s.tracked()
+	tracked.titles.Put(listedTitle{t.metaType, t.id}, t.item)
+	if mode == askLater {
+		// Item details: the title's page follows its versions from now on
+		// (see FollowedProgress).
+		tracked.pages.Put(askedKey{user.ID, t.item}, titlePage{t: t, serving: serving})
+	}
+	versions, unknown := s.listVersions(ctx, t, serving, mode)
+	if mode == askLater || mode == staleNow {
+		s.askStreams(ctx, user, t, unknown)
+	}
+	return versions, len(unknown) == 0, nil
+}
+
+// listVersions lists the versions serving list for t, as far as mode goes,
+// and returns the addons whose streams are not known, or are asked again:
+// for knownOnly, those whose lists are not remembered; for askLater, those
+// and those whose lists are stale; for staleNow, those whose lists are
+// stale; for waitAll, none.
+func (s *Service) listVersions(ctx context.Context, t target, serving []installed, mode listing) ([]Version, []installed) {
 	lists := make([][]stremio.Stream, len(serving))
-	// unknown are the addons whose streams are not known, or asked again.
 	var unknown []installed
-	if mode == waitAll {
-		var wg sync.WaitGroup
-		for i, entry := range serving {
+	var wg sync.WaitGroup
+	for i, entry := range serving {
+		// An IPTV source's streams are Polyfin's own: reading them asks
+		// no addon.
+		if entry.addon.IPTV() && mode != waitAll {
+			lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
+			continue
+		}
+		var l list[stremio.Stream]
+		var fresh, ok bool
+		if mode != waitAll {
+			l, fresh, ok = s.streamListOf(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
+		}
+		switch {
+		case fresh || ok && mode == knownOnly:
+			lists[i] = l.items
+		case ok:
+			// A stale list is listed until the addon answers again.
+			lists[i] = l.items
+			unknown = append(unknown, entry)
+		case mode == waitAll || mode == staleNow:
 			wg.Go(func() {
 				streams, err := s.streams(ctx, entry, t.metaType, t.id)
 				// An app that stops waiting cancels ctx: nothing failed.
@@ -203,28 +256,11 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 				}
 				lists[i] = streams
 			})
-		}
-		wg.Wait()
-	} else {
-		for i, entry := range serving {
-			// An IPTV source's streams are Polyfin's own: reading them asks
-			// no addon.
-			if entry.addon.IPTV() {
-				lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
-				continue
-			}
-			// A stale list is listed until the addon answers again, which
-			// item details ask it to.
-			l, fresh, ok := listOf(s, s.streamLists, streamKey{entry.addon.ID, t.metaType, t.id})
-			if !ok || !fresh && mode == askLater {
-				unknown = append(unknown, entry)
-			}
-			lists[i] = l.items
-		}
-		if mode == askLater {
-			s.askStreams(ctx, user, t, unknown)
+		default:
+			unknown = append(unknown, entry)
 		}
 	}
+	wg.Wait()
 	var versions []Version
 	seen := map[accounts.ID]bool{}
 	for i, streams := range lists {
@@ -241,7 +277,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 			s.versions.Put(version.ID, version)
 		}
 	}
-	return versions, len(unknown) == 0, nil
+	return versions, unknown
 }
 
 // Version finds a version of an item, listing the item's versions again
@@ -285,11 +321,20 @@ func (s *Service) KnownVersion(id accounts.ID) (Version, bool) {
 	return s.versions.Get(id)
 }
 
+// renewWait bounds how long a renewal waits for the addon's follow-up when
+// the addon's answer lacks the version's file (see Renew).
+const renewWait = 10 * time.Second
+
 // Renew asks the addon that listed a version for its streams again and
 // returns the same file with the link the addon gives now, for links that
 // expired. Every listing of the version uses the new link afterwards. The
-// answer replaces the addon's list for the title, which keeps the items a
-// running follow-up keeps listed (see keepAnswer).
+// addon is asked as a title's page asks it (see streams): a request under
+// way is joined, and the answer is stored and followed up, keeping the
+// items of the list it replaces listed meanwhile (see keepAnswer). An addon
+// that gathers other addons' streams may answer first without the file:
+// its follow-up is then asked at once, and waited for at most renewWait.
+// Only the addon's answers count, not the items kept from the list
+// replaced, whose links are those that expired.
 func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	addon, err := s.addons.Find(ctx, old.Origin.Addon)
 	if errors.Is(err, addons.ErrNotFound) {
@@ -308,22 +353,66 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		}
 		return s.resolveTrack(ctx, entry, r, true)
 	}
-	streams, err := s.fetchStreams(ctx, entry, old.Origin.Type, old.Origin.ID)
-	if err != nil {
+	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
+	if addon.IPTV() {
+		streams, err := s.fetchStreams(ctx, entry, t.metaType, t.id)
+		if err != nil {
+			return Version{}, err
+		}
+		if version, ok := s.renewed(t, entry, streams, old.ID); ok {
+			return version, nil
+		}
+		return Version{}, ErrNotFound
+	}
+	key := streamKey{addon.ID, t.metaType, t.id}
+	s.tracked().titles.Put(listedTitle{t.metaType, t.id}, t.item)
+	if _, err := s.streamAnswer(ctx, entry, key); err != nil {
 		return Version{}, err
 	}
-	keepAnswer(s, s.streamLists, streamKind, streamKey{addon.ID, old.Origin.Type, old.Origin.ID}, streams, false)
-	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
+	if version, ok := s.renewedFromAnswer(t, entry, key, old.ID); ok {
+		return version, nil
+	}
+	asked := s.hurryFollowUp(key)
+	if asked == nil {
+		return Version{}, ErrNotFound
+	}
+	timer := time.NewTimer(renewWait)
+	defer timer.Stop()
+	select {
+	case <-asked:
+	case <-timer.C:
+	case <-ctx.Done():
+		return Version{}, ctx.Err()
+	}
+	if version, ok := s.renewedFromAnswer(t, entry, key, old.ID); ok {
+		return version, nil
+	}
+	return Version{}, ErrNotFound
+}
+
+// renewedFromAnswer finds the version id among the streams of the addon's
+// last answer kept under key.
+func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, id accounts.ID) (Version, bool) {
+	l, ok := s.streamLists.Get(key)
+	if !ok {
+		return Version{}, false
+	}
+	return s.renewed(t, entry, l.items[:l.answer], id)
+}
+
+// renewed finds the version id among streams, and remembers it with the
+// link they give.
+func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, id accounts.ID) (Version, bool) {
 	for _, stream := range streams {
 		if !stream.Playable() {
 			continue
 		}
-		if version := newVersion(t, entry, stream); version.ID == old.ID {
+		if version := newVersion(t, entry, stream); version.ID == id {
 			s.versions.Put(version.ID, version)
-			return version, nil
+			return version, true
 		}
 	}
-	return Version{}, ErrNotFound
+	return Version{}, false
 }
 
 // newVersion describes a stream an addon listed for a target.
@@ -346,21 +435,27 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 }
 
 // streams lists an addon's streams for a title: those remembered while
-// fresh, else its answer, which every caller asking meanwhile shares, item
-// details' background requests included (see VersionsNow). An answer
-// stored is followed up; until the follow-ups end, it is listed with the
-// items it lacks of the stale list it replaced (see followUpList).
+// fresh, else its answer (see streamAnswer).
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
 	// An IPTV source's line-up changes its streams at once.
 	if entry.addon.IPTV() {
 		return s.fetchStreams(ctx, entry, contentType, id)
 	}
 	key := streamKey{entry.addon.ID, contentType, id}
-	if l, fresh, _ := listOf(s, s.streamLists, key); fresh {
+	if l, fresh, _ := s.streamListOf(ctx, key); fresh {
 		return l.items, nil
 	}
-	return shared(ctx, &s.flight, "streams "+key.addon.String()+" "+contentType+" "+id, func(ctx context.Context) ([]stremio.Stream, error) {
-		streams, err := s.fetchStreams(ctx, entry, contentType, id)
+	return s.streamAnswer(ctx, entry, key)
+}
+
+// streamAnswer asks an addon for its streams for a title. Every caller
+// asking meanwhile shares the answer, item details' background requests
+// and renewals included (see VersionsNow and Renew). An answer stored is
+// followed up; until the follow-ups end, it is listed with the items it
+// lacks of the stale list it replaced (see followUpList).
+func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
+	return shared(ctx, &s.flight, "streams "+key.addon.String()+" "+key.contentType+" "+key.id, func(ctx context.Context) ([]stremio.Stream, error) {
+		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
 		}
@@ -378,6 +473,13 @@ func streamServing(v view, t target) []installed {
 		}
 	}
 	return serving
+}
+
+// KnownSubtitles lists, as Subtitles does, the subtitle files known now,
+// stale lists' included, asking no addon. complete reports whether every
+// addon's list was known.
+func (s *Service) KnownSubtitles(ctx context.Context, user accounts.User, id accounts.ID) (subtitles []ExternalSubtitle, complete bool, err error) {
+	return s.subtitlesOf(ctx, user, id, knownOnly)
 }
 
 // shared runs fetch once for every caller asking for key at the same time.

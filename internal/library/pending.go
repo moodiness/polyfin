@@ -54,15 +54,13 @@ func (s *Service) KnownVersions(ctx context.Context, user accounts.User, id acco
 // expired (see VersionsNow), or again, their follow-ups scheduled or
 // running (see followUpList). An addon that fails is no longer asked: its
 // versions are left out, as they are when a request waits for it, but for
-// those of its stale list, which item details keep listing.
+// those of its stale list, which item details keep listing. The title's
+// page follows its versions from then on (see FollowedProgress).
 func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.ID) (int, error) {
 	// The addons asked for the first time are counted first: one that
 	// answers meanwhile has its follow-up scheduled before it stops being
 	// asked, so it is counted at least once.
-	pending := 0
-	if a, ok := s.asked.Get(askedKey{user.ID, id}); ok {
-		pending = int(a.pending.Load())
-	}
+	pending := s.askedFor(user.ID, id)
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return 0, err
@@ -70,13 +68,26 @@ func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.I
 	if AudioKind(t.kind) {
 		return pending, nil
 	}
-	return pending + s.streamFollowUps(streamServing(v, t), t), nil
+	serving := streamServing(v, t)
+	s.tracked().pages.Put(askedKey{user.ID, t.item}, titlePage{t: t, serving: serving})
+	return pending + s.streamFollowUps(serving, t), nil
+}
+
+// askedFor counts the addons still asked for a user's title for the first
+// time, or since their list expired.
+func (s *Service) askedFor(user, item accounts.ID) int {
+	if a, ok := s.asked.Get(askedKey{user, item}); ok {
+		return int(a.pending.Load())
+	}
+	return 0
 }
 
 // askStreams asks addons for a user's title's streams in the background,
 // detached from the request, unless they are already asked for it. Each
 // addon is asked once at a time whoever asks (see streams), so a request
-// that waits for every version, such as PlaybackInfo, joins them.
+// that waits for every version, such as PlaybackInfo, joins them. Each
+// addon done, answering or not, is told to whoever follows the title's
+// versions (see OnVersionsChanged).
 func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, unknown []installed) {
 	if len(unknown) == 0 {
 		return
@@ -91,6 +102,7 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 	detached := context.WithoutCancel(ctx)
 	for _, entry := range unknown {
 		go func() {
+			defer s.versionsChanged(t.item)
 			defer a.pending.Add(-1)
 			if _, err := s.streams(detached, entry, t.metaType, t.id); err != nil {
 				s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
