@@ -281,12 +281,24 @@ func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
 // times in all. A read past the age starts a refresh unless one is under
 // way, and the previous refresh may still be storing what it fetched: the
 // read joins it then, so the library is read again until its own starts.
+// When it does not come, it tells every request the addon had and what
+// the service logged.
 func refreshed(t *testing.T, e lifetimeEnv, what string, requests int) {
 	t.Helper()
-	eventually(t, what, func() bool {
+	for deadline := time.Now().Add(holdLimit); ; time.Sleep(10 * time.Millisecond) {
 		e.list()
-		return e.requests("catalog/") == requests
-	})
+		got := e.requests("catalog/")
+		if got == requests {
+			return
+		}
+		if got > requests || time.Now().After(deadline) {
+			e.addon.mu.Lock()
+			asked := slices.Clone(e.addon.requests)
+			e.addon.mu.Unlock()
+			t.Fatalf("%s: %d catalog requests, want %d; now %v, catalog life %v; requests %q; log:\n%s",
+				what, got, requests, e.service.now().Sub(time.Now()).Round(time.Second), e.service.catalogLife(), asked, e.log.String())
+		}
+	}
 }
 
 func TestSearchesAreKeptBrieflyWhateverTheCatalogLife(t *testing.T) {
