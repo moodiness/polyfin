@@ -143,8 +143,10 @@ func (c *ItemCounts) add(kind library.Kind) {
 // itemCounts counts the items of the user's libraries by type, the user's
 // favorites with isFavorite. A catalog's size is unknown until it is read
 // through, so libraries count as the pages of their named pages do (see
-// writeNamedPage): their first page of items, plus one when more follow.
-// Favorites are counted exactly.
+// writeNamedPage): their first page of items, plus one when more follow,
+// as far as Polyfin keeps them: counts are informational, and asking the
+// addons would make the screens that show them wait (see
+// library.KnownPages). Favorites are counted exactly.
 func (h *Handler) itemCounts(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	favorite, favoriteSet := b.bool(r, "isFavorite")
@@ -174,7 +176,7 @@ func (h *Handler) itemCounts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, counts)
 		return
 	}
-	pages, err := h.firstPages(r, user)
+	pages, err := h.Library.KnownPages(r.Context(), user, defaultPageSize)
 	if err != nil {
 		h.browseError(w, r, err)
 		return

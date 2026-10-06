@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -87,7 +88,15 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 	if err := s.addons.SetLibraryImage(t.Context(), addons.Shared(), key, addons.LibraryImageAutomatic); err != nil {
 		t.Fatal(err)
 	}
-	if _, tag = view(token); tag != library.ImageTag(server.URL+"/backdrop.jpg") || folderImage() != id {
+	// Nothing of the catalog was read yet: the first listing does not wait
+	// for it, and shows the image once found.
+	want := library.ImageTag(server.URL + "/backdrop.jpg")
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, tag = view(token); tag == want || time.Now().After(deadline) {
+			break
+		}
+	}
+	if tag != want || folderImage() != id {
 		t.Errorf("an automatic image: tag %q, folder image %q", tag, folderImage())
 	}
 	if status, body := download(id); status != http.StatusOK || body != "jpeg backdrop" {

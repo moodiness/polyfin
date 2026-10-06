@@ -106,12 +106,24 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	items, err := h.Library.Items(r.Context(), user, entryIDs(entries))
+	// Only movies and episodes resume, of the types asked: the others are
+	// left out before anything is described.
+	keep := itemTypeFilter(r)
+	var kinds []library.Kind
+	for _, kind := range []library.Kind{library.KindMovie, library.KindEpisode} {
+		if keep(library.Item{Kind: kind}) {
+			kinds = append(kinds, kind)
+		}
+	}
+	if len(kinds) == 0 {
+		h.writeItems(w, r, user, nil, start, 0)
+		return
+	}
+	items, err := h.Library.ItemsOf(r.Context(), user, entryIDs(entries), kinds)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	keep := itemTypeFilter(r)
 	term := strings.ToLower(strings.TrimSpace(query(r, "searchTerm")))
 	var playing map[accounts.ID]bool
 	if excludeActive {

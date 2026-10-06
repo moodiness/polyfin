@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // router matches Jellyfin routes the way Jellyfin does: path segments
@@ -68,6 +70,9 @@ func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
 		return
 	}
+	// A request builds each user's view of the library once, however many
+	// items it describes.
+	r = r.WithContext(library.PerRequest(r.Context()))
 	for name, value := range bestValues {
 		r.SetPathValue(name, value)
 	}
