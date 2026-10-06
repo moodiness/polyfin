@@ -33,10 +33,10 @@ func TestPersonalAddonsTurnedOffAreLeftOut(t *testing.T) {
 	}
 	expect("by default", true)
 	// The server's addons stay, even when the user had turned them off.
-	if err := e.addons.SetUsesSharedAddons(ctx, admin.ID, false); err != nil {
+	var err error
+	if admin, err = e.users.UpdateUser(ctx, admin.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	var err error
 	if admin, err = e.users.UpdateUser(ctx, admin.ID, accounts.UserChanges{PersonalAddons: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestPersonalAddonsTurnedOffAreLeftOut(t *testing.T) {
 	if admin, err = e.users.UpdateUser(ctx, admin.ID, accounts.UserChanges{PersonalAddons: new(true)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.addons.SetUsesSharedAddons(ctx, admin.ID, true); err != nil {
+	if admin, err = e.users.UpdateUser(ctx, admin.ID, accounts.UserChanges{UseSharedAddons: new(true)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expect("user's permission back on", true)

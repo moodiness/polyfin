@@ -261,19 +261,16 @@ func redactGuideURL(guideURL string) string {
 // they have no such name.
 func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope addons.Scope, libraries []addons.Library) {
 	var shown []addons.Library
-	if scope.Owner != nil {
-		shared, err := h.Addons.UsesSharedAddons(r.Context(), *scope.Owner)
-		if err == nil && shared {
-			var list []addons.Library
-			list, err = h.Addons.Libraries(r.Context(), addons.Shared())
-			shown = slices.DeleteFunc(list, func(l addons.Library) bool {
-				return !l.Enabled || !l.AddonActive || library.LiveCatalog(l.Catalog.Type)
-			})
-		}
+	// A scope with an owner is the caller's own (see scope).
+	if scope.Owner != nil && sessionFrom(r.Context()).User.UseSharedAddons {
+		list, err := h.Addons.Libraries(r.Context(), addons.Shared())
 		if err != nil {
 			h.internalError(w, r, err)
 			return
 		}
+		shown = slices.DeleteFunc(list, func(l addons.Library) bool {
+			return !l.Enabled || !l.AddonActive || library.LiveCatalog(l.Catalog.Type)
+		})
 	}
 	first := len(shown)
 	var positions []int // libraries index of each shown library of the scope
@@ -744,14 +741,10 @@ type addonPreferencesJSON struct {
 
 func (h *handler) addonPreferences(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
-	uses, err := h.Addons.UsesSharedAddons(r.Context(), user.ID)
-	if err != nil {
-		h.internalError(w, r, err)
-		return
-	}
 	restricted := user.Restricted()
 	personal := h.Accounts.Settings().PersonalAddonsAllowed(user)
-	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: uses || restricted || !personal, ParentalControl: restricted, PersonalAddons: personal})
+	writeJSON(w, http.StatusOK, addonPreferencesJSON{UseSharedAddons: user.UseSharedAddons || restricted || !personal, ParentalControl: restricted,
+		PersonalAddons: personal})
 }
 
 func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
@@ -768,7 +761,7 @@ func (h *handler) saveAddonPreferences(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "parental_control")
 		return
 	}
-	if err := h.Addons.SetUsesSharedAddons(r.Context(), user.ID, body.UseSharedAddons); err != nil {
+	if _, err := h.Accounts.UpdateUser(r.Context(), user.ID, accounts.UserChanges{UseSharedAddons: &body.UseSharedAddons}, nil); err != nil {
 		h.internalError(w, r, err)
 		return
 	}

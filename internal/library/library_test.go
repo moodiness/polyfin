@@ -512,7 +512,8 @@ func TestUsersOnlyReachTheirLibraries(t *testing.T) {
 	}
 	e.install(addons.Shared(), addon)
 	top := e.library(e.member, "Top")
-	if err := e.addons.SetUsesSharedAddons(t.Context(), e.member.ID, false); err != nil {
+	var err error
+	if e.member, err = e.users.UpdateUser(t.Context(), e.member.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if libraries, _ := e.service.Libraries(t.Context(), e.member); len(libraries) != 0 {

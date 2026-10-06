@@ -164,6 +164,9 @@ func serve(ctx context.Context) error {
 	signIns := throttle.New(signInFailures, signInWindow)
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
+	// Addons and libraries are answered from memory while their changes
+	// are followed.
+	go addonStore.Watch(ctx, logger)
 	secret, err := database.Secret(ctx, pool)
 	if err != nil {
 		return err

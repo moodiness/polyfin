@@ -186,9 +186,11 @@ func TestOnlyTheServersAddonsGiveGenres(t *testing.T) {
 	// The kid's own addon is left out of their libraries and of the
 	// descriptions they get.
 	e.install(addons.Personal(kid.ID), fakeRatings())
-	if err := e.addons.SetUsesSharedAddons(t.Context(), kid.ID, false); err != nil {
+	updated, err := e.users.UpdateUser(t.Context(), kid.ID, accounts.UserChanges{UseSharedAddons: new(false)}, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
+	kid = updated
 	libraries, _ := e.service.Libraries(t.Context(), kid)
 	if got := names(libraries); slices.Contains(got, "Mine") || !slices.Contains(got, "Top") {
 		t.Errorf("kid's libraries: %v", got)
