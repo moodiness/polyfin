@@ -398,14 +398,21 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	if err != nil {
 		return reads{requests: p.requests}, err
 	}
-	// Every request left could read a keyframe: they are spread over the
-	// runtime, or at the chapters' starts when only those are made.
-	var targets []time.Duration
+	// Every request left could read a keyframe: one for each thumbnail,
+	// their interval stretched so that each has its own, and one at each
+	// chapter's start while requests are left for them; otherwise chapter
+	// images show the thumbnails' keyframes.
+	var chapters []time.Duration
+	for _, chapter := range want.chapters {
+		chapters = append(chapters, chapter.Start)
+	}
+	targets := chapters
+	interval := want.interval
 	if want.trickplay {
-		targets = spread(analysis.Duration, p.left)
-	} else {
-		for _, chapter := range want.chapters {
-			targets = append(targets, chapter.Start)
+		interval = stepFor(analysis.Duration, want.interval, p.left)
+		targets = thumbnailTimes(analysis.Duration, interval)
+		if len(targets)+len(chapters) <= p.left {
+			targets = append(targets, chapters...)
 		}
 	}
 	order := chooseKeyframes(video.Keyframes, targets)
@@ -451,12 +458,9 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		times[i] = f.at
 	}
 	if want.trickplay {
-		count := thumbnailCount(analysis.Duration, want.interval)
-		asked := make([]time.Duration, count)
-		for i := range asked {
-			asked[i] = time.Duration(i) * want.interval
-		}
-		tiles := newTiler(count, want.interval)
+		asked := thumbnailTimes(analysis.Duration, interval)
+		count := len(asked)
+		tiles := newTiler(count, interval)
 		tiles.info.Width = want.width
 		for _, k := range shown(times, asked) {
 			if err := tiles.add(frames[k].images[0]); err != nil {
@@ -471,14 +475,10 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 			return read, err
 		}
 	}
-	if len(want.chapters) > 0 {
-		starts := make([]time.Duration, len(want.chapters))
-		for i, chapter := range want.chapters {
-			starts[i] = chapter.Start
-		}
+	if len(chapters) > 0 {
 		encoded := map[int][]byte{}
-		data := make([][]byte, len(starts))
-		for c, k := range shown(times, starts) {
+		data := make([][]byte, len(chapters))
+		for c, k := range shown(times, chapters) {
 			if encoded[k] == nil {
 				if encoded[k], err = encodeJPEG(frames[k].images[len(filters)-1]); err != nil {
 					return read, err

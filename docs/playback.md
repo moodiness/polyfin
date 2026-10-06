@@ -176,7 +176,7 @@ Apps that offer SyncPlay, jellyfin-web first, play the same titles in step acros
 |---|---|---|---|
 | **Thumbnails when moving through a title** | **Settings › Thumbnails** | Off | Makes trickplay thumbnails. |
 | **Chapter images** | **Settings › Thumbnails** | Off | Makes chapter images. |
-| **One thumbnail every (seconds)** | **Settings › Thumbnails** | 10 seconds (5 to 60) | Time between thumbnails. |
+| **One thumbnail every (seconds, at least)** | **Settings › Thumbnails** | 10 seconds (5 to 60) | Shortest time between thumbnails. A version longer than the requests allow at that pace gets longer steps (see [How the images look](#how-the-images-look)). |
 | **Thumbnail width** | **Settings › Thumbnails** | 320 (or 240, 480) | Thumbnail width in pixels. |
 | **Space for images (GB)** | **Settings › Thumbnails** | 2 GB (1 to 50) | Past this, the versions whose images were used longest ago lose them, and get them again on their next play. |
 
@@ -198,9 +198,9 @@ Images are made after watching, at a gentle pace:
 
 ### How the images look
 
-- The keyframes read are spread evenly over the runtime. Each thumbnail shows the keyframe read nearest its time, so long movies get coarser thumbnails, a few minutes apart rather than a few seconds.
-- A thumbnail may therefore show a moment a few seconds, or on long movies a few minutes, from its time.
-- Chapter images share the same reads: the keyframe read nearest each chapter's start.
+- Each thumbnail gets a keyframe of its own: a version whose thumbnails would outnumber the requests left once its index is read gets its thumbnails spread evenly over its runtime, one per request, a whole number of seconds apart. With about 58 requests left, that is every 47 seconds for a 45-minute episode, and every 2 minutes 5 seconds for a 2-hour movie.
+- Each thumbnail shows the keyframe nearest its time, a few seconds from it at most, unless the file has keyframes further apart.
+- Chapter images show the keyframe nearest each chapter's start: one read for it when the requests left allow one per thumbnail and per chapter, otherwise the nearest of the thumbnails' reads.
 - FFmpeg decodes each keyframe on its own as it arrives, tied to its time whatever the order it was read in, on the GPU when there is one, and tone maps HDR.
 - Thumbnails are packed into Jellyfin's 10x10 tile JPEGs. Chapter images are at most 640 pixels wide.
 - Images made by Polyfin 0.7.0, which could show their keyframes out of order, are dropped on upgrade and made again on the next play.
