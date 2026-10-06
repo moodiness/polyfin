@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -329,61 +330,139 @@ process.stdout.write(JSON.stringify(results))
 }
 
 // On a title's page, the script asks Polyfin every second for the title's
-// versions while addons are pending, and reloads the visible page when it
-// lists fewer versions than there are, as jellyfin-web reloads a page shown
-// again. It runs in Node.js, in a context that stands for the browser and
-// jellyfin-web: a title page whose version menu lists what the details
-// gave when it was last loaded, a clock and timers the harness moves on.
+// versions while addons are pending. When the page lists fewer versions than
+// there are, or a different number once none is pending, it asks for the
+// title's details and lists their versions in the version menu, in place,
+// keeping the version picked; it reloads the page as jellyfin-web reloads a
+// page shown again when the version picked is gone or no longer the same.
+// It runs in Node.js, in a context that stands for the browser and
+// jellyfin-web: a title page whose version menu lists what the details gave
+// when it was last loaded, a clock and timers the harness moves on.
 func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("Node.js is not installed")
 	}
-	const title = "#/details?id=0123456789abcdef0123456789abcdef&serverId=fedcba9876543210fedcba9876543210"
-	const ask = "ask http://polyfin.test/Polyfin/Items/0123456789abcdef0123456789abcdef/Versions"
-	type answer struct{ Pending, Count int }
+	const (
+		id      = "0123456789abcdef0123456789abcdef"
+		title   = "#/details?id=" + id + "&serverId=fedcba9876543210fedcba9876543210"
+		ask     = "ask http://polyfin.test/Polyfin/Items/" + id + "/Versions"
+		details = "details t"
+	)
+	// A source is a version as the title's details list it.
+	type source struct {
+		Id, Name string
+		Size     int64 `json:",omitempty"`
+	}
+	// Without Sources, an answer's details list Count versions as Polyfin
+	// names them: the first under the title's own identifier, then v1, v2…,
+	// named "Version 0", "Version 1"…
+	type answer struct {
+		Pending, Count int
+		Sources        []source `json:",omitempty"`
+	}
 	type scenario struct {
-		// listed is how many versions the menu lists; hidden hides it, as
-		// jellyfin-web does with one version or none.
-		listed int
-		hidden bool
-		video  bool
+		// The menu lists the first listed versions, or options, with picked
+		// picked, the first by default. jellyfin-web hides it with one
+		// version, and empties it for an item it cannot play (unplayable).
+		listed     int
+		options    []source
+		picked     string
+		unplayable bool
+		noMenu     bool
+		video      bool
 		// answers are Polyfin's, in order; then it fails, unless forever
 		// keeps the last.
 		answers []answer
 		forever bool
-		// steps: a route the router moves to, or "tick" to run the next
-		// timer, logging "idle" when there is none.
+		// steps: a route the router moves to; "tick" runs the next timer,
+		// logging "idle" when there is none; "focus" and "blur" move focus
+		// to and from the version menu; "pick <id>" picks a version as a
+		// user does, which jellyfin-web answers with the version's tracks
+		// ("tracks <id>"), or an error for a version missing from its own
+		// copy of the versions; "menu" logs the menu: its versions, "*"
+		// before the one picked, then whether it is shown. The title's own
+		// identifier is written "t".
 		steps []string
 		want  []string
 	}
 	reloads := []string{"viewbeforehide", "viewshow false"}
 	ticks := func(n int) []string { return slices.Repeat([]string{"tick"}, n) }
+	steps := func(n int, more ...string) []string { return slices.Concat([]string{title}, ticks(n), more) }
+	versions := func(sizes ...int64) []source {
+		list := make([]source, len(sizes))
+		for i, size := range sizes {
+			list[i] = source{"v" + strconv.Itoa(i), "Version " + strconv.Itoa(i), size}
+		}
+		list[0].Id = id
+		return list
+	}
+	sized := versions(100, 200, 300)
+	grown := append(versions(100, 250, 300), source{"v3", "Version 3", 0})
 	scenarios := map[string]scenario{
-		"versions come as addons answer": {listed: 1, hidden: true, answers: []answer{{2, 1}, {1, 2}, {0, 4}},
-			steps: append([]string{title}, ticks(4)...),
-			want:  slices.Concat([]string{ask, ask}, reloads, []string{ask}, reloads, []string{"idle"})},
-		// An addon asked again lists more: a page already listing its
-		// first versions is reloaded when Count grows.
-		"a follow-up adds versions": {listed: 2, answers: []answer{{1, 2}, {1, 2}, {1, 4}, {0, 4}},
-			steps: append([]string{title}, ticks(5)...),
-			want:  slices.Concat([]string{ask, ask, ask}, reloads, []string{ask, "idle"})},
-		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2}, {0, 2}, {0, 2}},
-			steps: append([]string{title}, ticks(4)...), want: []string{ask, ask, ask, "idle"}},
-		"leaving the page stops": {listed: 1, answers: []answer{{2, 1}, {2, 1}},
+		// From the one version a hidden menu lists, the menu shows them all.
+		"versions come as addons answer": {listed: 1, answers: []answer{{2, 1, nil}, {1, 2, nil}, {0, 4, nil}},
+			steps: steps(4, "menu"),
+			want:  []string{ask, ask, details, ask, details, "idle", "menu *t v1 v2 v3 shown"}},
+		// An addon asked again lists more: they join the versions listed,
+		// the one picked staying picked. jellyfin-web plays a version added
+		// once it has reloaded the page's details, and plays the others as
+		// it did.
+		"a follow-up adds versions": {listed: 2, picked: "v1", answers: []answer{{1, 2, nil}, {1, 2, nil}, {1, 4, nil}, {0, 4, nil}},
+			steps: steps(5, "menu", "pick v3", "pick t"),
+			want: slices.Concat([]string{ask, ask, ask, details, ask, "idle", "menu t *v1 v2 v3 shown"},
+				reloads, []string{"tracks v3", "tracks t"})},
+		"a known title is asked three times": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
+			steps: steps(4), want: []string{ask, ask, ask, "idle"}},
+		"leaving the page stops": {listed: 1, answers: []answer{{2, 1, nil}, {2, 1, nil}},
 			steps: []string{title, "tick", "#/home", "tick"}, want: []string{ask, "idle"}},
-		"other routes ask nothing": {listed: 1, answers: []answer{{2, 3}},
-			steps: []string{"#/details?id=dashboard", "#/home", "#/list?parentId=0123456789abcdef0123456789abcdef", "tick"}, want: []string{"idle"}},
-		"never during a video": {listed: 1, video: true, answers: []answer{{1, 1}, {1, 3}, {0, 3}},
-			steps: append([]string{title}, ticks(4)...), want: []string{ask, ask, ask, "idle"}},
-		// A menu that cannot list the versions, hidden, is reloaded once
-		// for each count, not every second.
-		"a hidden menu counts one": {listed: 0, hidden: true, answers: []answer{{1, 1}, {1, 2}, {0, 2}},
-			steps: append([]string{title}, ticks(4)...), want: slices.Concat([]string{ask, ask}, reloads, []string{ask, "idle"})},
-		"an error stops": {listed: 1, steps: []string{title, "tick", "tick"}, want: []string{ask, "idle"}},
+		"other routes ask nothing": {listed: 1, answers: []answer{{2, 3, nil}},
+			steps: []string{"#/details?id=dashboard", "#/home", "#/list?parentId=" + id, "tick"}, want: []string{"idle"}},
+		"never during a video": {listed: 1, video: true, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
+			steps: steps(4), want: []string{ask, ask, ask, "idle"}},
+		// A menu that cannot list the versions is reloaded once for each
+		// count, not every second.
+		"an empty menu counts one": {unplayable: true, answers: []answer{{1, 1, nil}, {1, 2, nil}, {0, 2, nil}},
+			steps: steps(4), want: slices.Concat([]string{ask, ask, details}, reloads, []string{ask, "idle"})},
+		"a page without a version menu is reloaded": {noMenu: true, answers: []answer{{1, 2, nil}, {0, 2, nil}, {0, 2, nil}},
+			steps: steps(4), want: slices.Concat([]string{ask}, reloads, []string{ask, ask, "idle"})},
+		"an error stops": {listed: 1, steps: steps(2), want: []string{ask, "idle"}},
+		// The track menus describe the version picked: when it is gone, the
+		// page is reloaded, and jellyfin-web picks the first version.
+		"the version picked is gone": {listed: 2, picked: "v1",
+			answers: []answer{{0, 3, []source{{id, "Version 0", 0}, {"v2", "Version 2", 0}, {"v3", "Version 3", 0}}}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, ask, "idle", "menu *t v2 v3 shown"})},
+		// The title's own identifier now names another version.
+		"the version picked is renamed": {listed: 2,
+			answers: []answer{{0, 3, []source{{id, "Version 9", 0}, {"v1", "Version 1", 0}, {"v2", "Version 2", 0}}}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, ask, "idle", "menu *t v1 v2 shown"})},
+		// Until a version is known, details list a placeholder named after
+		// the title under its own identifier, which the first version takes.
+		"the placeholder gives way to the first version": {options: []source{{id, "Movie", 0}},
+			answers: []answer{{1, 1, []source{{id, "Movie", 0}}}, {1, 3, nil}, {0, 3, nil}},
+			steps:   steps(4, "menu"),
+			want:    slices.Concat([]string{ask, ask, details}, reloads, []string{ask, "idle", "menu *t v1 v2 shown"})},
+		// The version picked, listed by the script, has another size now:
+		// the title's identifier names another version under the same name.
+		"the version picked changes size": {listed: 2, picked: "v1",
+			answers: []answer{{1, 3, sized}, {1, 4, grown}, {0, 4, grown}},
+			steps:   steps(4),
+			want:    slices.Concat([]string{ask, details, ask, details}, reloads, []string{ask, "idle"})},
+		// The menu may be open while it has focus: the versions wait for it
+		// to lose focus, even once Polyfin is no longer asked.
+		"not while the menu has focus": {listed: 2, picked: "v1", answers: []answer{{1, 3, nil}, {0, 3, nil}, {0, 3, nil}},
+			steps: slices.Concat([]string{title, "focus"}, ticks(4), []string{"menu", "blur", "menu", "tick"}),
+			want:  []string{ask, ask, ask, "idle", "menu t *v1 shown", details, "menu t *v1 v2 shown", "idle"}},
+		// Once no addon is pending, the menu lists the versions details
+		// list, even fewer.
+		"no addon pending with another count": {listed: 3, answers: []answer{{1, 2, nil}, {0, 2, nil}, {0, 2, nil}},
+			steps: steps(4, "menu"),
+			want:  []string{ask, ask, details, ask, "idle", "menu *t v1 shown"}},
 	}
 	ninety := slices.Repeat([]string{ask}, 90)
-	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1}}, forever: true,
+	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
 		// The 91st second asks nothing, and the polling ends.
 		steps: append([]string{title}, ticks(92)...), want: append(ninety, "idle")}
 
@@ -391,6 +470,9 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 const vm = require('node:vm')
 const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
 const flush = () => new Promise((resolve) => setImmediate(resolve))
+const TITLE = '0123456789abcdef0123456789abcdef'
+const short = (id) => (id === TITLE ? 't' : id)
+const versions = (n) => Array.from({ length: n }, (_, i) => ({ Id: i ? 'v' + i : TITLE, Name: 'Version ' + i }))
 async function run(scenario) {
   const log = []
   let now = 0
@@ -399,17 +481,81 @@ async function run(scenario) {
   const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
   const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
-  let count = scenario.listed
-  const menu = { options: { length: scenario.listed }, closest: () => (scenario.hidden ? {} : null) }
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
+  class Event { constructor(type) { this.type = type } stopPropagation() { this.stopped = true } }
+  // Changes to the menu's options reach its observers once the code that
+  // made them is done.
+  const observers = new Set()
+  let pending = false
+  const changed = () => {
+    if (pending) return
+    pending = true
+    queueMicrotask(() => {
+      pending = false
+      for (const observer of [...observers]) if (observers.has(observer)) observer.callback([])
+    })
+  }
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe() { observers.add(this) }
+    disconnect() { observers.delete(this) }
+  }
+  // What the title's details list now, and jellyfin-web's own copy of the
+  // versions it listed last.
+  let sources = scenario.options || versions(scenario.listed)
+  let copy = []
+  let focused = null
+  const container = { hidden: false, classList: { toggle: (name, force) => { if (name === 'hide') container.hidden = force } } }
+  const menu = {
+    children: [],
+    get options() { return this.children },
+    get selectedIndex() { return this.children.findIndex((option) => option.selected) },
+    get value() { const option = this.children.find((option) => option.selected); return option ? option.value : '' },
+    set value(value) { for (const option of this.children) option.selected = option.value === value },
+    matches: (selector) => selector === '.selectSource',
+    closest: (selector) => {
+      if (selector === '.hide') return scenario.unplayable || container.hidden ? {} : null
+      if (selector === '.selectSourceContainer') return container
+      return selector === '.itemDetailPage' ? page : null
+    },
+    insertBefore(option, before) {
+      if (this.children.includes(option)) this.children.splice(this.children.indexOf(option), 1)
+      this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, option)
+      changed()
+    },
+    removeChild(option) { this.children.splice(this.children.indexOf(option), 1); changed() },
+    dispatchEvent: (event) => dispatch(event),
+  }
+  // jellyfin-web fills the menu from the details, keeping the version picked
+  // if listed, else the first; it hides it with one version and lists none
+  // for an item it cannot play.
+  function fill(picked) {
+    copy = scenario.unplayable ? [] : sources
+    menu.children = copy.map((source) => ({ value: source.Id, textContent: source.Name, selected: false }))
+    menu.value = copy.some((source) => source.Id === picked) ? picked : copy.length ? copy[0].Id : ''
+    container.hidden = copy.length < 2
+    changed()
+  }
+  fill(scenario.picked || (sources[0] || {}).Id)
+  // Events on the menu reach the window's capturing listeners first, then
+  // jellyfin-web's, which fills the track menus from its own copy.
+  function dispatch(event) {
+    event.target = menu
+    for (const listener of listeners[event.type] || []) listener(event)
+    if (event.stopped || event.type !== 'change') return
+    log.push(copy.some((source) => source.Id === menu.value) ? 'tracks ' + short(menu.value) : 'error')
+  }
   const page = {
-    querySelector: (selector) => (selector === '.selectSource' ? menu : null),
+    querySelector: (selector) => (selector === '.selectSource' && !scenario.noMenu ? menu : null),
     dispatchEvent: (event) => {
       log.push(event.type + (event.detail && 'isRestored' in event.detail ? ' ' + event.detail.isRestored : ''))
       // Reloaded, the page lists what the details give now.
-      if (event.type === 'viewshow') menu.options.length = count
+      if (event.type === 'viewshow') fill(menu.value)
     },
   }
   const document = {
+    get activeElement() { return focused },
+    createElement: (tag) => (tag === 'option' ? { value: '', textContent: '', selected: false } : null),
     querySelector: (selector) => {
       if (selector === '.videoPlayerContainer') return scenario.video ? {} : null
       return selector === '.page.itemDetailPage:not(.hide)' ? page : null
@@ -418,37 +564,50 @@ async function run(scenario) {
   const answers = (scenario.answers || []).slice()
   const ApiClient = {
     getUrl: (path) => 'http://polyfin.test/' + path,
+    getCurrentUserId: () => 'user',
     getJSON: (url) => {
       log.push('ask ' + url)
       const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
-      count = answer.Count
-      return Promise.resolve(answer)
+      sources = answer.Sources || versions(answer.Count)
+      return Promise.resolve({ Pending: answer.Pending, Count: answer.Count })
+    },
+    getItem: (user, id) => {
+      log.push('details ' + short(id) + (user === 'user' ? '' : ' for ' + user))
+      return Promise.resolve({ Id: id, MediaSources: sources.map((source) => ({ ...source })) })
     },
   }
-  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   vm.runInNewContext(script, {
-    location, history, URL, document, CustomEvent, window: { ApiClient },
+    location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
     clearTimeout: (id) => { if (id) timers[id - 1] = null },
     addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
   })
   for (const step of scenario.steps) {
-    if (step !== 'tick') {
-      history.pushState(null, '', step)
-      continue
+    if (step === 'focus') focused = menu
+    else if (step === 'blur') {
+      focused = null
+      dispatch(new Event('blur'))
+    } else if (step.startsWith('pick ')) {
+      const id = step.slice(5)
+      menu.value = id === 't' ? TITLE : id
+      dispatch(new Event('change'))
+    } else if (step === 'menu') {
+      const options = menu.children.map((option) => (option.selected ? '*' : '') + short(option.value))
+      log.push(['menu', ...options, container.hidden ? 'hidden' : 'shown'].join(' '))
+    } else if (step !== 'tick') history.pushState(null, '', step)
+    else {
+      let next = -1
+      timers.forEach((timer, i) => { if (timer && (next < 0 || timer.at < timers[next].at)) next = i })
+      if (next < 0) log.push('idle')
+      else {
+        const timer = timers[next]
+        timers[next] = null
+        now = timer.at
+        timer.run()
+      }
     }
-    let next = -1
-    timers.forEach((timer, i) => { if (timer && (next < 0 || timer.at < timers[next].at)) next = i })
-    if (next < 0) {
-      log.push('idle')
-      continue
-    }
-    const timer = timers[next]
-    timers[next] = null
-    now = timer.at
-    timer.run()
     await flush()
   }
   return log
@@ -460,16 +619,19 @@ async function run(scenario) {
 })()
 `
 	type input struct {
-		Listed  int      `json:"listed"`
-		Hidden  bool     `json:"hidden"`
-		Video   bool     `json:"video"`
-		Answers []answer `json:"answers"`
-		Forever bool     `json:"forever"`
-		Steps   []string `json:"steps"`
+		Listed     int      `json:"listed"`
+		Options    []source `json:"options,omitempty"`
+		Picked     string   `json:"picked,omitempty"`
+		Unplayable bool     `json:"unplayable"`
+		NoMenu     bool     `json:"noMenu"`
+		Video      bool     `json:"video"`
+		Answers    []answer `json:"answers"`
+		Forever    bool     `json:"forever"`
+		Steps      []string `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.listed, s.hidden, s.video, s.answers, s.forever, s.steps}
+		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

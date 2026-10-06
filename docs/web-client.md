@@ -18,7 +18,7 @@ The Docker image includes jellyfin-web 12.1. Polyfin serves it at `/web/`, as Je
 
 In the web client, the **Dashboard** (from the menu or the user menu), every dashboard page, the metadata manager, plugin pages and the startup wizard open Polyfin's [admin app](administration.md) at `/admin/` instead.
 
-Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. The same script adds a title's versions to its page as the addons answer (see [Title pages](playback.md#title-pages)).
+Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. The same script adds a title's versions to its page's version menu as the addons answer, without reloading the page (see [Title pages](playback.md#title-pages)).
 
 ### Signing in to the admin app
 
