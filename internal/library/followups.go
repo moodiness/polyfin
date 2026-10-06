@@ -346,9 +346,11 @@ func (s *Service) forgetLists(ctx context.Context, key streamKey) {
 }
 
 // forgetStreams forgets an addon's stream list for a title as forgetLists
-// does, its subtitle list kept (see AskAgain).
+// does, its subtitle list kept (see AskAgain). A request asking the addon
+// since before is not joined any more: the next one asks it anew.
 func (s *Service) forgetStreams(ctx context.Context, key streamKey) {
 	s.stopFollowUps(key, listStreams)
+	s.flight.Forget(streamsFlight(key))
 	s.streamLists.Delete(key)
 	s.deleteSavedStreams(ctx, key)
 }

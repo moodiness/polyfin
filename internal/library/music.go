@@ -437,6 +437,11 @@ func remember[V any](ctx context.Context, s *Service, c musicCache[V], key music
 		if s.now().Sub(kept.at) > c.life() {
 			detached := context.WithoutCancel(ctx)
 			s.flight.DoChan(flightKey, func() (any, error) {
+				// A refresh that ended between the read above and this one
+				// already asked the addon.
+				if newer, ok := c.answers.Get(key); ok && newer.at.After(kept.at) {
+					return newer.value, nil
+				}
 				value, err := ask(detached)
 				if err != nil {
 					s.logger.Debug("A music page could not be read again", "resource", key.resource, "error", err)

@@ -138,3 +138,32 @@ func TestAskingAgainLeavesAnAddonStillAnswering(t *testing.T) {
 		t.Errorf("the addon still answering was asked %d times", got)
 	}
 }
+
+// Asked again while another user's request for the title is still under
+// way, the addon is asked anew: that request may have started before the
+// title's lists were dropped, and its answer is not what the user asked for.
+func TestAskingAgainDoesNotJoinAnEarlierRequest(t *testing.T) {
+	addon := newScriptedAddon(t, "Gathering")
+	h := heldOn(t, newTestServer(t, 10), addon.url)
+
+	h.sources(t)
+	addon.replies <- 0
+	h.reaches(t, VersionProgress{Pending: 0, Count: 1, Known: 0}, "Movie")
+
+	// Another user has the addon asked again; it holds its answer.
+	h.testServer.user("other", nil)
+	other := h.signIn("other", "tv")
+	if got := h.search(t, h.movie, other); got.status != http.StatusOK {
+		t.Fatalf("asked again by another user: %+v", got)
+	}
+	eventually(t, "the other user's request", func() bool { return addon.asked.Load() == 2 })
+
+	// The user asks again meanwhile: a new request, not the one under way.
+	if got := h.search(t, h.movie, h.token); got.status != http.StatusOK || got.progress.Pending != 1 {
+		t.Fatalf("asked again: %+v", got)
+	}
+	eventually(t, "a request of the user's own", func() bool { return addon.asked.Load() == 3 })
+	addon.replies <- 1
+	addon.replies <- 2
+	eventually(t, "both answers", func() bool { return h.progress(t).Pending == 0 })
+}
