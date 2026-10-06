@@ -307,9 +307,11 @@ func (h *Handler) unanalyzed(ctx context.Context, version library.Version) bool 
 
 // analyzeAhead does before a play asks what the first play of a version
 // waits for: its analysis, then what an HLS play reads besides, its
-// keyframe index and where its subtitle tracks sit in it. Each is kept like
-// the analysis, and a PlaybackInfo arriving meanwhile waits for the read
-// under way rather than starting another.
+// keyframe index, read while it is analyzed, the bytes of its first
+// segment, which Plan warms into the source cache, and where its subtitle
+// tracks sit in the index. Each is kept like the analysis, and a
+// PlaybackInfo arriving meanwhile waits for the read under way rather than
+// starting another.
 func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 	if h.Playback.Failed(version.ID) {
 		return
@@ -321,7 +323,8 @@ func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 		return
 	}
 	// A version without an index still plays as it is; a first play would
-	// find that out the same way.
+	// find that out the same way. One with an index has the bytes of its
+	// first segment warmed in the background (see playback.Service.Warm).
 	if _, err := h.Playback.Plan(ctx, version); err != nil {
 		h.Logger.Debug("A version's keyframe index could not be read ahead of playback", "addon", version.Addon, "error", err)
 	}
