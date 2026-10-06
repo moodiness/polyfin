@@ -102,6 +102,10 @@ func threeStreamsTV(t *testing.T) string {
 				streams = append(streams, stremio.Stream{Name: "Live " + strconv.Itoa(n), URL: server.URL + "/live/" + strconv.Itoa(n) + ".m3u8"})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case "/live/0.m3u8", "/live/1.m3u8", "/live/2.m3u8":
+			// Live playlists: their start is checked before ffprobe reads them.
+			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+			_, _ = w.Write([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nsegment.ts\n"))
 		default:
 			http.NotFound(w, r)
 		}

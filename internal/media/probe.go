@@ -136,25 +136,36 @@ func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
 var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL"}
 
 // ProbeLive analyzes a live stream at url, an HLS playlist or an endless
-// stream, reading a few seconds of it, as Jellyfin analyzes live TV.
+// stream, reading about a second of it. It never reconnects: a live
+// stream that ends while it is read is a failure, told at once.
 func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
-	return p.probe(ctx, url, append([]string{"-probesize", "5M", "-analyzeduration", "3M"}, LiveOptions...)...)
-}
-
-func (p Prober) probe(ctx context.Context, url string, options ...string) (Analysis, error) {
-	data, err := p.run(ctx, url, options...)
+	data, err := p.run(ctx, url, false, append([]string{"-probesize", "1M", "-analyzeduration", "1M"}, LiveOptions...)...)
 	if err != nil {
 		return Analysis{}, err
 	}
 	return Parse(data)
 }
 
-// run runs ffprobe on url and returns its JSON output.
-func (p Prober) run(ctx context.Context, url string, options ...string) ([]byte, error) {
+// probe runs ffprobe on url with options, reconnecting when the
+// connection drops, as remote files need.
+func (p Prober) probe(ctx context.Context, url string, options ...string) (Analysis, error) {
+	data, err := p.run(ctx, url, true, options...)
+	if err != nil {
+		return Analysis{}, err
+	}
+	return Parse(data)
+}
+
+// run runs ffprobe on url and returns its JSON output, reconnecting when
+// asked.
+func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
 	args := append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters"}, options...)
-	command := exec.CommandContext(ctx, p.Path, append(args, "-reconnect", "1", "-reconnect_streamed", "1", "-i", url)...)
+	if reconnect {
+		args = append(args, "-reconnect", "1", "-reconnect_streamed", "1")
+	}
+	command := exec.CommandContext(ctx, p.Path, append(args, "-i", url)...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if err := command.Run(); err != nil {

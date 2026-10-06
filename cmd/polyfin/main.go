@@ -207,6 +207,13 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	defer player.Close()
+	// Channel streams of IPTV sources share their account's connections,
+	// and how they answer orders them.
+	player.LiveSources(channels.Connections, func(ctx context.Context, v library.Version, failure string) {
+		if err := channels.ReportStream(ctx, v.Origin.Addon, v.Origin.ID, v.URL, failure); err != nil {
+			logger.Warn("A channel's stream health could not be saved", "error", err)
+		}
+	})
 	images := thumbnails.New(thumbnails.Options{
 		DB:          pool,
 		FFmpeg:      cfg.FFmpeg,

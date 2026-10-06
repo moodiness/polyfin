@@ -23,7 +23,9 @@ func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	s := newService(t, &fakeSource{}, path, nil)
+	// The channel answers with a live playlist: its start is checked
+	// before ffprobe reads it.
+	s := newService(t, &fakeSource{body: []byte("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nsegment.ts\n")}, path, nil)
 	settings := s.settings()
 	settings.AnalysisTimeout = accounts.MinAnalysisTimeout
 	s.settings = func() accounts.Settings { return settings }

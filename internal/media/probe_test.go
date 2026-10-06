@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,5 +117,37 @@ func TestProbeFindsChapters(t *testing.T) {
 	want := []Chapter{{Start: 0, End: time.Second, Title: "Intro"}, {Start: time.Second, End: 2 * time.Second}}
 	if !slices.Equal(analysis.Chapters, want) {
 		t.Errorf("chapters:\n got %+v\nwant %+v", analysis.Chapters, want)
+	}
+}
+
+// A live analysis reads about a second and never reconnects: a stream that
+// ends while it is read fails at once; a file's analysis reconnects.
+func TestLiveAnalysesNeverReconnect(t *testing.T) {
+	dir := t.TempDir()
+	args := filepath.Join(dir, "args")
+	path := filepath.Join(dir, "ffprobe")
+	script := "#!/bin/sh\necho \"$*\" > " + args + "\necho '{\"streams\": [{\"index\": 0, \"codec_type\": \"video\", \"codec_name\": \"h264\"}], \"format\": {}}'\n"
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	prober := Prober{Path: path, Timeout: 5 * time.Second}
+	read := func() string {
+		data, err := os.ReadFile(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	if _, err := prober.ProbeLive(t.Context(), "http://127.0.0.1:1/live.ts"); err != nil {
+		t.Fatal(err)
+	}
+	if live := read(); strings.Contains(live, "-reconnect") || !strings.Contains(live, "-probesize 1M -analyzeduration 1M") {
+		t.Errorf("a live analysis: %s", live)
+	}
+	if _, err := prober.Probe(t.Context(), "http://127.0.0.1:1/movie.mkv"); err != nil {
+		t.Fatal(err)
+	}
+	if file := read(); !strings.Contains(file, "-reconnect 1") {
+		t.Errorf("a file's analysis: %s", file)
 	}
 }
