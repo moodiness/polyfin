@@ -87,8 +87,13 @@ func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 			!chosen.MediaSources[0].SupportsDirectPlay || chosen.MediaSources[0].TranscodingUrl != "" {
 			t.Errorf("%s off: chosen %+v", off.name, chosen)
 		}
-		// The version that needs a conversion is not played when asked.
-		if asked := p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.movie}); !asked.refused() {
+		// The version that needs a conversion is not played when asked by
+		// its own identifier; the title's names none, and plays the next.
+		if asked := p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.versions[0].ID.String()}); !asked.refused() {
+			t.Errorf("%s off: the version needing a conversion: %+v", off.name, asked)
+		}
+		if asked := p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.movie}); len(asked.MediaSources) != 1 ||
+			asked.MediaSources[0].Id != p.versions[1].ID.String() {
 			t.Errorf("%s off: the version needing a conversion: %+v", off.name, asked)
 		}
 		// Neither direct play nor a remux that copies the tracks changes.
@@ -102,7 +107,7 @@ func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 			t.Errorf("%s off: a remux copying the tracks: %+v", off.name, copied)
 		}
 		// Only one version: none plays.
-		if only := p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.movie, "EnableDirectPlay": false}); !only.refused() {
+		if only := p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.versions[0].ID.String(), "EnableDirectPlay": false}); !only.refused() {
 			t.Errorf("%s off: %+v", off.name, only)
 		}
 		off.set(true)
@@ -112,7 +117,7 @@ func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 func TestConversionPermissionsApplyPerKind(t *testing.T) {
 	p := playing(t)
 	p.remuxable(t)
-	audio := map[string]any{"MediaSourceId": p.movie}
+	audio := map[string]any{"MediaSourceId": p.versions[0].ID.String()}
 	minimal := p.profile(t, "minimal")
 
 	// The video copied, the audio converted.
@@ -131,7 +136,7 @@ func TestConversionPermissionsApplyPerKind(t *testing.T) {
 	}
 	// The video converted, the audio copied, as jellyfin-web asks when a
 	// file failed to play as it is.
-	video := map[string]any{"MediaSourceId": p.movie, "EnableDirectPlay": false, "AllowVideoStreamCopy": false}
+	video := map[string]any{"MediaSourceId": p.versions[0].ID.String(), "EnableDirectPlay": false, "AllowVideoStreamCopy": false}
 	chrome := p.profile(t, "jellyfin-web-chrome")
 	if answer := p.ask(t, p.token, p.movie, chrome, video); len(answer.MediaSources) != 1 ||
 		!strings.HasSuffix(answer.MediaSources[0].TranscodingUrl, "&allowVideoStreamCopy=false") {

@@ -115,6 +115,7 @@ func TestDefaultTracksFollowTheUsersPreferences(t *testing.T) {
 	// The first version has English (flagged) and French audio, and full
 	// and forced English subtitles, after the addon's French file.
 	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")
+	p.keyframed(t, p.versions[0])
 	const fileFrench, audioEnglish, audioFrench, fullEnglish, forcedEnglish = 0, 2, 3, 4, 5
 	detail := func() MediaSourceInfo {
 		t.Helper()
