@@ -215,17 +215,3 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 // subtitleGrace is how long a play waits for the addons' subtitles once
 // its versions are in.
 const subtitleGrace = time.Second
-
-// warmer is what warms the start of a version's first HLS segment ahead
-// of the player's request.
-type warmer interface {
-	Warm(version library.Version, start time.Duration)
-}
-
-// warm has the bytes of the version chosen for an HLS play read from
-// start, where the play begins, while the app reads the answer.
-func (h *Handler) warm(version library.Version, start time.Duration) {
-	if w, ok := any(h.Playback).(warmer); ok {
-		w.Warm(version, start)
-	}
-}

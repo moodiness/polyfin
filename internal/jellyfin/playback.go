@@ -384,7 +384,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	if chosen.decision.HLS {
-		h.warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
+		// The bytes of the segment the play begins with are read while the
+		// app reads the answer.
+		h.Playback.Warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
 	}
 	// An app that named a version, the title's own identifier included,
 	// gets the version chosen alone, as from Jellyfin.

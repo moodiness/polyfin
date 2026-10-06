@@ -421,8 +421,11 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			src.Release()
 			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
+		// The encoding stops as soon as the source fails, rather than
+		// taking a body cut short for the end of the file.
+		failed := src.Failed()
 		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
-			Subtitles: streams, Extracted: x}
+			Subtitles: streams, Extracted: x, Failed: failed, Failure: func() error { return failureOf(src, failed) }}
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
 			r.ADTS = true
 		}
