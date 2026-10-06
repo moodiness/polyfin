@@ -283,7 +283,7 @@ func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
 		t.Errorf("the episode opened with %+v", item.MediaSources)
 	}
 	var progress VersionProgress
-	if rs.get(t, "/Polyfin/Items/"+first+"/Versions", rs.token, &progress); progress != (VersionProgress{Pending: 0, Count: 1}) {
+	if rs.get(t, "/Polyfin/Items/"+first+"/Versions", rs.token, &progress); progress != (VersionProgress{Pending: 0, Count: 1, Known: 1}) {
 		t.Errorf("the episode's versions: %+v", progress)
 	}
 	if asked, want := rs.addon.requests(), onceEach(append(movies[:homeRowTitles:homeRowTitles], episodes[:homeRowTitles]...)); !maps.Equal(asked, want) {

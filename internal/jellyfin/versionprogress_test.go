@@ -222,7 +222,7 @@ func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 	if len(sources) != 1 || sources[0].Id != h.movie || !sources[0].SupportsDirectPlay {
 		t.Fatalf("details before any addon answered: %+v", sources)
 	}
-	if got := h.progress(t); got != (VersionProgress{Pending: 2, Count: 1}) {
+	if got := h.progress(t); got != (VersionProgress{Pending: 2, Count: 1, Known: 0}) {
 		t.Errorf("before any addon answered: %+v", got)
 	}
 	// Opened again meanwhile, the title asks neither addon again.
@@ -230,15 +230,15 @@ func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 	eventually(t, "both addons to be asked", func() bool { return first.asked.Load() == 1 && second.asked.Load() == 1 })
 
 	first.answer()
-	h.reaches(t, VersionProgress{Pending: 1, Count: 2}, "First", "First")
+	h.reaches(t, VersionProgress{Pending: 1, Count: 2, Known: 2}, "First", "First")
 	second.answer()
-	h.reaches(t, VersionProgress{Pending: 0, Count: 4}, "First", "First", "Second", "Second")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 4, Known: 4}, "First", "First", "Second", "Second")
 	if first.asked.Load() != 1 || second.asked.Load() != 1 {
 		t.Errorf("addons asked %d and %d times", first.asked.Load(), second.asked.Load())
 	}
 	// Known now, the versions come with the details at once.
 	h.sources(t)
-	if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 4}) || first.asked.Load() != 1 {
+	if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 4, Known: 4}) || first.asked.Load() != 1 {
 		t.Errorf("reopened: %+v, first addon asked %d times", got, first.asked.Load())
 	}
 
@@ -256,9 +256,9 @@ func TestAFailingAddonLeavesNothingPending(t *testing.T) {
 
 	h.sources(t)
 	broken.answer()
-	h.reaches(t, VersionProgress{Pending: 1, Count: 1}, "Movie")
+	h.reaches(t, VersionProgress{Pending: 1, Count: 1, Known: 0}, "Movie")
 	first.answer()
-	h.reaches(t, VersionProgress{Pending: 0, Count: 2}, "First", "First")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 2, Known: 2}, "First", "First")
 }
 
 func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
@@ -289,7 +289,7 @@ func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
 	if first.asked.Load() != 1 || second.asked.Load() != 1 {
 		t.Errorf("addons asked %d and %d times", first.asked.Load(), second.asked.Load())
 	}
-	if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 4}) {
+	if got := h.progress(t); got != (VersionProgress{Pending: 0, Count: 4, Known: 4}) {
 		t.Errorf("once played: %+v", got)
 	}
 }
@@ -365,12 +365,12 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 		return len(sources) == 1 && strings.HasPrefix(sources[0].Name, "Gathering ")
 	})
 	// The follow-up is scheduled: the title is still pending.
-	if got, asked := h.progress(t), gathering.asked.Load(); got != (VersionProgress{Pending: 1, Count: 1}) || asked != 1 {
+	if got, asked := h.progress(t), gathering.asked.Load(); got != (VersionProgress{Pending: 1, Count: 1, Known: 1}) || asked != 1 {
 		t.Errorf("follow-up scheduled: %+v, addon asked %d times", got, asked)
 	}
 	// It runs, held: PlaybackInfo answers at once with the version known.
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 2 })
-	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1}) {
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1, Known: 1}) {
 		t.Errorf("follow-up running: %+v", got)
 	}
 	select {
@@ -384,10 +384,10 @@ func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
 	// Its answer lists more: details list them, and the addon is asked once
 	// more, which lists no more and ends it.
 	gathering.replies <- 3
-	h.reaches(t, VersionProgress{Pending: 1, Count: 3}, "Gathering", "Gathering", "Gathering")
+	h.reaches(t, VersionProgress{Pending: 1, Count: 3, Known: 3}, "Gathering", "Gathering", "Gathering")
 	eventually(t, "the second follow-up", func() bool { return gathering.asked.Load() == 3 })
 	gathering.replies <- 3
-	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering", "Gathering", "Gathering")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3, Known: 3}, "Gathering", "Gathering", "Gathering")
 	if got := gathering.asked.Load(); got != 3 {
 		t.Errorf("addon asked %d times, want 3", got)
 	}
@@ -418,14 +418,14 @@ func expiredOnProbe(t *testing.T, probe fakeProbe) (heldSetup, *scriptedAddon) {
 	gathering.replies <- 3
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 2 })
 	gathering.replies <- 3
-	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3, Known: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
 	// Lists are kept ten minutes by default.
 	elapsed.Add(int64(11 * time.Minute))
 	if sources := h.sources(t); len(sources) != 3 || sources[0].Id != h.movie {
 		t.Fatalf("details once the versions expired: %+v", sources)
 	}
 	eventually(t, "the addon to be asked again", func() bool { return gathering.asked.Load() == 3 })
-	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 3}) {
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 3, Known: 3}) {
 		t.Errorf("asked again: %+v", got)
 	}
 	return h, gathering
@@ -454,7 +454,7 @@ func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T)
 	gathering.replies <- 3
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
 	gathering.replies <- 3
-	h.reaches(t, VersionProgress{Pending: 0, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 3, Known: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
 }
 
 // When no version of an expired list plays, a play waits for the addon's
@@ -493,7 +493,7 @@ func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) 
 	// listed, and playable, while the addon is followed up.
 	gathering.replies <- 1
 	eventually(t, "the follow-up", func() bool { return gathering.asked.Load() == 4 })
-	h.reaches(t, VersionProgress{Pending: 1, Count: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
+	h.reaches(t, VersionProgress{Pending: 1, Count: 3, Known: 3}, "Gathering 1", "Gathering 2", "Gathering 3")
 	select {
 	case got := <-h.askPlaybackInfo(t, extra.Id):
 		if got.err != nil || got.status != http.StatusOK || got.code != "" || len(got.info.MediaSources) != 1 ||
@@ -506,7 +506,7 @@ func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) 
 	// The follow-up lists the one stream again: the others are no longer
 	// offered.
 	gathering.replies <- 1
-	h.reaches(t, VersionProgress{Pending: 0, Count: 1}, "Gathering 1")
+	h.reaches(t, VersionProgress{Pending: 0, Count: 1, Known: 1}, "Gathering 1")
 	select {
 	case got := <-h.askPlaybackInfo(t, extra.Id):
 		if got.err != nil || got.code != "NoCompatibleStream" {

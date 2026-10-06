@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,13 +18,22 @@ import (
 // come since its details opened: Pending is how many of the user's addons
 // are still asked for its streams in the background, for the first time
 // or again (see library.Service.Pending), Count how many media sources its
-// details would list now, the placeholder included. Polyfin's jellyfin-web
-// script follows it to add versions to the title page as they come: it is
-// pushed on the user's sockets as it changes (see versionsChanged), and
-// answered when asked.
+// details would list now, the placeholder included, and Known how many of
+// them are versions, the placeholder left out. Polyfin's jellyfin-web
+// script follows it to add versions to the title page as they come, and to
+// hold its play buttons until one is known: it is pushed on the user's
+// sockets as it changes (see versionsChanged), and answered when asked.
 type VersionProgress struct {
 	Pending int
 	Count   int
+	Known   int
+}
+
+// newProgress is the progress of a title with pending addons still asked
+// and the versions offered its details would list.
+func newProgress(pending int, offered []library.Version) VersionProgress {
+	// As details count them (see addMediaSources).
+	return VersionProgress{Pending: pending, Count: max(len(offered), 1), Known: len(offered)}
 }
 
 const (
@@ -42,6 +52,9 @@ const (
 	// maxWatched is how many titles are watched before those no longer
 	// watched are forgotten.
 	maxWatched = 1000
+	// searchInterval is how often a user may have a title's addons asked
+	// again (see searchVersions).
+	searchInterval = 20 * time.Second
 )
 
 // versionsPush is the data of a PolyfinVersions message.
@@ -49,6 +62,7 @@ type versionsPush struct {
 	ItemId  string
 	Pending int
 	Count   int
+	Known   int
 }
 
 // watchedPages are the title pages users opened lately, by title, then by
@@ -156,7 +170,8 @@ func (h *Handler) pushVersions(title accounts.ID) {
 		offered := h.offered(ctx, p.user, versions)
 		conns := h.userSockets(p.user.ID)
 		for _, opened := range p.opened {
-			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: pending, Count: max(len(offered), 1)})
+			progress := newProgress(pending, offered)
+			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known})
 			for _, conn := range conns {
 				_ = conn.Write(ctx, websocket.MessageText, payload)
 			}
@@ -181,10 +196,10 @@ func (h *Handler) userSockets(user accounts.ID) []*websocket.Conn {
 
 // versionProgress answers /Polyfin/Items/{itemId}/Versions for a movie or
 // an episode, by its own identifier or one of its versions', with the
-// checks of its details; other items answer zero for both. A title whose
-// details the user opened lately is answered from what is kept in memory
-// (see library.Service.FollowedProgress). The page asking is told of the
-// changes from then on (see versionsChanged).
+// checks of its details; other items answer zero for all three. A title
+// whose details the user opened lately is answered from what is kept in
+// memory (see library.Service.FollowedProgress). The page asking is told of
+// the changes from then on (see versionsChanged).
 func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")
@@ -192,15 +207,82 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if pending, versions, ok := h.Library.FollowedProgress(r.Context(), user, id); ok {
-		title := id
-		if owner, ok := h.Library.VersionOwner(id); ok {
-			title = owner
-		}
-		h.watch(user, title, id)
-		writeJSON(w, http.StatusOK, VersionProgress{Pending: pending, Count: max(len(h.offered(r.Context(), user, versions)), 1)})
+	if progress, ok := h.followedProgress(r.Context(), user, id); ok {
+		writeJSON(w, http.StatusOK, progress)
 		return
 	}
+	item, ok := h.versionedItem(w, r, user, id)
+	if !ok {
+		return
+	}
+	var progress VersionProgress
+	if item.Kind == library.KindMovie || item.Kind == library.KindEpisode {
+		if progress, ok = h.titleProgress(w, r, user, item.ID, id); !ok {
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, progress)
+}
+
+// searchVersions answers POST /Polyfin/Items/{itemId}/Versions/Search for
+// a movie or an episode, with the checks of versionProgress: it asks the
+// user's addons again for the title's streams (see
+// library.Service.AskAgain), at most once every searchInterval for a user's
+// title, and answers the progress then. Other items ask nothing and answer
+// zero for all three.
+func (h *Handler) searchVersions(w http.ResponseWriter, r *http.Request) {
+	b := bindErrors{}
+	id := b.pathID(r, "itemId")
+	user, ok := h.viewer(w, r, b, notFoundProblem)
+	if !ok {
+		return
+	}
+	item, ok := h.versionedItem(w, r, user, id)
+	if !ok {
+		return
+	}
+	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
+		writeJSON(w, http.StatusOK, VersionProgress{})
+		return
+	}
+	if allowed, wait := h.searches.allow(user.ID, item.ID, h.now()); !allowed {
+		// Whole seconds, rounded up: asking at once after waiting them is allowed.
+		w.Header().Set("Retry-After", strconv.Itoa(int((wait+time.Second-1)/time.Second)))
+		processingError(w, http.StatusTooManyRequests)
+		return
+	}
+	if err := h.Library.AskAgain(r.Context(), user, item.ID); err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	if progress, ok := h.followedProgress(r.Context(), user, id); ok {
+		writeJSON(w, http.StatusOK, progress)
+		return
+	}
+	if progress, ok := h.titleProgress(w, r, user, item.ID, id); ok {
+		writeJSON(w, http.StatusOK, progress)
+	}
+}
+
+// followedProgress answers the progress of a title whose details the user
+// opened lately, by its identifier or one of its versions', from what is
+// kept in memory, and has the page opened as id told of its changes.
+func (h *Handler) followedProgress(ctx context.Context, user accounts.User, id accounts.ID) (VersionProgress, bool) {
+	pending, versions, ok := h.Library.FollowedProgress(ctx, user, id)
+	if !ok {
+		return VersionProgress{}, false
+	}
+	title := id
+	if owner, ok := h.Library.VersionOwner(id); ok {
+		title = owner
+	}
+	h.watch(user, title, id)
+	return newProgress(pending, h.offered(ctx, user, versions)), true
+}
+
+// versionedItem finds the item id names, or the title of the version it
+// names, as the user may see it, answering the error otherwise.
+func (h *Handler) versionedItem(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) (library.Item, bool) {
 	item, err := h.Library.Item(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		if owner, ok := h.Library.VersionOwner(id); ok {
@@ -209,26 +291,59 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		h.browseError(w, r, err)
-		return
+		return library.Item{}, false
 	}
-	var progress VersionProgress
-	if item.Kind == library.KindMovie || item.Kind == library.KindEpisode {
-		// Pending first: an addon no longer asked has its streams kept, so
-		// the count that follows has its versions.
-		pending, err := h.Library.Pending(r.Context(), user, item.ID)
-		if err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		progress.Pending = pending
-		versions, err := h.Library.KnownVersions(r.Context(), user, item.ID)
-		if err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		// As details count them (see addMediaSources).
-		progress.Count = max(len(h.offered(r.Context(), user, versions)), 1)
-		h.watch(user, item.ID, id)
+	return item, true
+}
+
+// titleProgress answers the progress of a movie or an episode, asking the
+// library, answering the error otherwise, and has the page opened as
+// opened told of its changes.
+func (h *Handler) titleProgress(w http.ResponseWriter, r *http.Request, user accounts.User, title, opened accounts.ID) (VersionProgress, bool) {
+	// Pending first: an addon no longer asked has its streams kept, so the
+	// versions that follow have them.
+	pending, err := h.Library.Pending(r.Context(), user, title)
+	if err != nil {
+		h.browseError(w, r, err)
+		return VersionProgress{}, false
 	}
-	writeJSON(w, http.StatusOK, progress)
+	versions, err := h.Library.KnownVersions(r.Context(), user, title)
+	if err != nil {
+		h.browseError(w, r, err)
+		return VersionProgress{}, false
+	}
+	h.watch(user, title, opened)
+	return newProgress(pending, h.offered(r.Context(), user, versions)), true
+}
+
+// versionSearches remembers when each user last had each title's addons
+// asked again. Its zero value is ready.
+type versionSearches struct {
+	mu   sync.Mutex
+	last map[searchKey]time.Time
+}
+
+type searchKey struct {
+	user, title accounts.ID
+}
+
+// allow reports whether user may have title's addons asked again at now,
+// and records it, or how long until they may.
+func (s *versionSearches) allow(user, title accounts.ID, now time.Time) (bool, time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.last == nil {
+		s.last = map[searchKey]time.Time{}
+	}
+	for key, at := range s.last {
+		if now.Sub(at) >= searchInterval {
+			delete(s.last, key)
+		}
+	}
+	key := searchKey{user, title}
+	if at, ok := s.last[key]; ok {
+		return false, searchInterval - now.Sub(at)
+	}
+	s.last[key] = now
+	return true, 0
 }
