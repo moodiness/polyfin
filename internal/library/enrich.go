@@ -44,7 +44,7 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 					continue
 				}
 			} else if cached, ok := s.metas.Get(metaKey{candidate.addon.ID, meta.Type, id}); ok {
-				described = cached
+				described = cached.value
 			} else {
 				continue
 			}

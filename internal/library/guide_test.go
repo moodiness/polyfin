@@ -396,7 +396,7 @@ func TestUsersGuidesStayOnPublicAddresses(t *testing.T) {
 		key := e.tvCatalog(scope, channels...)
 		// The test addon is on this machine too: its channels are listed
 		// already.
-		e.service.pages.Put(pageKey{addon: key.AddonID, catalogType: "tv", catalogID: "channels"}, channels)
+		e.service.pages.Put(pageKey{addon: key.AddonID, catalogType: "tv", catalogID: "channels"}, fetched[[]stremio.Meta]{channels, now})
 		guide := newGuideServer(t, body)
 		if _, err := e.addons.SetGuide(t.Context(), scope, key, guide.url); err != nil {
 			t.Fatal(err)

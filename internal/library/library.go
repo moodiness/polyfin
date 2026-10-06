@@ -3,7 +3,6 @@ package library
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"slices"
@@ -26,10 +25,15 @@ import (
 )
 
 const (
-	metaTTL     = 6 * time.Hour
-	pageFetches = 4 // catalog pages of one catalog fetched at once
-	// catalogFetches bounds the catalogs merged reads at once.
-	catalogFetches = 8
+	// metaTTL is the age past which a title's description is asked for
+	// again (see meta).
+	metaTTL = 6 * time.Hour
+	// pageFetches bounds the pages of one catalog a read asks for at once,
+	// those already kept not counting.
+	pageFetches = 8
+	// catalogFetches bounds the catalogs merged reads at once: a
+	// collection's sources each read a page or two, together.
+	catalogFetches = 16
 )
 
 // ErrNotFound reports an item that does not exist or that the user cannot
@@ -48,12 +52,21 @@ type Service struct {
 	now      func() time.Time
 	settings func() accounts.Settings
 
-	pages  *cache.Cache[pageKey, []stremio.Meta]
-	metas  *cache.Cache[metaKey, stremio.Meta]
-	flight singleflight.Group
+	// pages, metas and libraryImages keep what addons answered, with when
+	// (see kept.go); searchPages, the pages of searches, briefly; sizes,
+	// how long each catalog's pages are.
+	pages       *cache.Cache[pageKey, fetched[[]stremio.Meta]]
+	searchPages *cache.Cache[pageKey, fetched[[]stremio.Meta]]
+	metas       *cache.Cache[metaKey, fetched[stremio.Meta]]
+	flight      singleflight.Group
 	// libraryImages are the libraries' automatic images, by catalog (see
 	// automaticImage).
-	libraryImages *cache.Cache[pageKey, string]
+	libraryImages *cache.Cache[pageKey, fetched[string]]
+	sizes         pageSizes
+	// prefetches holds a place for each listing read ahead (see
+	// readAhead); readAhead turns reading ahead on.
+	prefetches chan struct{}
+	readAhead  bool
 
 	// streamLists and subtitleLists are the addons' lists for each title,
 	// kept stale once expired (see staleLists).
@@ -136,7 +149,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		logger:         logger,
 		now:            time.Now,
 		settings:       settings,
-		metas:          cache.New[metaKey, stremio.Meta](4000, metaTTL),
+		metas:          cache.NewLasting[metaKey, fetched[stremio.Meta]](4000, func() time.Duration { return metaKept }, time.Now),
 		versions:       cache.New[accounts.ID, Version](20000, versionsTTL),
 		asked:          cache.New[askedKey, *asked](maxAsked, askedFor),
 		followUps:      followUps{running: map[followKey]*followUp{}},
@@ -146,8 +159,11 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		music:          eclipse.NewClient(client),
 	}
 	clock := func() time.Time { return s.now() }
-	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
-	s.libraryImages = cache.NewLasting[pageKey, string](1000, s.catalogLife, clock)
+	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock)
+	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock)
+	s.libraryImages = cache.NewLasting[pageKey, fetched[string]](1000, s.keptCatalogLife, clock)
+	s.prefetches = make(chan struct{}, prefetchLimit)
+	s.readAhead = true
 	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
 	s.musicCache = newMusicCaches(s)
@@ -234,7 +250,26 @@ func (v view) limit(src source) int {
 	return v.catalogLimit
 }
 
+// view returns what user can browse, built once per request served under
+// PerRequest.
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
+	views, _ := ctx.Value(requestViewsKey{}).(*requestViews)
+	if views == nil || time.Since(views.started) > viewReuse {
+		return s.buildView(ctx, user)
+	}
+	views.mu.Lock()
+	defer views.mu.Unlock()
+	if v, ok := views.views[user.ID]; ok {
+		return v, nil
+	}
+	v, err := s.buildView(ctx, user)
+	if err == nil {
+		views.views[user.ID] = v
+	}
+	return v, err
+}
+
+func (s *Service) buildView(ctx context.Context, user accounts.User) (view, error) {
 	settings := s.settings()
 	// A user under parental control or blocking genres browses the server's
 	// addons only: their own addons could describe titles without the
@@ -418,6 +453,9 @@ type source struct {
 	date string
 	// guide is set for a live TV catalog with an XMLTV guide.
 	guide bool
+	// first reads the catalog's first page only, as Stremio apps show
+	// searches and home rows.
+	first bool
 }
 
 // paged reports whether the catalog can be read past its first page.
@@ -448,45 +486,6 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 	return values, true
 }
 
-// page fetches the catalog page starting at skip, sharing concurrent and
-// recent requests.
-func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
-	// An IPTV source's live TV catalog is one page, which it remembers
-	// itself until its list changes; its movie and series catalogs read
-	// pages from its stored lists.
-	if src.addon.addon.IPTV() {
-		switch {
-		case s.iptv == nil || src.date != "":
-			return nil, nil
-		case !LiveCatalog(src.catalog.Type):
-			return s.iptv.Catalog(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, skip, src.genre, src.search)
-		case skip > 0 || src.genre != "" || src.search != "":
-			return nil, nil
-		}
-		return s.iptv.Channels(ctx, src.addon.addon.ID)
-	}
-	key := pageKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, src.date, skip}
-	if metas, ok := s.pages.Get(key); ok {
-		return metas, nil
-	}
-	extra, ok := src.extras(skip)
-	if !ok {
-		return nil, nil
-	}
-	result, err, _ := s.flight.Do(fmt.Sprintf("page %v", key), func() (any, error) {
-		metas, err := s.client.Catalog(ctx, src.addon.addon.ManifestURL, src.catalog.Type, src.catalog.ID, extra, src.addon.confined)
-		if err != nil {
-			return nil, err
-		}
-		s.pages.Put(key, metas)
-		return metas, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return result.([]stremio.Meta), nil
-}
-
 // window returns the catalog's items [start, start+count) and whether more
 // follow, reading no further than the catalog's limit (see view.limit). A
 // Stremio catalog is read in order: each page is requested with
@@ -494,11 +493,17 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 // Pages may be shorter than the first when the addon filters them, so the
 // pages fetched ahead together, on the guess that they are as long as the
 // first, only count while the guess holds; reading then goes on from the
-// actual position. Titles the user's parental control hides are left out
-// before positions are counted. A restricted listing reads at most
-// hiddenReach times as far as an unrestricted one, and stops where titles
-// wait for their rating: it reports that more may follow, which apps ask
-// for later, once the ratings are known.
+// actual position. Each read asks for up to pageFetches pages at once, the
+// pages kept not counting, and none past a page kept empty, which ends the
+// catalog. When the catalog's page size is remembered (see pageSize), the
+// first read asks for every page it needs at once; a size learned from a
+// short first page is only trusted once a second page confirms it, so
+// that a small catalog is not asked for many empty pages. Titles the
+// user's parental control hides are left out before positions are
+// counted. A restricted listing reads at most hiddenReach times as far as
+// an unrestricted one, and stops where titles wait for their rating: it
+// reports that more may follow, which apps ask for later, once the
+// ratings are known.
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
 	// stored lists, whole, but for a restricted user, whose listing leaves
@@ -508,7 +513,12 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	}
 	var collected []stremio.Meta
 	seen := map[string]bool{}
-	received, size := 0, 0
+	received := 0
+	size := 0
+	if src.paged() && !src.first {
+		size = s.pageSize(ctx, src)
+	}
+	remembered, trusted, filled := size, size > 0, 0
 	more := true
 	limit := v.limit(src)
 	reach := limit
@@ -525,17 +535,39 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 		}
 		offsets := []int{received}
 		needed := start + count - len(collected)
-		for next := received + size; size > 0 && next < min(received+needed, limit) && len(offsets) < pageFetches; next += size {
-			offsets = append(offsets, next)
+		if !src.first && size > 0 && (trusted || size >= shortPage) {
+			uncached := 0
+			if _, ok := s.cachedPage(src.key(received)); !ok {
+				uncached++
+			}
+			for next := received + size; next < min(received+needed, limit); next += size {
+				if kept, ok := s.cachedPage(src.key(offsets[len(offsets)-1])); ok && len(kept) == 0 {
+					break
+				}
+				_, cached := s.cachedPage(src.key(next))
+				if !cached && uncached >= pageFetches {
+					break
+				}
+				if !cached {
+					uncached++
+				}
+				offsets = append(offsets, next)
+			}
 		}
-		pages, err := s.pagesAt(ctx, src, offsets)
+		pages, missing, err := s.pagesAt(ctx, src, offsets)
 		if err != nil {
 			return nil, 0, err
 		}
 		var fresh []stremio.Meta
-		repeated := false
+		repeated, unknown := false, false
 		for i, metas := range pages {
 			if offsets[i] != received {
+				break
+			}
+			// A page not kept, read without asking the addon (see
+			// KnownPages), ends what is known, not the catalog.
+			if missing[i] {
+				unknown = true
 				break
 			}
 			before := len(fresh)
@@ -552,21 +584,28 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			}
 			received += len(metas)
 			size = max(size, len(metas))
+			if len(metas) > 0 {
+				filled++
+			}
 		}
+		trusted = trusted || filled >= 2
 		visible, held := s.visibleMetas(ctx, v, src, fresh)
 		collected = append(collected, visible...)
 		if held {
 			v.held.Store(true)
 			break
 		}
-		if repeated {
-			more = false
+		if repeated || unknown {
+			more = unknown
 			break
 		}
-		if !src.paged() {
-			more = false
+		if !src.paged() || src.first {
+			more = more && src.paged()
 			break
 		}
+	}
+	if trusted && size > remembered {
+		s.learnPageSize(ctx, src, size)
 	}
 	total := len(collected)
 	if more {
@@ -578,18 +617,27 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	return collected[start:min(start+count, len(collected))], total, nil
 }
 
-// pagesAt fetches the catalog pages starting at each offset together.
-func (s *Service) pagesAt(ctx context.Context, src source, offsets []int) ([][]stremio.Meta, error) {
-	pages := make([][]stremio.Meta, len(offsets))
+// shortPage is the length under which a first page does not tell the
+// catalog's page size: the catalog may simply hold that few titles.
+const shortPage = 10
+
+// pagesAt fetches the catalog pages starting at each offset together. The
+// pages kept answer at once: reads bound the pages they fetch (see
+// window). missing tells the pages a read that asks no addon does not
+// know.
+func (s *Service) pagesAt(ctx context.Context, src source, offsets []int) (pages [][]stremio.Meta, missing []bool, err error) {
+	pages, missing = make([][]stremio.Meta, len(offsets)), make([]bool, len(offsets))
 	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(pageFetches)
 	for i, offset := range offsets {
 		group.Go(func() (err error) {
 			pages[i], err = s.page(groupCtx, src, offset)
+			if errors.Is(err, errNotKept) {
+				missing[i], err = true, nil
+			}
 			return err
 		})
 	}
-	return pages, group.Wait()
+	return pages, missing, group.Wait()
 }
 
 // listed is a title of a catalog, with the catalog that listed it.
@@ -619,7 +667,9 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 		return result, total, err
 	}
 	need := start + count
-	per := need/len(sources) + 1
+	// A quarter more than an even share, as duplicates and short catalogs
+	// leave the share short, saves most listings a second round.
+	per := (need+need/4)/len(sources) + 1
 	limit := 0
 	for _, src := range sources {
 		limit = max(limit, v.limit(src))
@@ -643,23 +693,7 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 			})
 		}
 		_ = group.Wait()
-		var result []listed
-		seen := map[string]bool{}
-		for rank := 0; ; rank++ {
-			added := false
-			for i, list := range lists {
-				if rank < len(list) {
-					added = true
-					if !seen[list[rank].ID] {
-						seen[list[rank].ID] = true
-						result = append(result, listed{list[rank], sources[i]})
-					}
-				}
-			}
-			if !added {
-				break
-			}
-		}
+		result := interleave(sources, lists)
 		anyMore := slices.Contains(mores, true)
 		// Reading further would not show the titles a restricted listing
 		// stopped at (see window).
@@ -677,6 +711,28 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 	}
 }
 
+// interleave merges the lists of sources, one item of each in turn,
+// without duplicates.
+func interleave(sources []source, lists [][]stremio.Meta) []listed {
+	var result []listed
+	seen := map[string]bool{}
+	for rank := 0; ; rank++ {
+		added := false
+		for i, list := range lists {
+			if rank < len(list) {
+				added = true
+				if !seen[list[rank].ID] {
+					seen[list[rank].ID] = true
+					result = append(result, listed{list[rank], sources[i]})
+				}
+			}
+		}
+		if !added {
+			return result
+		}
+	}
+}
+
 // Page is a window of a folder's children.
 type Page struct {
 	Items []Item
@@ -689,18 +745,52 @@ type Page struct {
 // collection's titles, a series' seasons or a season's episodes. genre
 // narrows a library to one of the genres its catalog offers (see Genres).
 func (s *Service) Children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
-	page, err := s.children(ctx, user, parent, start, count, genre)
+	page, err := s.children(ctx, user, parent, start, count, genre, false)
 	page.Items = s.overridden(page.Items)
 	return page, err
 }
 
-func (s *Service) children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
+// Latest lists the first children of a library or collection as a home
+// row shows them: from the first page of its catalogs only, as Stremio
+// apps show their boards, so that a row never waits for more pages.
+// Other folders list their children as Children does.
+func (s *Service) Latest(ctx context.Context, user accounts.User, parent accounts.ID, count int) (Page, error) {
+	page, err := s.children(ctx, user, parent, 0, count, "", true)
+	page.Items = s.overridden(page.Items)
+	return page, err
+}
+
+// KnownPages returns the first page of each of the user's libraries, but
+// music ones, from the catalog pages Polyfin keeps, asking no addon: what
+// apps' item counts are made of. A library none of whose first page is
+// kept is empty.
+func (s *Service) KnownPages(ctx context.Context, user accounts.User, count int) ([]Page, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	ctx = withKeptOnly(ctx)
+	pages := make([]Page, 0, len(v.libraries))
+	for _, l := range v.libraries {
+		if l.addon.addon.Eclipse() {
+			continue
+		}
+		page, err := s.libraryChildren(ctx, v, l, 0, count, "", false)
+		if err != nil {
+			return nil, err
+		}
+		pages = append(pages, page)
+	}
+	return pages, nil
+}
+
+func (s *Service) children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string, first bool) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return Page{}, err
 	}
 	if l, ok := v.library(parent); ok {
-		return s.libraryChildren(ctx, v, l, start, count, genre)
+		return s.libraryChildren(ctx, v, l, start, count, genre, first)
 	}
 	r, err := s.load(ctx, parent)
 	if err != nil {
@@ -708,7 +798,7 @@ func (s *Service) children(ctx context.Context, user accounts.User, parent accou
 	}
 	switch r.Kind {
 	case KindCollection:
-		return s.collectionChildren(ctx, v, r, start, count)
+		return s.collectionChildren(ctx, v, r, start, count, first)
 	case KindSeries:
 		seasons, err := s.Seasons(ctx, user, parent)
 		return slicePage(seasons, start, count), err
@@ -740,7 +830,7 @@ func slicePage(items []Item, start, count int) Page {
 
 func (r record) seriesItemID() accounts.ID { return itemID(titleKey(KindSeries, r.SeriesID)) }
 
-func (s *Service) libraryChildren(ctx context.Context, v view, l library, start, count int, genre string) (Page, error) {
+func (s *Service) libraryChildren(ctx context.Context, v view, l library, start, count int, genre string, first bool) (Page, error) {
 	if l.addon.addon.Eclipse() {
 		records, err := s.musicLibraryRecords(ctx, v, l)
 		if err != nil {
@@ -748,7 +838,8 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		return s.musicChildren(ctx, v, records, l.addon, start, count)
 	}
-	metas, total, err := s.window(ctx, v, source{addon: l.addon, catalog: l.catalog, genre: genre}, start, count)
+	src := source{addon: l.addon, catalog: l.catalog, genre: genre, first: first}
+	metas, total, err := s.window(ctx, v, src, start, count)
 	if err != nil {
 		return Page{}, err
 	}
@@ -765,12 +856,43 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		items, records = append(items, item), append(records, r)
 	}
-	return page(items, start, total), s.save(ctx, records)
+	result := page(items, start, total)
+	if result.More && !first {
+		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
+	}
+	return result, s.save(ctx, records)
 }
 
 // page makes a Page of a window of children, out of total.
 func page(items []Item, start, total int) Page {
 	return Page{Items: items, Total: total, More: start+len(items) < total}
+}
+
+// prefetchLimit bounds the listings read ahead at once.
+const prefetchLimit = 2
+
+// prefetch reads the next window of a listing ahead, in the background, so
+// that the app's next page answers at once: read fills the pages kept. It
+// reads none when prefetchLimit listings are being read ahead already,
+// for a user whose listings wait for ratings, nor from an addon whose last
+// request failed, which would only be asked more.
+func (s *Service) prefetch(ctx context.Context, v view, addon installed, read func(context.Context)) {
+	if !s.readAhead || v.restricted() || keptOnly(ctx) || addon.addon.IPTV() {
+		return
+	}
+	if health, ok := s.client.Health(addon.addon.ManifestURL); ok && health.Failure != "" {
+		return
+	}
+	select {
+	case s.prefetches <- struct{}{}:
+	default:
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	go func() {
+		defer func() { <-s.prefetches }()
+		read(ctx)
+	}()
 }
 
 func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, confined bool) (Item, record) {
@@ -801,7 +923,7 @@ func titleItem(addon accounts.ID, catalog stremio.Catalog, meta stremio.Meta, pa
 		Parent: &parent, Meta: &preview, Confined: confined}, nil
 }
 
-func (s *Service) collectionChildren(ctx context.Context, v view, r record, start, count int) (Page, error) {
+func (s *Service) collectionChildren(ctx context.Context, v view, r record, start, count int, first bool) (Page, error) {
 	if r.Addon == nil || r.Meta == nil {
 		return Page{}, ErrNotFound
 	}
@@ -826,7 +948,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 		}
 		for _, ref := range meta.Collection.Sources {
 			if catalog, ok := addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok {
-				sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre})
+				sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, first: first})
 			}
 		}
 	}
@@ -851,33 +973,12 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 			items, records = append(items, item), append(records, rec)
 		}
 	}
-	return page(items, start, total), s.save(ctx, records)
-}
-
-// meta returns an addon's complete description of a title, cached.
-func (s *Service) meta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
-	// An IPTV source describes its titles from its database, with details
-	// once a title was opened: it is not cached here, lest a listing's
-	// description hide the details.
-	if addon.addon.IPTV() {
-		return s.fetchMeta(ctx, addon, metaType, id)
+	result := page(items, start, total)
+	if result.More && !first && len(sources) > 0 {
+		next := max(start+count-len(nested), 0)
+		s.prefetch(ctx, v, addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, next, count) })
 	}
-	key := metaKey{addon.addon.ID, metaType, id}
-	if meta, ok := s.metas.Get(key); ok {
-		return meta, nil
-	}
-	result, err, _ := s.flight.Do(fmt.Sprintf("meta %v", key), func() (any, error) {
-		meta, err := s.fetchMeta(ctx, addon, metaType, id)
-		if err != nil {
-			return nil, err
-		}
-		s.metas.Put(key, meta)
-		return meta, nil
-	})
-	if err != nil {
-		return stremio.Meta{}, err
-	}
-	return result.(stremio.Meta), nil
+	return result, s.save(ctx, records)
 }
 
 // fetchMeta asks an addon, or an IPTV source, for its description of a
@@ -922,13 +1023,14 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		if shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			continue
 		}
-		meta, err := s.meta(ctx, candidate, r.Meta.Type, r.Meta.ID)
+		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
+			meta := kept.value
 			if candidate.addon.IPTV() {
 				meta = s.enrich(ctx, v, candidate, meta, shared)
 			}
 			if candidate.shared {
-				s.learnTraits(ctx, r, meta)
+				s.learnTraits(ctx, r, meta, kept.at)
 			}
 			return meta, true
 		}
@@ -966,23 +1068,54 @@ func (s *Service) Original(ctx context.Context, user accounts.User, id accounts.
 // that no longer exist, or whose addon fails to describe them, are left
 // out.
 func (s *Service) Items(ctx context.Context, user accounts.User, ids []accounts.ID) ([]Item, error) {
+	return s.ItemsOf(ctx, user, ids, nil)
+}
+
+// ItemsOf is Items for the items of the given kinds only, any kind when
+// kinds is nil: the others are left out before anything is described.
+func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []accounts.ID, kinds []Kind) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return nil, err
+	}
+	// The records are read together; libraries and identifiers without
+	// one are described one by one.
+	records, err := s.loadAll(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[accounts.ID]record, len(records))
+	for _, r := range records {
+		byID[r.ID] = r
 	}
 	found := make([]*Item, len(ids))
 	var g errgroup.Group
 	g.SetLimit(8)
 	for i, id := range ids {
+		r, recorded := byID[id]
+		_, isLibrary := v.library(id)
+		switch {
+		case kinds == nil:
+		case isLibrary && !slices.Contains(kinds, KindLibrary), recorded && !isLibrary && !slices.Contains(kinds, r.Kind):
+			continue
+		}
 		g.Go(func() error {
-			item, err := s.item(ctx, v, id)
+			var item Item
+			var err error
+			if recorded && !isLibrary {
+				item, err = s.described(ctx, v, r)
+			} else {
+				item, err = s.item(ctx, v, id)
+			}
 			if err != nil {
 				if !errors.Is(err, ErrNotFound) {
 					s.logger.Debug("An item could not be described", "item", id, "error", err)
 				}
 				return nil
 			}
-			found[i] = &item
+			if kinds == nil || slices.Contains(kinds, item.Kind) {
+				found[i] = &item
+			}
 			return nil
 		})
 	}
@@ -1000,7 +1133,13 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	if l, ok := v.library(id); ok {
 		item := l.item
 		if l.image == addons.LibraryImageAutomatic && !v.restricted() {
-			item.Images.Primary = s.automaticImage(ctx, l.addon, l.catalog)
+			item.Images.Primary = s.automaticImage(ctx, l.addon, l.catalog, func() string {
+				r, err := s.load(ctx, id)
+				if err != nil {
+					return ""
+				}
+				return r.Poster
+			})
 		}
 		return item, nil
 	}
@@ -1008,6 +1147,12 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	if err != nil {
 		return Item{}, err
 	}
+	return s.described(ctx, v, r)
+}
+
+// described describes the item Polyfin recorded as r.
+func (s *Service) described(ctx context.Context, v view, r record) (Item, error) {
+	id := r.ID
 	switch r.Kind {
 	case KindCollection:
 		if r.Meta == nil || r.Addon == nil {
@@ -1042,8 +1187,16 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		if r.Kind == KindSeries && len(meta.Videos) > 0 {
 			item.Contents = contents(meta, nil, s.now())
 		}
-		// Apps show the credited people and open them by identifier.
-		return item, s.saveCredits(ctx, id, item.People, r.Confined)
+		// Apps show the credited people and open them by identifier: those
+		// of an addon's description are recorded when it is fetched (see
+		// fetchKeptMeta), those of an IPTV source's here, as it describes
+		// its titles anew each time.
+		if r.Addon != nil {
+			if entry, ok := v.addon(*r.Addon); ok && entry.addon.IPTV() {
+				return item, s.saveCredits(ctx, id, item.People, r.Confined)
+			}
+		}
+		return item, nil
 	case KindSeason, KindEpisode:
 		series, meta, err := s.series(ctx, v, r.seriesItemID())
 		if err != nil {
@@ -1361,22 +1514,34 @@ func (s *Service) renamed(ctx context.Context, v view, term string, kinds []Kind
 	return result
 }
 
+// searchLimit bounds the titles a search lists, whatever the app asks:
+// search catalogs are read for their first page only, as Stremio apps
+// read them.
+const searchLimit = 100
+
+// peopleGrace is how long a search waits for its people-search catalogs
+// (see searchesPeople) once its title searches answered: people searches
+// are often much slower, and their titles mostly come up in the title
+// searches too.
+const peopleGrace = 300 * time.Millisecond
+
 func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind, limit int) ([]Item, error) {
 	var sources []source
 	for _, entry := range v.addons {
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchable(catalog) {
-				sources = append(sources, source{addon: entry, catalog: catalog, search: term})
+				sources = append(sources, source{addon: entry, catalog: catalog, search: term, first: true})
 			}
 		}
 	}
 	if len(sources) == 0 {
 		return nil, nil
 	}
-	titles, _, err := s.merged(ctx, v, sources, 0, limit)
-	if err != nil {
+	titles := s.searched(ctx, v, sources, min(limit, searchLimit))
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	titles = titles[:min(len(titles), limit, searchLimit)]
 	var items []Item
 	var records []record
 	for _, title := range titles {
@@ -1388,6 +1553,75 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 		items, records = append(items, item), append(records, r)
 	}
 	return items, s.save(ctx, records)
+}
+
+// searched reads the first page of each search catalog, together, and
+// interleaves their titles as merged does. It answers once the title
+// searches did, waiting peopleGrace more for the people searches, and for
+// all of them when there are only people searches. Searches still running
+// then answer for the next request: their pages are kept (see page).
+func (s *Service) searched(ctx context.Context, v view, sources []source, need int) []listed {
+	lists := make([][]stremio.Meta, len(sources))
+	var mu sync.Mutex
+	var titleSearches, all sync.WaitGroup
+	fetches := make(chan struct{}, catalogFetches)
+	people, titles := false, 0
+	for i, src := range sources {
+		byPeople := searchesPeople(src.catalog)
+		people = people || byPeople
+		all.Add(1)
+		if !byPeople {
+			titleSearches.Add(1)
+			titles++
+		}
+		go func() {
+			defer all.Done()
+			if !byPeople {
+				defer titleSearches.Done()
+			}
+			fetches <- struct{}{}
+			defer func() { <-fetches }()
+			metas, _, err := s.window(ctx, v, src, 0, need)
+			// An app that stops waiting cancels ctx: nothing failed.
+			if err != nil && ctx.Err() == nil {
+				s.logger.Warn("A search catalog could not be read", "catalog", src.catalog.ID, "error", err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			lists[i] = metas
+		}()
+	}
+	everything := done(&all)
+	if people && titles > 0 {
+		select {
+		case <-done(&titleSearches):
+			select {
+			case <-everything:
+			case <-time.After(peopleGrace):
+			case <-ctx.Done():
+			}
+		case <-everything:
+		case <-ctx.Done():
+		}
+	} else {
+		select {
+		case <-everything:
+		case <-ctx.Done():
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	return interleave(sources, slices.Clone(lists))
+}
+
+// done is closed once group is done.
+func done(group *sync.WaitGroup) <-chan struct{} {
+	closed := make(chan struct{})
+	go func() {
+		group.Wait()
+		close(closed)
+	}()
+	return closed
 }
 
 // Ancestors lists the folders above an item, nearest first: a season and
@@ -1525,5 +1759,6 @@ func (s *Service) cachedMeta(r record) (stremio.Meta, bool) {
 	if r.Addon == nil || r.Meta == nil {
 		return stremio.Meta{}, false
 	}
-	return s.metas.Get(metaKey{*r.Addon, r.Meta.Type, r.Meta.ID})
+	kept, ok := s.metas.Get(metaKey{*r.Addon, r.Meta.Type, r.Meta.ID})
+	return kept.value, ok
 }

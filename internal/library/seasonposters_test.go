@@ -114,9 +114,9 @@ func TestSeasonsShowTheirOwnPosters(t *testing.T) {
 		}
 	}
 	artwork("images")
-	// Once the series' metadata is no longer cached, as after a restart,
-	// the season keeps the image apps were given its tag for.
-	e.service.metas = cache.New[metaKey, stremio.Meta](4000, metaTTL)
+	// Once the series' metadata is no longer cached, as when it is
+	// forgotten, the season keeps the image apps were given its tag for.
+	e.service.metas = cache.New[metaKey, fetched[stremio.Meta]](4000, metaTTL)
 	artwork("images after the cache")
 	if metaRequests() != asked {
 		t.Errorf("images asked the addon for metadata: %d requests, %d before", metaRequests(), asked)
