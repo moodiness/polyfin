@@ -229,8 +229,11 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 	if subtitle.DeliveryMethod != "External" || !strings.HasSuffix(subtitle.DeliveryUrl, "/Subtitles/0/0/Stream.vtt?ApiKey="+p.token) {
 		t.Errorf("subtitle delivery: %s %s", subtitle.DeliveryMethod, subtitle.DeliveryUrl)
 	}
-	if refused := ask("minimal-no-aac", p.versions[1].ID.String()).MediaSources[0]; refused.SupportsDirectPlay {
-		t.Error("AAC audio played by a profile without AAC")
+	// Without AAC, its audio would be converted over HLS, which needs a
+	// keyframe index the file lacks: it is not offered rather than offered
+	// with nothing to play.
+	if refused := ask("minimal-no-aac", p.versions[1].ID.String()); len(refused.MediaSources) != 0 {
+		t.Errorf("AAC audio offered to a profile without AAC: %+v", refused.MediaSources[0])
 	}
 	// Without a choice, the first version that can be analyzed is played:
 	// the first cannot, as ffprobe is not installed in tests.
@@ -249,6 +252,7 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 func TestPlaybackInfoListsEveryVersionUnlessOneIsAsked(t *testing.T) {
 	p := playing(t)
 	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")
+	p.keyframed(t, p.versions[0])
 	ask := func(mediaSourceID string) playbackInfoResponse {
 		t.Helper()
 		body := map[string]any{"UserId": p.user.ID.String(), "DeviceProfile": p.profile(t, "jellyfin-web-chrome")}

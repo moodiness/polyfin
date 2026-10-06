@@ -24,7 +24,7 @@ Jellyfin apps get the rest of what they ask a movie, series and Live TV server f
 
 A title's page opens as soon as its description is ready, with the versions Polyfin already knows, even from lists that expired, while it asks the stream addons without a current list in the background. The web player adds their versions as each addon answers. Other apps show the versions known when the page opened, and get them all when the user presses Play or opens the page again. See [Title pages](playback.md#title-pages).
 
-**For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked, for the first time or again, and how many media sources the title's details list now.
+**For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked, for the first time or again, and how many media sources the title's details list now, and Polyfin pushes the same as a `PolyfinVersions` message on the live connection (WebSocket) as it changes (see [Title pages](playback.md#title-pages)).
 
 ### Profile pictures
 

@@ -259,7 +259,8 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 		runs        int
 		played      int // -1 for none
 	}{
-		{"Original", "exec cat \"$0.json\"\n", 0, 1, 0},
+		// Both versions are read at once; the first plays.
+		{"Original", "exec cat \"$0.json\"\n", 0, 2, 0},
 		{"1080p", "exec cat \"$0.json\"\n", 1080, 1, 1},
 		{"1080p, the version that fits unreadable", unreadableFirst, 1080, 1, -1},
 	} {

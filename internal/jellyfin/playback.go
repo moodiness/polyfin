@@ -243,6 +243,7 @@ type playbackInfoRequest struct {
 	AudioStreamIndex     looseInt
 	SubtitleStreamIndex  looseInt
 	MediaSourceId        string
+	StartTimeTicks       looseInt
 	DeviceProfile        *playback.DeviceProfile
 	EnableDirectPlay     *bool
 	EnableDirectStream   *bool
@@ -283,6 +284,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		request.AllowVideoStreamCopy = new(value)
 	}
 	request.MediaSourceId = query(r, "mediaSourceId")
+	if start := b.ticks(r, "startTimeTicks"); start != nil {
+		request.StartTimeTicks = looseInt{*start, true}
+	}
 	if r.Method == http.MethodPost && !h.readPlaybackInfoBody(w, r, b, &request) {
 		return
 	}
@@ -312,93 +316,78 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.audioPlaybackInfo(w, r, user, item, request)
 		return
 	}
-	p, err := h.playable(r.Context(), user, item)
+	// A stale list is played as it is, while its addon is asked again: the
+	// new answers are waited for only when none of its versions plays.
+	p, complete, err := h.playableToPlay(r.Context(), user, item)
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
-	versions := p.versions
-	at := openedIndex(opened, versions)
-	allowed := h.Accounts.Conversions(user)
 	settings := h.Accounts.Settings()
-
-	// The candidates: the version the app asked for, else every version,
-	// the one the item was opened as first (see openedIndex), then the
-	// others in order. Of the latter, the first VersionAttempts may be
-	// analyzed now; the others are tried only when analyzed before, which
-	// costs nothing.
-	candidates := make([]int, 0, len(versions))
-	if request.MediaSourceId != "" {
-		requested, _ := parseGUID(request.MediaSourceId)
-		for i, version := range versions {
-			if sourceID(opened, version, i == at) == requested {
-				candidates = append(candidates, i)
+	// The title's own identifier names no version in particular: Jellyfin
+	// names a single version after its item, and the apps that play from a
+	// title's page send it for whichever version comes first. A play of it
+	// chooses among the versions as one naming none does. Only a version's
+	// own identifier, or that of the version the item was opened as, asks
+	// for that version alone.
+	requested, _ := parseGUID(request.MediaSourceId)
+	explicit := request.MediaSourceId != "" && requested != item.ID
+	plan := func(versions []library.Version) candidates {
+		at := openedIndex(opened, versions)
+		if explicit {
+			for i, version := range versions {
+				if version.ID == requested || sourceID(opened, version, i == at) == requested {
+					return candidates{order: []int{i}, analyzed: 1, named: i}
+				}
+			}
+			return candidates{named: -1}
+		}
+		// The version the item was opened as first, then the others in
+		// order. Its tracks are those the app asked for, if it named it.
+		c := candidates{order: make([]int, 0, len(versions)), analyzed: settings.VersionAttempts, named: -1}
+		if len(versions) > 0 {
+			c.order = append(c.order, at)
+			if request.MediaSourceId != "" {
+				c.named = at
 			}
 		}
-		if len(candidates) == 0 {
-			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
-			return
-		}
-	} else if len(versions) > 0 {
-		candidates = append(candidates, at)
 		for i := range versions {
 			if i != at {
-				candidates = append(candidates, i)
+				c.order = append(c.order, i)
 			}
 		}
+		return c
 	}
-	// The first candidate that plays on the app is chosen. With
-	// PreferDirectPlay, and no version asked for, the candidates are gone
-	// through until one plays without conversion, as it is or repackaged
-	// with its tracks copied, the first that plays at all being chosen
-	// when none does. Jellyfin 12.1 keeps the version opened first however
+	// With PreferDirectPlay, and no version asked for, the version chosen
+	// is the first that plays without conversion, as it is or repackaged
+	// with its tracks copied, among those analyzed now; else the first that
+	// plays at all. Jellyfin 12.1 keeps the version opened first however
 	// it plays: the setting departs from it, and is off by default.
-	prefer := settings.PreferDirectPlay && request.MediaSourceId == ""
-	var chosen, first *decided
-	unreadable := map[int]bool{}
-	for n, i := range candidates {
-		version := versions[i]
-		var analysis media.Analysis
-		if request.MediaSourceId == "" && n >= settings.VersionAttempts {
-			var known bool
-			if analysis, known = h.Playback.Analyzed(r.Context(), version.ID); !known {
-				continue
-			}
-		} else {
-			var err error
-			if analysis, err = h.Playback.Analyze(r.Context(), version); err != nil {
-				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
-				unreadable[i] = true
-				continue
-			}
+	prefer := settings.PreferDirectPlay && !explicit
+	c := plan(p.versions)
+	choice := h.choose(r, user, p, opened, request, c, prefer)
+	if choice.decided == nil && !complete && r.Context().Err() == nil {
+		versions, err := h.Library.Versions(r.Context(), user, item.ID)
+		if err != nil {
+			h.browseError(w, r, err)
+			return
 		}
-		permits := h.convertible(allowed, user, version)
-		d, ok := h.decide(r, p, i, version, sourceID(opened, version, i == at), analysis, request, permits)
-		if !ok {
-			if permits != allowed {
-				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
-			} else {
-				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit or quality group", "addon", version.Addon)
-			}
-			continue
-		}
-		if first == nil {
-			first = &d
-		}
-		if !prefer || h.unconverted(r.Context(), d, request) {
-			chosen = &d
-			break
-		}
+		p.versions = h.offered(r.Context(), user, versions)
+		c = plan(p.versions)
+		choice = h.choose(r, user, p, opened, request, c, prefer)
 	}
-	if chosen == nil {
-		chosen = first
-	}
-	if chosen == nil {
+	if choice.decided == nil {
 		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
 		return
 	}
+	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
+	if chosen.decision.HLS {
+		h.warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
+	}
+	// An app that named a version, the title's own identifier included,
+	// gets the version chosen alone, as from Jellyfin.
 	if request.MediaSourceId != "" {
 		writeJSON(w, http.StatusOK, playbackInfoResponse{MediaSources: []MediaSourceInfo{chosenSource}, PlaySessionId: session})
 		return
@@ -407,15 +396,16 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// some, such as Strand, list them for the user to pick. They keep the
 	// order item details give them, which neither a pick nor a play
 	// changes. The candidates passed over before the one chosen, tried in
-	// vain or skipped, are left out, as are those found unreadable just
-	// now: for a title opened by its own identifier, the first source is
-	// then the one chosen, which apps play unless the user picks another.
+	// vain, skipped or still being read, are left out, as are those found
+	// unreadable just now: for a title opened by its own identifier, the
+	// first source is then the one chosen, which apps play unless the user
+	// picks another.
 	// The one chosen is described as decided; the others as item details
 	// describe them, and decided when an app asks for one. Jellyfin 12.1
 	// lists every version and puts the source of a version opened as an
 	// item first; Polyfin never moves one.
 	passed := map[int]bool{}
-	for _, i := range candidates {
+	for _, i := range c.order {
 		if i == chosen.index {
 			break
 		}
@@ -487,6 +477,9 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	if posted.MediaSourceId != "" {
 		request.MediaSourceId = posted.MediaSourceId
 	}
+	if posted.StartTimeTicks.set {
+		request.StartTimeTicks = posted.StartTimeTicks
+	}
 	if posted.DeviceProfile != nil {
 		request.DeviceProfile = posted.DeviceProfile
 	}
@@ -536,9 +529,10 @@ func (h *Handler) unconverted(ctx context.Context, d decided, request playbackIn
 
 // decide decides how the version at index plays on the app, for its device
 // profile. Only the conversions allowed are planned: it reports false when
-// the version would need another to play on the app.
+// the version would need another to play on the app. named tells whether
+// the app asked for this version, whose tracks it may have chosen.
 func (h *Handler) decide(r *http.Request, p playable, index int, version library.Version, id accounts.ID, analysis media.Analysis,
-	request playbackInfoRequest, allowed accounts.Conversions) (decided, bool) {
+	request playbackInfoRequest, allowed accounts.Conversions, named bool) (decided, bool) {
 	source := h.baseSource(r, p, version, id, analysis, true)
 	streams := source.MediaStreams
 	options := playback.Options{
@@ -556,13 +550,13 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	// audio track flagged default, else the first, by itself: another
 	// preferred one is passed as if asked, so that the decision checks it.
 	audio := p.tracks.audio(streams)
-	if request.MediaSourceId != "" && request.AudioStreamIndex.set {
+	if named && request.AudioStreamIndex.set {
 		audio = new(int(request.AudioStreamIndex.value))
 		options.AudioStreamIndex = audio
 	} else if audio != nil && *audio != *defaultAudio(streams) {
 		options.AudioStreamIndex = audio
 	}
-	if request.MediaSourceId != "" && request.SubtitleStreamIndex.set {
+	if named && request.SubtitleStreamIndex.set {
 		options.SubtitleStreamIndex = new(int(request.SubtitleStreamIndex.value))
 	} else {
 		options.SubtitleStreamIndex = p.tracks.subtitle(streams, audio)
@@ -598,9 +592,15 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		// for a file without an index such as MPEG-TS, every few seconds,
 		// which only converted video allows (see hls.NewGridPlan). Such a
 		// version is not offered to a user who may not have it converted,
-		// rather than offered and failing.
+		// rather than offered and failing; nor is a version whose index
+		// cannot be read, which nothing could stream.
 		if decision.HLS {
-			if plan, err := h.Playback.Plan(r.Context(), version); err == nil && plan.Grid() && decision.Video == nil {
+			plan, err := h.Playback.Plan(r.Context(), version)
+			if err != nil {
+				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+				return decided{}, false
+			}
+			if plan.Grid() && decision.Video == nil {
 				converted := options
 				converted.ConvertVideo = true
 				if decision = playback.Decide(request.DeviceProfile, described, converted); !decision.HLS || decision.Video == nil {

@@ -184,8 +184,13 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 	if source := first(answer); source.Id != light || !source.SupportsDirectPlay || len(answer.MediaSources) != 1 {
 		t.Errorf("fallback to the lighter version: %+v", answer)
 	}
-	if asked := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": heavy}); !asked.refused() {
+	// Asked for by its own identifier, the heavier version is refused; the
+	// title's identifier, which names no version, plays the lighter one.
+	if asked := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": p.versions[0].ID.String()}); !asked.refused() {
 		t.Errorf("the heavier version asked for: %+v", asked)
+	}
+	if source := first(p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": heavy})); source.Id != light {
+		t.Errorf("the title asked for: %+v", source)
 	}
 	// An app without a device profile is told to play the lighter one.
 	if source := first(p.playbackInfo(t, "tv", p.token, p.movie, nil)); source.Id != light {

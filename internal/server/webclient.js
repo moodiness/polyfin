@@ -21,7 +21,11 @@
 // background, and asks each addon again 10 seconds after its first answer,
 // then 30 seconds later while its answers grow; /Polyfin/Items/{id}/Versions
 // tells how many addons it still asks (Pending) and how many versions
-// details list now (Count). It asks every second while addons are pending,
+// details list now (Count). Polyfin also pushes it, as it changes, on the
+// socket jellyfin-web keeps open, in a PolyfinVersions message whose Data
+// names the page's identifier (ItemId): the script hears it through
+// ApiClient's message event. It asks every second while addons are pending,
+// every 10 seconds once a push came, the socket then telling the changes,
 // for at most 90 seconds: a first answer, which takes at most 15 seconds,
 // and both follow-ups, 10 and 30 seconds later and as long each, end within
 // 85. When the page lists fewer versions than Count, or a different number
@@ -77,6 +81,10 @@
   var latest = null
   var updatedFor = 0
   var asking = false
+  // Whether Polyfin pushed the title's progress, and the ApiClient whose
+  // messages the script hears.
+  var pushed = false
+  var heard = null
   // The options this script added to the version menu, and the size of the
   // version each option stood for when the script last listed it.
   // jellyfin-web fills the menu with new options, which forgets both.
@@ -169,6 +177,29 @@
       }
     )
   }
+  // listen hears the messages of jellyfin-web's ApiClient, as its message
+  // event gives them: jellyfin-web's events keep an object's listeners in
+  // its _callbacks, by event, and call each with the event then the message.
+  function listen() {
+    var api = window.ApiClient
+    if (!api || api === heard) return
+    heard = api
+    var callbacks = (api._callbacks = api._callbacks || {})
+    ;(callbacks.message = callbacks.message || []).push(function (event, message) {
+      try {
+        hear(message)
+      } catch (error) {}
+    })
+  }
+  // hear takes a pushed progress of the title followed as an answer.
+  function hear(message) {
+    if (!message || message.MessageType !== 'PolyfinVersions' || !message.Data) return
+    var progress = message.Data
+    if (!title || String(progress.ItemId).toLowerCase() !== title) return
+    pushed = true
+    latest = progress
+    update(progress)
+  }
   function followVersions() {
     var match = titleRoute.exec(location.hash)
     var id = match ? match[1].toLowerCase() : ''
@@ -178,9 +209,11 @@
     title = id
     latest = null
     updatedFor = 0
+    pushed = false
     if (picking) picking.disconnect()
     picking = null
     if (!id) return
+    listen()
     var until = Date.now() + 90000
     var answers = 0
     function ask() {
@@ -201,11 +234,14 @@
         .catch(function () {})
     }
     function next() {
-      timer = setTimeout(function () {
-        try {
-          ask()
-        } catch (error) {}
-      }, 1000)
+      timer = setTimeout(
+        function () {
+          try {
+            ask()
+          } catch (error) {}
+        },
+        pushed ? 10000 : 1000
+      )
     }
     next()
   }

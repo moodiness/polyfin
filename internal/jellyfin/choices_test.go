@@ -31,8 +31,9 @@ func scriptedProbe(t *testing.T, body string) fakeProbe {
 	return f
 }
 
-// A source that does not answer is given up once the analysis timeout is
-// over, and PlaybackInfo plays the next version.
+// A source that does not answer holds up PlaybackInfo only for a while
+// once the next version is ready: that version plays, and the first, still
+// being read, is left out of the list.
 func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
 	probe := scriptedProbe(t, "[ $n -gt 1 ] || exec sleep 60\nexec cat \"$0.json\"\n")
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
@@ -40,14 +41,13 @@ func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
 	started := time.Now()
 	answer := p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil)
 	elapsed := time.Since(started)
-	// The second version's analysis is known; the first, given up, is
-	// left out of the list.
+	// The second version's analysis is known.
 	if len(answer.MediaSources) != 1 || answer.MediaSources[0].Id != p.versions[1].ID.String() || probe.runs() != 1 {
 		t.Fatalf("after a source that did not answer: %d runs, %+v", probe.runs(), answer)
 	}
-	// The default, 45 s, would still be waiting.
-	if limit := time.Duration(accounts.MinAnalysisTimeout) * time.Second; elapsed < limit || elapsed > 3*limit {
-		t.Errorf("PlaybackInfo answered after %s, want about %s", elapsed, limit)
+	// The analysis timeout, longer, would still be waiting.
+	if elapsed < versionPatience || elapsed > versionPatience+time.Second {
+		t.Errorf("PlaybackInfo answered after %s, want about %s", elapsed, versionPatience)
 	}
 }
 
@@ -55,26 +55,31 @@ func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
 // source that is not media, and answer the next ones.
 const unreadableFirst = "[ $n -gt 1 ] || { echo 'Invalid data found when processing input' >&2; exit 1; }\nexec cat \"$0.json\"\n"
 
+// unreadable makes a scripted ffprobe fail every run.
+const unreadable = "echo 'Invalid data found when processing input' >&2\nexit 1\n"
+
 // When the app chooses no version, PlaybackInfo analyzes VersionAttempts
-// of them at most; the others play only when analyzed before.
+// of them at most, at once; the others play only when analyzed before.
 func TestVersionAttemptsBoundTheVersionsAnalyzed(t *testing.T) {
-	for _, attempts := range []int{1, 2} {
-		// The first version cannot be read; the second can.
-		probe := scriptedProbe(t, unreadableFirst)
+	for _, attempts := range []int{1, 2, 3} {
+		probe := scriptedProbe(t, unreadable)
 		p := playingOn(t, newProbingServer(t, 10, probe.path))
 		p.setting(t, func(settings *accounts.Settings) { settings.VersionAttempts = attempts })
-		// Unlike the first title's, the other title's versions were not
-		// analyzed before.
-		versions := p.versionsOf(t, p.remote)
+		// Unlike the first title's, the other title's two versions were
+		// not analyzed before, and cannot be read.
+		p.versionsOf(t, p.remote)
 		answer := p.ask(t, p.token, p.remote, p.profile(t, "jellyfin-web-chrome"), nil)
-		switch {
-		case probe.runs() != attempts:
-			t.Errorf("%d attempts: %d versions analyzed", attempts, probe.runs())
-		case attempts == 1 && !answer.refused():
-			t.Errorf("one attempt, on a version that cannot be read: %+v", answer)
-		case attempts == 2 && (len(answer.MediaSources) != 1 || answer.MediaSources[0].ETag != versions[1].ID.String()):
-			t.Errorf("two attempts: %+v", answer)
+		if runs := probe.runs(); runs != min(attempts, 2) || !answer.refused() {
+			t.Errorf("%d attempts: %d versions analyzed, %+v", attempts, runs, answer)
 		}
+	}
+	// The first title's second version, analyzed before, plays however
+	// few may be analyzed now.
+	probe := scriptedProbe(t, unreadable)
+	p := playingOn(t, newProbingServer(t, 10, probe.path))
+	p.setting(t, func(settings *accounts.Settings) { settings.VersionAttempts = 1 })
+	if source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil)); source.Id != p.versions[1].ID.String() || probe.runs() != 1 {
+		t.Errorf("one attempt: %d runs, %+v", probe.runs(), source)
 	}
 }
 
@@ -178,7 +183,7 @@ func TestPreferDirectPlayChoosesAVersionThatNeedsNoConversion(t *testing.T) {
 		t.Errorf("preferring a copy: %+v", source)
 	}
 	// The version the app asks for plays, converted as it needs.
-	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.movie})); source.Id != p.movie ||
+	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.versions[0].ID.String()})); source.Id != p.movie ||
 		!strings.HasSuffix(source.TranscodingUrl, "&allowAudioStreamCopy=false") {
 		t.Errorf("the version asked for: %+v", source)
 	}

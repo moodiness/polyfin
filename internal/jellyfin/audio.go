@@ -779,30 +779,32 @@ func (h *Handler) prepareNextTrack(user accounts.User, item library.Item, state 
 	if !h.Accounts.Settings().PrepareAhead || state.Queued && state.Next == (accounts.ID{}) {
 		return
 	}
-	h.prepare(preparationKey{user: user.ID, title: item.ID, next: true}, func(ctx context.Context) {
+	h.prepare(preparationKey{user: user.ID, title: item.ID, next: true}, func(ctx context.Context) bool {
 		next := state.Next
 		if !state.Queued {
 			var ok bool
 			if next, ok = h.trackAfter(ctx, user, item); !ok {
-				return
+				return true
 			}
 		}
 		if next == item.ID || !h.preparations.claim(preparationKey{user: user.ID, title: next}) {
-			return
+			return true
 		}
 		// Through Library.Item, as details, for parental control.
 		track, err := h.Library.Item(ctx, user, next)
 		if err != nil || !library.AudioKind(track.Kind) {
-			return
+			return true
 		}
 		versions, err := h.Library.Versions(ctx, user, track.ID)
 		if err != nil || len(versions) == 0 {
 			h.Logger.Debug("The next track could not be resolved ahead of playback", "error", err)
-			return
+			return false
 		}
 		if _, err := h.describeAudio(ctx, versions[0]); err != nil {
 			h.Logger.Debug("The next track could not be analyzed ahead of playback", "addon", versions[0].Addon, "error", err)
+			return false
 		}
+		return true
 	})
 }
 

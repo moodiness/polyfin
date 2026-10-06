@@ -99,9 +99,14 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 // library.Service.VersionsNow). complete reports whether every addon's
 // versions were known, and none asked again. Like playable, it leaves out
 // versions that recently failed and those taller than the user's group.
-func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item) (playable, bool, error) {
+// The page, opened as opened, is told of the versions as they come (see
+// versionsChanged).
+func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) (playable, bool, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	versions, complete, err := h.Library.VersionsNow(ctx, user, item.ID)
+	if err == nil {
+		h.watch(user, item.ID, opened)
+	}
 	p.versions = h.offered(ctx, user, versions)
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
 		p.subtitles = subtitles

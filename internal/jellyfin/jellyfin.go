@@ -113,6 +113,9 @@ type Handler struct {
 	preparations *preparations
 	// listings lists the versions of home rows' titles ahead of a play.
 	listings *listings
+	// watched are the title pages that follow their versions as addons
+	// answer (see versionsChanged).
+	watched *watchedPages
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
@@ -135,13 +138,17 @@ func New(options Options) *Handler {
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
 		sockets:        newSockets(),
-		preparations:   newPreparations(),
+		preparations:   newPreparations(options.Logger),
+		watched:        newWatchedPages(),
 		now:            time.Now,
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
+	if options.Library != nil {
+		options.Library.OnVersionsChanged(h.versionsChanged)
+	}
 	options.Accounts.OnSignOut(h.signedOut)
 	if options.Thumbnails != nil {
 		options.Thumbnails.WatchPlaybacks(h.thumbnailPlaybacks)

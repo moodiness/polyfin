@@ -70,11 +70,9 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	for _, entry := range v.addons {
 		for _, video := range lists {
 			// Their follow-ups stop first: one answering meanwhile
-			// replaces no list, and none is brought back afterwards.
-			key := streamKey{entry.addon.ID, title.Meta.Type, video}
-			s.stopFollowUps(key)
-			s.streamLists.Delete(key)
-			s.subtitleLists.Delete(key)
+			// replaces no list, and none is brought back afterwards,
+			// not even by a restart.
+			s.forgetLists(ctx, streamKey{entry.addon.ID, title.Meta.Type, video})
 		}
 	}
 	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'genres' WHERE id = $1", title.ID); err != nil {

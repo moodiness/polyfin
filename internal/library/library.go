@@ -67,6 +67,9 @@ type Service struct {
 	// after each of followUpDelays (see followUpList).
 	followUps      followUps
 	followUpDelays []time.Duration
+	// tracking follows titles' versions for the pages that show them, and
+	// saves stream lists (see versionTracking).
+	tracking versionTracking
 	// ratingLookups holds a place for each rating looked up (see visible);
 	// ratingWait bounds how long a request waits for them.
 	ratingLookups chan struct{}
