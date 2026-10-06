@@ -95,6 +95,7 @@ The first play of a version waits for some reads. **Prepare playback in advance*
 - as soon as a title's details open in an app, it analyzes the version the title would play;
 - it then reads the version's keyframe index and where its subtitle tracks sit, which HLS playback needs;
 - it readies the next episode the same way, with its versions and subtitles, once the episode playing has 9 minutes left;
+- as a song or audiobook starts, it resolves the next track of the app's queue (else of the album) the same way: where it streams from, and its analysis when its addon does not describe it;
 - when an app asks for Continue Watching or Next Up, it asks the addons, in the background, for the versions of the first 10 movies and episodes of each row. A title opened from these rows then lists its versions at once, instead of a placeholder while the addons answer (see [Title pages](#title-pages)). Only the versions are listed: the file is read when the page opens.
 
 Playback then starts at once instead of waiting a second or two for these reads.

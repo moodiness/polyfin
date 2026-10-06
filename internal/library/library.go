@@ -77,15 +77,10 @@ type Service struct {
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
 
-	// music asks Eclipse addons for their resources, which the caches
-	// below keep: catalog pages as long as other catalogs', album, artist
-	// and playlist pages as long as descriptions, searches briefly.
-	music          *eclipse.Client
-	musicPages     *cache.Cache[musicKey, musicPage]
-	musicAlbums    *cache.Cache[musicKey, eclipse.Album]
-	musicArtists   *cache.Cache[musicKey, eclipse.Artist]
-	musicPlaylists *cache.Cache[musicKey, eclipse.Playlist]
-	musicSearches  *cache.Cache[musicKey, eclipse.Results]
+	// music asks Eclipse addons for their resources, which musicCache
+	// keeps (see musicCaches).
+	music      *eclipse.Client
+	musicCache musicCaches
 
 	// overrides are administrators' edits of items, loaded on first use
 	// (see overridesNow); overridesMu orders their loading and changes.
@@ -146,17 +141,13 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
 		music:          eclipse.NewClient(client),
-		musicAlbums:    cache.New[musicKey, eclipse.Album](2000, metaTTL),
-		musicArtists:   cache.New[musicKey, eclipse.Artist](2000, metaTTL),
-		musicPlaylists: cache.New[musicKey, eclipse.Playlist](1000, metaTTL),
-		musicSearches:  cache.New[musicKey, eclipse.Results](500, searchTTL),
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, []stremio.Meta](4000, s.catalogLife, clock)
 	s.libraryImages = cache.NewLasting[pageKey, string](1000, s.catalogLife, clock)
 	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
-	s.musicPages = cache.NewLasting[musicKey, musicPage](2000, s.catalogLife, clock)
+	s.musicCache = newMusicCaches(s)
 	return s
 }
 

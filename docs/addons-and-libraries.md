@@ -79,9 +79,11 @@ Podcasts have no Jellyfin type: their episodes are songs.
 A row lists its own items. When an app asks for another kind, the library derives it:
 
 - the albums and artists its songs name; or
-- the songs of its albums, playlists or artists, reading at most 50 of their pages.
+- the songs of its albums, playlists or artists, reading at most 50 of their pages, 8 at a time.
 
 An album or artist that a song only names is found again through the addon's search when opened. So addons without catalogs still serve search and album, artist and playlist pages.
+
+Polyfin keeps what music addons answer. Catalog pages are read again after **Refresh catalogs every (minutes)**, and album, artist and playlist pages after 6 hours. A page due to be read again is still served at once, for up to 24 more hours, while Polyfin asks the addon again in the background. Searches are kept 10 minutes. At most 8 requests for pages go to one addon at a time.
 
 ### Instant mixes and lyrics
 
@@ -93,13 +95,14 @@ An album or artist that a song only names is found again through the addon's sea
 
 ### Music playback
 
-Polyfin decides how to play a track with the app's device profile, as Jellyfin decides for audio. It uses the codec, container, sample rate and bit depth from the addon's stream reply.
+Polyfin decides how to play a track with the app's device profile, as Jellyfin decides for audio. It uses the codec, container, sample rate and bit depth from the addon's stream reply. When the reply or the track listing gives only a known format (`flac`, `mp3`, `aac`, `m4a`, `opus`, `ogg` or `wav`), Polyfin takes the codec and container from it.
 
-- The stream is analyzed only when the reply gives none of these.
+- The stream is analyzed, as an audio file, only when neither gives its codec and container. Tracks listed with a `streamURL` play from it the same way.
 - The reply does not give a lossless stream's bitrate. Polyfin takes it as the bitrate of its samples in stereo, so that a bitrate limit converts it.
-- Polyfin plays the track as it is, through the same source and relay rules as videos (see [Playback](playback.md)).
+- Polyfin plays the track as it is, through the same source and relay rules as videos (see [Playback](playback.md)). A track whose link expires before the track ends is always relayed, so that Polyfin can renew the link while it plays.
 - Or it converts the track with FFmpeg to the codec, bitrate, sample rate and channels the app asks for, progressively or in 3-second HLS segments (see [Transcoding](transcoding.md)).
-- An expired link is asked for again, before it expires (`expiresAt`) or once it fails.
+- An expired link is asked for again, a minute before it expires (`expiresAt`) or once it fails. A link given less than 15 seconds ago is used until it expires, so one play asks for it once. Plays of the same track at the same time share one request.
+- With **Prepare playback in advance** on, Polyfin resolves the next track as a track starts: the next one in the queue the app reports, else the next one on the album (see [Playback](playback.md#preparing-playback-in-advance)).
 
 The user's conversion permission, bitrate limit and number of playbacks at once apply (see [Users](users.md)). Quality groups, which are about video heights, do not.
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -71,7 +72,8 @@ type describedAudio struct {
 }
 
 // describeAudio describes a track's stream from its addon's routing
-// fields when they give its codec and container, and analyzes it
+// fields when they give its codec and container, the format they name
+// included (see library.AudioSource), and analyzes it as an audio file
 // otherwise.
 func (h *Handler) describeAudio(ctx context.Context, version library.Version) (describedAudio, error) {
 	if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
@@ -93,7 +95,7 @@ func (h *Handler) describeAudio(ctx context.Context, version library.Version) (d
 			analysis: media.Analysis{Format: container, Duration: version.Runtime, Streams: []media.Stream{stream}, Remote: true},
 		}, nil
 	}
-	analysis, err := h.Playback.Analyze(ctx, version)
+	analysis, err := h.Playback.AnalyzeAudio(ctx, version)
 	if err != nil {
 		return describedAudio{}, err
 	}
@@ -167,8 +169,15 @@ func (h *Handler) audioSource(r *http.Request, item library.Item, version librar
 	if runtime := cmp.Or(d.analysis.Duration, version.Runtime, item.Runtime); runtime > 0 {
 		source.RunTimeTicks = new(int64(runtime / 100))
 	}
-	source.Path = h.audioURL(r, item.ID, version, d.source.Container, mustRelay(r, version))
+	source.Path = h.audioURL(r, item.ID, version, d.source.Container, relayTrack(r, version))
 	return source
+}
+
+// relayTrack reports whether a track's bytes go through Polyfin: when
+// they must (see mustRelay), or when its link expires before the track
+// would end, so that the source cache renews it mid-track.
+func relayTrack(r *http.Request, version library.Version) bool {
+	return mustRelay(r, version) || !version.Expires.IsZero() && version.Expires.Before(time.Now().Add(version.Runtime))
 }
 
 // audioURL is the address players fetch a track from as it is, with a
@@ -206,7 +215,7 @@ func (h *Handler) audioPlaybackInfo(w http.ResponseWriter, r *http.Request, user
 		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
 		return
 	}
-	session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: mustRelay(r, version)})
+	session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relayTrack(r, version)})
 	source := h.audioSource(r, item, version, d)
 	// Jellyfin names the default track in a song's details, not here.
 	source.DefaultAudioStreamIndex = nil
@@ -426,7 +435,7 @@ func (h *Handler) audioFile(w http.ResponseWriter, r *http.Request) {
 // serveTrack serves a track as it is: redirected to its source, or
 // relayed (see playback.Service.Serve).
 func (h *Handler) serveTrack(w http.ResponseWriter, r *http.Request, req audioRequest, extension string) {
-	relay := req.grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
+	relay := req.grant.Relay || relayTrack(r, req.version) || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	if analysis, known := h.Playback.Analyzed(r.Context(), req.version.ID); known && overUserLimit(int64(req.user.MaxBitrate), analysis.Bitrate) {
 		h.Logger.Info("A track above the user's bitrate limit was refused", "addon", req.version.Addon)
 		w.WriteHeader(http.StatusForbidden)
@@ -723,4 +732,92 @@ func (h *Handler) addAudioSources(r *http.Request, user accounts.User, dto *Base
 		}
 	}
 	dto.MediaSources, dto.MediaStreams = &sources, &streams
+}
+
+// queueItem is an entry of the queue a player reports with its playback:
+// the item, and the entry's own identifier, as an item may be queued twice.
+type queueItem struct {
+	Id             string
+	PlaylistItemId string
+}
+
+// next is the item the reported queue plays after the one playing, found
+// by its entry when the report names it, else by its first entry: the
+// following entry, or the first once the last ends when the queue
+// repeats. It is zero when nothing follows, or when the item repeats
+// itself, which leaves nothing to prepare.
+func (report playbackReport) next() accounts.ID {
+	queue := report.NowPlayingQueue
+	i := -1
+	if report.PlaylistItemId != "" {
+		i = slices.IndexFunc(queue, func(q queueItem) bool { return q.PlaylistItemId == report.PlaylistItemId })
+	}
+	if playing, ok := parseGUID(report.ItemId); i < 0 && ok {
+		i = slices.IndexFunc(queue, func(q queueItem) bool { id, ok := parseGUID(q.Id); return ok && id == playing })
+	}
+	if i < 0 || report.RepeatMode == "RepeatOne" {
+		return accounts.ID{}
+	}
+	i++
+	if i == len(queue) {
+		if report.RepeatMode != "RepeatAll" {
+			return accounts.ID{}
+		}
+		i = 0
+	}
+	id, _ := parseGUID(queue[i].Id)
+	return id
+}
+
+// prepareNextTrack readies, as a track starts, the track played after it,
+// with playback prepared ahead in the settings: where it streams from, and
+// its analysis when its addon does not describe it, so that it starts as
+// fast as a track played again. The next track is the queue's the player
+// reported (see playbackReport.next), else, when it reported none, the
+// next of the track's album.
+func (h *Handler) prepareNextTrack(user accounts.User, item library.Item, state playback.PlayState) {
+	if !h.Accounts.Settings().PrepareAhead || state.Queued && state.Next == (accounts.ID{}) {
+		return
+	}
+	h.prepare(preparationKey{user: user.ID, title: item.ID, next: true}, func(ctx context.Context) {
+		next := state.Next
+		if !state.Queued {
+			var ok bool
+			if next, ok = h.trackAfter(ctx, user, item); !ok {
+				return
+			}
+		}
+		if next == item.ID || !h.preparations.claim(preparationKey{user: user.ID, title: next}) {
+			return
+		}
+		// Through Library.Item, as details, for parental control.
+		track, err := h.Library.Item(ctx, user, next)
+		if err != nil || !library.AudioKind(track.Kind) {
+			return
+		}
+		versions, err := h.Library.Versions(ctx, user, track.ID)
+		if err != nil || len(versions) == 0 {
+			h.Logger.Debug("The next track could not be resolved ahead of playback", "error", err)
+			return
+		}
+		if _, err := h.describeAudio(ctx, versions[0]); err != nil {
+			h.Logger.Debug("The next track could not be analyzed ahead of playback", "addon", versions[0].Addon, "error", err)
+		}
+	})
+}
+
+// trackAfter is the track following item on its album.
+func (h *Handler) trackAfter(ctx context.Context, user accounts.User, item library.Item) (accounts.ID, bool) {
+	if item.AlbumID == (accounts.ID{}) {
+		return accounts.ID{}, false
+	}
+	tracks, err := h.Library.Music(ctx, user, library.MusicQuery{Parent: item.AlbumID})
+	if err != nil {
+		return accounts.ID{}, false
+	}
+	i := slices.IndexFunc(tracks, func(t library.Item) bool { return t.ID == item.ID })
+	if i < 0 || i+1 == len(tracks) {
+		return accounts.ID{}, false
+	}
+	return tracks[i+1].ID, true
 }

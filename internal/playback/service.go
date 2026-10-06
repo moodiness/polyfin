@@ -203,6 +203,11 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 // first use. A version that cannot be analyzed is not tried again for a
 // while.
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
+	return s.analyze(ctx, version, media.Prober.Probe)
+}
+
+// analyze is Analyze, the version read with probe.
+func (s *Service) analyze(ctx context.Context, version library.Version, probe func(media.Prober, context.Context, string) (media.Analysis, error)) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
 	}
@@ -222,7 +227,7 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		target, release := s.loopback.register(src)
 		defer release()
 		started := time.Now()
-		analysis, err := s.ffprobe().Probe(ctx, target)
+		analysis, err := probe(s.ffprobe(), ctx, target)
 		if err == nil && standIn(analysis, version.Runtime) {
 			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
 		}

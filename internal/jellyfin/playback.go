@@ -1074,6 +1074,8 @@ type playbackReport struct {
 	VolumeLevel         looseInt
 	RepeatMode          string
 	PlaybackOrder       string
+	PlaylistItemId      string
+	NowPlayingQueue     []queueItem
 }
 
 func (report playbackReport) state() playback.PlayState {
@@ -1098,6 +1100,7 @@ func (report playbackReport) state() playback.PlayState {
 	if report.VolumeLevel.set {
 		state.VolumeLevel = new(int(report.VolumeLevel.value))
 	}
+	state.Queued, state.Next = report.NowPlayingQueue != nil, report.next()
 	return state
 }
 
