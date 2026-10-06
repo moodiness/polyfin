@@ -418,6 +418,8 @@ type lineupStreamJSON struct {
 	Enabled bool    `json:"enabled"`
 	Custom  bool    `json:"custom"`
 	Address *string `json:"address"`
+	// Health is how the stream last answered when its channel was opened.
+	Health iptv.StreamHealth `json:"health"`
 }
 
 func newMappingJSON(guide *accounts.ID, guideChannel *string, name string, manual bool) *mappingJSON {
@@ -437,7 +439,7 @@ func newChannelJSON(c iptv.Channel) channelJSON {
 		result.Mapping = newMappingJSON(m.Guide, m.GuideChannel, m.GuideChannelName, m.Manual)
 	}
 	for _, s := range c.Streams {
-		stream := lineupStreamJSON{ID: s.ID, Label: s.Label, Enabled: s.Enabled, Custom: s.Custom}
+		stream := lineupStreamJSON{ID: s.ID, Label: s.Label, Enabled: s.Enabled, Custom: s.Custom, Health: s.Health}
 		if s.Custom {
 			stream.Address = new(s.Address)
 		}
@@ -693,6 +695,21 @@ func (h *handler) setStreams(w http.ResponseWriter, r *http.Request) {
 		settings = append(settings, iptv.StreamSetting{ID: s.ID, Enabled: *s.Enabled})
 	}
 	c, err := h.IPTV.SetStreams(r.Context(), scope, source, channel, settings)
+	h.answerChannel(w, r, http.StatusOK, c, err)
+}
+
+// retryStreams forgets how a channel's streams answered, so that its next
+// start tries them all.
+func (h *handler) retryStreams(w http.ResponseWriter, r *http.Request) {
+	scope, source, channel, ok := h.channelTarget(w, r, true)
+	if !ok {
+		return
+	}
+	if err := h.IPTV.ForgetStreamHealth(r.Context(), scope, source, channel); err != nil {
+		h.answerChannel(w, r, http.StatusOK, iptv.Channel{}, err)
+		return
+	}
+	c, err := h.IPTV.Channel(r.Context(), scope, source, channel)
 	h.answerChannel(w, r, http.StatusOK, c, err)
 }
 

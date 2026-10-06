@@ -274,7 +274,7 @@ const settings = {
       `Recordings older than this are deleted. This is checked every day. From ${r.min} to ${r.max}.`,
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp:
-      'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. From 1 to 168; 12 by default.',
+      'How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From 1 to 168; 12 by default.',
     backupsFolder: (folder: string) => `Backups of the database are saved in ${folder}.`,
     backupsOff:
       'Backups are off. Set POLYFIN_BACKUP_DIR to a folder on the container, mounted from the server, then restart Polyfin to turn them on.',

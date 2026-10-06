@@ -207,6 +207,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}", h.signedIn(h.updateChannel))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/move", h.signedIn(h.moveChannel))
 	mux.Handle("PUT /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams", h.signedIn(h.setStreams))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams/retry", h.signedIn(h.retryStreams))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams", h.signedIn(h.addStream))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/iptv/{id}/channels/{chid}/streams/{sid}", h.signedIn(h.deleteStream))
 	mux.Handle("GET /admin/api/scopes/{scope}/catalog-guides", h.signedIn(h.catalogGuides))

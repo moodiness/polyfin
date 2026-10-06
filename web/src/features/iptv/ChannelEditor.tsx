@@ -8,6 +8,7 @@ import {
   fetchLineupChannel,
   queryClient,
   queryKeys,
+  retryChannelStreams,
   saveChannelStreams,
   updateLineupChannel,
   type ChannelPatch,
@@ -33,6 +34,7 @@ import {
   TextInput,
   useToast,
   MoveButtons,
+  RelativeTime,
 } from '@/ui'
 import { MappingControls, mappingWords, MappingText } from './MappingControls'
 import { ChannelLogo } from './shared'
@@ -306,6 +308,15 @@ function Streams({
       onSaved(updated)
     },
   })
+  const retry = useMutation({
+    mutationFn: () => retryChannelStreams(scope, id, channel.id),
+    onSuccess: (updated) => {
+      setStreams(updated.streams)
+      onSaved(updated)
+      toast(text.retried)
+    },
+  })
+  const failing = streams.some((s) => s.health.failure !== '')
 
   function move(from: number, to: number) {
     setStreams((current) => {
@@ -350,6 +361,20 @@ function Streams({
               />
             </div>
             {stream.custom && <Badge tone="accent">{text.custom}</Badge>}
+            {stream.health.failure !== '' && stream.health.failedAt && (
+              <span className="basis-full pl-7 text-small text-ink-3">
+                <StatusPill tone={stream.health.hiddenUntil ? 'danger' : 'warn'}>
+                  {text.failures[stream.health.failure]}
+                </StatusPill>{' '}
+                <RelativeTime iso={stream.health.failedAt} />
+                {stream.health.hiddenUntil && (
+                  <>
+                    {' · '}
+                    {text.leftOutUntil} <RelativeTime iso={stream.health.hiddenUntil} />
+                  </>
+                )}
+              </span>
+            )}
             <span className="flex items-center">
               <MoveButtons
                 name={stream.label}
@@ -373,8 +398,8 @@ function Streams({
         ))}
       </ol>
       {dirty && <p className="text-small text-warn">{text.saveFirst}</p>}
-      {(save.isError || remove.isError) && (
-        <FieldError>{errorMessage(t, save.error ?? remove.error)}</FieldError>
+      {(save.isError || remove.isError || retry.isError) && (
+        <FieldError>{errorMessage(t, save.error ?? remove.error ?? retry.error)}</FieldError>
       )}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -388,6 +413,11 @@ function Streams({
         <Button variant="ghost" disabled={!dirty} onClick={() => setStreams(channel.streams)}>
           {t.lineup.reset}
         </Button>
+        {failing && (
+          <Button variant="ghost" loading={retry.isPending} onClick={() => retry.mutate()}>
+            {text.retry}
+          </Button>
+        )}
       </div>
       <form
         onSubmit={(event) => {

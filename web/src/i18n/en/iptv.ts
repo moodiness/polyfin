@@ -21,6 +21,8 @@ const iptv = {
       too_large: 'The last download failed: the list is too large. The previous channels are kept.',
       malformed:
         'The last download failed: the server did not return a channel list, or refused the login. The previous channels are kept.',
+      rate_limited:
+        'The last download failed: the server asked Polyfin to slow down. It is tried again in a few minutes; the previous channels are kept.',
     } as Record<string, string>,
   },
   lineup: {
@@ -52,6 +54,8 @@ const iptv = {
       malformed: 'The last fetch failed: this file is not an XMLTV guide.',
       channels_unreachable:
         'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
+      rate_limited:
+        'The last fetch failed: the server asked Polyfin to slow down. It is tried again in a few minutes.',
     } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
@@ -314,6 +318,14 @@ const iptv = {
       defaultLabel: 'Custom',
       add: 'Add the stream',
       adding: 'Adding…',
+      failures: {
+        dead: 'No live stream',
+        refused: 'Refused by the provider',
+        timeout: 'Nothing came',
+      },
+      leftOutUntil: 'left out until',
+      retry: 'Try every stream again',
+      retried: 'Every stream is tried at the next start.',
     },
     guides: {
       title: 'Guides',
