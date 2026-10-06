@@ -228,9 +228,10 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	source.Path = h.streamURL(r, p.item.ID, id, version, source.Container, mustRelay(r, version))
 	// jellyfin-web asks for the segments of the version it plays only when
 	// the version says it has some: movies and episodes may, while the skip
-	// buttons are on and a segment database is asked.
+	// buttons are on and a segment database is asked, or the version's own
+	// chapters name an intro or credits (see versionSegments).
 	source.HasSegments = (p.item.Kind == library.KindMovie || p.item.Kind == library.KindEpisode) &&
-		h.Accounts.Settings().SkipButtons && h.Segments.Asks()
+		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || analyzed && len(chapterSegments(analysis.Chapters)) > 0)
 	size, runtime := version.Size, version.Runtime
 	if analyzed {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(), language)
