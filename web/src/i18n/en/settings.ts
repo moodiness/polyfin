@@ -226,9 +226,9 @@ const settings = {
     versionListMinutes: 'Keep version lists for (minutes)',
     versionListMinutesHelp: (r: RangeText) =>
       `How long Polyfin uses the versions and subtitles the addons list for a title before asking them again. An older list still shows at once when the title is opened again, while Polyfin asks. Keeping lists longer sends fewer requests to the stream addon, which helps with providers that refuse too many requests, but new versions show up later. From ${r.min} to ${r.max}; ${r.default} by default.`,
-    catalogRefreshMinutes: 'Refresh catalogs every (minutes)',
-    catalogRefreshMinutesHelp:
-      'How long Polyfin keeps the catalog pages it reads from addons, the Live TV guide included, before reading them again. A longer time sends fewer requests to the addons, but new titles show up later. From 1 to 1,440 (one day); 10 by default.',
+    catalogRefreshMinutes: 'Refresh catalogs after (minutes)',
+    catalogRefreshMinutesHelp: (r: RangeText) =>
+      `How old a catalog page Polyfin read from an addon, the Live TV guide included, may get before Polyfin reads it again. Apps never wait for it: an older page still shows at once while Polyfin reads it again in the background, and it is kept a day more. A longer time sends fewer requests to the addons, but new titles show up later. From ${r.min} to ${r.max} (one day); ${r.default} by default.`,
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',

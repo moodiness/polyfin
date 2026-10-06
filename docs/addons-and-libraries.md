@@ -53,7 +53,7 @@ A library image uploaded with jellyfin-web's **Edit images** is its custom image
 **For app developers:**
 
 - The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
-- The automatic image is looked up again with the catalog's pages, after **Refresh catalogs every (minutes)**. Its tag changes with the title it comes from.
+- The automatic image is looked up again with the catalog's pages, after **Refresh catalogs after (minutes)**. Its tag changes with the title it comes from. `/UserViews` never waits for it: until it is found, the library shows the image found last, or none.
 
 ## Music addons
 
@@ -139,13 +139,29 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 | **Titles read per movie and series catalog** | **Settings › Catalogs** | 2,000 (100 to 20,000) | Item limit for every catalog except Live TV ones. |
 | **Channels read per Live TV catalog** | **Settings › Catalogs** | 10,000 (100 to 50,000) | Item limit for Live TV catalogs (see [Live TV](live-tv.md)). |
 | **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are used before Polyfin asks the addons again. |
-| **Refresh catalogs every (minutes)** | **Settings › Catalogs** | 10 (1 to 1,440) | How long catalog pages are kept, the Live TV guide's included. |
+| **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the Live TV guide's included, may get before Polyfin reads it again. Apps never wait for it. |
 
 A longer **Keep version lists for (minutes)** sends fewer requests to the stream addon, which helps with providers that refuse too many. But new versions show up later. Preparing playback ahead readies the next episode a minute before that time ends: at most 9 minutes and at least 1 minute before the end of the episode. Whatever the setting, Polyfin asks an addon again 10 seconds after its first answer for a title, and once more 30 seconds later while its answers grow, for addons that gather other addons' streams (see [Title pages](playback.md#title-pages)).
 
 Once that time has passed, a title opened again still shows the versions known before at once, even old ones, while Polyfin asks the addons again: Polyfin keeps the old lists 24 hours more for this. Versions missing from a new answer that lists only part of them stay listed until Polyfin stops asking that addon again.
 
-Every change applies at once, to what is already kept too.
+### Catalog pages
+
+Catalog pages work the same way. Once a page is older than **Refresh catalogs after (minutes)**, it still shows at once, and Polyfin reads it again from the addon in the background. It is kept 24 hours more, and also kept when the addon fails. A new title shows up one visit later.
+
+Polyfin also keeps catalog pages and titles' descriptions in its database. So libraries, collections, home rows and title pages show at once after a restart too. A page no one read for 24 hours past that time is forgotten, and so is a description after a week. Searches stay in memory.
+
+To answer quickly:
+
+- While you look at a page of a library or collection, Polyfin reads the next one ahead, unless the addon's last answer failed.
+- When it starts, and every hour, Polyfin reads the first page of every library (the **Read the libraries' first pages** task).
+- Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
+- Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
+- A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
+- A search reads the first page of the search catalogs, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, and waits 0.3 seconds more for people-search catalogs. A slower answer is kept for the next search of the same term.
+- When an app gives up on a request, what Polyfin was reading for it goes on and is kept for the next request. Other apps waiting for the same page get it.
+
+Every change to these settings applies at once, to what is already kept too.
 
 ## Collections
 
@@ -240,7 +256,13 @@ The change applies at once.
 
 ## Artwork
 
-Polyfin relays images from the addons' artwork servers, so Jellyfin apps only ever talk to Polyfin.
+Polyfin relays images from the addons' artwork servers, IPTV channel logos included, so Jellyfin apps only ever talk to Polyfin.
+
+- Polyfin downloads an image once, however many apps ask for it at once, and asks one artwork server for at most 4 images at a time.
+- It keeps the images it relayed in memory (128 MB) and in the `images` folder of `POLYFIN_CACHE_DIR` (1 GB), the least recently used going first. They are not downloaded again after a restart.
+- An image that could not be downloaded is not asked for again for 2 minutes.
+- An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too.
+- An image asked for with its `tag` may be kept by the app for good: the tag changes with the image.
 
 Seasons show their own poster when the metadata addon lists the seasons' posters, as Jellyfin shows a season's own image. A season without one shows its series' poster.
 
@@ -287,5 +309,5 @@ Polyfin keeps these fields: name, original title, sort name, overview, tagline, 
 **For app developers:**
 
 - `/Items/Root` is the user's root folder; its children are the user's views.
-- `/Items/Counts` counts each library's first page of titles, plus one when more follow, as genre and studio pages count. The user's favorites are counted exactly with `isFavorite=true`.
+- `/Items/Counts` counts each library's first page of titles, plus one when more follow, as genre and studio pages count, as far as Polyfin keeps them: it asks the addons nothing. The user's favorites are counted exactly with `isFavorite=true`.
 - `/Items/Suggestions` returns titles picked at random among the first page of each library.

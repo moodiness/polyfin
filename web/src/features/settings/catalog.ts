@@ -311,7 +311,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'catalogs',
     anchor: 'catalog-refresh-minutes',
     label: (t) => s(t).catalogRefreshMinutes,
-    help: (t) => s(t).catalogRefreshMinutesHelp,
+    help: (t, r) => s(t).catalogRefreshMinutesHelp(r('catalogRefreshMinutes')),
     codes: ['invalid_catalog_refresh_minutes'],
   },
   // Thumbnails
