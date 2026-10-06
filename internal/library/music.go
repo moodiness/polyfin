@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -28,14 +29,22 @@ const (
 	// musicExpansion bounds the albums, artists or playlists whose pages a
 	// listing reads to list what they hold.
 	musicExpansion = 50
-	// musicFetches bounds the pages one listing reads at once.
-	musicFetches = 4
+	// musicFetches bounds the pages one listing reads at once, and
+	// addonFetches those read from one addon at once, over every listing.
+	musicFetches = 8
+	addonFetches = 8
 	// searchTTL is how long a search's results are kept.
 	searchTTL = 10 * time.Minute
+	// staleMusic is how long a catalog, album, artist or playlist page is
+	// kept once it is due to be read again: it is served meanwhile, while
+	// the addon is asked again in the background.
+	staleMusic = 24 * time.Hour
 	// originEclipse is the Origin type of a track's version.
 	originEclipse = "eclipse"
-	// streamMargin renews a link this long before it expires.
+	// streamMargin renews a link this long before it expires, unless it was
+	// given less than justResolved ago.
 	streamMargin = time.Minute
+	justResolved = 15 * time.Second
 )
 
 // MusicKind reports whether items of kind come from music addons.
@@ -330,57 +339,136 @@ type musicPage struct {
 	length int
 }
 
-// remember returns what key holds in c, else what fetch gets, which is
-// kept; concurrent requests share one fetch.
-func remember[V any](ctx context.Context, s *Service, c interface {
-	Get(musicKey) (V, bool)
-	Put(musicKey, V)
-}, key musicKey, fetch func(context.Context) (V, error)) (V, error) {
-	if value, ok := c.Get(key); ok {
-		return value, nil
+// musicCaches keep what music addons answered: catalog pages as long as
+// other catalogs' pages (the settings' CatalogRefreshMinutes), album,
+// artist and playlist pages as long as descriptions, then, stale,
+// staleMusic more (see remember); searches briefly. fetches bounds the
+// requests for them under way to each addon.
+type musicCaches struct {
+	pages     musicCache[musicPage]
+	albums    musicCache[eclipse.Album]
+	artists   musicCache[eclipse.Artist]
+	playlists musicCache[eclipse.Playlist]
+	searches  musicCache[eclipse.Results]
+	fetches   *addonSlots
+}
+
+func newMusicCaches(s *Service) musicCaches {
+	clock := func() time.Time { return s.now() }
+	fixed := func(life time.Duration) func() time.Duration { return func() time.Duration { return life } }
+	return musicCaches{
+		pages:     newMusicCache[musicPage](2000, s.catalogLife, staleMusic, clock),
+		albums:    newMusicCache[eclipse.Album](2000, fixed(metaTTL), staleMusic, clock),
+		artists:   newMusicCache[eclipse.Artist](2000, fixed(metaTTL), staleMusic, clock),
+		playlists: newMusicCache[eclipse.Playlist](1000, fixed(metaTTL), staleMusic, clock),
+		searches:  newMusicCache[eclipse.Results](500, fixed(searchTTL), 0, clock),
+		fetches:   &addonSlots{slots: map[accounts.ID]chan struct{}{}},
 	}
-	result, err, _ := s.flight.Do(fmt.Sprintf("music %v", key), func() (any, error) {
-		value, err := fetch(ctx)
+}
+
+// musicCache keeps answers of one kind with the time they were given:
+// fresh for life, then kept stale for stale more.
+type musicCache[V any] struct {
+	answers *cache.Cache[musicKey, answered[V]]
+	life    func() time.Duration
+}
+
+// answered is an addon's answer, given at.
+type answered[V any] struct {
+	value V
+	at    time.Time
+}
+
+func newMusicCache[V any](capacity int, life func() time.Duration, stale time.Duration, now func() time.Time) musicCache[V] {
+	return musicCache[V]{answers: cache.NewLasting[musicKey, answered[V]](capacity, func() time.Duration { return life() + stale }, now), life: life}
+}
+
+// addonSlots bounds the requests under way to each addon.
+type addonSlots struct {
+	mu    sync.Mutex
+	slots map[accounts.ID]chan struct{}
+}
+
+// acquire waits for a place for a request to addon, which release frees.
+func (a *addonSlots) acquire(ctx context.Context, addon accounts.ID) (release func(), err error) {
+	a.mu.Lock()
+	slots, ok := a.slots[addon]
+	if !ok {
+		slots = make(chan struct{}, addonFetches)
+		a.slots[addon] = slots
+	}
+	a.mu.Unlock()
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// remember returns what key holds in c while it is fresh. A stale answer
+// is returned too, while the addon is asked again in the background, for
+// later requests; with none kept, the addon's answer is waited for.
+// Concurrent requests share one request to the addon, which waits for a
+// place among those under way to it.
+func remember[V any](ctx context.Context, s *Service, c musicCache[V], key musicKey, fetch func(context.Context) (V, error)) (V, error) {
+	flightKey := fmt.Sprintf("music %v", key)
+	ask := func(ctx context.Context) (V, error) {
+		release, err := s.musicCache.fetches.acquire(ctx, key.addon)
 		if err != nil {
-			return nil, err
+			var zero V
+			return zero, err
 		}
-		c.Put(key, value)
-		return value, nil
-	})
-	if err != nil {
-		var zero V
-		return zero, err
+		defer release()
+		value, err := fetch(ctx)
+		if err == nil {
+			c.answers.Put(key, answered[V]{value: value, at: s.now()})
+		}
+		return value, err
 	}
-	return result.(V), nil
+	if kept, ok := c.answers.Get(key); ok {
+		if s.now().Sub(kept.at) > c.life() {
+			detached := context.WithoutCancel(ctx)
+			s.flight.DoChan(flightKey, func() (any, error) {
+				value, err := ask(detached)
+				if err != nil {
+					s.logger.Debug("A music page could not be read again", "resource", key.resource, "error", err)
+				}
+				return value, err
+			})
+		}
+		return kept.value, nil
+	}
+	return shared(ctx, &s.flight, flightKey, ask)
 }
 
 func (s *Service) musicCatalogPage(ctx context.Context, entry installed, catalog eclipse.Catalog, skip int) (musicPage, error) {
-	return remember(ctx, s, s.musicPages, entry.musicKey("catalog", catalog.ID, skip), func(ctx context.Context) (musicPage, error) {
+	return remember(ctx, s, s.musicCache.pages, entry.musicKey("catalog", catalog.ID, skip), func(ctx context.Context) (musicPage, error) {
 		items, length, err := s.music.Catalog(ctx, entry.eclipseAddon(), catalog, skip)
 		return musicPage{items: items, length: length}, err
 	})
 }
 
 func (s *Service) albumPage(ctx context.Context, entry installed, id string) (eclipse.Album, error) {
-	return remember(ctx, s, s.musicAlbums, entry.musicKey("album", id, 0), func(ctx context.Context) (eclipse.Album, error) {
+	return remember(ctx, s, s.musicCache.albums, entry.musicKey("album", id, 0), func(ctx context.Context) (eclipse.Album, error) {
 		return s.music.Album(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) artistPage(ctx context.Context, entry installed, id string) (eclipse.Artist, error) {
-	return remember(ctx, s, s.musicArtists, entry.musicKey("artist", id, 0), func(ctx context.Context) (eclipse.Artist, error) {
+	return remember(ctx, s, s.musicCache.artists, entry.musicKey("artist", id, 0), func(ctx context.Context) (eclipse.Artist, error) {
 		return s.music.Artist(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) playlistPage(ctx context.Context, entry installed, id string) (eclipse.Playlist, error) {
-	return remember(ctx, s, s.musicPlaylists, entry.musicKey("playlist", id, 0), func(ctx context.Context) (eclipse.Playlist, error) {
+	return remember(ctx, s, s.musicCache.playlists, entry.musicKey("playlist", id, 0), func(ctx context.Context) (eclipse.Playlist, error) {
 		return s.music.Playlist(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) musicSearch(ctx context.Context, entry installed, term string) (eclipse.Results, error) {
-	return remember(ctx, s, s.musicSearches, entry.musicKey("search", musicName(term), 0), func(ctx context.Context) (eclipse.Results, error) {
+	return remember(ctx, s, s.musicCache.searches, entry.musicKey("search", musicName(term), 0), func(ctx context.Context) (eclipse.Results, error) {
 		return s.music.Search(ctx, entry.eclipseAddon(), term)
 	})
 }
@@ -1198,12 +1286,45 @@ func (s *Service) InstantMix(ctx context.Context, user accounts.User, id account
 // AudioSource is what an addon tells of a track's stream: its format and
 // quality as labels, its codec, container and manifest ("none", "hls" or
 // "dash"), sample rate and bit depth when it gives them, which playback
-// trusts without probing the stream, and the chapters of an audiobook.
+// trusts without probing the stream, and the chapters of an audiobook. A
+// known format gives the codec and container the addon leaves out (see
+// audioFormats). Resolved is when the addon gave the link.
 type AudioSource struct {
 	Format, Quality            string
 	Codec, Container, Manifest string
 	SampleRate, BitDepth       int
 	Chapters                   []eclipse.Chapter
+	Resolved                   time.Time
+}
+
+// audioFormats are the codec and container of the formats addons name
+// tracks' files by.
+var audioFormats = map[string]struct{ codec, container string }{
+	"flac": {"flac", "flac"},
+	"mp3":  {"mp3", "mp3"},
+	"aac":  {"aac", "aac"},
+	"m4a":  {"aac", "m4a"},
+	"opus": {"opus", "ogg"},
+	"ogg":  {"vorbis", "ogg"},
+	"wav":  {"pcm_s16le", "wav"},
+}
+
+// completeFromFormat fills in the codec and container a's format gives,
+// when the addon gives neither, or gives the one the format agrees with. A
+// manifest (HLS or DASH) is not a file of that format.
+func (a *AudioSource) completeFromFormat() {
+	known, ok := audioFormats[a.Format]
+	if !ok || a.Manifest == "hls" || a.Manifest == "dash" {
+		return
+	}
+	switch {
+	case a.Codec == "" && a.Container == "":
+		a.Codec, a.Container = known.codec, known.container
+	case a.Container == "" && a.Codec == known.codec:
+		a.Container = known.container
+	case a.Codec == "" && a.Container == known.container:
+		a.Codec = known.codec
+	}
 }
 
 // trackVersion resolves where a track plays from: the stream address the
@@ -1225,6 +1346,8 @@ func trackVersionID(item accounts.ID) accounts.ID {
 	return itemID("version|" + item.String() + "|" + originEclipse)
 }
 
+// resolveTrack resolves where a track plays from. Requests for the same
+// track at the same time share one request to the stream resource.
 func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, renew bool) (Version, error) {
 	e := r.Music
 	version := Version{ID: trackVersionID(r.ID), Item: r.ID, Name: e.Title, Addon: entry.addon.Manifest.Name,
@@ -1232,26 +1355,36 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 		Runtime: time.Duration(e.Duration * float64(time.Second))}
 	if !renew && e.StreamURL != "" {
 		version.URL = e.StreamURL
-		version.Audio = &AudioSource{Format: e.Format}
+		version.Audio = &AudioSource{Format: e.Format, Resolved: s.now()}
+		version.Audio.completeFromFormat()
 		s.versions.Put(version.ID, version)
 		return version, nil
 	}
-	stream, err := s.music.Stream(ctx, entry.eclipseAddon(), e.ID)
-	if errors.Is(err, stremio.ErrNotFound) {
-		return Version{}, ErrNotFound
-	}
-	if err != nil {
-		return Version{}, err
-	}
-	version.URL, version.Expires = stream.URL, stream.Expires
-	version.Name = cmpOr(stream.Quality, e.Title)
-	version.Audio = &AudioSource{Format: cmpOr(stream.Format, e.Format), Quality: stream.Quality, Codec: stream.Codec,
-		Container: stream.Container, Manifest: stream.Manifest, SampleRate: stream.SampleRate, BitDepth: stream.BitDepth, Chapters: stream.Chapters}
-	s.versions.Put(version.ID, version)
-	return version, nil
+	return shared(ctx, &s.flight, "track "+r.ID.String(), func(ctx context.Context) (Version, error) {
+		stream, err := s.music.Stream(ctx, entry.eclipseAddon(), e.ID)
+		if errors.Is(err, stremio.ErrNotFound) {
+			return Version{}, ErrNotFound
+		}
+		if err != nil {
+			return Version{}, err
+		}
+		version.URL, version.Expires = stream.URL, stream.Expires
+		version.Name = cmpOr(stream.Quality, e.Title)
+		version.Audio = &AudioSource{Format: cmpOr(stream.Format, e.Format), Quality: stream.Quality, Codec: stream.Codec,
+			Container: stream.Container, Manifest: stream.Manifest, SampleRate: stream.SampleRate, BitDepth: stream.BitDepth,
+			Chapters: stream.Chapters, Resolved: s.now()}
+		version.Audio.completeFromFormat()
+		s.versions.Put(version.ID, version)
+		return version, nil
+	})
 }
 
-// fresh reports whether a version's link may still be used at now.
+// fresh reports whether a version's link may still be used at now: until
+// streamMargin before it expires, or, given less than justResolved ago,
+// until it expires, since asking again would give a link as short-lived.
 func (v Version) fresh(now time.Time) bool {
-	return v.Expires.IsZero() || now.Add(streamMargin).Before(v.Expires)
+	if v.Expires.IsZero() || now.Add(streamMargin).Before(v.Expires) {
+		return true
+	}
+	return v.Audio != nil && now.Sub(v.Audio.Resolved) < justResolved && now.Before(v.Expires)
 }
