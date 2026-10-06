@@ -57,15 +57,18 @@ type User struct {
 	Parental ParentalControl
 	// VideoTranscoding and AudioTranscoding let the user's apps have the
 	// video (burning subtitles in included) or the audio converted, when the
-	// server converts; ContentDownloading lets them download titles, when
-	// the server allows downloads. See Store.Conversions and
-	// Store.MayDownload.
+	// server converts; ContentDownloading alone lets them download titles.
+	// See Store.Conversions and Store.MayDownload.
 	VideoTranscoding   bool
 	AudioTranscoding   bool
 	ContentDownloading bool
 	// PersonalAddons lets the user add and use their own addons, when the
 	// server allows users' own addons (see Settings.PersonalAddonsAllowed).
 	PersonalAddons bool
+	// UseSharedAddons shows the user the server's addons and libraries
+	// before their own, when they may use their own; otherwise they see
+	// the server's alone whatever its value.
+	UseSharedAddons bool
 	// InvalidLoginAttempts counts the user's wrong passwords in a row,
 	// while the server blocks accounts after Settings.LoginAttempts of them;
 	// BlockedUntil is when the last block ends (see Store.BlockedUntil).
@@ -147,6 +150,8 @@ type UserChanges struct {
 	LiveTvManagement *bool
 	// QualityGroup, see User.
 	QualityGroup *int
+	// UseSharedAddons, see User.
+	UseSharedAddons *bool
 }
 
 // Store is the accounts repository.
@@ -165,6 +170,8 @@ type Store struct {
 	// cannot open, as they are stored, by name.
 	secretsMu  sync.Mutex
 	unreadable map[string]string
+	// signIns remembers the access tokens and API keys resolved lately.
+	signIns signIns
 }
 
 // Option completes a store.
@@ -211,7 +218,7 @@ func Open(ctx context.Context, db *pgxpool.Pool, options ...Option) (*Store, err
 
 const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created_at, last_login_at, last_activity_at, " +
 	"max_parental_rating, max_parental_sub_rating, block_unrated_items, video_transcoding, audio_transcoding, content_downloading, " +
-	"personal_addons, invalid_login_attempts, blocked_until, " +
+	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 	"subtitle_management, image_tag, live_tv_management, quality_group"
@@ -222,7 +229,7 @@ func (user *User) fields() []any {
 		&user.CreatedAt, &user.LastLoginAt, &user.LastActivityAt,
 		&user.Parental.MaxRating, &user.Parental.MaxSubRating, &user.Parental.BlockUnrated,
 		&user.VideoTranscoding, &user.AudioTranscoding, &user.ContentDownloading,
-		&user.PersonalAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
+		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup}
@@ -516,7 +523,8 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				collection_management = coalesce($23, collection_management),
 				subtitle_management = coalesce($24, subtitle_management),
 				live_tv_management = coalesce($25, live_tv_management),
-				quality_group = coalesce($26, quality_group)
+				quality_group = coalesce($26, quality_group),
+				use_shared_addons = coalesce($27, use_shared_addons)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
@@ -524,7 +532,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup))
+			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}
@@ -536,6 +544,9 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 		}
 		return err
 	})
+	// Whatever changed, permissions, limits or a sign-out, applies from
+	// the user's next request.
+	s.forgetSignIns()
 	if err == nil {
 		s.notifySignOut(signedOut)
 	}
@@ -598,6 +609,7 @@ func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 		_, err = tx.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 		return err
 	})
+	s.forgetSignIns()
 	if err == nil {
 		s.notifySignOut(signedOut)
 	}

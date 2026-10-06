@@ -70,6 +70,8 @@ func scanDevice(row pgx.Row, extra ...any) (Device, error) {
 // again from the same device replaces the previous token, as Jellyfin does,
 // and resets the capabilities the app reported.
 func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (string, Device, error) {
+	// The device's previous token, if any, stops working.
+	defer s.forgetSignIns()
 	token, hash := newToken()
 	var device Device
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -100,31 +102,42 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 }
 
 // DeviceByToken resolves an access token to its device and enabled user, and
-// records the activity.
+// records the activity, at most once a minute or when the device's address
+// changes. A token resolved less than signInLife ago is not looked up again.
 func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) (Device, User, error) {
-	var user User
-	device, err := scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+", "+qualifiedUserColumns("u")+`
-		FROM devices d JOIN users u ON u.id = d.user_id
-		WHERE d.token_hash = $1 AND NOT u.is_disabled`, hashToken(token)), user.fields()...)
-	if err != nil {
-		return Device{}, User{}, err
-	}
-	if time.Since(device.LastActivityAt) >= activityResolution || device.RemoteAddress != remoteAddress {
-		_, err = s.db.Exec(ctx, `WITH touched AS (
-				UPDATE devices SET last_activity_at = now(), remote_address = $2 WHERE id = $1 RETURNING user_id
-			) UPDATE users SET last_activity_at = now() WHERE id = (SELECT user_id FROM touched)`,
-			device.ID, remoteAddress)
+	hash := string(hashToken(token))
+	now := s.now()
+	entry, ok := s.signIns.device(hash, now)
+	if !ok {
+		generation := s.signIns.current()
+		device, err := scanDevice(s.db.QueryRow(ctx, "SELECT "+deviceColumns+", "+qualifiedUserColumns("u")+`
+			FROM devices d JOIN users u ON u.id = d.user_id
+			WHERE d.token_hash = $1 AND NOT u.is_disabled`, []byte(hash)), entry.user.fields()...)
 		if err != nil {
 			return Device{}, User{}, err
 		}
-		device.RemoteAddress = remoteAddress
+		entry.device, entry.at = device, now
+		s.signIns.keepDevice(hash, entry, generation)
 	}
-	return device, user, nil
+	if now.Sub(entry.device.LastActivityAt) >= activityResolution || entry.device.RemoteAddress != remoteAddress {
+		_, err := s.db.Exec(ctx, `WITH touched AS (
+				UPDATE devices SET last_activity_at = $3, remote_address = $2 WHERE id = $1 RETURNING user_id
+			) UPDATE users SET last_activity_at = $3 WHERE id = (SELECT user_id FROM touched)`,
+			entry.device.ID, remoteAddress, now)
+		if err != nil {
+			return Device{}, User{}, err
+		}
+		s.signIns.touched(hash, now, remoteAddress)
+		entry.device.LastActivityAt, entry.device.RemoteAddress = now, remoteAddress
+		entry.user.LastActivityAt = &now
+	}
+	return entry.device, entry.user, nil
 }
 
 // SignOutDevice revokes an access token.
 func (s *Store) SignOutDevice(ctx context.Context, token string) error {
 	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE token_hash = $1 RETURNING id", hashToken(token)))
+	s.forgetSignIns()
 	if err == nil {
 		s.notifySignOut(devices)
 	}
@@ -134,6 +147,7 @@ func (s *Store) SignOutDevice(ctx context.Context, token string) error {
 // RevokeDevice signs a user's device out.
 func (s *Store) RevokeDevice(ctx context.Context, user, device ID) error {
 	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE id = $1 AND user_id = $2 RETURNING id", device, user))
+	s.forgetSignIns()
 	switch {
 	case err != nil:
 		return err
@@ -169,6 +183,8 @@ func (s *Store) Device(ctx context.Context, id ID) (Device, error) {
 
 // SetCapabilities records what a signed-in app reported it supports.
 func (s *Store) SetCapabilities(ctx context.Context, device ID, capabilities Capabilities) error {
+	// Requests carry the device, capabilities included.
+	defer s.forgetSignIns()
 	if capabilities.PlayableMediaTypes == nil {
 		capabilities.PlayableMediaTypes = []string{}
 	}
@@ -229,6 +245,7 @@ func (s *Store) AllDevices(ctx context.Context, deviceID string) ([]ListedDevice
 // through the same path as any other sign-out, and returns how many.
 func (s *Store) SignOutDeviceID(ctx context.Context, deviceID string) (int, error) {
 	devices, err := deletedDevices(s.db.Query(ctx, "DELETE FROM devices WHERE device_id = $1 RETURNING id", deviceID))
+	s.forgetSignIns()
 	if err != nil {
 		return 0, err
 	}

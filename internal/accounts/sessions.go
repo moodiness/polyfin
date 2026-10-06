@@ -39,6 +39,8 @@ func HashAdminToken(token string) []byte {
 // CreateAdminSession signs a user in to the admin interface, which counts as
 // a sign-in of the account.
 func (s *Store) CreateAdminSession(ctx context.Context, user ID) (string, time.Time, error) {
+	// The user's last sign-in changes.
+	defer s.forgetSignIns()
 	raw := make([]byte, 32)
 	_, _ = rand.Read(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw)

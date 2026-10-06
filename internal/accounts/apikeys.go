@@ -63,17 +63,25 @@ func (s *Store) APIKeys(ctx context.Context) ([]APIKey, error) {
 }
 
 // APIKeyByToken resolves a key and records its use, at most once a minute.
+// A key resolved less than signInLife ago is not looked up again.
 func (s *Store) APIKeyByToken(ctx context.Context, token string) (APIKey, error) {
-	key, err := scanAPIKey(s.db.QueryRow(ctx, "SELECT "+apiKeyColumns+" FROM api_keys WHERE token_hash = $1", hashToken(token)))
-	if err != nil {
-		return APIKey{}, err
-	}
+	hash := hashToken(token)
 	now := s.now()
+	key, ok := s.signIns.key(string(hash), now)
+	if !ok {
+		generation := s.signIns.current()
+		var err error
+		if key, err = scanAPIKey(s.db.QueryRow(ctx, "SELECT "+apiKeyColumns+" FROM api_keys WHERE token_hash = $1", hash)); err != nil {
+			return APIKey{}, err
+		}
+		s.signIns.keepKey(string(hash), key, now, generation)
+	}
 	if key.LastUsedAt == nil || now.Sub(*key.LastUsedAt) >= activityResolution {
 		if _, err := s.db.Exec(ctx, "UPDATE api_keys SET last_used_at = $2 WHERE id = $1", key.ID, now); err != nil {
 			return APIKey{}, err
 		}
 		key.LastUsedAt = &now
+		s.signIns.used(string(hash), now)
 	}
 	return key, nil
 }
@@ -81,6 +89,7 @@ func (s *Store) APIKeyByToken(ctx context.Context, token string) (APIKey, error)
 // RevokeAPIKey deletes a key by its identifier.
 func (s *Store) RevokeAPIKey(ctx context.Context, id ID) error {
 	tag, err := s.db.Exec(ctx, "DELETE FROM api_keys WHERE id = $1", id)
+	s.forgetSignIns()
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
@@ -90,5 +99,6 @@ func (s *Store) RevokeAPIKey(ctx context.Context, id ID) error {
 // RevokeAPIKeyByToken deletes the key token is, if any.
 func (s *Store) RevokeAPIKeyByToken(ctx context.Context, token string) error {
 	_, err := s.db.Exec(ctx, "DELETE FROM api_keys WHERE token_hash = $1", hashToken(token))
+	s.forgetSignIns()
 	return err
 }
