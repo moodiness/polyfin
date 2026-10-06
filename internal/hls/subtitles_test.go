@@ -97,16 +97,17 @@ func TestSubtitlesAreExtractedWhileRemuxing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 
-	// A player resuming at segment 2 gets its subtitles once FFmpeg went
-	// past it, in the version's time.
-	if err := m.Subtitles(ctx, key, open, 2); err != nil {
+	// A player resuming at the segment playing at 18 s gets its subtitles
+	// once FFmpeg went past it, in the version's time.
+	resumed := plan.Segment(18 * time.Second)
+	if err := m.Subtitles(ctx, key, open, resumed); err != nil {
 		t.Fatal(err)
 	}
-	if !x.Covers(plan.Start(2), plan.End(2)) || x.Covers(0, plan.End(0)) {
+	if !x.Covers(plan.Start(resumed), plan.End(resumed)) || x.Covers(0, plan.End(0)) {
 		t.Fatalf("covered %v", x.spans)
 	}
-	if got := x.texts(2, plan.Start(2), plan.End(2)); !slices.Equal(got, []string{"18s Three|on two lines"}) {
-		t.Errorf("SubRip in segment 2: %q", got)
+	if got := x.texts(2, plan.Start(resumed), plan.End(resumed)); !slices.Equal(got, []string{"18s Three|on two lines"}) {
+		t.Errorf("SubRip in segment %d: %q", resumed, got)
 	}
 	// Starting over extracts the rest; ASS keeps its italics, not its
 	// positions.
@@ -123,11 +124,12 @@ func TestSubtitlesAreExtractedWhileRemuxing(t *testing.T) {
 	}
 	// A segment holds the cues shown during it, mapped onto the remux's
 	// timestamps.
+	shown := plan.Segment(9500 * time.Millisecond)
 	x.mu.Lock()
-	segment := string(SubtitleSegment(x.cues[2], plan, 1))
+	segment := string(SubtitleSegment(x.cues[2], plan, shown))
 	x.mu.Unlock()
 	if !strings.HasPrefix(segment, "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:09.500 --> 00:00:12.000\n<i>Two</i>\n") ||
 		strings.Contains(segment, "One") || strings.Contains(segment, "Three") {
-		t.Errorf("segment 1:\n%s", segment)
+		t.Errorf("segment %d:\n%s", shown, segment)
 	}
 }

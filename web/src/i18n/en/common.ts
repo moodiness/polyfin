@@ -86,7 +86,7 @@ const common = {
     invalid_audio_bitrate_per_channel:
       'Audio bitrate per channel must be 0, or a whole number of kb/s from 32 to 320.',
     invalid_encoding_threads: 'Processor threads must be a whole number from 0 to 64.',
-    invalid_ahead_segments: 'Segments prepared ahead must be a whole number from 1 to 60.',
+    invalid_ahead_seconds: 'Seconds prepared ahead must be a whole number from 30 to 600.',
     parental_control:
       'Parental control applies to this account: it keeps the server’s addons, which give the ratings it relies on.',
     invalid_parental_control: 'This parental control setting is not supported. Reload the page.',

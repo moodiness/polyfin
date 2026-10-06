@@ -232,13 +232,13 @@ export type Settings = {
   audioBitratePerChannel: number
   /** Threads FFmpeg converts with, 0 letting it choose. */
   encodingThreads: number
-  /** Segments, of about 6 seconds, made ahead of what the app asked for. */
-  aheadSegments: number
+  /** Seconds of picture made ahead of the end of what the app asked for. */
+  aheadSeconds: number
   /** What conversions run on (read-only). */
   conversionHardware: ConversionHardware
   /** Makes scrubbing thumbnails of the versions played, from their keyframes, in the background. */
   trickplay: boolean
-  /** Seconds between two scrubbing thumbnails. */
+  /** Shortest time between two scrubbing thumbnails, in seconds: longer titles get longer steps. */
   trickplayInterval: number
   /** Width of the scrubbing thumbnails, in pixels. */
   trickplayWidth: number

@@ -194,9 +194,9 @@ const settings: typeof en = {
       encodingThreads: 'Threads du processeur par conversion (0 = automatique)',
       encodingThreadsHelp: (r: RangeText) =>
         `Limite la part du processeur qu’une conversion utilise, pour laisser de la place au reste. De ${r.min} à ${r.max} ; 0 laisse FFmpeg choisir.`,
-      aheadSegments: 'Segments préparés à l’avance',
-      aheadSegmentsHelp:
-        'Polyfin prépare une vidéo au plus ce nombre de segments, d’environ 6 secondes chacun, au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De 1 à 60 ; 10 par défaut.',
+      aheadSeconds: 'Secondes préparées à l’avance',
+      aheadSecondsHelp: (r: RangeText) =>
+        `Polyfin prépare une vidéo au plus ce nombre de secondes au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes et garde leur connexion occupée, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
@@ -253,9 +253,9 @@ const settings: typeof en = {
     trickplay: 'Miniatures quand on avance dans un titre',
     trickplayHelp:
       'Les applications montrent une petite image du moment visé dans la barre de lecture. Polyfin les fait une fois le titre regardé, et pour l’épisode suivant quand la lecture est préparée à l’avance. Les films longs ont des miniatures plus espacées : quelques minutes plutôt que quelques secondes.',
-    trickplayInterval: 'Une miniature toutes les (secondes)',
-    trickplayIntervalHelp:
-      'Tous les combien la barre de lecture change d’image. Polyfin lit au plus 60 images par titre : sur les titres longs, la même image couvre plusieurs pas. De 5 à 60 ; 10 par défaut, comme Jellyfin.',
+    trickplayInterval: 'Une miniature toutes les (secondes, au moins)',
+    trickplayIntervalHelp: (r: RangeText) =>
+      `Tous les combien la barre de lecture change d’image. Polyfin lit au plus 60 images par titre : un titre de plus de 10 minutes environ a une image par pas, ses pas répartis sur toute sa durée : environ 1 minute pour un épisode d’une heure, 2 minutes pour un film de 2 heures. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
     trickplayWidth: 'Largeur des miniatures',
     trickplayWidthHelp:
       'Des miniatures plus larges sont plus nettes sur un grand écran, mais prennent plus de place. Un changement fait de nouvelles miniatures à la prochaine lecture d’un titre.',

@@ -189,9 +189,9 @@ const settings = {
       encodingThreads: 'Processor threads per conversion (0 = automatic)',
       encodingThreadsHelp: (r: RangeText) =>
         `Limits how much of the processor one conversion uses, to leave room for other work. From ${r.min} to ${r.max}; 0 lets FFmpeg choose.`,
-      aheadSegments: 'Segments prepared ahead',
-      aheadSegmentsHelp:
-        'Polyfin prepares a video at most this many segments, of about 6 seconds each, past the part the app asked for, then waits. More helps with slow sources, but uses more power and disk space when people stop watching early. From 1 to 60; 10 by default.',
+      aheadSeconds: 'Seconds prepared ahead',
+      aheadSecondsHelp: (r: RangeText) =>
+        `Polyfin prepares a video at most this many seconds past the part the app asked for, then waits. More helps with slow sources and keeps their connection busy, but uses more power and disk space when people stop watching early. From ${r.min} to ${r.max}; ${r.default} by default.`,
     },
     catalogsTitle: 'Catalogs',
     catalogLimit: 'Titles read per movie and series catalog',
@@ -247,9 +247,9 @@ const settings = {
     trickplay: 'Thumbnails when moving through a title',
     trickplayHelp:
       'Apps show a small image of the moment the user moves to in the playback bar. Polyfin makes them once a title has been watched, and for the next episode when playback is prepared in advance. Long movies get coarser thumbnails: a few minutes apart rather than a few seconds.',
-    trickplayInterval: 'One thumbnail every (seconds)',
-    trickplayIntervalHelp:
-      'How often the playback bar changes image. Polyfin reads at most 60 images per title, so on long titles the same image covers several steps. From 5 to 60; 10 by default, like Jellyfin.',
+    trickplayInterval: 'One thumbnail every (seconds, at least)',
+    trickplayIntervalHelp: (r: RangeText) =>
+      `How often the playback bar changes image. Polyfin reads at most 60 images per title, so a title longer than about 10 minutes gets one image per step, its steps spread evenly over its runtime: about 1 minute apart for a 1-hour episode, 2 minutes for a 2-hour movie. From ${r.min} to ${r.max}; ${r.default} by default, like Jellyfin.`,
     trickplayWidth: 'Thumbnail width',
     trickplayWidthHelp:
       'Wider thumbnails look sharper on large screens, but take more space. Changing it makes new thumbnails the next time a title is played.',

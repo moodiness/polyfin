@@ -129,26 +129,29 @@ func TestSettingsChangeTheArguments(t *testing.T) {
 	}
 }
 
-// FFmpeg makes as many segments past the last one asked for as the
-// settings say, then waits for the player.
+// FFmpeg makes the segments starting within as many seconds past the end
+// of the last one asked for as the settings say, then waits for the
+// player: counted in time, the 2 s first segment lets fewer seconds
+// through than its count would.
 func TestSegmentsAheadFollowTheSettings(t *testing.T) {
 	ffmpeg, _ := tools(t)
 	input := filepath.Join(t.TempDir(), "long.mkv")
 	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24",
-		"-t", "60", "-c:v", "libx264", "-preset", "ultrafast", "-g", "144", input).CombinedOutput(); err != nil {
+		"-t", "60", "-c:v", "libx264", "-preset", "ultrafast", "-g", "48", input).CombinedOutput(); err != nil {
 		t.Fatalf("make the source: %v: %s", err, out)
 	}
 	var keyframes []time.Duration
-	for at := time.Duration(0); at < time.Minute; at += 6 * time.Second {
+	for at := time.Duration(0); at < time.Minute; at += 2 * time.Second {
 		keyframes = append(keyframes, at)
 	}
+	// Segments start at 0, 2, 6, 10, 14, 18 s and so on.
 	plan := NewPlan(keyframes, time.Minute)
 	m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Close)
-	m.LimitAhead(func() int { return 2 })
+	m.LimitAhead(func() time.Duration { return 10 * time.Second })
 	open := func(context.Context) (Remux, func(), error) {
 		return Remux{Input: input, Video: 0, Audio: -1, Format: TS, Plan: plan}, func() {}, nil
 	}
@@ -167,8 +170,9 @@ func TestSegmentsAheadFollowTheSettings(t *testing.T) {
 		}
 		return n
 	}
-	// The segment asked for and the 2 after it, however long FFmpeg runs.
-	for n, want := range []int{3, 4} {
+	// Segment 0 ends at 2 s: those starting before 12 s, up to segment 3
+	// at 10 s. Segment 1 ends at 6 s: up to segment 4, at 14 s.
+	for n, want := range []int{4, 5} {
 		f, err := m.Segment(t.Context(), key, open, n)
 		if err != nil {
 			t.Fatal(err)
@@ -180,7 +184,42 @@ func TestSegmentsAheadFollowTheSettings(t *testing.T) {
 		}
 		time.Sleep(2 * time.Second)
 		if got := made(); got != want {
-			t.Errorf("segment %d asked for, 2 ahead: %d segments made, want %d", n, got, want)
+			t.Errorf("segment %d asked for, 10 s ahead: %d segments made, want %d", n, got, want)
 		}
+	}
+}
+
+// The ahead limit is a length of picture past the end of the segment
+// asked for: at least the next segment, 120 s unless set.
+func TestAheadLimitCountsTime(t *testing.T) {
+	m := &Manager{}
+	// Segments start at 0, 2, 6, 10 s, then every 4 s to 600 s.
+	var keyframes []time.Duration
+	for at := time.Duration(0); at < 10*time.Minute; at += 2 * time.Second {
+		keyframes = append(keyframes, at)
+	}
+	plan := NewPlan(keyframes, 10*time.Minute)
+	for _, tc := range []struct {
+		ahead   time.Duration
+		n, want int
+	}{
+		// Unset: 120 s past the end of segment 0, at 2 s, segments start
+		// before 122 s: the last at 118 s.
+		{0, 0, plan.Segment(118 * time.Second)},
+		{0, 10, plan.Segment(plan.End(10) + 116*time.Second)},
+		{30 * time.Second, 0, plan.Segment(30 * time.Second)},
+		// A limit shorter than a segment still lets the next one through.
+		{time.Second, 5, 6},
+		// Near the end, the last segment.
+		{0, plan.Len() - 2, plan.Len() - 1},
+	} {
+		ahead := tc.ahead
+		m.LimitAhead(func() time.Duration { return ahead })
+		if got := m.aheadLimit(plan, tc.n); got != tc.want {
+			t.Errorf("%v ahead of segment %d: up to %d, want %d", tc.ahead, tc.n, got, tc.want)
+		}
+	}
+	if plan.Start(plan.Segment(118*time.Second)) != 118*time.Second {
+		t.Fatalf("the plan has no segment at 118 s: %v", plan.starts[:40])
 	}
 }

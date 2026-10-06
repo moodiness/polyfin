@@ -10,9 +10,14 @@ import (
 )
 
 const (
-	// targetDuration is the length segments aim for: each ends on the first
-	// keyframe this long after its start.
-	targetDuration = 6 * time.Second
+	// firstDuration is the length the first segment aims for, and
+	// targetDuration that of the others: each ends on the first keyframe
+	// this long after its start. A short first segment is the one a player
+	// waits for before it shows anything, after a start or a seek; 4 s
+	// segments then cost few more requests than longer ones while each
+	// seek downloads less picture before it plays.
+	firstDuration  = 2 * time.Second
+	targetDuration = 4 * time.Second
 	// seekMargin keeps a keyframe followed this closely by another from
 	// starting a segment: FFmpeg, asked to start on it, could land on the
 	// next one (see seekTime).
@@ -22,36 +27,48 @@ const (
 	shortestTail = time.Second
 )
 
+// segmentLength is how long segment n aims to be.
+func segmentLength(n int) time.Duration {
+	if n == 0 {
+		return firstDuration
+	}
+	return targetDuration
+}
+
 // Plan is how a version is cut: where each segment starts, in the source's
 // presentation time.
 type Plan struct {
 	starts   []time.Duration
 	duration time.Duration
-	// grid marks a plan cut every targetDuration, not on keyframes (see
+	// grid marks a plan cut on a fixed grid, not on keyframes (see
 	// NewGridPlan).
 	grid bool
 }
 
 // NewGridPlan cuts a version lasting duration, whose keyframes are not
-// known, such as an MPEG-TS file, every targetDuration. Only converted
-// video, whose keyframes the encoder places at each segment's start, can
-// be cut so: FFmpeg starts on an earlier keyframe, and what comes before
-// the segment is left out (see encoding.take).
+// known, such as an MPEG-TS file, as NewPlan would cut one with a
+// keyframe everywhere: a first segment of firstDuration, then one every
+// targetDuration. Only converted video, whose keyframes the encoder
+// places at each segment's start, can be cut so: FFmpeg starts on an
+// earlier keyframe, and what comes before the segment is left out (see
+// encoding.take).
 func NewGridPlan(duration time.Duration) Plan {
 	starts := []time.Duration{0}
-	for at := targetDuration; at <= duration-shortestTail; at += targetDuration {
+	for at := firstDuration; at <= duration-shortestTail; at += segmentLength(len(starts)) {
 		starts = append(starts, at)
 	}
 	return Plan{starts: starts, duration: duration, grid: true}
 }
 
-// Grid reports whether the plan is cut every targetDuration rather than
-// on the version's keyframes: its segments need the video converted.
+// Grid reports whether the plan is cut on a fixed grid rather than on
+// the version's keyframes: its segments need the video converted.
 func (p Plan) Grid() bool { return p.grid }
 
 // NewPlan cuts a version lasting duration into segments starting on its
-// keyframes, about targetDuration long. The first segment starts at zero,
-// whatever the first keyframe.
+// keyframes: the first ends on the first keyframe at least firstDuration
+// in, each next one on the first keyframe at least targetDuration after
+// its start. The first segment starts at zero, whatever the first
+// keyframe.
 func NewPlan(keyframes []time.Duration, duration time.Duration) Plan {
 	starts := []time.Duration{0}
 	for i, keyframe := range keyframes {
@@ -61,7 +78,7 @@ func NewPlan(keyframes []time.Duration, duration time.Duration) Plan {
 		if i+1 < len(keyframes) && keyframes[i+1]-keyframe < seekMargin {
 			continue
 		}
-		if keyframe-starts[len(starts)-1] >= targetDuration {
+		if keyframe-starts[len(starts)-1] >= segmentLength(len(starts)-1) {
 			starts = append(starts, keyframe)
 		}
 	}

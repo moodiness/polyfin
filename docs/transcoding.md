@@ -37,6 +37,17 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 
 At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU, which `POLYFIN_HWACCEL` sets at the first start. See [Configuration](configuration.md) for `POLYFIN_HWACCEL` and `POLYFIN_VAAPI_DEVICE`.
 
+It then converts a second of video on that GPU to learn whether the frames it decodes can stay in its memory until they are encoded, and logs the answer (`resident`, and on NVIDIA `vulkan_decoding`).
+
+### Frames on the GPU
+
+Where the GPU can do every step of a conversion, the frames it decodes stay in its memory until it encodes them:
+
+- **SDR video:** scaled on the GPU (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel), and deinterlaced there when FFmpeg has the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`).
+- **HDR video on NVIDIA:** decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
+
+Frames still go through memory for burned-in subtitles, for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the test conversion failed.
+
 ### Giving the container an NVIDIA GPU
 
 - Docker: `--runtime=nvidia`. Compose: `runtime: nvidia`.
@@ -55,16 +66,30 @@ The container runs as user 65532. When the render nodes in `/dev/dri` are not op
 
 When HDR video is converted to SDR, Polyfin tone maps it:
 
-- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included.
+- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when the GPU can (see [Frames on the GPU](#frames-on-the-gpu)).
 - **Elsewhere:** on the processor, up to 720p, without Dolby Vision profile 5.
 
 You can turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
+
+## HLS segments
+
+Remuxes and conversions of files are cut into HLS segments on the source's own keyframes:
+
+- The first segment ends on the first keyframe at least 2 seconds in, and each next one on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
+- An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds.
+- Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
+- An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good ends its conversion, and the next request answers `503` too.
+
+**For app developers:**
+
+- `EXT-X-TARGETDURATION` is the longest segment, rounded up.
+- After a seek, FFmpeg probes 2 MB of the file's head, which the analysis already read, rather than 5 MB; conversions burning subtitles in, and MPEG-TS files, probe as usual.
 
 ## Conversion settings
 
 **Settings › Conversion** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
 
-Every default keeps Polyfin's conversions as they were before these settings existed. A change applies to the next playback, without a restart.
+Every default but **Seconds prepared ahead** keeps Polyfin's conversions as they were before these settings existed. A change applies to the next playback, without a restart.
 
 ### Graphics card
 
@@ -85,7 +110,7 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 | **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the driver's for VAAPI. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1` and VAAPI's compression levels 1 to 7. |
 | **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, and QVBR's quality for the VAAPI drivers that have it; other drivers ignore it. |
 | **Allow converting to HEVC** | **Settings › Conversion** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
-| **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif. |
+| **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames. An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method. |
 | **Double the frame rate** | **Settings › Conversion** | — | Makes a frame of each field of video up to 30 frames a second. |
 
 ### HDR
@@ -111,7 +136,7 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
-| **Segments prepared ahead** | **Settings › Conversion** | 10 (range 1 to 60) | How many segments of about 6 seconds a remux or conversion of a file makes past the last one the app asked for, before it waits. |
+| **Seconds prepared ahead** | **Settings › Conversion** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
 
 **Compared with Jellyfin:**
 
@@ -125,4 +150,4 @@ Every default keeps Polyfin's conversions as they were before these settings exi
 - Jellyfin's stereo mix volume is 2 by default.
 - Jellyfin has no **Most audio channels** or **Audio bitrate per channel** setting.
 - **Processor threads per conversion** is Jellyfin's encoding thread count.
-- Jellyfin throttles by seconds instead of segments, and not by default.
+- Jellyfin also throttles by seconds, but not by default.

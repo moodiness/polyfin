@@ -324,7 +324,7 @@ function Thumbnails({ form, update, error, number, range, limits }: SectionFormA
       <FieldRow
         anchor="trickplay-interval"
         label={s.trickplayInterval}
-        help={s.trickplayIntervalHelp}
+        help={s.trickplayIntervalHelp(range('trickplayInterval'))}
         error={error('trickplay-interval')}
       >
         <NumberInput

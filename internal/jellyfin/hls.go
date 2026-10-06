@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // transcodingURL is a remux's TranscodingUrl: relative, with Jellyfin's
@@ -363,8 +364,10 @@ func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	// A segment far ahead of FFmpeg waits for a new run to reach it.
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	// A segment far ahead of FFmpeg waits for a new run to reach it, as
+	// long as FFmpeg makes progress: one that made none for 20 s, or did
+	// not reach the segment in 2 min, is answered 503 (see remuxError).
+	ctx, cancel := context.WithTimeout(r.Context(), segmentWait)
 	defer cancel()
 	var file *os.File
 	if n < 0 {
@@ -425,7 +428,7 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 			data = hls.SubtitleSegment(text.cues, plan, n)
 		}
 	} else {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(r.Context(), segmentWait)
 		defer cancel()
 		data, err = h.Playback.RemuxSubtitle(ctx, req.remux, stream, n)
 	}
@@ -436,6 +439,9 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	w.Header().Set("Content-Type", "text/vtt")
 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
 }
+
+// segmentWait bounds the wait for a segment whose FFmpeg makes progress.
+const segmentWait = 2 * time.Minute
 
 func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playback.Remux, err error) {
 	switch {
@@ -449,6 +455,13 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// same to apps, which take both as a server error, and that the
 		// refusal lasts only while the server is busy.
 		h.Logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.Addon)
+		processingError(w, http.StatusServiceUnavailable)
+	case errors.Is(err, hls.ErrStalled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, source.ErrUnavailable):
+		// The source is slow, stopped answering, or failed: the app hears
+		// it within seconds, rather than after minutes, and may ask again,
+		// which waits for the same encoding, or reopens one once the
+		// source failed.
+		h.Logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 	default:
 		h.Logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)

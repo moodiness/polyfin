@@ -31,11 +31,17 @@ func TestSegmentsStartOnKeyframesFFmpegCanSeekTo(t *testing.T) {
 		duration  time.Duration
 		starts    []time.Duration
 	}{
-		"each segment ends on the first keyframe 6 s after its start": {
-			seconds(0, 2.5, 7, 8, 15.333, 16, 22.917, 27), 30 * time.Second, seconds(0, 7, 15.333, 22.917),
+		"the first segment ends on the first keyframe 2 s in, the others 4 s after their start": {
+			seconds(0, 2.5, 7, 8, 15.333, 16, 22.917, 27), 30 * time.Second, seconds(0, 2.5, 7, 15.333, 22.917, 27),
+		},
+		"2 s keyframes make a 2 s segment, then 4 s ones": {
+			seconds(0, 2, 4, 6, 8, 10), 12 * time.Second, seconds(0, 2, 6, 10),
+		},
+		"10 s keyframes make 10 s segments": {
+			seconds(0, 10, 20, 30), 40 * time.Second, seconds(0, 10, 20, 30),
 		},
 		"a keyframe followed closely by another does not start a segment": {
-			seconds(0, 6, 6.1, 12, 18), 20 * time.Second, seconds(0, 6.1, 18),
+			seconds(0, 6, 6.1, 12, 18), 20 * time.Second, seconds(0, 6.1, 12, 18),
 		},
 		"a keyframe at the very end does not start a segment": {
 			seconds(0, 6, 12, 19.5), 20 * time.Second, seconds(0, 6, 12),
@@ -59,6 +65,25 @@ func TestSegmentsStartOnKeyframesFFmpegCanSeekTo(t *testing.T) {
 				t.Errorf("segment of the last start: %d", got)
 			}
 		})
+	}
+}
+
+// A version without keyframes known is cut as one with a keyframe
+// everywhere: 2 s, then every 4 s, the last segment at least 1 s long; the
+// playlists' target duration is the longest segment, rounded up.
+func TestGridAndTargetDurationFollowTheSegments(t *testing.T) {
+	grid := NewGridPlan(13 * time.Second)
+	if !grid.Grid() || !slices.Equal(grid.starts, seconds(0, 2, 6, 10)) || grid.TargetDuration() != 4 {
+		t.Errorf("grid %v, target %d", grid.starts, grid.TargetDuration())
+	}
+	if short := NewGridPlan(10500 * time.Millisecond); !slices.Equal(short.starts, seconds(0, 2, 6)) || short.End(2) != 10500*time.Millisecond {
+		t.Errorf("short grid %v", short.starts)
+	}
+	if got := NewPlan(seconds(0, 2.5, 7, 12, 17.5), 20*time.Second).TargetDuration(); got != 6 {
+		t.Errorf("target duration %d, want 6 (12 to 17.5 s)", got)
+	}
+	if got := NewPlan(seconds(0, 2, 4, 6, 8, 10), 12*time.Second).TargetDuration(); got != 4 {
+		t.Errorf("target duration %d, want 4", got)
 	}
 }
 

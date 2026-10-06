@@ -175,7 +175,7 @@ Movies and series are ordinary titles in apps: details, search, latest, genres, 
 
 Each movie or episode has one version, the provider's file (`/movie/…` or `/series/…` with its container for Xtream). It is labelled with the quality its name gives (4K, FHD, HD, SD) for quality groups. It plays, converts, downloads and takes thumbnails and subtitles as any title's (see [Playback](playback.md) and [Transcoding](transcoding.md)).
 
-An MPEG-TS file has no index to cut it by its keyframes. It plays as it is on apps that take MPEG-TS, and otherwise only converted: cut every six seconds over its duration, FFmpeg reading it from the time an app seeks to, the encoder placing a keyframe at each segment's start. A user who may not have video converted is told no stream suits instead. This holds for addons' MPEG-TS files too.
+An MPEG-TS file has no index to cut it by its keyframes. It plays as it is on apps that take MPEG-TS, and otherwise only converted: cut into a 2-second segment, then one every four seconds over its duration, FFmpeg reading it from the time an app seeks to, the encoder placing a keyframe at each segment's start. A user who may not have video converted is told no stream suits instead. This holds for addons' MPEG-TS files too.
 
 **Compared with Jellyfin:**
 - MPEG-TS files play as Jellyfin plays such files.
