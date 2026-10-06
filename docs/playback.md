@@ -24,6 +24,9 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 - Versions always keep the addons' order. Picking or playing one never moves it.
 - When the app has not picked a version, a version that cannot be read, or does not play on the app, is skipped in favor of the next one. It is also left out of the versions Polyfin lists, which keep their order starting from the one chosen, for apps that let the user pick at that point.
+- A version that would play over HLS but whose keyframe index cannot be read is skipped the same way, as nothing could stream it.
+- The first versions are analyzed together, up to 3 at once, and taken in order. Once a later one is ready, Polyfin waits 3 more seconds for those before it, then plays the later one: a source that never answers delays playback by those 3 seconds rather than by the whole analysis time. The analyses still running go on in the background and are kept for the next play.
+- The title's page plays the version the app sends. Most apps (the web player, Android TV, Swiftfin) send the title's own identifier, which names the first version: Polyfin then chooses among all the versions as when the app picks none. Only a version picked in the version menu, under its own identifier, is played alone.
 - Apps can save the user's playback preferences (audio and subtitle languages, subtitle mode). These choose the default audio and subtitle tracks. See [Subtitles](subtitles.md).
 - Apps that keep titles for offline viewing can download the movies and episodes whose versions they were shown. A download is the version's file, under its file name, sent to the source or relayed as playback would be.
 - Active playback appears in Jellyfin apps' dashboards.
@@ -38,14 +41,17 @@ A title's details list every stream the addons offer as a version (see [Title pa
 **For app developers:**
 
 - Unreadable or unplayable versions are left out of the versions `PlaybackInfo` lists only when the app has not picked a version.
+- A `MediaSourceId` equal to the item's own identifier picks no version: `PlaybackInfo` tries the versions in order, as without one, and answers with the version chosen alone, under its own identifier unless it is the first. Any other `MediaSourceId` plays that version or nothing.
+- `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
 
 ### Title pages
 
 A title's page opens as soon as its description is ready, without waiting for the stream addons, some of which are slow. It lists the versions Polyfin already knows: those of the addons that answered for the title within **Keep version lists for (minutes)**, and those of IPTV sources. Polyfin asks the other addons in the background meanwhile.
 
-A title opened again once **Keep version lists for (minutes)** has passed shows the versions known before at once, even old ones, while Polyfin asks the addons again. For this, Polyfin keeps an addon's list for 24 hours after that time. Listings may show these versions too.
+A title opened again once **Keep version lists for (minutes)** has passed shows the versions known before at once, even old ones, while Polyfin asks the addons again. For this, Polyfin keeps an addon's list for 24 hours after that time, also across restarts: the last list of each addon for each title is saved in the database. Listings may show these versions too.
 
-- Play waits for the addon's new answer, as for an addon asked for the first time.
+- Play does not wait for the addon's new answer: it plays the old versions, asking the addon again in the background. Expired links are renewed when the source refuses them. Only when none of the old versions plays does Play wait for the new answer, then choose among its versions.
+- After a restart, a title shows the versions saved before at once, as old versions, while Polyfin asks the addons again.
 - The new answer replaces the old list. The versions it lacks stay listed after its own until Polyfin stops asking the addon again (see below): an addon that gathers other addons' streams often answers first with only part of them. They still play meanwhile.
 - Once Polyfin stops asking, the list is the addon's last answer alone: the versions the addon no longer lists disappear.
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops the old lists too.
@@ -58,6 +64,7 @@ Some addons gather other addons' streams. They answer the first request for a ti
 - It asks again only when it asked the addon itself. A list it already kept is used as it is. IPTV sources are never asked again: their streams are Polyfin's own.
 - Subtitles from the addons are asked again the same way, and the longer list kept.
 - Opening a title and playing never wait for these requests.
+- Renewing an expired link asks the addon as opening the title does, joining a request already under way, and asks again in the same way. When the answer lacks the version's file, Polyfin asks the addon again at once and waits for that answer, 10 seconds at most, before giving the link up. Meanwhile the title keeps listing every version.
 
 In apps:
 
@@ -66,7 +73,7 @@ In apps:
 - With [Prepare playback in advance](#preparing-playback-in-advance) on, Polyfin lists the versions of the titles of Continue Watching and Next Up as soon as an app asks for these rows. Once they are listed, every app opens those titles with all their versions.
 - Until a version is known, the title still shows as playable. Play waits for the addons still answering for the first time, then picks among all the versions, as before.
 - An addon that fails, or does not answer within 15 seconds, only leaves its versions out.
-- Subtitles from the addons follow the same way: those known show at once, and the others with Play or the next opening.
+- Subtitles from the addons follow the same way: those known show at once, and the others with Play or the next opening. Play waits for them one second at most once the versions are in: later ones come with the next play or track change.
 
 **Compared with Jellyfin:**
 
@@ -75,8 +82,8 @@ In apps:
 **For app developers:**
 
 - Item details (`/Items/{id}`, `/Users/{userId}/Items/{id}`) describe the versions known when asked, an expired list's included. With none known, they describe one placeholder source under the title's own identifier, which plays the first version. `PlaybackInfo` waits for every addon asked for the first time, or asked again because its list expired, joining the requests the details started, but never for an addon asked again after an answer.
-- `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder. It drops when the versions an addon's new answer lacked are no longer listed. Items other than movies and episodes answer `0` for both. Polyfin's web player script polls it every second while `Pending` is above `0`, for at most 90 seconds. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each). When `Count` is above what the version menu lists, or differs from it once `Pending` is `0`, the script asks for the item's details (`/Users/{userId}/Items/{id}`) and lists their media sources in the menu.
-- With **Prepare playback in advance** on, `GET /UserItems/Resume`, `GET /Users/{userId}/Items/Resume` and `GET /Shows/NextUp` queue the first 10 movies and episodes of their answer before answering, and never wait for them. Each queued title is listed as `PlaybackInfo` lists it, waiting for every addon and joining any request already under way.
+- `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder. It drops when the versions an addon's new answer lacked are no longer listed. Items other than movies and episodes answer `0` for both. Polyfin also pushes it on the user's live connection (WebSocket) as it changes, for 2 minutes after the details or this endpoint were last asked, in a `PolyfinVersions` message whose `Data` is `{"ItemId": <the identifier the page was opened with>, "Pending": …, "Count": …}`. Polyfin's web player script listens to it, and polls every second while `Pending` is above `0`, every 10 seconds once a push came, for at most 90 seconds. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each). When `Count` is above what the version menu lists, or differs from it once `Pending` is `0`, the script asks for the item's details (`/Users/{userId}/Items/{id}`) and lists their media sources in the menu.
+- With **Prepare playback in advance** on, `GET /UserItems/Resume`, `GET /Users/{userId}/Items/Resume` and `GET /Shows/NextUp` queue the first 10 movies and episodes of their answer before answering, and never wait for them. Each queued title is listed waiting for every addon and joining any request already under way. The first 2 then have their first version analyzed.
 
 ## Chapters
 
@@ -88,11 +95,11 @@ Chapters come without chapter images unless you turn those on (see [Scrubbing th
 
 The first play of a version waits for some reads. **Prepare playback in advance** does them before the user presses Play:
 
-- as soon as a title's details open in an app, it analyzes the version the title would play;
-- it then reads the version's keyframe index and where its subtitle tracks sit, which HLS playback needs;
+- as soon as a title's details open in an app, it analyzes the first 2 versions the title would play, those a play reads at once, and again when an addon answering later puts another version first;
+- it then reads each version's keyframe index and where its subtitle tracks sit, which HLS playback needs;
 - it readies the next episode the same way, with its versions and subtitles, once the episode playing has 9 minutes left;
 - as a song or audiobook starts, it resolves the next track of the app's queue (else of the album) the same way: where it streams from, and its analysis when its addon does not describe it;
-- when an app asks for Continue Watching or Next Up, it asks the addons, in the background, for the versions of the first 10 movies and episodes of each row. A title opened from these rows then lists its versions at once, instead of a placeholder while the addons answer (see [Title pages](#title-pages)). Only the versions are listed: the file is read when the page opens.
+- when an app asks for Continue Watching or Next Up, it asks the addons, in the background, for the versions of the first 10 movies and episodes of each row. A title opened from these rows then lists its versions at once, instead of a placeholder while the addons answer (see [Title pages](#title-pages)). The first version of the first 2 titles of each row is analyzed too, so that resuming from these rows starts at once.
 
 Playback then starts at once instead of waiting a second or two for these reads.
 
@@ -102,9 +109,8 @@ Playback then starts at once instead of waiting a second or two for these reads.
 
 It costs a few more requests to the sources, also for titles opened but not played. Limits:
 
-- at most 2 preparations run at once;
-- at most 6 start per user each minute; beyond that they are skipped;
-- a title is prepared once per user every 10 minutes;
+- at most 2 preparations run at once; the others wait, the newest first, so that the title opened last is prepared first. Beyond 4 waiting, the oldest is skipped;
+- a title is prepared once per user every 10 minutes, unless its preparation failed;
 - the titles of Continue Watching and Next Up are listed 2 at a time over the server, apart from the preparations above, in the order the rows asked for them. A title waiting or being listed is not queued again, and a title whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 
 ## Choosing a version
@@ -114,8 +120,8 @@ Five more settings change how Polyfin picks a version and how much video the ser
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Maximum time to analyze a version** | **Settings › Playback** | 20 seconds (5 to 120) | Bounds every ffprobe analysis, of files and of live streams; a channel is analyzed for 8 seconds at most. A source that does not answer in time is given up for 15 minutes, and Polyfin moves on to the next version sooner. |
-| **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none, for titles and channels alike. Later versions analyzed before are still tried, as they cost nothing. |
-| **Prefer versions the app plays without conversion** | **Settings › Playback** | Off | Goes on through those versions until one plays on the app as it is or remuxed with its tracks copied. If none does, falls back to the first that plays at all. |
+| **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none, for titles and channels alike, up to 3 at once for titles. Later versions analyzed before are still tried, as they cost nothing. |
+| **Prefer versions the app plays without conversion** | **Settings › Playback** | Off | Looks among the versions analyzed at once for one that plays on the app as it is or remuxed with its tracks copied. If none does, falls back to the first that plays at all. |
 | **Video conversions at once (0 = no limit)** | **Settings › Conversion** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |
 | **Maximum quality of converted video** | **Settings › Conversion** | Original (or 480p to 2160p) | Scales converted video down to that height. |
 
