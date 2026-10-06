@@ -487,7 +487,7 @@ function Tracking({ form, update, error }: SectionFormApi) {
   )
 }
 
-function LiveTv({ form, update, error, number, limits }: SectionFormApi) {
+function LiveTv({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   return (
@@ -495,7 +495,7 @@ function LiveTv({ form, update, error, number, limits }: SectionFormApi) {
       <FieldRow
         anchor="live-tv-refresh-hours"
         label={s.liveTvRefreshHours}
-        help={s.liveTvRefreshHoursHelp}
+        help={s.liveTvRefreshHoursHelp(range('liveTvRefreshHours'))}
         error={error('live-tv-refresh-hours')}
       >
         <NumberInput
