@@ -331,6 +331,20 @@ func isFolder(kind library.Kind) bool {
 	return false
 }
 
+// appCollectionType is the content type apps are told a library holds. A
+// library of an addon's collections is told apart from Jellyfin's
+// Collections view: it holds folders of titles, as a Jellyfin library of
+// mixed content does, and has no type. Jellyfin apps leave libraries of
+// collections out of their home rows of latest items (jellyfin-web's
+// Latest Media, Streamyfin's Recently Added), which then left such
+// libraries, often a server's only ones, without rows.
+func appCollectionType(item library.Item) string {
+	if item.Kind == library.KindLibrary && item.CollectionType == "boxsets" && item.ID != collectionsViewID {
+		return ""
+	}
+	return item.CollectionType
+}
+
 // newItemDto describes an item, with what the user did with it in state.
 // detail is true for an item's own description, which carries every field;
 // listings carry the base fields plus those in fields.
@@ -348,7 +362,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		IsFolder:          folder,
 		Type:              itemTypes[item.Kind],
 		Status:            item.Status,
-		CollectionType:    item.CollectionType,
+		CollectionType:    appCollectionType(item),
 		SeriesName:        item.SeriesName,
 		ImageTags:         map[string]string{},
 		BackdropImageTags: []string{},
@@ -613,7 +627,12 @@ type QueryResult struct {
 
 // itemTypeFilter keeps the item types a request includes and drops those it
 // excludes; mediaTypes further keeps only items of those media types, and
-// the IsFolder and IsNotFolder filters only folders or the others.
+// the IsFolder and IsNotFolder filters only folders or the others. An
+// addon's collection, a folder of titles, is kept by a request for
+// folders too: jellyfin-web lists a library without content type, as an
+// addon's collection library is to apps (see appCollectionType), by its
+// folders, movies and series. A request that leaves folders out still
+// keeps it, as Jellyfin keeps collections.
 func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	include := listQuery(r, "includeItemTypes")
 	exclude := listQuery(r, "excludeItemTypes")
@@ -626,7 +645,8 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	return func(item library.Item) bool {
 		itemType := itemTypes[item.Kind]
 		folder := isFolder(item.Kind)
-		return (len(include) == 0 || matches(include, itemType)) && !matches(exclude, itemType) &&
+		included := len(include) == 0 || matches(include, itemType) || item.Kind == library.KindCollection && matches(include, "Folder")
+		return included && !matches(exclude, itemType) &&
 			(len(media) == 0 || matches(media, mediaType(item.Kind))) && (!folders || folder) && (!others || !folder)
 	}
 }

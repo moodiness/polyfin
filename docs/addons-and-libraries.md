@@ -196,6 +196,16 @@ Every change to these settings applies at once, to what is already kept too.
 
 An addon's collection catalogs (such as AIOMetadata's) become collection libraries. Each collection gathers the catalogs it groups, movies and series together.
 
+On the home page of Jellyfin apps, each collection library has a row of its collections, as a movie or series library has a row of its titles: "Recently Added in" the library's name. In jellyfin-web, a user can leave a library out of these rows under **Settings › Home**.
+
+**Compared with Jellyfin:** a Jellyfin library of collections gets no home row. Polyfin's collection libraries are told to apps as libraries of mixed content, so that they get one. Opening one shows its collections. Without an image, its tile shows the icon of a mixed library.
+
+**For app developers:**
+
+- A collection library has no `CollectionType`, unlike Jellyfin's Collections view of collections made by users, which keeps `boxsets`. jellyfin-web and Streamyfin leave `boxsets` libraries out of their rows of latest items.
+- `/Items/Latest` lists its collections, `BoxSet` items.
+- A listing that asks for `Folder` items keeps them, as jellyfin-web lists a library without type by its folders, movies and series.
+
 ### Collections made by users
 
 Users who may manage collections group titles into collections from their apps (**Add to collection** in jellyfin-web). A collection can hold movies, series, seasons, episodes, an addon's collections and Live TV channels.
