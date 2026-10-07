@@ -2,6 +2,7 @@ package eclipse
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -17,6 +18,30 @@ func TestManifestsAreToldApartFromStremioOnes(t *testing.T) {
 		if got := Detect([]byte(manifest)); got != want {
 			t.Errorf("Detect(%s) = %v", manifest, got)
 		}
+	}
+}
+
+func TestAddonsWithASearchOfferMyMusic(t *testing.T) {
+	catalogs := func(manifest string) []string {
+		t.Helper()
+		m, err := ParseManifest([]byte(manifest))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []string
+		for _, c := range m.Stremio().Catalogs {
+			ids = append(ids, c.Type+"/"+c.ID)
+		}
+		return ids
+	}
+	// A catalog of the addon's own under My music's identifier is left out.
+	got := catalogs(`{"id":"a","name":"A","version":"1","resources":["search","stream"],
+		"catalogs":[{"id":"top","type":"track","name":"Top"},{"id":"polyfin:mine","type":"album","name":"Mine"}]}`)
+	if !slices.Equal(got, []string{"track/top", "track/" + MyMusic}) {
+		t.Errorf("with a search: %v", got)
+	}
+	if got := catalogs(`{"id":"a","name":"A","version":"1","resources":["stream"],"types":["track"]}`); len(got) != 0 {
+		t.Errorf("without a search: %v", got)
 	}
 }
 

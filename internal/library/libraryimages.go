@@ -115,7 +115,9 @@ func (s *Service) findImage(ctx context.Context, src source) string {
 // automaticImageOf finds a library's image in the first page of its
 // catalog, narrowed to its genre: the first backdrop, wide as library
 // tiles are, else the first wide poster, else the first poster; for a
-// music library, the artwork of the first item that has some.
+// music library, the artwork of the first item that has some. My music,
+// listed for each user from their own music, has none: it is not a row the
+// addon lists.
 func (s *Service) automaticImageOf(ctx context.Context, src source) (string, error) {
 	if entry := src.addon; entry.addon.Eclipse() {
 		row, ok := entry.addon.Music.Catalog(src.catalog.ID)

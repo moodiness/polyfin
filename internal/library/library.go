@@ -235,6 +235,9 @@ func (l library) catalogSource() source {
 // server's first unless they turned them off. Enabled live TV catalogs are
 // not libraries: they list the user's channels, in the same order.
 type view struct {
+	// user is the user browsing, zero for a request made with an API key:
+	// whose music My music lists (see myMusicRecords).
+	user      accounts.ID
 	addons    []installed
 	libraries []library
 	channels  []source
@@ -305,7 +308,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
 		}
 	}
-	v := view{parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
+	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
 	var visible []addons.Library
 	var entries []installed

@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -24,7 +25,9 @@ import (
 // library): its folder lists the row's items, and a listing of another kind
 // derives it from them, the albums of a row of tracks or the tracks of a
 // row of albums. An album or an artist a track only names is known by that
-// name, and found again through the addon's search when it is opened.
+// name, and found again through the addon's search when it is opened. My
+// music (eclipse.MyMusic), enabled as any row, lists instead what the user
+// played or marked favorite of the addon (see myMusicRecords).
 const (
 	// musicExpansion bounds the albums, artists or playlists whose pages a
 	// listing reads to list what they hold.
@@ -550,13 +553,63 @@ func trackRecords(entry installed, tracks []eclipse.Track, parent *accounts.ID, 
 	return records
 }
 
-// musicLibraryRecords lists the items of a music library's catalog row.
+// musicLibraryRecords lists the items of a music library's catalog row, or
+// of My music (see myMusicRecords).
 func (s *Service) musicLibraryRecords(ctx context.Context, v view, l library) ([]record, error) {
+	if l.catalog.ID == eclipse.MyMusic {
+		return s.myMusicRecords(ctx, v, l)
+	}
 	items, err := s.musicCatalog(ctx, v, l.addon, l.catalog.Type, l.catalog.ID)
 	if err != nil {
 		return nil, err
 	}
 	return itemRecords(l.addon, items, &l.item.ID), nil
+}
+
+// myMusicKinds are the kinds My music lists, in the order it lists them.
+var myMusicKinds = []string{string(KindTrack), string(KindAudiobook), string(KindAlbum), string(KindArtist), string(KindMusicPlaylist)}
+
+// myMusicRecords lists My music (see eclipse.MyMusic) for the user of v,
+// from what they did in Polyfin, never from the addon: the addon's tracks
+// they played, most recently played first, then those they marked
+// favorite; then the albums, artists and playlists they marked favorite,
+// by name. Each kind lists at most the catalog limit. A request without a
+// user lists nothing. Being the user's own, the listing is never cached.
+func (s *Service) myMusicRecords(ctx context.Context, v view, l library) ([]record, error) {
+	if v.user == (accounts.ID{}) {
+		return nil, nil
+	}
+	// An item's key names its addon: kind|addon|identifier (see
+	// musicEntry.key). Only tracks count as played.
+	rows, err := s.db.Query(ctx, `WITH mine AS (
+			SELECT i.id, i.key, i.data, i.kind, d.favorite, i.kind = ANY($4) AND (d.played OR d.play_count > 0) AS played, d.last_played_at
+			FROM user_data d JOIN items i ON i.id = d.item_id
+			WHERE d.user_id = $1 AND split_part(i.key, '|', 2) = $2 AND i.kind = ANY($3) AND i.data ? 'music'
+		), ranked AS (
+			SELECT id, key, data, kind, row_number() OVER (PARTITION BY kind ORDER BY played DESC,
+				CASE WHEN played THEN last_played_at END DESC NULLS LAST, lower(data->'music'->>'title'), id) AS place
+			FROM mine WHERE played OR favorite
+		)
+		SELECT id, key, data FROM ranked WHERE place <= $5 ORDER BY array_position($3, kind), place`,
+		v.user, l.addon.addon.ID.String(), myMusicKinds, myMusicKinds[:2], v.catalogLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []record
+	for rows.Next() {
+		var r record
+		var data []byte
+		if err := rows.Scan(&r.ID, &r.Key, &data); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &r); err != nil {
+			return nil, err
+		}
+		r.Parent, r.Confined = &l.item.ID, l.addon.confined
+		records = append(records, r)
+	}
+	return records, rows.Err()
 }
 
 // albumTracks lists an album's tracks: from its page, or, for an album
@@ -890,7 +943,8 @@ func (s *Service) folderMusic(ctx context.Context, v view, entry installed, r re
 // asked for, else those of each kind asked for, derived from the row's
 // items when they are of another kind: the tracks of albums, playlists or
 // artists (their top tracks), read for at most musicExpansion of them; the
-// albums and artists the tracks or albums name; an artist's albums.
+// albums and artists the tracks or albums name; an artist's albums. My
+// music, whose items are of every kind, lists them as myMusic does.
 func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []Kind, recursive, shallow bool) ([]record, error) {
 	records, err := s.musicLibraryRecords(ctx, v, l)
 	if err != nil {
@@ -898,6 +952,9 @@ func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []K
 	}
 	if len(kinds) == 0 {
 		return records, nil
+	}
+	if l.catalog.ID == eclipse.MyMusic {
+		return s.myMusic(ctx, v, l, records, kinds, recursive, shallow), nil
 	}
 	parent := &l.item.ID
 	rowKind := map[string]Kind{eclipse.TypeTrack: KindTrack, eclipse.TypeAlbum: KindAlbum, eclipse.TypeArtist: KindArtist,
@@ -940,6 +997,41 @@ func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []K
 		}
 	}
 	return result, nil
+}
+
+// myMusic lists My music's items of each kind asked for, with, when
+// recursive, the tracks of its albums, playlists and artists (their top
+// tracks), read for at most musicExpansion of them unless shallow, and the
+// albums and artists its tracks and albums name.
+func (s *Service) myMusic(ctx context.Context, v view, l library, records []record, kinds []Kind, recursive, shallow bool) []record {
+	parent := &l.item.ID
+	ofKind := func(list []record, kinds ...Kind) []record {
+		return slices.DeleteFunc(slices.Clone(list), func(r record) bool { return !slices.Contains(kinds, r.Kind) })
+	}
+	tracks := ofKind(records, KindTrack, KindAudiobook)
+	var expanded []record
+	expandedOnce := sync.OnceFunc(func() {
+		folders := ofKind(records, KindAlbum, KindArtist, KindMusicPlaylist)
+		expanded = s.expand(ctx, v, l.addon, slices.DeleteFunc(folders, func(r record) bool { return !v.allowsMusic(r) }))
+		for i := range expanded {
+			expanded[i].Parent = parent
+		}
+	})
+	var result []record
+	for _, kind := range kinds {
+		result = append(result, ofKind(records, kind)...)
+		switch {
+		case !recursive:
+		case AudioKind(kind) && !shallow:
+			expandedOnce()
+			result = append(result, ofKind(expanded, kind)...)
+		case kind == KindAlbum:
+			result = append(result, derived(l.addon, tracks, KindAlbum, parent)...)
+		case kind == KindArtist:
+			result = append(result, derived(l.addon, slices.Concat(tracks, ofKind(records, KindAlbum)), KindArtist, parent)...)
+		}
+	}
+	return result
 }
 
 // expandArtistAlbums lists the albums of the artists of a row, reading at

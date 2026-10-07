@@ -111,6 +111,17 @@ An album or artist that a song only names is found again through the addon's sea
 
 Polyfin keeps what music addons answer. Catalog pages are read again after **Refresh catalogs after (minutes)**, and album, artist and playlist pages after 6 hours. A page due to be read again is still served at once, for up to 24 more hours, while Polyfin asks the addon again in the background. Searches are kept 10 minutes. At most 8 requests for pages go to one addon at a time.
 
+#### My music
+
+Every music addon with a search also offers "My music", a catalog Polyfin makes, listed with the addon's rows under **Content › Libraries** and **My sources**. It is enabled, named and ordered like any library; without a name of its own, apps show it as "My music", or "Ma musique" when the server's language is French. Each user sees their own music of the addon in it:
+
+- the songs they played, most recently played first, then the songs they marked favorite;
+- then the albums, artists and playlists they marked favorite.
+
+Asked for another kind, it lists the albums and artists its songs name (and its albums' artists), or the songs of its albums, playlists and artists, as a row does. Each kind lists at most **Titles read per movie and series catalog**. Searching from it searches the addon, as in any music library.
+
+An addon installed without catalog rows of its own gets "My music" enabled as its library, so that music apps starting from a library show something. An addon with rows keeps them as its libraries, with "My music" offered but off. Addons installed before keep their libraries: an administrator enables "My music" under **Content › Libraries** (users, under **My sources**). Polyfin never asks the addon for this catalog, and it has no automatic image, since every user sees a different list.
+
 ### Instant mixes and lyrics
 
 - A song's instant mix is that song, then its album's and its artist's other songs.
