@@ -25,10 +25,20 @@ const edge = 8
 const searchAbove = 12
 
 /**
+ * The bottom of the app's sticky top bar (marked `data-top-bar`) in the window, in px, which a
+ * list portaled to the body must stay under; 0 without one, and in a dialog, which covers it.
+ */
+function topBarBottom(host: HTMLElement) {
+  if (host !== document.body) return 0
+  return document.querySelector('[data-top-bar]')?.getBoundingClientRect().bottom ?? 0
+}
+
+/**
  * The floating surface under a field: portaled to the body (or to the open dialog holding the
  * field, which keeps it usable there) and shown in the top layer, so no table, scroll box or
  * dialog clips it. It sits under the field, above it when there is no room below, at least as
- * wide as the field, and follows it on scroll and resize. A press outside both calls `onDismiss`.
+ * wide as the field, and follows it on scroll and resize, never over the app's top bar. A press
+ * outside both calls `onDismiss`, as does the field scrolling out of view under the top bar.
  */
 function ListPopover({
   anchor,
@@ -57,6 +67,11 @@ function ListPopover({
       const field = anchor.current
       if (!field || !list) return
       const box = field.getBoundingClientRect()
+      const top = topBarBottom(host)
+      if (box.bottom <= top) {
+        dismiss.current()
+        return
+      }
       const viewport = document.documentElement
       const width = viewport.clientWidth
       const height = viewport.clientHeight
@@ -64,7 +79,7 @@ function ListPopover({
       list.style.maxWidth = `${Math.min(width - 2 * edge, Math.max(box.width, 420))}px`
       list.style.maxHeight = `${maxListHeight}px`
       const below = height - box.bottom - gap - edge
-      const above = box.top - gap - edge
+      const above = box.top - gap - top - edge
       const up = list.offsetHeight > below && above > below
       list.style.maxHeight = `${Math.max(0, Math.min(maxListHeight, up ? above : below))}px`
       list.style.top = up ? 'auto' : `${box.bottom + gap}px`
@@ -88,7 +103,7 @@ function ListPopover({
       window.removeEventListener('resize', place)
       document.removeEventListener('pointerdown', onPointerDown, true)
     }
-  }, [anchor, ref])
+  }, [anchor, ref, host])
 
   return createPortal(
     <div

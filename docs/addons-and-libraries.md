@@ -50,6 +50,8 @@ Image changes are saved at once, apart from the list's **Save**. A catalog just 
 
 A library image uploaded with jellyfin-web's **Edit images** is its custom image too. Choosing **None** or **Automatic** deletes it.
 
+A library taken out of the list keeps its custom image, for when it is added back. Removing the addon deletes the custom images of all its libraries.
+
 **For app developers:**
 
 - The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
@@ -126,6 +128,7 @@ Polyfin decides how to play a track with the app's device profile, as Jellyfin d
 - Polyfin plays the track as it is, through the same source and relay rules as videos (see [Playback](playback.md)). A track whose link expires before the track ends is always relayed, so that Polyfin can renew the link while it plays.
 - Or it converts the track with FFmpeg to the codec, bitrate, sample rate and channels the app asks for, progressively or in 3-second HLS segments (see [Transcoding](transcoding.md)).
 - An expired link is asked for again, a minute before it expires (`expiresAt`) or once it fails. A link given less than 15 seconds ago is used until it expires, so one play asks for it once. Plays of the same track at the same time share one request.
+- A track whose addon gives no stream (it cannot be reached, answers an HTTP error other than `404`, or gives no stream address) does not play: `PlaybackInfo` answers `NoCompatibleStream`, as for a title none of whose versions plays, and apps say the track cannot be played. A `404` means the track no longer exists: it is not found.
 - With **Prepare playback in advance** on, Polyfin resolves the next track as a track starts: the next one in the queue the app reports, else the next one on the album (see [Playback](playback.md#preparing-playback-in-advance)).
 
 The user's conversion permission, bitrate limit and number of playbacks at once apply (see [Users](users.md)). Quality groups, which are about video heights, do not.
@@ -301,6 +304,7 @@ Polyfin relays images from the addons' artwork servers, IPTV channel logos inclu
 - Polyfin downloads an image once, however many apps ask for it at once, and asks one artwork server for at most 16 images at a time. It asks for at most 4 at a time from the servers of IPTV sources and of their logos, often the provider's panel, and for 10 minutes from a server that reset a connection or answered 429, 502, 503 or 504.
 - It keeps the images it relayed in memory (128 MB) and in the `images` folder of `POLYFIN_CACHE_DIR` (1 GB), the least recently used going first. They are not downloaded again after a restart.
 - An image that could not be downloaded is not asked for again for 2 minutes.
+- An image its artwork server does not have (`404` or `410`) answers `404`, as Jellyfin answers for an image an item does not have, and apps show their placeholder. An artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`.
 - An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too.
 - An image asked for with its `tag` may be kept by the app for good: the tag changes with the image.
 

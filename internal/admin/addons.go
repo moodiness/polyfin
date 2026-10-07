@@ -581,6 +581,13 @@ func (h *handler) removeAddon(w http.ResponseWriter, r *http.Request) {
 	for _, addon := range installed {
 		if addon.ID == id {
 			h.Activity.AddonRemoved(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, scope.Owner == nil)
+			// The images uploaded for its libraries go with the addon, even
+			// when the request is abandoned; the addon is gone either way.
+			if h.LibraryImages != nil {
+				if err := h.LibraryImages.DeleteLibraryImages(context.WithoutCancel(r.Context()), addon); err != nil {
+					h.Logger.Warn("The images of a removed addon's libraries could not be deleted", "addon", addon.Manifest.Name, "error", err)
+				}
+			}
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)

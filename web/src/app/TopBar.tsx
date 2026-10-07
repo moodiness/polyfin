@@ -39,7 +39,8 @@ export function useWebClient(): boolean {
 /**
  * The 60 px bar on top of every signed-in page: the logo, the sections (or a member's own
  * pages), search, the web player and the account menu. Below 768 px it keeps the logo, search
- * and a menu button that opens the same entries in a sheet.
+ * and a menu button that opens the same entries in a sheet. `data-top-bar` marks it for the
+ * lists of `Select` and `SuggestInput`, which stay under it.
  */
 export function TopBar({ user }: { user: SessionUser }) {
   const { t } = useI18n()
@@ -49,7 +50,10 @@ export function TopBar({ user }: { user: SessionUser }) {
   const sections = user.isAdministrator ? adminSections : memberSections
 
   return (
-    <header className="sticky top-0 z-30 h-topbar border-b border-line bg-bg/78 backdrop-blur-[18px] backdrop-saturate-130">
+    <header
+      data-top-bar
+      className="sticky top-0 z-30 h-topbar border-b border-line bg-bg/78 backdrop-blur-[18px] backdrop-saturate-130"
+    >
       <div className="mx-auto flex h-full max-w-page items-center gap-10 px-14 max-xl:gap-6 max-xl:px-8 max-md:gap-3 max-md:px-5">
         <Brand />
         <nav aria-label={t.nav.label} className="flex h-full items-stretch gap-1 max-md:hidden">

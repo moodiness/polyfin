@@ -41,7 +41,8 @@ const itemSelector = '[role^="menuitem"]:not([aria-disabled="true"])'
  *   </Menu>
  *
  * Keyboard: Enter, Space or ↓ opens it on the first item; ↑ ↓ Home End move; Escape and Tab close
- * it, Escape returning to the button. A click outside closes it.
+ * it, Escape returning to the button. A click outside closes it. It scrolls with its button,
+ * over the page's save bar and beneath the app's top bar.
  */
 export function Menu({
   label,
@@ -151,7 +152,8 @@ export function Menu({
           onKeyDown={onListKeyDown}
           style={{ width }}
           className={cx(
-            'absolute top-[calc(100%+6px)] z-40 rounded-row bg-s2 p-1.5 shadow-pop animate-fade',
+            // Above the SaveBar (z-20), under the TopBar (z-30).
+            'absolute top-[calc(100%+6px)] z-25 rounded-row bg-s2 p-1.5 shadow-pop animate-fade',
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >

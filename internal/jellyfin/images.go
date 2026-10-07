@@ -409,7 +409,9 @@ type downloadError struct {
 func (e downloadError) Error() string { return e.err.Error() }
 
 // fetchArtwork returns the artwork at target, downloaded once (see
-// imageCache); iptv tells that its host serves an IPTV source.
+// imageCache); iptv tells that its host serves an IPTV source. Artwork its
+// server does not have (404 or 410) is not found, as an image the item
+// does not have, for apps to show their placeholder.
 func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, iptv bool) (artwork, error) {
 	if status, failed := h.images.failures.Get(target); failed {
 		return artwork{}, downloadError{status, errors.New("the last download failed")}
@@ -423,8 +425,11 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, ipt
 		body, contentType, err := h.Stremio.Image(ctx, target, confined)
 		if err != nil {
 			status := http.StatusBadGateway
-			if errors.Is(err, stremio.ErrPrivateNetwork) {
+			switch {
+			case errors.Is(err, stremio.ErrPrivateNetwork):
 				status = http.StatusForbidden
+			case stremio.StatusOf(err) == http.StatusNotFound, stremio.StatusOf(err) == http.StatusGone:
+				status = http.StatusNotFound
 			}
 			if overloaded(err) {
 				h.images.spare(target)

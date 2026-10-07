@@ -260,3 +260,15 @@ func (s *Service) DownloadImage(ctx context.Context, id accounts.ID, imageType, 
 	}
 	return s.UploadImage(ctx, id, imageType, data)
 }
+
+// DeleteLibraryImages drops the images uploaded for the libraries of a
+// removed addon: those of the items of every catalog of its manifest,
+// whether or not the catalog was an enabled library. A library merely
+// disabled keeps its image, for when it is enabled again.
+func (s *Service) DeleteLibraryImages(ctx context.Context, addon addons.Addon) error {
+	items := make([]accounts.ID, 0, len(addon.Manifest.Catalogs))
+	for _, catalog := range addon.Manifest.Catalogs {
+		items = append(items, LibraryID(addons.Library{AddonID: addon.ID, Catalog: catalog}))
+	}
+	return s.deleteUploadedImages(ctx, items)
+}
