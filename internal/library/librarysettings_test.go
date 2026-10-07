@@ -224,6 +224,19 @@ func TestAWholeListingWaitsForAddonsAWhile(t *testing.T) {
 	}
 }
 
+// A whole listing from an index, of a library none of whose pages were
+// kept yet, reads them: what was kept, nothing, may look like the whole
+// listing from past its end.
+func TestAWholeListingFromAnIndexReadsWhatWasNotKept(t *testing.T) {
+	e := newEnv(t)
+	e.settingsLibraries(libraryOf("movie", "top", "", 0))
+	top := e.library(e.member, "Top")
+	page, err := e.service.Whole(t.Context(), e.member, top.ID, 6, 2, "")
+	if want := []string{"drama 0", "drama 1", "drama 2", "drama 3"}; err != nil || !slices.Equal(names(page.Items), want) || page.More {
+		t.Errorf("listed %v, more %v, %v; want %v", names(page.Items), page.More, err, want)
+	}
+}
+
 // blockCatalogs has addon answer no catalog request until the function it
 // returns is called, or the test ends.
 func blockCatalogs(t *testing.T, addon *fakeAddon) func() {

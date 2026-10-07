@@ -189,7 +189,7 @@ Once that time has passed, a title opened again still shows the versions known b
 
 Catalog pages work the same way. Once a page is older than **Refresh catalogs after (minutes)**, it still shows at once, and Polyfin reads it again from the addon in the background. It is kept 24 hours more, and also kept when the addon fails. A new title shows up one visit later.
 
-Polyfin also keeps catalog pages and titles' descriptions in its database. So libraries, collections, home rows and title pages show at once after a restart too. A page no one read for 24 hours past that time is forgotten, and so is a description after a week. Searches stay in memory.
+Polyfin also keeps catalog pages and titles' descriptions in its database. So libraries, collections, home rows and title pages show at once after a restart too, and a page read from the database past that time is read again in the background, as above. A page no one read for 24 hours past that time is forgotten, and so is a description after a week. Searches stay in memory.
 
 To answer quickly:
 
