@@ -386,9 +386,9 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 		defer cache.mu.Unlock()
 		return cache.used
 	}
-	if used() < 6*blockSize {
-		t.Fatalf("cached %d bytes before the limit was lowered", used())
-	}
+	// A read is answered as soon as its block is stored: the cache counts
+	// the block, and evicts for it, just after.
+	waitFor(t, "the blocks read to be counted", func() bool { return used() >= 6*blockSize })
 	limit.Store(2 * blockSize)
 	if _, _, got := cache.Usage(); got != 2*blockSize {
 		t.Errorf("usage tells a limit of %d", got)
@@ -400,13 +400,18 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 	if _, err := s.ReadAt(t.Context(), make([]byte, 100), 8*blockSize); err != nil {
 		t.Fatal(err)
 	}
+	waitFor(t, "the next write to evict the chunks read long ago", func() bool {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		for _, use := range cache.chunks {
+			if clock.now().Sub(use.touched) >= protectedFor {
+				return false
+			}
+		}
+		return true
+	})
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
-	for key, use := range cache.chunks {
-		if clock.now().Sub(use.touched) >= protectedFor {
-			t.Errorf("chunk %d, read long ago, is kept above the limit", key.index)
-		}
-	}
 	for index := range int64(6) {
 		if cache.chunkExists(accounts.ID{1}, index) {
 			t.Errorf("chunk %d is kept above the limit", index)
