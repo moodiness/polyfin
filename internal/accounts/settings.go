@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -367,6 +368,40 @@ const (
 	DefaultCollectionReadHour = -1
 )
 
+// ErrInvalidRemuxDBURL reports a Settings.RemuxDBURL that is not a valid
+// address (see ValidRemuxDBURL).
+var ErrInvalidRemuxDBURL = errors.New("invalid RemuxDB address")
+
+// DefaultRemuxDBURL is the RemuxDB server asked by default, and
+// MaxRemuxDBURLBytes the longest Settings.RemuxDBURL.
+const (
+	DefaultRemuxDBURL  = "https://remuxdb.1632022.xyz"
+	MaxRemuxDBURLBytes = 512
+)
+
+// ValidRemuxDBURL reports whether address may be the address of a RemuxDB
+// server: an absolute http or https URL with a host, without user info,
+// query or fragment, of at most MaxRemuxDBURLBytes, holding no spaces or
+// control characters. Empty is invalid.
+func ValidRemuxDBURL(address string) bool {
+	// The scheme is matched as written, in lower case, as the database's
+	// constraint matches it.
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") || len(address) > MaxRemuxDBURLBytes {
+		return false
+	}
+	for _, r := range address {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return false
+		}
+	}
+	// A question mark or a number sign would start a query or a fragment.
+	if strings.ContainsAny(address, "?#") {
+		return false
+	}
+	parsed, err := url.Parse(address)
+	return err == nil && parsed.Hostname() != "" && parsed.User == nil
+}
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -561,6 +596,13 @@ type Settings struct {
 	// at which every collection of the server's collection libraries is
 	// read each day; -1 never.
 	CollectionReadHour int
+	// RemuxDB makes item details describe the versions of a movie or an
+	// episode not analyzed yet, their audio, subtitle and video tracks, as
+	// RemuxDB found them in the same file; off, RemuxDB is never asked.
+	RemuxDB bool
+	// RemuxDBURL is the address of the RemuxDB server asked: an http or
+	// https URL, without a trailing slash (see ValidRemuxDBURL).
+	RemuxDBURL string
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -607,7 +649,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
-	"backup_hour, backups_kept, collection_read_hour"
+	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -633,7 +675,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
-		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour}
+		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -853,6 +895,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.CollectionReadHour < -1 || settings.CollectionReadHour > 23 {
 		return Settings{}, ErrInvalidCollectionReadHour
+	}
+	// The address is kept without surrounding spaces or trailing slashes:
+	// the paths asked are added after it.
+	settings.RemuxDBURL = strings.TrimRight(strings.TrimSpace(settings.RemuxDBURL), "/")
+	if !ValidRemuxDBURL(settings.RemuxDBURL) {
+		return Settings{}, ErrInvalidRemuxDBURL
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

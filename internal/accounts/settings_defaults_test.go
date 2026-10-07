@@ -103,11 +103,16 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				}
 			}
 		case b.Bounded && kind == reflect.String:
-			letter := "a"
-			if err := try(name, strings.Repeat(letter, int(b.Max))); err != nil {
+			// An address is a URL: its scheme starts it, letters fill the
+			// rest.
+			letter, start := "a", ""
+			if name == "remuxDbUrl" {
+				start = "https://"
+			}
+			if err := try(name, start+strings.Repeat(letter, int(b.Max)-len(start))); err != nil {
 				t.Errorf("%s: %v long refused: %v", name, b.Max, err)
 			}
-			if err := try(name, strings.Repeat(letter, int(b.Max)+1)); err == nil {
+			if err := try(name, start+strings.Repeat(letter, int(b.Max)+1-len(start))); err == nil {
 				t.Errorf("%s: %v long accepted", name, b.Max+1)
 			}
 			if b.Min > 0 {

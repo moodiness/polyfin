@@ -100,13 +100,15 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 // versions were known, and none asked again. Like playable, it leaves out
 // versions that recently failed and those taller than the user's group.
 // The page, opened as opened, is told of the versions as they come (see
-// versionsChanged).
+// versionsChanged). RemuxDB, when on, is asked about the versions it was
+// not asked about lately, for a moment at most (see remuxdb.Describe).
 func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) (playable, bool, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	versions, complete, err := h.Library.VersionsNow(ctx, user, item.ID)
 	if err == nil {
 		h.watch(user, item.ID, opened)
 	}
+	h.RemuxDB.Describe(ctx, versions)
 	p.versions = h.offered(ctx, user, versions)
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
 		p.subtitles = subtitles
@@ -190,12 +192,16 @@ func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) 
 }
 
 // describedSource describes a version as item details do, without a
-// device profile: playable as it is, its tracks as far as it was analyzed.
+// device profile: playable as it is, its tracks as far as it was analyzed,
+// or, until it is, as RemuxDB describes its file.
 func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID) MediaSourceInfo {
-	analysis, analyzed := h.Playback.Analyzed(r.Context(), version.ID)
-	source := h.baseSource(r, p, version, id, analysis, analyzed)
+	analysis, known := h.Playback.Analyzed(r.Context(), version.ID)
+	if !known {
+		analysis, known = h.RemuxDB.Described(version)
+	}
+	source := h.baseSource(r, p, version, id, analysis, known)
 	source.SupportsDirectPlay, source.SupportsDirectStream = true, true
-	if analyzed {
+	if known {
 		source.Container = playback.DisplayContainer(analysis, version.Filename)
 		source.DefaultAudioStreamIndex = p.tracks.audio(source.MediaStreams)
 	}
@@ -213,8 +219,10 @@ func (h *Handler) placeholderSource(r *http.Request, item library.Item) MediaSou
 	return source
 }
 
-// baseSource fills what every description of a version shares.
-func (h *Handler) baseSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, analyzed bool) MediaSourceInfo {
+// baseSource fills what every description of a version shares. analysis
+// tells the version's tracks when known: its analysis, or RemuxDB's
+// description of its file.
+func (h *Handler) baseSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, known bool) MediaSourceInfo {
 	language := h.Accounts.Settings().Language
 	source := MediaSourceInfo{
 		Protocol:               "Http",
@@ -237,9 +245,9 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	// buttons are on and a segment database is asked, or the version's own
 	// chapters name an intro or credits (see versionSegments).
 	source.HasSegments = (p.item.Kind == library.KindMovie || p.item.Kind == library.KindEpisode) &&
-		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || analyzed && len(chapterSegments(analysis.Chapters)) > 0)
+		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || known && len(chapterSegments(analysis.Chapters)) > 0)
 	size, runtime := version.Size, version.Runtime
-	if analyzed {
+	if known {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(), language)
 		source.MediaAttachments = mediaAttachments(analysis)
 		size = cmp.Or(analysis.Size, size)

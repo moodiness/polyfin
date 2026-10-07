@@ -35,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/source"
@@ -266,6 +267,7 @@ func serve(ctx context.Context) error {
 		Preferences:   preferences.New(pool),
 		UserData:      userData,
 		Segments:      skipSegments,
+		RemuxDB:       remuxdb.New(serverID, version, logger, store.Settings),
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
 		Thumbnails:    images,

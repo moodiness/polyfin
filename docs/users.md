@@ -195,7 +195,7 @@ Creating a group takes the first choice. Listing and joining groups takes either
 
 ### How a version's height is found
 
-Once Polyfin has analyzed a version, its height is the one the analysis found. Before that, it is the one its labels name, in the addon's stream name, title, description or file name:
+Once Polyfin has analyzed a version, its height is the one the analysis found. Before that, it is the one RemuxDB found in its file, when [Describe versions from RemuxDB](playback.md#tracks-from-remuxdb) is on and RemuxDB knows the file. Otherwise, it is the one its labels name, in the addon's stream name, title, description or file name:
 
 - 2160p, 4K or UHD;
 - 1440p, 2K or QHD;

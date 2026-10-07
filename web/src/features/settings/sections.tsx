@@ -134,6 +134,31 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           )}
         />
       </FieldRow>
+      <SwitchRow
+        anchor="remuxdb"
+        label={s.remuxDb}
+        help={s.remuxDbHelp}
+        checked={form.remuxDb}
+        onChange={(remuxDb) => update({ remuxDb })}
+      />
+      <FieldRow
+        anchor="remuxdb-url"
+        label={s.remuxDbUrl}
+        help={s.remuxDbUrlHelp}
+        error={error('remuxdb-url')}
+      >
+        <TextInput
+          inputMode="url"
+          value={form.remuxDbUrl}
+          onValue={(remuxDbUrl) => update({ remuxDbUrl })}
+          disabled={!form.remuxDb}
+          maxLength={limits('remuxDbUrl').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-md"
+        />
+      </FieldRow>
     </SettingsGroup>
   )
 }

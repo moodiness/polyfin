@@ -30,11 +30,16 @@ func videoHeight(analysis media.Analysis) int {
 }
 
 // versionHeight is the height of a version's video: its analysis's when
-// Polyfin has one, else the one the addon's labels give, 0 when unknown.
-// Nothing is read from the source to find it.
+// Polyfin has one, else RemuxDB's description's, else the one the addon's
+// labels give, 0 when unknown. Nothing is read from the source to find it.
 func (h *Handler) versionHeight(ctx context.Context, version library.Version) int {
 	if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
 		if height := videoHeight(analysis); height > 0 {
+			return height
+		}
+	}
+	if described, ok := h.RemuxDB.Described(version); ok {
+		if height := videoHeight(described); height > 0 {
 			return height
 		}
 	}

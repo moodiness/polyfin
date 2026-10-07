@@ -3,6 +3,7 @@ package accounts
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -80,6 +81,53 @@ func TestPlaybackChoicesStayInRange(t *testing.T) {
 		"max_conversions = -1", "max_conversions = 33", "max_conversion_height = 600"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
+		}
+	}
+}
+
+// RemuxDB is off by default, with its public server's address. Only an
+// http or https address with a host, without user info, query, fragment
+// or spaces, and up to MaxRemuxDBURLBytes, is saved, without surrounding
+// spaces or trailing slashes; the database refuses what does not start
+// with http.
+func TestRemuxDBSettings(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	if got := store.Settings(); got.RemuxDB || got.RemuxDBURL != DefaultRemuxDBURL || DefaultRemuxDBURL != "https://remuxdb.1632022.xyz" {
+		t.Errorf("defaults: %v %q", got.RemuxDB, got.RemuxDBURL)
+	}
+	tooLong := "https://host/" + strings.Repeat("a", MaxRemuxDBURLBytes)
+	for _, address := range []string{"", "ftp://host", "remuxdb.example", "https://", "https://user@host", "https://host/?q=1",
+		"https://host/#f", "https://ho st", tooLong} {
+		changed := store.Settings()
+		changed.RemuxDB, changed.RemuxDBURL = true, address
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidRemuxDBURL) {
+			t.Errorf("%q: %v", address, err)
+		}
+	}
+	if got := store.Settings(); got.RemuxDB || got.RemuxDBURL != DefaultRemuxDBURL {
+		t.Errorf("a refused update changed the settings: %v %q", got.RemuxDB, got.RemuxDBURL)
+	}
+	changed := store.Settings()
+	changed.RemuxDB, changed.RemuxDBURL = true, "  https://host/base/  "
+	saved, err := store.UpdateSettings(ctx, changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !saved.RemuxDB || saved.RemuxDBURL != "https://host/base" {
+		t.Errorf("saved: %v %q", saved.RemuxDB, saved.RemuxDBURL)
+	}
+	reopened, err := Open(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Settings(); !reflect.DeepEqual(got, saved) {
+		t.Errorf("after reopening: %+v, want %+v", got, saved)
+	}
+	for _, column := range []string{"remuxdb_url = 'remuxdb.example'", "remuxdb_url = 'ftp://host'", "remuxdb_url = ''",
+		"remuxdb_url = 'https://" + strings.Repeat("a", MaxRemuxDBURLBytes) + "'"} {
+		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
+			t.Errorf("the database took %.40s", column)
 		}
 	}
 }

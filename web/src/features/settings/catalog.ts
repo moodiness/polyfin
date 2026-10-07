@@ -89,6 +89,19 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).versionAttemptsHelp(r('versionAttempts')),
     codes: ['invalid_version_attempts'],
   },
+  {
+    section: 'playback',
+    anchor: 'remuxdb',
+    label: (t) => s(t).remuxDb,
+    help: (t) => s(t).remuxDbHelp,
+  },
+  {
+    section: 'playback',
+    anchor: 'remuxdb-url',
+    label: (t) => s(t).remuxDbUrl,
+    help: (t) => s(t).remuxDbUrlHelp,
+    codes: ['invalid_remuxdb_url'],
+  },
   // Conversion
   {
     section: 'conversion',

@@ -63,6 +63,9 @@ func DefaultSettings() Settings {
 		BackupHour:         DefaultBackupHour,
 		BackupsKept:        DefaultBackupsKept,
 		CollectionReadHour: DefaultCollectionReadHour,
+
+		RemuxDB:    false,
+		RemuxDBURL: DefaultRemuxDBURL,
 	}
 }
 
@@ -171,6 +174,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"backupHour":         between(0, 23, d.BackupHour),
 		"backupsKept":        between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
 		"collectionReadHour": between(-1, 23, d.CollectionReadHour),
+
+		"remuxDb":    is(d.RemuxDB),
+		"remuxDbUrl": text(MaxRemuxDBURLBytes, d.RemuxDBURL),
 	}
 }
 

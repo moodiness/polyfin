@@ -53,6 +53,11 @@ const settings: typeof en = {
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+    remuxDb: 'Décrire les versions grâce à RemuxDB',
+    remuxDbHelp:
+      'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
+    remuxDbUrl: 'Adresse de RemuxDB',
+    remuxDbUrlHelp: 'Le serveur RemuxDB que Polyfin interroge.',
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,

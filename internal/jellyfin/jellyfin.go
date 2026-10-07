@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/streamyfin"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -59,6 +60,8 @@ type Options struct {
 	// Segments finds the parts of titles apps offer to skip; nil finds
 	// none.
 	Segments *mediasegments.Service
+	// RemuxDB describes the versions not analyzed yet; nil describes none.
+	RemuxDB *remuxdb.Service
 	// Playlists stores the playlists users make.
 	Playlists *playlists.Store
 	// Collections stores the collections users make.

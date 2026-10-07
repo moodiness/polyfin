@@ -50,6 +50,11 @@ const settings = {
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    remuxDb: 'Describe versions from RemuxDB',
+    remuxDbHelp:
+      'Shows the audio, subtitle and video tracks of a version before it is first played, as RemuxDB found them in the same file. When a title’s details open, Polyfin asks RemuxDB, a community database, by the title’s IMDb identifier, and finds the versions by their file names. Playback still analyzes each version.',
+    remuxDbUrl: 'RemuxDB address',
+    remuxDbUrlHelp: 'The RemuxDB server Polyfin asks.',
     maxConversions: 'Video conversions at once (0 = no limit)',
     maxConversionsHelp: (r: RangeText) =>
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,
