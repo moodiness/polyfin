@@ -25,6 +25,9 @@ func versionNames(versions []Version) []string {
 func TestAPlayListsAnExpiredListAtOnce(t *testing.T) {
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
+	// The next follow-up waits until hurried: the requests counted before
+	// it are the play's and the wait's.
+	e.service.followUpDelays = []time.Duration{time.Hour}
 	versions, complete, err := e.service.VersionsToPlay(t.Context(), e.member, e.movie)
 	if err != nil || complete || !slices.Equal(versionNames(versions), []string{"Source 1", "Source 2", "Source 3"}) {
 		t.Fatalf("listed for a play: %q, complete %v, %v", versionNames(versions), complete, err)
@@ -43,6 +46,8 @@ func TestAPlayListsAnExpiredListAtOnce(t *testing.T) {
 	if got := <-waited; len(got) != 3 || e.asked("stream") != 3 {
 		t.Errorf("waited for %q, addon asked %d times", got, e.asked("stream"))
 	}
+	e.eventually("the follow-up's schedule", func() bool { return e.scheduled() == 1 })
+	e.hurry()
 	e.eventually("the follow-up", func() bool { return e.asked("stream") == 4 })
 	e.numbers <- []int{1, 2, 3}
 	e.settles("stream", 4)
