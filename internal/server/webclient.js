@@ -1,7 +1,7 @@
 // Polyfin (MIT License). Served at /web/polyfin.js and loaded by the
 // index.html of jellyfin-web, which Polyfin ships unmodified. It follows the
-// client's routes for three things, adds a style for a fourth, and mends a
-// link for a fifth.
+// client's routes for three things, adds a style for a fourth, mends a link
+// for a fifth, and closes a duplicate error for a sixth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -74,6 +74,16 @@
 // tab from such a link as it is pressed or clicked, before jellyfin-web
 // follows it: pressed covers a link opened in a new tab, clicked one
 // followed with the keyboard.
+//
+// Sixth, it closes the generic error jellyfin-web shows on top of a refused
+// playback's own error. When a title's PlaybackInfo answers with an
+// ErrorCode, such as the RateLimitExceeded of a user playing on as many
+// devices as allowed, jellyfin-web 12.2 explains the code, then rejects the
+// playback without a reason, and its rejection handler shows "There was an
+// error processing the request" over it: the user meets the wrong error
+// first. Of two alerts with the same title shown within a second of each
+// other, the first still open, the script hides the second at once, with
+// its backdrop, and closes it once it is open, as its button would.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -583,6 +593,56 @@
     })
     if (chosen !== href) link.setAttribute('href', chosen)
   }
+  // The last alert shown, and how close a second alert with the same title
+  // follows it to be the duplicate one.
+  var alerted = null
+  var duplicateWithin = 1000
+  // closeDuplicate hides and closes a dialog container that repeats, as an
+  // alert of the same title opened just before and still open, the alert
+  // before it (see the header).
+  function closeDuplicate(container) {
+    var dialog = container.querySelector && container.querySelector('.dialog')
+    var title = dialog && dialog.querySelector('.formDialogHeaderTitle')
+    var buttons = dialog ? dialog.querySelectorAll('.btnOption') : []
+    if (!title || buttons.length !== 1) return
+    var shown = { container: container, title: title.textContent, at: Date.now() }
+    var before = alerted
+    if (!before || !before.container.isConnected || shown.at - before.at > duplicateWithin || before.title !== shown.title) {
+      alerted = shown
+      return
+    }
+    container.style.visibility = 'hidden'
+    var backdrop = container.previousElementSibling
+    if (backdrop && backdrop.classList.contains('dialogBackdrop')) backdrop.style.visibility = 'hidden'
+    // Closed once open, as a click on its button closes it, so that
+    // jellyfin-web undoes its opening, history entry included; at most 2
+    // seconds later all the same.
+    var waited = 0
+    ;(function close() {
+      if (!container.isConnected) return
+      if (dialog.classList.contains('opened') || waited >= 2000) {
+        buttons[0].click()
+        return
+      }
+      waited += 50
+      setTimeout(close, 50)
+    })()
+  }
+  // Alerts are dialog containers jellyfin-web adds to the body, which the
+  // script, loaded in the head, observes once it exists.
+  function watchDialogs() {
+    if (typeof MutationObserver !== 'function' || !document.body) return
+    new MutationObserver(
+      quietly(function (records) {
+        for (var i = 0; i < records.length; i++) {
+          var added = records[i].addedNodes || []
+          for (var j = 0; j < added.length; j++) {
+            if (added[j].classList && added[j].classList.contains('dialogContainer')) closeDuplicate(added[j])
+          }
+        }
+      }),
+    ).observe(document.body, { childList: true })
+  }
   // The router moves through history.pushState and replaceState, which
   // fire no event; links and typed addresses fire hashchange.
   ;['pushState', 'replaceState'].forEach(function (name) {
@@ -601,5 +661,7 @@
   // Both run before jellyfin-web follows the link.
   addEventListener('mousedown', quietly(chosenScreen), true)
   addEventListener('click', quietly(chosenScreen), true)
+  if (document.body) watchDialogs()
+  else addEventListener('DOMContentLoaded', watchDialogs)
   follow()
 })()

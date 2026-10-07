@@ -409,6 +409,133 @@ process.stdout.write(JSON.stringify(results))
 	}
 }
 
+// When jellyfin-web refuses a playback for a PlaybackInfo's ErrorCode, it
+// shows the code's alert, then its generic error alert over it, with the
+// same title. The script hides the second at once, with its backdrop, and
+// closes it with its button once it is open, or 2 seconds later. It leaves
+// alone a lone alert, alerts of other titles, one shown more than a second
+// later or after the first was closed, and dialogs that are not alerts. It
+// runs in Node.js, in a context that stands for the browser: dialog
+// containers added to the body, as jellyfin-web adds them.
+func TestTheGenericErrorOverARefusedPlaybackIsClosed(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	// What became of the first and the second dialog: "-" untouched,
+	// "closed" hidden at once then closed once open, "closed late" hidden
+	// then closed without opening.
+	scenarios := map[string]string{
+		"the refusal's two alerts":                      "- closed",
+		"the refusal's two alerts, the body after load": "- closed",
+		"a lone alert":                                  "-",
+		"alerts of other titles":                        "- -",
+		"a second alert, a second later":                "- -",
+		"a second alert, the first closed":              "- -",
+		"a dialog that is not an alert":                 "- -",
+		"the second alert never opening":                "- closed late",
+	}
+	const harness = `
+const vm = require('node:vm')
+const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const results = {}
+for (const name of scenarios) {
+  let now = 0
+  const timers = []
+  const listeners = {}
+  const advance = (ms) => {
+    const until = now + ms
+    for (;;) {
+      timers.sort((a, b) => a.at - b.at)
+      const next = timers[0]
+      if (!next || next.at > until) break
+      timers.shift()
+      now = next.at
+      next.run()
+    }
+    now = until
+  }
+  let observer = null
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe(target, options) { if (target !== body || options.subtree) throw new Error('not the body children'); observer = this }
+    disconnect() {}
+  }
+  // A dialog as jellyfin-web's dialog helper adds it: a container after
+  // its backdrop, holding a dialog with a title and its buttons.
+  const dialog = (title, buttons) => {
+    const backdrop = { classList: { contains: (c) => c === 'dialogBackdrop' }, style: {} }
+    const inner = { opened: false, classList: { contains: (c) => c === 'opened' && inner.opened } }
+    const container = {
+      isConnected: true, style: {}, previousElementSibling: backdrop, backdrop, inner, clicks: 0, clicksBeforeOpen: 0,
+      classList: { contains: (c) => c === 'dialogContainer' },
+      querySelector: (s) => (s === '.dialog' ? inner : null),
+    }
+    const list = Array.from({ length: buttons }, () => ({ click: () => { container.clicks++; if (!inner.opened) container.clicksBeforeOpen++; container.isConnected = false } }))
+    inner.querySelector = (s) => (s === '.formDialogHeaderTitle' && title ? { textContent: title } : null)
+    inner.querySelectorAll = (s) => (s === '.btnOption' ? list : [])
+    return container
+  }
+  const add = (container) => observer && observer.callback([{ addedNodes: [container.backdrop] }, { addedNodes: [container] }])
+  // jellyfin-web opens a dialog with an animation.
+  const open = (container) => { timers.push({ at: now + 150, run: () => { container.inner.opened = true } }) }
+  const body = {}
+  const document = { head: { appendChild: () => {} }, createElement: () => ({}), body: name.includes('after load') ? undefined : body }
+  const location = { href: 'http://polyfin.test/web/#/details?id=x', hash: '#/details?id=x', replace: () => {} }
+  vm.runInNewContext(script, {
+    location, history: { pushState: () => {}, replaceState: () => {} }, URL, document, MutationObserver,
+    Date: { now: () => now }, setTimeout: (run, delay) => timers.push({ at: now + delay, run }), clearTimeout: () => {},
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  if (!document.body) { document.body = body; for (const listener of listeners.DOMContentLoaded || []) listener() }
+  const title = 'Playback Error'
+  const first = dialog(title, 1)
+  add(first); open(first)
+  let second = null
+  switch (name) {
+    case 'a lone alert': break
+    case 'alerts of other titles': advance(2); second = dialog('Something else', 1); break
+    case 'a second alert, a second later': advance(1200); second = dialog(title, 1); break
+    case 'a second alert, the first closed': advance(2); first.isConnected = false; second = dialog(title, 1); break
+    case 'a dialog that is not an alert': advance(2); second = dialog(title, 2); break
+    default: advance(2); second = dialog(title, 1)
+  }
+  if (second) {
+    add(second)
+    if (!name.includes('never opening')) open(second)
+  }
+  advance(3000)
+  const fate = (c) => {
+    if (!c.style.visibility && !c.clicks) return '-'
+    if (c.style.visibility !== 'hidden' || c.backdrop.style.visibility !== 'hidden' || c.clicks !== 1) return 'wrong: ' + JSON.stringify({ hidden: c.style.visibility, backdrop: c.backdrop.style.visibility, clicks: c.clicks })
+    return c.clicksBeforeOpen ? 'closed late' : 'closed'
+  }
+  results[name] = [first, second].filter(Boolean).map(fate).join(' ')
+}
+process.stdout.write(JSON.stringify(results))
+`
+	names := make([]string, 0, len(scenarios))
+	for name := range scenarios {
+		names = append(names, name)
+	}
+	input, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": names})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(input))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, want := range scenarios {
+		if got := results[name]; got != want {
+			t.Errorf("%s: %q, want %q", name, got, want)
+		}
+	}
+}
+
 // On a title's page, the script asks Polyfin for the title's versions at
 // once, then every second while addons are pending. When the page lists
 // fewer versions than there are, or a different number once none is
@@ -888,19 +1015,20 @@ async function run(scenario) {
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   // Observers hear the changes within what they observe once the code that
-  // made them is done.
+  // made them is done: within its subtree, or of the element itself.
   const observers = new Set()
   const queued = new Set()
   const changed = (element) => {
     for (const observer of observers) {
-      if (!observer.target.contains(element) || queued.has(observer)) continue
+      const heard = observer.options.subtree ? observer.target.contains(element) : observer.target === element
+      if (!heard || queued.has(observer)) continue
       queued.add(observer)
       queueMicrotask(() => { queued.delete(observer); if (observers.has(observer)) observer.callback([]) })
     }
   }
   class MutationObserver {
     constructor(callback) { this.callback = callback }
-    observe(target, options) { if (!options.subtree) throw new Error('not the subtree'); this.target = target; observers.add(this) }
+    observe(target, options) { this.target = target; this.options = options; observers.add(this) }
     disconnect() { observers.delete(this) }
   }
   // A small document: elements with attributes, classes, children and text,
