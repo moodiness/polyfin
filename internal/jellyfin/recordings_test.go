@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -416,7 +417,8 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 		t.Fatalf("%v: %s", err, output)
 	}
 	now := time.Now()
-	addonURL := recordingAddon(t, stream, now.Add(-time.Second), now.Add(6*time.Second))
+	end := now.Add(6 * time.Second)
+	addonURL := recordingAddon(t, stream, now.Add(-time.Second), end)
 	folder := t.TempDir()
 	s, service := recordingServer(t, ffprobe, folder)
 	token, user := recordingMember(t, s, addonURL, true)
@@ -431,7 +433,12 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	var channels QueryResult
 	s.get(t, "/LiveTv/Channels", token, &channels)
 	liveAnalysis(t, s, user, channels.Items[0].Id)
-	if status, body := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), timerDefaults(t, s, token, show.Id)); status != http.StatusNoContent {
+	// The recording goes on at least 10 seconds after the timer is made,
+	// its post padding past the programme's end, however long the steps
+	// above took: the test sees it under way before it ends.
+	timer := timerDefaults(t, s, token, show.Id)
+	timer["PostPaddingSeconds"] = max(0, int(math.Ceil(time.Now().Add(10*time.Second).Sub(end).Seconds())))
+	if status, body := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), timer); status != http.StatusNoContent {
 		t.Fatalf("a timer made: %d %s", status, body)
 	}
 
