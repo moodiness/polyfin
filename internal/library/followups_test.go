@@ -42,12 +42,16 @@ func scriptedReplies(replies <-chan int) func(http.ResponseWriter, *http.Request
 
 // answerNumbered answers a request for a resource with the streams or
 // subtitles numbered as numbers lists: stream 2 is the second stream of an
-// answer of scriptedReplies, whatever the answer.
+// answer of scriptedReplies, whatever the answer. Stream 0 is a notice,
+// with nothing to play, such as addons send when they limit requests.
 func answerNumbered(w http.ResponseWriter, resource string, numbers []int) {
 	if resource == "stream" {
 		streams := make([]stremio.Stream, len(numbers))
 		for i, n := range numbers {
 			streams[i] = stremio.Stream{Name: fmt.Sprintf("Source %d", n), URL: fmt.Sprintf("https://cdn.example/movie/%d.mkv", n)}
+			if n == 0 {
+				streams[i] = stremio.Stream{Name: "Notice", Description: "Rate limit exceeded", ExternalURL: "https://addon.example/"}
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
 		return

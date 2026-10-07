@@ -173,6 +173,39 @@ func TestWaitingForVersionsWaitsForTheAnswerReplacingAStaleList(t *testing.T) {
 	e.settles("stream", 4)
 }
 
+// An addon limiting requests answers with a notice that has nothing to
+// play: the versions it listed before stay listed, the addon is not asked
+// again meanwhile, and it is asked when the title opens again.
+func TestANoticeKeepsTheVersionsOfAnExpiredList(t *testing.T) {
+	e := newStaleEnv(t, 20*time.Millisecond)
+	e.expired()
+	e.reopened()
+	// The addon limits requests for a while: whatever asks gets a notice.
+	for range 3 {
+		e.numbers <- []int{0}
+	}
+	e.eventually("the answer", func() bool { return e.pending() == 0 && e.scheduled() == 0 })
+	if got := e.listed(); !slices.Equal(got, []string{"Source 1", "Source 2", "Source 3"}) {
+		t.Errorf("listed after the notice: %q", got)
+	}
+	e.settles("stream", 3)
+	for len(e.numbers) > 0 {
+		<-e.numbers
+	}
+	versions, complete, err := e.service.VersionsNow(t.Context(), e.member, e.movie)
+	if err != nil || complete || len(versions) != 3 {
+		t.Fatalf("opened again: %d versions, complete %v, %v", len(versions), complete, err)
+	}
+	e.eventually("the addon to be asked again", func() bool { return e.asked("stream") == 4 })
+	e.numbers <- []int{2}
+	e.eventually("the follow-up", func() bool { return e.asked("stream") == 5 })
+	e.numbers <- []int{2}
+	e.settles("stream", 5)
+	if got := e.listed(); !slices.Equal(got, []string{"Source 2"}) {
+		t.Errorf("listed once the addon answered again: %q", got)
+	}
+}
+
 func TestARefreshDropsStaleLists(t *testing.T) {
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()

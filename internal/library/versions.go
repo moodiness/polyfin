@@ -452,16 +452,31 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // asking meanwhile shares the answer, item details' background requests
 // and renewals included (see VersionsNow and Renew). An answer stored is
 // followed up; until the follow-ups end, it is listed with the items it
-// lacks of the stale list it replaced (see followUpList).
+// lacks of the stale list it replaced (see followUpList). An answer of
+// notices alone, nothing to play, is not stored over a list that has
+// streams to play: it is errOnlyNotices, an addon failing.
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	return shared(ctx, &s.flight, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
 		}
+		if len(streams) > 0 && streamKind.count(streams) == 0 {
+			if kept, _, ok := s.streamListOf(ctx, key); ok && streamKind.count(kept.items) > 0 {
+				return nil, errOnlyNotices
+			}
+		}
 		return s.followStreams(ctx, entry, key, streams), nil
 	})
 }
+
+// errOnlyNotices is an addon's answer listing only notices for a title it
+// listed streams for, such as a notice that it limits requests: it would
+// list them again a moment later. The list kept stays as it was, listed
+// while kept, and asked for again as it would have been. An empty answer
+// is the addon having nothing for the title any more: it replaces the
+// list as any answer does.
+var errOnlyNotices = errors.New("its answer has only notices, nothing to play: the streams it listed before are kept")
 
 // streamsFlight names the request asking an addon for its streams for a
 // title, which callers share (see streamAnswer).

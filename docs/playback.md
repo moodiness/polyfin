@@ -57,6 +57,7 @@ A title opened again once **Keep version lists for (minutes)** has passed shows 
 - Once Polyfin stops asking, the list is the addon's last answer alone: the versions the addon no longer lists disappear.
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops the old lists too.
 - Subtitles from the addons are kept the same way.
+- An answer made only of notices, with nothing to play, as an addon sends when it limits requests, counts as the addon failing: the versions it listed before stay listed, and it is asked again as before. The log tells it (`An addon could not list streams`). An empty answer still replaces the list: the addon has nothing for the title any more.
 
 Some addons gather other addons' streams. They answer the first request for a title with the streams that came in within their own time limit, and get the others moments later. So Polyfin asks an addon again 10 seconds after its first answer for a title, and once more 30 seconds later if that answer listed more playable streams:
 
