@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -13,6 +14,10 @@ import (
 )
 
 const defaultPageSize = 100
+
+// slowListing is how long a listing of a folder may take before the log
+// tells where its time went.
+const slowListing = 5 * time.Second
 
 func (h *Handler) browseRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -277,6 +282,7 @@ func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 // items lists a folder's children, the titles of a genre, studio or year,
 // the results of a search, or items by identifier.
 func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
+	begun := time.Now()
 	b := bindErrors{}
 	start, limit := b.paging(r, defaultPageSize)
 	parent, hasParent := b.guid(r, "parentId")
@@ -391,6 +397,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
+	asked := time.Now()
 	var page library.Page
 	var err error
 	if wholeListing(r) {
@@ -398,6 +405,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	} else {
 		page, err = h.Library.Children(r.Context(), user, parent, max(start, 0), limit, genre)
 	}
+	read := time.Since(asked)
 	if errors.Is(err, library.ErrNotFound) {
 		// Jellyfin refuses to list a folder it does not know.
 		processingError(w, http.StatusBadRequest)
@@ -422,6 +430,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	if took := time.Since(begun); took > slowListing {
+		h.Logger.Info("A listing was slow", "folder", parent, "whole", wholeListing(r), "items", len(items),
+			"checked", asked.Sub(begun).Round(time.Millisecond), "read", read.Round(time.Millisecond),
+			"described", (took - read - asked.Sub(begun)).Round(time.Millisecond))
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: page.Total, StartIndex: start})
 }
