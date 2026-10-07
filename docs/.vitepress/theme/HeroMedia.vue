@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { withBase } from 'vitepress'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watchEffect } from 'vue'
 import Icon from './Icon.vue'
+import SoundControl from './SoundControl.vue'
 import { icons } from './icons'
+import { heard, level } from './sound'
 
 /** The teaser's poster is its frame at 6 s, the diagram of sources, Polyfin and apps: it starts there. */
 const POSTER_TIME = 6
@@ -12,9 +14,18 @@ const tour = ref<HTMLVideoElement>()
 const dialog = ref<HTMLDialogElement>()
 const previewing = ref(false)
 let resumePreview = false
+/** The video heard before the tour opened, heard again once it closes. */
+let heardBefore: string | null = null
 
 onMounted(() => {
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) playPreview()
+})
+
+watchEffect(() => {
+  const video = teaser.value
+  if (!video) return
+  video.muted = heard.value !== 'intro'
+  video.volume = level.value
 })
 
 function playPreview() {
@@ -28,16 +39,26 @@ function togglePreview() {
   else playPreview()
 }
 
+/** The tour is the only video heard while it is open, at the level set, which its own controls change. */
 function openTour() {
   resumePreview = previewing.value
   teaser.value!.pause()
+  heardBefore = heard.value
+  heard.value = 'tour'
   dialog.value!.showModal()
+  tour.value!.volume = level.value
   tour.value!.play().catch(() => {})
 }
 
 function closeTour() {
   tour.value!.pause()
+  heard.value = heardBefore
   if (resumePreview) playPreview()
+}
+
+function onTourVolume() {
+  const video = tour.value!
+  if (!video.muted && video.volume > 0) level.value = video.volume
 }
 
 /** A click on the backdrop reaches the dialog itself. */
@@ -71,14 +92,17 @@ function onDialogClick(event: MouseEvent) {
         Watch the tour
         <span class="duration">1:18</span>
       </a>
-      <button
-        type="button"
-        class="icon-button"
-        :aria-label="previewing ? 'Pause the preview' : 'Play the preview'"
-        @click="togglePreview"
-      >
-        <Icon :svg="previewing ? icons.pause : icons.play" :size="14" />
-      </button>
+      <div class="buttons">
+        <SoundControl owner="intro" />
+        <button
+          type="button"
+          class="icon-button"
+          :aria-label="previewing ? 'Pause the preview' : 'Play the preview'"
+          @click="togglePreview"
+        >
+          <Icon :svg="previewing ? icons.pause : icons.play" :size="14" />
+        </button>
+      </div>
     </div>
     <dialog
       ref="dialog"
@@ -93,6 +117,7 @@ function onDialogClick(event: MouseEvent) {
         controls
         playsinline
         preload="none"
+        @volumechange="onTourVolume"
       ></video>
       <button type="button" class="icon-button close" aria-label="Close" @click="dialog?.close()">
         <Icon :svg="icons.x" :size="18" />
@@ -132,6 +157,11 @@ function onDialogClick(event: MouseEvent) {
   pointer-events: auto;
 }
 
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .tour-button,
 .icon-button {
   display: inline-flex;
@@ -155,6 +185,7 @@ function onDialogClick(event: MouseEvent) {
   font-size: 15px;
   font-weight: 500;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .icon-button {
@@ -230,6 +261,8 @@ function onDialogClick(event: MouseEvent) {
 @media (max-width: 639px) {
   .controls {
     inset: auto 10px 10px;
+    --sound-size: 32px;
+    --sound-slider: 56px;
   }
   .tour-button {
     gap: 8px;
@@ -247,6 +280,13 @@ function onDialogClick(event: MouseEvent) {
   .icon-button {
     width: 32px;
     height: 32px;
+  }
+}
+
+/* The tour's button, the sound's slider and play take 360 px: narrower, the slider is left out, phones having their own buttons for it. */
+@media (max-width: 419px) {
+  .controls :deep(.level) {
+    display: none;
   }
 }
 </style>

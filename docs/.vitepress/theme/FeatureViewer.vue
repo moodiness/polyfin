@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { withBase } from 'vitepress'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import Icon from './Icon.vue'
+import SoundControl from './SoundControl.vue'
 import { features } from './home'
 import { icons } from './icons'
+import { heard, level } from './sound'
 
 /** From 13.4 s, each video ends on Polyfin's logo: the viewer moves to the next feature just before. */
 const END = 13.2
@@ -13,7 +15,6 @@ const video = ref<HTMLVideoElement>()
 /** Whether the viewer plays when it is on screen: not with reduced motion, nor once paused. */
 const autoplay = ref(false)
 const playing = ref(false)
-const muted = ref(true)
 const feature = computed(() => features[current.value])
 let visible = false
 let progressBar: HTMLElement | undefined
@@ -35,6 +36,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect()
   cancelAnimationFrame(frame)
+})
+
+watchEffect(() => {
+  const element = video.value
+  if (!element) return
+  element.muted = heard.value !== 'features'
+  element.volume = level.value
 })
 
 function play() {
@@ -124,7 +132,7 @@ function onPause() {
         ref="video"
         :src="withBase(`/videos/polyfin-${feature.slug}.mp4`)"
         :poster="autoplay ? undefined : withBase(`/videos/polyfin-${feature.slug}.jpg`)"
-        :muted="muted"
+        muted
         playsinline
         preload="metadata"
         :aria-label="`${feature.name}: ${feature.pitch}`"
@@ -133,14 +141,7 @@ function onPause() {
         @ended="show(current + 1)"
       ></video>
       <div class="controls">
-        <button
-          type="button"
-          class="icon-button"
-          :aria-label="muted ? 'Turn the sound on' : 'Turn the sound off'"
-          @click="muted = !muted"
-        >
-          <Icon :svg="muted ? icons.soundOff : icons.soundOn" :size="16" />
-        </button>
+        <SoundControl owner="features" />
         <button
           type="button"
           class="icon-button"
