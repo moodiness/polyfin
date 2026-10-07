@@ -717,6 +717,7 @@ func (s *Service) artistOf(ctx context.Context, entry installed, r record) (ecli
 
 // artistRecords lists an artist's albums, or their tracks: their top
 // tracks, then those of their albums, at most musicExpansion of them read.
+// An artist whose page lists no albums has those its top tracks name.
 func (s *Service) artistRecords(ctx context.Context, v view, entry installed, r record, tracks bool) ([]record, error) {
 	artist, err := s.artistOf(ctx, entry, r)
 	if err != nil {
@@ -724,6 +725,9 @@ func (s *Service) artistRecords(ctx context.Context, v view, entry installed, r 
 	}
 	content := entry.content()
 	if !tracks {
+		if len(artist.Albums) == 0 {
+			return derived(entry, trackRecords(entry, artist.TopTracks, &r.ID, "", false), KindAlbum, &r.ID), nil
+		}
 		records := make([]record, 0, len(artist.Albums))
 		for _, album := range artist.Albums {
 			records = append(records, musicRecord(entry, albumEntry(album, content), &r.ID))
