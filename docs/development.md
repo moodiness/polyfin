@@ -38,6 +38,7 @@ The [website](https://moodiness.github.io/polyfin/) is built with [VitePress](ht
 
 - Each page of this documentation is one of its pages, under `/docs/`, with the sidebar following the sections of the [documentation's index](README.md). Links that leave `docs/` open the file on GitHub.
 - The landing page is in `docs/.vitepress/theme/`, and its videos in `docs/public/videos/`.
+- VitePress 1 asks for Vite 5, whose development server has security advisories fixed only in Vite 6.4.3. `docs/package.json` overrides it with Vite 6; the override can go once VitePress asks for a fixed Vite.
 
 ```sh
 npm --prefix docs ci
