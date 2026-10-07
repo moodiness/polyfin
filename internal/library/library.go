@@ -1039,6 +1039,116 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	return result, s.save(ctx, records)
 }
 
+// Titles lists the titles under parent for a listing that asks for titles
+// only, through the folders within it, as a Jellyfin listing with Recursive
+// does: an addon's collection lists the titles of the catalogs it and the
+// collections within it group, merged, rather than those collections, which
+// such a listing would leave out. Any other folder lists its children (see
+// Children).
+func (s *Service) Titles(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return Page{}, err
+	}
+	if _, ok := v.library(parent); !ok {
+		r, err := s.load(ctx, parent)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return Page{}, err
+		}
+		if err == nil && r.Kind == KindCollection {
+			return s.collectionTitles(ctx, v, r, start, count)
+		}
+	}
+	return s.Children(ctx, user, parent, start, count, genre)
+}
+
+// collectionTitles lists the titles of the catalogs an addon's collection
+// and the collections within it group, merged (see collectionSources).
+func (s *Service) collectionTitles(ctx context.Context, v view, r record, start, count int) (Page, error) {
+	if r.Addon == nil || r.Meta == nil {
+		return Page{}, ErrNotFound
+	}
+	addon, ok := v.addon(*r.Addon)
+	if !ok {
+		return Page{}, ErrNotFound
+	}
+	meta, err := s.meta(ctx, addon, "collection", r.Meta.ID)
+	if err != nil {
+		return Page{}, err
+	}
+	most := s.collectionMax(ctx, v, r)
+	count = withinMax(start, count, most)
+	sources := s.collectionSources(ctx, addon, meta, most)
+	if len(sources) == 0 {
+		return Page{}, nil
+	}
+	titles, total, err := s.merged(ctx, v, sources, start, count)
+	if err != nil {
+		return Page{}, err
+	}
+	var items []Item
+	var records []record
+	for _, title := range titles {
+		item, rec, err := title.title(r.ID)
+		if err != nil {
+			continue
+		}
+		items, records = append(items, item), append(records, rec)
+	}
+	result := page(items, start, totalWithinMax(total, most))
+	if result.More {
+		s.prefetch(ctx, v, addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, start+count, count) })
+	}
+	return result, s.save(ctx, records)
+}
+
+// collectionSources lists, each once, the catalogs an addon's collection
+// groups, then those the collections within it group, following them up to
+// maxNesting deep. A collection within that cannot be described is left
+// out; descriptions are cached.
+func (s *Service) collectionSources(ctx context.Context, addon installed, meta stremio.Meta, most int) []source {
+	var sources []source
+	seen := map[catalogKey]bool{}
+	described := map[string]bool{meta.ID: true}
+	level := []stremio.Meta{meta}
+	for depth := 0; len(level) > 0 && depth < maxNesting; depth++ {
+		var nested []string
+		for _, m := range level {
+			if m.Collection == nil {
+				continue
+			}
+			for _, ref := range m.Collection.Sources {
+				key := catalogKey{addon.addon.ID, ref.Type, ref.CatalogID, ref.Genre}
+				if catalog, ok := addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok && !seen[key] {
+					seen[key] = true
+					sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, max: most})
+				}
+			}
+			for _, sub := range m.Collection.Items {
+				if sub.ID != "" && !described[sub.ID] {
+					described[sub.ID] = true
+					nested = append(nested, sub.ID)
+				}
+			}
+		}
+		level = make([]stremio.Meta, len(nested))
+		var group errgroup.Group
+		group.SetLimit(metaFetches)
+		for i, id := range nested {
+			group.Go(func() error {
+				m, err := s.meta(ctx, addon, "collection", id)
+				if err != nil && ctx.Err() == nil {
+					s.logger.Debug("A collection could not be described", "collection", id, "error", err)
+				}
+				level[i] = m
+				return nil
+			})
+		}
+		_ = group.Wait()
+	}
+	return sources
+}
+
 // collectionMax is the most items a collection lists: the maximum of the
 // library it was listed in, through the collections it was listed in, 0
 // for none.

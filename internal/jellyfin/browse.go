@@ -177,6 +177,18 @@ func wholeListing(r *http.Request) bool {
 	return strings.TrimSpace(query(r, "limit")) == ""
 }
 
+// titlesThrough reports whether a listing asks for the titles under its
+// folder, through the folders within it: Recursive, and types that are
+// titles, not collections or folders. Streamyfin lists a collection so,
+// for its movies, series and seasons (see library.Service.Titles).
+func titlesThrough(r *http.Request) bool {
+	recursive, _ := boolQuery(r, "recursive")
+	include := listQuery(r, "includeItemTypes")
+	return recursive && len(include) > 0 && !slices.ContainsFunc(include, func(t string) bool {
+		return strings.EqualFold(t, "BoxSet") || strings.EqualFold(t, "Folder") || strings.EqualFold(t, "CollectionFolder")
+	})
+}
+
 func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	includeHidden, _ := b.bool(r, "includeHidden")
@@ -381,9 +393,12 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	var page library.Page
 	var err error
-	if wholeListing(r) {
+	switch {
+	case titlesThrough(r):
+		page, err = h.Library.Titles(r.Context(), user, parent, max(start, 0), limit, genre)
+	case wholeListing(r):
 		page, err = h.Library.Whole(r.Context(), user, parent, max(start, 0), limit, genre)
-	} else {
+	default:
 		page, err = h.Library.Children(r.Context(), user, parent, max(start, 0), limit, genre)
 	}
 	if errors.Is(err, library.ErrNotFound) {
@@ -394,6 +409,17 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.browseError(w, r, err)
 		return
+	}
+	// Titles listed whole are sorted as asked, as Jellyfin sorts them: a
+	// saga's movies by premiere date. A listing in pages keeps its catalogs'
+	// order, which pages sorted one by one would mix up.
+	if titlesThrough(r) && start <= 0 && !page.More && len(page.Items) == page.Total && len(listQuery(r, "sortBy")) > 0 {
+		state, err := h.userState(r.Context(), user, page.Items)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		sortItems(r, page.Items, state)
 	}
 	items, err := h.dtos(r, user, page.Items, fields, keep)
 	if err != nil {
