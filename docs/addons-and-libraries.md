@@ -79,7 +79,7 @@ A genre the addon stops offering lists the whole catalog again, until another is
 
 **For app developers:**
 
-- A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. It waits for the addons 8 seconds at most, then lists the titles read by then, and never fewer than a page of 100. A listing with a `limit` lists as many as it asks, within the library's maximum.
+- A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. For a library or an addon's collection, the titles kept from earlier listings answer at once when they make the whole listing. Otherwise the listing waits for the addons 3 seconds at most, or 1 second when the titles kept fill a page of 100, then lists those read by then, and at least the first page of each catalog. It reads the rest in the background, for the next listing. A listing with a `limit` lists as many as it asks, within the library's maximum.
 
 ## Music addons
 
@@ -197,7 +197,7 @@ To answer quickly:
 - When it starts, and every hour, Polyfin reads the first page of every library: the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard.
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
-- jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. The first time, reading them can take long: the page waits for the addons 8 seconds at most and shows the titles read by then, at least 100. The next time, it shows those at once and reads further.
+- jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. Reading them all can take long the first time: the page waits for the addons 3 seconds at most and shows the titles read by then, at least the first page of each catalog, while Polyfin reads the rest in the background. The next time, the page shows them all at once; if Polyfin is still reading, it shows those read so far after 1 second at most.
 - A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
 - A search reads the first page of the search catalogs, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, and waits 0.3 seconds more for people-search catalogs. A slower answer is kept for the next search of the same term.
 - When an app gives up on a request, what Polyfin was reading for it goes on and is kept for the next request. Other apps waiting for the same page get it.
@@ -210,7 +210,7 @@ Every change to these settings applies at once, to what is already kept too.
 
 An addon's collection catalogs (such as AIOMetadata's) become collection libraries. Each collection gathers the catalogs it groups, movies and series together.
 
-A collection may also group other collections: a genre's movies and series, or a franchise's movies in several sagas. Opening it shows the titles of every collection within it together, up to three levels deep, as a collection of catalogs does, never those collections as folders. When the app reads them all at once, as jellyfin-web's collection page does, they come by release date, as Jellyfin orders a collection. In pages, they come one of each catalog in turn. A collection that groups only catalogs keeps their order, such as their titles' popularity.
+A collection may also group other collections: a genre's movies and series, or a franchise's movies in several sagas. Opening it shows the titles of every collection within it together, up to three levels deep, as a collection of catalogs does, never those collections as folders. When the app reads them all at once, as jellyfin-web's collection page does, they come by release date once Polyfin has read them all, as Jellyfin orders a collection. Until then, and in pages, they come one of each catalog in turn. A collection that groups only catalogs keeps their order, such as their titles' popularity.
 
 On the home page of Jellyfin apps, each collection library has a row of its collections, as a movie or series library has a row of its titles: "Recently Added in" the library's name. In jellyfin-web, a user can leave a library out of these rows under **Settings › Home**. The row's title, like the library's links in the header and the menu, opens the library on the screen chosen for it there under "Default screen": "Folders" by default, which lists its collections. jellyfin-web reads that choice for these libraries in the browser where it was saved: another browser opens "Folders" until the choice is saved there too.
 

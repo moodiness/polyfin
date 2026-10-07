@@ -90,9 +90,10 @@ type Service struct {
 	// ratingWait bounds how long a request waits for them.
 	ratingLookups chan struct{}
 	ratingWait    time.Duration
-	// wholeWait bounds how long a whole listing waits for addons (see
-	// Whole).
+	// wholeWait bounds how long a whole listing waits for addons, and
+	// keptWait how long one does when what was kept fills it (see Whole).
 	wholeWait time.Duration
+	keptWait  time.Duration
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -164,6 +165,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
 		wholeWait:      wholeListingWait,
+		keptWait:       keptListingWait,
 		music:          eclipse.NewClient(client),
 	}
 	clock := func() time.Time { return s.now() }
@@ -1118,9 +1120,11 @@ const (
 	// collection that asks for no limit gets at most, as jellyfin-web's
 	// collection pages ask for every title in one request.
 	WholeListing = 500
-	// wholeListingWait bounds how long such a listing waits for addons
-	// (see Whole).
-	wholeListingWait = 8 * time.Second
+	// wholeListingWait bounds how long such a listing waits for addons,
+	// and keptListingWait how long one does when what earlier listings
+	// kept fills a listing of count (see Whole).
+	wholeListingWait = 3 * time.Second
+	keptListingWait  = time.Second
 )
 
 // wholeKey marks the context of a whole listing, which reads no page
@@ -1135,11 +1139,14 @@ func whole(ctx context.Context) bool {
 // Whole lists the children of parent from start for a listing that asks
 // for no limit, as a listing of count does but for a library or a
 // collection: up to WholeListing items, or the library's maximum when
-// lower (see listingLimit). Their first read may take long, catalogs
-// being read a page at a time: it waits for addons at most wholeListingWait,
-// then lists the items read and kept so far, while the reads go on and
-// keep their pages for the next listing. It never lists fewer than a
-// listing of count would.
+// lower (see listingLimit). Catalogs are read a page at a time, and such a
+// listing may take many pages. What earlier listings kept answers at once
+// when it holds the whole listing. Otherwise the listing waits for addons
+// at most wholeListingWait, or keptListingWait when what was kept fills a
+// listing of count, then lists what was read and kept by then; when
+// nothing came in time, the first page of each catalog, waited for as a
+// home row waits for it. What it did not wait for is read on in the
+// background, to the end, for the next listing (see readRest).
 func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
 	most, err := s.listingLimit(ctx, user, parent)
 	if err != nil {
@@ -1150,9 +1157,17 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	if most <= count {
 		return s.Children(ctx, user, parent, start, count, genre)
 	}
-	wait, cancel := context.WithTimeout(context.WithValue(ctx, wholeKey{}, true), s.wholeWait)
-	page, err := s.Children(wait, user, parent, start, most, genre)
-	late := wait.Err() != nil
+	known, err := s.Children(withKeptOnly(ctx), user, parent, start, most, genre)
+	if err == nil && !known.More {
+		return known, nil
+	}
+	wait := s.wholeWait
+	if err == nil && len(known.Items) >= count {
+		wait = s.keptWait
+	}
+	waiting, cancel := context.WithTimeout(context.WithValue(ctx, wholeKey{}, true), wait)
+	page, err := s.Children(waiting, user, parent, start, most, genre)
+	late := waiting.Err() != nil
 	cancel()
 	// A late listing may have left out what it did not wait for: a
 	// collection's catalogs that had not answered.
@@ -1162,11 +1177,48 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	if ctx.Err() != nil {
 		return Page{}, ctx.Err()
 	}
-	known, err := s.Children(withKeptOnly(ctx), user, parent, start, most, genre)
-	if err == nil && (len(known.Items) >= count || !known.More) {
-		return known, nil
+	known, err = s.Children(withKeptOnly(ctx), user, parent, start, most, genre)
+	if err != nil || len(known.Items) == 0 {
+		known, err = s.children(ctx, user, parent, start, count, genre, true)
+		if err != nil {
+			return Page{}, err
+		}
+		known.Items = s.overridden(known.Items)
 	}
-	return s.Children(ctx, user, parent, start, count, genre)
+	if known.More {
+		s.readRest(ctx, user, parent, start, most, genre)
+	}
+	return known, nil
+}
+
+// readRest reads a whole listing of parent, up to most, in the
+// background, as prefetch reads a listing's next window and on the same
+// terms, so that the next whole listing finds all of it kept (see Whole).
+func (s *Service) readRest(ctx context.Context, user accounts.User, parent accounts.ID, start, most int, genre string) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return
+	}
+	addon, ok := s.listedAddon(ctx, v, parent)
+	if !ok {
+		return
+	}
+	s.prefetch(ctx, v, addon, func(ctx context.Context) {
+		_, _ = s.Children(context.WithValue(ctx, wholeKey{}, true), user, parent, start, most, genre)
+	})
+}
+
+// listedAddon returns the addon whose catalogs list parent: a library's,
+// or a collection's.
+func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (installed, bool) {
+	if l, ok := v.library(parent); ok {
+		return l.addon, true
+	}
+	r, err := s.load(ctx, parent)
+	if err != nil || r.Addon == nil {
+		return installed{}, false
+	}
+	return v.addon(*r.Addon)
 }
 
 // listingLimit is how many items a listing of parent that asks for no
