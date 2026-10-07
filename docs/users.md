@@ -137,7 +137,7 @@ The same section also holds **Quality group**; see [Quality groups](#quality-gro
 
 ### Playbacks at once
 
-Once that many of the user's other devices are playing, as **Sessions** lists them, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time. A device already playing can go on to another title.
+Once that many of the user's other devices are playing, as **Sessions** lists them, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title.
 
 **Compared with Jellyfin:**
 

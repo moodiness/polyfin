@@ -30,6 +30,8 @@ Its words follow the web client's language: English or French, English for any o
 
 On the home page, it has the title of a collection library's "Recently Added in" row open the library on the default screen chosen under **Settings › Home**, as its links in the header do, rather than on Suggestions (see [Collections from addons](addons-and-libraries.md#collections-from-addons)).
 
+When the server refuses to play a title, jellyfin-web 12.2 shows the reason, such as "This media cannot be played at this time due to rate limits." for a user playing on as many devices as allowed, then "There was an error processing the request" over it. The script closes that second, generic error as it opens, so only the reason shows. A real Jellyfin server gets the same two errors from jellyfin-web.
+
 ### Signing in to the admin app
 
 An administrator signed in to the web client arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
