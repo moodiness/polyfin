@@ -1157,8 +1157,10 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	if most <= count {
 		return s.Children(ctx, user, parent, start, count, genre)
 	}
+	// From the start, a kept listing that wants no more is the whole
+	// listing; from an index, it may only know less than the index.
 	known, err := s.Children(withKeptOnly(ctx), user, parent, start, most, genre)
-	if err == nil && !known.More {
+	if err == nil && !known.More && start == 0 {
 		return known, nil
 	}
 	wait := s.wholeWait

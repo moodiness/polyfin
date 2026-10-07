@@ -131,11 +131,12 @@ func keptOnly(ctx context.Context) bool {
 // errNotKept reports a page a read that asks no addon does not know.
 var errNotKept = errors.New("catalog page not kept")
 
-// page returns the catalog page starting at skip: the one kept, refreshed
-// in the background once past its refresh age, else the one kept in the
-// database, else the addon's answer. A search's page is kept apart, for
-// searchTTL, and never refreshed: every term is a new page, seldom read
-// again.
+// page returns the catalog page starting at skip: the one kept in memory,
+// else the one kept in the database, either asked for again in the
+// background once past its refresh age, else the addon's answer. A read
+// that asks no addon (see keptOnly) gets errNotKept instead of the addon's
+// answer. A search's page is kept apart, for searchTTL, and never
+// refreshed: every term is a new page, seldom read again.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's live TV catalog is one page, which it remembers
 	// itself until its list changes; its movie and series catalogs read
@@ -162,10 +163,14 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 		return nil, nil
 	}
 	if keptOnly(ctx) {
-		if kept, ok := s.loadPage(ctx, src, key); ok {
-			return kept.value, nil
+		kept, ok := s.loadPage(ctx, src, key)
+		if !ok {
+			return nil, errNotKept
 		}
-		return nil, errNotKept
+		if !kept.fresh(s.now(), s.catalogLife()) {
+			s.refreshPage(ctx, src, key, kept.at)
+		}
+		return kept.value, nil
 	}
 	result, err := s.shared(ctx, fmt.Sprintf("page %v", key), func(ctx context.Context) (any, error) {
 		if kept, ok := s.loadPage(ctx, src, key); ok {

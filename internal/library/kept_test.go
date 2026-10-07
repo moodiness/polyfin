@@ -240,6 +240,38 @@ func TestStalePagesShowWhileTheyAreRefreshed(t *testing.T) {
 	}
 }
 
+// After a restart, a whole listing shows at once the pages kept in the
+// database, without asking the addon, and asks it again in the background
+// for those past their refresh age, as for pages kept in memory: the next
+// listing shows the addon's new answer.
+func TestStalePagesKeptInTheDatabaseAreRefreshedToo(t *testing.T) {
+	e := newLifetimeEnv(t)
+	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 60 })
+	top := e.library(e.member, "Top").ID
+	whole := func() []string {
+		t.Helper()
+		page, err := e.service.Whole(t.Context(), e.member, top, 0, 1, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return names(page.Items)
+	}
+	if got := whole(); len(got) != 1 {
+		t.Fatalf("first listing: %v", got)
+	}
+	e.addon.mu.Lock()
+	e.addon.catalogs["movie/top"] = titles("movie", 2)
+	e.addon.mu.Unlock()
+	e.wait(61 * time.Minute)
+	e.env = e.env.restarted()
+	asked := e.requests("catalog/")
+	if got := whole(); len(got) != 1 {
+		t.Errorf("after a restart, the page kept: %v", got)
+	}
+	eventually(t, "asking the addon again", func() bool { return e.requests("catalog/") > asked })
+	eventually(t, "showing the refreshed page", func() bool { return len(whole()) == 2 })
+}
+
 func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
 	e := newLifetimeEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 10 })
