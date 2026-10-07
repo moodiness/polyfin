@@ -84,7 +84,8 @@ const (
 // IPTV source, ManifestURL is the address of its list, which embeds its
 // credentials, and Manifest describes its live TV catalog. For an Eclipse
 // addon, Music is its manifest, Manifest what libraries see of it (its
-// name, icon and catalog rows), and Settings the values chosen for its
+// name, icon and catalog rows, and eclipse.MyMusic, see
+// eclipse.Manifest.Stremio), and Settings the values chosen for its
 // settings.
 type Addon struct {
 	ID          accounts.ID
@@ -550,7 +551,8 @@ func SyncCatalogs(ctx context.Context, tx pgx.Tx, id accounts.ID, manifest strem
 // groups its catalogs into collections (such as AIOMetadata) already says how
 // to organize them: its browsable collection catalogs become the libraries.
 // Otherwise its browsable movie, series and live TV catalogs do, or an
-// Eclipse addon's catalog rows, until the scope has DefaultLibraries.
+// Eclipse addon's catalog rows, else, for one declaring none, its
+// eclipse.MyMusic, until the scope has DefaultLibraries.
 func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) error {
 	var count, last int
 	err := tx.QueryRow(ctx, `SELECT count(*), coalesce(max(l.position), 0) FROM libraries l
@@ -562,7 +564,10 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 		return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
 	}
 	if addon.Eclipse() {
-		wanted = func(catalog stremio.Catalog) bool { return eclipse.CatalogType(catalog.Type) }
+		rowless := len(addon.Music.Catalogs) == 0
+		wanted = func(catalog stremio.Catalog) bool {
+			return eclipse.CatalogType(catalog.Type) && (catalog.ID != eclipse.MyMusic || rowless)
+		}
 	} else if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
 		wanted = func(catalog stremio.Catalog) bool { return catalog.Type == "collection" }
 	}

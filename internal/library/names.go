@@ -19,15 +19,17 @@ type words struct {
 	collections string
 	// The content of music rows: songs, albums, artists and playlists.
 	songs, albums, artists, playlists string
+	// myMusic names a music addon's My music (see eclipse.MyMusic).
+	myMusic string
 }
 
 var vocabulary = map[string]words{
 	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", collections: "Collections",
-		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists"},
+		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music"},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", collections: "Collections",
-		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists"},
+		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique"},
 }
 
 // vocabularyOf returns the words of a server language, English when the
@@ -113,6 +115,10 @@ func LibraryNames(libraries []addons.Library, language string) []string {
 	name := func(i int) string {
 		l := libraries[i]
 		base := strings.TrimSpace(l.Catalog.Name)
+		if l.Catalog.ID == eclipse.MyMusic {
+			// Polyfin's own catalog, named in the server's language.
+			base = w.myMusic
+		}
 		if l.Name != nil {
 			base = strings.TrimSpace(*l.Name)
 		} else if genre := strings.TrimSpace(l.Genre); genre != "" {

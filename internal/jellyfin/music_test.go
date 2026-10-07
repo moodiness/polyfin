@@ -23,12 +23,16 @@ import (
 // an artist page, a search, and streams of a generated FLAC tone that
 // expire once expiring is set, or fail with HTTP 502 once failing is set.
 // content, set before it is installed, is its manifest's contentType: an
-// audiobook addon's streams come with chapters. queries records the
-// settings every request carried.
+// audiobook addon's streams come with chapters; rowless, set before it is
+// installed, leaves its manifest without catalog rows. queries records the
+// settings every request carried, catalogs counts the requests for catalog
+// rows.
 type fakeEclipse struct {
 	url      string
 	content  string
+	rowless  bool
 	streams  atomic.Int32
+	catalogs atomic.Int32
 	expiring atomic.Bool
 	failing  atomic.Bool
 	mu       sync.Mutex
@@ -60,7 +64,11 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 			f.mu.Unlock()
 		}
 		answer := func(v any) { _ = json.NewEncoder(w).Encode(v) }
-		switch path := strings.TrimPrefix(r.URL.Path, "/token"); {
+		path := strings.TrimPrefix(r.URL.Path, "/token")
+		if strings.HasPrefix(path, "/catalog") {
+			f.catalogs.Add(1)
+		}
+		switch {
 		case path == "/manifest.json":
 			manifest := map[string]any{"id": "com.example.tones", "name": "Tones", "version": "1.0.0",
 				"resources": []string{"search", "stream", "catalog", "settings"}, "types": []string{"track", "album", "artist"},
@@ -70,6 +78,9 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 					map[string]string{"id": "top", "type": "track", "name": "Top Songs"}}}
 			if f.content != "" {
 				manifest["contentType"] = f.content
+			}
+			if f.rowless {
+				manifest["resources"], manifest["catalogs"] = []string{"search", "stream", "settings"}, []any{}
 			}
 			answer(manifest)
 		case path == "/catalog/new":
@@ -141,7 +152,8 @@ func TestEclipseAddonPlaysInJellyfinMusicApps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if installed.Kind != addons.KindEclipse || len(installed.Manifest.Catalogs) != 2 {
+	// Its two rows and My music.
+	if installed.Kind != addons.KindEclipse || len(installed.Manifest.Catalogs) != 3 {
 		t.Fatalf("installed as %s with %d catalogs", installed.Kind, len(installed.Manifest.Catalogs))
 	}
 	if _, err := s.addons.SetSettings(t.Context(), addons.Shared(), installed.ID, map[string]string{"quality": "low"}); err != nil {

@@ -42,6 +42,15 @@ func CatalogType(catalogType string) bool {
 	return false
 }
 
+// MyMusic is the catalog Polyfin adds to every addon with a search, of
+// type TypeTrack and named MyMusicName: what each user played or marked
+// favorite of the addon's music. The addon itself is never asked for it,
+// and a catalog it declares under that identifier is left out.
+const (
+	MyMusic     = "polyfin:mine"
+	MyMusicName = "My music"
+)
+
 // Manifest describes an Eclipse addon.
 type Manifest struct {
 	ID          string    `json:"id"`
@@ -158,8 +167,9 @@ func resourceNames(raw []json.RawMessage) []string {
 }
 
 // ParseManifest decodes and validates an Eclipse manifest. Catalogs of an
-// unknown type, settings without a key or with a key given twice, and
-// pickers without options are left out, as they could not work.
+// unknown type or with the identifier of MyMusic, settings without a key or
+// with a key given twice, and pickers without options are left out, as they
+// could not work.
 func ParseManifest(data []byte) (Manifest, error) {
 	var raw struct {
 		ID          string            `json:"id"`
@@ -194,7 +204,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 	seen := map[string]bool{}
 	for _, catalog := range raw.Catalogs {
 		catalog.ID, catalog.Name = strings.TrimSpace(catalog.ID), strings.TrimSpace(catalog.Name)
-		if catalog.ID == "" || !CatalogType(catalog.Type) || seen[catalog.ID] {
+		if catalog.ID == "" || catalog.ID == MyMusic || !CatalogType(catalog.Type) || seen[catalog.ID] {
 			continue
 		}
 		seen[catalog.ID] = true
@@ -307,7 +317,8 @@ func (m Manifest) Has(resource string) bool {
 	return slices.Contains(m.Resources, resource)
 }
 
-// Catalog finds a catalog row by identifier.
+// Catalog finds a catalog row of the addon by identifier: never MyMusic,
+// which is not the addon's.
 func (m Manifest) Catalog(id string) (Catalog, bool) {
 	i := slices.IndexFunc(m.Catalogs, func(c Catalog) bool { return c.ID == id })
 	if i < 0 {
@@ -317,12 +328,16 @@ func (m Manifest) Catalog(id string) (Catalog, bool) {
 }
 
 // Stremio describes the addon as the libraries see an addon: its name, icon
-// and catalog rows, each a catalog of its Eclipse type. It declares no
-// Stremio resource, so that nothing asks it for one.
+// and catalog rows, each a catalog of its Eclipse type, followed by MyMusic
+// when the addon has a search. It declares no Stremio resource, so that
+// nothing asks it for one.
 func (m Manifest) Stremio() stremio.Manifest {
-	catalogs := make([]stremio.Catalog, 0, len(m.Catalogs))
+	catalogs := make([]stremio.Catalog, 0, len(m.Catalogs)+1)
 	for _, c := range m.Catalogs {
 		catalogs = append(catalogs, stremio.Catalog{Type: c.Type, ID: c.ID, Name: c.Name})
+	}
+	if m.Has("search") {
+		catalogs = append(catalogs, stremio.Catalog{Type: TypeTrack, ID: MyMusic, Name: MyMusicName})
 	}
 	return stremio.Manifest{ID: m.ID, Version: m.Version, Name: m.Name, Description: m.Description, Logo: m.Icon, Catalogs: catalogs}
 }
