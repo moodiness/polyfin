@@ -7,14 +7,32 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes 
 
 Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
 
+<p align="center">
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-showcase-30fps.mp4"><img src="assets/videos/polyfin-showcase-30fps.jpg" width="100%" alt="Watch the Polyfin tour (1:18)"></a>
+  <br>
+  <sub>Or watch the <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-intro.mp4">14-second teaser</a>.</sub>
+</p>
+
 > [!NOTE]
 > Polyfin is in early development. Expect changes between releases, and report problems in the [issues](https://github.com/moodiness/polyfin/issues).
 
 ## Features
 
+<p align="center">
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-stremio.mp4"><img src="assets/videos/polyfin-stremio.jpg" width="32%" alt="Stremio addons (0:16)"></a>
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-multi-user.mp4"><img src="assets/videos/polyfin-multi-user.jpg" width="32%" alt="Multi-user (0:16)"></a>
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-transcoding.mp4"><img src="assets/videos/polyfin-transcoding.jpg" width="32%" alt="Transcoding (0:16)"></a>
+  <br>
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-live-tv.mp4"><img src="assets/videos/polyfin-live-tv.jpg" width="32%" alt="Live TV (0:16)"></a>
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-music.mp4"><img src="assets/videos/polyfin-music.jpg" width="32%" alt="Music (0:16)"></a>
+  <br>
+  <sub>One 16-second video per feature: click one to play it.</sub>
+</p>
+
 - **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.2 API.
 - **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
 - **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV movies and series become libraries.
+- **Music, audiobooks and podcasts:** Eclipse music addons install like Stremio addons and become music and books libraries. Tracks play as they are, or are converted when the app needs it.
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapping.
 - **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
 - **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits.
