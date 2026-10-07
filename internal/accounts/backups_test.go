@@ -49,3 +49,39 @@ func TestBackupSettingsStayInRange(t *testing.T) {
 		}
 	}
 }
+
+// Collections are never all read by default, and otherwise at an hour
+// from 0 to 23; the database refuses what the store would.
+func TestCollectionReadHourStaysInRange(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	if got := store.Settings().CollectionReadHour; got != DefaultCollectionReadHour || DefaultCollectionReadHour != -1 {
+		t.Errorf("default: %d", got)
+	}
+	for _, hour := range []int{-2, 24} {
+		changed := store.Settings()
+		changed.CollectionReadHour = hour
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidCollectionReadHour) {
+			t.Errorf("hour %d: %v", hour, err)
+		}
+	}
+	for _, hour := range []int{0, 23, -1} {
+		changed := store.Settings()
+		changed.CollectionReadHour = hour
+		if _, err := store.UpdateSettings(ctx, changed); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := Open(ctx, store.db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := reopened.Settings().CollectionReadHour; got != hour {
+			t.Errorf("after reopening: %d, want %d", got, hour)
+		}
+	}
+	for _, column := range []string{"collection_read_hour = -2", "collection_read_hour = 24"} {
+		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
+			t.Errorf("the database took %s", column)
+		}
+	}
+}

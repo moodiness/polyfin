@@ -131,11 +131,27 @@ func keptOnly(ctx context.Context) bool {
 // errNotKept reports a page a read that asks no addon does not know.
 var errNotKept = errors.New("catalog page not kept")
 
+// refreshingKey marks the context of a read that asks the addon at once
+// for the pages past their refresh age, and waits for them, instead of
+// taking them and asking again in the background (see ReadCollections).
+type refreshingKey struct{}
+
+func withRefreshing(ctx context.Context) context.Context {
+	return context.WithValue(ctx, refreshingKey{}, true)
+}
+
+func refreshing(ctx context.Context) bool {
+	asked, _ := ctx.Value(refreshingKey{}).(bool)
+	return asked
+}
+
 // page returns the catalog page starting at skip: the one kept in memory,
 // else the one kept in the database, either asked for again in the
 // background once past its refresh age, else the addon's answer. A read
 // that asks no addon (see keptOnly) gets errNotKept instead of the addon's
-// answer. A search's page is kept apart, for searchTTL, and never
+// answer; a read that refreshes (see withRefreshing) waits for the addon's
+// answer to a page past its refresh age, and takes the kept one if the
+// addon fails. A search's page is kept apart, for searchTTL, and never
 // refreshed: every term is a new page, seldom read again.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's live TV catalog is one page, which it remembers
@@ -155,6 +171,9 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 	key := src.key(skip)
 	if kept, ok := s.pagesOf(key).Get(key); ok {
 		if key.search == "" && !kept.fresh(s.now(), s.catalogLife()) {
+			if refreshing(ctx) {
+				return s.refetchPage(ctx, src, key, kept.value)
+			}
 			s.refreshPage(ctx, src, key, kept.at)
 		}
 		return kept.value, nil
@@ -175,6 +194,9 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 	result, err := s.shared(ctx, fmt.Sprintf("page %v", key), func(ctx context.Context) (any, error) {
 		if kept, ok := s.loadPage(ctx, src, key); ok {
 			if !kept.fresh(s.now(), s.catalogLife()) {
+				if refreshing(ctx) {
+					return s.refetchPage(ctx, src, key, kept.value)
+				}
 				s.refreshPage(ctx, src, key, kept.at)
 			}
 			return kept.value, nil
@@ -199,6 +221,33 @@ func (s *Service) pagesOf(key pageKey) *cache.Cache[pageKey, fetched[[]stremio.M
 func (s *Service) cachedPage(key pageKey) ([]stremio.Meta, bool) {
 	kept, ok := s.pagesOf(key).Get(key)
 	return kept.value, ok
+}
+
+// readyPage returns the page of key if it is kept in memory and a read on
+// ctx takes it without asking the addon: any kept page, but only a fresh
+// one for a read that refreshes.
+func (s *Service) readyPage(ctx context.Context, key pageKey) ([]stremio.Meta, bool) {
+	kept, ok := s.pagesOf(key).Get(key)
+	if !ok || refreshing(ctx) && key.search == "" && !kept.fresh(s.now(), s.catalogLife()) {
+		return nil, false
+	}
+	return kept.value, true
+}
+
+// refetchPage asks the addon for a page past its refresh age and waits for
+// its answer, for a read that refreshes: the stale page when the addon
+// fails.
+func (s *Service) refetchPage(ctx context.Context, src source, key pageKey, stale []stremio.Meta) ([]stremio.Meta, error) {
+	result, err := s.shared(ctx, fmt.Sprintf("refetch page %v", key), func(ctx context.Context) (any, error) {
+		return s.fetchPage(ctx, src, key)
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return stale, nil
+	}
+	return result.([]stremio.Meta), nil
 }
 
 // fetchPage asks the addon for a catalog page, and keeps its answer, as old
@@ -567,4 +616,59 @@ func (s *Service) Warm(ctx context.Context) error {
 	}
 	_, err := s.db.Exec(ctx, "DELETE FROM metas WHERE fetched_at < $1", s.now().Add(-metaKept))
 	return err
+}
+
+// ReadCollections reads every collection of the server's collection
+// libraries whole, as a whole listing lists it (see Whole), one collection
+// after the other, so that apps then open each at once with all its
+// titles. It asks the addons again for the pages past their refresh age
+// and waits for their answers (see withRefreshing), and reads the pages
+// never read. It reads the libraries a request without a user sees: those
+// of the server's addons.
+func (s *Service) ReadCollections(ctx context.Context) error {
+	started := time.Now()
+	ctx = withRefreshing(context.WithValue(ctx, wholeKey{}, true))
+	var server accounts.User
+	v, err := s.view(ctx, server)
+	if err != nil {
+		return err
+	}
+	read, failed := 0, 0
+	whole := func(parent accounts.ID) (Page, error) {
+		most, err := s.listingLimit(ctx, server, parent)
+		if err != nil {
+			return Page{}, err
+		}
+		return s.Children(ctx, server, parent, 0, most, "")
+	}
+	for _, l := range v.libraries {
+		if l.catalog.Type != "collection" {
+			continue
+		}
+		listed, err := whole(l.item.ID)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			s.logger.Debug("A collection library could not be read", "library", l.item.Name, "error", err)
+			failed++
+			continue
+		}
+		for _, collection := range listed.Items {
+			if collection.Kind != KindCollection {
+				continue
+			}
+			if _, err := whole(collection.ID); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				s.logger.Debug("A collection could not be read", "collection", collection.Name, "error", err)
+				failed++
+				continue
+			}
+			read++
+		}
+	}
+	s.logger.Info("Read the collections", "collections", read, "failed", failed, "took", time.Since(started).Round(time.Second))
+	return nil
 }

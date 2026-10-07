@@ -177,6 +177,8 @@ const common: typeof en = {
     invalid_backup_hour: 'Choisissez l’heure des sauvegardes dans la liste.',
     invalid_backups_kept:
       'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
+    invalid_collection_read_hour:
+      'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',

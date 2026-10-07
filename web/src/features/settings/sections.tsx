@@ -245,7 +245,7 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
 }
 
 function Catalogs({ form, update, error, number, range, limits }: SectionFormApi) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const s = t.settings
   return (
     <SettingsGroup>
@@ -303,6 +303,25 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
           {...number('catalog-refresh-minutes', form.catalogRefreshMinutes, (value) =>
             update({ catalogRefreshMinutes: Math.trunc(value) }),
           )}
+        />
+      </FieldRow>
+      <FieldRow
+        anchor="collection-read-hour"
+        label={s.collectionReadHour}
+        help={s.collectionReadHourHelp}
+        error={error('collection-read-hour')}
+      >
+        <Select
+          value={form.collectionReadHour}
+          options={[
+            { value: -1, label: s.collectionReadHourNever },
+            ...Array.from({ length: 24 }, (_, hour) => ({
+              value: hour,
+              label: formatHour(hour, language),
+            })),
+          ]}
+          onValue={(collectionReadHour) => update({ collectionReadHour })}
+          className="max-w-[10rem]"
         />
       </FieldRow>
     </SettingsGroup>

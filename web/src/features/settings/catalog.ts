@@ -314,6 +314,13 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).catalogRefreshMinutesHelp(r('catalogRefreshMinutes')),
     codes: ['invalid_catalog_refresh_minutes'],
   },
+  {
+    section: 'catalogs',
+    anchor: 'collection-read-hour',
+    label: (t) => s(t).collectionReadHour,
+    help: (t) => s(t).collectionReadHourHelp,
+    codes: ['invalid_collection_read_hour'],
+  },
   // Thumbnails
   {
     section: 'thumbnails',

@@ -363,6 +363,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
 		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
+		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},

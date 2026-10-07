@@ -153,6 +153,44 @@ func TestADailyTaskRunsAtItsHour(t *testing.T) {
 	}
 }
 
+// A daily task whose hour is negative runs by hand only, and tells no hour
+// nor next run; once given an hour, it runs at it.
+func TestADailyTaskWithoutAnHourRunsByHandOnly(t *testing.T) {
+	zone := time.FixedZone("Server", 2*60*60)
+	// The registry's clock is 50 ms before 23:00, the hour -1 would be
+	// taken for, a day's -1st hour.
+	start, fake := time.Now(), time.Date(2026, 10, 5, 22, 59, 59, 950_000_000, zone)
+	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	registry.now = func() time.Time { return fake.Add(time.Since(start)) }
+	registry.dailyCheck = 10 * time.Millisecond
+	var hour atomic.Int32
+	hour.Store(-1)
+	var runs atomic.Int32
+	registry.Register(Task{Key: "Read", Daily: func() int { return int(hour.Load()) }, Text: map[string]Text{"en": {Name: "Read"}},
+		Run: func(context.Context) error {
+			runs.Add(1)
+			return nil
+		}})
+	registry.Start(t.Context())
+	if info, _ := registry.Task(ID("Read"), "en"); info.Daily != nil || info.Next != nil {
+		t.Errorf("without an hour: %+v", info)
+	}
+	time.Sleep(10 * registry.dailyCheck)
+	if runs.Load() != 0 {
+		t.Errorf("ran %d times without an hour", runs.Load())
+	}
+	if err := registry.Run(ID("Read")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return runs.Load() == 1 })
+	// Given an hour, it tells it and when it runs next.
+	hour.Store(5)
+	waitFor(t, func() bool {
+		info, _ := registry.Task(ID("Read"), "en")
+		return info.Daily != nil && *info.Daily == 5 && info.Next != nil && info.Next.Equal(time.Date(2026, 10, 6, 5, 0, 0, 0, zone))
+	})
+}
+
 func TestNextDaily(t *testing.T) {
 	paris, err := time.LoadLocation("Europe/Paris")
 	if err != nil {

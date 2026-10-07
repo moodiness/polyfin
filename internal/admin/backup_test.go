@@ -49,6 +49,39 @@ func TestSettingsBackups(t *testing.T) {
 	}
 }
 
+// The collection read hour defaults to -1, never, and otherwise goes from
+// 0 to 23; a PUT leaving it out keeps it.
+func TestSettingsCollectionReadHour(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["collectionReadHour"] != -1.0 {
+		t.Errorf("default: %v", body["collectionReadHour"])
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
+	for _, hour := range []int{0, 23} {
+		settings := maps.Clone(base)
+		settings["collectionReadHour"] = hour
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+			body["collectionReadHour"] != float64(hour) {
+			t.Fatalf("saving %d: %d %v", hour, status, body)
+		}
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || body["collectionReadHour"] != 23.0 {
+		t.Errorf("left out: %d %v", status, body)
+	}
+	for _, hour := range []int{-2, 24} {
+		settings := maps.Clone(base)
+		settings["collectionReadHour"] = hour
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusBadRequest ||
+			body["error"] != "invalid_collection_read_hour" {
+			t.Errorf("hour %d: %d %v", hour, status, body)
+		}
+	}
+	if got := api.store.Settings().CollectionReadHour; got != 23 {
+		t.Errorf("saved: %d", got)
+	}
+}
+
 // Without POLYFIN_BACKUP_DIR, backups are off: no folder, no status in
 // the health. With it, the last run's result shows, and is a problem when
 // it failed or the last backup is older than two days.

@@ -229,6 +229,10 @@ const settings = {
     catalogRefreshMinutes: 'Refresh catalogs after (minutes)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `How old a catalog page Polyfin read from an addon, the Live TV guide included, may get before Polyfin reads it again. Apps never wait for it: an older page still shows at once while Polyfin reads it again in the background, and it is kept a day more. A longer time sends fewer requests to the addons, but new titles show up later. From ${r.min} to ${r.max} (one day); ${r.default} by default.`,
+    collectionReadHour: 'Read every collection each day',
+    collectionReadHourNever: 'Never',
+    collectionReadHourHelp:
+      'Reads every collection of the server’s collection libraries at this hour, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others.',
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
