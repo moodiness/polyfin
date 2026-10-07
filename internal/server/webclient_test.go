@@ -331,6 +331,84 @@ process.stdout.write(JSON.stringify(results))
 	}
 }
 
+// The title of a collection library's "Recently Added" row on the home
+// page, which jellyfin-web opens on Suggestions (#/mixed?…&tab=1), opens the
+// library on the screen its user chose instead: the script drops the tab
+// from the link as it is pressed or clicked, on the link or on the title
+// within it, before jellyfin-web follows it. Other links keep theirs. It
+// runs in Node.js, in a context that stands for the browser.
+func TestRowTitlesOpenACollectionLibraryOnItsChosenScreen(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	// The link each one becomes once pressed or clicked.
+	links := map[string]string{
+		"#/mixed?topParentId=0123&collectionType=mixed&tab=1":   "#/mixed?topParentId=0123&collectionType=mixed",
+		"#!/mixed?tab=1&topParentId=0123":                       "#!/mixed?topParentId=0123",
+		"#/mixed?topParentId=0123&tab=1&collectionType=mixed":   "#/mixed?topParentId=0123&collectionType=mixed",
+		"#/mixed?topParentId=0123&collectionType=mixed":         "#/mixed?topParentId=0123&collectionType=mixed",
+		"#/mixed?topParentId=0123&tab=3":                        "#/mixed?topParentId=0123&tab=3",
+		"#/mixed?topParentId=0123&tab=12":                       "#/mixed?topParentId=0123&tab=12",
+		"#/movies?topParentId=0123&collectionType=movies&tab=1": "#/movies?topParentId=0123&collectionType=movies&tab=1",
+		"#/tv?topParentId=0123&collectionType=tvshows&tab=1":    "#/tv?topParentId=0123&collectionType=tvshows&tab=1",
+		"#/details?id=0123&tab=1":                               "#/details?id=0123&tab=1",
+	}
+	const harness = `
+const vm = require('node:vm')
+const { script, links } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const results = {}
+const node = (parentNode, matches) => ({ parentNode, matches, closest(selector) { for (let e = this; e; e = e.parentNode) if (e.matches(selector)) return e; return null } })
+for (const href of links) {
+  for (const type of ['mousedown', 'click']) {
+    for (const on of ['link', 'title']) {
+      const listeners = {}
+      const location = { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }
+      const history = { pushState: () => {}, replaceState: () => {} }
+      const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
+      vm.runInNewContext(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      const attributes = { href }
+      const link = node(null, (selector) => selector === 'a[href]')
+      link.getAttribute = (name) => attributes[name] ?? null
+      link.setAttribute = (name, value) => { attributes[name] = String(value) }
+      const title = node(link, () => false)
+      for (const listener of listeners[type] || []) listener({ type, target: on === 'link' ? link : title })
+      results[type + ' ' + on + ' ' + href] = attributes.href
+    }
+  }
+}
+// Elsewhere than on a link, nothing happens and nothing fails.
+const listeners = {}
+vm.runInNewContext(script, { location: { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }, history: { pushState: () => {}, replaceState: () => {} }, URL, document: { head: { appendChild: () => {} }, createElement: () => ({}) }, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+for (const target of [node(null, () => false), {}, null]) for (const listener of listeners.click || []) listener({ type: 'click', target })
+process.stdout.write(JSON.stringify(results))
+`
+	hrefs := make([]string, 0, len(links))
+	for href := range links {
+		hrefs = append(hrefs, href)
+	}
+	input, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "links": hrefs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(input))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	if len(results) != len(links)*2*2 {
+		t.Fatalf("%d results for %d links", len(results), len(links))
+	}
+	for key, got := range results {
+		href := key[strings.Index(key, "#"):]
+		if want := links[href]; got != want {
+			t.Errorf("%s: became %q, want %q", key, got, want)
+		}
+	}
+}
+
 // On a title's page, the script asks Polyfin for the title's versions at
 // once, then every second while addons are pending. When the page lists
 // fewer versions than there are, or a different number once none is

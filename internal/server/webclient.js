@@ -1,6 +1,7 @@
 // Polyfin (MIT License). Served at /web/polyfin.js and loaded by the
 // index.html of jellyfin-web, which Polyfin ships unmodified. It follows the
-// client's routes for three things, and adds a style for a fourth.
+// client's routes for three things, adds a style for a fourth, and mends a
+// link for a fifth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -63,6 +64,16 @@
 // a title's page: stream addons name versions with every detail, and
 // jellyfin-web leaves no room for the arrow in those menus. Their text ends
 // with "…" before it; the open menu still lists whole names.
+//
+// Fifth, the title of a collection library's "Recently Added" row on the
+// home page opens the library on the screen its user chose (Settings › Home
+// › Default screen), as the library's links in the header and the menu do.
+// jellyfin-web, which calls a library without a CollectionType mixed, opens
+// every library's Suggestions from that title (#/mixed?…&tab=1), and a
+// collection library has no suggestions of its own. The script drops the
+// tab from such a link as it is pressed or clicked, before jellyfin-web
+// follows it: pressed covers a link opened in a new tab, clicked one
+// followed with the keyboard.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -561,6 +572,17 @@
       followVersions()
     } catch (error) {}
   }
+  // The link pressed or clicked, if it opens a collection library on
+  // Suggestions, without the tab: the library opens on its chosen screen.
+  function chosenScreen(event) {
+    var link = event.target && event.target.closest && event.target.closest('a[href]')
+    var href = link ? link.getAttribute('href') : ''
+    if (!/^#!?\/mixed\?/i.test(href)) return
+    var chosen = href.replace(/([?&])tab=1(&|$)/, function (match, before, after) {
+      return after ? before : ''
+    })
+    if (chosen !== href) link.setAttribute('href', chosen)
+  }
   // The router moves through history.pushState and replaceState, which
   // fire no event; links and typed addresses fire hashchange.
   ;['pushState', 'replaceState'].forEach(function (name) {
@@ -576,5 +598,8 @@
   // Both run before jellyfin-web's own listeners on the version menu.
   addEventListener('change', quietly(pick), true)
   addEventListener('blur', quietly(leave), true)
+  // Both run before jellyfin-web follows the link.
+  addEventListener('mousedown', quietly(chosenScreen), true)
+  addEventListener('click', quietly(chosenScreen), true)
   follow()
 })()
