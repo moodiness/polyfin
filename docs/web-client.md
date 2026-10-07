@@ -28,6 +28,8 @@ Polyfin does this with one script of its own added to jellyfin-web's page, `/web
 
 Its words follow the web client's language: English or French, English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. See [Title pages](playback.md#title-pages).
 
+On the home page, it has the title of a collection library's "Recently Added in" row open the library on the default screen chosen under **Settings › Home**, as its links in the header do, rather than on Suggestions (see [Collections from addons](addons-and-libraries.md#collections-from-addons)).
+
 ### Signing in to the admin app
 
 An administrator signed in to the web client arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
