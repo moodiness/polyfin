@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -108,5 +111,117 @@ func TestLibrariesShowTheNameAppsShow(t *testing.T) {
 	}
 	if got := administrator.appNames("shared"); !slices.Equal(got, []string{"Top (Films)", "Top (Séries)", ""}) {
 		t.Errorf("shared libraries in French: %q", got)
+	}
+}
+
+// narrowedLibrary is what the admin app reads of a library's genre and
+// maximum.
+type narrowedLibrary struct {
+	AddonID     string   `json:"addonId"`
+	CatalogType string   `json:"catalogType"`
+	CatalogID   string   `json:"catalogId"`
+	AppName     *string  `json:"appName"`
+	Genre       *string  `json:"genre"`
+	Genres      []string `json:"genres"`
+	MaxItems    *int     `json:"maxItems"`
+	Filterable  bool     `json:"filterable"`
+}
+
+// saveLibraries puts the server's libraries, and answers the status, the
+// libraries answered and the error code.
+func (b browser) saveLibraries(libraries ...map[string]any) (int, []narrowedLibrary, string) {
+	b.api.t.Helper()
+	encoded, _ := json.Marshal(map[string]any{"libraries": libraries})
+	request, _ := http.NewRequestWithContext(b.api.t.Context(), http.MethodPut, b.api.url+"/admin/api/scopes/shared/libraries", bytes.NewReader(encoded))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := b.client.Do(request)
+	if err != nil {
+		b.api.t.Fatal(err)
+	}
+	defer response.Body.Close()
+	raw, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK {
+		var failure struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(raw, &failure)
+		return response.StatusCode, nil, failure.Error
+	}
+	var saved []narrowedLibrary
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		b.api.t.Fatal(err)
+	}
+	return response.StatusCode, saved, ""
+}
+
+// An administrator narrows a library to one of its catalog's genres and
+// sets the most titles it lists; apps name it after the genre. A genre the
+// catalog does not offer, a maximum that is not a whole number from 1 to
+// 20,000, and either on a live TV catalog are refused. A collection catalog
+// that requires its only genre takes a maximum, but offers no genre.
+func TestLibrariesTakeAGenreAndAMaximum(t *testing.T) {
+	api := newTestAPI(t, 10)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],
+			"catalogs": [{"type": "movie", "id": "top", "name": "Top", "extra": [{"name": "genre", "options": ["Comedy", "Drama"]}]},
+				{"type": "tv", "id": "channels", "name": "Channels"},
+				{"type": "collection", "id": "sets", "name": "Sets", "extra": [{"name": "genre", "isRequired": true, "options": ["None"]}]}]}`))
+	}))
+	defer server.Close()
+	administrator := api.signedIn("administrator", true)
+	status, body, _ := administrator.call(http.MethodPost, "/scopes/shared/addons", map[string]string{"manifestUrl": server.URL + "/manifest.json"})
+	if status != http.StatusCreated {
+		t.Fatalf("installing: %d %v", status, body)
+	}
+	addonID, _ := body["id"].(string)
+	top := func(extra map[string]any) map[string]any {
+		library := map[string]any{"addonId": addonID, "catalogType": "movie", "catalogId": "top", "name": nil}
+		maps.Copy(library, extra)
+		return library
+	}
+	status, saved, code := administrator.saveLibraries(top(map[string]any{"genre": "Drama", "maxItems": 40}))
+	if status != http.StatusOK {
+		t.Fatalf("saving: %d %s", status, code)
+	}
+	byID := map[string]narrowedLibrary{}
+	for _, l := range saved {
+		byID[l.CatalogType+"/"+l.CatalogID] = l
+	}
+	if l := byID["movie/top"]; l.Genre == nil || *l.Genre != "Drama" || l.MaxItems == nil || *l.MaxItems != 40 || !l.Filterable ||
+		!slices.Equal(l.Genres, []string{"Comedy", "Drama"}) || l.AppName == nil || *l.AppName != "Top · Drama" {
+		t.Errorf("the narrowed library: %+v", l)
+	}
+	if l := byID["tv/channels"]; l.Filterable || l.Genres == nil || len(l.Genres) != 0 || l.Genre != nil || l.MaxItems != nil {
+		t.Errorf("a live TV catalog: %+v", l)
+	}
+	if l := byID["collection/sets"]; !l.Filterable || l.Genres == nil || len(l.Genres) != 0 {
+		t.Errorf("a collection catalog that requires its only genre: %+v", l)
+	}
+
+	channels := func(extra map[string]any) map[string]any {
+		library := map[string]any{"addonId": addonID, "catalogType": "tv", "catalogId": "channels"}
+		maps.Copy(library, extra)
+		return library
+	}
+	for name, tc := range map[string]struct {
+		library map[string]any
+		code    string
+	}{
+		"a genre the catalog does not offer": {top(map[string]any{"genre": "Horror"}), "invalid_library_genre"},
+		"a genre for a live TV catalog":      {channels(map[string]any{"genre": "Drama"}), "invalid_library_genre"},
+		"a maximum that is no whole number":  {top(map[string]any{"maxItems": 12.5}), "invalid_library_max_items"},
+		"no title at most":                   {top(map[string]any{"maxItems": 0}), "invalid_library_max_items"},
+		"more than the most":                 {top(map[string]any{"maxItems": 20001}), "invalid_library_max_items"},
+		"a maximum for a live TV catalog":    {channels(map[string]any{"maxItems": 10}), "invalid_library_max_items"},
+	} {
+		if status, _, code := administrator.saveLibraries(tc.library); status != http.StatusBadRequest || code != tc.code {
+			t.Errorf("%s: %d %s, want %s", name, status, code, tc.code)
+		}
+	}
+
+	// Saved without them, the library lists its whole catalog again.
+	if status, saved, code := administrator.saveLibraries(top(nil)); status != http.StatusOK || saved[0].Genre != nil || saved[0].MaxItems != nil ||
+		saved[0].AppName == nil || *saved[0].AppName != "Top" {
+		t.Errorf("cleared: %d %s %+v", status, code, saved)
 	}
 }

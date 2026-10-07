@@ -85,10 +85,12 @@ func (w words) contentType(catalogType string) string {
 }
 
 // LibraryNames returns the names Jellyfin apps show for libraries, in the
-// same order: libraries is everything one user browses, in their order.
-// Jellyfin apps never show two libraries with the same name, so names that
-// collide (ignoring surrounding spaces and letter case) are told apart, one
-// step after the other while collisions remain:
+// same order: libraries is everything one user browses, in their order. A
+// library is named after its catalog, and the genre it is narrowed to
+// ("Popular · Comedy"), unless it was given a name. Jellyfin apps never
+// show two libraries with the same name, so names that collide (ignoring
+// surrounding spaces and letter case) are told apart, one step after the
+// other while collisions remain:
 //
 //  1. Each colliding library named after its catalog gets its content type
 //     in the server language: "Popular (Movies)" and "Popular (Shows)". A
@@ -113,6 +115,8 @@ func LibraryNames(libraries []addons.Library, language string) []string {
 		base := strings.TrimSpace(l.Catalog.Name)
 		if l.Name != nil {
 			base = strings.TrimSpace(*l.Name)
+		} else if genre := strings.TrimSpace(l.Genre); genre != "" {
+			base += " · " + genre
 		}
 		switch level[i] {
 		case 0:

@@ -542,12 +542,15 @@ func (s *Service) Warm(ctx context.Context) error {
 				continue
 			}
 			entry := installed{addon: addon, confined: scope.confined, shared: scope.scope.Owner == nil}
+			// The page apps read first: of the library's genre, when it is
+			// narrowed to one.
+			src := source{addon: entry, catalog: l.Catalog, genre: l.Genre}
 			group.Go(func() error {
-				if _, err := s.page(ctx, source{addon: entry, catalog: l.Catalog}, 0); err != nil && ctx.Err() == nil {
+				if _, err := s.page(ctx, src, 0); err != nil && ctx.Err() == nil {
 					s.logger.Debug("A library's first page could not be read", "addon", addon.Manifest.Name, "catalog", l.Catalog.ID, "error", err)
 				}
 				if l.Image == addons.LibraryImageAutomatic {
-					s.lookUpImage(ctx, entry, l.Catalog)
+					s.lookUpImage(ctx, src)
 				}
 				return nil
 			})

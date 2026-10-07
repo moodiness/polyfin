@@ -1,6 +1,7 @@
 import {
   CaretRightIcon,
   FilmStripIcon,
+  FunnelSimpleIcon,
   MagnifyingGlassIcon,
   MusicNoteIcon,
   PlusIcon,
@@ -17,6 +18,7 @@ import {
   fetchLibraries,
   queryClient,
   queryKeys,
+  MAX_LIBRARY_ITEMS,
   saveLibraries,
   type Addon,
   type Library,
@@ -48,6 +50,7 @@ import {
   SaveBar,
   Select,
   Skeleton,
+  NumberInput,
   StatusPill,
   TextInput,
   IconButton,
@@ -62,8 +65,25 @@ const recommendedLibraries = 20
 /** The longest library name the server accepts. */
 const nameMaxLength = 64
 
-/** One enabled library being edited. `name` is the text of its name field: empty = catalog name. */
-type Entry = { key: string; library: Library; name: string }
+/**
+ * One enabled library being edited. `name` is the text of its name field: empty = catalog name.
+ * `genre` and `maxItems` narrow it; null for none.
+ */
+type Entry = {
+  key: string
+  library: Library
+  name: string
+  genre: string | null
+  maxItems: number | null
+}
+
+/** Whether the server takes this maximum: none, or a whole number from 1 to MAX_LIBRARY_ITEMS. */
+function validMax(maxItems: number | null): boolean {
+  return (
+    maxItems === null ||
+    (Number.isInteger(maxItems) && maxItems >= 1 && maxItems <= MAX_LIBRARY_ITEMS)
+  )
+}
 
 function catalogKey(library: Pick<Library, 'addonId' | 'catalogType' | 'catalogId'>): string {
   return JSON.stringify([library.addonId, library.catalogType, library.catalogId])
@@ -72,7 +92,13 @@ function catalogKey(library: Pick<Library, 'addonId' | 'catalogType' | 'catalogI
 function sameEntries(a: Entry[], b: Entry[]): boolean {
   return (
     a.length === b.length &&
-    a.every((entry, i) => entry.key === b[i].key && entry.name === b[i].name)
+    a.every(
+      (entry, i) =>
+        entry.key === b[i].key &&
+        entry.name === b[i].name &&
+        entry.genre === b[i].genre &&
+        entry.maxItems === b[i].maxItems,
+    )
   )
 }
 
@@ -173,7 +199,7 @@ function LibraryForm({
   catalogs: Library[]
   addons: Addon[]
 }) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const toast = useToast()
   const baseId = useId()
   const [draft, setDraft] = useState<Entry[] | null>(null)
@@ -182,6 +208,8 @@ function LibraryForm({
   const [announcement, setAnnouncement] = useState('')
   // The entry whose image editor is open, below its row.
   const [imageOpen, setImageOpen] = useState<string | null>(null)
+  // The entry whose genre and maximum editor is open, below its row; never with its image editor.
+  const [narrowOpen, setNarrowOpen] = useState<string | null>(null)
   // Element ids to try, in order, once the next render is committed (the focused row may be gone).
   const focusAfterRender = useRef<string[]>([])
   // The row to bring into view in its box once the next render is committed, after a move.
@@ -217,11 +245,13 @@ function LibraryForm({
     mutationFn: (entries: Entry[]) =>
       saveLibraries(
         scope,
-        entries.map(({ library, name }) => ({
+        entries.map(({ library, name, genre, maxItems }) => ({
           addonId: library.addonId,
           catalogType: library.catalogType,
           catalogId: library.catalogId,
           name: name.trim() === '' ? null : name.trim(),
+          genre,
+          maxItems,
         })),
       ),
     onSuccess: (saved, entries) => {
@@ -241,9 +271,16 @@ function LibraryForm({
   const byKey = new Map(catalogs.map((library) => [catalogKey(library), library]))
   const serverEntries: Entry[] = catalogs
     .filter((library) => library.enabled)
-    .map((library) => ({ key: catalogKey(library), library, name: library.name ?? '' }))
+    .map((library) => ({
+      key: catalogKey(library),
+      library,
+      name: library.name ?? '',
+      genre: library.genre,
+      maxItems: library.maxItems,
+    }))
   const entries = draft ?? serverEntries
   const dirty = draft !== null
+  const anyFilterable = entries.some((entry) => (byKey.get(entry.key) ?? entry.library).filterable)
   const shownKeys = new Set(entries.map((entry) => entry.key))
   const offAddons = new Set(addons.filter((addon) => !addon.enabled).map((addon) => addon.id))
   const iptvAddons = new Set(addons.filter((addon) => isIptv(addon)).map((addon) => addon.id))
@@ -277,6 +314,9 @@ function LibraryForm({
     row: (key: string) => `${baseId}-row-${key}`,
     image: (key: string) => `${baseId}-image-${key}`,
     thumb: (key: string) => `${baseId}-thumb-${key}`,
+    narrow: (key: string) => `${baseId}-narrow-${key}`,
+    narrowButton: (key: string) => `${baseId}-narrow-button-${key}`,
+    maxItems: (key: string) => `${baseId}-max-items-${key}`,
     filter: `${baseId}-filter`,
   }
 
@@ -303,10 +343,21 @@ function LibraryForm({
     edit(entries.map((entry, i) => (i === index ? { ...entry, name } : entry)))
   }
 
+  function narrow(index: number, change: Partial<Pick<Entry, 'genre' | 'maxItems'>>) {
+    edit(entries.map((entry, i) => (i === index ? { ...entry, ...change } : entry)))
+  }
+
+  /** Opens the genre and maximum editor of `key`, or closes it with null, and the image editor. */
+  function openNarrow(key: string | null) {
+    setImageOpen(null)
+    setNarrowOpen(key)
+  }
+
   function remove(index: number) {
     const removed = entries[index]
     const next = entries.filter((_, i) => i !== index)
     if (imageOpen === removed.key) setImageOpen(null)
+    if (narrowOpen === removed.key) setNarrowOpen(null)
     focusAfterRender.current = [
       ...(index < next.length ? [ids.remove(next[index].key)] : []),
       ...(index > 0 ? [ids.remove(next[index - 1].key)] : []),
@@ -330,7 +381,7 @@ function LibraryForm({
       // The last catalog added: the filter is gone with the list, so go to its new row.
       ids.remove(key),
     ]
-    edit([...entries, { key, library, name: '' }])
+    edit([...entries, { key, library, name: '', genre: null, maxItems: null }])
     setAnnouncement(t.libraries.addedLive(library.catalogName, entries.length + 1))
   }
 
@@ -359,6 +410,17 @@ function LibraryForm({
       className={blockSpacing}
       onSubmit={(event) => {
         event.preventDefault()
+        // A maximum the server refuses: show it in its row's editor rather than save.
+        const invalid = entries.find((entry) => !validMax(entry.maxItems))
+        if (invalid !== undefined) {
+          focusAfterRender.current = [ids.maxItems(invalid.key)]
+          if (narrowOpen === invalid.key) {
+            document.getElementById(ids.maxItems(invalid.key))?.querySelector('input')?.focus()
+          } else {
+            openNarrow(invalid.key)
+          }
+          return
+        }
         save.mutate(entries)
       }}
     >
@@ -410,6 +472,7 @@ function LibraryForm({
                 const iptv = iptvAddons.has(library.addonId)
                 const tv = isTvCatalog(library)
                 const imageShown = !tv && imageOpen === entry.key
+                const narrowShown = library.filterable && narrowOpen === entry.key
                 return (
                   <li
                     key={entry.key}
@@ -435,7 +498,10 @@ function LibraryForm({
                           name={name}
                           open={imageShown}
                           controls={ids.image(entry.key)}
-                          onToggle={() => setImageOpen(imageShown ? null : entry.key)}
+                          onToggle={() => {
+                            setNarrowOpen(null)
+                            setImageOpen(imageShown ? null : entry.key)
+                          }}
                         />
                       )}
                       <div className="min-w-0">
@@ -447,6 +513,12 @@ function LibraryForm({
                             {stremioLabel(t.stremioTypes, library.catalogType)}
                           </Badge>
                           <MusicKind content={music} />
+                          {entry.genre !== null && <Badge>{entry.genre}</Badge>}
+                          {entry.maxItems !== null && (
+                            <Badge tone={validMax(entry.maxItems) ? 'neutral' : 'danger'}>
+                              {t.libraries.narrow.maxBadge(entry.maxItems.toLocaleString(language))}
+                            </Badge>
+                          )}
                         </p>
                         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-3">
                           <span className="break-words">{library.addonName}</span>
@@ -503,6 +575,21 @@ function LibraryForm({
                       )}
                     </div>
                     <div className="col-start-3 row-start-1 flex items-center gap-1 md:col-start-4">
+                      {library.filterable ? (
+                        <IconButton
+                          id={ids.narrowButton(entry.key)}
+                          size="sm"
+                          icon={FunnelSimpleIcon}
+                          label={t.libraries.narrow.edit(name)}
+                          aria-expanded={narrowShown}
+                          aria-controls={narrowShown ? ids.narrow(entry.key) : undefined}
+                          className={cx(narrowShown && 'bg-ink/8 text-ink')}
+                          onClick={() => openNarrow(narrowShown ? null : entry.key)}
+                        />
+                      ) : (
+                        // Keeps the name column as wide as in the rows that have the button.
+                        anyFilterable && <span aria-hidden="true" className="size-7 shrink-0" />
+                      )}
                       <MoveButtons
                         name={name}
                         index={index}
@@ -528,6 +615,23 @@ function LibraryForm({
                           onClose={() => {
                             setImageOpen(null)
                             focusAfterRender.current = [ids.thumb(entry.key)]
+                          }}
+                        />
+                      </div>
+                    )}
+                    {narrowShown && (
+                      <div className="col-span-full row-start-3 min-w-0 md:col-span-3 md:col-start-2 md:row-start-2">
+                        <NarrowEditor
+                          id={ids.narrow(entry.key)}
+                          maxItemsId={ids.maxItems(entry.key)}
+                          scope={scope}
+                          library={library}
+                          entry={entry}
+                          name={name}
+                          onChange={(change) => narrow(index, change)}
+                          onClose={() => {
+                            setNarrowOpen(null)
+                            focusAfterRender.current = [ids.narrowButton(entry.key)]
                           }}
                         />
                       </div>
@@ -644,6 +748,95 @@ function LibraryForm({
         error={save.isError ? errorMessage(t, save.error) : undefined}
       />
     </form>
+  )
+}
+
+/**
+ * The genre and maximum of a library, below its row: staged like its name and saved with the
+ * list. The genre shows only when the catalog offers genres.
+ */
+function NarrowEditor({
+  id,
+  maxItemsId,
+  scope,
+  library,
+  entry,
+  name,
+  onChange,
+  onClose,
+}: {
+  id: string
+  /** The id of the box around the maximum's field, to focus it. */
+  maxItemsId: string
+  scope: Scope
+  library: Library
+  entry: Entry
+  /** The library's name, for the close button's label. */
+  name: string
+  onChange: (change: Partial<Pick<Entry, 'genre' | 'maxItems'>>) => void
+  onClose: () => void
+}) {
+  const { t, language } = useI18n()
+  const text = t.libraries.narrow
+  const labelId = `${id}-label`
+  const max = MAX_LIBRARY_ITEMS.toLocaleString(language)
+  // A genre the catalog no longer offers stays listed, so the choice shows; saving reports it.
+  const genres =
+    entry.genre === null || library.genres.includes(entry.genre)
+      ? library.genres
+      : [entry.genre, ...library.genres]
+  return (
+    <section
+      id={id}
+      aria-labelledby={labelId}
+      className="animate-rise rounded-row border border-line-2 bg-s2/50 p-4 max-sm:p-3.5"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 id={labelId} className="text-control font-medium text-ink">
+            {text.title}
+          </h3>
+          <p className="mt-0.5 text-small text-ink-3">{text.staged}</p>
+        </div>
+        <IconButton size="sm" icon={XIcon} label={text.close(name)} onClick={onClose} />
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {genres.length > 0 && (
+          <Field label={text.genre} help={text.genreHelp}>
+            <Select
+              value={entry.genre ?? ''}
+              onValue={(value) => onChange({ genre: value === '' ? null : value })}
+              options={[
+                { value: '', label: text.allGenres },
+                ...genres.map((genre) => ({ value: genre, label: genre })),
+              ]}
+            />
+          </Field>
+        )}
+        <div id={maxItemsId}>
+          <Field
+            label={text.maxItems}
+            help={
+              scope === 'shared'
+                ? text.maxHelp(max, t.nav.trail(t.nav.settings, t.nav.settingsSections.catalogs))
+                : text.maxHelpMine(max)
+            }
+            error={validMax(entry.maxItems) ? undefined : text.maxRange(max)}
+          >
+            <NumberInput
+              value={entry.maxItems}
+              onValue={(value) => onChange({ maxItems: value })}
+              min={1}
+              max={MAX_LIBRARY_ITEMS}
+              step={1}
+              inputMode="numeric"
+              placeholder={text.noMax}
+              className="w-[160px]"
+            />
+          </Field>
+        </div>
+      </div>
+    </section>
   )
 }
 

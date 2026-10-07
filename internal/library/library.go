@@ -209,13 +209,22 @@ type installed struct {
 	shared   bool
 }
 
-// library is a library of a user with its catalog, and how it finds its
-// image (see addons.Library.Image).
+// library is a library of a user with its catalog, the genre it is
+// narrowed to and the most items it lists (see addons.Library), and how it
+// finds its image (see addons.Library.Image).
 type library struct {
-	item    Item
-	addon   installed
-	catalog stremio.Catalog
-	image   string
+	item     Item
+	addon    installed
+	catalog  stremio.Catalog
+	genre    string
+	maxItems int
+	image    string
+}
+
+// catalogSource is the library's catalog as it lists it: narrowed to its
+// genre and limited to its maximum.
+func (l library) catalogSource() source {
+	return source{addon: l.addon, catalog: l.catalog, genre: l.genre, max: l.maxItems}
 }
 
 // view is what a user can browse: their enabled addons and libraries, the
@@ -242,13 +251,16 @@ type view struct {
 }
 
 // limit is how many items one read of src's catalog fetches at most: the
-// channel limit for a live TV catalog, the catalog limit for any other.
-// Some catalogs are nearly endless; an IPTV source's movies and series
-// are a stored list, read whole.
+// channel limit for a live TV catalog, else the maximum of the library it
+// lists for, lower or higher than the catalog limit, else the catalog
+// limit. Some catalogs are nearly endless; an IPTV source's movies and
+// series are a stored list, read whole unless the library has a maximum.
 func (v view) limit(src source) int {
 	switch {
 	case LiveCatalog(src.catalog.Type):
 		return v.channelLimit
+	case src.max > 0:
+		return src.max
 	case src.addon.addon.IPTV():
 		return math.MaxInt32
 	}
@@ -346,9 +358,11 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 				Name:           name,
 				CollectionType: collection,
 			},
-			addon:   entries[i],
-			catalog: l.Catalog,
-			image:   l.Image,
+			addon:    entries[i],
+			catalog:  l.Catalog,
+			genre:    l.Genre,
+			maxItems: l.MaxItems,
+			image:    l.Image,
 		})
 	}
 	return v, nil
@@ -399,7 +413,8 @@ func LibraryID(l addons.Library) accounts.ID {
 }
 
 // ServerLibrary is one of the server's libraries, with the genres its
-// catalog can be narrowed to, which name its genre pages.
+// catalog can be narrowed to, which name its genre pages: only its own
+// when it is narrowed to one.
 type ServerLibrary struct {
 	ID     accounts.ID
 	Name   string
@@ -432,10 +447,10 @@ func ServerLibraries(ctx context.Context, store *addons.Store, language string) 
 	result := make([]ServerLibrary, 0, len(shown))
 	for i, name := range LibraryNames(shown, language) {
 		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}}
-		for _, extra := range shown[i].Catalog.Extra {
-			if extra.Name == "genre" {
-				library.Genres = append(library.Genres, extra.Options...)
-			}
+		if genre := shown[i].Genre; genre != "" {
+			library.Genres = append(library.Genres, genre)
+		} else {
+			library.Genres = append(library.Genres, addons.Genres(shown[i].Catalog)...)
 		}
 		result = append(result, library)
 	}
@@ -461,6 +476,10 @@ type source struct {
 	// first reads the catalog's first page only, as Stremio apps show
 	// searches and home rows.
 	first bool
+	// max is the most items of the catalog the library it lists for
+	// shows, in place of the catalog limit; 0 for that limit (see
+	// view.limit).
+	max int
 }
 
 // paged reports whether the catalog can be read past its first page.
@@ -843,7 +862,16 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		return s.musicChildren(ctx, v, records, l.addon, start, count)
 	}
-	src := source{addon: l.addon, catalog: l.catalog, genre: genre, first: first}
+	src := l.catalogSource()
+	src.first = first
+	if genre != "" {
+		// A library narrowed to a genre lists that genre only.
+		if l.genre != "" && genre != l.genre {
+			return Page{}, nil
+		}
+		src.genre = genre
+	}
+	count = withinMax(start, count, l.maxItems)
 	metas, total, err := s.window(ctx, v, src, start, count)
 	if err != nil {
 		return Page{}, err
@@ -861,11 +889,29 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		items, records = append(items, item), append(records, r)
 	}
-	result := page(items, start, total)
+	result := page(items, start, totalWithinMax(total, l.maxItems))
 	if result.More && !first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
 	}
 	return result, s.save(ctx, records)
+}
+
+// withinMax bounds the count of a window starting at start to the first
+// most items of a listing, 0 for no maximum.
+func withinMax(start, count, most int) int {
+	if most <= 0 {
+		return count
+	}
+	return min(count, max(0, most-start))
+}
+
+// totalWithinMax bounds a listing's total to its first most items, 0 for no
+// maximum.
+func totalWithinMax(total, most int) int {
+	if most <= 0 {
+		return total
+	}
+	return min(total, most)
 }
 
 // page makes a Page of a window of children, out of total.
@@ -940,6 +986,9 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	if err != nil {
 		return Page{}, err
 	}
+	// A collection lists at most the items of the library it belongs to.
+	most := s.collectionMax(ctx, v, r)
+	count = withinMax(start, count, most)
 	// A collection groups either other collections or catalogs; should it
 	// have both, its collections come first.
 	var nested []stremio.Meta
@@ -953,7 +1002,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 		}
 		for _, ref := range meta.Collection.Sources {
 			if catalog, ok := addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok {
-				sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, first: first})
+				sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, first: first, max: most})
 			}
 		}
 	}
@@ -978,12 +1027,65 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 			items, records = append(items, item), append(records, rec)
 		}
 	}
-	result := page(items, start, total)
+	result := page(items, start, totalWithinMax(total, most))
 	if result.More && !first && len(sources) > 0 {
 		next := max(start+count-len(nested), 0)
 		s.prefetch(ctx, v, addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, next, count) })
 	}
 	return result, s.save(ctx, records)
+}
+
+// collectionMax is the most items a collection lists: the maximum of the
+// library it was listed in, through the collections it was listed in, 0
+// for none.
+func (s *Service) collectionMax(ctx context.Context, v view, r record) int {
+	parent := r.Parent
+	for depth := 0; parent != nil && depth <= maxNesting; depth++ {
+		if l, ok := v.library(*parent); ok {
+			return l.maxItems
+		}
+		up, err := s.load(ctx, *parent)
+		if err != nil || up.Kind != KindCollection {
+			return 0
+		}
+		parent = up.Parent
+	}
+	return 0
+}
+
+// WholeListing is how many items a listing of a library or a collection
+// that asks for no limit gets at most, as jellyfin-web's collection pages
+// ask for every title in one request.
+const WholeListing = 500
+
+// ListingLimit is how many items a listing of parent that asks for no
+// limit gets: WholeListing, or the maximum of the library the library or
+// collection parent belongs to when lower; 0 for any other parent.
+func (s *Service) ListingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (int, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return 0, err
+	}
+	most := 0
+	if l, ok := v.library(parent); ok {
+		most = l.maxItems
+	} else {
+		r, err := s.load(ctx, parent)
+		if errors.Is(err, ErrNotFound) {
+			return 0, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		if r.Kind != KindCollection {
+			return 0, nil
+		}
+		most = s.collectionMax(ctx, v, r)
+	}
+	if most > 0 && most < WholeListing {
+		return most, nil
+	}
+	return WholeListing, nil
 }
 
 // fetchMeta asks an addon, or an IPTV source, for its description of a
@@ -1138,7 +1240,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	if l, ok := v.library(id); ok {
 		item := l.item
 		if l.image == addons.LibraryImageAutomatic && !v.restricted() {
-			item.Images.Primary = s.automaticImage(ctx, l.addon, l.catalog, func() string {
+			item.Images.Primary = s.automaticImage(ctx, l.catalogSource(), func() string {
 				r, err := s.load(ctx, id)
 				if err != nil {
 					return ""
@@ -1653,7 +1755,8 @@ func (s *Service) Ancestors(ctx context.Context, user accounts.User, id accounts
 	return result, nil
 }
 
-// Genres lists the genres a library's catalog can be narrowed to.
+// Genres lists the genres a library's catalog can be narrowed to: only its
+// own when the library is narrowed to one.
 func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID accounts.ID) ([]string, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -1663,12 +1766,10 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 	if !ok {
 		return nil, ErrNotFound
 	}
-	for _, extra := range l.catalog.Extra {
-		if extra.Name == "genre" {
-			return slices.Clone(extra.Options), nil
-		}
+	if l.genre != "" {
+		return []string{l.genre}, nil
 	}
-	return nil, nil
+	return slices.Clone(addons.Genres(l.catalog)), nil
 }
 
 // Artwork returns the URL of an item's image and whether downloading it is

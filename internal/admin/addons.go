@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -152,6 +153,16 @@ type libraryJSON struct {
 	AppName   *string `json:"appName"`
 	Enabled   bool    `json:"enabled"`
 	Browsable bool    `json:"browsable"`
+	// Genre is the genre an enabled library is narrowed to, null for the
+	// whole catalog; Genres those it may be narrowed to (see
+	// addons.GenreChoices). MaxItems is the most titles it lists, in place
+	// of the server's catalog limit, null for that limit.
+	// Filterable tells whether it takes a genre and a maximum: false for
+	// live TV and music catalogs.
+	Genre      *string  `json:"genre"`
+	Genres     []string `json:"genres"`
+	MaxItems   *int     `json:"maxItems"`
+	Filterable bool     `json:"filterable"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
 	// show on its tile: "none", "automatic", or "custom" when one was
@@ -308,9 +319,20 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			AppName:     appNames[i],
 			Enabled:     l.Enabled,
 			Browsable:   l.Catalog.Browsable(),
+			Genres:      []string{},
+			Filterable:  l.Filterable,
 			Image:       l.Image,
 			Guide:       newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
 			Guides:      newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
+		}
+		if l.Filterable {
+			entry.Genres = append(entry.Genres, addons.GenreChoices(l.Catalog)...)
+		}
+		if l.Genre != "" {
+			entry.Genre = new(l.Genre)
+		}
+		if l.MaxItems > 0 {
+			entry.MaxItems = new(l.MaxItems)
 		}
 		if images != nil && images[i].ID != (accounts.ID{}) {
 			entry.ItemID = new(images[i].ID.String())
@@ -380,6 +402,8 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidOrder, http.StatusBadRequest, "invalid_order"},
 		{addons.ErrInvalidLibrary, http.StatusBadRequest, "invalid_library"},
 		{addons.ErrInvalidLibraryName, http.StatusBadRequest, "invalid_library_name"},
+		{addons.ErrInvalidLibraryGenre, http.StatusBadRequest, "invalid_library_genre"},
+		{addons.ErrInvalidLibraryMaxItems, http.StatusBadRequest, "invalid_library_max_items"},
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
@@ -617,6 +641,10 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			CatalogType string  `json:"catalogType"`
 			CatalogID   string  `json:"catalogId"`
 			Name        *string `json:"name"`
+			Genre       *string `json:"genre"`
+			// MaxItems is read as any number, so that one that is not a
+			// whole number is refused as a maximum, not as a request.
+			MaxItems *float64 `json:"maxItems"`
 		} `json:"libraries"`
 	}
 	if !decode(w, r, &body) {
@@ -629,8 +657,16 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_library")
 			return
 		}
-		choices = append(choices, addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType,
-			CatalogID: library.CatalogID, Name: library.Name})
+		choice := addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType, CatalogID: library.CatalogID,
+			Name: library.Name, Genre: library.Genre}
+		if max := library.MaxItems; max != nil {
+			if *max != math.Trunc(*max) || *max < 1 || *max > addons.MaxLibraryItems {
+				writeError(w, http.StatusBadRequest, "invalid_library_max_items")
+				return
+			}
+			choice.MaxItems = new(int(*max))
+		}
+		choices = append(choices, choice)
 	}
 	libraries, err := h.Addons.SetLibraries(r.Context(), scope, choices)
 	if addonError(w, err) {

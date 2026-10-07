@@ -30,15 +30,25 @@ import (
 // enables. Each library adds a row to the home screen of Jellyfin apps.
 const DefaultLibraries = 20
 
+// MaxLibraryItems bounds the titles a library may be set to list at most,
+// as the server's catalog limit is bounded.
+const MaxLibraryItems = 20000
+
 var (
 	ErrNotFound           = errors.New("addon not found")
 	ErrExists             = errors.New("addon already installed")
 	ErrInvalidOrder       = errors.New("the order must list every addon of the scope once")
 	ErrInvalidLibrary     = errors.New("unknown or unbrowsable catalog")
 	ErrInvalidLibraryName = errors.New("library names are 1 to 64 printable characters")
-	ErrInvalidGuideURL    = errors.New("guide addresses are http or https URLs of at most 4096 characters")
-	ErrTooManyGuides      = errors.New("a live TV catalog has at most 10 guides")
-	ErrInvalidGuide       = errors.New("unknown guide")
+	// ErrInvalidLibraryGenre reports a genre a catalog does not offer, or a
+	// genre given to a catalog that takes none (see Filterable).
+	ErrInvalidLibraryGenre = errors.New("a library's genre is one its catalog offers")
+	// ErrInvalidLibraryMaxItems reports a maximum outside 1 to
+	// MaxLibraryItems, or given to a catalog that takes none.
+	ErrInvalidLibraryMaxItems = errors.New("a library's maximum is a whole number from 1 to 20,000")
+	ErrInvalidGuideURL        = errors.New("guide addresses are http or https URLs of at most 4096 characters")
+	ErrTooManyGuides          = errors.New("a live TV catalog has at most 10 guides")
+	ErrInvalidGuide           = errors.New("unknown guide")
 	// ErrNotStremio reports an IPTV source asked for a manifest.
 	ErrNotStremio = errors.New("not a Stremio addon")
 	// ErrNotEclipse reports settings given to an addon that has none.
@@ -106,6 +116,15 @@ type Library struct {
 	Name        *string
 	Enabled     bool
 	AddonActive bool
+	// Filterable tells that the library takes a Genre and MaxItems: a
+	// catalog of titles or collections, not of live TV or music.
+	Filterable bool
+	// Genre is the genre an enabled library lists, one of its catalog's
+	// GenreChoices, empty for the whole catalog. MaxItems is the most titles
+	// it lists, and each of its collections, in place of the server's
+	// catalog limit, lower or higher; 0 for that limit.
+	Genre    string
+	MaxItems int
 	// Image is how an enabled library finds the image apps show on its
 	// tile: LibraryImageNone or LibraryImageAutomatic. An image uploaded for
 	// the library's item wins over both (see library.LibraryImages).
@@ -116,6 +135,38 @@ type Library struct {
 	Guides        []Guide
 	GuideChannels int
 	GuideMapped   int
+}
+
+// Filterable reports whether a catalog of addon takes a genre and a
+// maximum as a library: catalogs of titles and collections do, live TV and
+// music catalogs do not.
+func Filterable(addon Addon, catalog stremio.Catalog) bool {
+	return catalog.Type != "tv" && addon.Kind != KindEclipse
+}
+
+// Genres lists the genres a catalog offers in its genre filter, in order.
+func Genres(catalog stremio.Catalog) []string {
+	for _, extra := range catalog.Extra {
+		if extra.Name == "genre" {
+			return extra.Options
+		}
+	}
+	return nil
+}
+
+// GenreChoices lists the genres a library of catalog may be narrowed to:
+// those of its genre filter, unless the catalog requires a genre and
+// offers a single one, which it always lists.
+func GenreChoices(catalog stremio.Catalog) []string {
+	for _, extra := range catalog.Extra {
+		if extra.Name == "genre" {
+			if extra.IsRequired && len(extra.Options) < 2 {
+				return nil
+			}
+			return extra.Options
+		}
+	}
+	return nil
 }
 
 // The images a library may find on its own (see Library.Image).
@@ -159,12 +210,16 @@ type LibraryKey struct {
 	CatalogID   string
 }
 
-// LibraryChoice selects a catalog as a library, with an optional name.
+// LibraryChoice selects a catalog as a library, with an optional name, and
+// optionally narrowed to a genre and limited to MaxItems titles (see
+// Library).
 type LibraryChoice struct {
 	AddonID     accounts.ID
 	CatalogType string
 	CatalogID   string
 	Name        *string
+	Genre       *string
+	MaxItems    *int
 }
 
 // Store is the addons repository. Reads of the addons and libraries are
@@ -730,19 +785,22 @@ type libraryRow struct {
 	name              *string
 	channels, matched int
 	image             string
+	genre             *string
+	maxItems          *int
 }
 
 // libraryRows reads the libraries filter selects, l being the library
 // and a its addon, in order.
 func libraryRows(ctx context.Context, db queryer, filter string, args ...any) ([]libraryRow, error) {
-	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image
-		FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
+	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image,
+		l.genre, l.max_items FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (libraryRow, error) {
 		var r libraryRow
-		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image)
+		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image,
+			&r.genre, &r.maxItems)
 		return r, err
 	})
 }
@@ -794,7 +852,14 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 		}
 		chosen[row.key] = len(enabled)
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Image: row.image}
+			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image}
+		// A genre the catalog no longer offers lists the whole catalog.
+		if row.genre != nil && library.Filterable && slices.Contains(GenreChoices(catalog), *row.genre) {
+			library.Genre = *row.genre
+		}
+		if row.maxItems != nil && library.Filterable {
+			library.MaxItems = *row.maxItems
+		}
 		if catalog.Type == "tv" {
 			library.Guides, library.GuideChannels, library.GuideMapped = []Guide{}, row.channels, row.matched
 		}
@@ -812,16 +877,25 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 				continue
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-				AddonActive: addon.Enabled, Image: LibraryImageNone})
+				AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: LibraryImageNone})
 		}
 	}
 	return result
 }
 
-// SetLibraries replaces the scope's libraries with choices, in order.
+// SetLibraries replaces the scope's libraries with choices, in order. A
+// choice's genre must be one its catalog offers, and its maximum from 1 to
+// MaxLibraryItems, on a Filterable catalog; an empty genre lists the whole
+// catalog.
 func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []LibraryChoice) ([]Library, error) {
 	defer s.changed()
 	for i, choice := range choices {
+		if choice.Genre != nil && *choice.Genre == "" {
+			choices[i].Genre = nil
+		}
+		if choice.MaxItems != nil && (*choice.MaxItems < 1 || *choice.MaxItems > MaxLibraryItems) {
+			return nil, ErrInvalidLibraryMaxItems
+		}
 		if choice.Name == nil {
 			continue
 		}
@@ -856,6 +930,13 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 				return ErrInvalidLibrary
 			}
 			seen[unique] = true
+			filterable := Filterable(installed[index], catalog)
+			if choice.Genre != nil && (!filterable || !slices.Contains(GenreChoices(catalog), *choice.Genre)) {
+				return ErrInvalidLibraryGenre
+			}
+			if choice.MaxItems != nil && !filterable {
+				return ErrInvalidLibraryMaxItems
+			}
 		}
 		// Libraries kept keep their guide: only those dropped are deleted,
 		// with their guides.
@@ -881,9 +962,10 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			}
 		}
 		for position, choice := range choices {
-			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position) VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE SET name = excluded.name, position = excluded.position`,
-				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items)
+				VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
+				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items`,
+				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems); err != nil {
 				return err
 			}
 		}

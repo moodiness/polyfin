@@ -288,6 +288,9 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	if hasParent && parent != collectionsViewID {
 		c, err := h.Collections.Get(r.Context(), parent)
 		if err == nil {
+			if wholeListing(r) {
+				limit = library.WholeListing
+			}
 			h.writeCollectionTitles(w, r, user, c, start, limit)
 			return true
 		}

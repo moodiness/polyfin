@@ -7,6 +7,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -22,7 +23,8 @@ const (
 // list for a genre option: each catalog of titles the user reaches (see
 // titleCatalogs) whose genre extra offers an option that matches is
 // narrowed to that option, and the catalogs are merged, one title of each
-// in turn. It returns the titles [start, start+count).
+// in turn. It returns the titles [start, start+count). A library narrowed
+// to a genre adds its catalog to that genre's page only.
 //
 // The genre extra is the only filter Stremio catalogs accept, and addons
 // put genres in it, but also years, studios or networks; so it is how a
@@ -39,18 +41,22 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 		return Page{}, err
 	}
 	var sources []source
+	read := map[catalogKey]bool{}
 	for _, c := range catalogs {
 		if kind, _ := titleKind(c.catalog.Type); !slices.Contains(kinds, kind) {
 			continue
 		}
-		for _, extra := range c.catalog.Extra {
-			if extra.Name != "genre" {
-				continue
-			}
-			if i := slices.IndexFunc(extra.Options, matches); i >= 0 {
-				sources = append(sources, source{addon: c.addon, catalog: c.catalog, genre: extra.Options[i]})
-			}
-			break
+		options := c.options()
+		i := slices.IndexFunc(options, matches)
+		if i < 0 {
+			continue
+		}
+		// A catalog reached both through a library narrowed to the genre
+		// and otherwise is read once.
+		key := catalogKey{c.addon.addon.ID, c.catalog.Type, c.catalog.ID, options[i]}
+		if !read[key] {
+			read[key] = true
+			sources = append(sources, source{addon: c.addon, catalog: c.catalog, genre: options[i]})
 		}
 	}
 	if len(sources) == 0 {
@@ -75,16 +81,28 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 	return page(s.overridden(items), start, total), s.save(ctx, records)
 }
 
-// titleCatalog is a catalog of titles a user reaches, with its addon.
+// titleCatalog is a catalog of titles a user reaches, with its addon, and
+// the genre the library listing it is narrowed to, if any.
 type titleCatalog struct {
 	addon   installed
 	catalog stremio.Catalog
+	genre   string
 }
 
-// catalogKey identifies a catalog among those of all addons.
+// options are the genre options the catalog is listed under: its library's
+// genre when it is narrowed to one, else every option of its genre filter.
+func (c titleCatalog) options() []string {
+	if c.genre != "" {
+		return []string{c.genre}
+	}
+	return addons.Genres(c.catalog)
+}
+
+// catalogKey identifies a catalog among those of all addons, as narrowed
+// to a genre by a library.
 type catalogKey struct {
-	addon           accounts.ID
-	catalogType, id string
+	addon                  accounts.ID
+	catalogType, id, genre string
 }
 
 // titleCatalogs lists, each once, the catalogs of titles a user reaches:
@@ -92,15 +110,16 @@ type catalogKey struct {
 // libraries group, nested collections included. Users who enabled an
 // addon's collections often have no other library, so their titles are
 // only reachable this way. A collection library that cannot be listed is
-// left out.
+// left out. A catalog listed by a library narrowed to a genre is listed
+// with that genre, and again without it when it is reached another way.
 func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, error) {
 	seen := map[catalogKey]bool{}
 	var result []titleCatalog
-	add := func(addon installed, catalog stremio.Catalog) {
-		key := catalogKey{addon.addon.ID, catalog.Type, catalog.ID}
+	add := func(addon installed, catalog stremio.Catalog, genre string) {
+		key := catalogKey{addon.addon.ID, catalog.Type, catalog.ID, genre}
 		if _, ok := titleKind(catalog.Type); ok && !seen[key] {
 			seen[key] = true
-			result = append(result, titleCatalog{addon: addon, catalog: catalog})
+			result = append(result, titleCatalog{addon: addon, catalog: catalog, genre: genre})
 		}
 	}
 	var collections []library
@@ -108,7 +127,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 		if l.catalog.Type == "collection" {
 			collections = append(collections, l)
 		} else {
-			add(l.addon, l.catalog)
+			add(l.addon, l.catalog, l.genre)
 		}
 	}
 	for _, l := range collections {
@@ -121,7 +140,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 			continue
 		}
 		for _, catalog := range grouped {
-			add(l.addon, catalog)
+			add(l.addon, catalog, "")
 		}
 	}
 	return result, nil
@@ -133,7 +152,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 // mostly costs requests the first time; a collection that cannot be
 // described is left out.
 func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]stremio.Catalog, error) {
-	src := source{addon: l.addon, catalog: l.catalog}
+	src := l.catalogSource()
 	entries, _, err := s.window(ctx, v, src, 0, v.limit(src))
 	if err != nil {
 		return nil, err
