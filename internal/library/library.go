@@ -421,11 +421,14 @@ func LibraryID(l addons.Library) accounts.ID {
 
 // ServerLibrary is one of the server's libraries, with the genres its
 // catalog can be narrowed to, which name its genre pages: only its own
-// when it is narrowed to one.
+// when it is narrowed to one. CollectionType is the content its catalog
+// holds, as collectionType tells it: "movies", "tvshows", "boxsets" for
+// collections, "music", or another.
 type ServerLibrary struct {
-	ID     accounts.ID
-	Name   string
-	Genres []string
+	ID             accounts.ID
+	Name           string
+	Genres         []string
+	CollectionType string
 }
 
 // ServerLibraries lists the server's libraries, in order and named in
@@ -453,7 +456,7 @@ func ServerLibraries(ctx context.Context, store *addons.Store, language string) 
 	}
 	result := make([]ServerLibrary, 0, len(shown))
 	for i, name := range LibraryNames(shown, language) {
-		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}}
+		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}, CollectionType: collectionType(shown[i].Catalog.Type)}
 		if genre := shown[i].Genre; genre != "" {
 			library.Genres = append(library.Genres, genre)
 		} else {

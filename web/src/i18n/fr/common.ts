@@ -118,6 +118,10 @@ const common: typeof en = {
       'Le genre d’une bibliothèque n’est pas proposé par son catalogue. Choisissez-en un autre dans la liste, puis enregistrez à nouveau.',
     invalid_library_max_items:
       'Le nombre maximum de titres d’une bibliothèque doit être un nombre entier de 1 à 20 000, ou rester vide.',
+    invalid_streamyfin_row:
+      'Une rangée n’est pas valide : sa bibliothèque ou sa collection n’existe plus, ou son titre dépasse 64 caractères. Rechargez la page, puis enregistrez à nouveau.',
+    too_many_streamyfin_rows:
+      'L’accueil de Streamyfin compte au plus 30 rangées. Retirez-en, puis enregistrez à nouveau.',
     invalid_image: 'Choisissez une image JPEG, PNG ou WebP de 10 Mo au plus.',
     invalid_image_url: 'Saisissez une adresse d’image commençant par https:// ou http://.',
     image_unreachable:
