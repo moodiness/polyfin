@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -217,6 +218,71 @@ func TestStreamListsOutliveARestart(t *testing.T) {
 	}
 	if versions, _ := e.restarted().KnownVersions(t.Context(), e.member, e.movie); len(versions) != 0 {
 		t.Errorf("after a refresh and a restart: %q", versionNames(versions))
+	}
+}
+
+// A list still being saved when the title's lists are dropped, by a
+// refresh or a user asking its addons again, is not saved back: the
+// versions dropped do not come back, at the next opening nor after a
+// restart.
+func TestADroppedListIsNotSavedBack(t *testing.T) {
+	e := newStaleEnv(t)
+	ctx := t.Context()
+	db := e.service.db
+	var addon accounts.ID
+	if err := db.QueryRow(ctx, "SELECT id FROM addons").Scan(&addon); err != nil {
+		t.Fatal(err)
+	}
+	key := streamKey{addon, "movie", "ttm000"}
+	// Another transaction holds a list under the same key, uncommitted:
+	// saving the movie's list waits for it, while deleting it does not.
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	var holder int
+	if err := tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&holder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO stream_lists (addon_id, content_type, stremio_id, streams, answer, fetched_at)
+		VALUES ($1, $2, $3, '{"streams": []}', 0, now())`, key.addon, key.contentType, key.id); err != nil {
+		t.Fatal(err)
+	}
+	listed := make(chan []Version, 1)
+	go func() {
+		versions, _ := e.service.Versions(ctx, e.member, e.movie)
+		listed <- versions
+	}()
+	e.numbers <- []int{1, 2, 3}
+	e.eventually("the answer's save to wait", func() bool {
+		var waiting int
+		_ = db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", holder).Scan(&waiting)
+		return waiting > 0
+	})
+	refreshed := make(chan error, 1)
+	go func() { refreshed <- e.service.Refresh(ctx, e.member, e.movie) }()
+	e.eventually("the list to be dropped from memory", func() bool {
+		_, kept := e.service.streamLists.Get(key)
+		return !kept
+	})
+	// Time for the refresh to delete the list saved, if it does not wait
+	// for the save.
+	time.Sleep(100 * time.Millisecond)
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if versions := <-listed; len(versions) != 3 {
+		t.Errorf("the answer: %q", versionNames(versions))
+	}
+	if err := <-refreshed; err != nil {
+		t.Fatal(err)
+	}
+	if versions, _ := e.service.KnownVersions(ctx, e.member, e.movie); len(versions) != 0 {
+		t.Errorf("listed after the refresh: %q", versionNames(versions))
+	}
+	if versions, _ := e.restarted().KnownVersions(ctx, e.member, e.movie); len(versions) != 0 {
+		t.Errorf("listed after the refresh and a restart: %q", versionNames(versions))
 	}
 }
 
