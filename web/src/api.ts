@@ -278,6 +278,10 @@ export type Settings = {
   backupFolder: string
   /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
   collectionReadHour: number
+  /** Describes the versions not analyzed yet from RemuxDB, which the titles' IMDb ids are sent to. */
+  remuxDb: boolean
+  /** Address of the RemuxDB server asked: an http or https URL, without a trailing slash. */
+  remuxDbUrl: string
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }

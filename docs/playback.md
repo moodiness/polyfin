@@ -32,6 +32,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - Active playback appears in Jellyfin apps' dashboards.
 - Apps can control one another (play, pause, seek, messages) when the controlled app keeps Jellyfin's live connection (WebSocket) open.
 - The skip intro, recap and credits buttons come from [TheIntroDB](https://theintrodb.org) and [IntroDB](https://introdb.app), community databases. Polyfin sends them only titles' IDs, episode numbers and runtimes. See [Skip segments](skip-segments.md).
+- With **Describe versions from RemuxDB** on, a title's page shows the tracks of its versions before they are played, from what [RemuxDB](https://remuxdb.1632022.xyz), a community database, found in the same files. Polyfin sends it only titles' IDs. See [Tracks from RemuxDB](#tracks-from-remuxdb).
 
 **Compared with Jellyfin:**
 
@@ -87,6 +88,34 @@ In apps:
 - `GET /Polyfin/Items/{id}/Versions` answers `{"Pending": <addons still asked for the title, for the first time or again>, "Count": <media sources the details would list now>, "Known": <versions known now>}`, with the authentication and access checks of item details. An addon to be asked again counts from its first answer until it is no longer asked. `Count` includes the placeholder; `Known` leaves it out, so it is `0` until a version is known, old versions of an expired list included. Both drop when the versions an addon's new answer lacked are no longer listed. Items other than movies and episodes answer `0` for all three. Polyfin also pushes it on the user's live connection (WebSocket) as it changes, for 2 minutes after the details or this endpoint were last asked, in a `PolyfinVersions` message whose `Data` is `{"ItemId": <the identifier the page was opened with>, "Pending": …, "Count": …, "Known": …}`. Polyfin's web player script listens to it, and polls at once when a title's page opens, then every second while `Pending` is above `0`, every 10 seconds once a push came, for at most 90 seconds. The 90 seconds cover a first answer (at most 15 seconds) and both requests that follow it (10 and 30 seconds later, at most 15 seconds each). When `Count` is above what the version menu lists, or differs from it once `Pending` is `0`, the script asks for the item's details (`/Users/{userId}/Items/{id}`) and lists their media sources in the menu. It holds the play buttons while `Known` is `0`, searching while `Pending` is above `0`, with no source once it is `0`. Its first answer may come before the details asked any addon, so it takes no source from it, only from the next. Before any answer, it holds them as searching when the version menu lists a single source whose identifier is the title's own, the placeholder.
 - `POST /Polyfin/Items/{id}/Versions/Search` asks the user's stream addons again for a movie or an episode, as [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) does for its streams only: each addon's stream list for the title is dropped, the saved one included, its follow-ups stop, and the addons are asked in the background, as item details ask them. Addons still asked for the title are left to answer. It has the checks of `GET /Polyfin/Items/{id}/Versions` and answers the same progress, `Pending` counting the addons now asked. A user may ask once every 20 seconds for a title; sooner, it answers `429 Too Many Requests` with `Retry-After` in seconds. Items other than movies and episodes ask nothing and answer `0` for all three.
 - With **Prepare playback in advance** on, `GET /UserItems/Resume`, `GET /Users/{userId}/Items/Resume` and `GET /Shows/NextUp` queue the first 10 movies and episodes of their answer before answering, and never wait for them. Each queued title is listed waiting for every addon and joining any request already under way. The first 2 then have their first version analyzed.
+
+### Tracks from RemuxDB
+
+Until a version is played, Polyfin knows only what its addon says of it. With **Describe versions from RemuxDB** on, a title's page shows the tracks of each version RemuxDB knows before it is played:
+
+- the video: resolution, codec, HDR or Dolby Vision;
+- the audio tracks: language, codec, channels;
+- the subtitles inside the file: language, forced, for the deaf and hard of hearing;
+- the file's size, length and bitrate.
+
+[RemuxDB](https://remuxdb.1632022.xyz) is a community database of what probing release files found in them.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Describe versions from RemuxDB** | **Settings › Playback** | Off | Asks RemuxDB about the titles whose pages open, and describes their versions from its answers until they are analyzed. |
+| **RemuxDB address** | **Settings › Playback** | `https://remuxdb.1632022.xyz` | The RemuxDB server Polyfin asks. |
+
+- When a title's page opens, Polyfin asks RemuxDB about the title by its IMDb identifier, with the season and episode numbers for an episode. It waits for the answer one second at most; a later answer shows from the next opening. Titles the addons know by other identifiers are not asked about.
+- Polyfin finds each version among the files RemuxDB lists by the name of its file, as the addon gives it, folders left out and case ignored. When the addon gives the file's size, the sizes must agree within 64 MiB or 1%, the larger, as addons round sizes. When several files share the name, the one of the closest size wins; without a size, a shared name describes nothing. A file under a tenth of the title's runtime, a sample, describes nothing either.
+- What RemuxDB said of a version, whether it knew the file or not, is kept in memory for 6 hours. A version listed since has the title asked about again. After RemuxDB fails to answer, it is not asked for a minute, or for as long as its `Retry-After` says.
+- Playback still analyzes each version with ffprobe, and the analysis then replaces the description. The tracks keep the numbers ffprobe gives them, so a track picked before the first play stays the same track.
+- Until the version is analyzed, the height RemuxDB found places it in the user's quality group (see [How a version's height is found](users.md#how-a-versions-height-is-found)).
+- RemuxDB knows the files of torrents and NZBs that its contributors probed. A version is described only when its addon gives its file's name and RemuxDB probed that file.
+- Polyfin sends RemuxDB only the titles' identifiers and a name for the server, derived from the server's identifier, which RemuxDB requires. It sends none of its own analyses.
+
+**For app developers:**
+
+- Item details and listings describe a version not analyzed yet with the tracks RemuxDB found, numbered as ffprobe numbers them, after the subtitle files as usual. These `MediaStreams` lack what only an analysis reads, such as `TimeBase` and `CodecTag`; the version has no chapters nor attachments yet. `PlaybackInfo` always answers from the analysis.
 
 ## Chapters
 

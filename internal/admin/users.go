@@ -365,6 +365,10 @@ type settingsJSON struct {
 	BackupsKept        *int   `json:"backupsKept"`
 	BackupFolder       string `json:"backupFolder"`
 	CollectionReadHour *int   `json:"collectionReadHour"`
+	// RemuxDB and RemuxDBURL keep their current values when a PUT leaves
+	// them out.
+	RemuxDB    *bool   `json:"remuxDb"`
+	RemuxDBURL *string `json:"remuxDbUrl"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -467,6 +471,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		BackupHour:         &settings.BackupHour,
 		BackupsKept:        &settings.BackupsKept,
 		CollectionReadHour: &settings.CollectionReadHour,
+
+		RemuxDB:    &settings.RemuxDB,
+		RemuxDBURL: &settings.RemuxDBURL,
 	}
 }
 
@@ -936,6 +943,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		BackupHour:         valueOr(body.BackupHour, current.BackupHour),
 		BackupsKept:        valueOr(body.BackupsKept, current.BackupsKept),
 		CollectionReadHour: valueOr(body.CollectionReadHour, current.CollectionReadHour),
+
+		RemuxDB:    valueOr(body.RemuxDB, current.RemuxDB),
+		RemuxDBURL: valueOr(body.RemuxDBURL, current.RemuxDBURL),
 	})
 	if accountError(w, err) {
 		return
