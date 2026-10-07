@@ -424,8 +424,10 @@ type Source struct {
 	wake     chan struct{}
 	progress chan struct{}
 	// rangeless marks a source that ignores ranges: it is read from its
-	// start, whatever block is wanted.
-	rangeless bool
+	// start, whatever block is wanted. ranged marks one that answered a
+	// range with it, which a whole file answered once does not make
+	// rangeless.
+	rangeless, ranged bool
 	// singleRanges marks a source that does not serve several ranges with
 	// one request: FetchRanges no longer asks it to.
 	singleRanges bool

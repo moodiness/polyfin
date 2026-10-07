@@ -802,7 +802,8 @@ func (s *Source) unpinFrom(via *pin) {
 // another file does not fix itself. A source asking to wait is waited for,
 // longer when it asks to slow down (429, 503), which also gives its host
 // fewer connections. A connection more is not retried: its failure is the
-// host's refusal.
+// host's refusal. A source that served ranges answering one with the whole
+// file is asked again: it ignores ranges only once it keeps doing so.
 func (s *Source) connect(c *conn, block int64) error {
 	offset := block * blockSize
 	renewed, retried := false, false
@@ -850,6 +851,9 @@ func (s *Source) connect(c *conn, block int64) error {
 				return fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 			}
 			if other = s.learn(total, response.Header.Get("Content-Type")); other == nil {
+				s.mu.Lock()
+				s.ranged, s.rangeless = true, false
+				s.mu.Unlock()
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))
 				s.connected(c, response.Body, cancel, block, t.pinned)
@@ -860,15 +864,28 @@ func (s *Source) connect(c *conn, block int64) error {
 		case status == http.StatusOK:
 			// The body starts at the first byte whatever was asked: a source
 			// answering so past its start ignores ranges, and the blocks
-			// before the one asked are read through. A body of another size
-			// than the file is an error page, which some hosts send so when
-			// they refuse a request: the size of a file is never taken from
-			// it, which would cut the file short for every reader.
+			// before the one asked are read through. A source that served
+			// ranges may answer one so once in a while, which would read
+			// gigabytes through for a seek: it is asked again, up to
+			// attempts times. A body of another size than the file is an
+			// error page, which some hosts send so when they refuse a
+			// request: the size of a file is never taken from it, which
+			// would cut the file short for every reader.
 			if other = s.learn(response.ContentLength, response.Header.Get("Content-Type")); other == nil {
 				if offset > 0 {
 					s.mu.Lock()
-					s.rangeless = true
+					again := s.ranged && attempt < attempts
+					if !again {
+						s.rangeless = true
+					}
 					s.mu.Unlock()
+					if again {
+						response.Body.Close()
+						cancel()
+						s.cache.logger.Debug("A source answered a range with the whole file: it is asked again", "source", s.id, "attempt", attempt)
+						_ = pause(c.slot.ctx, backoff(attempt, ""))
+						continue
+					}
 				}
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))

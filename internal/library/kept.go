@@ -196,17 +196,19 @@ func (s *Service) cachedPage(key pageKey) ([]stremio.Meta, bool) {
 	return kept.value, ok
 }
 
-// fetchPage asks the addon for a catalog page, and keeps its answer.
+// fetchPage asks the addon for a catalog page, and keeps its answer, as old
+// as the request: a slow answer is not taken for a newer one.
 func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]stremio.Meta, error) {
 	extra, ok := src.extras(key.skip)
 	if !ok {
 		return nil, nil
 	}
+	asked := s.now()
 	metas, err := s.client.Catalog(ctx, src.addon.addon.ManifestURL, src.catalog.Type, src.catalog.ID, extra, src.addon.confined)
 	if err != nil {
 		return nil, err
 	}
-	kept := fetched[[]stremio.Meta]{metas, s.now()}
+	kept := fetched[[]stremio.Meta]{metas, asked}
 	s.pagesOf(key).Put(key, kept)
 	if key.kept() {
 		if err := s.storePage(ctx, src, key, kept); err != nil {
