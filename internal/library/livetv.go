@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -378,14 +379,7 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 	if err != nil {
 		return Item{}, err
 	}
-	var p xmltv.Programme
-	err = s.db.QueryRow(ctx, `SELECT p.starts_at, p.ends_at, p.title, p.subtitle, p.description, p.categories, coalesce(p.season, 0),
-		coalesce(p.episode, 0), p.icon FROM live_guide_programmes p JOIN live_guides g ON g.id = p.guide_id AND p.generation = g.generation
-		WHERE p.guide_id = $1 AND p.xmltv_id = $2 AND p.starts_at = $3 LIMIT 1`, ref.guide, ref.xmltvID, ref.start).
-		Scan(&p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories, &p.Season, &p.Episode, &p.Icon)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Item{}, ErrNotFound
-	}
+	p, err := s.guideProgramme(ctx, ref)
 	if err != nil {
 		return Item{}, err
 	}
@@ -395,6 +389,40 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 	}
 	rememberProgram(id, ref)
 	return s.overriddenItem(program), nil
+}
+
+// ProgramArtwork returns the image of an XMLTV programme listed lately,
+// which no item keeps, and whether downloading it is confined, as its
+// channel's addon is. Other programmes are not searched for: images are
+// served without credentials, and apps list the programmes they show.
+func (s *Service) ProgramArtwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
+	ref, ok := programRefs.Get(id)
+	if !ok || !strings.EqualFold(imageType, "Primary") {
+		return "", false, ErrNotFound
+	}
+	p, err := s.guideProgramme(ctx, ref)
+	if err != nil {
+		return "", false, err
+	}
+	if p.Icon == "" {
+		return "", false, ErrNotFound
+	}
+	channel, err := s.load(ctx, itemID(channelKey(ref.channel)))
+	return p.Icon, err != nil || channel.Confined, nil
+}
+
+// guideProgramme reads the programme ref names in its guide's current
+// download; none is ErrNotFound.
+func (s *Service) guideProgramme(ctx context.Context, ref programRef) (xmltv.Programme, error) {
+	var p xmltv.Programme
+	err := s.db.QueryRow(ctx, `SELECT p.starts_at, p.ends_at, p.title, p.subtitle, p.description, p.categories, coalesce(p.season, 0),
+		coalesce(p.episode, 0), p.icon FROM live_guide_programmes p JOIN live_guides g ON g.id = p.guide_id AND p.generation = g.generation
+		WHERE p.guide_id = $1 AND p.xmltv_id = $2 AND p.starts_at = $3 LIMIT 1`, ref.guide, ref.xmltvID, ref.start).
+		Scan(&p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories, &p.Season, &p.Episode, &p.Icon)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return xmltv.Programme{}, ErrNotFound
+	}
+	return p, err
 }
 
 // searchProgram finds the guide programme an identifier names among those
