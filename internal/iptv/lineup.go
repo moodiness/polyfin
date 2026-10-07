@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -366,16 +365,15 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 	var channel, address, checked string
 	var st Stream
 	var custom *string
-	var okAt *time.Time
 	var h health
 	now := s.now()
-	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom, &address, &checked, &okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom, &address, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
 		stream := st
 		stream.Custom = custom != nil
 		if custom != nil {
 			stream.Address = Redact(*custom)
 		}
-		stream.Health = streamHealth(address, checked, okAt, h, now)
+		stream.Health = streamHealth(address, checked, h, now)
 		c := &channels[index[channel]]
 		c.Streams = append(c.Streams, stream)
 		return nil

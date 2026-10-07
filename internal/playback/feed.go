@@ -55,7 +55,9 @@ type liveTimes struct {
 }
 
 // defaultLiveTimes are the times of live streams; tests shorten them.
-var defaultLiveTimes = liveTimes{grace: 20 * time.Second, stall: 10 * time.Second, answer: 5 * time.Second, body: 3 * time.Second,
+// Providers that redirect to the stream take a few seconds to answer, more
+// when busy.
+var defaultLiveTimes = liveTimes{grace: 20 * time.Second, stall: 10 * time.Second, answer: 10 * time.Second, body: 3 * time.Second,
 	slotWait: 5 * time.Second}
 
 // timingLocked returns the times of the service's live streams. The

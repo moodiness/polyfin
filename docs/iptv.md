@@ -111,7 +111,7 @@ A list read a page of 100 at a time from the server, filtered by category, state
 Each stream shows how it last answered when its channel was opened:
 
 - **No live stream**: an error, a web page, an empty answer or bytes of no video. It is left out of its channel for an hour, then 6 hours, then a day while it keeps failing.
-- **Nothing came**: left out for 10 minutes.
+- **Nothing came**: left out for 10 minutes when it never played at its address, or after nothing came twice in a row. A stream that played and was silent once, as when its provider was slow, is tried again at the next start, after the channel's other streams.
 - **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
 
 Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. **Try every stream again** forgets it all for the channel.

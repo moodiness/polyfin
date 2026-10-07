@@ -234,9 +234,10 @@ func TestDeadLiveStreamsFailAtOnce(t *testing.T) {
 			t.Errorf("%s: reported %q", tc.name, reported[version.ID])
 		}
 		mu.Unlock()
-		// A refusal is tried again at the next start; the others are not
-		// tried again for a while.
-		if failed := s.Failed(version.ID); failed != (tc.failure != LiveRefused) {
+		// A source that answered no live stream is not tried again for a
+		// while; one that refused or sent nothing in time is at the next
+		// start, its health deciding whether it is left out.
+		if failed := s.Failed(version.ID); failed != (tc.failure == LiveDead) {
 			t.Errorf("%s: remembered as failed: %v", tc.name, failed)
 		}
 	}

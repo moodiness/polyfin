@@ -792,7 +792,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		return nil, fmt.Errorf("IPTV channel: %w", err)
 	}
 	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}'), coalesce(s.health_url, ''),
-		s.failure, s.failed_at, s.failures FROM iptv_streams s
+		s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
 		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
 		WHERE s.addon_id = $1 AND s.channel_id = $2 AND s.enabled AND (s.custom_url IS NOT NULL OR e.url IS NOT NULL)
 		ORDER BY `+streamOrder, source, strings.TrimPrefix(id, prefix(source)))
@@ -804,7 +804,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	var label, address, checked string
 	var headers map[string]string
 	var h health
-	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &checked, &h.failure, &h.failedAt, &h.failures}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
 		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address}
 		if len(headers) > 0 {
 			stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: maps.Clone(headers)}
