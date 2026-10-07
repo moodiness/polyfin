@@ -1,6 +1,6 @@
 // Package backup backs Polyfin's database up into a folder with pg_dump,
-// every day at the hour the settings choose and whenever an administrator
-// asks, and keeps the newest backups there.
+// while the settings turn backups on: every day at the hour they choose and
+// whenever an administrator asks. It keeps the newest backups there.
 //
 // A backup is pg_dump's custom format, which pg_restore restores into an
 // empty database. It is written under a hidden temporary name and renamed
@@ -54,9 +54,9 @@ type DB interface {
 
 // Config is what the service needs.
 type Config struct {
-	// Dir is the folder backups are written to, POLYFIN_BACKUP_DIR; empty
-	// turns backups off.
-	Dir string
+	// Folder gives the folder backups are written to while backups are
+	// on, empty while they are off, read whenever it is used.
+	Folder func() string
 	// DatabaseURL is the database backed up, POLYFIN_DATABASE_URL. It
 	// holds the password, which is never logged nor written on pg_dump's
 	// command line: pg_dump gets it in PGPASSWORD.
@@ -85,12 +85,12 @@ func New(cfg Config) *Service {
 	return &Service{cfg: cfg, now: time.Now}
 }
 
-// Dir is the folder backups are written to, empty when they are off.
+// Dir is the folder backups are written to, empty while they are off.
 func (s *Service) Dir() string {
-	if s == nil {
+	if s == nil || s.cfg.Folder == nil {
 		return ""
 	}
-	return s.cfg.Dir
+	return s.cfg.Folder()
 }
 
 // Available reports whether backups are on.
@@ -104,8 +104,12 @@ func (s *Service) PgDump() string {
 }
 
 // Hour is the hour of the server's time zone the database is backed up at
-// every day.
+// every day, the settings' BackupHour; -1 while backups are off, which
+// leaves the daily task to be run by hand.
 func (s *Service) Hour() int {
+	if !s.Available() {
+		return -1
+	}
 	return s.cfg.Settings().BackupHour
 }
 
@@ -146,14 +150,20 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 	return st, err
 }
 
-// Run backs the database up, records how it went, then deletes the oldest
-// backups past the settings' BackupsKept. It is the scheduled task.
+// ErrOff fails a backup asked for while backups are off.
+var ErrOff = errors.New("backups are off: turn them on under Settings › Backups")
+
+// Run backs the database up into the backup folder, records how it went,
+// then deletes the oldest backups there past the settings' BackupsKept. It
+// is the scheduled task; while backups are off, it fails with ErrOff.
 func (s *Service) Run(ctx context.Context) error {
-	if !s.Available() {
-		return errors.New("backups are off: POLYFIN_BACKUP_DIR is not set")
+	// The folder of the run is the one when it starts.
+	dir := s.Dir()
+	if dir == "" {
+		return ErrOff
 	}
 	started := s.now()
-	name, size, err := s.dump(ctx, started)
+	name, size, err := s.dump(ctx, dir, started)
 	if ctx.Err() != nil {
 		// A cancelled run leaves what the last one recorded.
 		return ctx.Err()
@@ -163,7 +173,7 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 	s.cfg.Logger.Info("The database was backed up", "file", name, "size", size)
-	deleted, err := prune(s.cfg.Dir, s.cfg.Settings().BackupsKept)
+	deleted, err := prune(dir, s.cfg.Settings().BackupsKept)
 	if len(deleted) > 0 {
 		s.cfg.Logger.Info("Deleted old database backups", "files", deleted)
 	}
@@ -173,19 +183,20 @@ func (s *Service) Run(ctx context.Context) error {
 	return nil
 }
 
-// dump writes a backup started at started, and returns its name and size.
-func (s *Service) dump(ctx context.Context, started time.Time) (string, int64, error) {
+// dump writes a backup started at started into dir, and returns its name
+// and size.
+func (s *Service) dump(ctx context.Context, dir string, started time.Time) (string, int64, error) {
 	name := "polyfin-" + started.Format(nameLayout) + ".dump"
-	final := filepath.Join(s.cfg.Dir, name)
+	final := filepath.Join(dir, name)
 	if _, err := os.Lstat(final); !errors.Is(err, fs.ErrNotExist) {
 		return "", 0, fmt.Errorf("%s already exists", name)
 	}
-	removePartials(s.cfg.Dir, s.cfg.Logger)
+	removePartials(dir, s.cfg.Logger)
 	conninfo, password, err := splitPassword(s.cfg.DatabaseURL)
 	if err != nil {
 		return "", 0, err
 	}
-	partial := filepath.Join(s.cfg.Dir, "."+name+".partial")
+	partial := filepath.Join(dir, "."+name+".partial")
 	cmd := exec.CommandContext(ctx, s.cfg.PgDump, "--format=custom", "--no-password", "--file="+partial, "--dbname="+conninfo)
 	cmd.Env = environment(os.Environ(), password)
 	output := &tail{}
@@ -216,7 +227,7 @@ func (s *Service) dump(ctx context.Context, started time.Time) (string, int64, e
 		_ = os.Remove(partial)
 		return "", 0, err
 	}
-	syncDir(s.cfg.Dir)
+	syncDir(dir)
 	return name, info.Size(), nil
 }
 

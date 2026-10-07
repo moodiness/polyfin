@@ -122,7 +122,7 @@ func (client) Open(ctx context.Context, method, target string, header http.Heade
 
 func newCache(t *testing.T, limit int64) *Cache {
 	t.Helper()
-	cache, err := New(t.TempDir(), limit, client{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cache, err := New(t.TempDir(), func() int64 { return limit }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,6 +361,59 @@ func TestLongReadsStayWithinTheLimit(t *testing.T) {
 	}
 }
 
+// A limit lowered while the cache runs applies at its next write, which
+// evicts down to it, and Usage tells it.
+func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
+	_, server := newOrigin(t, 10*blockSize)
+	cache, clock := smallCache(t, 10*blockSize)
+	var limit atomic.Int64
+	limit.Store(10 * blockSize)
+	cache.limit = limit.Load
+	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	read := func(block int64) {
+		t.Helper()
+		if _, err := s.ReadAt(t.Context(), make([]byte, 100), block*blockSize); err != nil {
+			t.Fatalf("block %d: %v", block, err)
+		}
+		clock.advance(time.Minute)
+	}
+	for block := range int64(6) {
+		read(block)
+	}
+	used := func() int64 {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		return cache.used
+	}
+	if used() < 6*blockSize {
+		t.Fatalf("cached %d bytes before the limit was lowered", used())
+	}
+	limit.Store(2 * blockSize)
+	if _, _, got := cache.Usage(); got != 2*blockSize {
+		t.Errorf("usage tells a limit of %d", got)
+	}
+	// The next write evicts every chunk not read lately: only those the
+	// last read stored, which readers are on, may keep the cache above its
+	// limit (see TestBlocksReadLatelyAreKept).
+	clock.advance(time.Minute)
+	if _, err := s.ReadAt(t.Context(), make([]byte, 100), 8*blockSize); err != nil {
+		t.Fatal(err)
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	for key, use := range cache.chunks {
+		if clock.now().Sub(use.touched) >= protectedFor {
+			t.Errorf("chunk %d, read long ago, is kept above the limit", key.index)
+		}
+	}
+	for index := range int64(6) {
+		if cache.chunkExists(accounts.ID{1}, index) {
+			t.Errorf("chunk %d is kept above the limit", index)
+		}
+	}
+}
+
 func TestBlocksReadLatelyAreKept(t *testing.T) {
 	o, server := newOrigin(t, 4*blockSize)
 	cache, _ := smallCache(t, blockSize)
@@ -424,7 +477,7 @@ func TestStaleBlocksAreRemovedAtStart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := New(dir, 1<<20, client{}, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+	if _, err := New(dir, func() int64 { return 1 << 20 }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {

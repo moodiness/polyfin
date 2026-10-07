@@ -49,8 +49,8 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	}
 	// Every setting a PUT saves has bounds, and every bounds a setting;
 	// the secrets are never answered, but have bounds.
-	readOnly := map[string]bool{"bounds": true, "conversionHardware": true, "recordingsFolder": true, "backupFolder": true,
-		"publicMetaDbKeySet": true, "theIntroDbKeySet": true, "traktClientSecretSet": true}
+	readOnly := map[string]bool{"bounds": true, "conversionHardware": true, "recordingsFolderDefault": true, "backupFolderDefault": true,
+		"renderNodes": true, "publicMetaDbKeySet": true, "theIntroDbKeySet": true, "traktClientSecretSet": true}
 	secrets := map[string]bool{"publicMetaDbKey": true, "theIntroDbKey": true, "traktClientSecret": true}
 	for name := range body {
 		if _, found := bounds[name]; !found && !readOnly[name] {

@@ -69,7 +69,7 @@ const livetv = {
     recordingsLoading: 'Loading recordings…',
     recordingsOffTitle: 'Recording is off',
     recordingsOff:
-      'Set POLYFIN_RECORDINGS_DIR on the container to turn it on. Padding and how long recordings are kept are under Settings › Recordings.',
+      'Turn it on, and choose padding and how long recordings are kept, under Settings › Recordings.',
     noTimersTitle: 'No recording scheduled',
     noTimers:
       'Recordings are scheduled from the programme guide in Jellyfin apps. They are listed here until they end.',

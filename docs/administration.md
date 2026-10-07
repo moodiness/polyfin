@@ -59,7 +59,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - Under **Server**:
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
-  - the **Source cache**, against `POLYFIN_CACHE_SIZE`;
+  - the **Source cache**, against **Disk space for files being read (GB)**;
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, and the next one. A failed backup, or a last backup older than two days, is a problem. See [Backups](backups.md);
   - **Thumbnails**: the queue and paused sources;
@@ -138,7 +138,7 @@ Jellyfin apps can read and save the server configuration. It answers Polyfin's s
 
 - Configuration: `/System/Configuration`.
 - Libraries: `/Library/MediaFolders`.
-- Storage: `/System/Info/Storage` lists the cache folder and, when `POLYFIN_RECORDINGS_DIR` is set, the recordings folder.
+- Storage: `/System/Info/Storage` lists the cache folder and, while recording is on, the recordings folder.
 - The authentication providers are available too.
 
 ### Activity log

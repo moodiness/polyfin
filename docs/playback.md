@@ -209,7 +209,7 @@ Apps that offer SyncPlay, jellyfin-web first, play the same titles in step acros
 
 ## Reading the sources
 
-FFmpeg, ffprobe and relayed apps read a version's file through Polyfin's source cache (`POLYFIN_CACHE_SIZE`). It fetches the file from the source in blocks and keeps them on disk for seeks.
+FFmpeg, ffprobe and relayed apps read a version's file through Polyfin's source cache, as large as **Disk space for files being read (GB)** under **Settings › Playback** (10 GB by default; a lower value applies at once). It fetches the file from the source in blocks and keeps them on disk for seeks.
 
 - A file is read over up to 3 connections when its host serves each one at its own pace: one serves what is being read, the others the stretches read next. A host that asks to slow down (`429`, `503`), refuses one more connection, or serves several no faster than one, is read over one connection per file for an hour.
 - Polyfin opens at most 4 connections to a host at once, over all the files it reads there, and 2 for 10 minutes after the host answers `429` or `503`. A playback never waits for them: the remux or relay of the version playing, its seeks, the analysis of the version a play chose, the bytes of its first segment, and the subtitles read through a file's index. Background reads wait for a free connection, and give theirs up to a playback: the reads ahead of a title whose details opened, the keyframe indexes read during an analysis, the other versions a play analyzes alongside the first, a file's second and third connections, which are not opened while the host has none free, and the requests of scrubbing images.

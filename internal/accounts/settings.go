@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -402,6 +404,97 @@ func ValidRemuxDBURL(address string) bool {
 	return err == nil && parsed.Hostname() != "" && parsed.User == nil
 }
 
+// ErrInvalidCacheSize reports a CacheSizeGB outside [MinCacheSizeGB,
+// MaxCacheSizeGB], and ErrInvalidVAAPIDevice a VAAPIDevice that is not a
+// render node (see ValidVAAPIDevice).
+var (
+	ErrInvalidCacheSize   = errors.New("invalid cache size")
+	ErrInvalidVAAPIDevice = errors.New("invalid VAAPI render node")
+)
+
+// The bounds and default of Settings.CacheSizeGB, in gigabytes (10^9
+// bytes): by default, 10 GB keep a few movies, read again for seeks and
+// restarts without downloading them again.
+const (
+	MinCacheSizeGB     = 1
+	MaxCacheSizeGB     = 2000
+	DefaultCacheSizeGB = 10
+)
+
+// vaapiDevice matches the render nodes VAAPI may open.
+var vaapiDevice = regexp.MustCompile(`^/dev/dri/renderD[0-9]{1,4}$`)
+
+// ValidVAAPIDevice reports whether device may be Settings.VAAPIDevice:
+// empty, for each render node in turn, or a render node such as
+// /dev/dri/renderD128.
+func ValidVAAPIDevice(device string) bool {
+	return device == "" || vaapiDevice.MatchString(device)
+}
+
+// ErrInvalidRecordingsFolder and ErrInvalidBackupFolder report a
+// RecordingsFolder or a BackupFolder that is not a folder's path (see
+// CleanFolder), or, from the admin API, a folder Polyfin cannot write into.
+var (
+	ErrInvalidRecordingsFolder = errors.New("invalid recordings folder")
+	ErrInvalidBackupFolder     = errors.New("invalid backup folder")
+)
+
+// MaxFolderBytes is the longest RecordingsFolder or BackupFolder, in bytes.
+const MaxFolderBytes = 512
+
+// CleanFolder returns folder as Settings.RecordingsFolder and BackupFolder
+// keep it, cleaned (see filepath.Clean), and whether it may be one: empty,
+// for the default folder, or an absolute path of at most MaxFolderBytes
+// holding no control characters. Nothing is looked up on disk.
+func CleanFolder(folder string) (string, bool) {
+	if folder == "" {
+		return "", true
+	}
+	if !filepath.IsAbs(folder) || strings.ContainsFunc(folder, unicode.IsControl) {
+		return "", false
+	}
+	folder = filepath.Clean(folder)
+	return folder, len(folder) <= MaxFolderBytes
+}
+
+// DefaultRecordingsFolder is the folder recordings are written to when the
+// settings name none, on a server keeping its files in dataDir.
+func DefaultRecordingsFolder(dataDir string) string {
+	return filepath.Join(dataDir, "recordings")
+}
+
+// DefaultBackupFolder is the folder the database is backed up into when
+// the settings name none, on a server keeping its files in dataDir.
+func DefaultBackupFolder(dataDir string) string {
+	return filepath.Join(dataDir, "backups")
+}
+
+// RecordingsDir is the folder recordings are written to on a server
+// keeping its files in dataDir: RecordingsFolder, or the default folder,
+// while recording is on; empty while it is off.
+func (s Settings) RecordingsDir(dataDir string) string {
+	switch {
+	case !s.Recording:
+		return ""
+	case s.RecordingsFolder != "":
+		return s.RecordingsFolder
+	}
+	return DefaultRecordingsFolder(dataDir)
+}
+
+// BackupDir is the folder the database is backed up into on a server
+// keeping its files in dataDir: BackupFolder, or the default folder, while
+// backups are on; empty while they are off.
+func (s Settings) BackupDir(dataDir string) string {
+	switch {
+	case !s.Backups:
+		return ""
+	case s.BackupFolder != "":
+		return s.BackupFolder
+	}
+	return DefaultBackupFolder(dataDir)
+}
+
 // Languages are the server languages, as ISO 639-1 codes. The first is the
 // default.
 var Languages = []string{"en", "fr"}
@@ -451,7 +544,7 @@ type Settings struct {
 	// SegmentOrder is the order of preference of the segment databases,
 	// every one of SegmentSources once, and SegmentSourcesOff those never
 	// asked, wherever they are in it. Both come from POLYFIN_SEGMENTS at
-	// the first start (see AdoptEnvironment).
+	// the first start that read it (see AdoptEnvironment).
 	SegmentOrder      []string
 	SegmentSourcesOff []string
 	// SimilarTitles lists titles close to a movie or series from the
@@ -476,7 +569,7 @@ type Settings struct {
 	// InactiveDeviceDays is after how many days unused a Jellyfin app is
 	// signed out; 0 never signs it out.
 	InactiveDeviceDays int
-	// DetailedLog logs at the debug level, whatever the configured level
+	// DetailedLog logs at the debug level rather than at the info level
 	// (see FollowLogLevel).
 	DetailedLog bool
 	// AnalysisTimeout bounds each ffprobe analysis, of a file or of a live
@@ -589,7 +682,7 @@ type Settings struct {
 	SimklClientID     string
 	// BackupHour is the hour of the server's time zone, 0 to 23, the
 	// database is backed up at every day, and BackupsKept how many of the
-	// newest backups are kept, when POLYFIN_BACKUP_DIR turns backups on.
+	// newest backups are kept, while Backups is on.
 	BackupHour  int
 	BackupsKept int
 	// CollectionReadHour is the hour of the server's time zone, 0 to 23,
@@ -603,6 +696,23 @@ type Settings struct {
 	// RemuxDBURL is the address of the RemuxDB server asked: an http or
 	// https URL, without a trailing slash (see ValidRemuxDBURL).
 	RemuxDBURL string
+	// CacheSizeGB bounds the space the blocks of the sources being played
+	// take, in gigabytes (10^9 bytes); lowered, the cache evicts down to it
+	// at its next write.
+	CacheSizeGB int
+	// VAAPIDevice is the render node VAAPI opens, such as
+	// /dev/dri/renderD128; empty tries each in turn (see ValidVAAPIDevice).
+	VAAPIDevice string
+	// Recording turns Live TV recording on. RecordingsFolder is the folder
+	// recordings are written to, empty for the default one under the data
+	// folder (see RecordingsDir).
+	Recording        bool
+	RecordingsFolder string
+	// Backups turns the daily database backups on. BackupFolder is the
+	// folder they are written to, empty for the default one under the data
+	// folder (see BackupDir).
+	Backups      bool
+	BackupFolder string
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -649,7 +759,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
-	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url"
+	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
+	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -675,7 +786,8 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
-		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL}
+		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
+		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -740,33 +852,83 @@ func (s *Store) Settings() Settings {
 	return *s.settings.Load()
 }
 
-// AdoptEnvironment copies into the settings, once, what POLYFIN_HWACCEL
-// and POLYFIN_SEGMENTS gave before they were settings: hardware is the GPU
-// POLYFIN_HWACCEL names (auto when it is not set), segments the databases
-// POLYFIN_SEGMENTS asks, the preferred first. The database lists the
-// settings still to be copied, those of a new server or of one that left
-// them to the variables before; once they are copied, the variables are not
-// read again for them, and what an administrator chooses stays chosen.
-func (s *Store) AdoptEnvironment(ctx context.Context, hardware string, segments []string) error {
-	if !slices.Contains(HardwareAccelerations, hardware) {
+// Environment is what the environment variables that were options before
+// they were settings give, each zero when its variable is not set: the GPU
+// POLYFIN_HWACCEL names, the segment databases POLYFIN_SEGMENTS asks, the
+// preferred first (empty, not nil, for none), POLYFIN_CACHE_SIZE in
+// gigabytes, DetailedLog for POLYFIN_LOG_LEVEL=debug, the render node
+// POLYFIN_VAAPI_DEVICE names, and the folders of POLYFIN_RECORDINGS_DIR
+// and POLYFIN_BACKUP_DIR, which turned recording and backups on.
+type Environment struct {
+	Hardware         string
+	Segments         []string
+	CacheSizeGB      int
+	DetailedLog      bool
+	VAAPIDevice      string
+	RecordingsFolder string
+	BackupFolder     string
+}
+
+// AdoptEnvironment copies env into the settings, once. The database lists
+// the settings still to be copied, those of a new server or of one that
+// left them to the variables before: each takes the value its variable
+// gives, and keeps its own when the variable is not set. A recordings or
+// backup folder turns recording or backups on with it. Once they are
+// copied, the variables are not read again for them, and what an
+// administrator chooses stays chosen.
+func (s *Store) AdoptEnvironment(ctx context.Context, env Environment) error {
+	if env.Hardware != "" && !slices.Contains(HardwareAccelerations, env.Hardware) {
 		return ErrInvalidHardwareAcceleration
 	}
-	if !validSegmentSources(segments) {
+	if env.Segments != nil && !validSegmentSources(env.Segments) {
 		return ErrInvalidSegmentSourcesOff
 	}
-	// The databases asked, in the order given, then the others, turned off.
-	order, off := slices.Clone(segments), []string{}
-	for _, name := range SegmentSources {
-		if !slices.Contains(segments, name) {
-			order, off = append(order, name), append(off, name)
+	if env.CacheSizeGB != 0 && (env.CacheSizeGB < MinCacheSizeGB || env.CacheSizeGB > MaxCacheSizeGB) {
+		return ErrInvalidCacheSize
+	}
+	if !ValidVAAPIDevice(env.VAAPIDevice) {
+		return ErrInvalidVAAPIDevice
+	}
+	recordings, ok := CleanFolder(env.RecordingsFolder)
+	if !ok {
+		return ErrInvalidRecordingsFolder
+	}
+	backups, ok := CleanFolder(env.BackupFolder)
+	if !ok {
+		return ErrInvalidBackupFolder
+	}
+	// The databases asked, in the order given, then the others, turned
+	// off; nil when POLYFIN_SEGMENTS is not set.
+	var order, off []string
+	if env.Segments != nil {
+		order, off = slices.Clone(env.Segments), []string{}
+		for _, name := range SegmentSources {
+			if !slices.Contains(env.Segments, name) {
+				order, off = append(order, name), append(off, name)
+			}
 		}
 	}
 	adopted, err := s.db.Exec(ctx, `UPDATE settings SET
-		hardware_acceleration = CASE WHEN 'hardware_acceleration' = ANY(environment_pending) THEN $1 ELSE hardware_acceleration END,
-		segment_order = CASE WHEN 'segment_order' = ANY(environment_pending) THEN $2 ELSE segment_order END,
-		segment_sources_off = CASE WHEN 'segment_sources_off' = ANY(environment_pending) THEN $3 ELSE segment_sources_off END,
+		hardware_acceleration = CASE WHEN $1::text <> '' AND 'hardware_acceleration' = ANY(environment_pending)
+			THEN $1::text ELSE hardware_acceleration END,
+		segment_order = CASE WHEN $2::text[] IS NOT NULL AND 'segment_order' = ANY(environment_pending)
+			THEN $2::text[] ELSE segment_order END,
+		segment_sources_off = CASE WHEN $3::text[] IS NOT NULL AND 'segment_sources_off' = ANY(environment_pending)
+			THEN $3::text[] ELSE segment_sources_off END,
+		cache_size_gb = CASE WHEN $4::integer > 0 AND 'cache_size_gb' = ANY(environment_pending)
+			THEN $4::integer ELSE cache_size_gb END,
+		detailed_log = CASE WHEN $5::boolean AND 'detailed_log' = ANY(environment_pending) THEN true ELSE detailed_log END,
+		vaapi_device = CASE WHEN $6::text <> '' AND 'vaapi_device' = ANY(environment_pending)
+			THEN $6::text ELSE vaapi_device END,
+		recording = CASE WHEN $7::text <> '' AND 'recording' = ANY(environment_pending) THEN true ELSE recording END,
+		recordings_folder = CASE WHEN $7::text <> '' AND 'recording' = ANY(environment_pending)
+			THEN $7::text ELSE recordings_folder END,
+		backups = CASE WHEN $8::text <> '' AND 'backups' = ANY(environment_pending) THEN true ELSE backups END,
+		backup_folder = CASE WHEN $8::text <> '' AND 'backups' = ANY(environment_pending)
+			THEN $8::text ELSE backup_folder END,
 		environment_pending = '{}'
-		WHERE environment_pending <> '{}'`, hardware, order, off)
+		WHERE environment_pending <> '{}'`,
+		env.Hardware, order, off, env.CacheSizeGB, env.DetailedLog, env.VAAPIDevice, recordings, backups)
 	if err != nil || adopted.RowsAffected() == 0 {
 		return err
 	}
@@ -775,6 +937,7 @@ func (s *Store) AdoptEnvironment(ctx context.Context, hardware string, segments 
 		return err
 	}
 	s.settings.Store(&settings)
+	s.applyLogLevel()
 	return nil
 }
 
@@ -895,6 +1058,19 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.CollectionReadHour < -1 || settings.CollectionReadHour > 23 {
 		return Settings{}, ErrInvalidCollectionReadHour
+	}
+	if settings.CacheSizeGB < MinCacheSizeGB || settings.CacheSizeGB > MaxCacheSizeGB {
+		return Settings{}, ErrInvalidCacheSize
+	}
+	if !ValidVAAPIDevice(settings.VAAPIDevice) {
+		return Settings{}, ErrInvalidVAAPIDevice
+	}
+	var ok bool
+	if settings.RecordingsFolder, ok = CleanFolder(settings.RecordingsFolder); !ok {
+		return Settings{}, ErrInvalidRecordingsFolder
+	}
+	if settings.BackupFolder, ok = CleanFolder(settings.BackupFolder); !ok {
+		return Settings{}, ErrInvalidBackupFolder
 	}
 	// The address is kept without surrounding spaces or trailing slashes:
 	// the paths asked are added after it.

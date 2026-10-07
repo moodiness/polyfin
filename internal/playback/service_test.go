@@ -89,7 +89,7 @@ func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewe
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sources, err := source.New(t.TempDir(), 1<<30, opener, logger)
+	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, opener, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

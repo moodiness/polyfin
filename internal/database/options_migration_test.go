@@ -15,6 +15,10 @@ import (
 // POLYFIN_HWACCEL and POLYFIN_SEGMENTS still have to give.
 const optionsMigration = "options_and_addon_changes"
 
+// laterOptions are the settings a later migration (settings_from_environment)
+// adds to those the environment still has to give.
+var laterOptions = []string{"cache_size_gb", "vaapi_device", "recording", "backups", "detailed_log"}
+
 // beforeOptions migrates a fresh schema up to the migration changing the
 // options, runs prepare on it, then applies the rest.
 func beforeOptions(t *testing.T, prepare string) *pgxpool.Pool {
@@ -103,7 +107,7 @@ func TestTheOptionsMigrationMovesTheOldDefaults(t *testing.T) {
 	// The GPU and the order hold the defaults until the environment is
 	// copied in, which they wait for, with the databases turned off.
 	if got.hardware != "auto" || !slices.Equal(got.order, []string{"theintrodb", "introdb", "publicmetadb"}) || len(got.off) != 0 ||
-		!slices.Equal(got.pending, []string{"hardware_acceleration", "segment_order", "segment_sources_off"}) {
+		!slices.Equal(got.pending, append([]string{"hardware_acceleration", "segment_order", "segment_sources_off"}, laterOptions...)) {
 		t.Errorf("before the environment is copied: %+v", got)
 	}
 	var columns []string
@@ -143,7 +147,7 @@ func TestTheOptionsMigrationKeepsWhatWasChosen(t *testing.T) {
 	// Only the databases turned off are still to come from the
 	// environment, which alone chose them.
 	if got.hardware != "vaapi" || !slices.Equal(got.order, []string{"publicmetadb", "introdb", "theintrodb"}) ||
-		!slices.Equal(got.pending, []string{"segment_sources_off"}) {
+		!slices.Equal(got.pending, append([]string{"segment_sources_off"}, laterOptions...)) {
 		t.Errorf("chosen GPU and order: %+v", got)
 	}
 }

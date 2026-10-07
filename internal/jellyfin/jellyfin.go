@@ -75,11 +75,10 @@ type Options struct {
 	Tasks *tasks.Registry
 	// Logs keeps the recent log lines administrators read; nil keeps none.
 	Logs *logs.Ring
-	// CacheDir is where sources and their remuxes are kept, and
-	// RecordingsDir where recordings are, empty when none are made: the
-	// folders storage information describes.
-	CacheDir      string
-	RecordingsDir string
+	// CacheDir is where sources and their remuxes are kept: with the
+	// current folder of Recordings, the folders storage information
+	// describes.
+	CacheDir string
 	// FontsDir holds the fonts apps load to render subtitles whose own
 	// fonts are missing; empty or missing, it offers none.
 	FontsDir string

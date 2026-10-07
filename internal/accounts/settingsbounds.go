@@ -66,6 +66,13 @@ func DefaultSettings() Settings {
 
 		RemuxDB:    false,
 		RemuxDBURL: DefaultRemuxDBURL,
+
+		CacheSizeGB:      DefaultCacheSizeGB,
+		VAAPIDevice:      "",
+		Recording:        false,
+		RecordingsFolder: "",
+		Backups:          false,
+		BackupFolder:     "",
 	}
 }
 
@@ -177,6 +184,13 @@ func SettingsBounds() map[string]SettingBounds {
 
 		"remuxDb":    is(d.RemuxDB),
 		"remuxDbUrl": text(MaxRemuxDBURLBytes, d.RemuxDBURL),
+
+		"cacheSizeGb":      between(MinCacheSizeGB, MaxCacheSizeGB, d.CacheSizeGB),
+		"vaapiDevice":      is(d.VAAPIDevice),
+		"recording":        is(d.Recording),
+		"recordingsFolder": text(MaxFolderBytes, d.RecordingsFolder),
+		"backups":          is(d.Backups),
+		"backupFolder":     text(MaxFolderBytes, d.BackupFolder),
 	}
 }
 

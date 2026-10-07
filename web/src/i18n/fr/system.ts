@@ -59,7 +59,7 @@ const system: typeof en = {
       autoRefresh: 'Mise à jour toutes les 5 secondes.',
       recordingsTitle: 'Enregistrements à venir',
       recordingsOff:
-        'L’enregistrement est désactivé. Définissez POLYFIN_RECORDINGS_DIR sur le conteneur pour l’activer.',
+        'L’enregistrement est désactivé. Activez-le dans Paramètres › Enregistrements.',
       noTimers: 'Aucun enregistrement n’est prévu.',
       recordingNow: 'En cours',
       failed: 'Échec',
@@ -162,7 +162,7 @@ const system: typeof en = {
       size: 'Taille',
       cacheTitle: 'Cache des sources',
       cacheHelp:
-        'Des morceaux des fichiers en lecture, gardés sur le disque dans la limite de POLYFIN_CACHE_SIZE. Un cache plein est normal : les morceaux les plus anciens laissent la place.',
+        'Des morceaux des fichiers en lecture, gardés sur le disque dans la limite réglée dans Paramètres › Lecture. Un cache plein est normal : les morceaux les plus anciens laissent la place.',
       cacheUse: (used: string, limit: string) => `${used} sur ${limit}`,
       sourcesOpen: 'Fichiers ouverts',
       disksTitle: 'Espace disque',
@@ -184,8 +184,7 @@ const system: typeof en = {
       noPausedHosts: 'Aucune source en pause.',
       until: (time: string) => `jusqu’à ${time}`,
       backupTitle: 'Sauvegardes',
-      backupOff:
-        'Les sauvegardes sont désactivées. Définissez POLYFIN_BACKUP_DIR sur le conteneur pour les activer.',
+      backupOff: 'Les sauvegardes sont désactivées. Activez-les dans Paramètres › Sauvegardes.',
       backup: {
         result: 'Dernière exécution',
         none: 'Aucune sauvegarde pour l’instant',

@@ -81,6 +81,11 @@ const settings: typeof en = {
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
         'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Un changement s’applique dès l’enregistrement, sans redémarrer.',
+      vaapiDevice: 'Carte graphique pour VAAPI',
+      vaapiDeviceHelp:
+        'Le nœud de rendu sur lequel VAAPI convertit la vidéo, quand plusieurs cartes graphiques le pourraient. Chacune à son tour par défaut, la première qui fonctionne.',
+      vaapiDeviceEach: 'Chacune à son tour',
+      vaapiDeviceMissing: (path: string) => `${path} (introuvable)`,
       hardware: {
         auto: 'Automatique : NVIDIA, sinon AMD ou Intel',
         nvenc: 'NVIDIA (NVENC)',
@@ -275,10 +280,17 @@ const settings: typeof en = {
     thumbnailStorage: 'Place pour les images (Go)',
     thumbnailStorageHelp: (r: RangeText) =>
       `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    cacheSize: 'Espace disque des fichiers en cours de lecture (Go)',
+    cacheSizeHelp: (r: RangeText) =>
+      `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go ; ${r.default} par défaut.`,
     recordingsTitle: 'Enregistrements',
     recordingsFolder: (folder: string) => `Les enregistrements sont gardés dans ${folder}.`,
-    recordingsOff:
-      'L’enregistrement est désactivé. Indiquez un dossier dans POLYFIN_RECORDINGS_DIR pour l’activer.',
+    recording: 'Enregistrer la TV en direct',
+    recordingHelp:
+      'Permet aux utilisateurs de programmer des enregistrements de la TV en direct, écrits dans le dossier ci-dessous.',
+    recordingsFolderLabel: 'Dossier des enregistrements',
+    recordingsFolderHelp:
+      'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Pour garder les enregistrements sur un autre disque, montez-le à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire. Le changer ne déplace pas les enregistrements déjà faits.',
     recordingPrePadding: 'Commencer les enregistrements avant (minutes)',
     recordingPrePaddingHelp: (r: RangeText) =>
       `Combien de minutes avant l’émission un enregistrement commence. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
@@ -293,8 +305,12 @@ const settings: typeof en = {
       `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt : après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     backupsFolder: (folder: string) =>
       `Les sauvegardes de la base de données sont enregistrées dans ${folder}.`,
-    backupsOff:
-      'Les sauvegardes sont désactivées. Indiquez dans POLYFIN_BACKUP_DIR un dossier du conteneur, monté depuis le serveur, puis redémarrez Polyfin pour les activer.',
+    backups: 'Sauvegarder la base de données chaque jour',
+    backupsHelp:
+      'Écrit chaque jour une copie de la base de données dans le dossier ci-dessous, à l’heure choisie, et supprime les plus anciennes au-delà du nombre conservé.',
+    backupFolderLabel: 'Dossier des sauvegardes',
+    backupFolderHelp:
+      'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : montez-en un à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire.',
     backupHour: 'Sauvegarder chaque jour à',
     backupHourHelp: (hour: string) => `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     backupsKept: 'Sauvegardes à conserver',
@@ -327,7 +343,7 @@ const settings: typeof en = {
       variables: 'Variables d’environnement',
     },
     variablesHelp:
-      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. POLYFIN_HWACCEL et POLYFIN_SEGMENTS ne sont lues qu’au premier démarrage, comme valeurs par défaut de la carte graphique et des sources de repères : modifiez celles-ci dans les paramètres. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
+      'En lecture seule. Elles sont définies sur le conteneur (environnement Docker, fichier compose ou modèle Unraid) et s’appliquent au démarrage de Polyfin : modifiez-les là, puis redémarrez le conteneur. Les variables qui réglaient d’autres options sont copiées une fois dans les paramètres, au premier démarrage de cette version, puis ne sont plus lues : modifiez celles-ci dans les paramètres. Les secrets sont masqués, et l’adresse de la base de données n’affiche que son hôte et son nom.',
     value: 'Valeur utilisée',
     defaultValue: 'Par défaut',
     setValue: 'Définie',

@@ -100,6 +100,27 @@ export default function ConversionSection({
             onValue={(hardwareAcceleration) => update({ hardwareAcceleration })}
           />
         </FieldRow>
+        {(form.hardwareAcceleration === 'auto' || form.hardwareAcceleration === 'vaapi') && (
+          <FieldRow
+            anchor="vaapi-device"
+            label={c.vaapiDevice}
+            help={c.vaapiDeviceHelp}
+            error={error('vaapi-device')}
+          >
+            <Select
+              value={form.vaapiDevice}
+              options={[
+                { value: '', label: c.vaapiDeviceEach },
+                ...form.renderNodes.map((node) => ({ value: node, label: node })),
+                ...(form.vaapiDevice !== '' && !form.renderNodes.includes(form.vaapiDevice)
+                  ? [{ value: form.vaapiDevice, label: c.vaapiDeviceMissing(form.vaapiDevice) }]
+                  : []),
+              ]}
+              onValue={(vaapiDevice) => update({ vaapiDevice })}
+              className="max-w-xs"
+            />
+          </FieldRow>
+        )}
         <SettingRow anchor="detected-hardware">
           <h4 className="text-[15px] font-medium tracking-[-0.01em] text-ink">{c.detected}</h4>
           <dl className="mt-3 rounded-row border border-line-2 bg-s1 text-small">

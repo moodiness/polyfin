@@ -90,6 +90,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 		Guides:        lib,
 		IPTV:          channels,
 		LibraryImages: lib,
+		DataDir:       t.TempDir(),
 	}
 	for _, c := range configure {
 		c(&options, testDeps{pool: pool, client: client, addons: addonStore})

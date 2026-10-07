@@ -177,6 +177,12 @@ const common: typeof en = {
     invalid_backup_hour: 'Choisissez l’heure des sauvegardes dans la liste.',
     invalid_backups_kept:
       'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
+    invalid_cache_size: 'L’espace disque doit être un nombre entier de Go, de 1 à 2000.',
+    invalid_vaapi_device: 'Choisissez la carte graphique dans la liste.',
+    invalid_recordings_folder:
+      'Le dossier des enregistrements doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
+    invalid_backup_folder:
+      'Le dossier des sauvegardes doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_remuxdb_url:

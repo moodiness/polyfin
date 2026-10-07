@@ -48,7 +48,7 @@ import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
 import { Anchor } from './parts'
 
-/** The task that backs the database up, registered when POLYFIN_BACKUP_DIR is set. */
+/** The task that backs the database up every day while backups are on in the settings. */
 const backupTaskKey = 'BackUpDatabase'
 
 /** `/system/schedule`: scheduled tasks, backups, recordings ahead and Live TV refreshes. */

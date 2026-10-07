@@ -3,7 +3,6 @@ package config
 import (
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -31,7 +30,9 @@ type Variable struct {
 // form, and those cfg, loaded from them, gives a default, by name. The
 // database URL shows its host and database only; the values of variables
 // named after a password, a token, a key or a secret are hidden, and the
-// addresses of the others keep their host only.
+// addresses of the others keep their host only. The variables copied into
+// the settings once (see Config.Environment) are not known: Polyfin no
+// longer reads them.
 func Variables(environ []string, cfg Config) []Variable {
 	set := map[string]string{}
 	for _, entry := range environ {
@@ -40,28 +41,16 @@ func Variables(environ []string, cfg Config) []Variable {
 			set[name] = value
 		}
 	}
-	level, _ := cfg.LogLevel.MarshalText()
-	segments := strings.Join(cfg.Segments, ",")
-	if segments == "" {
-		segments = "none"
-	}
 	effective := map[string]string{
-		"POLYFIN_DATABASE_URL":   databaseLocation(cfg.DatabaseURL),
-		"POLYFIN_LISTEN":         cfg.Listen,
-		"POLYFIN_LOG_LEVEL":      strings.ToLower(string(level)),
-		"POLYFIN_FFPROBE":        cfg.FFprobe,
-		"POLYFIN_FFMPEG":         cfg.FFmpeg,
-		"POLYFIN_CACHE_DIR":      cfg.CacheDir,
-		"POLYFIN_CACHE_SIZE":     strconv.FormatInt(cfg.CacheSize, 10),
-		"POLYFIN_HWACCEL":        cfg.Acceleration,
-		"POLYFIN_VAAPI_DEVICE":   cfg.VAAPIDevice,
-		"POLYFIN_SEGMENTS":       segments,
-		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
-		"POLYFIN_RECORDINGS_DIR": cfg.RecordingsDir,
-		"POLYFIN_WEB_DIR":        cfg.WebDir,
+		"POLYFIN_DATABASE_URL": databaseLocation(cfg.DatabaseURL),
+		"POLYFIN_LISTEN":       cfg.Listen,
+		"POLYFIN_FFPROBE":      cfg.FFprobe,
+		"POLYFIN_FFMPEG":       cfg.FFmpeg,
+		"POLYFIN_DATA_DIR":     cfg.DataDir,
+		"POLYFIN_FONTS_DIR":    cfg.FontsDir,
+		"POLYFIN_WEB_DIR":      cfg.WebDir,
 		// A secret, never shown: secretName hides it.
 		"POLYFIN_SECRET_KEY": "",
-		"POLYFIN_BACKUP_DIR": cfg.BackupDir,
 	}
 	names := make([]string, 0, len(effective)+len(set))
 	for name := range effective {
@@ -83,9 +72,6 @@ func Variables(environ []string, cfg Config) []Variable {
 			v.Hidden = true
 		case name == "POLYFIN_DATABASE_URL":
 			v.Value = value
-		case known && isSet && name == "POLYFIN_CACHE_SIZE":
-			// The size as written, such as 20GB, reads better than bytes.
-			v.Value = strings.TrimSpace(raw)
 		case known:
 			v.Value = redactAddress(value)
 		default:

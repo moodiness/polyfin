@@ -165,6 +165,12 @@ const common = {
       'The Simkl client ID must be at most 256 characters, without spaces or special characters. Copy it again from your Simkl app.',
     invalid_backup_hour: 'Choose the hour of the backups from the list.',
     invalid_backups_kept: 'The number of backups kept must be a whole number from 1 to 90.',
+    invalid_cache_size: 'The disk space must be a whole number of GB from 1 to 2000.',
+    invalid_vaapi_device: 'Choose the graphics card from the list.',
+    invalid_recordings_folder:
+      'The recordings folder must be an absolute path to a folder Polyfin can write to.',
+    invalid_backup_folder:
+      'The backups folder must be an absolute path to a folder Polyfin can write to.',
     invalid_collection_read_hour:
       'Choose the hour collections are read at, or Never, from the list.',
     invalid_remuxdb_url:

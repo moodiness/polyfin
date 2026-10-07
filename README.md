@@ -82,7 +82,7 @@ The full documentation is in [`docs/`](docs/README.md), and on the [website](htt
 
 ## Configuration
 
-Polyfin reads a few environment variables; with the Compose file, the only one you must set is `POSTGRES_PASSWORD` in `.env`. Everything else has a default, and most options live in the admin app under **Settings**. See [Configuration](docs/configuration.md).
+With the Compose file, the only value you must set is `POSTGRES_PASSWORD` in `.env`, and `POLYFIN_SECRET_KEY` is advised. Every option is set in the admin app, under **Settings**. See [Configuration](docs/configuration.md).
 
 ## Legal disclaimer
 

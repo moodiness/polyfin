@@ -56,7 +56,7 @@ export function formatHour(hour: number, language: string): string {
 
 const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
 
-/** A size in bytes as "4.2 GB", decimal units as POLYFIN_CACHE_SIZE reads them. */
+/** A size in bytes as "4.2 GB", in decimal units as the cache size setting counts them. */
 export function formatBytes(bytes: number, language: string): string {
   let value = bytes
   let unit = 0

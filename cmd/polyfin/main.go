@@ -69,16 +69,15 @@ Commands:
 
 Environment:
   POLYFIN_DATABASE_URL  PostgreSQL URL (required)
+  POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
+  POLYFIN_DATA_DIR      absolute path of the folder Polyfin keeps its files in: the cache, and the default recordings and backups folders (default: a polyfin folder in the system's temporary folder)
   POLYFIN_LISTEN        HTTP address (default :8096)
-  POLYFIN_LOG_LEVEL     debug, info, warn or error (default info)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
-  POLYFIN_CACHE_DIR     where sources being played and their remuxes are kept (default: a polyfin directory in the system's temporary directory)
-  POLYFIN_CACHE_SIZE    space the source cache may use, such as 20GB (default 10GB)
-  POLYFIN_HWACCEL       GPU video is converted on, copied into the settings at the first start only: auto, nvenc, vaapi or none (default auto)
-  POLYFIN_VAAPI_DEVICE  render node VAAPI opens (default: each in turn)
-  POLYFIN_SEGMENTS      databases skip buttons come from, preferred first, copied into the settings at the first start only: theintrodb, introdb, publicmetadb or none (default theintrodb,introdb,publicmetadb)
-  POLYFIN_SECRET_KEY    key the stored keys and tokens are encrypted with: 32 bytes in base64, from openssl rand -base64 32 (default: none, stored unencrypted)
+  POLYFIN_FONTS_DIR     fallback fonts for subtitles (default /usr/share/fonts)
+  POLYFIN_WEB_DIR       jellyfin-web, served at /web/ (default /usr/share/polyfin/jellyfin-web)
+
+Every other option is a setting of the admin app.
 `
 
 func main() {
@@ -113,13 +112,18 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// The level follows the settings' detailed log once they are loaded.
-	// The recent lines are also kept, redacted, for administrators to read
-	// from Jellyfin apps.
+	// The level is info, and follows the settings' detailed log once they
+	// are loaded. The recent lines are also kept, redacted, for
+	// administrators to read from Jellyfin apps.
 	level := new(slog.LevelVar)
-	level.Set(cfg.LogLevel)
 	recent := logs.NewRing(logs.Capacity)
 	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, recent), &slog.HandlerOptions{Level: level}))
+	for _, warning := range cfg.Warnings {
+		logger.Warn("A variable copied into the settings has a value that is not valid: it is not copied", "error", warning)
+	}
+	for _, retired := range cfg.Retired {
+		logger.Info(retired.Name+" is no longer read: its value is a setting, under "+retired.Section, "variable", retired.Name)
+	}
 	adminApp, err := webui.Assets()
 	if err != nil {
 		return err
@@ -148,12 +152,13 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
-	// POLYFIN_HWACCEL and POLYFIN_SEGMENTS are copied into the settings
-	// once; the settings decide from then on.
-	if err := store.AdoptEnvironment(ctx, cfg.Acceleration, cfg.Segments); err != nil {
-		return fmt.Errorf("copy POLYFIN_HWACCEL and POLYFIN_SEGMENTS into the settings: %w", err)
+	// The variables that were options are copied into the settings once;
+	// the settings decide from then on.
+	if err := store.AdoptEnvironment(ctx, cfg.Environment); err != nil {
+		return fmt.Errorf("copy the environment variables into the settings: %w", err)
 	}
-	store.FollowLogLevel(level, cfg.LogLevel)
+	store.FollowLogLevel(level, slog.LevelInfo)
+	prepareFolders(store.Settings(), cfg.DataDir, logger)
 	var setupCode string
 	if required, err := store.SetupRequired(ctx); err != nil {
 		return err
@@ -183,7 +188,8 @@ func serve(ctx context.Context) error {
 	if _, err := exec.LookPath(cfg.FFmpeg); err != nil {
 		logger.Warn("FFmpeg was not found: apps that cannot play a file as it is cannot play it", "ffmpeg", cfg.FFmpeg)
 	}
-	sources, err := source.New(filepath.Join(cfg.CacheDir, "sources"), cfg.CacheSize, addonClient, logger)
+	cacheLimit := func() int64 { return int64(store.Settings().CacheSizeGB) * 1e9 }
+	sources, err := source.New(filepath.Join(cfg.CacheDir, "sources"), cacheLimit, addonClient, logger)
 	if err != nil {
 		return fmt.Errorf("prepare the source cache: %w", err)
 	}
@@ -193,7 +199,8 @@ func serve(ctx context.Context) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
-	segments.SelectHardware(store.Settings().HardwareAcceleration, cfg.VAAPIDevice)
+	settings := store.Settings()
+	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
@@ -227,19 +234,23 @@ func serve(ctx context.Context) error {
 		Logger:      logger,
 	})
 	defer images.Close()
-	recorder := recordings.New(recordings.Config{DB: pool, Dir: cfg.RecordingsDir, Guide: lib, Recorder: player, Users: store, Logger: logger})
+	// Recording and backups follow the settings, which turn them on and
+	// choose their folders.
+	recorder := recordings.New(recordings.Config{DB: pool, Folder: func() string { return store.Settings().RecordingsDir(cfg.DataDir) },
+		Guide: lib, Recorder: player, Users: store, Logger: logger})
 	if recorder.Available() {
-		logger.Info("Live TV recording is on", "folder", cfg.RecordingsDir)
-		registerRecordingTasks(registry, recorder)
+		logger.Info("Live TV recording is on", "folder", recorder.Dir())
 	}
-	backups := backup.New(backup.Config{Dir: cfg.BackupDir, DatabaseURL: cfg.DatabaseURL, DB: pool, Settings: store.Settings, Logger: logger})
+	registerRecordingTasks(registry, recorder)
+	backups := backup.New(backup.Config{Folder: func() string { return store.Settings().BackupDir(cfg.DataDir) }, DatabaseURL: cfg.DatabaseURL,
+		DB: pool, Settings: store.Settings, Logger: logger})
 	if backups.Available() {
-		logger.Info("Database backups are on", "folder", cfg.BackupDir)
+		logger.Info("Database backups are on", "folder", backups.Dir())
 		if _, err := exec.LookPath(backups.PgDump()); err != nil {
 			logger.Warn("pg_dump was not found: database backups fail until it is installed", "pg_dump", backups.PgDump())
 		}
-		registerBackupTask(registry, backups)
 	}
+	registerBackupTask(registry, backups)
 	webClient := server.WebClientFiles(cfg.WebDir)
 	switch {
 	case webClient != nil:
@@ -276,7 +287,6 @@ func serve(ctx context.Context) error {
 		Tasks:         registry,
 		Logs:          recent,
 		CacheDir:      cfg.CacheDir,
-		RecordingsDir: cfg.RecordingsDir,
 		FontsDir:      cfg.FontsDir,
 		Recordings:    recorder,
 		Trackers:      tracking,
@@ -300,8 +310,7 @@ func serve(ctx context.Context) error {
 				IPTV:          channels,
 				Segments:      skipSegments,
 				Activity:      activityLog,
-				RecordingsDir: cfg.RecordingsDir,
-				VAAPIDevice:   cfg.VAAPIDevice,
+				DataDir:       cfg.DataDir,
 				WebClient:     webClient != nil,
 				Sessions:      jellyfinAPI,
 				Tasks:         registry,
@@ -456,8 +465,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 }
 
 // registerRecordingTasks registers the periodic jobs of Live TV recording,
-// when it is on: the scheduler itself runs on its own (see
-// recordings.Service.Run).
+// which do nothing while it is off: the scheduler itself runs on its own
+// (see recordings.Service.Run).
 func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Service) {
 	registry.Register(tasks.Task{
 		Key:      "DeleteOldRecordings",
@@ -483,17 +492,34 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 	})
 }
 
-// registerBackupTask registers the daily database backup, when backups
-// are on.
+// registerBackupTask registers the daily database backup: it runs every
+// day while backups are on, and by hand only, failing, while they are off.
 func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 	registry.Register(tasks.Task{
 		Key:      "BackUpDatabase",
 		Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{
-			"en": {Name: "Back up the database", Description: "Copies the database into POLYFIN_BACKUP_DIR every day at the hour set under Settings › Backups, and deletes the oldest copies past the number kept."},
-			"fr": {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans POLYFIN_BACKUP_DIR chaque jour à l’heure choisie dans Paramètres › Sauvegardes, et supprime les plus anciennes copies au-delà du nombre conservé."},
+			"en": {Name: "Back up the database", Description: "Copies the database into the backup folder every day at the hour set under Settings › Backups, while backups are on, and deletes the oldest copies past the number kept."},
+			"fr": {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans le dossier des sauvegardes chaque jour à l’heure choisie dans Paramètres › Sauvegardes, quand elles sont activées, et supprime les plus anciennes copies au-delà du nombre conservé."},
 		},
 		Daily: backups.Hour,
 		Run:   backups.Run,
 	})
+}
+
+// prepareFolders makes the default recordings or backups folder when the
+// settings turn that feature on, and warns about a folder Polyfin cannot
+// write into: the feature fails until it is fixed under Settings.
+func prepareFolders(settings accounts.Settings, dataDir string, logger *slog.Logger) {
+	for _, f := range []struct{ feature, dir, defaultDir string }{
+		{"recording", settings.RecordingsDir(dataDir), accounts.DefaultRecordingsFolder(dataDir)},
+		{"backups", settings.BackupDir(dataDir), accounts.DefaultBackupFolder(dataDir)},
+	} {
+		if f.dir == "" {
+			continue
+		}
+		if err := config.PrepareFolder(f.dir, f.dir == f.defaultDir); err != nil {
+			logger.Warn("A folder the settings choose cannot be written into", "feature", f.feature, "folder", f.dir, "error", err)
+		}
+	}
 }

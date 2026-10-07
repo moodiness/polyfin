@@ -20,9 +20,9 @@ ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
 # The final stage runs nothing, so as to need no emulation on arm64: the
-# cache directory is copied.
+# data directory is copied.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin \
-	&& mkdir /cache
+	&& mkdir /data
 
 # jellyfin-web 12.2, the web client of the Jellyfin version Polyfin speaks.
 # Its two pins are here, to change together when the client is updated
@@ -138,14 +138,16 @@ COPY --from=pg-dump /pg-dump/ /
 COPY --from=jellyfin-web /jellyfin/jellyfin-web/ /usr/share/polyfin/jellyfin-web/
 COPY third_party/jellyfin-web/LICENSE third_party/jellyfin-web/NOTICE /usr/share/doc/jellyfin-web/
 COPY --from=build /polyfin /polyfin
-# Parts of the files being read. A volume, so that it stays writable in a
-# read-only container; Polyfin empties it when it starts.
-COPY --from=build --chown=65532:65532 /cache /cache
-VOLUME /cache
+# Polyfin's files: the parts of the files being read, which it empties
+# when it starts, and by default the Live TV recordings and the database
+# backups. A volume, so that it stays writable in a read-only container,
+# owned by the user Polyfin runs as, which a new named volume copies.
+COPY --from=build --chown=65532:65532 /data /data
+VOLUME /data
 # NVIDIA's runtime exposes the GPUs and the video and Vulkan libraries to
 # containers that ask for it; other runtimes ignore these. Mesa would keep
 # a shader cache in a home directory the read-only image does not have.
-ENV POLYFIN_LISTEN=:8096 POLYFIN_CACHE_DIR=/cache NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
+ENV POLYFIN_LISTEN=:8096 POLYFIN_DATA_DIR=/data NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
 	MESA_SHADER_CACHE_DISABLE=true
 EXPOSE 8096
 USER 65532:65532

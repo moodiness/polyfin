@@ -4,10 +4,14 @@ Everything Polyfin keeps is in its PostgreSQL database: accounts and watch histo
 
 ## Turning backups on
 
-Backups are off until `POLYFIN_BACKUP_DIR` names a folder (see [Configuration](configuration.md)). The folder must exist and the container's user, UID 65532, must be able to write to it; otherwise Polyfin does not start.
+Backups are off until **Back up the database every day** is turned on, under **Settings › Backups**. They are written to **Backups folder**: when it is empty, to `backups` in Polyfin's data folder, `/data/backups` in the Docker image's volume, which Polyfin creates. Polyfin must be able to write to the folder, as the container's user, UID 65532: it checks it when the setting is saved, and refuses a folder it cannot write to.
 
-- **Docker Compose:** uncomment `POLYFIN_BACKUP_DIR: /backups` and the `./backups:/backups` volume of the `polyfin` service in `compose.yaml`. Create the folder first with `mkdir backups && sudo chown 65532:65532 backups`, then run `docker compose up -d`.
-- **Unraid:** set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, and **Backups folder in the container** to `/backups`. Create the folder first with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`.
+In a default Docker installation, the data volume is on the same disk as the database. To keep the backups on another one, mount a folder of the server at `/data/backups`:
+
+- **Docker Compose:** add `- ./backups:/data/backups` under `volumes` in the `polyfin` service of `compose.yaml`. Create the folder first with `mkdir backups && sudo chown 65532:65532 backups`, then run `docker compose up -d`.
+- **Unraid:** set the template's **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, which it mounts at `/data/backups`. Create the folder first with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`.
+
+A folder mounted elsewhere in the container works too: enter its path in **Backups folder**.
 
 The Docker image includes `pg_dump` from PostgreSQL 18. Without the image, install PostgreSQL 18's client tools so that `pg_dump` is in `PATH`.
 
@@ -28,7 +32,7 @@ The folder is on the same server as the database. Copy the backups elsewhere too
 
 ## Restoring a backup
 
-A backup restores into the PostgreSQL 18 container with its own `pg_restore`. The examples below use the Compose services `postgres` and `polyfin`, and the database and user `polyfin` from `.env`. On Unraid, use `docker stop`, `docker exec` and `docker start` with your containers' names instead.
+A backup restores into the PostgreSQL 18 container with its own `pg_restore`. The examples below use the Compose services `postgres` and `polyfin`, the database and user `polyfin` of `compose.yaml`, and a `backups` folder of the server holding the backups. When they are in Polyfin's data volume, copy the one to restore out of it first: `mkdir -p backups && docker compose cp polyfin:/data/backups/polyfin-20261005-040000.dump backups/`. On Unraid, use `docker stop`, `docker exec` and `docker start` with your containers' names instead.
 
 1. Stop Polyfin, so that nothing writes to the database:
 

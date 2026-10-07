@@ -134,6 +134,20 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           )}
         />
       </FieldRow>
+      <FieldRow
+        anchor="cache-size"
+        label={s.cacheSize}
+        help={s.cacheSizeHelp(range('cacheSizeGb'))}
+        error={error('cache-size')}
+      >
+        <NumberInput
+          {...limits('cacheSizeGb')}
+          step={1}
+          {...number('cache-size', form.cacheSizeGb, (value) =>
+            update({ cacheSizeGb: Math.trunc(value) }),
+          )}
+        />
+      </FieldRow>
       <SwitchRow
         anchor="remuxdb"
         label={s.remuxDb}
@@ -559,12 +573,32 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
   const s = t.settings
   return (
     <>
-      {form.recordingsFolder === '' && (
-        <Notice tone="info" className="mt-8">
-          {s.recordingsOff}
-        </Notice>
-      )}
       <SettingsGroup>
+        <SwitchRow
+          anchor="recording"
+          label={s.recording}
+          help={s.recordingHelp}
+          checked={form.recording}
+          onChange={(recording) => update({ recording })}
+        />
+        <FieldRow
+          anchor="recordings-folder"
+          label={s.recordingsFolderLabel}
+          help={s.recordingsFolderHelp}
+          error={error('recordings-folder')}
+        >
+          <TextInput
+            value={form.recordingsFolder}
+            onValue={(recordingsFolder) => update({ recordingsFolder })}
+            placeholder={form.recordingsFolderDefault}
+            disabled={!form.recording}
+            maxLength={limits('recordingsFolder').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
         <FieldRow
           anchor="recording-pre-padding"
           label={s.recordingPrePadding}
@@ -621,12 +655,32 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
   const s = t.settings
   return (
     <>
-      {form.backupFolder === '' && (
-        <Notice tone="info" className="mt-8">
-          {s.backupsOff}
-        </Notice>
-      )}
       <SettingsGroup>
+        <SwitchRow
+          anchor="backups"
+          label={s.backups}
+          help={s.backupsHelp}
+          checked={form.backups}
+          onChange={(backups) => update({ backups })}
+        />
+        <FieldRow
+          anchor="backup-folder"
+          label={s.backupFolderLabel}
+          help={s.backupFolderHelp}
+          error={error('backup-folder')}
+        >
+          <TextInput
+            value={form.backupFolder}
+            onValue={(backupFolder) => update({ backupFolder })}
+            placeholder={form.backupFolderDefault}
+            disabled={!form.backups}
+            maxLength={limits('backupFolder').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
         <FieldRow
           anchor="backup-hour"
           label={s.backupHour}
@@ -657,7 +711,7 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
             )}
           />
         </FieldRow>
-        {form.backupFolder !== '' && <LastBackup />}
+        {form.backups && <LastBackup />}
       </SettingsGroup>
     </>
   )

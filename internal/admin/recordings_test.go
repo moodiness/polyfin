@@ -1,10 +1,8 @@
 package admin
 
 import (
-	"encoding/json"
 	"maps"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -16,7 +14,7 @@ func TestSettingsRecordings(t *testing.T) {
 	recording := func(body map[string]any) [4]any {
 		return [4]any{body["recordingPrePadding"], body["recordingPostPadding"], body["recordingRetentionDays"], body["recordingsFolder"]}
 	}
-	// Without POLYFIN_RECORDINGS_DIR, recording is off: no folder.
+	// Recording is off by default, into the default folder.
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); recording(body) != [4]any{0.0, 0.0, 0.0, ""} {
 		t.Errorf("default settings: %v", body)
 	}
@@ -24,7 +22,8 @@ func TestSettingsRecordings(t *testing.T) {
 	settings := maps.Clone(base)
 	maps.Copy(settings, map[string]any{"recordingPrePadding": 120, "recordingPostPadding": 600, "recordingRetentionDays": 30,
 		"recordingsFolder": "/elsewhere"})
-	saved := [4]any{120.0, 600.0, 30.0, ""}
+	// Recording off, the folder is not looked at.
+	saved := [4]any{120.0, 600.0, 30.0, "/elsewhere"}
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || recording(body) != saved {
 		t.Fatalf("saving the recording settings: %d %v", status, body)
 	}
@@ -50,18 +49,6 @@ func TestSettingsRecordings(t *testing.T) {
 		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != tc.code {
 			t.Errorf("%s %v: %d %v", tc.key, tc.value, status, body)
 		}
-	}
-}
-
-// The folder the configuration names shows in the settings.
-func TestSettingsShowTheRecordingsFolder(t *testing.T) {
-	api := newTestAPI(t, 10)
-	h := &handler{Options: Options{Accounts: api.store, RecordingsDir: "/recordings"}}
-	response := httptest.NewRecorder()
-	h.settings(response, httptest.NewRequest(http.MethodGet, "/admin/api/settings", nil))
-	var body map[string]any
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body["recordingsFolder"] != "/recordings" {
-		t.Errorf("settings with a recordings folder: %v %v", body, err)
 	}
 }
 

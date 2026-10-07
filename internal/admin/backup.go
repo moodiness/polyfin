@@ -8,8 +8,8 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 )
 
-// backupJSON is how the database backups go. Folder is POLYFIN_BACKUP_DIR,
-// empty when backups are off, which leaves the rest empty.
+// backupJSON is how the database backups go. Folder is the folder they are
+// written to, empty when backups are off, which leaves the rest empty.
 type backupJSON struct {
 	Folder string `json:"folder"`
 	// Next is when the next backup is made, at the settings' hour.

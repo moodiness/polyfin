@@ -35,7 +35,7 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 
 ### Detection
 
-At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU, which `POLYFIN_HWACCEL` sets at the first start. See [Configuration](configuration.md) for `POLYFIN_HWACCEL` and `POLYFIN_VAAPI_DEVICE`.
+At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU. For AMD and Intel, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
 
 It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
 
@@ -98,6 +98,7 @@ Every default but **Seconds prepared ahead** keeps Polyfin's conversions as they
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic**, **NVIDIA (NVENC)**, **AMD or Intel (VAAPI)** or **None**, applied once saved. |
+| **Graphics card for VAAPI** | **Settings › Conversion** | **Each in turn** | With **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
 | **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping. |
 | **Read these formats on the graphics card** | **Settings › Conversion** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
 

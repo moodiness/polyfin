@@ -77,8 +77,9 @@ type Users interface {
 // Config are the dependencies of the recordings service.
 type Config struct {
 	DB *pgxpool.Pool
-	// Dir is the recordings folder; empty leaves recording off.
-	Dir      string
+	// Folder gives the recordings folder while recording is on, empty
+	// while it is off, read whenever it is used.
+	Folder   func() string
 	Guide    Guide
 	Recorder Recorder
 	Users    Users
@@ -90,7 +91,7 @@ type Config struct {
 // Service keeps timers, series timers and recordings, and records.
 type Service struct {
 	db       *pgxpool.Pool
-	dir      string
+	folder   func() string
 	guide    Guide
 	recorder Recorder
 	users    Users
@@ -103,6 +104,11 @@ type Service struct {
 	mu   sync.Mutex
 	// active are the recordings under way, by timer.
 	active map[accounts.ID]*active
+	// skipped are the timers due while recording is off, logged once.
+	skipped map[accounts.ID]bool
+	// recovered tells whether the recordings a shutdown interrupted were
+	// finished, which waits for recording to be on.
+	recovered bool
 }
 
 // active is a recording under way.
@@ -110,6 +116,9 @@ type active struct {
 	recording accounts.ID
 	cancel    context.CancelCauseFunc
 	done      chan struct{}
+	// dir is the folder the recording started in, which keeps its parts
+	// and its file until it is finished.
+	dir string
 	// part is the file written now.
 	part string
 }
@@ -120,35 +129,46 @@ var errStopped = errors.New("the recording was stopped")
 
 // New returns the recordings service.
 func New(c Config) *Service {
-	s := &Service{db: c.DB, dir: c.Dir, guide: c.Guide, recorder: c.Recorder, users: c.Users, logger: c.Logger,
-		retry: retryDelay, now: time.Now, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}}
+	s := &Service{db: c.DB, folder: c.Folder, guide: c.Guide, recorder: c.Recorder, users: c.Users, logger: c.Logger,
+		retry: retryDelay, now: time.Now, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}, skipped: map[accounts.ID]bool{}}
+	if s.folder == nil {
+		s.folder = func() string { return "" }
+	}
 	if c.RetryDelay > 0 {
 		s.retry = c.RetryDelay
 	}
 	return s
 }
 
-// Available reports whether the server records: it has a recordings
+// Available reports whether the server records: recording is on, with a
 // folder.
 func (s *Service) Available() bool {
-	return s != nil && s.dir != ""
+	return s.Dir() != ""
 }
 
-// Dir is the recordings folder, empty when recording is off.
+// Dir is the recordings folder, empty while recording is off.
 func (s *Service) Dir() string {
 	if s == nil {
 		return ""
 	}
-	return s.dir
+	return s.folder()
 }
 
-// Path is the file of a recording.
+// Path is the file of a finished recording, in the current recordings
+// folder; empty while recording is off.
 func (s *Service) Path(r Recording) string {
-	return filepath.Join(s.dir, r.File)
+	dir := s.Dir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, r.File)
 }
 
 // Wake has the scheduler look at its timers now.
 func (s *Service) Wake() {
+	if s == nil {
+		return
+	}
 	select {
 	case s.wake <- struct{}{}:
 	default:
@@ -156,16 +176,16 @@ func (s *Service) Wake() {
 }
 
 // Run records until ctx ends: it first finishes the recordings a restart
-// interrupted, then starts each timer at its time. Recordings under way
-// when ctx ends are left to be finished, as partial, when it runs again.
-// Series timers and old recordings are seen to by RefreshSeriesTimers and
-// SweepRecordings, which the server's tasks run.
+// interrupted, once recording is on, then starts each timer at its time.
+// Recordings under way when ctx ends are left to be finished, as partial,
+// when it runs again. Series timers and old recordings are seen to by
+// RefreshSeriesTimers and SweepRecordings, which the server's tasks run.
 func (s *Service) Run(ctx context.Context) {
-	if !s.Available() {
-		return
-	}
-	s.Recover(ctx)
 	for {
+		if !s.recovered && s.Available() {
+			s.Recover(ctx)
+			s.recovered = true
+		}
 		wait := s.startDue(ctx)
 		timer := time.NewTimer(wait)
 		select {
@@ -205,26 +225,36 @@ func (s *Service) startDue(ctx context.Context) time.Duration {
 		return maxWait
 	}
 	wait := maxWait
+	dir := s.Dir()
+	skipped := map[accounts.ID]bool{}
 	for _, t := range timers {
 		switch from := t.From(); {
+		case !from.After(now) && now.Before(t.Until()) && dir == "":
+			// While recording is off, a timer due does not record, said
+			// once; its programme ending deletes it.
+			skipped[t.ID] = true
+			if !s.skipped[t.ID] {
+				s.logger.Info("A timer is due while recording is off: it does not record", "timer", t.ID.String(), "name", t.Name)
+			}
 		case !from.After(now) && now.Before(t.Until()):
-			s.start(ctx, t)
+			s.start(ctx, t, dir)
 		case from.After(now):
 			wait = min(wait, from.Sub(now))
 		}
 	}
+	s.skipped = skipped
 	return wait
 }
 
-// start records t, unless it records already.
-func (s *Service) start(ctx context.Context, t Timer) {
+// start records t into dir, unless it records already.
+func (s *Service) start(ctx context.Context, t Timer, dir string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, running := s.active[t.ID]; running {
 		return
 	}
 	recordCtx, cancel := context.WithCancelCause(ctx)
-	a := &active{cancel: cancel, done: make(chan struct{})}
+	a := &active{cancel: cancel, done: make(chan struct{}), dir: dir}
 	s.active[t.ID] = a
 	s.wg.Go(func() {
 		defer close(a.done)
@@ -273,8 +303,9 @@ func (s *Service) Active(id accounts.ID) (part string, done <-chan struct{}, ok 
 	return "", nil, false
 }
 
-func (s *Service) partPath(recording accounts.ID, n int) string {
-	return filepath.Join(s.dir, recording.String()+".part"+strconv.Itoa(n)+".ts")
+// partPath is the nth part of a recording written into dir.
+func partPath(dir string, recording accounts.ID, n int) string {
+	return filepath.Join(dir, recording.String()+".part"+strconv.Itoa(n)+".ts")
 }
 
 // record writes t's recording until its end: the stream is read again
@@ -302,7 +333,7 @@ func (s *Service) record(ctx context.Context, t Timer, a *active) {
 	defer cancel()
 	interrupted := false
 	for n := 0; until.Err() == nil; {
-		path := s.partPath(id, n)
+		path := partPath(a.dir, id, n)
 		s.mu.Lock()
 		a.part = path
 		s.mu.Unlock()
@@ -326,7 +357,7 @@ func (s *Service) record(ctx context.Context, t Timer, a *active) {
 		return
 	}
 	stopped := errors.Is(context.Cause(ctx), errStopped) && s.now().Before(t.Until().Add(-lateStop))
-	s.finish(context.WithoutCancel(ctx), id, t.Until(), interrupted || stopped)
+	s.finish(context.WithoutCancel(ctx), a.dir, id, t.Until(), interrupted || stopped)
 }
 
 // recordPart records t's channel into path with the first of its streams
@@ -363,11 +394,11 @@ func (s *Service) recordPart(ctx context.Context, t Timer, recording accounts.ID
 	return err
 }
 
-// finish joins a recording's parts into its file, marks it complete, and
-// its timer with it. A recording that wrote nothing is deleted, and its
-// timer marked failed.
-func (s *Service) finish(ctx context.Context, id accounts.ID, until time.Time, partial bool) {
-	parts := s.parts(id)
+// finish joins the parts a recording wrote into dir into its file there,
+// marks it complete, and its timer with it. A recording that wrote nothing
+// is deleted, and its timer marked failed.
+func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until time.Time, partial bool) {
+	parts := parts(dir, id)
 	if len(parts) == 0 {
 		s.logger.Warn("A recording wrote nothing", "recording", id.String())
 		var timer *accounts.ID
@@ -385,24 +416,24 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, until time.Time, p
 		partial = true
 	}
 	file := id.String() + ".mkv"
-	if err := s.recorder.FinishRecording(ctx, parts, filepath.Join(s.dir, file)); err != nil {
+	if err := s.recorder.FinishRecording(ctx, parts, filepath.Join(dir, file)); err != nil {
 		// The parts stay readable as they are: the first is kept.
 		s.logger.Warn("A recording could not be made into one file; its first part is kept", "recording", id.String(), "error", err)
 		file = id.String() + ".ts"
-		if err := os.Rename(parts[0], filepath.Join(s.dir, file)); err != nil {
+		if err := os.Rename(parts[0], filepath.Join(dir, file)); err != nil {
 			s.logger.Warn("A recording's part could not be kept", "error", err)
 		}
 		partial = partial || len(parts) > 1
 	}
 	var timer, series *accounts.ID
 	err := s.db.QueryRow(ctx, `UPDATE live_recordings SET status = 'Completed', ended_at = $2, partial = $3, file = $4, size = $5
-		WHERE id = $1 RETURNING timer_id, series_timer_id`, id, s.now(), partial, file, size(filepath.Join(s.dir, file))).Scan(&timer, &series)
+		WHERE id = $1 RETURNING timer_id, series_timer_id`, id, s.now(), partial, file, size(filepath.Join(dir, file))).Scan(&timer, &series)
 	for _, part := range parts {
 		_ = os.Remove(part)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Deleted while it was finished.
-		_ = os.Remove(filepath.Join(s.dir, file))
+		_ = os.Remove(filepath.Join(dir, file))
 		return
 	}
 	if err != nil {
@@ -420,11 +451,12 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, until time.Time, p
 	}
 }
 
-// parts lists the parts of a recording that hold something, in order.
-func (s *Service) parts(id accounts.ID) []string {
+// parts lists the parts of a recording in dir that hold something, in
+// order.
+func parts(dir string, id accounts.ID) []string {
 	var parts []string
 	for n := 0; ; n++ {
-		path := s.partPath(id, n)
+		path := partPath(dir, id, n)
 		if _, err := os.Stat(path); err != nil {
 			return parts
 		}
@@ -457,9 +489,11 @@ func (s *Service) keepUpTo(ctx context.Context, series accounts.ID) {
 	}
 }
 
-// Recover finishes, as partial, the recordings a shutdown interrupted, and
-// has their timers record the rest of their programme while it airs.
+// Recover finishes, as partial, the recordings a shutdown interrupted, from
+// their parts in the current recordings folder, and has their timers
+// record the rest of their programme while it airs.
 func (s *Service) Recover(ctx context.Context) {
+	dir := s.Dir()
 	rows, err := s.db.Query(ctx, "SELECT "+recordingColumns+" FROM live_recordings WHERE status = 'InProgress'")
 	var interrupted []Recording
 	if err == nil {
@@ -476,7 +510,7 @@ func (s *Service) Recover(ctx context.Context) {
 		s.logger.Warn("Interrupted timers could not be scheduled again", "error", err)
 	}
 	for _, r := range interrupted {
-		s.finish(ctx, r.ID, r.End, true)
+		s.finish(ctx, dir, r.ID, r.End, true)
 	}
 }
 
@@ -596,15 +630,20 @@ func timeOfDay(t time.Time) time.Duration {
 	return t.Sub(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC))
 }
 
-// removeFiles deletes a recording's file and parts.
+// removeFiles deletes a recording's file and parts from the current
+// recordings folder; while recording is off, they are left there.
 func (s *Service) removeFiles(r Recording) {
+	dir := s.Dir()
+	if dir == "" {
+		return
+	}
 	if r.File != "" {
-		if err := os.Remove(s.Path(r)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := os.Remove(filepath.Join(dir, r.File)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			s.logger.Warn("A recording's file could not be deleted", "error", err)
 		}
 	}
 	for n := 0; ; n++ {
-		if err := os.Remove(s.partPath(r.ID, n)); err != nil {
+		if err := os.Remove(partPath(dir, r.ID, n)); err != nil {
 			return
 		}
 	}

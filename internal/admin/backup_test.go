@@ -82,9 +82,9 @@ func TestSettingsCollectionReadHour(t *testing.T) {
 	}
 }
 
-// Without POLYFIN_BACKUP_DIR, backups are off: no folder, no status in
-// the health. With it, the last run's result shows, and is a problem when
-// it failed or the last backup is older than two days.
+// While the settings leave backups off: no folder, no status in the
+// health. Turned on, the last run's result shows, and is a problem when it
+// failed or the last backup is older than two days.
 func TestBackupStatus(t *testing.T) {
 	off := newTestAPI(t, 10).signedIn("administrator", true)
 	if status, body, _ := off.call(http.MethodGet, "/backup", nil); status != http.StatusOK || body["folder"] != "" || body["next"] != nil {
@@ -98,11 +98,15 @@ func TestBackupStatus(t *testing.T) {
 	var deps testDeps
 	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
 		deps = d
-		o.Backups = backup.New(backup.Config{Dir: dir, DB: d.pool, Settings: o.Accounts.Settings, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		settings := o.Accounts.Settings
+		dataDir := o.DataDir
+		o.Backups = backup.New(backup.Config{Folder: func() string { return settings().BackupDir(dataDir) }, DB: d.pool, Settings: settings,
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	})
 	administrator := api.signedIn("administrator", true)
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["backupFolder"] != dir {
-		t.Errorf("settings folder: %v", body["backupFolder"])
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true,
+		"language": "en", "backups": true, "backupFolder": dir}); status != http.StatusOK || body["backupFolder"] != dir || body["backups"] != true {
+		t.Fatalf("turning backups on: %d %v", status, body)
 	}
 	status, body, _ := administrator.call(http.MethodGet, "/backup", nil)
 	if status != http.StatusOK || body["folder"] != dir || body["next"] == nil || body["ranAt"] != nil || body["problem"] != false {

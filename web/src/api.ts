@@ -133,7 +133,7 @@ export type QuickConnectRequest = {
   requestedAt: string
 }
 
-/** The skip marker sources, by the names POLYFIN_SEGMENTS gives them. */
+/** The skip marker sources, by the names the server gives them. */
 export type SegmentSource = 'theintrodb' | 'introdb' | 'publicmetadb'
 
 /** What the server accepts for a setting, and its default. */
@@ -211,8 +211,14 @@ export type Settings = {
   hevcQuality: number
   /** Converts to HEVC for the apps that list it before H.264. */
   allowHevcEncoding: boolean
-  /** GPU conversions run on, set from POLYFIN_HWACCEL at the first start. */
+  /** GPU conversions run on. */
   hardwareAcceleration: HardwareAcceleration
+  /** VAAPI render node conversions run on; empty tries each in turn. */
+  vaapiDevice: string
+  /** The render nodes found on the server (read-only). */
+  renderNodes: string[]
+  /** Disk space, in GB, kept for the parts of the files being read. */
+  cacheSizeGb: number
   /** Codecs the GPU decodes. */
   hardwareDecodingCodecs: HardwareDecodingCodec[]
   /** Converts HDR to SDR with toneMappingAlgorithm; peak (nits, 0 the video's) and desaturation on the processor only. */
@@ -252,8 +258,12 @@ export type Settings = {
   recordingPostPadding: number
   /** Days after which recordings are deleted; 0 keeps them forever. */
   recordingRetentionDays: number
-  /** Folder recordings are written to (read-only); empty when recording is off. */
+  /** Whether Live TV recording is on. */
+  recording: boolean
+  /** Folder recordings are written to; empty uses recordingsFolderDefault. */
   recordingsFolder: string
+  /** Folder recordings are written to when recordingsFolder is empty (read-only). */
+  recordingsFolderDefault: string
   /** Hours after which the XMLTV guides and IPTV channel lists are fetched again. */
   liveTvRefreshHours: number
   /** CSS jellyfin-web applies to every page, unless a user turns it off (Jellyfin's branding). */
@@ -274,8 +284,12 @@ export type Settings = {
   backupHour: number
   /** How many of the newest database backups are kept. */
   backupsKept: number
-  /** Folder backups are written to (read-only); empty when backups are off. */
+  /** Whether the database is backed up every day. */
+  backups: boolean
+  /** Folder backups are written to; empty uses backupFolderDefault. */
   backupFolder: string
+  /** Folder backups are written to when backupFolder is empty (read-only). */
+  backupFolderDefault: string
   /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
   collectionReadHour: number
   /** Describes the versions not analyzed yet from RemuxDB, which the titles' IMDb ids are sent to. */

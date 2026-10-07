@@ -78,6 +78,11 @@ const settings = {
       hardwareAcceleration: 'Graphics card used to convert',
       hardwareAccelerationHelp:
         'A graphics card (GPU) converts video much faster than the processor. A change applies once saved, without a restart.',
+      vaapiDevice: 'Graphics card for VAAPI',
+      vaapiDeviceHelp:
+        'The render node VAAPI converts video on, when several graphics cards could. Each in turn by default, the first that works.',
+      vaapiDeviceEach: 'Each in turn',
+      vaapiDeviceMissing: (path: string) => `${path} (not found)`,
       hardware: {
         auto: 'Automatic: NVIDIA, else AMD or Intel',
         nvenc: 'NVIDIA (NVENC)',
@@ -269,9 +274,17 @@ const settings = {
     thumbnailStorage: 'Space for images (GB)',
     thumbnailStorageHelp: (r: RangeText) =>
       `Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    cacheSize: 'Disk space for files being read (GB)',
+    cacheSizeHelp: (r: RangeText) =>
+      `Space Polyfin may use to keep the parts of the files being played, so that seeks and restarts do not download them again. Parts read in the last 30 seconds are kept even above it. From ${r.min} to ${r.max} GB; ${r.default} by default.`,
     recordingsTitle: 'Recordings',
     recordingsFolder: (folder: string) => `Recordings are saved in ${folder}.`,
-    recordingsOff: 'Recording is off. Set POLYFIN_RECORDINGS_DIR to a folder to turn it on.',
+    recording: 'Record Live TV',
+    recordingHelp:
+      'Lets users schedule recordings of Live TV programmes and series, written to the folder below.',
+    recordingsFolderLabel: 'Recordings folder',
+    recordingsFolderHelp:
+      'A folder of Polyfin’s container, the one shown when empty, in its data volume. To keep recordings on another disk, mount it there, or elsewhere and enter its path here. Polyfin must be able to write to it. Changing it does not move the recordings already made.',
     recordingPrePadding: 'Start recordings early (minutes)',
     recordingPrePaddingHelp: (r: RangeText) =>
       `How many minutes before the programme a recording starts. From ${r.min} to ${r.max}; ${r.default} by default.`,
@@ -285,8 +298,12 @@ const settings = {
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From ${r.min} to ${r.max}; ${r.default} by default.`,
     backupsFolder: (folder: string) => `Backups of the database are saved in ${folder}.`,
-    backupsOff:
-      'Backups are off. Set POLYFIN_BACKUP_DIR to a folder on the container, mounted from the server, then restart Polyfin to turn them on.',
+    backups: 'Back up the database every day',
+    backupsHelp:
+      'Writes a copy of the database to the folder below each day, at the hour chosen, and deletes the oldest past the number kept.',
+    backupFolderLabel: 'Backups folder',
+    backupFolderHelp:
+      'A folder of Polyfin’s container, the one shown when empty, in its data volume. Backups are safer on another disk than the database’s: mount one there, or elsewhere and enter its path here. Polyfin must be able to write to it.',
     backupHour: 'Back up every day at',
     backupHourHelp: (hour: string) => `In the server’s time zone. ${hour} by default.`,
     backupsKept: 'Backups to keep',
@@ -319,7 +336,7 @@ const settings = {
       variables: 'Environment variables',
     },
     variablesHelp:
-      'Read only. These are set on the container (Docker environment, compose file or Unraid template) and apply when Polyfin starts: change them there, then restart the container. POLYFIN_HWACCEL and POLYFIN_SEGMENTS are only read at the first start, as the defaults of the graphics card and the skip marker sources: change those in the settings. Secrets are hidden, and the database address shows its host and database only.',
+      'Read only. These are set on the container (Docker environment, compose file or Unraid template) and apply when Polyfin starts: change them there, then restart the container. The variables that used to set other options are copied into the settings once, at the first start of this version, and are no longer read: change those in the settings. Secrets are hidden, and the database address shows its host and database only.',
     value: 'Value in effect',
     defaultValue: 'Default',
     setValue: 'Set',

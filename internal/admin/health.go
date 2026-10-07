@@ -178,7 +178,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		used, sources, limit := h.Health.Cache.Usage()
 		result.Cache = &cacheJSON{Used: used, Limit: limit, Sources: sources}
 	}
-	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.RecordingsDir}, {"backups", h.Backups.Dir()}} {
+	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.Recordings.Dir()}, {"backups", h.Backups.Dir()}} {
 		if folder.path == "" {
 			continue
 		}

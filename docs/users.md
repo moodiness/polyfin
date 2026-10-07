@@ -283,4 +283,4 @@ Polyfin signs out the Jellyfin apps not used for that many days, at startup and 
 
 ### Detailed log
 
-With **Detailed log** on, Polyfin logs at the `debug` level until it is turned off again, whatever `POLYFIN_LOG_LEVEL` says. See [Configuration](configuration.md).
+With **Detailed log** on, Polyfin logs at the `debug` level until it is turned off again, and at the `info` level otherwise. See [Configuration](configuration.md).

@@ -88,7 +88,7 @@ The catalog's row then shows when its first guide was last fetched, when it will
 - The file may be plain XML, compressed with gzip, or a ZIP archive. Polyfin tells which by its content, not its name.
 - Up to 300 MB downloaded, and four times as much once uncompressed.
 - Plain and gzip guides are read as they arrive, never whole.
-- A ZIP archive can only be read once complete. It is first written to a temporary file in Polyfin's cache folder (`POLYFIN_CACHE_DIR`, see [Configuration](configuration.md)), removed as soon as it is read or fails. Its `.xml` file, the largest if it holds several, is then read the same way. An archive without one is reported as not a guide.
+- A ZIP archive can only be read once complete. It is first written to a temporary file in Polyfin's cache folder (`cache` in `POLYFIN_DATA_DIR`, see [Configuration](configuration.md)), removed as soon as it is read or fails. Its `.xml` file, the largest if it holds several, is then read the same way. An archive without one is reported as not a guide.
 - The download must answer within 30 seconds, never stall for a minute, and end within 10 minutes.
 
 #### What a download keeps
@@ -140,9 +140,13 @@ Recommended programmes airing now are listed by channel number; those to come, b
 
 ## Recordings
 
-Polyfin records Live TV programmes, as Jellyfin's DVR does, once `POLYFIN_RECORDINGS_DIR` names a folder it can write to (see [Configuration](configuration.md)). Polyfin does not start with a folder it cannot use.
+Polyfin records Live TV programmes, as Jellyfin's DVR does, once **Record Live TV** is turned on, under **Settings › Recordings**. Recordings are written to **Recordings folder**: when it is empty, to `recordings` in Polyfin's data folder, `/data/recordings` in the Docker image's volume, which Polyfin creates.
 
-Without it, recording is off and Polyfin answers as a server that records nothing: the recording, timer and series timer lists stay empty, what they would hold is not found, and new timers are refused (400).
+- To keep them on another disk, mount a folder of the server at `/data/recordings`: with Compose, add `- ./recordings:/data/recordings` under `volumes` in the `polyfin` service of `compose.yaml`; on Unraid, set the template's **Recordings folder**. A folder mounted elsewhere in the container works too: enter its path in **Recordings folder**.
+- Polyfin must be able to write to the folder, as the container's user, UID 65532: it checks it when the setting is saved, and refuses a folder it cannot write to. **System › Health** lists a folder it can no longer write to.
+- Changing the folder does not move the recordings already made: they are found again once moved there.
+
+While recording is off, Polyfin answers as a server that records nothing: the recording, timer and series timer lists stay empty, what they would hold is not found, and new timers are refused (400).
 
 ### Who can record
 

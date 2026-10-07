@@ -104,10 +104,13 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			}
 		case b.Bounded && kind == reflect.String:
 			// An address is a URL: its scheme starts it, letters fill the
-			// rest.
+			// rest. A folder is an absolute path.
 			letter, start := "a", ""
-			if name == "remuxDbUrl" {
+			switch name {
+			case "remuxDbUrl":
 				start = "https://"
+			case "recordingsFolder", "backupFolder":
+				start = "/"
 			}
 			if err := try(name, start+strings.Repeat(letter, int(b.Max)-len(start))); err != nil {
 				t.Errorf("%s: %v long refused: %v", name, b.Max, err)
@@ -150,7 +153,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if err := store.AdoptEnvironment(ctx, "nvenc", []string{"introdb", "theintrodb"}); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "nvenc", Segments: []string{"introdb", "theintrodb"}}); err != nil {
 		t.Fatal(err)
 	}
 	check := func(when string, s *Store, hardware string, order, off []string) {
@@ -174,7 +177,7 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	adopted := []string{"introdb", "theintrodb", "publicmetadb"}
 	check("the first start", store, "nvenc", adopted, []string{"publicmetadb"})
 	// A start with other values changes nothing.
-	if err := store.AdoptEnvironment(ctx, "vaapi", []string{"publicmetadb"}); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "vaapi", Segments: []string{"publicmetadb"}}); err != nil {
 		t.Fatal(err)
 	}
 	check("a start with other values", store, "nvenc", adopted, []string{"publicmetadb"})
@@ -184,15 +187,15 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	if _, err := store.UpdateSettings(ctx, chosen); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AdoptEnvironment(ctx, "auto", nil); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "auto"}); err != nil {
 		t.Fatal(err)
 	}
 	check("after the administrator's choice", store, "none", chosen.SegmentOrder, []string{})
 	// Wrong values are refused, and change nothing.
-	if err := store.AdoptEnvironment(ctx, "", nil); !errors.Is(err, ErrInvalidHardwareAcceleration) {
-		t.Errorf("no GPU: %v", err)
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "qsv"}); !errors.Is(err, ErrInvalidHardwareAcceleration) {
+		t.Errorf("an unknown GPU: %v", err)
 	}
-	if err := store.AdoptEnvironment(ctx, "auto", []string{"introdb", "introdb"}); !errors.Is(err, ErrInvalidSegmentSourcesOff) {
+	if err := store.AdoptEnvironment(ctx, Environment{Segments: []string{"introdb", "introdb"}}); !errors.Is(err, ErrInvalidSegmentSourcesOff) {
 		t.Errorf("a database twice: %v", err)
 	}
 }
@@ -207,7 +210,7 @@ func TestEnvironmentFillsOnlyWhatFollowedIt(t *testing.T) {
 		"segment_order = '{publicmetadb,introdb,theintrodb}', environment_pending = '{segment_sources_off}'"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AdoptEnvironment(ctx, "nvenc", nil); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "nvenc", Segments: []string{}}); err != nil {
 		t.Fatal(err)
 	}
 	got := store.Settings()
