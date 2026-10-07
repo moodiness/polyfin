@@ -196,6 +196,8 @@ Every change to these settings applies at once, to what is already kept too.
 
 An addon's collection catalogs (such as AIOMetadata's) become collection libraries. Each collection gathers the catalogs it groups, movies and series together.
 
+A collection may also group other collections: a genre's movies and series, or a franchise's movies in several sagas. jellyfin-web shows those collections. Streamyfin asks for a collection's movies and series instead, and gets the titles of every collection within it, up to three levels deep. When they fit on one page, they are sorted as it asks, such as a franchise's movies by release date.
+
 On the home page of Jellyfin apps, each collection library has a row of its collections, as a movie or series library has a row of its titles: "Recently Added in" the library's name. In jellyfin-web, a user can leave a library out of these rows under **Settings › Home**. jellyfin-web opens the library's Suggestions tab from the row's title, which it leaves empty for a library of mixed content; the library's tile opens its collections.
 
 **Compared with Jellyfin:** a Jellyfin library of collections gets no home row. Polyfin's collection libraries are told to apps as libraries of mixed content, so that they get one. Opening one shows its collections. Without an image, its tile shows the icon of a mixed library.
@@ -205,6 +207,7 @@ On the home page of Jellyfin apps, each collection library has a row of its coll
 - A collection library has no `CollectionType`, unlike Jellyfin's Collections view of collections made by users, which keeps `boxsets`. jellyfin-web and Streamyfin leave `boxsets` libraries out of their rows of latest items.
 - `/Items/Latest` lists its collections, `BoxSet` items.
 - A listing that asks for `Folder` items keeps them, as jellyfin-web lists a library without type by its folders, movies and series.
+- A `Recursive` listing of an addon's collection that asks only for titles (no `BoxSet` or `Folder`), as Streamyfin's collection pages ask, lists the titles of the catalogs the collection and the collections within it group, merged one of each in turn, rather than those collections. A listing that fits on its first page is then sorted by its `sortBy`; a listing in pages keeps the catalogs' order.
 
 ### Collections made by users
 
