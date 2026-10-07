@@ -9,7 +9,7 @@ This page explains how to run Polyfin from source, run its tests, refresh the Je
 - A PostgreSQL 18 server.
 - FFmpeg 9.0 or later (`ffmpeg` and `ffprobe`), to play titles.
 
-With `POSTGRES_PASSWORD` set in `.env`, `docker compose up -d postgres` starts a PostgreSQL server on `127.0.0.1:5432`.
+With `POSTGRES_PASSWORD` set in `.env`, `docker compose -f compose.yaml -f compose.build.yaml up -d postgres` starts a PostgreSQL server on `127.0.0.1:5432`.
 
 ## Commands
 

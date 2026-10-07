@@ -33,7 +33,7 @@ func recordingServer(t *testing.T, ffprobe, dir string) (testServer, *recordings
 	t.Helper()
 	var service *recordings.Service
 	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
-		service = recordings.New(recordings.Config{DB: pool, Dir: dir, Guide: o.Library, Recorder: o.Playback, Users: o.Accounts,
+		service = recordings.New(recordings.Config{DB: pool, Folder: func() string { return dir }, Guide: o.Library, Recorder: o.Playback, Users: o.Accounts,
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), RetryDelay: time.Second})
 		o.Recordings = service
 	})

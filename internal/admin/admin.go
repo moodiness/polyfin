@@ -69,12 +69,9 @@ type Options struct {
 	// Activity records what administrators change for the activity log;
 	// nil records nothing.
 	Activity *activity.Store
-	// RecordingsDir is the folder Live TV recordings are written to, empty
-	// when recording is off.
-	RecordingsDir string
-	// VAAPIDevice is the render node POLYFIN_VAAPI_DEVICE names, empty for
-	// any, which the GPU the settings choose opens.
-	VAAPIDevice string
+	// DataDir is the folder Polyfin keeps its files in, which holds the
+	// default recordings and backups folders.
+	DataDir string
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
@@ -105,8 +102,8 @@ type Options struct {
 	// Trackers connects users' accounts on tracking services; nil offers
 	// none.
 	Trackers *trackers.Service
-	// Backups backs the database up into POLYFIN_BACKUP_DIR; nil, or one
-	// without a folder, makes none.
+	// Backups backs the database up into the folder the settings give
+	// while backups are on; nil makes none.
 	Backups *backup.Service
 	// Streamyfin keeps the rows of Streamyfin's home screen, and
 	// StreamyfinItems tells the libraries and collections they can show;
@@ -365,6 +362,10 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
+		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
+		{accounts.ErrInvalidVAAPIDevice, http.StatusBadRequest, "invalid_vaapi_device"},
+		{accounts.ErrInvalidRecordingsFolder, http.StatusBadRequest, "invalid_recordings_folder"},
+		{accounts.ErrInvalidBackupFolder, http.StatusBadRequest, "invalid_backup_folder"},
 		{accounts.ErrInvalidParentalControl, http.StatusBadRequest, "invalid_parental_control"},
 		{accounts.ErrInvalidMaxPlaybacks, http.StatusBadRequest, "invalid_max_playbacks"},
 		{accounts.ErrInvalidMaxBitrate, http.StatusBadRequest, "invalid_max_bitrate"},

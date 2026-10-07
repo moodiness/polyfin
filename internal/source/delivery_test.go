@@ -156,7 +156,7 @@ func TestTheNewestReaderIsServedFirst(t *testing.T) {
 	o.rate = 16 << 20
 	o.mu.Unlock()
 	cache := newCache(t, 1<<30)
-	cache.connections, cache.readahead, cache.aheadBudget = 1, 2, 2
+	cache.connections, cache.readahead, cache.aheadBudget = 1, 2, func() int64 { return 2 }
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	old := s.NewReader()
@@ -226,7 +226,7 @@ func TestReadersGivingUpDropTheirBlocks(t *testing.T) {
 func TestReadAheadGrowsWithTheStream(t *testing.T) {
 	_, server := newOrigin(t, 200*blockSize)
 	cache := newCache(t, 1<<30)
-	cache.readahead, cache.aheadBudget = 4, 64
+	cache.readahead, cache.aheadBudget = 4, func() int64 { return 64 }
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	if _, err := s.ReadAt(t.Context(), make([]byte, 10), 100*blockSize); err != nil {

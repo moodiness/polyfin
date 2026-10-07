@@ -91,6 +91,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'cache-size',
+    label: (t) => s(t).cacheSize,
+    help: (t, r) => s(t).cacheSizeHelp(r('cacheSizeGb')),
+    keywords: ['cache', 'POLYFIN_CACHE_SIZE'],
+    codes: ['invalid_cache_size'],
+  },
+  {
+    section: 'playback',
     anchor: 'remuxdb',
     label: (t) => s(t).remuxDb,
     help: (t) => s(t).remuxDbHelp,
@@ -130,6 +138,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => c(t).hardwareAccelerationHelp,
     keywords: ['gpu', 'nvidia', 'vaapi', 'POLYFIN_HWACCEL'],
     codes: ['invalid_hardware_acceleration'],
+  },
+  {
+    section: 'conversion',
+    anchor: 'vaapi-device',
+    label: (t) => c(t).vaapiDevice,
+    help: (t) => c(t).vaapiDeviceHelp,
+    keywords: ['gpu', 'vaapi', 'renderD', '/dev/dri', 'POLYFIN_VAAPI_DEVICE'],
+    codes: ['invalid_vaapi_device'],
   },
   {
     section: 'conversion',
@@ -426,6 +442,21 @@ export const settingEntries: readonly SettingEntry[] = [
   // Recordings
   {
     section: 'recordings',
+    anchor: 'recording',
+    label: (t) => s(t).recording,
+    help: (t) => s(t).recordingHelp,
+    keywords: ['dvr', 'POLYFIN_RECORDINGS_DIR'],
+  },
+  {
+    section: 'recordings',
+    anchor: 'recordings-folder',
+    label: (t) => s(t).recordingsFolderLabel,
+    help: (t) => s(t).recordingsFolderHelp,
+    keywords: ['POLYFIN_RECORDINGS_DIR'],
+    codes: ['invalid_recordings_folder'],
+  },
+  {
+    section: 'recordings',
     anchor: 'recording-pre-padding',
     label: (t) => s(t).recordingPrePadding,
     help: (t, r) => s(t).recordingPrePaddingHelp(r('recordingPrePadding', 1 / 60)),
@@ -448,6 +479,21 @@ export const settingEntries: readonly SettingEntry[] = [
   // Backups
   {
     section: 'backups',
+    anchor: 'backups',
+    label: (t) => s(t).backups,
+    help: (t) => s(t).backupsHelp,
+    keywords: ['POLYFIN_BACKUP_DIR'],
+  },
+  {
+    section: 'backups',
+    anchor: 'backup-folder',
+    label: (t) => s(t).backupFolderLabel,
+    help: (t) => s(t).backupFolderHelp,
+    keywords: ['POLYFIN_BACKUP_DIR'],
+    codes: ['invalid_backup_folder'],
+  },
+  {
+    section: 'backups',
     anchor: 'backup-hour',
     label: (t) => s(t).backupHour,
     help: (t, r) => s(t).backupHourHelp(r('backupHour').default),
@@ -464,7 +510,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'backups',
     anchor: 'last-backup',
     label: (t) => s(t).lastBackup,
-    keywords: ['POLYFIN_BACKUP_DIR'],
+    keywords: ['backup'],
   },
   // Web player
   {
@@ -497,7 +543,7 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'detailed-log',
     label: (t) => s(t).detailedLog,
     help: (t) => s(t).detailedLogHelp,
-    keywords: ['debug'],
+    keywords: ['debug', 'POLYFIN_LOG_LEVEL'],
   },
   {
     section: 'diagnostics',

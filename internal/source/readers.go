@@ -134,7 +134,7 @@ func (s *Source) moveWindow(r *Reader, block int64) {
 	if s.newestStreaming() != r {
 		return
 	}
-	ahead := min(max(2*(block-r.from), s.cache.readahead), max(s.cache.aheadBudget, s.cache.readahead))
+	ahead := min(max(2*(block-r.from), s.cache.readahead), max(s.cache.aheadBudget(), s.cache.readahead))
 	s.window = window{owner: r, cursor: block, horizon: block + 1 + ahead}
 }
 

@@ -338,7 +338,7 @@ func TestHealthDescribesTheServerFromWhatItRecords(t *testing.T) {
 	t.Cleanup(encoder.Close)
 	encoder.LimitConversions(func() int { return 3 })
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
-		sources, err := source.New(cacheDir, 1<<30, deps.client, logger)
+		sources, err := source.New(cacheDir, func() int64 { return 1 << 30 }, deps.client, logger)
 		if err != nil {
 			t.Fatal(err)
 		}

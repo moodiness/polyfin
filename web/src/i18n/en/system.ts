@@ -55,7 +55,7 @@ const system = {
       started: (name: string) => `${name} started.`,
       autoRefresh: 'Updates every 5 seconds.',
       recordingsTitle: 'Upcoming recordings',
-      recordingsOff: 'Recording is off. Set POLYFIN_RECORDINGS_DIR on the container to turn it on.',
+      recordingsOff: 'Recording is off. Turn it on under Settings › Recordings.',
       noTimers: 'No recording is scheduled.',
       recordingNow: 'Recording',
       failed: 'Failed',
@@ -155,7 +155,7 @@ const system = {
       size: 'Size',
       cacheTitle: 'Source cache',
       cacheHelp:
-        'Parts of the files being played, kept on disk up to POLYFIN_CACHE_SIZE. A full cache is normal: the oldest parts make room.',
+        'Parts of the files being played, kept on disk up to the size set under Settings › Playback. A full cache is normal: the oldest parts make room.',
       cacheUse: (used: string, limit: string) => `${used} of ${limit}`,
       sourcesOpen: 'Files open',
       disksTitle: 'Disk space',
@@ -179,7 +179,7 @@ const system = {
       noPausedHosts: 'No source is paused.',
       until: (time: string) => `until ${time}`,
       backupTitle: 'Backups',
-      backupOff: 'Backups are off. Set POLYFIN_BACKUP_DIR on the container to turn them on.',
+      backupOff: 'Backups are off. Turn them on under Settings › Backups.',
       backup: {
         result: 'Last run',
         none: 'No backup yet',

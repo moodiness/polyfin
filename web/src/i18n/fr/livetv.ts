@@ -71,7 +71,7 @@ const livetv: typeof en = {
     recordingsLoading: 'Chargement des enregistrements…',
     recordingsOffTitle: 'L’enregistrement est désactivé',
     recordingsOff:
-      'Définissez POLYFIN_RECORDINGS_DIR sur le conteneur pour l’activer. Les marges et la durée de conservation sont dans Paramètres › Enregistrements.',
+      'Activez-le, et choisissez les marges et la durée de conservation, dans Paramètres › Enregistrements.',
     noTimersTitle: 'Aucun enregistrement prévu',
     noTimers:
       'Les enregistrements se programment depuis le guide des programmes des applications Jellyfin. Ils sont listés ici jusqu’à leur fin.',

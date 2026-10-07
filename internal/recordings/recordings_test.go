@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -53,6 +54,9 @@ type fixture struct {
 	guide   *guide
 	user    accounts.User
 	dir     string
+	// folder is the recordings folder the service is given, f.dir at
+	// first; empty turns recording off.
+	folder *atomic.Pointer[string]
 }
 
 func newFixture(t *testing.T) fixture {
@@ -69,8 +73,9 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{store: store, guide: &guide{}, user: user, dir: t.TempDir()}
-	f.service = New(Config{DB: pool, Dir: f.dir, Guide: f.guide, Recorder: recorder{}, Users: store,
+	f := fixture{store: store, guide: &guide{}, user: user, dir: t.TempDir(), folder: &atomic.Pointer[string]{}}
+	f.folder.Store(&f.dir)
+	f.service = New(Config{DB: pool, Folder: func() string { return *f.folder.Load() }, Guide: f.guide, Recorder: recorder{}, Users: store,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	return f
 }
@@ -215,7 +220,7 @@ func TestRestartKeepsInterruptedRecordingsAsPartial(t *testing.T) {
 	}
 	// The airing programme's recording wrote two parts before the restart.
 	for n, data := range []string{"first ", "second"} {
-		if err := os.WriteFile(f.service.partPath(recorded[0].ID, n), []byte(data), 0o600); err != nil {
+		if err := os.WriteFile(partPath(f.dir, recorded[0].ID, n), []byte(data), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -288,5 +293,39 @@ func TestOldRecordingsAreSwept(t *testing.T) {
 	}
 	if files, _ := filepath.Glob(filepath.Join(f.dir, "*")); len(files) != 1 || filepath.Base(files[0]) != "rec2.mkv" {
 		t.Errorf("files after a sweep: %v", files)
+	}
+}
+
+// Recording follows the folder the settings give: off, the service is not
+// available, and a timer due does not record; another folder is used at
+// once.
+func TestRecordingFollowsTheSettingsFolder(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	airing := program(t, "01000000000000000000000000000000", "Airing", id(t, channelX), time.Now().Add(-10*time.Minute))
+	timer, err := f.service.CreateTimer(ctx, f.user.ID, ProgrammeOf(airing), Options{KeepUntil: KeepUntil[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := ""
+	f.folder.Store(&off)
+	if f.service.Available() || f.service.Dir() != "" || f.service.Path(Recording{File: "a.mkv"}) != "" {
+		t.Errorf("recording is on without a folder: %q", f.service.Dir())
+	}
+	later := program(t, "02000000000000000000000000000000", "Later", id(t, channelX), time.Now().Add(time.Hour))
+	if _, err := f.service.CreateTimer(ctx, f.user.ID, ProgrammeOf(later), Options{KeepUntil: KeepUntil[0]}); err != ErrUnavailable {
+		t.Errorf("a timer made while recording is off: %v", err)
+	}
+	f.service.startDue(ctx)
+	f.service.mu.Lock()
+	started := len(f.service.active)
+	f.service.mu.Unlock()
+	if started != 0 || !f.service.skipped[timer.ID] {
+		t.Errorf("a timer due while recording is off: %d started, skipped %v", started, f.service.skipped)
+	}
+	other := t.TempDir()
+	f.folder.Store(&other)
+	if !f.service.Available() || f.service.Dir() != other || f.service.Path(Recording{File: "a.mkv"}) != filepath.Join(other, "a.mkv") {
+		t.Errorf("another folder: %q", f.service.Dir())
 	}
 }

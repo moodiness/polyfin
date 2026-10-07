@@ -357,13 +357,13 @@ func (h *Handler) storage(w http.ResponseWriter, _ *http.Request) {
 	if h.CacheDir != "" {
 		result.TranscodingTempFolder = folderStorage(filepath.Join(h.CacheDir, "segments"))
 	}
-	if h.RecordingsDir != "" {
+	if dir := h.Recordings.Dir(); dir != "" {
 		name := "Recordings"
 		if h.Accounts.Settings().Language == "fr" {
 			name = "Enregistrements"
 		}
 		result.Libraries = append(result.Libraries, LibraryStorageDto{Id: recordingsLibrary, Name: name,
-			Folders: []FolderStorageDto{folderStorage(h.RecordingsDir)}})
+			Folders: []FolderStorageDto{folderStorage(dir)}})
 	}
 	writeJSON(w, http.StatusOK, result)
 }

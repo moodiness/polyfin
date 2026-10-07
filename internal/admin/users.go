@@ -3,11 +3,13 @@ package admin
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -336,12 +338,10 @@ type settingsJSON struct {
 	ThumbnailStorageGB *int  `json:"thumbnailStorageGB"`
 	// RecordingPrePadding and RecordingPostPadding, in seconds, and
 	// RecordingRetentionDays keep their current values when a PUT leaves
-	// them out. RecordingsFolder is the folder recordings are written to,
-	// empty when recording is off; a PUT cannot change it.
-	RecordingPrePadding    *int   `json:"recordingPrePadding"`
-	RecordingPostPadding   *int   `json:"recordingPostPadding"`
-	RecordingRetentionDays *int   `json:"recordingRetentionDays"`
-	RecordingsFolder       string `json:"recordingsFolder"`
+	// them out.
+	RecordingPrePadding    *int `json:"recordingPrePadding"`
+	RecordingPostPadding   *int `json:"recordingPostPadding"`
+	RecordingRetentionDays *int `json:"recordingRetentionDays"`
 	// LiveTvRefreshHours keeps its current value when a PUT leaves it out.
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 	// CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web, keep their
@@ -358,17 +358,29 @@ type settingsJSON struct {
 	TraktClientSecretSet bool    `json:"traktClientSecretSet"`
 	SimklClientID        *string `json:"simklClientId"`
 	// BackupHour, BackupsKept and CollectionReadHour keep their current
-	// values when a PUT leaves them out. BackupFolder is the folder
-	// backups are written to, empty when they are off; a PUT cannot
-	// change it.
-	BackupHour         *int   `json:"backupHour"`
-	BackupsKept        *int   `json:"backupsKept"`
-	BackupFolder       string `json:"backupFolder"`
-	CollectionReadHour *int   `json:"collectionReadHour"`
+	// values when a PUT leaves them out.
+	BackupHour         *int `json:"backupHour"`
+	BackupsKept        *int `json:"backupsKept"`
+	CollectionReadHour *int `json:"collectionReadHour"`
 	// RemuxDB and RemuxDBURL keep their current values when a PUT leaves
 	// them out.
 	RemuxDB    *bool   `json:"remuxDb"`
 	RemuxDBURL *string `json:"remuxDbUrl"`
+	// CacheSizeGB, VAAPIDevice, Recording, RecordingsFolder, Backups and
+	// BackupFolder keep their current values when a PUT leaves them out;
+	// an empty folder is the default one. RecordingsFolderDefault and
+	// BackupFolderDefault are the default folders, under the data folder,
+	// and RenderNodes the render nodes the server has, sorted, found at
+	// each request; a PUT ignores them.
+	CacheSizeGB             *int     `json:"cacheSizeGb"`
+	VAAPIDevice             *string  `json:"vaapiDevice"`
+	Recording               *bool    `json:"recording"`
+	RecordingsFolder        *string  `json:"recordingsFolder"`
+	Backups                 *bool    `json:"backups"`
+	BackupFolder            *string  `json:"backupFolder"`
+	RecordingsFolderDefault string   `json:"recordingsFolderDefault"`
+	BackupFolderDefault     string   `json:"backupFolderDefault"`
+	RenderNodes             []string `json:"renderNodes"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -474,6 +486,13 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		RemuxDB:    &settings.RemuxDB,
 		RemuxDBURL: &settings.RemuxDBURL,
+
+		CacheSizeGB:      &settings.CacheSizeGB,
+		VAAPIDevice:      &settings.VAAPIDevice,
+		Recording:        &settings.Recording,
+		RecordingsFolder: &settings.RecordingsFolder,
+		Backups:          &settings.Backups,
+		BackupFolder:     &settings.BackupFolder,
 	}
 }
 
@@ -818,13 +837,14 @@ func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
 }
 
-// settingsJSON describes settings with what the configuration sets, what
-// conversions run on, and the bounds of each setting.
+// settingsJSON describes settings with the default folders, the render
+// nodes, what conversions run on, and the bounds of each setting.
 func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 	body := newSettingsJSON(settings)
 	body.Bounds = settingsBounds
-	body.RecordingsFolder = h.RecordingsDir
-	body.BackupFolder = h.Backups.Dir()
+	body.RecordingsFolderDefault = accounts.DefaultRecordingsFolder(h.DataDir)
+	body.BackupFolderDefault = accounts.DefaultBackupFolder(h.DataDir)
+	body.RenderNodes = renderNodes()
 	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
@@ -872,7 +892,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if len(body.SegmentOrder) > 0 {
 		segmentOrder = body.SegmentOrder
 	}
-	settings, err := h.Accounts.UpdateSettings(r.Context(), accounts.Settings{
+	next := accounts.Settings{
 		ServerName:          body.ServerName,
 		QuickConnectEnabled: body.QuickConnectEnabled,
 		LegacyAuthorization: body.LegacyAuthorization,
@@ -946,7 +966,19 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 		RemuxDB:    valueOr(body.RemuxDB, current.RemuxDB),
 		RemuxDBURL: valueOr(body.RemuxDBURL, current.RemuxDBURL),
-	})
+
+		CacheSizeGB:      valueOr(body.CacheSizeGB, current.CacheSizeGB),
+		VAAPIDevice:      valueOr(body.VAAPIDevice, current.VAAPIDevice),
+		Recording:        valueOr(body.Recording, current.Recording),
+		RecordingsFolder: valueOr(body.RecordingsFolder, current.RecordingsFolder),
+		Backups:          valueOr(body.Backups, current.Backups),
+		BackupFolder:     valueOr(body.BackupFolder, current.BackupFolder),
+	}
+	if code := h.unwritableFolder(next, current); code != "" {
+		writeError(w, http.StatusBadRequest, code)
+		return
+	}
+	settings, err := h.Accounts.UpdateSettings(r.Context(), next)
 	if accountError(w, err) {
 		return
 	}
@@ -958,12 +990,64 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !settings.QuickConnectEnabled {
 		h.QuickConnect.Clear()
 	}
-	// A GPU chosen anew is detected, or switched to, before the answer
-	// shows what was found.
-	if encoder := h.Health.Encoder; encoder != nil && settings.HardwareAcceleration != current.HardwareAcceleration {
-		encoder.SelectHardware(settings.HardwareAcceleration, h.VAAPIDevice)
+	// A GPU or a render node chosen anew is detected, or switched to,
+	// before the answer shows what was found.
+	if encoder := h.Health.Encoder; encoder != nil &&
+		(settings.HardwareAcceleration != current.HardwareAcceleration || settings.VAAPIDevice != current.VAAPIDevice) {
+		encoder.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
+	}
+	// Recording turned on, or moved, has the scheduler look at its timers.
+	if settings.RecordingsDir(h.DataDir) != current.RecordingsDir(h.DataDir) {
+		h.Recordings.Wake()
 	}
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
+}
+
+// renderNodesPattern matches the render nodes VAAPI may open.
+var renderNodesPattern = "/dev/dri/renderD*"
+
+// renderNodes lists the render nodes the server has, sorted; none is an
+// empty list.
+func renderNodes() []string {
+	nodes, _ := filepath.Glob(renderNodesPattern)
+	if nodes == nil {
+		return []string{}
+	}
+	slices.Sort(nodes)
+	return nodes
+}
+
+// unwritableFolder checks the recordings and backup folders next turns to,
+// against the current settings: recording turned on, or its folder
+// changed while it is on, needs a folder Polyfin can write into, the
+// default one being created first; likewise for backups. It returns the
+// error code of the first that fails, empty when none does. A folder that
+// is not a path is left to UpdateSettings to refuse.
+func (h *handler) unwritableFolder(next, current accounts.Settings) string {
+	for _, f := range []struct {
+		on, wasOn                bool
+		folder, was, defaultPath string
+		code                     string
+	}{
+		{next.Recording, current.Recording, next.RecordingsFolder, current.RecordingsFolder, accounts.DefaultRecordingsFolder(h.DataDir),
+			"invalid_recordings_folder"},
+		{next.Backups, current.Backups, next.BackupFolder, current.BackupFolder, accounts.DefaultBackupFolder(h.DataDir),
+			"invalid_backup_folder"},
+	} {
+		folder, ok := accounts.CleanFolder(f.folder)
+		if !f.on || !ok || f.wasOn && folder == f.was {
+			continue
+		}
+		dir, create := folder, false
+		if dir == "" {
+			dir, create = f.defaultPath, true
+		}
+		if err := config.PrepareFolder(dir, create); err != nil {
+			h.Logger.Info("A folder chosen in the settings cannot be written into", "folder", dir, "error", err)
+			return f.code
+		}
+	}
+	return ""
 }
 
 // segmentKeyErrors are the error codes of the keys of the segment

@@ -3,6 +3,7 @@ package backup
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,10 +41,11 @@ printf ' complete' >> "$file"
 
 type harness struct {
 	service *Service
-	dir     string
-	record  string
-	logs    *bytes.Buffer
-	kept    int
+	// dir is the folder the service is given; empty turns backups off.
+	dir    string
+	record string
+	logs   *bytes.Buffer
+	kept   int
 }
 
 func newHarness(t *testing.T, db DB) *harness {
@@ -55,7 +57,7 @@ func newHarness(t *testing.T, db DB) *harness {
 	}
 	t.Setenv("FAKE_PG_DUMP_RECORD", h.record)
 	h.service = New(Config{
-		Dir:         h.dir,
+		Folder:      func() string { return h.dir },
 		DatabaseURL: "postgresql://polyfin:" + strings.ReplaceAll(strings.ReplaceAll(password, " ", "%20"), "@", "%40") + "@db.example:5432/polyfin?sslmode=disable&pool_max_conns=4",
 		PgDump:      script,
 		DB:          db,
@@ -188,8 +190,8 @@ func TestStatusBeforeTheFirstRun(t *testing.T) {
 	if off.Available() || off.Dir() != "" {
 		t.Error("backups are on without a folder")
 	}
-	if err := off.Run(t.Context()); err == nil {
-		t.Error("a backup ran without a folder")
+	if err := off.Run(t.Context()); !errors.Is(err, ErrOff) {
+		t.Errorf("a backup without a folder: %v", err)
 	}
 	var nilService *Service
 	if nilService.Available() {
@@ -294,5 +296,34 @@ func TestSplitPassword(t *testing.T) {
 		if _, _, err := splitPassword(refused); err == nil || strings.Contains(err.Error(), "pw") {
 			t.Errorf("%s: %v", refused, err)
 		}
+	}
+}
+
+// Backups follow the folder the settings give: off, they are not
+// available, the daily task has no hour, and a run by hand fails; another
+// folder is written to at once.
+func TestBackupsFollowTheSettingsFolder(t *testing.T) {
+	h := newHarness(t, nil)
+	on := h.dir
+	h.dir = ""
+	if h.service.Available() || h.service.Dir() != "" || h.service.Hour() != -1 {
+		t.Errorf("off: available %v, folder %q, hour %d", h.service.Available(), h.service.Dir(), h.service.Hour())
+	}
+	if err := h.service.Run(t.Context()); !errors.Is(err, ErrOff) {
+		t.Errorf("run by hand while off: %v", err)
+	}
+	if entries, _ := os.ReadDir(on); len(entries) != 0 {
+		t.Errorf("files written while off: %v", entries)
+	}
+	other := t.TempDir()
+	h.dir = other
+	if !h.service.Available() || h.service.Dir() != other || h.service.Hour() != 4 {
+		t.Errorf("on: available %v, folder %q, hour %d", h.service.Available(), h.service.Dir(), h.service.Hour())
+	}
+	if err := h.service.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if files := h.files(t); len(files) != 1 || !backupName.MatchString(files[0]) {
+		t.Errorf("files in the other folder: %v", files)
 	}
 }

@@ -1,19 +1,16 @@
-# Build Polyfin from this checkout instead of pulling the published image:
+# Build Polyfin from this checkout instead of pulling the published image,
+# and reach PostgreSQL from this machine, for development tools:
 #   docker compose -f compose.yaml -f compose.build.yaml up --build
 # The local tag keeps a source build from shadowing a published ghcr.io tag.
 services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
   polyfin:
     image: polyfin-local:dev
     pull_policy: build
     build:
       context: .
       args:
-        VERSION: ${POLYFIN_VERSION:-dev}
-    # Live TV recording and daily database backups, optional: the folders
-    # recordings and backups are written to.
-    # environment:
-    #   POLYFIN_RECORDINGS_DIR: /recordings
-    #   POLYFIN_BACKUP_DIR: /backups
-    # volumes:
-    #   - ./recordings:/recordings
-    #   - ./backups:/backups
+        VERSION: dev

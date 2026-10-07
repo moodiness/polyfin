@@ -1,30 +1,42 @@
 # Configuration
 
-This page lists the environment variables Polyfin reads. Many settings can also be changed in the admin app under **Settings**.
+Polyfin is set in the admin app, under **Settings**. The environment only gives it what it needs before it can read its settings: where its database is, and the key its stored secrets are encrypted with.
 
 ## Environment variables
+
+With the Compose file, `POSTGRES_PASSWORD` in `.env` is the only value to set: Compose builds `POLYFIN_DATABASE_URL` from it. `POLYFIN_SECRET_KEY` is optional but advised. The Docker image sets the others.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `POLYFIN_DATABASE_URL` | (required) | PostgreSQL URL, for example `postgresql://polyfin:password@postgres:5432/polyfin`. Besides its pool, Polyfin keeps one connection that listens for changes to addons and libraries, so that it answers them from memory; a pooler in transaction mode cannot carry it, and Polyfin then reads them from the database for every request. |
+| `POLYFIN_SECRET_KEY` | (unset) | Key the stored API keys, client secret and tracking tokens are encrypted with: 32 random bytes in base64, made with `openssl rand -base64 32`, or 64 hexadecimal digits. Unset keeps them unencrypted, and **Health** warns about it. A malformed key stops Polyfin from starting. Keep it with your backups: see [Stored keys and tokens](#stored-keys-and-tokens). |
+| `POLYFIN_DATA_DIR` | `polyfin` in the system temporary directory; `/data` in the Docker image, a volume | Folder Polyfin keeps its files in, as an absolute path: in `cache`, the parts of the files being read and the HLS segments being played, emptied when Polyfin starts; and, unless their settings name other folders, the Live TV recordings in `recordings` and the database backups in `backups`. |
 | `POLYFIN_LISTEN` | `:8096` | HTTP address. 8096 is the port Jellyfin clients try by default. |
-| `POLYFIN_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. From `info`, Polyfin logs each Jellyfin endpoint an app calls that it does not serve, with the app's name and version. It logs each endpoint at most once an hour, without the request's identifiers, query or token. **Settings › Diagnostics › Detailed log** switches to `debug` at once, without a restart, and back to this level when turned off. |
 | `POLYFIN_FFPROBE` | `ffprobe` | ffprobe executable (FFmpeg 9.0 or later): a path, or a name looked up in `PATH`. The Docker image includes one. |
 | `POLYFIN_FFMPEG` | `ffmpeg` | FFmpeg executable (9.0 or later): a path, or a name looked up in `PATH`. The Docker image includes one. |
-| `POLYFIN_CACHE_DIR` | System temporary directory; `/cache` in the Docker image | Where Polyfin keeps parts of the files being read and the HLS segments being played. Emptied when Polyfin starts. |
-| `POLYFIN_CACHE_SIZE` | `10GB` (at least 256 MiB) | Disk space the parts of files being read may use, for example `10GB` or `512MiB`. Parts read in the last 30 seconds are kept even above it. HLS segments come on top: two minutes ahead of each player by default (**Seconds prepared ahead**), up to 1 GB for a 4K remux. See [Playback](playback.md). |
-| `POLYFIN_HWACCEL` | `auto` | GPU video is converted on: `auto` for the first that works, `nvenc` (NVIDIA), `vaapi` (AMD, Intel), or `none` for the processor. Read only at the first start, and at the first start of a version that brings this rule, where it is copied into **Settings › Conversion**; change it there afterwards. See [Transcoding](transcoding.md). |
-| `POLYFIN_VAAPI_DEVICE` | Each render node in turn | Render node VAAPI opens, for example `/dev/dri/renderD128`, when several GPUs could. |
-| `POLYFIN_SEGMENTS` | `theintrodb,introdb,publicmetadb` | Databases the skip intro, recap, credits and preview buttons come from, preferred first: `theintrodb`, `introdb`, `publicmetadb`, or `none` for no database, which leaves only the buttons a version's own chapters give. Read only at the first start, and at the first start of a version that brings this rule: the databases named are turned on in this order, the others turned off, under **Settings › Content**, where they are changed afterwards. See [Skip segments](skip-segments.md). |
 | `POLYFIN_FONTS_DIR` | `/usr/share/fonts`, with DejaVu in the Docker image | Fallback fonts apps load to render subtitles whose own fonts are missing: the `.ttf`, `.otf`, `.woff` and `.woff2` files of this folder and its subfolders. Mount more fonts here for other scripts. A missing folder offers none. See [Subtitles](subtitles.md). |
-| `POLYFIN_RECORDINGS_DIR` | (unset) | Folder Live TV recordings are written to, as an absolute path. Unset leaves recording off. Polyfin must be able to write to it, or it does not start. See [Live TV](live-tv.md). |
 | `POLYFIN_WEB_DIR` | `/usr/share/polyfin/jellyfin-web`, where the Docker image puts jellyfin-web | Folder of jellyfin-web, the web client served at `/web/`. A folder without its `index.html` leaves the web client off, as happens without the Docker image. See [Web client](web-client.md). |
-| `POLYFIN_SECRET_KEY` | (unset) | Key the stored API keys, client secret and tracking tokens are encrypted with: 32 random bytes in base64, made with `openssl rand -base64 32`, or 64 hexadecimal digits. Unset keeps them unencrypted, and **Health** warns about it. A malformed key stops Polyfin from starting. Keep it with your backups: see [Stored keys and tokens](#stored-keys-and-tokens). |
-| `POLYFIN_BACKUP_DIR` | (unset) | Folder the database is backed up into every day, as an absolute path. Unset leaves backups off. Polyfin must be able to write to it, or it does not start. The hour and the number of backups kept are under **Settings › Backups**. See [Backups](backups.md). |
+
+Polyfin logs at the `info` level, and at the `debug` level while **Detailed log**, under **Settings › Diagnostics**, is on. At the `info` level, it logs each Jellyfin endpoint an app calls that it does not serve, with the app's name and version, at most once an hour per endpoint, without the request's identifiers, query or token.
+
+### Variables that became settings
+
+These variables are no longer read at every start: they are settings of the admin app. At its first start with a version that made them settings, Polyfin copies the value of those still set into their setting, once, and never reads them again. Until they are removed, it logs at each start that it no longer reads them. A value it cannot use is not copied, and the log says so: it never stops Polyfin from starting.
+
+| Variable | Setting |
+| --- | --- |
+| `POLYFIN_CACHE_SIZE` | **Disk space for files being read (GB)**, under **Settings › Playback** |
+| `POLYFIN_HWACCEL` | The GPU choice, under **Settings › Conversion** (see [Transcoding](transcoding.md)) |
+| `POLYFIN_VAAPI_DEVICE` | **Graphics card for VAAPI**, under **Settings › Conversion** |
+| `POLYFIN_SEGMENTS` | The databases turned on, and their order, under **Settings › Content** (see [Skip segments](skip-segments.md)) |
+| `POLYFIN_RECORDINGS_DIR` | **Record Live TV**, turned on, and **Recordings folder**, under **Settings › Recordings** (see [Live TV](live-tv.md)) |
+| `POLYFIN_BACKUP_DIR` | **Back up the database every day**, turned on, and **Backups folder**, under **Settings › Backups** (see [Backups](backups.md)) |
+| `POLYFIN_LOG_LEVEL` | **Detailed log**, under **Settings › Diagnostics**: `debug` turns it on; the other levels are not copied |
+| `POLYFIN_CACHE_DIR` | Not a setting: replaced by `POLYFIN_DATA_DIR`, whose `cache` folder holds the cache |
 
 ## Compose settings in `.env`
 
-The Compose files read their own settings (passwords, ports, image version) from `.env`. See [`.env.example`](../.env.example).
+The Compose file reads `POSTGRES_PASSWORD` and `POLYFIN_SECRET_KEY` from `.env`. See [`.env.example`](../.env.example). To publish Polyfin on another port, change the first `8096` of `ports` in `compose.yaml`; to pin a release, replace the image's `latest` tag with its version, such as `0.22.0`.
 
 ## Stored keys and tokens
 

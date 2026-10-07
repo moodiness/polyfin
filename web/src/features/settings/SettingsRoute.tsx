@@ -141,7 +141,17 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
 function sectionLede(
   t: Messages,
   section: SettingsSectionId,
-  settings: { recordingsFolder: string; backupFolder: string } | undefined,
+  settings:
+    | Pick<
+        Settings,
+        | 'recording'
+        | 'recordingsFolder'
+        | 'recordingsFolderDefault'
+        | 'backups'
+        | 'backupFolder'
+        | 'backupFolderDefault'
+      >
+    | undefined,
 ): string | undefined {
   const s = t.settings
   const ledes = t.settingsPage.ledes
@@ -165,9 +175,13 @@ function sectionLede(
     case 'live-tv':
       return ledes.liveTv
     case 'recordings':
-      return settings?.recordingsFolder ? s.recordingsFolder(settings.recordingsFolder) : undefined
+      return settings?.recording
+        ? s.recordingsFolder(settings.recordingsFolder || settings.recordingsFolderDefault)
+        : undefined
     case 'backups':
-      return settings?.backupFolder ? s.backupsFolder(settings.backupFolder) : undefined
+      return settings?.backups
+        ? s.backupsFolder(settings.backupFolder || settings.backupFolderDefault)
+        : undefined
     case 'web-player':
       return s.webPlayerHelp
     case 'diagnostics':

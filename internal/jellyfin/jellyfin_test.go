@@ -90,7 +90,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	if err != nil {
 		t.Fatal(err)
 	}
-	sources, err := source.New(t.TempDir(), 1<<30, client, logger)
+	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, client, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

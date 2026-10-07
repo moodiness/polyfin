@@ -155,22 +155,26 @@ type Renewer func(ctx context.Context) (Location, error)
 // are evicted first, of any source, which bounds the disk a long file read
 // to its end takes; chunks read lately are kept, as readers are on them.
 type Cache struct {
-	dir    string
-	limit  int64
+	dir string
+	// limit gives the bytes the cache may keep, read at each use, so that
+	// a lower limit applies at the next write.
+	limit  func() int64
 	opener Opener
 	logger *slog.Logger
 	// chunkBlocks is how many blocks one file on disk holds; readahead how
 	// many blocks past the last one read a reader starting to stream has
-	// read ahead, and aheadBudget how many one that has streamed long has,
-	// so that a sequential reader rarely waits, and a connection stays
-	// busy while FFmpeg pauses; now the clock chunks are dated by,
+	// read ahead, and aheadBudget how many one that has streamed long has
+	// (see aheadBudget), so that a sequential reader rarely waits, and a
+	// connection stays busy while FFmpeg pauses; now the clock chunks are
+	// dated by,
 	// fetchInterval the time between two requests of Fetch and FetchRanges
 	// to a source, and attemptTime the time one of them may take before
 	// the bytes asked.
-	chunkBlocks, readahead, aheadBudget int64
-	now                                 func() time.Time
-	fetchInterval                       time.Duration
-	attemptTime                         time.Duration
+	chunkBlocks, readahead int64
+	aheadBudget            func() int64
+	now                    func() time.Time
+	fetchInterval          time.Duration
+	attemptTime            time.Duration
 	// headerTimeout bounds the wait for a source's headers, stallTimeout
 	// the time a connection read may go without a byte, recoveryTimeout
 	// the wait for the headers of the connection replacing a stalled one,
@@ -213,9 +217,10 @@ type chunkUse struct {
 	touched time.Time
 }
 
-// New returns a cache keeping blocks in dir, up to limit bytes. Blocks a
-// previous run left there are removed: they are not trusted.
-func New(dir string, limit int64, opener Opener, logger *slog.Logger) (*Cache, error) {
+// New returns a cache keeping blocks in dir, up to the bytes limit gives,
+// read whenever the limit is used. Blocks a previous run left there are
+// removed: they are not trusted.
+func New(dir string, limit func() int64, opener Opener, logger *slog.Logger) (*Cache, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -229,7 +234,7 @@ func New(dir string, limit int64, opener Opener, logger *slog.Logger) (*Cache, e
 		}
 	}
 	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32,
-		aheadBudget: aheadBudget(limit), now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
+		aheadBudget: func() int64 { return aheadBudget(limit()) }, now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
 		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout,
 		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections, hostConnections: hostConnections,
 		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{},
@@ -300,11 +305,11 @@ func (c *Cache) Streamed(id accounts.ID) bool {
 }
 
 // Usage tells the bytes the cache keeps on disk, the sources open, and its
-// limit (POLYFIN_CACHE_SIZE).
+// limit (the settings' CacheSizeGB).
 func (c *Cache) Usage() (used int64, sources int, limit int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.used, len(c.sources), c.limit
+	return c.used, len(c.sources), c.limit()
 }
 
 // Close stops reading every source and removes their blocks.
@@ -344,7 +349,7 @@ func (c *Cache) stored(key chunkKey, size int64) {
 	use.touched = c.now()
 	c.used += size
 	protected := c.now().Add(-protectedFor)
-	for c.used > c.limit {
+	for limit := c.limit(); c.used > limit; {
 		var oldest chunkKey
 		var found *chunkUse
 		for key, use := range c.chunks {

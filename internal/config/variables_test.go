@@ -40,11 +40,11 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		t.Error("a variable of another program is listed")
 	}
 	for name, want := range map[string]Variable{
-		"POLYFIN_DATABASE_URL":   {Value: "db.internal:5432/media", Set: true, Known: true},
-		"POLYFIN_CACHE_SIZE":     {Value: "20GB", Set: true, Known: true},
+		"POLYFIN_DATABASE_URL": {Value: "db.internal:5432/media", Set: true, Known: true},
+		// Copied into the settings once, it is no longer read.
+		"POLYFIN_CACHE_SIZE":     {Value: "20GB", Set: true},
 		"POLYFIN_LISTEN":         {Value: ":8096", Known: true},
-		"POLYFIN_HWACCEL":        {Value: "auto", Known: true},
-		"POLYFIN_SEGMENTS":       {Value: "theintrodb,introdb,publicmetadb", Known: true},
+		"POLYFIN_DATA_DIR":       {Value: cfg.DataDir, Known: true},
 		"POLYFIN_API_TOKEN":      {Set: true, Hidden: true},
 		"POLYFIN_ADMIN_PASSWORD": {Set: true, Hidden: true},
 		"POLYFIN_SECRET_KEY":     {Set: true, Hidden: true, Known: true},
@@ -54,6 +54,11 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		want.Name = name
 		if got != want {
 			t.Errorf("%s: got %+v, want %+v", name, got, want)
+		}
+	}
+	for _, retired := range []string{"POLYFIN_HWACCEL", "POLYFIN_SEGMENTS", "POLYFIN_LOG_LEVEL", "POLYFIN_CACHE_DIR"} {
+		if _, listed := byName[retired]; listed {
+			t.Errorf("%s is listed while not set", retired)
 		}
 	}
 	if location := databaseLocation("host=db.internal port=5433 user=polyfin password=s3cret dbname=media"); location != "db.internal:5433/media" {

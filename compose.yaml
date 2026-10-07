@@ -1,60 +1,35 @@
 name: polyfin
 
+# Set POSTGRES_PASSWORD in .env (see .env.example). Everything else is set
+# in the admin app, under Settings.
+
 services:
   postgres:
     image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-polyfin}
-      POSTGRES_USER: ${POSTGRES_USER:-polyfin}
+      POSTGRES_USER: polyfin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    # Loopback only, for local development tools. Polyfin reaches it over the
-    # Compose network.
-    ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     # PostgreSQL 18 keeps its versioned data directory below this path.
     volumes:
       - postgres_data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     stop_grace_period: 1m
     restart: unless-stopped
 
   polyfin:
-    image: ghcr.io/moodiness/polyfin:${POLYFIN_VERSION:-latest}
+    image: ghcr.io/moodiness/polyfin:latest
     environment:
-      POLYFIN_DATABASE_URL: postgresql://${POSTGRES_USER:-polyfin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-polyfin}
-      POLYFIN_LOG_LEVEL: ${POLYFIN_LOG_LEVEL:-info}
-      POLYFIN_CACHE_SIZE: ${POLYFIN_CACHE_SIZE:-10GB}
-      POLYFIN_HWACCEL: ${POLYFIN_HWACCEL:-auto}
+      POLYFIN_DATABASE_URL: postgresql://polyfin:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/polyfin
       # Encrypts the keys and tokens Polyfin stores, optional but advised:
       # set it in .env, and keep it, or they have to be entered again.
       POLYFIN_SECRET_KEY: ${POLYFIN_SECRET_KEY:-}
-      # Live TV recording, optional: the folder recordings are written to,
-      # mounted below.
-      # POLYFIN_RECORDINGS_DIR: /recordings
-      # Daily database backups, optional: the folder they are written to,
-      # mounted below. Create ./backups first, owned by UID 65532.
-      # POLYFIN_BACKUP_DIR: /backups
-    # A GPU to convert video on, optional. NVIDIA, with the NVIDIA Container
-    # Toolkit installed:
-    # runtime: nvidia
-    # AMD or Intel, through VAAPI:
-    # devices:
-    #   - /dev/dri:/dev/dri
-    # Parts of the files being read, emptied when Polyfin starts.
+    # The cache, and by default the recordings and backups.
     volumes:
-      - polyfin_cache:/cache
-      # - ./recordings:/recordings
-      # - ./backups:/backups
-    # Reachable on the LAN by default: TVs and phones connect to it directly.
+      - polyfin_data:/data
+    # Reachable on the LAN: TVs and phones connect to it directly.
     ports:
-      - "${POLYFIN_BIND_IP:-0.0.0.0}:${POLYFIN_PORT:-8096}:8096"
+      - "8096:8096"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -64,4 +39,4 @@ services:
 
 volumes:
   postgres_data:
-  polyfin_cache:
+  polyfin_data:
