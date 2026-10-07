@@ -33,6 +33,9 @@ type liveSource struct {
 	interval time.Duration
 	// refuse answers 429 to so many opens first.
 	refuse int
+	// closing, when set, holds each stream's connection, its request
+	// ended, until it is closed in turn: a connection slow to close.
+	closing chan struct{}
 
 	mu     sync.Mutex
 	open   int
@@ -84,7 +87,7 @@ func answer(status int, contentType string, body io.Reader) *http.Response {
 
 // stream answers an MPEG-TS stream sending chunks chunks, then nothing
 // (keeping the connection open); -1 sends forever. It counts as open until
-// closed.
+// its request ends, which closes it.
 func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 	reader, writer := io.Pipe()
 	l.mu.Lock()
@@ -104,6 +107,9 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 		<-ctx.Done()
 	}()
 	body := &countedBody{ReadCloser: reader, close: func() {
+		if l.closing != nil {
+			<-l.closing
+		}
 		l.mu.Lock()
 		l.open--
 		l.mu.Unlock()
@@ -112,6 +118,9 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 	return answer(http.StatusOK, "video/mp2t", body)
 }
 
+// countedBody stops counting its connection when closed, then closes it:
+// its reader sees it end once it no longer counts, as a connection is
+// closed before its reads fail.
 type countedBody struct {
 	io.ReadCloser
 	once  sync.Once
@@ -119,9 +128,8 @@ type countedBody struct {
 }
 
 func (b *countedBody) Close() error {
-	err := b.ReadCloser.Close()
 	b.once.Do(b.close)
-	return err
+	return b.ReadCloser.Close()
 }
 
 func (l *liveSource) counts() (open, opened, most int) {
@@ -329,6 +337,39 @@ func TestSourceConnectionsAreKept(t *testing.T) {
 		t.Fatalf("after the other stream was left: %v", err)
 	}
 	_ = third.Close()
+	if _, _, most := src.counts(); most != 1 {
+		t.Errorf("%d connections at once, want 1", most)
+	}
+}
+
+// A stream closed at the end of its grace keeps its connection until it is
+// closed, and the source counts it meanwhile: another stream of the source
+// waits for it rather than opening a second connection.
+func TestAStreamWaitsForAConnectionStillClosing(t *testing.T) {
+	source := accounts.ID{7}
+	closing := make(chan struct{})
+	src := &liveSource{interval: 5 * time.Millisecond, closing: closing}
+	s := liveService(t, src, "ffprobe-not-installed")
+	s.LiveSources(func(context.Context, accounts.ID) (int, error) { return 1, nil }, nil)
+	first := channelVersion(1, "1.ts", source)
+	left, err := s.openFeed(ForUser(t.Context(), accounts.ID{1}), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = left.Close()
+	eventually(t, "the end of the stream's grace", func() bool {
+		s.feeds.mu.Lock()
+		defer s.feeds.mu.Unlock()
+		return s.feeds.feeds[first.ID] == nil
+	})
+	release := sync.OnceFunc(func() { close(closing) })
+	defer release()
+	time.AfterFunc(100*time.Millisecond, release)
+	next, err := s.openFeed(ForUser(t.Context(), accounts.ID{2}), channelVersion(2, "2.ts", source))
+	if err != nil {
+		t.Fatalf("the next stream: %v", err)
+	}
+	_ = next.Close()
 	if _, _, most := src.counts(); most != 1 {
 		t.Errorf("%d connections at once, want 1", most)
 	}
