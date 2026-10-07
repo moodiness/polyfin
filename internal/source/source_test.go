@@ -38,13 +38,16 @@ type origin struct {
 	// expired paths answer 403; busy makes the next requests answer 429,
 	// asking to retry after retryAfter seconds, and failing the next ones
 	// 502; refusing makes the next ones answer an error page with 200, as
-	// some hosts refuse requests; rangeless ignores ranges and hides the
-	// size. ranges holds the ranges asked, and times when.
+	// some hosts refuse requests; whole makes the next ones answer the whole
+	// file with 200, as some hosts serving ranges do once in a while;
+	// rangeless ignores ranges and hides the size. ranges holds the ranges
+	// asked, and times when.
 	mu         sync.Mutex
 	expired    map[string]bool
 	busy       int
 	failing    int
 	refusing   int
+	whole      int
 	retryAfter string
 	rangeless  bool
 	ranges     []string
@@ -60,6 +63,7 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		o.mu.Lock()
 		expired, busy, failing, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter
 		refusing := !busy && !failing && o.refusing > 0
+		whole := !busy && !failing && !refusing && o.whole > 0
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
 		o.times = append(o.times, time.Now())
 		switch {
@@ -69,6 +73,8 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 			o.failing--
 		case refusing:
 			o.refusing--
+		case whole:
+			o.whole--
 		}
 		o.mu.Unlock()
 		switch {
@@ -82,6 +88,9 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		case refusing:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"error":"too many requests"}`))
+		case whole:
+			w.Header().Set("Content-Length", strconv.Itoa(len(o.data)))
+			_, _ = w.Write(o.data)
 		case rangeless:
 			// Chunked, without a length: the size is learned at the end.
 			for chunk := range slices.Chunk(o.data, 64<<10) {
@@ -223,6 +232,37 @@ func TestSourcesIgnoringRangesAreReadThrough(t *testing.T) {
 	}
 	if n, err := s.ReadAt(t.Context(), make([]byte, 10), int64(len(o.data))-5); n != 5 || err != io.EOF {
 		t.Errorf("read across the end: %d %v", n, err)
+	}
+}
+
+// A host serving ranges that answers one with the whole file is asked
+// again, rather than taken to ignore ranges: a seek far into a file would
+// otherwise read every block before it, minutes for tens of gigabytes.
+func TestAWholeFileAnsweredOnceIsAskedAgain(t *testing.T) {
+	o, server := newOrigin(t, 48*blockSize)
+	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	read := func(block int64) {
+		t.Helper()
+		got := make([]byte, 2000)
+		off := block*blockSize + 100
+		if _, err := s.ReadAt(t.Context(), got, off); err != nil || !bytes.Equal(got, o.data[off:off+2000]) {
+			t.Fatalf("read at block %d: %v", block, err)
+		}
+	}
+	read(4)
+	o.mu.Lock()
+	o.whole = 1
+	o.mu.Unlock()
+	read(40)
+	if s.ignoresRanges() {
+		t.Error("one whole-file answer made the source ignore ranges")
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	far := "bytes=" + strconv.Itoa(40*blockSize) + "-"
+	if n := len(slices.DeleteFunc(slices.Clone(o.ranges), func(r string) bool { return r != far })); n != 2 {
+		t.Errorf("the far block asked %d times, want twice: %q", n, o.ranges)
 	}
 }
 
