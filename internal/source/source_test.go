@@ -40,7 +40,8 @@ type origin struct {
 	// 502; refusing makes the next ones answer an error page with 200, as
 	// some hosts refuse requests; whole makes the next ones answer the whole
 	// file with 200, as some hosts serving ranges do once in a while;
-	// rangeless ignores ranges and hides the size. ranges holds the ranges
+	// rangeless ignores ranges and hides the size; rate paces the bytes
+	// served, so many a second, none when zero. ranges holds the ranges
 	// asked, and times when.
 	mu         sync.Mutex
 	expired    map[string]bool
@@ -50,6 +51,7 @@ type origin struct {
 	whole      int
 	retryAfter string
 	rangeless  bool
+	rate       int
 	ranges     []string
 	times      []time.Time
 }
@@ -61,7 +63,7 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		o.requests.Add(1)
 		o.mu.Lock()
-		expired, busy, failing, rangeless, retryAfter := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter
+		expired, busy, failing, rangeless, retryAfter, rate := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter, o.rate
 		refusing := !busy && !failing && o.refusing > 0
 		whole := !busy && !failing && !refusing && o.whole > 0
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
@@ -97,6 +99,8 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 				_, _ = w.Write(chunk)
 				w.(http.Flusher).Flush()
 			}
+		case rate > 0:
+			http.ServeContent(throttled{w, rate}, r, "", time.Time{}, bytes.NewReader(o.data))
 		default:
 			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(o.data))
 		}

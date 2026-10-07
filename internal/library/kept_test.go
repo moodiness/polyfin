@@ -263,10 +263,16 @@ func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
 		t.Errorf("23 hours later, refreshed daily: %d catalog requests", got)
 	}
 	e.wait(2 * time.Hour)
+	// The addon answers the refresh 3 minutes after it was asked: the page
+	// is as old as the request, and a shorter age applies at once, to the
+	// page kept too.
+	gate := make(chan struct{})
+	e.addon.mu.Lock()
+	e.addon.catalogGate = gate
+	e.addon.mu.Unlock()
 	refreshed(t, e, "refreshing after 25 hours", 3)
-
-	// A shorter age applies at once, to the page kept too.
 	e.wait(3 * time.Minute)
+	close(gate)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 2 })
 	refreshed(t, e, "refreshing after 3 minutes, every 2", 4)
 	e.wait(time.Minute)

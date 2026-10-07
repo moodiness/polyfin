@@ -147,9 +147,14 @@ func TestHostsRefusingConnectionsAreReadOverOne(t *testing.T) {
 
 // The newest reader is served first: a request FFmpeg is leaving, still
 // waiting for the head of the file, does not pull the connection back
-// while the new one reads; it is served once the new one's window is.
+// while the new one reads; it is served once the new one's window is. The
+// host is slower than the reads, so that the new reader always waits for
+// its next block, as a playback does.
 func TestTheNewestReaderIsServedFirst(t *testing.T) {
 	o, server := newOrigin(t, 64*blockSize)
+	o.mu.Lock()
+	o.rate = 16 << 20
+	o.mu.Unlock()
 	cache := newCache(t, 1<<30)
 	cache.connections, cache.readahead, cache.aheadBudget = 1, 2, 2
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
