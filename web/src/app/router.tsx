@@ -16,6 +16,7 @@ import SettingsRoute from '@/features/settings/SettingsRoute'
 import MySourcesRoute from '@/features/sources/MySourcesRoute'
 import SourceRoute from '@/features/sources/SourceRoute'
 import SourcesRoute from '@/features/sources/SourcesRoute'
+import StreamyfinRoute from '@/features/streamyfin/StreamyfinRoute'
 import ApiKeysRoute from '@/features/system/ApiKeysRoute'
 import HealthRoute from '@/features/system/HealthRoute'
 import LogsRoute from '@/features/system/LogsRoute'
@@ -117,6 +118,7 @@ export const router = createBrowserRouter(
                 { path: 'sources', element: <SourcesRoute /> },
                 { path: 'libraries', element: <LibrariesRoute /> },
                 { path: 'live-tv', element: <LiveTvRoute /> },
+                { path: 'streamyfin', element: <StreamyfinRoute /> },
               ],
             },
           ],

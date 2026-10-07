@@ -11,6 +11,7 @@ const nav: typeof en = {
     sources: 'Sources',
     libraries: 'Bibliothèques',
     liveTv: 'TV en direct',
+    streamyfin: 'Accueil Streamyfin',
     health: 'Santé',
     schedule: 'Planning',
     logs: 'Journal',

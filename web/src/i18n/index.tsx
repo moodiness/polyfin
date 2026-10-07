@@ -9,6 +9,7 @@ import enLivetv from './en/livetv'
 import enNav from './en/nav'
 import enSettings from './en/settings'
 import enSources from './en/sources'
+import enStreamyfin from './en/streamyfin'
 import enSystem from './en/system'
 import enUsers from './en/users'
 import frAccount from './fr/account'
@@ -21,6 +22,7 @@ import frLivetv from './fr/livetv'
 import frNav from './fr/nav'
 import frSettings from './fr/settings'
 import frSources from './fr/sources'
+import frStreamyfin from './fr/streamyfin'
 import frSystem from './fr/system'
 import frUsers from './fr/users'
 
@@ -43,6 +45,7 @@ const en = {
   ...enIptv,
   ...enLibraries,
   ...enLivetv,
+  ...enStreamyfin,
   ...enUsers,
   ...enSystem,
   ...enSettings,
@@ -61,6 +64,7 @@ const fr: Messages = {
   ...frIptv,
   ...frLibraries,
   ...frLivetv,
+  ...frStreamyfin,
   ...frUsers,
   ...frSystem,
   ...frSettings,
@@ -79,6 +83,7 @@ if (import.meta.env.DEV) {
     enIptv,
     enLibraries,
     enLivetv,
+    enStreamyfin,
     enUsers,
     enSystem,
     enSettings,

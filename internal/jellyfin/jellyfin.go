@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/streamyfin"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -88,6 +89,9 @@ type Options struct {
 	// Trackers sends what users watch to the tracking services they
 	// connected; nil sends nothing.
 	Trackers *trackers.Service
+	// Streamyfin keeps the rows of Streamyfin's home screen; nil keeps
+	// Streamyfin's own.
+	Streamyfin *streamyfin.Store
 }
 
 // Handler serves the Jellyfin API.
@@ -180,6 +184,7 @@ func New(options Options) *Handler {
 	anonymous(http.MethodPost, "/Users/AuthenticateByName", h.authenticateByName)
 	anonymous(http.MethodPost, "/Users/AuthenticateWithQuickConnect", h.authenticateWithQuickConnect)
 	signedIn(http.MethodGet, "/Users/Me", h.currentUser)
+	signedIn(http.MethodGet, "/Streamyfin/config", h.streamyfinConfigOf)
 	signedIn(http.MethodGet, "/Users", h.users)
 	signedInAnyHour(http.MethodGet, "/Users/{userId}", h.user)
 	signedIn(http.MethodPost, "/Users/Password", h.changePassword)

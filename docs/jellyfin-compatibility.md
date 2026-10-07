@@ -26,6 +26,35 @@ A title's page opens as soon as its description is ready, with the versions Poly
 
 **For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked, for the first time or again, how many media sources the title's details list now, and how many versions are known, and Polyfin pushes the same as a `PolyfinVersions` message on the live connection (WebSocket) as it changes. `POST /Polyfin/Items/{id}/Versions/Search` has the title's addons asked again, once every 20 seconds at most for a user's title (see [Title pages](playback.md#title-pages)).
 
+### Streamyfin home
+
+Under **Content › Streamyfin home**, administrators choose the rows of Streamyfin's home screen, in order. Each row shows one of these:
+
+- **Continue watching**: the titles the user started and did not finish;
+- **Next up**: the next episodes of the series the user watches;
+- **A library**: a movie or series library shows its titles, a collection library its collections;
+- **A collection's titles**: the movies and series of one collection of a collection library, those of the collections within it included.
+
+Each row takes a title of its own. Without one, it is named after its library or collection, and Continue watching and Next up are named as in jellyfin-web, in the server's language. **Suggested rows** fills an empty list with Continue watching, Next up and a row for each library.
+
+- Each user sees only the rows of the libraries and collections they can see.
+- With no row, or none the user can see, Streamyfin shows its own home screen.
+- Streamyfin reads the rows when it comes back to the foreground, or when its home screen is pulled down.
+- Users cannot change them in the app.
+
+Other apps keep their own home screens.
+
+**Compared with Jellyfin:** Streamyfin's server plugin lets a Jellyfin administrator write these rows by hand. Polyfin answers the plugin's settings itself, so no plugin is needed. It sends only the home screen, and none of the plugin's other settings.
+
+**For app developers:**
+
+- `GET /Streamyfin/config` answers `{"settings": {"home": {"locked": true, "value": {"sections": [...]}}}}`, or 404 without a row the user can see.
+- Continue watching is a `custom` section of `/UserItems/Resume`, and Next up a `nextUp` section.
+- A library or collection row is an `items` section with its `parentId`. A collection row asks for `Movie` and `Series` items, which a recursive listing of a collection gives through the collections within it.
+- Rows of collections show wide images (`"orientation": "horizontal"`), rows of titles posters.
+- The setting is locked: Streamyfin keeps no copy of it, and shows its own home screen again as soon as Polyfin answers none.
+- The admin app reads and saves the rows at `GET` and `PUT /admin/api/streamyfin`, administrators only, and lists a collection library's collections at `/admin/api/streamyfin/libraries/{id}/collections`.
+
 ### Profile pictures
 
 A user changes their own profile picture from their app; an administrator can change anyone's.
