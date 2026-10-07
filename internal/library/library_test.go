@@ -301,6 +301,8 @@ func TestShortPagesDoNotEndACatalog(t *testing.T) {
 	}
 }
 
+// A collection that groups another collection lists the titles of that
+// collection, as its own.
 func TestCollectionsCanGroupCollections(t *testing.T) {
 	e := newEnv(t)
 	addon := &fakeAddon{
@@ -326,15 +328,11 @@ func TestCollectionsCanGroupCollections(t *testing.T) {
 	page, _ := e.service.Children(t.Context(), e.member, genres.ID, 0, 10, "")
 	comedy := page.Items[0]
 	page, err := e.service.Children(t.Context(), e.member, comedy.ID, 0, 10, "")
-	if err != nil || len(page.Items) != 1 || page.Items[0].Kind != KindCollection || page.Items[0].Name != "Movies" || page.Total != 1 {
-		t.Fatalf("collection of collections: %+v %v", page, err)
-	}
-	page, _ = e.service.Children(t.Context(), e.member, page.Items[0].ID, 0, 10, "")
-	if got := names(page.Items); !slices.Equal(got, []string{"movie 0", "movie 1"}) {
-		t.Fatalf("nested collection: %v", got)
+	if got := names(page.Items); err != nil || !slices.Equal(got, []string{"movie 0", "movie 1"}) || page.Total != 2 {
+		t.Fatalf("collection of collections: %v, total %d, %v", got, page.Total, err)
 	}
 	ancestors, _ := e.service.Ancestors(t.Context(), e.member, page.Items[0].ID)
-	if got := names(ancestors); !slices.Equal(got, []string{"Movies", "Comedy", "Genres"}) {
+	if got := names(ancestors); !slices.Equal(got, []string{"Comedy", "Genres"}) {
 		t.Errorf("ancestors: %v", got)
 	}
 }

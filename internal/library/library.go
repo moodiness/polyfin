@@ -978,6 +978,15 @@ func titleItem(addon accounts.ID, catalog stremio.Catalog, meta stremio.Meta, pa
 		Parent: &parent, Meta: &preview, Confined: confined}, nil
 }
 
+// collectionChildren lists an addon's collection: the titles of the
+// catalogs it groups and of those the collections within it group, merged
+// one of each in turn (see collectionSources), never those collections
+// themselves, which apps would show as folders of folders. A collection
+// that groups other collections, listed whole, is ordered by release date,
+// as Jellyfin orders a collection: titles merged from several collections,
+// a genre's movies and series or a franchise's sagas, have no other common
+// order. A collection that only groups catalogs keeps their order, such as
+// their titles' popularity.
 func (s *Service) collectionChildren(ctx context.Context, v view, r record, start, count int, first bool) (Page, error) {
 	if r.Addon == nil || r.Meta == nil {
 		return Page{}, ErrNotFound
@@ -993,92 +1002,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	// A collection lists at most the items of the library it belongs to.
 	most := s.collectionMax(ctx, v, r)
 	count = withinMax(start, count, most)
-	// A collection groups either other collections or catalogs; should it
-	// have both, its collections come first.
-	var nested []stremio.Meta
-	var sources []source
-	if meta.Collection != nil {
-		for _, sub := range meta.Collection.Items {
-			if sub.ID != "" {
-				sub.Type = "collection"
-				nested = append(nested, sub)
-			}
-		}
-		for _, ref := range meta.Collection.Sources {
-			if catalog, ok := addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok {
-				sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, first: first, max: most})
-			}
-		}
-	}
-	var items []Item
-	var records []record
-	for _, sub := range nested[min(start, len(nested)):min(start+count, len(nested))] {
-		item, rec := collectionItem(addon.addon.ID, sub, r.ID, addon.confined)
-		items, records = append(items, item), append(records, rec)
-	}
-	total := len(nested)
-	if len(sources) > 0 {
-		titles, listedTotal, err := s.merged(ctx, v, sources, max(start-len(nested), 0), count-len(items))
-		if err != nil {
-			return Page{}, err
-		}
-		total += listedTotal
-		for _, title := range titles {
-			item, rec, err := title.title(r.ID)
-			if err != nil {
-				continue
-			}
-			items, records = append(items, item), append(records, rec)
-		}
-	}
-	result := page(items, start, totalWithinMax(total, most))
-	if result.More && !first && len(sources) > 0 {
-		next := max(start+count-len(nested), 0)
-		s.prefetch(ctx, v, addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, next, count) })
-	}
-	return result, s.save(ctx, records)
-}
-
-// Titles lists the titles under parent for a listing that asks for titles
-// only, through the folders within it, as a Jellyfin listing with Recursive
-// does: an addon's collection lists the titles of the catalogs it and the
-// collections within it group, merged, rather than those collections, which
-// such a listing would leave out. Any other folder lists its children (see
-// Children).
-func (s *Service) Titles(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
-	v, err := s.view(ctx, user)
-	if err != nil {
-		return Page{}, err
-	}
-	if _, ok := v.library(parent); !ok {
-		r, err := s.load(ctx, parent)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return Page{}, err
-		}
-		if err == nil && r.Kind == KindCollection {
-			return s.collectionTitles(ctx, v, r, start, count)
-		}
-	}
-	return s.Children(ctx, user, parent, start, count, genre)
-}
-
-// collectionTitles lists the titles of the catalogs an addon's collection
-// and the collections within it group, merged (see collectionSources).
-func (s *Service) collectionTitles(ctx context.Context, v view, r record, start, count int) (Page, error) {
-	if r.Addon == nil || r.Meta == nil {
-		return Page{}, ErrNotFound
-	}
-	addon, ok := v.addon(*r.Addon)
-	if !ok {
-		return Page{}, ErrNotFound
-	}
-	meta, err := s.meta(ctx, addon, "collection", r.Meta.ID)
-	if err != nil {
-		return Page{}, err
-	}
-	most := s.collectionMax(ctx, v, r)
-	count = withinMax(start, count, most)
-	sources := s.collectionSources(ctx, addon, meta, most)
+	sources, nested := s.collectionSources(ctx, addon, meta, most, first)
 	if len(sources) == 0 {
 		return Page{}, nil
 	}
@@ -1096,23 +1020,38 @@ func (s *Service) collectionTitles(ctx context.Context, v view, r record, start,
 		items, records = append(items, item), append(records, rec)
 	}
 	result := page(items, start, totalWithinMax(total, most))
-	if result.More {
+	if nested && start == 0 && !result.More {
+		slices.SortStableFunc(result.Items, func(a, b Item) int { return releaseOf(a).Compare(releaseOf(b)) })
+	}
+	if result.More && !first {
 		s.prefetch(ctx, v, addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, start+count, count) })
 	}
 	return result, s.save(ctx, records)
 }
 
+// releaseOf is when a title came out, as Jellyfin orders a collection: its
+// premiere date, else the start of its year; the earliest for neither.
+func releaseOf(item Item) time.Time {
+	switch {
+	case item.PremiereDate != nil:
+		return *item.PremiereDate
+	case item.ProductionYear > 0:
+		return time.Date(item.ProductionYear, time.January, 1, 0, 0, 0, 0, time.UTC)
+	}
+	return time.Time{}
+}
+
 // collectionSources lists, each once, the catalogs an addon's collection
 // groups, then those the collections within it group, following them up to
-// maxNesting deep. A collection within that cannot be described is left
-// out; descriptions are cached.
-func (s *Service) collectionSources(ctx context.Context, addon installed, meta stremio.Meta, most int) []source {
-	var sources []source
+// maxNesting deep, and tells whether it followed any. first reads each
+// catalog's first page only. A collection within that cannot be described
+// is left out; descriptions are cached.
+func (s *Service) collectionSources(ctx context.Context, addon installed, meta stremio.Meta, most int, first bool) (sources []source, nested bool) {
 	seen := map[catalogKey]bool{}
 	described := map[string]bool{meta.ID: true}
 	level := []stremio.Meta{meta}
 	for depth := 0; len(level) > 0 && depth < maxNesting; depth++ {
-		var nested []string
+		var within []string
 		for _, m := range level {
 			if m.Collection == nil {
 				continue
@@ -1121,20 +1060,21 @@ func (s *Service) collectionSources(ctx context.Context, addon installed, meta s
 				key := catalogKey{addon.addon.ID, ref.Type, ref.CatalogID, ref.Genre}
 				if catalog, ok := addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok && !seen[key] {
 					seen[key] = true
-					sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, max: most})
+					sources = append(sources, source{addon: addon, catalog: catalog, genre: ref.Genre, first: first, max: most})
 				}
 			}
 			for _, sub := range m.Collection.Items {
 				if sub.ID != "" && !described[sub.ID] {
 					described[sub.ID] = true
-					nested = append(nested, sub.ID)
+					within = append(within, sub.ID)
 				}
 			}
 		}
-		level = make([]stremio.Meta, len(nested))
+		nested = nested || len(within) > 0
+		level = make([]stremio.Meta, len(within))
 		var group errgroup.Group
 		group.SetLimit(metaFetches)
-		for i, id := range nested {
+		for i, id := range within {
 			group.Go(func() error {
 				m, err := s.meta(ctx, addon, "collection", id)
 				if err != nil && ctx.Err() == nil {
@@ -1146,7 +1086,7 @@ func (s *Service) collectionSources(ctx context.Context, addon installed, meta s
 		}
 		_ = group.Wait()
 	}
-	return sources
+	return sources, nested
 }
 
 // collectionMax is the most items a collection lists: the maximum of the

@@ -65,12 +65,12 @@ func nestedCollectionsAddon(t *testing.T) string {
 	return server.URL + "/manifest.json"
 }
 
-// Streamyfin lists a collection for its movies, series and seasons,
-// recursively: a collection that groups other collections then lists their
-// titles, as Jellyfin's recursive listing does, rather than nothing; sorted
-// as asked when listed whole, as a saga's movies by premiere date. Listed as
-// jellyfin-web lists it, it still shows those collections.
-func TestStreamyfinListsTheTitlesOfNestedCollections(t *testing.T) {
+// A collection that groups other collections lists their titles, in
+// jellyfin-web as in Streamyfin, which asks for a collection's movies,
+// series and seasons recursively: whole, by release date as Jellyfin
+// orders a collection, or sorted as the app asks; in pages, one title of
+// each catalog in turn, which pages sorted one by one would mix up.
+func TestAppsListTheTitlesOfNestedCollections(t *testing.T) {
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), nestedCollectionsAddon(t), false)
@@ -105,21 +105,22 @@ func TestStreamyfinListsTheTitlesOfNestedCollections(t *testing.T) {
 			"&Recursive=true&IncludeItemTypes=Movie,Series,Season&"+query, token, &result)
 		return status, names(result), result.TotalRecordCount
 	}
+	byRelease := "series 1:Series, series 2:Series, movie 1:Movie, movie 2:Movie"
 	for _, tc := range []struct{ query, want string }{
 		// Streamyfin's request: whole, sorted by premiere date.
-		{"Limit=18&StartIndex=0&SortBy=PremiereDate&SortOrder=Ascending", "series 1:Series, series 2:Series, movie 1:Movie, movie 2:Movie"},
-		// Unsorted, the catalogs' titles one of each in turn.
-		{"Limit=18&StartIndex=0", "movie 1:Movie, series 1:Series, movie 2:Movie, series 2:Series"},
-		// In pages, the catalogs' order, which pages sorted one by one would mix up.
+		{"Limit=18&StartIndex=0&SortBy=PremiereDate&SortOrder=Ascending", byRelease},
+		{"Limit=18&StartIndex=0", byRelease},
+		{"Limit=18&StartIndex=0&SortBy=SortName&SortOrder=Descending", "series 2:Series, series 1:Series, movie 2:Movie, movie 1:Movie"},
 		{"Limit=2&StartIndex=0&SortBy=PremiereDate&SortOrder=Ascending", "movie 1:Movie, series 1:Series"},
 	} {
 		if status, got, total := titlesOf(tc.query); status != http.StatusOK || got != tc.want || total != 4 {
 			t.Errorf("Streamyfin's listing with %s: %d %s, total %d; want %s", tc.query, status, got, total, tc.want)
 		}
 	}
+	// jellyfin-web's collection page asks for every child, without a type.
 	var web QueryResult
-	if status := s.get(t, "/Items?ParentId="+animation, token, &web); status != http.StatusOK ||
-		names(web) != fmt.Sprintf("%s:BoxSet, %s:BoxSet", "Movies", "Series") {
-		t.Errorf("jellyfin-web's listing: %d %s", status, names(web))
+	if status := s.get(t, "/Items?ParentId="+animation+"&Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount", token, &web); status != http.StatusOK ||
+		names(web) != byRelease {
+		t.Errorf("jellyfin-web's listing: %d %s, want %s", status, names(web), byRelease)
 	}
 }

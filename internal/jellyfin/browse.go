@@ -180,7 +180,7 @@ func wholeListing(r *http.Request) bool {
 // titlesThrough reports whether a listing asks for the titles under its
 // folder, through the folders within it: Recursive, and types that are
 // titles, not collections or folders. Streamyfin lists a collection so,
-// for its movies, series and seasons (see library.Service.Titles).
+// for its movies, series and seasons, sorted as it asks.
 func titlesThrough(r *http.Request) bool {
 	recursive, _ := boolQuery(r, "recursive")
 	include := listQuery(r, "includeItemTypes")
@@ -393,12 +393,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	var page library.Page
 	var err error
-	switch {
-	case titlesThrough(r):
-		page, err = h.Library.Titles(r.Context(), user, parent, max(start, 0), limit, genre)
-	case wholeListing(r):
+	if wholeListing(r) {
 		page, err = h.Library.Whole(r.Context(), user, parent, max(start, 0), limit, genre)
-	default:
+	} else {
 		page, err = h.Library.Children(r.Context(), user, parent, max(start, 0), limit, genre)
 	}
 	if errors.Is(err, library.ErrNotFound) {
