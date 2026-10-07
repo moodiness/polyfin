@@ -109,6 +109,23 @@ const libraries: typeof en = {
       afterSave: 'Enregistrez d’abord les bibliothèques, puis choisissez l’image de celle-ci.',
       close: (name: string) => `Fermer l’image de ${name}`,
     },
+    narrow: {
+      title: 'Genre et maximum',
+      edit: (name: string) => `Genre et maximum de ${name}`,
+      close: (name: string) => `Fermer le genre et le maximum de ${name}`,
+      staged: 'Enregistrés avec le bouton Enregistrer, comme les noms.',
+      genre: 'Genre',
+      allGenres: 'Tous les genres',
+      genreHelp: 'Affiche seulement les titres de ce genre.',
+      maxItems: 'Nombre maximum de titres',
+      noMax: 'Aucun maximum',
+      maxHelp: (max: string, where: string) =>
+        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite des catalogues dans ${where}. De 1 à ${max}. Vide : cette limite s’applique.`,
+      maxHelpMine: (max: string) =>
+        `Affiche au plus ce nombre de titres dans la bibliothèque, et autant dans chacune de ses collections, à la place de la limite du serveur. De 1 à ${max}. Vide : la limite du serveur s’applique.`,
+      maxRange: (max: string) => `Saisissez un nombre entier de 1 à ${max}, ou laissez vide.`,
+      maxBadge: (count: string) => `${count} max`,
+    },
   },
 }
 

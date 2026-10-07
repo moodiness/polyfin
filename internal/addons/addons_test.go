@@ -177,6 +177,100 @@ func TestLibrariesRejectInvalidChoices(t *testing.T) {
 	}
 }
 
+// A library keeps the genre and the maximum it is given, of its catalog's
+// genres and within bounds, on a catalog of titles or collections; saving
+// it without clears them. A genre its addon stops offering lists the whole
+// catalog. A catalog that requires its only genre offers none to choose.
+func TestLibrariesKeepAGenreAndAMaximum(t *testing.T) {
+	store, _ := newStore(t)
+	top := stremio.Catalog{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Comedy", "Drama"}}}}
+	plain := stremio.Catalog{Type: "movie", ID: "plain", Name: "Plain"}
+	channels := stremio.Catalog{Type: "tv", ID: "channels", Name: "Channels"}
+	sets := stremio.Catalog{Type: "collection", ID: "sets", Name: "Sets", Extra: []stremio.Extra{{Name: "genre", IsRequired: true, Options: []string{"None"}}}}
+	addon := newFakeAddon(t, []stremio.Catalog{top, plain, channels, sets})
+	installed, err := store.Install(t.Context(), Shared(), addon.url("a"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	choice := func(catalog stremio.Catalog, genre string, most int) LibraryChoice {
+		c := LibraryChoice{AddonID: installed.ID, CatalogType: catalog.Type, CatalogID: catalog.ID}
+		if genre != "" {
+			c.Genre = &genre
+		}
+		if most != 0 {
+			c.MaxItems = &most
+		}
+		return c
+	}
+	byID := func(libraries []Library) map[string]Library {
+		result := map[string]Library{}
+		for _, l := range libraries {
+			result[l.Catalog.ID] = l
+		}
+		return result
+	}
+	saved, err := store.SetLibraries(t.Context(), Shared(), []LibraryChoice{choice(top, "Drama", 50), choice(plain, "", 7), choice(channels, "", 0), choice(sets, "", 3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	libraries := byID(saved)
+	if l := libraries["top"]; l.Genre != "Drama" || l.MaxItems != 50 || !l.Filterable {
+		t.Errorf("top: %+v", l)
+	}
+	if l := libraries["plain"]; l.Genre != "" || l.MaxItems != 7 || !l.Filterable {
+		t.Errorf("plain: %+v", l)
+	}
+	if l := libraries["channels"]; l.Filterable {
+		t.Errorf("a live TV catalog takes a genre and a maximum: %+v", l)
+	}
+	if l := libraries["sets"]; l.MaxItems != 3 || !l.Filterable || GenreChoices(l.Catalog) != nil {
+		t.Errorf("a collection catalog that requires its only genre: %+v, choices %v", l, GenreChoices(l.Catalog))
+	}
+
+	for name, tc := range map[string]struct {
+		choice LibraryChoice
+		want   error
+	}{
+		"a genre the catalog does not offer":    {choice(top, "Horror", 0), ErrInvalidLibraryGenre},
+		"a genre for a catalog without genres":  {choice(plain, "Drama", 0), ErrInvalidLibraryGenre},
+		"a genre for a live TV catalog":         {choice(channels, "Drama", 0), ErrInvalidLibraryGenre},
+		"the genre a catalog requires":          {choice(sets, "None", 0), ErrInvalidLibraryGenre},
+		"no title at most":                      {choice(top, "", -1), ErrInvalidLibraryMaxItems},
+		"more than the most a library may list": {choice(top, "", MaxLibraryItems+1), ErrInvalidLibraryMaxItems},
+		"a maximum for a live TV catalog":       {choice(channels, "", 10), ErrInvalidLibraryMaxItems},
+	} {
+		if _, err := store.SetLibraries(t.Context(), Shared(), []LibraryChoice{tc.choice}); !errors.Is(err, tc.want) {
+			t.Errorf("%s: got %v, want %v", name, err, tc.want)
+		}
+	}
+	// The refused saves changed nothing.
+	current, _ := store.Libraries(t.Context(), Shared())
+	if l := byID(current)["top"]; l.Genre != "Drama" || l.MaxItems != 50 {
+		t.Errorf("after refused saves: %+v", l)
+	}
+
+	// A genre the addon no longer offers lists the whole catalog.
+	addon.catalogs.Store([]stremio.Catalog{{Type: "movie", ID: "top", Name: "Top", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Comedy"}}}}, plain, channels, sets})
+	if _, err := store.Refresh(t.Context(), Shared(), installed.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	current, _ = store.Libraries(t.Context(), Shared())
+	if l := byID(current)["top"]; l.Genre != "" || l.MaxItems != 50 {
+		t.Errorf("after the addon dropped its genre: %+v", l)
+	}
+	// Saved without them, a library lists its whole catalog again.
+	empty := ""
+	cleared := choice(top, "", 0)
+	cleared.Genre = &empty
+	saved, err = store.SetLibraries(t.Context(), Shared(), []LibraryChoice{cleared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := byID(saved)["top"]; l.Genre != "" || l.MaxItems != 0 {
+		t.Errorf("cleared: %+v", l)
+	}
+}
+
 func TestReorderNeedsEveryAddonOnce(t *testing.T) {
 	store, _ := newStore(t)
 	addon := newFakeAddon(t, nil)

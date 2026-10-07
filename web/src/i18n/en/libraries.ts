@@ -98,6 +98,23 @@ const libraries = {
       afterSave: 'Save the libraries first, then choose this library’s image.',
       close: (name: string) => `Close the image of ${name}`,
     },
+    narrow: {
+      title: 'Genre and maximum',
+      edit: (name: string) => `Genre and maximum of ${name}`,
+      close: (name: string) => `Close the genre and maximum of ${name}`,
+      staged: 'Saved with the Save button, like the names.',
+      genre: 'Genre',
+      allGenres: 'All genres',
+      genreHelp: 'Shows only the titles of this genre.',
+      maxItems: 'Maximum titles',
+      noMax: 'No maximum',
+      maxHelp: (max: string, where: string) =>
+        `Shows at most this many titles in the library, and as many in each of its collections, in place of the catalog limit in ${where}. From 1 to ${max}. Empty: that limit applies.`,
+      maxHelpMine: (max: string) =>
+        `Shows at most this many titles in the library, and as many in each of its collections, in place of the server’s limit. From 1 to ${max}. Empty: the server’s limit applies.`,
+      maxRange: (max: string) => `Enter a whole number from 1 to ${max}, or leave it empty.`,
+      maxBadge: (count: string) => `${count} max`,
+    },
   },
 }
 

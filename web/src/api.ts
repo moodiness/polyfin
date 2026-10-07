@@ -690,6 +690,14 @@ export type Library = {
   guide: Guide | null
   /** Every guide of an enabled TV catalog, in order; null for any other library. */
   guides: CatalogGuide[] | null
+  /** Genre the library is narrowed to; null lists the whole catalog. */
+  genre: string | null
+  /** Genres the catalog offers in its genre filter, in its order; empty when it offers none. */
+  genres: string[]
+  /** Most titles the library lists, its collections' included; null for no maximum but the server's catalog limit. */
+  maxItems: number | null
+  /** Whether the library takes a genre (when `genres` is not empty) and a maximum: false for live TV and music catalogs. */
+  filterable: boolean
 }
 
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
@@ -708,8 +716,12 @@ export type Guide = {
   nextAt: string | null
 }
 
+/** The most titles a library may be set to list; the least is 1. */
+export const MAX_LIBRARY_ITEMS = 20000
+
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
-export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'>
+export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
+  Partial<Pick<Library, 'genre' | 'maxItems'>>
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'custom'
 

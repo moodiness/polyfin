@@ -110,7 +110,7 @@ func similarSourcesOf(v view, title Item) []source {
 	var sources []source
 	seen := map[catalogKey]bool{}
 	add := func(addon installed, catalog stremio.Catalog) {
-		key := catalogKey{addon.addon.ID, catalog.Type, catalog.ID}
+		key := catalogKey{addon.addon.ID, catalog.Type, catalog.ID, ""}
 		if kind, _ := titleKind(catalog.Type); kind != title.Kind || seen[key] || !catalog.Browsable() || len(sources) >= similarSources {
 			return
 		}

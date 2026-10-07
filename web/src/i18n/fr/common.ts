@@ -114,6 +114,10 @@ const common: typeof en = {
     invalid_library:
       'Une bibliothèque fait référence à un catalogue qui n’existe plus ou ne peut pas être parcouru. Retirez les bibliothèques signalées comme plus disponibles, puis enregistrez à nouveau.',
     invalid_library_name: 'Le nom d’une bibliothèque doit comporter de 1 à 64 caractères.',
+    invalid_library_genre:
+      'Le genre d’une bibliothèque n’est pas proposé par son catalogue. Choisissez-en un autre dans la liste, puis enregistrez à nouveau.',
+    invalid_library_max_items:
+      'Le nombre maximum de titres d’une bibliothèque doit être un nombre entier de 1 à 20 000, ou rester vide.',
     invalid_image: 'Choisissez une image JPEG, PNG ou WebP de 10 Mo au plus.',
     invalid_image_url: 'Saisissez une adresse d’image commençant par https:// ou http://.',
     image_unreachable:
