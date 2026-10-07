@@ -16,12 +16,14 @@ import (
 )
 
 // LibraryImages finds and keeps the images Jellyfin apps show on the tiles
-// of libraries (see package library).
+// of libraries (see package library), and drops those uploaded for the
+// libraries of an addon removed.
 type LibraryImages interface {
 	LibraryImages(ctx context.Context, scope addons.Scope, confined bool, catalogs []addons.Library) ([]library.LibraryImage, error)
 	UploadImage(ctx context.Context, id accounts.ID, imageType string, data []byte) error
 	DownloadImage(ctx context.Context, id accounts.ID, imageType, address string, confined bool) error
 	DeleteUploadedImage(ctx context.Context, id accounts.ID, imageType string) error
+	DeleteLibraryImages(ctx context.Context, addon addons.Addon) error
 }
 
 // libraryImageRequest chooses the image of one of the scope's libraries:

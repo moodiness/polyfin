@@ -395,6 +395,22 @@ func (s *Service) DeleteUploadedImage(ctx context.Context, id accounts.ID, image
 	})
 }
 
+// deleteUploadedImages drops every uploaded artwork of items, of any image
+// type; there may be none.
+func (s *Service) deleteUploadedImages(ctx context.Context, items []accounts.ID) error {
+	if len(items) == 0 {
+		return nil
+	}
+	return s.changeOverrides(ctx, func(*overrideSet) error {
+		_, err := s.db.Exec(ctx, "DELETE FROM item_images WHERE item_id = ANY($1::uuid[])", items)
+		return err
+	}, func(next *overrideSet) {
+		for _, id := range items {
+			delete(next.images, id)
+		}
+	})
+}
+
 // uploadedURL stands for an item's uploaded artwork in Images: it changes
 // with the upload, and so does its ImageTag.
 func uploadedURL(id accounts.ID, imageType, tag string) string {

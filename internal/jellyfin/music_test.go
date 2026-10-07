@@ -21,14 +21,16 @@ import (
 
 // fakeEclipse is an Eclipse addon serving two albums, one explicit track,
 // an artist page, a search, and streams of a generated FLAC tone that
-// expire once expiring is set. content, set before it is installed, is its
-// manifest's contentType: an audiobook addon's streams come with
-// chapters. queries records the settings every request carried.
+// expire once expiring is set, or fail with HTTP 502 once failing is set.
+// content, set before it is installed, is its manifest's contentType: an
+// audiobook addon's streams come with chapters. queries records the
+// settings every request carried.
 type fakeEclipse struct {
 	url      string
 	content  string
 	streams  atomic.Int32
 	expiring atomic.Bool
+	failing  atomic.Bool
 	mu       sync.Mutex
 	queries  []string
 }
@@ -88,6 +90,10 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 			answer(map[string]any{"tracks": []any{track("t2", "Second Wind", "Sine Studies", "sine", false)},
 				"albums": []any{albums()["sine"]}, "artists": []any{map[string]string{"id": "quartet", "name": "Tone Quartet"}}})
 		case strings.HasPrefix(path, "/stream/"):
+			if f.failing.Load() {
+				http.Error(w, "bad gateway", http.StatusBadGateway)
+				return
+			}
 			n := f.streams.Add(1)
 			reply := map[string]any{"url": fmt.Sprintf("%s/tone.flac?n=%d", server.URL, n), "codec": "flac", "container": "flac",
 				"manifest": "none", "sampleRate": 44100, "bitDepth": 16}

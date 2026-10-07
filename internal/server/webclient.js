@@ -1,6 +1,6 @@
 // Polyfin (MIT License). Served at /web/polyfin.js and loaded by the
 // index.html of jellyfin-web, which Polyfin ships unmodified. It follows the
-// client's routes for three things.
+// client's routes for three things, and adds a style for a fourth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -58,7 +58,16 @@
 // document's lang (English and French, English otherwise). It never changes
 // the page during a video, and gives everything back when the route leaves
 // the title.
+//
+// Fourth, it keeps a long name from running under the arrow of the menus of
+// a title's page: stream addons name versions with every detail, and
+// jellyfin-web leaves no room for the arrow in those menus. Their text ends
+// with "…" before it; the open menu still lists whole names.
 ;(function () {
+  var menus = document.createElement('style')
+  menus.textContent =
+    'select.detailTrackSelect.emby-select-withcolor{padding-right:2.2em!important;text-overflow:ellipsis}'
+  document.head.appendChild(menus)
   var adminRoute = /^#!?\/(dashboard|metadata|configurationpage|wizard)(?:[/?#]|$)/i
   var titleRoute = /^#!?\/details\?(?:[^#]*&)?id=([0-9a-f]{32})(?:[&#]|$)/i
   // The first prefix of the dashboard page's path that matches wins.

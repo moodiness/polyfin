@@ -287,7 +287,9 @@ for (const route of routes) {
       location.href = page
       go(way === 'load' ? route || page : '#/home')
       const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
-      vm.runInNewContext(script, { location, history, URL, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      // The page's head takes the style the script adds.
+      const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
+      vm.runInNewContext(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
       if (way === 'pushState' || way === 'replaceState') history[way](null, '', route || page)
       if (way === 'hashchange' || way === 'popstate') { go(route || page); (listeners[way] || []).forEach((listener) => listener()) }
       results[way + ' ' + page + route] = replaced
@@ -573,7 +575,8 @@ async function run(scenario) {
   }
   const document = {
     get activeElement() { return focused },
-    createElement: (tag) => (tag === 'option' ? { value: '', textContent: '', selected: false } : null),
+    head: { appendChild: () => {} },
+    createElement: (tag) => (tag === 'option' ? { value: '', textContent: '', selected: false } : tag === 'style' ? {} : null),
     querySelector: (selector) => {
       if (selector === '.videoPlayerContainer') return scenario.video ? {} : null
       return selector === '.page.itemDetailPage:not(.hide)' ? page : null

@@ -195,7 +195,8 @@ func (h *Handler) audioURL(r *http.Request, item accounts.ID, version library.Ve
 }
 
 // audioPlaybackInfo answers PlaybackInfo for a track: its one version,
-// decided for the app's device profile.
+// decided for the app's device profile. A track whose addon gives no
+// stream plays nowhere, as a title none of whose versions plays.
 func (h *Handler) audioPlaybackInfo(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, request playbackInfoRequest) {
 	if request.MediaSourceId != "" {
 		if requested, ok := parseGUID(request.MediaSourceId); !ok || requested != item.ID {
@@ -206,6 +207,11 @@ func (h *Handler) audioPlaybackInfo(w http.ResponseWriter, r *http.Request, user
 		}
 	}
 	version, err := h.version(r.Context(), user, item, item.ID)
+	if failed, ok := errors.AsType[*library.StreamError](err); ok && r.Context().Err() == nil {
+		h.Logger.Info("A track's addon gave no stream", "addon", failed.Addon, "error", failed.Err)
+		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return

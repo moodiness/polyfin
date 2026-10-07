@@ -104,6 +104,23 @@ func TestTracksConvertToHLSSegments(t *testing.T) {
 	}
 }
 
+// A track whose addon fails to give its stream does not play, as a title
+// none of whose versions plays: apps show that it cannot be played rather
+// than a server error.
+func TestTrackWithoutStreamHasNoCompatibleStream(t *testing.T) {
+	s := newTestServer(t, 10)
+	addon := newFakeEclipse(t, "")
+	token, _, views := listening(t, s, addon.url)
+	song := firstSong(t, s, token, views["New Releases"])
+	addon.failing.Store(true)
+	status, body := s.call(http.MethodPost, "/Items/"+song+"/PlaybackInfo", app("web", token), map[string]any{"DeviceProfile": hlsProfile})
+	var info noCompatibleStream
+	if status != http.StatusOK || json.Unmarshal(body, &info) != nil || info.ErrorCode != "NoCompatibleStream" ||
+		info.MediaSources == nil || len(info.MediaSources) != 0 {
+		t.Errorf("playback info: %d %s", status, body)
+	}
+}
+
 func mustUser(t *testing.T, s testServer, name string) accounts.User {
 	t.Helper()
 	users, err := s.store.Users(t.Context())

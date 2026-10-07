@@ -1378,7 +1378,7 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 			return Version{}, ErrNotFound
 		}
 		if err != nil {
-			return Version{}, err
+			return Version{}, &StreamError{Addon: version.Addon, Err: err}
 		}
 		version.URL, version.Expires = stream.URL, stream.Expires
 		version.Name = cmpOr(stream.Quality, e.Title)
@@ -1390,6 +1390,18 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 		return version, nil
 	})
 }
+
+// StreamError reports a track whose addon gave no stream: it could not be
+// reached, or its answer was no stream.
+type StreamError struct {
+	// Addon is the name of the track's addon.
+	Addon string
+	Err   error
+}
+
+func (e *StreamError) Error() string { return e.Err.Error() }
+
+func (e *StreamError) Unwrap() error { return e.Err }
 
 // fresh reports whether a version's link may still be used at now: until
 // streamMargin before it expires, or, given less than justResolved ago,

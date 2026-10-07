@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -24,7 +25,8 @@ import (
 const holdLimit = 10 * time.Second
 
 // artServer is an artwork server counting its requests and the most it
-// answers at once; /missing.jpg is not found, /busy.jpg answers 503.
+// answers at once; /missing.jpg is not found, /gone.jpg answers 410,
+// /busy.jpg answers 503.
 type artServer struct {
 	*httptest.Server
 	requests atomic.Int32
@@ -76,6 +78,9 @@ func newArtServer(t *testing.T, picture []byte) *artServer {
 		switch r.URL.Path {
 		case "/missing.jpg":
 			http.NotFound(w, r)
+			return
+		case "/gone.jpg":
+			w.WriteHeader(http.StatusGone)
 			return
 		case "/busy.jpg":
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -200,6 +205,23 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 	}
 	if got := art.requests.Load() - before; got != 0 {
 		t.Errorf("after a restart: %d downloads", got)
+	}
+}
+
+// Artwork its server does not have is not found, as Jellyfin answers for
+// an image an item does not have, for apps to show their placeholder; a
+// server that fails otherwise is a bad gateway.
+func TestMissingArtworkIsNotFound(t *testing.T) {
+	art := newArtServer(t, jpegOf(t, 40, 60))
+	h := imageHandler(t.TempDir())
+	for name, want := range map[string]int{"missing": http.StatusNotFound, "gone": http.StatusNotFound, "busy": http.StatusBadGateway} {
+		// The second time, the failure remembered answers the same.
+		for range 2 {
+			_, err := h.fetchArtwork(t.Context(), art.URL+"/"+name+".jpg", false, false)
+			if failed, ok := errors.AsType[downloadError](err); !ok || failed.status != want {
+				t.Errorf("%s: %v, want %d", name, err, want)
+			}
+		}
 	}
 }
 

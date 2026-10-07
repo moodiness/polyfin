@@ -346,6 +346,14 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 			t.Errorf("%s: %d", path, response.StatusCode)
 		}
 	}
+	// The addon lists a backdrop its artwork server does not have: not
+	// found, as an image the movie does not have.
+	if len(movie.BackdropImageTags) == 0 {
+		t.Fatalf("no backdrop: %+v", movie.BackdropImageTags)
+	}
+	if response, _ := http.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0]); response.StatusCode != http.StatusNotFound {
+		t.Errorf("a backdrop the artwork server does not have: %d", response.StatusCode)
+	}
 }
 
 func TestCreditedPeopleHavePhotosAndPages(t *testing.T) {

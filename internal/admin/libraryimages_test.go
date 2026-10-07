@@ -8,9 +8,13 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -209,5 +213,94 @@ func TestLibraryImages(t *testing.T) {
 	// The server's library is not the member's.
 	if movie = find(administrator.libraries("shared"), "movie", "top"); movie["image"] != "none" {
 		t.Errorf("the server's library after a member's upload: %v", movie)
+	}
+}
+
+// Removing an addon deletes the images uploaded for its libraries, those
+// of the catalogs disabled before included; disabling a library keeps its
+// image, as do the libraries of other addons.
+func TestRemovedAddonsTakeTheirLibraryImages(t *testing.T) {
+	picture := pngPicture(t)
+	// Two addons, each serving its own manifest.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/manifest.json")
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "local." + name, Name: name, Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}}, Catalogs: []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"},
+				{Type: "movie", ID: "new", Name: "New"}}})
+	}))
+	t.Cleanup(server.Close)
+	var store *addons.Store
+	var lib *library.Service
+	var pool *pgxpool.Pool
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		store, lib, pool = deps.addons, o.LibraryImages.(*library.Service), deps.pool
+	})
+	administrator := api.signedIn("administrator", true)
+	var installed []addons.Addon
+	for _, path := range []string{"/removed/manifest.json", "/other/manifest.json"} {
+		addon, err := store.Install(t.Context(), addons.Shared(), server.URL+path, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		installed = append(installed, addon)
+	}
+	removed, other := installed[0], installed[1]
+	var choices []addons.LibraryChoice
+	for _, addon := range installed {
+		for _, id := range []string{"top", "new"} {
+			choices = append(choices, addons.LibraryChoice{AddonID: addon.ID, CatalogType: "movie", CatalogID: id})
+		}
+	}
+	if _, err := store.SetLibraries(t.Context(), addons.Shared(), choices); err != nil {
+		t.Fatal(err)
+	}
+	item := func(addon addons.Addon, id string) accounts.ID {
+		return library.LibraryID(addons.Library{AddonID: addon.ID, Catalog: stremio.Catalog{Type: "movie", ID: id}})
+	}
+	for _, addon := range installed {
+		for _, id := range []string{"top", "new"} {
+			status, code, _ := administrator.libraryImageCall("shared", map[string]any{"addonId": addon.ID.String(), "catalogType": "movie",
+				"catalogId": id, "image": "custom", "data": base64.StdEncoding.EncodeToString(picture)})
+			if status != http.StatusOK {
+				t.Fatalf("uploading for %s: %d %s", id, status, code)
+			}
+		}
+	}
+	// stored tells whether an item has an uploaded image, as the server
+	// shows it and as the database keeps it.
+	stored := func(id accounts.ID) (bool, bool) {
+		t.Helper()
+		_, shown := lib.UploadedArtwork(id, "Primary")
+		var rows int
+		if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM item_images WHERE item_id = $1", id).Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		return shown, rows > 0
+	}
+
+	// Disabled, the library keeps its image.
+	if _, err := store.SetLibraries(t.Context(), addons.Shared(), slices.DeleteFunc(slices.Clone(choices), func(c addons.LibraryChoice) bool {
+		return c.AddonID == removed.ID && c.CatalogID == "new"
+	})); err != nil {
+		t.Fatal(err)
+	}
+	if shown, inDatabase := stored(item(removed, "new")); !shown || !inDatabase {
+		t.Fatalf("a disabled library's image: shown %v, in the database %v", shown, inDatabase)
+	}
+
+	if status, body, _ := administrator.call(http.MethodDelete, "/scopes/shared/addons/"+removed.ID.String(), nil); status != http.StatusNoContent {
+		t.Fatalf("removing the addon: %d %v", status, body)
+	}
+	for _, id := range []string{"top", "new"} {
+		if shown, inDatabase := stored(item(removed, id)); shown || inDatabase {
+			t.Errorf("the removed addon's %s library image: shown %v, in the database %v", id, shown, inDatabase)
+		}
+		if shown, inDatabase := stored(item(other, id)); !shown || !inDatabase {
+			t.Errorf("another addon's %s library image: shown %v, in the database %v", id, shown, inDatabase)
+		}
 	}
 }
