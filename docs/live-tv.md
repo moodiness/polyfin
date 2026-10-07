@@ -33,7 +33,7 @@ A channel plays as the addon streams it when the app takes it.
 
 Each channel's stream is read through one connection to its source, whoever reads it: the check at its start, FFmpeg, apps relayed, a recording, several users watching it. The connection stays open 20 seconds after the last of them left, so a quick return to the channel starts at once. Whoever starts reading an MPEG-TS stream, first or joining, starts at its latest keyframe, after the tables that describe it, so that it decodes from its first bytes. A reader that falls more than a few seconds behind is dropped rather than holding the others back.
 
-An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
+An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). A stream being closed, as when its 20 seconds end, still counts until its connection is closed: a channel opening meanwhile waits for it, a second at most. Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
 
 #### Starting a channel
 

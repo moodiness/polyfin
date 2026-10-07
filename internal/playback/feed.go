@@ -118,6 +118,9 @@ func LiveFailure(err error) string {
 type liveState struct {
 	mu    sync.Mutex
 	feeds map[accounts.ID]*feed
+	// closing holds the feeds closed whose connection is not closed yet:
+	// their source still counts it (see makeRoom).
+	closing map[*feed]bool
 	// manifests are the streams found to be HLS playlists.
 	manifests map[accounts.ID]bool
 	// connections and health are set by LiveSources.
@@ -404,7 +407,8 @@ func (r *feedReader) Close() error {
 	return nil
 }
 
-// close ends the feed and its connection.
+// close ends the feed and its connection, which its source counts until it
+// is closed (see makeRoom).
 func (f *feed) close() {
 	f.mu.Lock()
 	if len(f.readers) > 0 && !f.evicted {
@@ -412,11 +416,20 @@ func (f *feed) close() {
 		return
 	}
 	f.mu.Unlock()
-	f.s.feeds.mu.Lock()
-	if f.s.feeds.feeds[f.version.ID] == f {
-		delete(f.s.feeds.feeds, f.version.ID)
+	st := &f.s.feeds
+	st.mu.Lock()
+	if st.feeds[f.version.ID] == f {
+		delete(st.feeds, f.version.ID)
 	}
-	f.s.feeds.mu.Unlock()
+	select {
+	case <-f.closed:
+	default:
+		if st.closing == nil {
+			st.closing = map[*feed]bool{}
+		}
+		st.closing[f] = true
+	}
+	st.mu.Unlock()
 	if f.cancel != nil {
 		f.cancel()
 	}
@@ -433,6 +446,12 @@ func (f *feed) evict() {
 	}
 	f.mu.Unlock()
 	f.close()
+	f.awaitClosed()
+}
+
+// awaitClosed returns once the feed's connection is closed, a second at
+// most.
+func (f *feed) awaitClosed() {
 	select {
 	case <-f.closed:
 	case <-time.After(time.Second):
@@ -461,7 +480,13 @@ func (f *feed) finish(err error) {
 func (f *feed) open(user accounts.ID) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f.cancel = cancel
-	defer close(f.closed)
+	defer func() {
+		st := &f.s.feeds
+		st.mu.Lock()
+		delete(st.closing, f)
+		close(f.closed)
+		st.mu.Unlock()
+	}()
 	freed, err := f.s.makeRoom(ctx, f, user)
 	var body io.ReadCloser
 	var head []byte
@@ -565,10 +590,12 @@ func (s *Service) closeIdle(f *feed) bool {
 	return len(idle) > 0
 }
 
-// makeRoom keeps a source within its connections before f opens one:
-// feeds of the source that no reader uses are closed first, then the
-// oldest only user reads; else it fails with ErrSlotsInUse. It reports
-// whether it closed one, which the provider may still count a moment.
+// makeRoom keeps a source within its connections before f opens one: the
+// feeds of the source still closing are waited for, as the source counts
+// their connections until they are closed; then feeds of the source that
+// no reader uses are closed, then the oldest only user reads; else it
+// fails with ErrSlotsInUse. It reports whether it closed or waited for
+// one, which the provider may still count a moment.
 func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool, error) {
 	st := &s.feeds
 	st.mu.Lock()
@@ -582,15 +609,27 @@ func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool
 		return false, err
 	}
 	st.mu.Lock()
-	var open []*feed
+	var open, closing []*feed
 	for _, other := range st.feeds {
 		if other != f && other.source == f.source && !other.finished() {
 			open = append(open, other)
 		}
 	}
+	for other := range st.closing {
+		if other.source == f.source {
+			closing = append(closing, other)
+		}
+	}
 	st.mu.Unlock()
-	if len(open) < limit {
+	if len(open)+len(closing) < limit {
 		return false, nil
+	}
+	for _, other := range closing {
+		other.awaitClosed()
+	}
+	freed := len(closing) > 0
+	if len(open) < limit {
+		return freed, nil
 	}
 	slices.SortFunc(open, func(a, b *feed) int { return a.opened.Compare(b.opened) })
 	idle := func(other *feed) bool {
@@ -608,7 +647,7 @@ func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool
 		}
 		return user != (accounts.ID{})
 	}
-	freed := false
+
 	for _, choose := range []func(*feed) bool{idle, mine} {
 		for _, other := range open {
 			if len(open) < limit {
