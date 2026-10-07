@@ -77,7 +77,7 @@ A genre the addon stops offering lists the whole catalog again, until another is
 
 **For app developers:**
 
-- A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. A listing with a `limit` lists as many as it asks, within the library's maximum.
+- A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. It waits for the addons 8 seconds at most, then lists the titles read by then, and never fewer than a page of 100. A listing with a `limit` lists as many as it asks, within the library's maximum.
 
 ## Music addons
 
@@ -183,6 +183,7 @@ To answer quickly:
 - When it starts, and every hour, Polyfin reads the first page of every library: the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard.
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
+- jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. The first time, reading them can take long: the page waits for the addons 8 seconds at most and shows the titles read by then, at least 100. The next time, it shows those at once and reads further.
 - A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
 - A search reads the first page of the search catalogs, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, and waits 0.3 seconds more for people-search catalogs. A slower answer is kept for the next search of the same term.
 - When an app gives up on a request, what Polyfin was reading for it goes on and is kept for the next request. Other apps waiting for the same page get it.

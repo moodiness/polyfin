@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -147,8 +148,8 @@ func (e env) libraries() []addons.Library {
 }
 
 // A library lists at most its maximum, reading no page past it, and so do
-// the collections of a collection library; a listing that asks for no
-// limit gets that maximum, else WholeListing.
+// the collections of a collection library, whole listings included; a
+// whole listing of a library without one lists all its titles.
 func TestALibraryListsAtMostItsMaximum(t *testing.T) {
 	e := newEnv(t)
 	addon := e.settingsLibraries(libraryOf("movie", "top", "", 5), libraryOf("collection", "sets", "", 3))
@@ -176,19 +177,105 @@ func TestALibraryListsAtMostItsMaximum(t *testing.T) {
 		t.Errorf("a collection of the library: %v, total %d, more %v, %v", names(page.Items), page.Total, page.More, err)
 	}
 
+	whole := func(parent accounts.ID) []string {
+		t.Helper()
+		page, err := e.service.Whole(t.Context(), e.member, parent, 0, 2, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return names(page.Items)
+	}
 	for name, tc := range map[string]struct {
 		parent accounts.ID
 		want   int
 	}{"the library": {top.ID, 5}, "a collection of a library": {all.ID, 3}} {
-		if got, err := e.service.ListingLimit(t.Context(), e.member, tc.parent); err != nil || got != tc.want {
-			t.Errorf("%s asked for no limit: %d %v, want %d", name, got, err, tc.want)
+		if got := whole(tc.parent); len(got) != tc.want {
+			t.Errorf("%s asked for no limit: %v, want %d titles", name, got, tc.want)
 		}
 	}
-	// Without a maximum, a listing that asks for no limit gets WholeListing.
 	e.chooseLibraries(libraryOf("movie", "top", "", 0))
-	plain := e.library(e.member, "Top")
-	if got, err := e.service.ListingLimit(t.Context(), e.member, plain.ID); err != nil || got != WholeListing {
-		t.Errorf("a library without a maximum: %d %v", got, err)
+	if got := whole(e.library(e.member, "Top").ID); len(got) != 10 {
+		t.Errorf("a library without a maximum asked for no limit: %v", got)
+	}
+}
+
+// A whole listing waits for addons at most wholeWait: it then lists the
+// titles read so far, well before the addon's request would time out (15
+// seconds), while the reads go on for the next listing.
+func TestAWholeListingWaitsForAddonsAWhile(t *testing.T) {
+	e := newEnv(t)
+	addon := e.settingsLibraries(libraryOf("movie", "top", "", 0))
+	top := e.library(e.member, "Top")
+	// The first page is read; then the addon answers nothing until the end.
+	if _, err := e.service.Children(t.Context(), e.member, top.ID, 0, 4, ""); err != nil {
+		t.Fatal(err)
+	}
+	gate := make(chan struct{})
+	addon.mu.Lock()
+	addon.catalogGate = gate
+	addon.mu.Unlock()
+	t.Cleanup(func() { close(gate) })
+	e.service.wholeWait = 50 * time.Millisecond
+	started := time.Now()
+	page, err := e.service.Whole(t.Context(), e.member, top.ID, 0, 4, "")
+	if waited := time.Since(started); waited > 5*time.Second {
+		t.Errorf("waited %v for the addon", waited)
+	}
+	if want := []string{"movie 0", "movie 1", "movie 2", "movie 3"}; err != nil || !slices.Equal(names(page.Items), want) || !page.More {
+		t.Errorf("listed %v, more %v, %v; want %v and more", names(page.Items), page.More, err, want)
+	}
+}
+
+// A whole listing of a collection that runs out of time lists what was
+// read of each of its catalogs, though the late listing, which merges
+// what its catalogs answered in time, may have left some out.
+func TestALateWholeListingOfACollectionKeepsEachCatalog(t *testing.T) {
+	e := newEnv(t)
+	second := titles("movie", 6)
+	for i := range second {
+		second[i].ID, second[i].Name = fmt.Sprintf("ttb%03d", i), fmt.Sprintf("other %d", i)
+	}
+	addon := &fakeAddon{
+		manifest: stremio.Manifest{ID: "pair", Name: "Pair", Version: "1", Types: []string{"movie", "collection"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+			Catalogs: []stremio.Catalog{
+				{Type: "movie", ID: "first", Name: "First", Extra: []stremio.Extra{{Name: "skip"}}},
+				{Type: "movie", ID: "second", Name: "Second", Extra: []stremio.Extra{{Name: "skip"}}},
+				{Type: "collection", ID: "sets", Name: "Sets"},
+			}},
+		catalogs: map[string][]stremio.Meta{
+			"movie/first":     titles("movie", 6),
+			"movie/second":    second,
+			"collection/sets": {{ID: "col:pair", Type: "collection", Name: "Pair"}},
+		},
+		metas: map[string]stremio.Meta{
+			"collection/col:pair": {ID: "col:pair", Type: "collection", Name: "Pair", Collection: &stremio.Collection{
+				Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: "first"}, {Type: "movie", CatalogID: "second"}}}},
+		},
+		pageSize: 2,
+	}
+	e.install(addons.Shared(), addon)
+	e.chooseLibraries(libraryOf("collection", "sets", "", 0))
+	collections := e.children(e.member, "Sets", 0, 10)
+	if len(collections.Items) != 1 {
+		t.Fatalf("the collections: %v", names(collections.Items))
+	}
+	pair := collections.Items[0].ID
+	// The first two pages of each catalog are read; then the addon answers
+	// nothing until the end.
+	if page, err := e.service.Children(t.Context(), e.member, pair, 0, 4, ""); err != nil || len(page.Items) != 4 {
+		t.Fatalf("the first titles: %v %v", names(page.Items), err)
+	}
+	gate := make(chan struct{})
+	addon.mu.Lock()
+	addon.catalogGate = gate
+	addon.mu.Unlock()
+	t.Cleanup(func() { close(gate) })
+	e.service.wholeWait = 50 * time.Millisecond
+	page, err := e.service.Whole(t.Context(), e.member, pair, 0, 4, "")
+	want := []string{"movie 0", "other 0", "movie 1", "other 1", "movie 2", "other 2", "movie 3", "other 3"}
+	if err != nil || !slices.Equal(names(page.Items), want) || !page.More {
+		t.Errorf("listed %v, more %v, %v; want %v and more", names(page.Items), page.More, err, want)
 	}
 }
 

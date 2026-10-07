@@ -172,7 +172,7 @@ func (b bindErrors) paging(r *http.Request, fallback int) (start, limit int) {
 
 // wholeListing reports whether a listing asks for no limit, as
 // jellyfin-web's collection pages do: Jellyfin then lists every item.
-// Polyfin lists library.WholeListing at most (see library.ListingLimit).
+// Polyfin lists up to library.WholeListing (see library.Service.Whole).
 func wholeListing(r *http.Request) bool {
 	return strings.TrimSpace(query(r, "limit")) == ""
 }
@@ -379,17 +379,13 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
+	var page library.Page
+	var err error
 	if wholeListing(r) {
-		whole, err := h.Library.ListingLimit(r.Context(), user, parent)
-		if err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		if whole > 0 {
-			limit = whole
-		}
+		page, err = h.Library.Whole(r.Context(), user, parent, max(start, 0), limit, genre)
+	} else {
+		page, err = h.Library.Children(r.Context(), user, parent, max(start, 0), limit, genre)
 	}
-	page, err := h.Library.Children(r.Context(), user, parent, max(start, 0), limit, genre)
 	if errors.Is(err, library.ErrNotFound) {
 		// Jellyfin refuses to list a folder it does not know.
 		processingError(w, http.StatusBadRequest)

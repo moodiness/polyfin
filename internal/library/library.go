@@ -90,6 +90,9 @@ type Service struct {
 	// ratingWait bounds how long a request waits for them.
 	ratingLookups chan struct{}
 	ratingWait    time.Duration
+	// wholeWait bounds how long a whole listing waits for addons (see
+	// Whole).
+	wholeWait time.Duration
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -160,6 +163,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		followUpDelays: followUpDelays,
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
+		wholeWait:      wholeListingWait,
 		music:          eclipse.NewClient(client),
 	}
 	clock := func() time.Time { return s.now() }
@@ -928,7 +932,7 @@ const prefetchLimit = 2
 // for a user whose listings wait for ratings, nor from an addon whose last
 // request failed, which would only be asked more.
 func (s *Service) prefetch(ctx context.Context, v view, addon installed, read func(context.Context)) {
-	if !s.readAhead || v.restricted() || keptOnly(ctx) || addon.addon.IPTV() {
+	if !s.readAhead || v.restricted() || keptOnly(ctx) || whole(ctx) || addon.addon.IPTV() {
 		return
 	}
 	if health, ok := s.client.Health(addon.addon.ManifestURL); ok && health.Failure != "" {
@@ -1053,15 +1057,66 @@ func (s *Service) collectionMax(ctx context.Context, v view, r record) int {
 	return 0
 }
 
-// WholeListing is how many items a listing of a library or a collection
-// that asks for no limit gets at most, as jellyfin-web's collection pages
-// ask for every title in one request.
-const WholeListing = 500
+const (
+	// WholeListing is how many items a listing of a library or a
+	// collection that asks for no limit gets at most, as jellyfin-web's
+	// collection pages ask for every title in one request.
+	WholeListing = 500
+	// wholeListingWait bounds how long such a listing waits for addons
+	// (see Whole).
+	wholeListingWait = 8 * time.Second
+)
 
-// ListingLimit is how many items a listing of parent that asks for no
+// wholeKey marks the context of a whole listing, which reads no page
+// ahead: apps ask for no next page.
+type wholeKey struct{}
+
+func whole(ctx context.Context) bool {
+	marked, _ := ctx.Value(wholeKey{}).(bool)
+	return marked
+}
+
+// Whole lists the children of parent from start for a listing that asks
+// for no limit, as a listing of count does but for a library or a
+// collection: up to WholeListing items, or the library's maximum when
+// lower (see listingLimit). Their first read may take long, catalogs
+// being read a page at a time: it waits for addons at most wholeListingWait,
+// then lists the items read and kept so far, while the reads go on and
+// keep their pages for the next listing. It never lists fewer than a
+// listing of count would.
+func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
+	most, err := s.listingLimit(ctx, user, parent)
+	if err != nil {
+		return Page{}, err
+	}
+	// Other folders list a page, and a library's maximum bounds its own
+	// listings (see withinMax).
+	if most <= count {
+		return s.Children(ctx, user, parent, start, count, genre)
+	}
+	wait, cancel := context.WithTimeout(context.WithValue(ctx, wholeKey{}, true), s.wholeWait)
+	page, err := s.Children(wait, user, parent, start, most, genre)
+	late := wait.Err() != nil
+	cancel()
+	// A late listing may have left out what it did not wait for: a
+	// collection's catalogs that had not answered.
+	if err == nil && !late {
+		return page, nil
+	}
+	if ctx.Err() != nil {
+		return Page{}, ctx.Err()
+	}
+	known, err := s.Children(withKeptOnly(ctx), user, parent, start, most, genre)
+	if err == nil && (len(known.Items) >= count || !known.More) {
+		return known, nil
+	}
+	return s.Children(ctx, user, parent, start, count, genre)
+}
+
+// listingLimit is how many items a listing of parent that asks for no
 // limit gets: WholeListing, or the maximum of the library the library or
 // collection parent belongs to when lower; 0 for any other parent.
-func (s *Service) ListingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (int, error) {
+func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (int, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return 0, err
