@@ -345,22 +345,26 @@ var (
 // MaxTrackingAppBytes is the longest Trakt or Simkl credential, in bytes.
 const MaxTrackingAppBytes = 256
 
-// ErrInvalidBackupHour reports a BackupHour outside [0, 23], and
+// ErrInvalidBackupHour reports a BackupHour outside [0, 23],
 // ErrInvalidBackupsKept a BackupsKept outside [MinBackupsKept,
-// MaxBackupsKept].
+// MaxBackupsKept], and ErrInvalidCollectionReadHour a CollectionReadHour
+// outside [-1, 23].
 var (
-	ErrInvalidBackupHour  = errors.New("invalid backup hour")
-	ErrInvalidBackupsKept = errors.New("invalid number of backups kept")
+	ErrInvalidBackupHour         = errors.New("invalid backup hour")
+	ErrInvalidBackupsKept        = errors.New("invalid number of backups kept")
+	ErrInvalidCollectionReadHour = errors.New("invalid collection read hour")
 )
 
-// The bounds and defaults of Settings.BackupHour and BackupsKept: by
-// default, the database is backed up at 4 in the morning and the last week
-// of backups is kept.
+// The bounds and defaults of Settings.BackupHour, BackupsKept and
+// CollectionReadHour: by default, the database is backed up at 4 in the
+// morning, the last week of backups is kept, and collections are never
+// all read.
 const (
-	DefaultBackupHour  = 4
-	MinBackupsKept     = 1
-	MaxBackupsKept     = 90
-	DefaultBackupsKept = 7
+	DefaultBackupHour         = 4
+	MinBackupsKept            = 1
+	MaxBackupsKept            = 90
+	DefaultBackupsKept        = 7
+	DefaultCollectionReadHour = -1
 )
 
 // Languages are the server languages, as ISO 639-1 codes. The first is the
@@ -553,6 +557,10 @@ type Settings struct {
 	// newest backups are kept, when POLYFIN_BACKUP_DIR turns backups on.
 	BackupHour  int
 	BackupsKept int
+	// CollectionReadHour is the hour of the server's time zone, 0 to 23,
+	// at which every collection of the server's collection libraries is
+	// read each day; -1 never.
+	CollectionReadHour int
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -599,7 +607,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
-	"backup_hour, backups_kept"
+	"backup_hour, backups_kept, collection_read_hour"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -625,7 +633,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
-		&settings.BackupHour, &settings.BackupsKept}
+		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -842,6 +850,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.BackupsKept < MinBackupsKept || settings.BackupsKept > MaxBackupsKept {
 		return Settings{}, ErrInvalidBackupsKept
+	}
+	if settings.CollectionReadHour < -1 || settings.CollectionReadHour > 23 {
+		return Settings{}, ErrInvalidCollectionReadHour
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

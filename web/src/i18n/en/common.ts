@@ -165,6 +165,8 @@ const common = {
       'The Simkl client ID must be at most 256 characters, without spaces or special characters. Copy it again from your Simkl app.',
     invalid_backup_hour: 'Choose the hour of the backups from the list.',
     invalid_backups_kept: 'The number of backups kept must be a whole number from 1 to 90.',
+    invalid_collection_read_hour:
+      'Choose the hour collections are read at, or Never, from the list.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',

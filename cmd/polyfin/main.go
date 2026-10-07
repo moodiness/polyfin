@@ -424,6 +424,18 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 		AtStart:  true,
 		Run:      lib.Warm,
 	})
+	// Reading every collection asks the addons for many pages: it runs at
+	// the hour an administrator sets, never by default.
+	registry.Register(tasks.Task{
+		Key:      "ReadCollections",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Read every collection", Description: "Reads every collection of the server's collection libraries whole, one after the other, so that each opens at once with all its titles: every day at the hour set under Settings › Catalogs, never by default."},
+			"fr": {Name: "Lire toutes les collections", Description: "Lit en entier toutes les collections des médiathèques de collections du serveur, l’une après l’autre, pour que chacune s’ouvre tout de suite avec tous ses titres : chaque jour à l’heure choisie dans Paramètres › Catalogues, jamais par défaut."},
+		},
+		Daily: func() int { return store.Settings().CollectionReadHour },
+		Run:   lib.ReadCollections,
+	})
 	// Asking for ratings costs requests to addons: this runs only when an
 	// administrator starts it.
 	registry.Register(tasks.Task{

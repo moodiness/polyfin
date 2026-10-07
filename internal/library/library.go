@@ -572,19 +572,21 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 		offsets := []int{received}
 		needed := start + count - len(collected)
 		if !src.first && size > 0 && (trusted || size >= shortPage) {
+			// Pages a read takes without asking the addon do not count
+			// toward the pages asked for at once (see readyPage).
 			uncached := 0
-			if _, ok := s.cachedPage(src.key(received)); !ok {
+			if _, ok := s.readyPage(ctx, src.key(received)); !ok {
 				uncached++
 			}
 			for next := received + size; next < min(received+needed, limit); next += size {
 				if kept, ok := s.cachedPage(src.key(offsets[len(offsets)-1])); ok && len(kept) == 0 {
 					break
 				}
-				_, cached := s.cachedPage(src.key(next))
-				if !cached && uncached >= pageFetches {
+				_, ready := s.readyPage(ctx, src.key(next))
+				if !ready && uncached >= pageFetches {
 					break
 				}
-				if !cached {
+				if !ready {
 					uncached++
 				}
 				offsets = append(offsets, next)

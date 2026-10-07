@@ -63,9 +63,10 @@ type Task struct {
 	// Interval runs the task that often; 0 never runs it on a timer.
 	Interval time.Duration
 	// Daily, when set, runs the task every day at the hour of the server's
-	// time zone it returns, 0 to 23. It is asked again every minute, so
-	// that a new hour applies without a restart. A task has an Interval or
-	// Daily, not both.
+	// time zone it returns, 0 to 23, or never for a negative hour: the task
+	// then runs by hand only. It is asked again every minute, so that a new
+	// hour applies without a restart. A task has an Interval or Daily, not
+	// both.
 	Daily func() int
 	// AtStart runs the task once when the registry starts.
 	AtStart bool
@@ -106,7 +107,8 @@ type Info struct {
 	Description string
 	Category    string
 	Interval    time.Duration
-	// Daily is the hour a daily task runs at, nil for other tasks.
+	// Daily is the hour a daily task runs at, nil for other tasks and for
+	// a daily task without one.
 	Daily   *int
 	AtStart bool
 	State   State
@@ -195,7 +197,7 @@ func (r *Registry) schedule(e *entry) {
 		r.start(e, false)
 	}
 	if e.Daily != nil {
-		e.next = NextDaily(r.now(), e.Daily())
+		e.next = scheduledDaily(r.now(), e.Daily())
 		go r.daily(e, e.next)
 		return
 	}
@@ -223,10 +225,14 @@ func (r *Registry) schedule(e *entry) {
 // daily runs e every day at the hour e.Daily gives, next the first time,
 // until the registry's context ends. It wakes at the next run, or sooner
 // to ask the hour again: an hour changed to one already past today runs
-// tomorrow.
+// tomorrow. A negative hour runs it never, until an hour is given.
 func (r *Registry) daily(e *entry, next time.Time) {
 	for {
-		timer := time.NewTimer(min(next.Sub(r.now()), r.dailyCheck))
+		wait := r.dailyCheck
+		if !next.IsZero() {
+			wait = min(next.Sub(r.now()), r.dailyCheck)
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-r.ctx.Done():
 			timer.Stop()
@@ -235,13 +241,22 @@ func (r *Registry) daily(e *entry, next time.Time) {
 		}
 		checked := r.now()
 		r.mu.Lock()
-		if !checked.Before(next) {
+		if !next.IsZero() && !checked.Before(next) {
 			r.start(e, false)
 		}
-		next = NextDaily(checked, e.Daily())
+		next = scheduledDaily(checked, e.Daily())
 		e.next = next
 		r.mu.Unlock()
 	}
+}
+
+// scheduledDaily is when a daily task of hour runs next after after (see
+// NextDaily), zero for a negative hour: none.
+func scheduledDaily(after time.Time, hour int) time.Time {
+	if hour < 0 {
+		return time.Time{}
+	}
+	return NextDaily(after, hour)
 }
 
 // NextDaily is the first time after after that is hour o'clock in after's
@@ -372,10 +387,11 @@ func (e *entry) info(language string, now time.Time) Info {
 	}
 	switch {
 	case e.Daily != nil:
-		hour := e.Daily()
-		info.Daily = &hour
-		if !e.next.IsZero() {
-			info.Next = new(NextDaily(now, hour))
+		if hour := e.Daily(); hour >= 0 {
+			info.Daily = &hour
+			if !e.next.IsZero() {
+				info.Next = new(NextDaily(now, hour))
+			}
 		}
 	case !e.next.IsZero():
 		info.Next = new(e.next)

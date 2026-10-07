@@ -178,6 +178,7 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 | **Channels read per Live TV catalog** | **Settings › Catalogs** | 10,000 (100 to 50,000) | Item limit for Live TV catalogs (see [Live TV](live-tv.md)). |
 | **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are used before Polyfin asks the addons again. |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the Live TV guide's included, may get before Polyfin reads it again. Apps never wait for it. |
+| **Read every collection each day** | **Settings › Catalogs** | Never (or an hour, 0 to 23) | Reads every collection of the server's collection libraries at this hour of the server's time zone, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others. |
 
 A library can have its own maximum instead, lower or higher, and list only one genre of its catalog: see [Genre and maximum](#genre-and-maximum).
 
@@ -198,6 +199,7 @@ To answer quickly:
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
 - jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. Reading them all can take long the first time: the page waits for the addons 3 seconds at most and shows the titles read by then, at least the first page of each catalog, while Polyfin reads the rest in the background. The next time, the page shows them all at once; if Polyfin is still reading, it shows those read so far after 1 second at most.
+- With **Read every collection each day** set to an hour, Polyfin reads every collection of the server's collection libraries whole at that hour: the scheduled task "Read every collection", which an administrator can also run by hand. It reads one collection after the other, asks the addons again for the pages past **Refresh catalogs after (minutes)** and waits for their answers, so that every collection page then opens at once with all its titles. The server log tells how many collections it read and how long it took.
 - A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
 - A search reads the first page of the search catalogs, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, and waits 0.3 seconds more for people-search catalogs. A slower answer is kept for the next search of the same term.
 - When an app gives up on a request, what Polyfin was reading for it goes on and is kept for the next request. Other apps waiting for the same page get it.

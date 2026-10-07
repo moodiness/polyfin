@@ -357,12 +357,14 @@ type settingsJSON struct {
 	TraktClientSecret    *string `json:"traktClientSecret,omitempty"`
 	TraktClientSecretSet bool    `json:"traktClientSecretSet"`
 	SimklClientID        *string `json:"simklClientId"`
-	// BackupHour and BackupsKept keep their current values when a PUT
-	// leaves them out. BackupFolder is the folder backups are written to,
-	// empty when they are off; a PUT cannot change it.
-	BackupHour   *int   `json:"backupHour"`
-	BackupsKept  *int   `json:"backupsKept"`
-	BackupFolder string `json:"backupFolder"`
+	// BackupHour, BackupsKept and CollectionReadHour keep their current
+	// values when a PUT leaves them out. BackupFolder is the folder
+	// backups are written to, empty when they are off; a PUT cannot
+	// change it.
+	BackupHour         *int   `json:"backupHour"`
+	BackupsKept        *int   `json:"backupsKept"`
+	BackupFolder       string `json:"backupFolder"`
+	CollectionReadHour *int   `json:"collectionReadHour"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -462,8 +464,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TraktClientSecretSet: settings.TraktClientSecret != "",
 		SimklClientID:        &settings.SimklClientID,
 
-		BackupHour:  &settings.BackupHour,
-		BackupsKept: &settings.BackupsKept,
+		BackupHour:         &settings.BackupHour,
+		BackupsKept:        &settings.BackupsKept,
+		CollectionReadHour: &settings.CollectionReadHour,
 	}
 }
 
@@ -930,8 +933,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),
 		SimklClientID:     valueOr(body.SimklClientID, current.SimklClientID),
 
-		BackupHour:  valueOr(body.BackupHour, current.BackupHour),
-		BackupsKept: valueOr(body.BackupsKept, current.BackupsKept),
+		BackupHour:         valueOr(body.BackupHour, current.BackupHour),
+		BackupsKept:        valueOr(body.BackupsKept, current.BackupsKept),
+		CollectionReadHour: valueOr(body.CollectionReadHour, current.CollectionReadHour),
 	})
 	if accountError(w, err) {
 		return

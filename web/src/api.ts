@@ -276,6 +276,8 @@ export type Settings = {
   backupsKept: number
   /** Folder backups are written to (read-only); empty when backups are off. */
   backupFolder: string
+  /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
+  collectionReadHour: number
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }

@@ -60,8 +60,9 @@ func DefaultSettings() Settings {
 		RecordingRetentionDays: DefaultRecordingRetentionDays,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
 
-		BackupHour:  DefaultBackupHour,
-		BackupsKept: DefaultBackupsKept,
+		BackupHour:         DefaultBackupHour,
+		BackupsKept:        DefaultBackupsKept,
+		CollectionReadHour: DefaultCollectionReadHour,
 	}
 }
 
@@ -167,8 +168,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"traktClientSecret": text(MaxTrackingAppBytes, d.TraktClientSecret),
 		"simklClientId":     text(MaxTrackingAppBytes, d.SimklClientID),
 
-		"backupHour":  between(0, 23, d.BackupHour),
-		"backupsKept": between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
+		"backupHour":         between(0, 23, d.BackupHour),
+		"backupsKept":        between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
+		"collectionReadHour": between(-1, 23, d.CollectionReadHour),
 	}
 }
 

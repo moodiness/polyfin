@@ -235,6 +235,10 @@ const settings: typeof en = {
     catalogRefreshMinutes: 'Rafraîchir les catalogues après (minutes)',
     catalogRefreshMinutesHelp: (r: RangeText) =>
       `L’âge qu’une page de catalogue lue auprès d’un addon, guide de la TV en direct compris, peut atteindre avant que Polyfin la relise. Les applis ne l’attendent jamais : une page plus ancienne s’affiche quand même tout de suite pendant que Polyfin la relit en arrière-plan, et elle est gardée un jour de plus. Une durée plus longue envoie moins de demandes aux addons, mais les nouveaux titres apparaissent plus tard. De ${r.min} à ${r.max} (un jour) ; ${r.default} par défaut.`,
+    collectionReadHour: 'Lire toutes les collections chaque jour',
+    collectionReadHourNever: 'Jamais',
+    collectionReadHourHelp:
+      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons : laissez-le désactivé pour un addon que vous partagez avec d’autres.',
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
