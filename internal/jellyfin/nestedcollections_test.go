@@ -31,7 +31,7 @@ func nestedCollectionsAddon(t *testing.T) string {
 		"col:anim": {ID: "col:anim", Type: "collection", Name: "Animation", Collection: &stremio.Collection{Items: []stremio.Meta{
 			{ID: "col:anim:movies", Name: "Movies"}, {ID: "col:anim:series", Name: "Series"}}}},
 		"col:anim:movies": {ID: "col:anim:movies", Type: "collection", Name: "Movies",
-			Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: "films"}}}},
+			Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "movie", CatalogID: "top"}}}},
 		"col:anim:series": {ID: "col:anim:series", Type: "collection", Name: "Series",
 			Collection: &stremio.Collection{Sources: []stremio.CollectionSource{{Type: "series", CatalogID: "shows"}}}},
 	}
@@ -41,11 +41,11 @@ func nestedCollectionsAddon(t *testing.T) string {
 		case path == "/manifest.json":
 			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "nested", Name: "Nested", Version: "1", Types: []string{"movie", "series", "collection"},
 				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
-				Catalogs: []stremio.Catalog{{Type: "collection", ID: "genres", Name: "Genres"}, {Type: "movie", ID: "films", Name: "Films"},
+				Catalogs: []stremio.Catalog{{Type: "collection", ID: "genres", Name: "Genres"}, {Type: "movie", ID: "top", Name: "Top"},
 					{Type: "series", ID: "shows", Name: "Shows"}}})
 		case strings.HasPrefix(path, "/catalog/collection/genres"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{{ID: "col:anim", Type: "collection", Name: "Animation"}}})
-		case strings.HasPrefix(path, "/catalog/movie/films"):
+		case strings.HasPrefix(path, "/catalog/movie/top"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": titles("movie", "ttm", 2012, 2017)})
 		case strings.HasPrefix(path, "/catalog/series/shows"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": titles("series", "tts", 2002, 2004)})

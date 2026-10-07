@@ -25,18 +25,18 @@ func nestedAddon() *fakeAddon {
 			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
 			Catalogs: []stremio.Catalog{
 				{Type: "collection", ID: "genres", Name: "Genres"},
-				{Type: "movie", ID: "films", Name: "Films"},
+				{Type: "movie", ID: "top", Name: "Top"},
 				{Type: "series", ID: "shows", Name: "Shows"},
 			}},
 		catalogs: map[string][]stremio.Meta{
 			"collection/genres": {{ID: "col:anim", Type: "collection", Name: "Animation"}},
-			"movie/films":       titles("movie", 3),
+			"movie/top":         titles("movie", 3),
 			"series/shows":      series,
 		},
 		metas: map[string]stremio.Meta{
 			"collection/col:anim": collection("col:anim", "Animation", []stremio.Meta{
 				{ID: "col:anim:movies", Name: "Movies"}, {ID: "col:anim:series", Name: "Series"}}),
-			"collection/col:anim:movies": collection("col:anim:movies", "Movies", nil, stremio.CollectionSource{Type: "movie", CatalogID: "films"}),
+			"collection/col:anim:movies": collection("col:anim:movies", "Movies", nil, stremio.CollectionSource{Type: "movie", CatalogID: "top"}),
 			"collection/col:anim:series": collection("col:anim:series", "Series", nil, stremio.CollectionSource{Type: "series", CatalogID: "shows"}),
 		},
 	}
