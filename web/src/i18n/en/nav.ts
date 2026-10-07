@@ -10,7 +10,6 @@ const nav = {
     sources: 'Sources',
     libraries: 'Libraries',
     liveTv: 'Live TV',
-    streamyfin: 'Streamyfin home',
     health: 'Health',
     schedule: 'Schedule',
     logs: 'Logs',
