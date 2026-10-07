@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 )
 
 // A catalog's XMLTV guide feeds the programme listings, the programme
-// each channel airs now and the programmes' details, for the channels
-// without Native EPG programmes: a channel with them keeps them.
+// each channel airs now, the programmes' details and their images, for the
+// channels without Native EPG programmes: a channel with them keeps them.
 func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
@@ -27,12 +28,19 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
   <channel id="two-x"><display-name>FR: TWO | HD</display-name></channel>
   <programme channel="one-x" start="%s" stop="%s"><title>Guide One</title></programme>
   <programme channel="two-x" start="%s" stop="%s">
-    <title>Talk Show</title><sub-title>Pilot</sub-title><desc>Caf%s.</desc>
+    <title>Talk Show</title><sub-title>Pilot</sub-title><desc>Caf%s.</desc><icon src="ICON"/>
     <category>Sports</category><episode-num system="xmltv_ns">1.4.</episode-num>
   </programme>
   <programme channel="two-x" start="%s" stop="%s"><title>Late Movie</title><category>Movie</category></programme>
 </tv>`, at(-time.Hour), at(time.Hour), at(-time.Hour), at(time.Hour), "\xe9", at(time.Hour), at(3*time.Hour))
-	guide := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, body) }))
+	guide := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/talk.png" {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte("\x89PNG\r\n\x1a\n"))
+			return
+		}
+		_, _ = io.WriteString(w, strings.ReplaceAll(body, "ICON", "http://"+r.Host+"/talk.png"))
+	}))
 	t.Cleanup(guide.Close)
 	libraries, err := s.addons.Libraries(t.Context(), addons.Shared())
 	if err != nil || len(libraries) != 1 {
@@ -69,6 +77,11 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 		talk.ParentIndexNumber == nil || *talk.ParentIndexNumber != 2 || talk.IndexNumber == nil || *talk.IndexNumber != 5 ||
 		talk.Overview == nil || *talk.Overview != "Café." || *talk.ChannelId != two.Id {
 		t.Errorf("guide programme: %+v", talk)
+	}
+	// Its image is relayed from the guide's address, which no item keeps.
+	if status, header, _ := s.send(http.MethodGet, "/Items/"+talk.Id+"/Images/Primary?tag="+talk.ImageTags["Primary"], "", "", ""); talk.ImageTags["Primary"] == "" ||
+		status != http.StatusOK || header.Get("Content-Type") != "image/png" {
+		t.Errorf("the programme's image: tag %q, %d %s", talk.ImageTags["Primary"], status, header.Get("Content-Type"))
 	}
 	s.get(t, "/LiveTv/Programs?IsMovie=true", token, &programs)
 	if names := programNames(programs); !slices.Equal(names, []string{"Next", "Late Movie"}) {

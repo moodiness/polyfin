@@ -126,6 +126,18 @@ func (e followEnv) scheduled() int {
 	return len(e.service.followUps.running)
 }
 
+// hurry has every schedule running ask its next follow-up at once.
+func (e followEnv) hurry() {
+	e.service.followUps.mu.Lock()
+	defer e.service.followUps.mu.Unlock()
+	for _, f := range e.service.followUps.running {
+		select {
+		case f.hurry <- struct{}{}:
+		default:
+		}
+	}
+}
+
 // known counts the versions known, asking no addon.
 func (e followEnv) known() int {
 	e.t.Helper()

@@ -574,6 +574,9 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		url, confined, err = h.recordingArtwork(r.Context(), id, r.PathValue("imageType"))
 	}
 	if errors.Is(err, library.ErrNotFound) {
+		url, confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
+	}
+	if errors.Is(err, library.ErrNotFound) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

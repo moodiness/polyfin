@@ -37,7 +37,7 @@ An Xtream account tells, at its login, how many streams it plays at once. Polyfi
 
 #### Starting a channel
 
-Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 3 seconds (5 for its answer) fails as silent. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with half a second of probing; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
+Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 3 seconds (10 for its answer, as providers that redirect to the stream can take several seconds) fails as silent. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with half a second of probing; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
 
 A live stream has no end: when its source closes the connection, or sends nothing for 10 seconds, FFmpeg reads it again after 1, 2, then 4 seconds, and the playlist goes on with a discontinuity instead of ending. Past 5 restarts in 2 minutes it gives up, until the app asks again.
 
@@ -130,7 +130,7 @@ A choice made by hand survives downloads, refreshes and **Map channels without a
 
 XMLTV programmes appear wherever Native EPG programmes do, with the same filters: the programme listings, recommended programmes, a programme's details, and the programme each channel airs now. A guide category such as "Movie", "News" or "Sports" marks programmes as a Native EPG genre does.
 
-XMLTV programmes are read from the guide when asked: a guide page reads only its channels' programmes, and a listing by start time (such as the upcoming rows of the Live TV page) reads no further than it shows. They are not stored apart from the guide; a programme opened by its identifier is found again in the guide. Native EPG programmes listed are kept, and deleted two days after they end, unless a recording or a timer names them.
+XMLTV programmes are read from the guide when asked: a guide page reads only its channels' programmes, and a listing by start time (such as the upcoming rows of the Live TV page) reads no further than it shows. They are not stored apart from the guide; a programme opened by its identifier is found again in the guide. A programme's image, its guide's `icon`, is relayed for the programmes listed in the last day, as images are served without signing in. Native EPG programmes listed are kept, and deleted two days after they end, unless a recording or a timer names them.
 
 Recommended programmes airing now are listed by channel number; those to come, by start time.
 

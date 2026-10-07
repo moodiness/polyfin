@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -138,17 +139,21 @@ func browsingOn(t *testing.T, s testServer) (testServer, string, map[string]stri
 	return s, token, ids
 }
 
-// episodeStreams serves two streams of every episode.
+// episodeStreams serves two streams of every episode. Their files are
+// served too: a source that fails would stop the analyses that tests count.
 func episodeStreams(t *testing.T) string {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch path := r.URL.EscapedPath(); {
 		case path == "/manifest.json":
 			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "episodes", Name: "Episodes", Version: "1", Types: []string{"series"},
 				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
 		case strings.HasPrefix(path, "/stream/series/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{
-				{Name: "1080p", URL: "https://example.com/1080p.mkv"}, {Name: "720p", URL: "https://example.com/720p.mkv"}}})
+				{Name: "1080p", URL: server.URL + "/files/1080p.mkv"}, {Name: "720p", URL: server.URL + "/files/720p.mkv"}}})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
 			http.NotFound(w, r)
 		}

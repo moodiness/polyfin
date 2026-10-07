@@ -51,11 +51,12 @@ var shortProbe = []string{"-probesize", "500000", "-analyzeduration", "500000", 
 // AnalyzeLive returns what a live stream holds: as found before, kept in
 // the database for shapeLife; else as ffprobe finds it, reading the
 // stream's shared feed (see openFeed) for a second, or an HLS playlist
-// through the loopback relay, within liveProbeCap. A stream that does not
-// answer with a live stream fails at once with ErrLiveDead,
-// ErrLiveRefused or ErrLiveTimeout; dead and silent streams are not tried
-// again for a while, refused ones are at the next start. How it answered
-// is told to LiveSources' health.
+// through the loopback relay, within liveProbeCap once the source
+// answered. A stream that does not answer with a live stream fails at once
+// with ErrLiveDead, ErrLiveRefused or ErrLiveTimeout. A source that sent
+// nothing in time, or refused, is asked again at the next start; one that
+// answered no live stream, or whose analysis outlasted its time, is not for
+// a while. How it answered is told to LiveSources' health.
 func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
@@ -77,29 +78,34 @@ func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (med
 }
 
 // probeLive analyzes a live stream (see AnalyzeLive) and keeps what it
-// found.
+// found. The source has its feed's times to answer (see sniff), and the
+// analysis liveProbeCap from then on.
 func (s *Service) probeLive(ctx context.Context, version library.Version) (media.Analysis, error) {
-	prober := s.ffprobe()
-	prober.Timeout = min(prober.Timeout, liveProbeCap)
-	ctx, cancel := context.WithTimeout(ctx, prober.Timeout)
-	defer cancel()
 	reader, err := s.openFeed(ctx, version)
 	if err != nil && !errors.Is(err, errManifest) {
-		s.liveFailed(ctx, version, err)
+		// A source may be slow once: one that sent nothing in time is asked
+		// again at the next start, unless its health leaves it out.
+		s.liveFailed(ctx, version, err, LiveFailure(err) != LiveTimeout)
 		return media.Analysis{}, err
 	}
 	// The analysis joins the feed opened for it: it holds it open meanwhile.
 	defer reader.Close()
+	prober := s.ffprobe()
+	prober.Timeout = min(prober.Timeout, liveProbeCap)
+	probeCtx, cancel := context.WithTimeout(ctx, prober.Timeout)
+	defer cancel()
 	target, release := s.loopback.registerLiveFor(version, userOf(ctx))
 	defer release()
-	analysis, err := prober.ProbeLive(ctx, target)
+	analysis, err := prober.ProbeLive(probeCtx, target)
 	if err != nil {
-		if ctx.Err() != nil {
+		if probeCtx.Err() != nil {
 			err = fmt.Errorf("%w: %w", ErrLiveTimeout, err)
 		} else if LiveFailure(err) == "" {
 			err = fmt.Errorf("%w: %v", ErrLiveDead, err)
 		}
-		s.liveFailed(ctx, version, err)
+		// The source answered: an analysis that outlasted its time would
+		// be waited for again.
+		s.liveFailed(ctx, version, err, true)
 		return media.Analysis{}, err
 	}
 	s.analyses.Put(version.ID, analysis)
@@ -108,12 +114,13 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 	return analysis, nil
 }
 
-// liveFailed records a live stream's failure: told to LiveSources'
-// health, and, unless it was refused, kept among the failures.
-func (s *Service) liveFailed(ctx context.Context, version library.Version, err error) {
+// liveFailed records a live stream's failure: told to LiveSources' health
+// and, when kept and not a refusal, kept among the failures, which the
+// next starts skip.
+func (s *Service) liveFailed(ctx context.Context, version library.Version, err error, kept bool) {
 	s.logger.Info("A channel's stream failed", "addon", version.Addon, "failure", LiveFailure(err), "error", err)
 	s.report(ctx, version, err)
-	if LiveFailure(err) != LiveRefused {
+	if kept && LiveFailure(err) != LiveRefused {
 		s.failures.Put(version.ID, err)
 	}
 }

@@ -26,8 +26,10 @@ const (
 	// 401, 403, 429, 458, its connections all in use. It hides nothing:
 	// the stream is tried again at the next start.
 	FailureRefused = "refused"
-	// FailureTimeout is a stream from which nothing came in time; it is
-	// left out for timeoutBackoff.
+	// FailureTimeout is a stream from which nothing came in time. A
+	// provider can be slow once: a stream that played at its address is
+	// left out for timeoutBackoff only once silent twice in a row, one that
+	// never played at once.
 	FailureTimeout = "timeout"
 )
 
@@ -47,8 +49,10 @@ func deadBackoff(failures int) time.Duration {
 	}
 }
 
-// health is what is known of a stream's last failure.
+// health is what is known of a stream: when it last played at the address
+// its health was found at, and its last failures in a row.
 type health struct {
+	okAt     *time.Time
 	failure  *string
 	failedAt *time.Time
 	failures int
@@ -64,7 +68,7 @@ func (h health) hidden(now time.Time) bool {
 	case FailureDead:
 		return now.Before(h.failedAt.Add(deadBackoff(h.failures)))
 	case FailureTimeout:
-		return now.Before(h.failedAt.Add(timeoutBackoff))
+		return (h.okAt == nil || h.failures >= 2) && now.Before(h.failedAt.Add(timeoutBackoff))
 	}
 	return false
 }
@@ -94,8 +98,10 @@ func (s *Service) ReportStream(ctx context.Context, source accounts.ID, channel,
 		_, err = s.db.Exec(ctx, `UPDATE iptv_streams s SET health_url = $4, ok_at = $5, failure = NULL, failed_at = NULL, failures = 0
 			WHERE `+match, source, key, address, hash, s.now())
 	} else {
+		// The time it played belongs to the address: a failure at another
+		// one forgets it.
 		_, err = s.db.Exec(ctx, `UPDATE iptv_streams s SET failures = CASE WHEN s.health_url = $4 AND s.failure = $6 THEN s.failures + 1 ELSE 1 END,
-			health_url = $4, failure = $6, failed_at = $5 WHERE `+match, source, key, address, hash, s.now(), failure)
+			ok_at = CASE WHEN s.health_url = $4 THEN s.ok_at END, health_url = $4, failure = $6, failed_at = $5 WHERE `+match, source, key, address, hash, s.now(), failure)
 	}
 	return err
 }
@@ -114,11 +120,11 @@ type StreamHealth struct {
 
 // streamHealth describes a stream's health at now; it is empty when it was
 // found at another address than the stream's.
-func streamHealth(address, checked string, okAt *time.Time, h health, now time.Time) StreamHealth {
+func streamHealth(address, checked string, h health, now time.Time) StreamHealth {
 	if checked == "" || checked != addressHash(address) {
 		return StreamHealth{}
 	}
-	result := StreamHealth{OKAt: okAt, FailedAt: h.failedAt, Failures: h.failures}
+	result := StreamHealth{OKAt: h.okAt, FailedAt: h.failedAt, Failures: h.failures}
 	if h.failure != nil {
 		result.Failure = *h.failure
 		if h.hidden(now) {
