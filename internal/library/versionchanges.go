@@ -45,6 +45,8 @@ type versionTracking struct {
 	titles  *cache.Cache[listedTitle, accounts.ID]
 	pages   *cache.Cache[askedKey, titlePage]
 	unsaved *cache.Cache[streamKey, bool]
+	// saving locks each stream list being saved or deleted.
+	saving listLocks
 	// changed is told the item whose versions changed (see
 	// OnVersionsChanged).
 	changed atomic.Pointer[func(item accounts.ID)]
