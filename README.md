@@ -8,7 +8,7 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes 
 Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
 
 <p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-showcase-30fps.mp4"><img src="assets/videos/polyfin-showcase-30fps.jpg" width="100%" alt="Watch the Polyfin tour (1:18)"></a>
+  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-showcase.mp4"><img src="assets/videos/polyfin-showcase.jpg" width="100%" alt="Watch the Polyfin tour (1:18)"></a>
   <br>
   <sub>Or watch the <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-intro.mp4">14-second teaser</a>.</sub>
 </p>
