@@ -72,6 +72,12 @@ Health sends no request outside the server. Like Schedule, it covers the server'
 
 **System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**.
 
+A listing of a library or a collection that takes more than 5 seconds logs "A listing was slow" (Info), with the folder, whether the app asked for every title, how many it got, and where the time went:
+
+- `checked`: the user and the request;
+- `read`: the addons and the database;
+- `described`: the titles for the app.
+
 ## Settings
 
 **Settings** has one page per section, listed on its left, with a search box over all of them (**Search a setting**). Each section page saves only its own changes. Leaving a page with unsaved changes asks first. **Settings › Diagnostics** ends with the `POLYFIN_*` variables in effect, read only:
