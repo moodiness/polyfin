@@ -2,7 +2,7 @@ import { icons } from './icons'
 
 export const repository = 'https://github.com/moodiness/polyfin'
 
-/** Apps that sign in to Polyfin, from docs/jellyfin-compatibility.md and the tour. */
+/** Apps that sign in to Polyfin, from docs/jellyfin-compatibility.md. */
 export const apps = [
   'Infuse',
   'Swiftfin',
