@@ -99,7 +99,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo \
             rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
-            .github/workflows/ci.yml
+            .github/workflows/ci.yml .github/workflows/pages.yml
           docker run --rm -i \
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile

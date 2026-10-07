@@ -1,0 +1,27 @@
+{
+  "name": "polyfin-website",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vitepress dev --host 127.0.0.1",
+    "build": "vitepress build",
+    "preview": "vitepress preview --host 127.0.0.1",
+    "format": "prettier --write .vitepress/config.mts .vitepress/theme index.md",
+    "format:check": "prettier --check .vitepress/config.mts .vitepress/theme index.md"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "semi": false,
+    "printWidth": 100
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@phosphor-icons/core": "2.1.1",
+    "prettier": "3.9.9",
+    "vitepress": "1.6.4"
+  }
+}

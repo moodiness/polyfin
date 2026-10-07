@@ -42,4 +42,4 @@ These pages explain how to run Polyfin and what it does for the people who use i
 
 | Page | What it covers |
 |---|---|
-| [Development](development.md) | Building, running and testing Polyfin |
+| [Development](development.md) | Building, running and testing Polyfin, and its website |

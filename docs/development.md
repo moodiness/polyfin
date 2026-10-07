@@ -1,6 +1,6 @@
 # Development
 
-This page explains how to run Polyfin from source, run its tests, and refresh the Jellyfin fixtures.
+This page explains how to run Polyfin from source, run its tests, refresh the Jellyfin fixtures, and work on the website.
 
 ## Requirements
 
@@ -31,3 +31,19 @@ make check                    # formatting, vet and tests
 Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.2 server, recorded in `internal/jellyfin/testdata/`.
 
 `scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container. It requires Docker, curl and jq.
+
+## Website
+
+The [website](https://moodiness.github.io/polyfin/) is built with [VitePress](https://vitepress.dev/) from `docs/`:
+
+- Each page of this documentation is one of its pages, under `/docs/`, with the sidebar following the sections of the [documentation's index](README.md). Links that leave `docs/` open the file on GitHub.
+- The landing page is in `docs/.vitepress/theme/`, and its videos in `docs/public/videos/`.
+
+```sh
+npm --prefix docs ci
+npm --prefix docs run dev       # the website on http://127.0.0.1:5173/polyfin/, with hot reload
+npm --prefix docs run build     # fails on a link to a page that does not exist
+npm --prefix docs run format    # formats the landing page's code
+```
+
+CI builds the website for each pull request that changes `docs/`. Each push of such a change to `main` publishes it on GitHub Pages (`.github/workflows/pages.yml`).

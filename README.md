@@ -7,27 +7,12 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes 
 
 Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
 
-<p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-showcase.mp4"><img src="assets/videos/polyfin-showcase.jpg" width="100%" alt="Watch the Polyfin tour (1:18)"></a>
-  <br>
-  <sub>Or watch the <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-intro.mp4">14-second teaser</a>.</sub>
-</p>
+See it on the [website](https://moodiness.github.io/polyfin/): a short tour, a video for each feature, and the documentation.
 
 > [!NOTE]
 > Polyfin is in early development. Expect changes between releases, and report problems in the [issues](https://github.com/moodiness/polyfin/issues).
 
 ## Features
-
-<p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-stremio.mp4"><img src="assets/videos/polyfin-stremio.jpg" width="32%" alt="Stremio addons (0:16)"></a>
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-multi-user.mp4"><img src="assets/videos/polyfin-multi-user.jpg" width="32%" alt="Multi-user (0:16)"></a>
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-transcoding.mp4"><img src="assets/videos/polyfin-transcoding.jpg" width="32%" alt="Transcoding (0:16)"></a>
-  <br>
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-live-tv.mp4"><img src="assets/videos/polyfin-live-tv.jpg" width="32%" alt="Live TV (0:16)"></a>
-  <a href="https://cdn.jsdelivr.net/gh/moodiness/polyfin@main/assets/videos/polyfin-music.mp4"><img src="assets/videos/polyfin-music.jpg" width="32%" alt="Music (0:16)"></a>
-  <br>
-  <sub>One 16-second video per feature: click one to play it.</sub>
-</p>
 
 - **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.2 API.
 - **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
@@ -87,7 +72,7 @@ docker compose up -d
 
 ## Documentation
 
-The full documentation is in [`docs/`](docs/README.md):
+The full documentation is in [`docs/`](docs/README.md), and on the [website](https://moodiness.github.io/polyfin/docs/):
 
 - **Set up:** [Installation](docs/installation.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Backups](docs/backups.md)
 - **Content:** [Addons and libraries](docs/addons-and-libraries.md), [Live TV](docs/live-tv.md), [IPTV](docs/iptv.md)

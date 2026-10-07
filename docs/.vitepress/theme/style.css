@@ -1,0 +1,90 @@
+/*
+ * The admin app's « Nuit » tokens (web/src/index.css), and the default theme's variables mapped
+ * to them. Like the admin app, the site is dark only.
+ */
+:root {
+  --nuit-bg: #08080e;
+  --nuit-s1: #0d0d15;
+  --nuit-s2: #12121c;
+  --nuit-s3: #191925;
+  --nuit-s4: #232331;
+  --nuit-line: rgb(236 236 255 / 0.07);
+  --nuit-line-2: rgb(236 236 255 / 0.11);
+  --nuit-line-3: rgb(236 236 255 / 0.17);
+  --nuit-ink: #ededf5;
+  --nuit-ink-2: #a6a6ba;
+  --nuit-ink-3: #80809a;
+  --nuit-accent: #5b63f6;
+  --nuit-accent-press: #4f57ec;
+  --nuit-link: #9aa0ff;
+  --nuit-link-hover: #c3c6ff;
+  /* The brand gradient: the logo and playback progress only. */
+  --nuit-brand: linear-gradient(
+    90deg,
+    #6d4aff 0%,
+    #4c3fd9 22%,
+    #5b63f6 48%,
+    #3e8ef7 74%,
+    #22d3ee 100%
+  );
+  --nuit-shadow-pop: 0 28px 70px -20px rgb(3 3 14 / 0.9), 0 0 0 1px var(--nuit-line-2);
+  --nuit-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --nuit-radius-panel: 16px;
+  --nuit-radius-row: 12px;
+  --nuit-radius-field: 8px;
+
+  /* The landing page's content, which its navigation bar lines up with. */
+  --pf-content-width: 1232px;
+
+  --vp-font-family-base:
+    'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.dark {
+  --vp-c-bg: var(--nuit-bg);
+  --vp-c-bg-alt: var(--nuit-s1);
+  --vp-c-bg-elv: var(--nuit-s2);
+  --vp-c-bg-soft: var(--nuit-s2);
+  --vp-c-border: var(--nuit-line-3);
+  --vp-c-divider: var(--nuit-line-2);
+  --vp-c-gutter: var(--nuit-line);
+  --vp-c-text-1: var(--nuit-ink);
+  --vp-c-text-2: var(--nuit-ink-2);
+  --vp-c-text-3: var(--nuit-ink-3);
+  --vp-c-default-soft: var(--nuit-line-2);
+  --vp-c-brand-1: var(--nuit-link);
+  --vp-c-brand-2: var(--nuit-link-hover);
+  --vp-c-brand-3: var(--nuit-accent);
+  --vp-c-brand-soft: rgb(91 99 246 / 0.16);
+  --vp-button-brand-hover-bg: var(--nuit-accent-press);
+  --vp-button-brand-active-bg: var(--nuit-accent-press);
+  --vp-code-color: var(--nuit-ink);
+  --vp-code-bg: var(--nuit-line-2);
+  --vp-code-block-bg: var(--nuit-s1);
+}
+
+::selection {
+  background: rgb(91 99 246 / 0.4);
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  letter-spacing: -0.02em;
+}
+
+/* The landing page ends with its own footer, and keeps the page still behind the tour. */
+.Layout .VPHome:has(.pf-home) {
+  margin-bottom: 0;
+}
+
+html:has(.pf-tour[open]) {
+  overflow: hidden;
+}
+
+@media (min-width: 960px) {
+  .Layout:has(.pf-home) .VPNavBar .container {
+    max-width: var(--pf-content-width);
+  }
+}
