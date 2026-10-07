@@ -39,7 +39,6 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
 	"github.com/moodiness/polyfin/internal/source"
-	"github.com/moodiness/polyfin/internal/streamyfin"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -265,7 +264,6 @@ func serve(ctx context.Context) error {
 	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
 		Titles: lib, UserData: userData})
 	defer tracking.Close()
-	homeRows := streamyfin.New(pool)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -290,7 +288,6 @@ func serve(ctx context.Context) error {
 		FontsDir:      cfg.FontsDir,
 		Recordings:    recorder,
 		Trackers:      tracking,
-		Streamyfin:    homeRows,
 	})
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
@@ -332,10 +329,6 @@ func serve(ctx context.Context) error {
 				Variables: config.Variables(os.Environ(), cfg),
 				Trackers:  tracking,
 				Backups:   backups,
-				// Streamyfin's rows show the server's libraries and
-				// their collections.
-				Streamyfin:      homeRows,
-				StreamyfinItems: lib,
 			}),
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,

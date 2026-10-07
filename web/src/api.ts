@@ -756,44 +756,6 @@ export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'cat
     | { image: 'custom'; url: string }
   )
 
-/** What a row of Streamyfin's home screen shows. */
-export type StreamyfinRowKind = 'resume' | 'nextUp' | 'library' | 'collection'
-
-/** One row of Streamyfin's home screen, as GET /streamyfin answers it. */
-export type StreamyfinRow = {
-  kind: StreamyfinRowKind
-  /** The library or collection; null for resume and nextUp. */
-  itemId: string | null
-  /** The administrator's title; null for the default. */
-  title: string | null
-  /** The name without the title: the item's name, or the server-language default. */
-  defaultName: string
-  /** The name Streamyfin shows: the title, else `defaultName`. */
-  name: string
-  /** For a collection row, the name of its library; null otherwise. */
-  libraryName: string | null
-  /** False when its library or collection is gone or disabled: the row is kept but shows nothing. */
-  available: boolean
-}
-
-/** A library a Streamyfin row can show: enabled, of movies, series or collections. */
-export type StreamyfinLibrary = { itemId: string; name: string; collections: boolean }
-
-export type StreamyfinHome = {
-  rows: StreamyfinRow[]
-  /** In the server's order. */
-  libraries: StreamyfinLibrary[]
-}
-
-/** One collection of a collection library. */
-export type StreamyfinCollection = { itemId: string; name: string }
-
-/** One row in the list sent to PUT /streamyfin. */
-export type StreamyfinRowSelection = Pick<StreamyfinRow, 'kind' | 'itemId' | 'title'>
-
-/** The most rows the server takes. */
-export const MAX_STREAMYFIN_ROWS = 30
-
 /**
  * `parentalControl`: the user's parental control keeps them on the server's addons only.
  * `personalAddons`: false while the server or the user's permission turns their own addons off;
@@ -1091,22 +1053,6 @@ export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
 /** Chooses one library's image at once, answering the scope's libraries. */
 export const saveLibraryImage = (scope: Scope, body: LibraryImageRequest) =>
   request<Library[]>('PUT', `${scopePath(scope)}/libraries/image`, body)
-
-export const fetchStreamyfinHome = (signal?: AbortSignal) =>
-  request<StreamyfinHome>('GET', '/streamyfin', undefined, signal)
-
-/** Replaces the rows of Streamyfin's home screen, in this order; none turns it off. */
-export const saveStreamyfinHome = (rows: StreamyfinRowSelection[]) =>
-  request<StreamyfinHome>('PUT', '/streamyfin', { rows })
-
-/** The collections of a collection library, in its order, at most 500. */
-export const fetchStreamyfinCollections = (libraryId: string, signal?: AbortSignal) =>
-  request<StreamyfinCollection[]>(
-    'GET',
-    `/streamyfin/libraries/${seg(libraryId)}/collections`,
-    undefined,
-    signal,
-  )
 
 /** Query parameters, without those left undefined. */
 function params(values: Record<string, string | number | boolean | undefined>): string {
@@ -1624,8 +1570,6 @@ export const queryKeys = {
   scope: (scope: Scope) => ['scopes', scope] as const,
   addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
   libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
-  streamyfin: ['streamyfin'] as const,
-  streamyfinCollections: (libraryId: string) => ['streamyfin', 'collections', libraryId] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,

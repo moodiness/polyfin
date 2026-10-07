@@ -25,7 +25,6 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
-	"github.com/moodiness/polyfin/internal/streamyfin"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/trackers"
@@ -105,11 +104,6 @@ type Options struct {
 	// Backups backs the database up into the folder the settings give
 	// while backups are on; nil makes none.
 	Backups *backup.Service
-	// Streamyfin keeps the rows of Streamyfin's home screen, and
-	// StreamyfinItems tells the libraries and collections they can show;
-	// nil offers none.
-	Streamyfin      *streamyfin.Store
-	StreamyfinItems StreamyfinItems
 }
 
 type handler struct {
@@ -192,9 +186,6 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
-	mux.Handle("GET /admin/api/streamyfin", h.administrator(h.streamyfinRows))
-	mux.Handle("PUT /admin/api/streamyfin", h.administrator(h.saveStreamyfinRows))
-	mux.Handle("GET /admin/api/streamyfin/libraries/{id}/collections", h.administrator(h.streamyfinCollections))
 	mux.Handle("GET /admin/api/account/addon-preferences", h.signedIn(h.addonPreferences))
 	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
 	mux.Handle("PUT /admin/api/scopes/{scope}/guides", h.signedIn(h.saveGuide))

@@ -109,10 +109,6 @@ const common = {
       'A library’s genre is not offered by its catalog. Choose another one from the list, then save again.',
     invalid_library_max_items:
       'A library’s maximum titles must be a whole number from 1 to 20,000, or empty.',
-    invalid_streamyfin_row:
-      'A row is not valid: its library or collection no longer exists, or its title is longer than 64 characters. Reload the page, then save again.',
-    too_many_streamyfin_rows:
-      'Streamyfin home screens hold at most 30 rows. Remove some, then save again.',
     invalid_image: 'Choose a JPEG, PNG or WebP image of at most 10 MB.',
     invalid_image_url: 'Enter an image address starting with https:// or http://.',
     image_unreachable:

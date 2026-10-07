@@ -4,7 +4,6 @@ import {
   BrowserIcon,
   CalendarDotsIcon,
   CpuIcon,
-  DeviceMobileIcon,
   FilmSlateIcon,
   FilmStripIcon,
   GearIcon,
@@ -49,7 +48,6 @@ export const contentPages: readonly NavPage[] = [
   { id: 'sources', to: '/sources', label: (t) => t.nav.sources, icon: PuzzlePieceIcon },
   { id: 'libraries', to: '/libraries', label: (t) => t.nav.libraries, icon: FilmStripIcon },
   { id: 'live-tv', to: '/live-tv', label: (t) => t.nav.liveTv, icon: TelevisionSimpleIcon },
-  { id: 'streamyfin', to: '/streamyfin', label: (t) => t.nav.streamyfin, icon: DeviceMobileIcon },
 ]
 
 export const systemPages: readonly NavPage[] = [
@@ -97,7 +95,7 @@ export const adminSections: readonly NavSection[] = [
   {
     id: 'content',
     to: '/sources',
-    match: ['/sources', '/libraries', '/live-tv', '/streamyfin'],
+    match: ['/sources', '/libraries', '/live-tv'],
     label: (t) => t.nav.content,
     icon: PuzzlePieceIcon,
     pages: contentPages,
