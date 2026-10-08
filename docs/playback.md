@@ -110,7 +110,7 @@ Until a version is played, Polyfin knows only what its addon says of it. With **
 - Polyfin finds each version among the files RemuxDB lists by the name of its file, as the addon gives it, folders left out and case ignored. When the addon gives the file's size, the sizes must agree within 64 MiB or 1%, the larger, as addons round sizes. When several files share the name, the one of the closest size wins; without a size, a shared name describes nothing. A file under a tenth of the title's runtime, a sample, describes nothing either.
 - What RemuxDB said of a version, whether it knew the file or not, is kept in memory for 6 hours. A version listed since has the title asked about again. After RemuxDB fails to answer, it is not asked for a minute, or for as long as its `Retry-After` says.
 - Playback still analyzes each version with ffprobe, and the analysis then replaces the description. The tracks keep the numbers ffprobe gives them, so a track picked before the first play stays the same track.
-- Until the version is analyzed, the height RemuxDB found places it in the user's quality group (see [How a version's height is found](users.md#how-a-versions-height-is-found)).
+- Until the version is analyzed, the height RemuxDB found places it in the user's quality group (see [How the height of a version is found](users.md#how-the-height-of-a-version-is-found)).
 - RemuxDB knows the files of torrents and NZBs that its contributors probed. A version is described only when its addon gives its file's name and RemuxDB probed that file.
 - Polyfin sends RemuxDB only the titles' identifiers and a name for the server, derived from the server's identifier, which RemuxDB requires. It sends none of its own analyses.
 

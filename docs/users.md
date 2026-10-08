@@ -193,7 +193,7 @@ Creating a group takes the first choice. Listing and joining groups takes either
 |---|---|---|---|
 | **Quality group** | **Users › Playback and access** | **Original (no limit)** | Highest resolution offered: **Original (no limit)**, **4K**, **1440p**, **1080p**, **720p** or **480p**. |
 
-### How a version's height is found
+### How the height of a version is found
 
 Once Polyfin has analyzed a version, its height is the one the analysis found. Before that, it is the one RemuxDB found in its file, when [Describe versions from RemuxDB](playback.md#tracks-from-remuxdb) is on and RemuxDB knows the file. Otherwise, it is the one its labels name, in the addon's stream name, title, description or file name:
 
@@ -246,7 +246,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ### Users' own addons
 
-Under **My sources**, users choose which catalogs of their own addons are libraries, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Hidden from the web player's top bar](addons-and-libraries.md#hidden-from-the-web-players-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
+Under **My sources**, users choose which catalogs of their own addons are libraries, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
 
 On a user's page under **Users**, the **Access** section also holds **Can add their own addons**, on by default. While either this or **Allow users' own addons** is off:
 
