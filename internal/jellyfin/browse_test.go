@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -198,6 +199,88 @@ func TestEpisodeListsStartAtTheItemAsked(t *testing.T) {
 	}
 	if page := list(strings.Repeat("ab", 16)); len(page.Items) != 0 {
 		t.Errorf("from an item the list does not have: %v", ids(page))
+	}
+}
+
+// The web player's menus leave out the libraries marked so, one of the
+// server's and one of the user's own, which /UserViews still lists for
+// their home rows. /Polyfin/UserViews lists the caller's views as
+// /UserViews does, in the same order, Polyfin's own views never left out,
+// and none of another user's own libraries, though marked too.
+func TestPolyfinUserViewsTellTheLibrariesLeftOutOfMenus(t *testing.T) {
+	s := newTestServer(t, 10)
+	member := s.user("member", nil)
+	other := s.user("other", nil)
+	install := func(scope addons.Scope, manifestURL string, choices ...addons.LibraryChoice) {
+		t.Helper()
+		addon, err := s.addons.Install(t.Context(), scope, manifestURL, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range choices {
+			choices[i].AddonID = addon.ID
+		}
+		if _, err := s.addons.SetLibraries(t.Context(), scope, choices); err != nil {
+			t.Fatal(err)
+		}
+	}
+	install(addons.Shared(), catalogAddon(t), addons.LibraryChoice{CatalogType: "movie", CatalogID: "top", HideInMenus: true},
+		addons.LibraryChoice{CatalogType: "series", CatalogID: "shows"}, addons.LibraryChoice{CatalogType: "collection", CatalogID: "groups"})
+	install(addons.Personal(member.ID), privateAddon(t), addons.LibraryChoice{CatalogType: "movie", CatalogID: "mine", HideInMenus: true})
+	install(addons.Personal(other.ID), privateAddon(t), addons.LibraryChoice{CatalogType: "movie", CatalogID: "mine", HideInMenus: true})
+	viewID := func(scope addons.Scope, catalogID string) string {
+		t.Helper()
+		libraries, err := s.addons.Libraries(t.Context(), scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range libraries {
+			if l.Enabled && l.Catalog.ID == catalogID {
+				return library.LibraryID(l).String()
+			}
+		}
+		t.Fatalf("no library %s", catalogID)
+		return ""
+	}
+	hidden := []string{viewID(addons.Shared(), "top"), viewID(addons.Personal(member.ID), "mine")}
+	theirs := viewID(addons.Personal(other.ID), "mine")
+
+	token := s.signIn("member", "tv")
+	// A playlist adds Polyfin's Playlists view.
+	s.createPlaylist(t, token, map[string]any{"Name": "Evening"})
+	var views QueryResult
+	if status := s.get(t, "/UserViews", token, &views); status != http.StatusOK {
+		t.Fatalf("views: %d", status)
+	}
+	if !slices.Contains(itemNames(views.Items), "Playlists") {
+		t.Fatalf("no Playlists view: %v", itemNames(views.Items))
+	}
+	var menus struct{ Items []MenuView }
+	if status := s.get(t, "/Polyfin/UserViews", token, &menus); status != http.StatusOK {
+		t.Fatalf("menu views: %d", status)
+	}
+	listed := func(id string) bool {
+		return slices.ContainsFunc(views.Items, func(view BaseItemDto) bool { return view.Id == id })
+	}
+	if !listed(hidden[0]) || !listed(hidden[1]) {
+		t.Errorf("/UserViews left out a library hidden from the menus: %v", itemIDs(views.Items))
+	}
+	if len(menus.Items) != len(views.Items) {
+		t.Fatalf("menu views: %+v, views: %v", menus.Items, itemIDs(views.Items))
+	}
+	for i, view := range menus.Items {
+		if view.Id != views.Items[i].Id {
+			t.Errorf("menu view %d: %s, want %s (%s)", i, view.Id, views.Items[i].Id, views.Items[i].Name)
+		}
+		if want := slices.Contains(hidden, view.Id); view.HideInMenus != want {
+			t.Errorf("%s (%s) hidden in menus: %v, want %v", views.Items[i].Name, view.Id, view.HideInMenus, want)
+		}
+		if view.Id == theirs {
+			t.Errorf("another user's library listed: %+v", view)
+		}
+	}
+	if status := s.get(t, "/Polyfin/UserViews", "", nil); status != http.StatusUnauthorized {
+		t.Errorf("without credentials: %d", status)
 	}
 }
 

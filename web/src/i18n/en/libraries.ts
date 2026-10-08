@@ -21,6 +21,10 @@ const libraries = {
     iptvVodLink: 'Its import options',
     addonOff: 'Addon turned off',
     missing: 'No longer available',
+    hideInMenus: 'Hide from the web player’s top bar',
+    hideInMenusHelp:
+      'It keeps its row on the home screen. The web player’s side menu leaves it out too; other Jellyfin apps still list it. Applies the next time the web player is loaded.',
+    hiddenInMenus: 'Hidden from the top bar',
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     removedLive: (name: string) => `${name} removed from the libraries.`,

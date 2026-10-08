@@ -246,7 +246,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ### Users' own addons
 
-Under **My sources**, users choose which catalogs of their own addons are libraries, with their names, images, genres and maximums, as administrators do under **Content › Libraries** (see [Library images](addons-and-libraries.md#library-images) and [Genre and maximum](addons-and-libraries.md#genre-and-maximum)). Their image addresses must be public: only administrators can use local network addresses.
+Under **My sources**, users choose which catalogs of their own addons are libraries, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Hidden from the web player's top bar](addons-and-libraries.md#hidden-from-the-web-players-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
 
 On a user's page under **Users**, the **Access** section also holds **Can add their own addons**, on by default. While either this or **Allow users' own addons** is off:
 

@@ -792,6 +792,8 @@ async function run(scenario) {
     getUrl: (path) => 'http://polyfin.test/' + path,
     getCurrentUserId: () => 'user',
     getJSON: (url) => {
+      // Polyfin answers the user's views too, which hide nothing here.
+      if (url === 'http://polyfin.test/Polyfin/UserViews') return Promise.resolve({ Items: [] })
       log.push('ask ' + url)
       const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
@@ -1170,6 +1172,8 @@ async function run(scenario) {
     getUrl: (path) => 'http://polyfin.test/' + path,
     getCurrentUserId: () => 'user',
     getJSON: (url) => {
+      // Polyfin answers the user's views too, which hide nothing here.
+      if (url === 'http://polyfin.test/Polyfin/UserViews') return Promise.resolve({ Items: [] })
       log.push('ask ' + url)
       const answer = answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
@@ -1258,6 +1262,422 @@ async function run(scenario) {
 		inputs[name] = input{s.lang, s.answers, s.searches, s.deferred, s.menu, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
+		}
+	}
+}
+
+// The libraries a user hides from the web player's menus leave them: once a
+// user is signed in, the script asks Polyfin for the user's views and hides
+// the links of those marked in the top bar, its More menu, the side menu of
+// that layout and the legacy layout's side menu, never another link to them,
+// and hides the More button at the widths where it would list only such
+// views. It asks again when the user changes, looks for a user restored
+// after the first route for 30 seconds, and drops an answer for the user
+// before. It keeps the last answer in the browser's storage and hides its
+// views as it starts, before any answer, until the user signed in is known
+// to be another; storage that fails or holds anything else counts as none.
+// It runs in Node.js, in a context that stands for the browser: the style
+// the script keeps is read back and its rules are tried on the links
+// jellyfin-web 12.2 renders in each place, at widths around MUI's lg and xl
+// breakpoints, with storage, a clock and timers the harness moves on.
+func TestHiddenLibrariesLeaveTheWebPlayerMenus(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	const (
+		title = "0123456789abcdef0123456789abcdef"
+		// savedKey is where the script keeps the last answer, from one load
+		// of the web player to the next.
+		savedKey = "polyfinUserViews"
+	)
+	type view struct {
+		Id          string
+		HideInMenus bool
+	}
+	type scenario struct {
+		// user is signed in as the script loads; empty for none.
+		user string
+		// views are Polyfin's answers by user: the user's views in order,
+		// each named by one character that its identifier repeats, a "*"
+		// after those hidden from the menus. A user without views gets an
+		// error.
+		views map[string]string
+		// deferred holds each answer until an "answer <user>" step gives it.
+		deferred bool
+		// stored is what storage holds under savedKey as the script loads;
+		// storage is "off" when using it throws, "full" when saving throws.
+		stored, storage string
+		// steps: a route the router moves to; "signin <user>" and "signout"
+		// change the user jellyfin-web's client has, without a route; "tick"
+		// runs the next timer, logging "idle" when there is none; "clock"
+		// logs the time, in seconds; "show" logs, for each place, the views
+		// whose link the style hides there at every width ("bar", "more",
+		// "drawer", "legacy"), those with another link hidden ("other"), and
+		// the widths at which the More button is hidden ("button"); "storage"
+		// logs what storage holds under savedKey, as "saved <user> <views>".
+		steps []string
+		want  []string
+	}
+	asks := func(user string) string { return "views for " + user }
+	// parse writes views as Polyfin answers them.
+	parse := func(list string) []view {
+		views := []view{}
+		for _, name := range strings.Fields(list) {
+			views = append(views, view{strings.Repeat(strings.TrimSuffix(name, "*"), 32), strings.HasSuffix(name, "*")})
+		}
+		return views
+	}
+	// savedAs is an answer for user kept by an earlier load.
+	savedAs := func(user, views string) string {
+		data, _ := json.Marshal(map[string]any{"user": user, "items": parse(views)})
+		return string(data)
+	}
+	// hidden is what "show" logs when the style hides views in the four
+	// places, and the More button at widths.
+	hidden := func(views, widths string) []string {
+		var lines []string
+		for _, place := range []string{"bar", "more", "drawer", "legacy"} {
+			lines = append(lines, strings.TrimSpace(place+" "+views))
+		}
+		return append(lines, "other", strings.TrimSpace("button "+widths))
+	}
+	nothing := hidden("", "")
+	scenarios := map[string]scenario{
+		"hidden views leave the four places": {user: "u1", views: map[string]string{"u1": "a* b c*"},
+			steps: []string{"show"}, want: slices.Concat([]string{asks("u1")}, hidden("a c", ""))},
+		// The top bar shows 3 views below 1200 pixels, 5 below 1536, 8 from
+		// there, or all of them when only one more would go under More.
+		"more lists hidden views only below 1200 pixels": {user: "u1", views: map[string]string{"u1": "1 2 3 4* 5* 6*"},
+			steps: []string{"show"}, want: slices.Concat([]string{asks("u1")}, hidden("4 5 6", "600 1199"))},
+		"more lists hidden views only from 1200 pixels": {user: "u1", views: map[string]string{"u1": "1 2 3 4 5 6* 7* 8* 9* 0*"},
+			steps: []string{"show"}, want: slices.Concat([]string{asks("u1")}, hidden("6 7 8 9 0", "1200 1535 1536 1920"))},
+		"nine views have no more from 1536 pixels": {user: "u1", views: map[string]string{"u1": "1 2 3 4 5 6 7 8 9*"},
+			steps: []string{"show"}, want: slices.Concat([]string{asks("u1")}, hidden("9", ""))},
+		// jellyfin-web may sign its user in again after the first route.
+		"a user restored after the first route": {views: map[string]string{"u1": "a*"},
+			steps: []string{"tick", "tick", "tick", "tick", "signin u1", "tick", "clock", "show"},
+			want:  slices.Concat([]string{asks("u1"), "clock 5"}, hidden("a", ""))},
+		"a user later than 30 seconds waits for a route": {views: map[string]string{"u1": "a*"},
+			steps: slices.Concat(slices.Repeat([]string{"tick"}, 30), []string{"clock", "tick", "signin u1", "tick", "show", "#/home", "show"}),
+			want:  slices.Concat([]string{"clock 30", "idle", "idle"}, nothing, []string{asks("u1")}, hidden("a", ""))},
+		"the same user is asked once": {user: "u1", views: map[string]string{"u1": "a*"},
+			steps: []string{"#/home", "#/movies?topParentId=" + strings.Repeat("a", 32), "tick", "show"},
+			want:  slices.Concat([]string{asks("u1"), "idle"}, hidden("a", ""))},
+		"another user is asked": {user: "u1", views: map[string]string{"u1": "a* b", "u2": "a b*"},
+			steps: []string{"show", "signin u2", "#/home", "show"},
+			want:  slices.Concat([]string{asks("u1")}, hidden("a", ""), []string{asks("u2")}, hidden("b", ""))},
+		"an answer for the user before is dropped": {user: "u1", views: map[string]string{"u1": "a* b", "u2": "a b*"}, deferred: true,
+			steps: []string{"signin u2", "#/home", "answer u1", "show", "answer u2", "show"},
+			want:  slices.Concat([]string{asks("u1"), asks("u2")}, nothing, hidden("b", ""))},
+		// A title's page still asks for its versions.
+		"a failed answer hides nothing": {user: "u1", views: map[string]string{"u2": "a*"},
+			steps: []string{"show", "#/details?id=" + title, "tick", "show"},
+			want: slices.Concat([]string{asks("u1")}, nothing,
+				[]string{"ask http://polyfin.test/Polyfin/Items/" + title + "/Versions", "idle"}, nothing)},
+		// jellyfin-web, whose scripts run after this one, signs its user in
+		// after the script started.
+		"a saved answer hides at once": {stored: savedAs("u1", "a* b"), views: map[string]string{"u1": "a b*"}, deferred: true,
+			steps: []string{"show", "signin u1", "tick", "show", "answer u1", "show", "storage"},
+			want:  slices.Concat(hidden("a", ""), []string{asks("u1")}, hidden("a", ""), hidden("b", ""), []string{"saved u1 a b*"})},
+		"a saved answer for another user is dropped": {stored: savedAs("u2", "a*"), views: map[string]string{"u1": "a b*"}, deferred: true,
+			steps: []string{"show", "signin u1", "tick", "show", "answer u1", "show", "storage"},
+			want:  slices.Concat(hidden("a", ""), []string{asks("u1")}, nothing, hidden("b", ""), []string{"saved u1 a b*"})},
+		// Signing out drops the rules, not the answer kept.
+		"an answer is kept for the next load": {user: "u1", views: map[string]string{"u1": "a* b"},
+			steps: []string{"storage", "signout", "#/home", "show", "storage"},
+			want:  slices.Concat([]string{asks("u1"), "saved u1 a* b"}, nothing, []string{"saved u1 a* b"})},
+		"storage that is off changes nothing else": {storage: "off", user: "u1", views: map[string]string{"u1": "a*"},
+			steps: []string{"show", "#/details?id=" + title, "tick", "show", "storage"},
+			want: slices.Concat([]string{asks("u1")}, hidden("a", ""),
+				[]string{"ask http://polyfin.test/Polyfin/Items/" + title + "/Versions", "idle"}, hidden("a", ""), []string{"saved nothing"})},
+		"full storage keeps the answer before": {storage: "full", stored: savedAs("u1", "a*"), user: "u1", views: map[string]string{"u1": "b*"},
+			steps: []string{"show", "storage"},
+			want:  slices.Concat([]string{asks("u1")}, hidden("b", ""), []string{"saved u1 a*"})},
+		"a bad saved answer counts as none": {stored: `{"user":"u1",`, views: map[string]string{"u1": "a*"}, deferred: true,
+			steps: []string{"show", "signin u1", "tick", "answer u1", "show", "storage"},
+			want:  slices.Concat(nothing, []string{asks("u1")}, hidden("a", ""), []string{"saved u1 a*"})},
+		"a saved answer for no user counts as none": {stored: savedAs("", "a*"), views: map[string]string{"u1": "a*"}, deferred: true,
+			steps: []string{"show", "signin u1", "tick", "answer u1", "show"},
+			want:  slices.Concat(nothing, []string{asks("u1")}, hidden("a", ""))},
+	}
+
+	const harness = `
+const vm = require('node:vm')
+const { script, key, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+const short = (id) => (id === id[0].repeat(32) ? id[0] : id)
+// The widths the style is tried at: around MUI's lg (1200) and xl (1536).
+const WIDTHS = [600, 1199, 1200, 1535, 1536, 1920]
+// The rules of a style that hide what they select, each with its media
+// query, or '' for none.
+function hiding(text) {
+  const found = []
+  let i = 0
+  // until reads up to one of stop, outside quotes.
+  const until = (stop) => {
+    const start = i
+    for (let quote = null; i < text.length; i++) {
+      const c = text[i]
+      if (quote) { if (c === '\\') i++; else if (c === quote) quote = null }
+      else if (c === '"' || c === "'") quote = c
+      else if (stop.includes(c)) break
+    }
+    return text.slice(start, i)
+  }
+  const block = (media) => {
+    while (i < text.length) {
+      const head = until('{}').trim()
+      if (i >= text.length) throw new Error('unclosed ' + head)
+      if (text[i++] === '}') return
+      if (head.startsWith('@media')) { block(head.slice(6).trim()); continue }
+      const body = until('}')
+      i++
+      if (/display\s*:\s*none/.test(body)) found.push({ media, selectors: list(head) })
+    }
+  }
+  block('')
+  return found
+}
+// list splits a selector list at its commas, outside quotes and brackets.
+function list(text) {
+  const selectors = []
+  let start = 0, depth = 0, quote = null
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null }
+    else if (c === '"' || c === "'") quote = c
+    else if (c === '[' || c === '(') depth++
+    else if (c === ']' || c === ')') depth--
+    else if (c === ',' && !depth) { selectors.push(text.slice(start, i).trim()); start = i + 1 }
+  }
+  return selectors.concat(text.slice(start).trim())
+}
+// compound reads a tag, ids, classes and attribute tests; null for anything else.
+function compound(text) {
+  const m = /^([a-z]*)((?:[.#][\w-]+|\[[\w-]+(?:[*^$]?=(?:"(?:[^"\\]|\\.)*"|[\w-]+))?\])*)$/i.exec(text)
+  if (!m) return null
+  const parts = { tag: m[1].toLowerCase(), ids: [], classes: [], attributes: [] }
+  for (const part of m[2].match(/[.#][\w-]+|\[[\w-]+(?:[*^$]?=(?:"(?:[^"\\]|\\.)*"|[\w-]+))?\]/g) || []) {
+    if (part[0] === '.') parts.classes.push(part.slice(1))
+    else if (part[0] === '#') parts.ids.push(part.slice(1))
+    else {
+      const [, name, op, value] = /^\[([\w-]+)(?:([*^$]?=)(.*))?\]$/.exec(part)
+      parts.attributes.push({ name, op, value: value && value[0] === '"' ? JSON.parse(value) : value })
+    }
+  }
+  return parts
+}
+function fits(parts, element) {
+  const value = (name) => (element.attributes || {})[name]
+  return (!parts.tag || parts.tag === element.tag) &&
+    parts.ids.every((id) => element.id === id) &&
+    parts.classes.every((name) => (element.classes || []).includes(name)) &&
+    parts.attributes.every(({ name, op, value: wanted }) => {
+      const v = value(name)
+      if (v === undefined) return false
+      return !op || (op === '=' ? v === wanted : op === '*=' ? v.includes(wanted) : op === '^=' ? v.startsWith(wanted) : v.endsWith(wanted))
+    })
+}
+// matches tells whether a selector of compounds and descendant combinators
+// selects the last element of a chain, from the root down.
+function matches(selector, chain) {
+  const parts = selector.split(/\s+/).map(compound)
+  if (parts.some((part) => !part)) throw new Error('selector not understood: ' + selector)
+  if (!fits(parts[parts.length - 1], chain[chain.length - 1])) return false
+  let at = chain.length - 2
+  for (let k = parts.length - 2; k >= 0; k--) {
+    while (at >= 0 && !fits(parts[k], chain[at])) at--
+    if (at < 0) return false
+    at--
+  }
+  return true
+}
+function atWidth(media, width) {
+  if (!media) return true
+  return media.split(/\s+and\s+/).every((feature) => {
+    const m = /^\((min|max)-width\s*:\s*([\d.]+)px\)$/.exec(feature.trim())
+    if (!m) throw new Error('media query not understood: ' + media)
+    return m[1] === 'min' ? width >= +m[2] : width <= +m[2]
+  })
+}
+// What jellyfin-web 12.2 renders, from the root down to a library's link:
+// its top bar's buttons, its More menu, the side menu of that layout, and
+// the legacy layout's side menu.
+const appBar = { tag: 'header', classes: ['MuiPaper-root', 'MuiAppBar-root', 'MuiAppBar-positionFixed'] }
+const toolbar = { tag: 'div', classes: ['MuiToolbar-root'] }
+const route = (id) => '#/movies?topParentId=' + id + '&collectionType=movies'
+const button = ['MuiButtonBase-root', 'MuiButton-root', 'MuiButton-text']
+const places = {
+  bar: (id) => [appBar, toolbar, { tag: 'div', classes: ['MuiStack-root'] }, { tag: 'a', classes: button, attributes: { href: route(id) } }],
+  more: (id) => [{ tag: 'div', id: 'user-view-overflow-menu', classes: ['MuiPopover-root', 'MuiMenu-root'] }, { tag: 'ul', classes: ['MuiList-root', 'MuiMenu-list'] },
+    { tag: 'a', classes: ['MuiButtonBase-root', 'MuiMenuItem-root'], attributes: { href: route(id) } }],
+  drawer: (id) => [{ tag: 'div', classes: ['MuiDrawer-root', 'MuiDrawer-docked'] }, { tag: 'ul', classes: ['MuiList-root'] }, { tag: 'li', classes: ['MuiListItem-root'] },
+    { tag: 'a', classes: ['MuiButtonBase-root', 'MuiListItemButton-root'], attributes: { href: route(id) } }],
+  legacy: (id) => [{ tag: 'div', classes: ['mainDrawer'] }, { tag: 'div', classes: ['libraryMenuOptions'] },
+    { tag: 'a', classes: ['lnkMediaFolder', 'navMenuOption'], attributes: { is: 'emby-linkbutton', 'data-itemid': id, href: route(id) } }],
+}
+// Other links to a library, which stay: its home row's title, and the
+// search button of its page, in the top bar.
+const others = (id) => [
+  [{ tag: 'div', classes: ['homeSectionsContainer'] }, { tag: 'div', classes: ['verticalSection'] },
+    { tag: 'a', classes: ['more', 'button-flat', 'sectionTitleTextButton'], attributes: { href: route(id) + '&tab=1' } }],
+  [appBar, toolbar, { tag: 'a', classes: ['MuiButtonBase-root', 'MuiIconButton-root'], attributes: { href: '#/search?parentId=' + id + '&collectionType=movies' } }],
+]
+const more = [appBar, toolbar, { tag: 'div', classes: ['MuiStack-root'] },
+  { tag: 'button', classes: button, attributes: { type: 'button', 'aria-controls': 'user-view-overflow-menu', 'aria-haspopup': 'true' } }]
+async function run(scenario) {
+  const log = []
+  let now = 0
+  let user = scenario.user
+  const timers = []
+  const listeners = {}
+  const sheets = []
+  const ids = [...new Set(Object.values(scenario.views).flat().map((view) => view.Id))]
+  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  class MutationObserver { observe() {} disconnect() {} }
+  const document = {
+    head: { appendChild: (element) => sheets.push(element) },
+    createElement: (tag) => (tag === 'style' ? { textContent: '' } : null),
+    getElementById: () => null,
+    querySelector: () => null,
+  }
+  // The browser's storage, which may be off or full.
+  const store = {}
+  if (scenario.stored) store[key] = scenario.stored
+  const localStorage = {
+    getItem: (name) => (name in store ? store[name] : null),
+    setItem: (name, value) => {
+      if (scenario.storage === 'full') throw new Error('QuotaExceededError')
+      store[name] = String(value)
+    },
+  }
+  const window = {
+    ApiClient: null,
+    get localStorage() {
+      if (scenario.storage === 'off') throw new Error('SecurityError')
+      return localStorage
+    },
+  }
+  function stored() {
+    if (!(key in store)) return log.push('saved nothing')
+    let saved
+    try {
+      saved = JSON.parse(store[key])
+    } catch (error) {
+      return log.push('saved ' + store[key])
+    }
+    log.push(['saved', saved.user, ...saved.items.map((view) => short(view.Id) + (view.HideInMenus ? '*' : ''))].join(' '))
+  }
+  const answers = {}
+  const ApiClient = {
+    getUrl: (path) => 'http://polyfin.test/' + path,
+    getCurrentUserId: () => user || undefined,
+    getJSON: (url) => {
+      if (url !== 'http://polyfin.test/Polyfin/UserViews') {
+        log.push('ask ' + url)
+        return Promise.reject(new Error('down'))
+      }
+      // Asked with the credentials of the user signed in then.
+      const views = scenario.views[user]
+      log.push('views for ' + user)
+      const answer = () => (views ? Promise.resolve({ Items: views.map((view) => ({ ...view })) }) : Promise.reject(new Error('down')))
+      if (!scenario.deferred) return answer()
+      return new Promise((resolve, reject) => (answers[user] ||= []).push(() => answer().then(resolve, reject)))
+    },
+  }
+  window.ApiClient = ApiClient
+  function show() {
+    const rules = hiding(sheets.map((sheet) => sheet.textContent).join(''))
+    const hides = (chain, width) => rules.some((rule) => atWidth(rule.media, width) && rule.selectors.some((selector) => matches(selector, chain)))
+    for (const [name, place] of Object.entries(places)) {
+      const shown = ids.flatMap((id) => {
+        const at = WIDTHS.filter((width) => hides(place(id), width)).length
+        return at === WIDTHS.length ? [short(id)] : at ? [short(id) + ' at some widths'] : []
+      })
+      log.push([name, ...shown].join(' '))
+    }
+    log.push(['other', ...ids.filter((id) => others(id).some((chain) => WIDTHS.some((width) => hides(chain, width)))).map(short)].join(' '))
+    log.push(['button', ...WIDTHS.filter((width) => hides(more, width))].join(' '))
+  }
+  vm.runInNewContext(script, {
+    location, history, URL, document, MutationObserver, window,
+    Date: { now: () => now },
+    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
+    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  await flush()
+  for (const step of scenario.steps) {
+    if (step === 'show') show()
+    else if (step === 'storage') stored()
+    else if (step === 'clock') log.push('clock ' + now / 1000)
+    else if (step.startsWith('signin ')) user = step.slice(7)
+    else if (step === 'signout') user = ''
+    else if (step.startsWith('answer ')) {
+      const give = (answers[step.slice(7)] || []).shift()
+      if (give) give()
+      else log.push('no answer')
+    } else if (step !== 'tick') history.pushState(null, '', step)
+    else {
+      let next = -1
+      timers.forEach((timer, i) => { if (timer && (next < 0 || timer.at < timers[next].at)) next = i })
+      if (next < 0) log.push('idle')
+      else {
+        const timer = timers[next]
+        timers[next] = null
+        now = timer.at
+        timer.run()
+      }
+    }
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    try {
+      results[name] = await run(scenario)
+    } catch (error) {
+      results[name] = ['harness: ' + error.stack]
+    }
+  }
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		User     string            `json:"user"`
+		Views    map[string][]view `json:"views"`
+		Deferred bool              `json:"deferred"`
+		Stored   string            `json:"stored,omitempty"`
+		Storage  string            `json:"storage,omitempty"`
+		Steps    []string          `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		views := map[string][]view{}
+		for user, list := range s.views {
+			views[user] = parse(list)
+		}
+		inputs[name] = input{s.user, views, s.deferred, s.stored, s.storage, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "key": savedKey, "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
 	command.Stdin = strings.NewReader(string(data))
 	output, err := command.Output()
