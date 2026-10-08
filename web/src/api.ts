@@ -718,6 +718,12 @@ export type Library = {
   maxItems: number | null
   /** Whether the library takes a genre (when `genres` is not empty) and a maximum: false for live TV and music catalogs. */
   filterable: boolean
+  /**
+   * Whether the web player leaves the library out of its top bar, that bar's More menu and its side
+   * menu; its home screen row and other Jellyfin apps keep it. False for a catalog that is not an
+   * enabled library.
+   */
+  hideInMenus: boolean
 }
 
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
@@ -741,7 +747,7 @@ export const MAX_LIBRARY_ITEMS = 20000
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
-  Partial<Pick<Library, 'genre' | 'maxItems'>>
+  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus'>>
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'custom'
 

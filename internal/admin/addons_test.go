@@ -115,24 +115,26 @@ func TestLibrariesShowTheNameAppsShow(t *testing.T) {
 }
 
 // narrowedLibrary is what the admin app reads of a library's genre and
-// maximum.
+// maximum, and of whether the web player's menus leave it out.
 type narrowedLibrary struct {
 	AddonID     string   `json:"addonId"`
 	CatalogType string   `json:"catalogType"`
 	CatalogID   string   `json:"catalogId"`
 	AppName     *string  `json:"appName"`
+	Enabled     bool     `json:"enabled"`
 	Genre       *string  `json:"genre"`
 	Genres      []string `json:"genres"`
 	MaxItems    *int     `json:"maxItems"`
 	Filterable  bool     `json:"filterable"`
+	HideInMenus bool     `json:"hideInMenus"`
 }
 
-// saveLibraries puts the server's libraries, and answers the status, the
+// saveLibraries puts a scope's libraries, and answers the status, the
 // libraries answered and the error code.
-func (b browser) saveLibraries(libraries ...map[string]any) (int, []narrowedLibrary, string) {
+func (b browser) saveLibraries(scope string, libraries ...map[string]any) (int, []narrowedLibrary, string) {
 	b.api.t.Helper()
 	encoded, _ := json.Marshal(map[string]any{"libraries": libraries})
-	request, _ := http.NewRequestWithContext(b.api.t.Context(), http.MethodPut, b.api.url+"/admin/api/scopes/shared/libraries", bytes.NewReader(encoded))
+	request, _ := http.NewRequestWithContext(b.api.t.Context(), http.MethodPut, b.api.url+"/admin/api/scopes/"+scope+"/libraries", bytes.NewReader(encoded))
 	request.Header.Set("Content-Type", "application/json")
 	response, err := b.client.Do(request)
 	if err != nil {
@@ -179,7 +181,7 @@ func TestLibrariesTakeAGenreAndAMaximum(t *testing.T) {
 		maps.Copy(library, extra)
 		return library
 	}
-	status, saved, code := administrator.saveLibraries(top(map[string]any{"genre": "Drama", "maxItems": 40}))
+	status, saved, code := administrator.saveLibraries("shared", top(map[string]any{"genre": "Drama", "maxItems": 40}))
 	if status != http.StatusOK {
 		t.Fatalf("saving: %d %s", status, code)
 	}
@@ -214,14 +216,91 @@ func TestLibrariesTakeAGenreAndAMaximum(t *testing.T) {
 		"more than the most":                 {top(map[string]any{"maxItems": 20001}), "invalid_library_max_items"},
 		"a maximum for a live TV catalog":    {channels(map[string]any{"maxItems": 10}), "invalid_library_max_items"},
 	} {
-		if status, _, code := administrator.saveLibraries(tc.library); status != http.StatusBadRequest || code != tc.code {
+		if status, _, code := administrator.saveLibraries("shared", tc.library); status != http.StatusBadRequest || code != tc.code {
 			t.Errorf("%s: %d %s, want %s", name, status, code, tc.code)
 		}
 	}
 
 	// Saved without them, the library lists its whole catalog again.
-	if status, saved, code := administrator.saveLibraries(top(nil)); status != http.StatusOK || saved[0].Genre != nil || saved[0].MaxItems != nil ||
+	if status, saved, code := administrator.saveLibraries("shared", top(nil)); status != http.StatusOK || saved[0].Genre != nil || saved[0].MaxItems != nil ||
 		saved[0].AppName == nil || *saved[0].AppName != "Top" {
 		t.Errorf("cleared: %d %s %+v", status, code, saved)
 	}
+}
+
+// An administrator leaves one of the server's libraries, and one of their
+// own, out of the web player's menus: the option reads back on the
+// library it was set on, and false on a library saved without it and on a
+// catalog that is no library. A live TV catalog, which makes no menu
+// entry, and an option that is not a boolean are refused.
+func TestLibrariesHideInMenus(t *testing.T) {
+	api := newTestAPI(t, 10)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],
+			"catalogs": [{"type": "movie", "id": "top", "name": "Top"}, {"type": "series", "id": "top", "name": "Top"},
+				{"type": "movie", "id": "new", "name": "New"}, {"type": "tv", "id": "channels", "name": "Channels"}]}`))
+	}))
+	defer server.Close()
+	administrator := api.signedIn("administrator", true)
+	for _, scope := range []string{"shared", "me"} {
+		status, body, _ := administrator.call(http.MethodPost, "/scopes/"+scope+"/addons", map[string]string{"manifestUrl": server.URL + "/manifest.json"})
+		if status != http.StatusCreated {
+			t.Fatalf("installing in %s: %d %v", scope, status, body)
+		}
+		addonID, _ := body["id"].(string)
+		library := func(catalogType, catalogID string, extra map[string]any) map[string]any {
+			library := map[string]any{"addonId": addonID, "catalogType": catalogType, "catalogId": catalogID, "name": nil}
+			maps.Copy(library, extra)
+			return library
+		}
+		hidden := library("movie", "top", map[string]any{"hideInMenus": true})
+		status, saved, code := administrator.saveLibraries(scope, hidden, library("series", "top", nil), library("tv", "channels", nil))
+		if status != http.StatusOK {
+			t.Fatalf("saving %s: %d %s", scope, status, code)
+		}
+		for when, listed := range map[string]map[string]narrowedLibrary{"saved": byCatalog(saved), "read": byCatalog(administrator.libraries(scope))} {
+			if l := listed["movie/top"]; !l.Enabled || !l.HideInMenus {
+				t.Errorf("%s %s: the hidden library: %+v", scope, when, l)
+			}
+			if l := listed["series/top"]; !l.Enabled || l.HideInMenus {
+				t.Errorf("%s %s: a library saved without the option: %+v", scope, when, l)
+			}
+			if l := listed["movie/new"]; l.Enabled || l.HideInMenus {
+				t.Errorf("%s %s: a catalog that is no library: %+v", scope, when, l)
+			}
+		}
+
+		for name, tc := range map[string]struct {
+			library map[string]any
+			code    string
+		}{
+			"a live TV catalog": {library("tv", "channels", map[string]any{"hideInMenus": true}), "invalid_library"},
+			"not a boolean":     {library("movie", "top", map[string]any{"hideInMenus": "yes"}), "invalid_request"},
+		} {
+			if status, _, code := administrator.saveLibraries(scope, tc.library); status != http.StatusBadRequest || code != tc.code {
+				t.Errorf("%s %s: %d %s, want %s", scope, name, status, code, tc.code)
+			}
+		}
+		if l := byCatalog(administrator.libraries(scope))["movie/top"]; !l.HideInMenus {
+			t.Errorf("%s: the option after refused changes: %+v", scope, l)
+		}
+
+		// Saved without it, the library is listed in the menus again.
+		if status, saved, code := administrator.saveLibraries(scope, library("movie", "top", nil)); status != http.StatusOK || byCatalog(saved)["movie/top"].HideInMenus {
+			t.Errorf("%s cleared: %d %s %+v", scope, status, code, saved)
+		}
+	}
+}
+
+// byCatalog keys libraries, as the admin API answers or a test reads them,
+// by catalog type and identifier.
+func byCatalog(libraries any) map[string]narrowedLibrary {
+	encoded, _ := json.Marshal(libraries)
+	var list []narrowedLibrary
+	_ = json.Unmarshal(encoded, &list)
+	result := map[string]narrowedLibrary{}
+	for _, l := range list {
+		result[l.CatalogType+"/"+l.CatalogID] = l
+	}
+	return result
 }

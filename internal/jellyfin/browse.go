@@ -34,6 +34,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Users/{userId}/Items/{itemId}", h.item)
 	signedIn(http.MethodGet, "/Items/{itemId}/Ancestors", h.ancestors)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Versions", h.versionProgress)
+	signedIn(http.MethodGet, "/Polyfin/UserViews", h.menuViews)
 	signedIn(http.MethodPost, "/Polyfin/Items/{itemId}/Versions/Search", h.searchVersions)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Seasons", h.seasons)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Episodes", h.episodes)
@@ -231,6 +232,40 @@ func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden b
 		return nil, err
 	}
 	return arrangeViews(items, configuration, includeHidden), nil
+}
+
+// MenuView is one of the views /UserViews lists, by its Id there, with
+// whether the web player's menus leave it out: its top bar, the bar's More
+// menu and its side menu (see addons.Library.HideInMenus). Polyfin's
+// jellyfin-web script hides the links to the views so marked; the views
+// keep their home screen rows, and other apps list them all.
+type MenuView struct {
+	Id          string
+	HideInMenus bool
+}
+
+// menuViews answers /Polyfin/UserViews: the views /UserViews lists the
+// caller, in the same order, each with whether the web player's menus
+// leave it out. Polyfin's own Live TV, Playlists and Collections views
+// never are.
+func (h *Handler) menuViews(w http.ResponseWriter, r *http.Request) {
+	user := callerFrom(r.Context()).User
+	views, err := h.userViews(r, user, false)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	hidden, err := h.Library.HiddenInMenus(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	items := make([]MenuView, 0, len(views))
+	for _, view := range views {
+		hide := slices.ContainsFunc(hidden, func(id accounts.ID) bool { return id.String() == view.Id })
+		items = append(items, MenuView{Id: view.Id, HideInMenus: hide})
+	}
+	writeJSON(w, http.StatusOK, struct{ Items []MenuView }{items})
 }
 
 // libraryViews describes the libraries user sees, in the order apps list

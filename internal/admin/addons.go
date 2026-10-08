@@ -163,6 +163,9 @@ type libraryJSON struct {
 	Genres     []string `json:"genres"`
 	MaxItems   *int     `json:"maxItems"`
 	Filterable bool     `json:"filterable"`
+	// HideInMenus leaves an enabled library out of the web player's menus
+	// (see addons.Library.HideInMenus); false for any other catalog.
+	HideInMenus bool `json:"hideInMenus"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
 	// show on its tile: "none", "automatic", or "custom" when one was
@@ -321,6 +324,7 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			Browsable:   l.Catalog.Browsable(),
 			Genres:      []string{},
 			Filterable:  l.Filterable,
+			HideInMenus: l.HideInMenus,
 			Image:       l.Image,
 			Guide:       newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
 			Guides:      newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
@@ -651,7 +655,8 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			Genre       *string `json:"genre"`
 			// MaxItems is read as any number, so that one that is not a
 			// whole number is refused as a maximum, not as a request.
-			MaxItems *float64 `json:"maxItems"`
+			MaxItems    *float64 `json:"maxItems"`
+			HideInMenus bool     `json:"hideInMenus"`
 		} `json:"libraries"`
 	}
 	if !decode(w, r, &body) {
@@ -665,7 +670,7 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		choice := addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType, CatalogID: library.CatalogID,
-			Name: library.Name, Genre: library.Genre}
+			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus}
 		if max := library.MaxItems; max != nil {
 			if *max != math.Trunc(*max) || *max < 1 || *max > addons.MaxLibraryItems {
 				writeError(w, http.StatusBadRequest, "invalid_library_max_items")

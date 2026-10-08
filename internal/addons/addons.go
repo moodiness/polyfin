@@ -126,6 +126,11 @@ type Library struct {
 	// catalog limit, lower or higher; 0 for that limit.
 	Genre    string
 	MaxItems int
+	// HideInMenus leaves an enabled library out of the web player's top
+	// bar, the bar's More menu and its side menu; it keeps its home screen
+	// row, and other apps keep listing it. Always false for a live TV
+	// catalog, which makes no menu entry, and for a disabled catalog.
+	HideInMenus bool
 	// Image is how an enabled library finds the image apps show on its
 	// tile: LibraryImageNone or LibraryImageAutomatic. An image uploaded for
 	// the library's item wins over both (see library.LibraryImages).
@@ -211,9 +216,9 @@ type LibraryKey struct {
 	CatalogID   string
 }
 
-// LibraryChoice selects a catalog as a library, with an optional name, and
-// optionally narrowed to a genre and limited to MaxItems titles (see
-// Library).
+// LibraryChoice selects a catalog as a library, with an optional name,
+// optionally narrowed to a genre and limited to MaxItems titles, and
+// possibly left out of the web player's menus (see Library).
 type LibraryChoice struct {
 	AddonID     accounts.ID
 	CatalogType string
@@ -221,6 +226,7 @@ type LibraryChoice struct {
 	Name        *string
 	Genre       *string
 	MaxItems    *int
+	HideInMenus bool
 }
 
 // Store is the addons repository. Reads of the addons and libraries are
@@ -792,20 +798,21 @@ type libraryRow struct {
 	image             string
 	genre             *string
 	maxItems          *int
+	hideInMenus       bool
 }
 
 // libraryRows reads the libraries filter selects, l being the library
 // and a its addon, in order.
 func libraryRows(ctx context.Context, db queryer, filter string, args ...any) ([]libraryRow, error) {
 	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image,
-		l.genre, l.max_items FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
+		l.genre, l.max_items, l.hide_in_menus FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (libraryRow, error) {
 		var r libraryRow
 		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image,
-			&r.genre, &r.maxItems)
+			&r.genre, &r.maxItems, &r.hideInMenus)
 		return r, err
 	})
 }
@@ -857,7 +864,8 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 		}
 		chosen[row.key] = len(enabled)
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image}
+			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
+			HideInMenus: row.hideInMenus}
 		// A genre the catalog no longer offers lists the whole catalog.
 		if row.genre != nil && library.Filterable && slices.Contains(GenreChoices(catalog), *row.genre) {
 			library.Genre = *row.genre
@@ -891,7 +899,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 // SetLibraries replaces the scope's libraries with choices, in order. A
 // choice's genre must be one its catalog offers, and its maximum from 1 to
 // MaxLibraryItems, on a Filterable catalog; an empty genre lists the whole
-// catalog.
+// catalog. A live TV catalog may not be hidden from the menus.
 func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []LibraryChoice) ([]Library, error) {
 	defer s.changed()
 	for i, choice := range choices {
@@ -942,6 +950,9 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			if choice.MaxItems != nil && !filterable {
 				return ErrInvalidLibraryMaxItems
 			}
+			if choice.HideInMenus && catalog.Type == "tv" {
+				return ErrInvalidLibrary
+			}
 		}
 		// Libraries kept keep their guide: only those dropped are deleted,
 		// with their guides.
@@ -967,10 +978,12 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			}
 		}
 		for position, choice := range choices {
-			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items)
-				VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
-				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items`,
-				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
+				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items,
+				hide_in_menus = excluded.hide_in_menus`,
+				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems,
+				choice.HideInMenus); err != nil {
 				return err
 			}
 		}

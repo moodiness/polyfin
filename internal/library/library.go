@@ -216,15 +216,17 @@ type installed struct {
 }
 
 // library is a library of a user with its catalog, the genre it is
-// narrowed to and the most items it lists (see addons.Library), and how it
-// finds its image (see addons.Library.Image).
+// narrowed to and the most items it lists (see addons.Library), how it
+// finds its image (see addons.Library.Image), and whether the web player's
+// menus leave it out (see addons.Library.HideInMenus).
 type library struct {
-	item     Item
-	addon    installed
-	catalog  stremio.Catalog
-	genre    string
-	maxItems int
-	image    string
+	item        Item
+	addon       installed
+	catalog     stremio.Catalog
+	genre       string
+	maxItems    int
+	image       string
+	hideInMenus bool
 }
 
 // catalogSource is the library's catalog as it lists it: narrowed to its
@@ -367,11 +369,12 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 				Name:           name,
 				CollectionType: collection,
 			},
-			addon:    entries[i],
-			catalog:  l.Catalog,
-			genre:    l.Genre,
-			maxItems: l.MaxItems,
-			image:    l.Image,
+			addon:       entries[i],
+			catalog:     l.Catalog,
+			genre:       l.Genre,
+			maxItems:    l.MaxItems,
+			image:       l.Image,
+			hideInMenus: l.HideInMenus,
 		})
 	}
 	return v, nil
@@ -414,6 +417,23 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 		records = append(records, libraryRecord(l, images[i]))
 	}
 	return s.overridden(items), s.save(ctx, records)
+}
+
+// HiddenInMenus lists those of a user's libraries the web player leaves
+// out of its menus (see addons.Library.HideInMenus), in order. It reads
+// the view the request built for Libraries, under PerRequest.
+func (s *Service) HiddenInMenus(ctx context.Context, user accounts.User) ([]accounts.ID, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	var hidden []accounts.ID
+	for _, l := range v.libraries {
+		if l.hideInMenus {
+			hidden = append(hidden, l.item.ID)
+		}
+	}
+	return hidden, nil
 }
 
 // LibraryID is the item of a library in Jellyfin apps.

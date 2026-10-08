@@ -23,6 +23,10 @@ const libraries: typeof en = {
     iptvVodLink: 'Ses options d’import',
     addonOff: 'Addon désactivé',
     missing: 'Plus disponible',
+    hideInMenus: 'Masquer dans la barre du haut du lecteur web',
+    hideInMenusHelp:
+      'Elle garde sa rangée sur l’accueil. Le menu latéral du lecteur web la masque aussi ; les autres applis Jellyfin la listent toujours. S’applique au prochain chargement du lecteur web.',
+    hiddenInMenus: 'Masquée dans la barre du haut',
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
     removedLive: (name: string) => `${name} a été retiré des bibliothèques.`,
