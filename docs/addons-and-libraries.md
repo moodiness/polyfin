@@ -81,7 +81,7 @@ A genre the addon stops offering lists the whole catalog again, until another is
 
 - A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. For a library or an addon's collection, the titles kept from earlier listings answer at once when they make the whole listing. Otherwise the listing waits for the addons 3 seconds at most, or 1 second when the titles kept fill a page of 100, then lists those read by then, and at least the first page of each catalog. It reads the rest in the background, for the next listing. A listing with a `limit` lists as many as it asks, within the library's maximum.
 
-### Hidden from the web player's top bar
+### Libraries hidden from the top bar
 
 Under **Content › Libraries**, **Hide from the web player's top bar** in a library's row leaves the library out of the web player's menus: the buttons of its top bar, the bar's **More** menu, and its side menu, in both of its layouts. It is saved with the list's **Save**, like the library's name, and the row then says **Hidden from the top bar**. Users set the same for their own libraries under **My sources**. Live TV catalogs have no such choice: their channels go to Live TV, never to a menu.
 
@@ -95,7 +95,7 @@ Under **Content › Libraries**, **Hide from the web player's top bar** in a lib
 
 **For app developers:**
 
-- The web player's Polyfin script reads the choice from `GET /Polyfin/UserViews` (see [Libraries left out of the web player's menus](jellyfin-compatibility.md#libraries-left-out-of-the-web-players-menus)) and hides the library's links with a style. `/UserViews` and every other answer list the library as before.
+- The web player's Polyfin script reads the choice from `GET /Polyfin/UserViews` (see [Libraries left out of the web player menus](jellyfin-compatibility.md#libraries-left-out-of-the-web-player-menus)) and hides the library's links with a style. `/UserViews` and every other answer list the library as before.
 
 ## Music addons
 
