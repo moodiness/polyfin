@@ -243,6 +243,7 @@ On the home page of Jellyfin apps, each collection library has a row of its coll
 - `/Items/Latest` lists its collections, `BoxSet` items.
 - A listing that asks for `Folder` items keeps them, as jellyfin-web lists a library without type by its folders, movies and series.
 - An addon's collection lists the titles of the catalogs it and the collections within it group, merged one of each in turn, never those collections. A collection that groups other collections, listed whole on its first page, is ordered by premiere date. A `Recursive` listing that asks only for titles (no `BoxSet` or `Folder`) and fits on its first page, as Streamyfin's collection pages ask, is sorted by its `sortBy`.
+- A listing of collections across the server (`IncludeItemTypes=BoxSet` without `ParentId`), as Strand asks for its shelves, lists every collection of the user's collection libraries, each once, with the collections made by users, sorted by name. jellyfin-web asks the same for its **Add to collection** dialog, where only collections made by users take a title: it gets those alone.
 
 ### Collections made by users
 
@@ -287,7 +288,7 @@ On a user's page under **Users**, the **Access** section's **Can manage collecti
 
 **For app developers:**
 
-- The **Collections** view has CollectionType `boxsets`. A listing of BoxSets across the server includes user collections.
+- The **Collections** view has CollectionType `boxsets`. A listing of BoxSets across the server includes user collections, and for apps other than jellyfin-web the addons' collections too (see [Collections from addons](#collections-from-addons)).
 - Hidden titles do not count in `ChildCount`, `RecursiveItemCount` or the played count.
 - Without the permission, `POST /Collections` and `POST` or `DELETE /Collections/{id}/Items` answer an empty 403, as in Jellyfin, administrators included.
 - Delete a collection with `DELETE /Items/{id}`, as in Jellyfin. Users without permission get 401.

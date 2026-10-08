@@ -282,8 +282,9 @@ func (h *Handler) collectionAncestors(w http.ResponseWriter, r *http.Request, us
 // collections with titles from a library, and a collection's titles listed
 // as its children. Like Jellyfin, a listing asking only for BoxSet lists
 // collections whatever folder it names, keeping, for a library that does
-// not hold collections, those with a title listed in it. It reports
-// whether it answered.
+// not hold collections, those with a title listed in it. A listing across
+// the server lists the addons' collections too (see
+// writeCollectionsAcrossServer). It reports whether it answered.
 func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, hasParent bool, start, limit int) bool {
 	if hasParent && parent != collectionsViewID {
 		c, err := h.Collections.Get(r.Context(), parent)
@@ -327,6 +328,10 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 		h.internalError(w, r, err)
 		return true
 	}
+	if !hasParent && !webApp(r) {
+		h.writeCollectionsAcrossServer(w, r, user, all, start, limit)
+		return true
+	}
 	fields := requestedFields(r)
 	filter, filtered := stateFilterOf(r)
 	if !filtered {
@@ -363,6 +368,77 @@ func (h *Handler) listedUnder(ctx context.Context, all []collections.Collection,
 		}
 	}
 	return kept, nil
+}
+
+// writeCollectionsAcrossServer answers a listing of collections across the
+// server as Jellyfin answers one, with every BoxSet the user sees: the
+// collections made by users and those the user's collection libraries
+// list, each once, by name. Strand builds its shelves from such a listing.
+// jellyfin-web makes one only for its Add to collection dialog, where a
+// title can go to collections made by users alone: collectionListing
+// answers it with those.
+func (h *Handler) writeCollectionsAcrossServer(w http.ResponseWriter, r *http.Request, user accounts.User, made []collections.Collection, start, limit int) {
+	fromAddons, err := h.addonCollections(r.Context(), user)
+	if err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	fields := requestedFields(r)
+	dtos, err := h.collectionDtos(r, user, made, fields, false)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	listed, err := h.dtos(r, user, fromAddons, fields, nil)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	dtos = append(dtos, listed...)
+	if filter, filtered := stateFilterOf(r); filtered {
+		dtos = slices.DeleteFunc(dtos, func(dto BaseItemDto) bool { return !filter.keepsData(dto.UserData, false) })
+	}
+	orders := listQuery(r, "sortOrder")
+	descending := len(orders) > 0 && strings.EqualFold(orders[0], "Descending")
+	slices.SortStableFunc(dtos, func(a, b BaseItemDto) int {
+		order := cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+		if descending {
+			return -order
+		}
+		return order
+	})
+	if wholeListing(r) {
+		limit = library.WholeListing
+	}
+	from, to := bounds(len(dtos), start, limit)
+	writeJSON(w, http.StatusOK, QueryResult{Items: dtos[from:to], TotalRecordCount: len(dtos), StartIndex: start})
+}
+
+// addonCollections lists the collections of the user's collection
+// libraries, as each lists them, each once.
+func (h *Handler) addonCollections(ctx context.Context, user accounts.User) ([]library.Item, error) {
+	libraries, err := h.Library.Libraries(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	var listed []library.Item
+	seen := map[accounts.ID]bool{}
+	for _, l := range libraries {
+		if l.CollectionType != "boxsets" {
+			continue
+		}
+		page, err := h.Library.Children(ctx, user, l.ID, 0, library.WholeListing, "")
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Items {
+			if item.Kind == library.KindCollection && !seen[item.ID] {
+				seen[item.ID] = true
+				listed = append(listed, item)
+			}
+		}
+	}
+	return listed, nil
 }
 
 // writeCollectionTitles answers the titles of a collection that user may
