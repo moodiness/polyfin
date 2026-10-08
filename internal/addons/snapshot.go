@@ -11,8 +11,8 @@ import (
 )
 
 // changesChannel is where the database notifies changes to the addons,
-// libraries and guides, once their transaction commits (see the triggers
-// of the migrations).
+// libraries and guides, once their transaction commits, naming the schema
+// of the table changed (see the triggers of the migrations).
 const changesChannel = "polyfin_addons"
 
 // The delays before following changes again once the connection
@@ -175,6 +175,14 @@ func (s *Store) listen(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+	// The channel is the database's: servers, or tests, sharing it keep
+	// their tables in schemas of their own, and each follows only the
+	// changes of the schema its queries find the addons in.
+	var schema string
+	if err := conn.QueryRow(ctx, `SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.oid = 'addons'::regclass`).Scan(&schema); err != nil {
+		return false, err
+	}
 	if _, err := conn.Exec(ctx, "LISTEN "+changesChannel); err != nil {
 		return false, err
 	}
@@ -182,9 +190,12 @@ func (s *Store) listen(ctx context.Context) (bool, error) {
 	s.changed()
 	s.watching.Store(true)
 	for {
-		if _, err := conn.WaitForNotification(ctx); err != nil {
+		notification, err := conn.WaitForNotification(ctx)
+		if err != nil {
 			return true, err
 		}
-		s.changed()
+		if notification.Payload == schema {
+			s.changed()
+		}
 	}
 }
