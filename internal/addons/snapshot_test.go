@@ -122,6 +122,36 @@ func TestWatchedStoreAnswersFromMemory(t *testing.T) {
 	}
 }
 
+// Servers, or tests, sharing a database keep their tables in schemas of
+// their own, and the database notifies every change on one channel: a
+// change in another schema never has the store read its own again.
+func TestWatchedStoreIgnoresOtherSchemas(t *testing.T) {
+	store, counter, _ := countedStore(t)
+	addon := newFakeAddon(t, catalogs("movie", 3))
+	if _, err := store.Install(t.Context(), Shared(), addon.url("a"), false); err != nil {
+		t.Fatal(err)
+	}
+	watch(t, store)
+	if _, err := store.Libraries(t.Context(), Shared()); err != nil {
+		t.Fatal(err)
+	}
+	neighbour, _ := newStore(t)
+	counter.queries.Store(0)
+	if _, err := neighbour.Install(t.Context(), Shared(), addon.url("b"), false); err != nil {
+		t.Fatal(err)
+	}
+	// Its notification comes within milliseconds; the store is read for
+	// far longer.
+	for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if libraries, err := store.Libraries(t.Context(), Shared()); err != nil || len(libraries) != 3 {
+			t.Fatalf("libraries: %v %v", libraries, err)
+		}
+	}
+	if n := counter.queries.Load(); n != 0 {
+		t.Errorf("a change in another schema sent %d statements", n)
+	}
+}
+
 func TestEveryWriteOfTheStoreIsReadAtOnce(t *testing.T) {
 	store, users := newStore(t)
 	// No notification can help: only the store's own writes tell it.
