@@ -17,6 +17,7 @@ var serverSecrets = map[string]func(accounts.Settings) string{
 	"publicMetaDbKey":   func(s accounts.Settings) string { return s.PublicMetaDBKey },
 	"theIntroDbKey":     func(s accounts.Settings) string { return s.TheIntroDBKey },
 	"traktClientSecret": func(s accounts.Settings) string { return s.TraktClientSecret },
+	"lastFmSecret":      func(s accounts.Settings) string { return s.LastFMSecret },
 }
 
 // secretJSON is a secret revealed on demand. Answers never cache it.
@@ -44,9 +45,10 @@ func (h *handler) revealServerSecret(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, secretJSON{Value: value})
 }
 
-// revealTrackingKey answers the API key the signed-in user connected a key
-// service with, MDBList or PublicMetaDB, and records it in the activity
-// log. The tokens of the code services are never revealed: 400
+// revealTrackingKey answers the API key or user token the signed-in user
+// connected a key service with, MDBList, PublicMetaDB or ListenBrainz, and
+// records it in the activity log. The tokens and session keys of the
+// services connected on their own sites are never revealed: 400
 // not_revealable. 404 not_set: no connection, or one the key cannot
 // decrypt.
 func (h *handler) revealTrackingKey(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +57,7 @@ func (h *handler) revealTrackingKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
-	if trackers.ByCode(service) {
+	if !trackers.ByKey(service) {
 		writeError(w, http.StatusBadRequest, "not_revealable")
 		return
 	}

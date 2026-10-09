@@ -10,10 +10,15 @@ import (
 )
 
 // trackingServiceJSON is how one of the signed-in user's tracking services
-// stands. Tokens and keys are never sent.
+// stands. Tokens and keys are never sent. Connection is "code" (a code to
+// enter on the service's site), "signin" (signing in there to allow
+// Polyfin, Code then holding the page, without a user code) or "key" (an
+// API key or user token); Music tells a service told the songs the user
+// plays, which has no history to import.
 type trackingServiceJSON struct {
 	Service     string            `json:"service"`
 	Connection  string            `json:"connection"`
+	Music       bool              `json:"music"`
 	Available   bool              `json:"available"`
 	Connected   bool              `json:"connected"`
 	Account     *string           `json:"account"`
@@ -46,10 +51,13 @@ type trackingCodeJSON struct {
 }
 
 func newTrackingServiceJSON(status trackers.Status) trackingServiceJSON {
-	result := trackingServiceJSON{Service: status.Service, Connection: "key", Available: status.Available, Connected: status.Connected,
-		ConnectedAt: utcSeconds(status.ConnectedAt), LastSentAt: utcSeconds(status.LastSentAt)}
-	if status.ByCode {
+	result := trackingServiceJSON{Service: status.Service, Connection: "key", Music: status.Music, Available: status.Available,
+		Connected: status.Connected, ConnectedAt: utcSeconds(status.ConnectedAt), LastSentAt: utcSeconds(status.LastSentAt)}
+	switch {
+	case status.ByCode:
 		result.Connection = "code"
+	case status.BySignIn:
+		result.Connection = "signin"
 	}
 	if status.Account != "" {
 		result.Account = &status.Account
@@ -101,7 +109,8 @@ func (h *handler) ownTracking(w http.ResponseWriter, r *http.Request) {
 }
 
 // connectTracking connects the signed-in user to a service: with the API
-// key the body holds, or by starting a code the user enters on its site.
+// key or user token the body holds, or by starting a code the user enters,
+// or a sign-in, on its site.
 func (h *handler) connectTracking(w http.ResponseWriter, r *http.Request) {
 	service := r.PathValue("service")
 	if h.Trackers == nil || !slices.Contains(trackers.Services, service) {
@@ -113,7 +122,7 @@ func (h *handler) connectTracking(w http.ResponseWriter, r *http.Request) {
 		status trackers.Status
 		err    error
 	)
-	if trackers.ByCode(service) {
+	if trackers.ByCode(service) || trackers.BySignIn(service) {
 		status, err = h.Trackers.StartCode(r.Context(), user, service)
 	} else {
 		var body struct {
@@ -190,6 +199,9 @@ func (h *handler) importTracking(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) importAnswer(w http.ResponseWriter, r *http.Request, success int, status trackers.Status, err error) {
 	switch {
+	case errors.Is(err, trackers.ErrUnknownService):
+		// A music service, which has no history to import.
+		writeError(w, http.StatusNotFound, "not_found")
 	case errors.Is(err, trackers.ErrNotConnected):
 		writeError(w, http.StatusConflict, "not_connected")
 	case errors.Is(err, trackers.ErrImportOff):

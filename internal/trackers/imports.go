@@ -76,9 +76,10 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 }
 
 // SetImport turns the import of user's watch history from service on or
-// off. Turned on, it imports at once, then every 6 hours.
+// off. Turned on, it imports at once, then every 6 hours. The music
+// services have no watch history: ErrUnknownService.
 func (s *Service) SetImport(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
-	if !known(service) {
+	if !imports(service) {
 		return Status{}, ErrUnknownService
 	}
 	key := laneKey{user, service}
@@ -112,7 +113,7 @@ func (s *Service) SetImport(ctx context.Context, user accounts.ID, service strin
 // ImportNow imports user's watch history from service at once, unless an
 // import of it runs already.
 func (s *Service) ImportNow(ctx context.Context, user accounts.ID, service string) (Status, error) {
-	if !known(service) {
+	if !imports(service) {
 		return Status{}, ErrUnknownService
 	}
 	if _, ok, err := s.connection(ctx, user, service); err != nil {

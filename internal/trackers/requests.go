@@ -90,7 +90,10 @@ func (s *Service) api(ctx context.Context, service, token string, settings accou
 		// MDBList takes its keys in the query only.
 		query.Set("apikey", token)
 	}
-	if token != "" && service != MDBList {
+	switch {
+	case token != "" && service == ListenBrainz:
+		header.Set("Authorization", "Token "+token)
+	case token != "" && service != MDBList:
 		header.Set("Authorization", "Bearer "+token)
 	}
 	var body []byte
@@ -149,6 +152,10 @@ func classify(service string, r reply) result {
 	case r.status == http.StatusTooManyRequests:
 		result.outcome = retry
 		result.after = retryAfter(r.header)
+		if service == ListenBrainz {
+			// ListenBrainz tells when its window ends in its own header.
+			result.after = max(result.after, secondsHeader(r.header, "X-RateLimit-Reset-In"))
+		}
 		// Simkl's per-second limit clears in a second; its Retry-After
 		// is for its daily one.
 		if service == Simkl && errorCode(r.body) == "rate_limit" {
@@ -171,7 +178,12 @@ func classify(service string, r reply) result {
 
 // retryAfter reads a Retry-After header in seconds, zero when absent.
 func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
+	return secondsHeader(header, "Retry-After")
+}
+
+// secondsHeader reads the header name in seconds, zero when absent.
+func secondsHeader(header http.Header, name string) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get(name)))
 	if err != nil || seconds < 0 {
 		return 0
 	}
@@ -299,8 +311,13 @@ func round(percent float64) float64 {
 // sendTo sends a change of kind to service for the connection holding
 // token.
 func (s *Service) sendTo(ctx context.Context, service, token string, settings accounts.Settings, kind string, ev event) result {
-	if service == PublicMetaDB {
+	switch service {
+	case PublicMetaDB:
 		return s.sendPublicMetaDB(ctx, token, settings, kind, ev)
+	case LastFM:
+		return s.sendLastFM(ctx, token, settings, kind, ev)
+	case ListenBrainz:
+		return s.sendListenBrainz(ctx, token, settings, kind, ev)
 	}
 	var (
 		path    string
@@ -491,6 +508,8 @@ func (s *Service) checkKey(ctx context.Context, service, key string) (string, er
 		r, err = s.api(ctx, service, key, settings, http.MethodGet, "/user", nil, nil)
 	case PublicMetaDB:
 		r, err = s.api(ctx, service, key, settings, http.MethodGet, "/api/external/lists", url.Values{"perPage": {"1"}}, nil)
+	case ListenBrainz:
+		r, err = s.api(ctx, service, key, settings, http.MethodGet, "/1/validate-token", nil, nil)
 	default:
 		return "", ErrUnknownService
 	}
@@ -499,21 +518,38 @@ func (s *Service) checkKey(ctx context.Context, service, key string) (string, er
 		return "", ErrUnreachable
 	case r.status == http.StatusUnauthorized || r.status == http.StatusForbidden:
 		return "", ErrInvalidKey
+	case service == ListenBrainz && r.status == http.StatusBadRequest:
+		// Older ListenBrainz servers refuse an unknown token so.
+		return "", ErrInvalidKey
 	case r.status != http.StatusOK:
 		return "", ErrUnreachable
 	}
-	if service != MDBList {
-		return "", nil
+	switch service {
+	case MDBList:
+		var user struct {
+			Username string `json:"username"`
+			Error    any    `json:"error"`
+		}
+		if json.Unmarshal(r.body, &user) != nil {
+			return "", ErrUnreachable
+		}
+		if user.Error != nil {
+			return "", ErrInvalidKey
+		}
+		return user.Username, nil
+	case ListenBrainz:
+		// An unknown token is answered 200, as not valid.
+		var answer struct {
+			Valid    *bool  `json:"valid"`
+			UserName string `json:"user_name"`
+		}
+		if json.Unmarshal(r.body, &answer) != nil || answer.Valid == nil {
+			return "", ErrUnreachable
+		}
+		if !*answer.Valid {
+			return "", ErrInvalidKey
+		}
+		return answer.UserName, nil
 	}
-	var user struct {
-		Username string `json:"username"`
-		Error    any    `json:"error"`
-	}
-	if json.Unmarshal(r.body, &user) != nil {
-		return "", ErrUnreachable
-	}
-	if user.Error != nil {
-		return "", ErrInvalidKey
-	}
-	return user.Username, nil
+	return "", nil
 }

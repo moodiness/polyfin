@@ -75,9 +75,14 @@ const (
 	// (Scope).
 	kindWatched   = "watched"
 	kindUnwatched = "unwatched"
+	// kindNowPlaying tells a music service the song playing now;
+	// kindListen scrobbles a song played long enough (ListenedAt).
+	kindNowPlaying = "now_playing"
+	kindListen     = "listen"
 )
 
-// event is what a change sends, as kept in the queue.
+// event is what a change sends, as kept in the queue: about movies and
+// episodes (Titles), or about a song (Song).
 type event struct {
 	Titles     []Title    `json:"titles"`
 	Action     string     `json:"action,omitempty"`
@@ -86,6 +91,22 @@ type event struct {
 	RuntimeMS  int64      `json:"runtimeMs,omitempty"`
 	WatchedAt  *time.Time `json:"watchedAt,omitempty"`
 	Scope      Scope      `json:"scope,omitempty"`
+	Song       *Song      `json:"song,omitempty"`
+	// ListenedAt is when the song scrobbled started playing.
+	ListenedAt *time.Time `json:"listenedAt,omitempty"`
+}
+
+// complete reports whether the event names what it is about.
+func (e event) complete() bool {
+	return len(e.Titles) > 0 || e.Song != nil
+}
+
+// item is the item the event is about: its first title's, or its song's.
+func (e event) item() accounts.ID {
+	if e.Song != nil {
+		return e.Song.Item
+	}
+	return e.Titles[0].Item
 }
 
 // sessionKey names the playback of one device of a user.
@@ -174,7 +195,7 @@ type change struct {
 
 func (s *Service) playback(ctx context.Context, user accounts.ID, report Playback) {
 	key := sessionKey{user, report.Device}
-	services, err := s.active(ctx, user)
+	services, err := s.active(ctx, user, false)
 	if err != nil || len(services) == 0 {
 		if report.Event == Stopped {
 			s.mu.Lock()
@@ -287,7 +308,7 @@ func (s *Service) playback(ctx context.Context, user accounts.ID, report Playbac
 }
 
 func (s *Service) mark(ctx context.Context, user accounts.ID, mark Mark) {
-	services, err := s.active(ctx, user)
+	services, err := s.active(ctx, user, false)
 	if err != nil {
 		s.logger.Warn("A played mark could not be sent to tracking services", "error", err)
 		return
@@ -346,10 +367,10 @@ func scoped(titles []Title, scope Scope) [][]Title {
 	return groups
 }
 
-// active lists the services user connected that changes can be sent to:
-// those not waiting for the user to connect again, and whose app the
-// settings still hold.
-func (s *Service) active(ctx context.Context, user accounts.ID) ([]string, error) {
+// active lists the services user connected that changes can be sent to,
+// the music services or the others: those not waiting for the user to
+// connect again, and whose app the settings still hold.
+func (s *Service) active(ctx context.Context, user accounts.ID, music bool) ([]string, error) {
 	rows, err := s.db.Query(ctx, `SELECT service FROM tracking_connections
 		WHERE user_id = $1 AND problem IS DISTINCT FROM 'reconnect' ORDER BY service`, user)
 	if err != nil {
@@ -362,7 +383,7 @@ func (s *Service) active(ctx context.Context, user accounts.ID) ([]string, error
 	settings := s.settings()
 	var services []string
 	for _, service := range connected {
-		if Available(service, settings) {
+		if Music(service) == music && Available(service, settings) {
 			services = append(services, service)
 		}
 	}
@@ -383,7 +404,7 @@ func (s *Service) queue(ctx context.Context, user accounts.ID, service string, c
 	}
 	var id int64
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		title := c.event.Titles[0].Item
+		title := c.event.item()
 		if c.kind == kindResume {
 			// A newer resume point replaces the one waiting.
 			if _, err := tx.Exec(ctx, "DELETE FROM tracking_events WHERE user_id = $1 AND service = $2 AND kind = $3 AND title = $4",

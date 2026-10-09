@@ -349,6 +349,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
 		{accounts.ErrInvalidTraktApp, http.StatusBadRequest, "invalid_trakt_app"},
 		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
+		{accounts.ErrInvalidLastFMApp, http.StatusBadRequest, "invalid_lastfm_app"},
 		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},

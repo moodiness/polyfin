@@ -131,10 +131,10 @@ func (r *reader) refused(ctx context.Context) error {
 // waitPace waits for the turn of a request to PublicMetaDB, and reports
 // false if ctx ended first.
 func (s *Service) waitPace(ctx context.Context) bool {
-	p := &s.pace
+	p := s.paces[PublicMetaDB]
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !sleep(ctx, time.Until(latest(p.last.Add(s.timing.publicMetaDBGap), p.notBefore))) {
+	if !sleep(ctx, time.Until(latest(p.last.Add(s.timing.sharedGaps[PublicMetaDB]), p.notBefore))) {
 		return false
 	}
 	p.last = time.Now()
@@ -143,9 +143,10 @@ func (s *Service) waitPace(ctx context.Context) bool {
 
 // holdPace holds every request to PublicMetaDB for wait.
 func (s *Service) holdPace(wait time.Duration) {
-	s.pace.mu.Lock()
-	s.pace.notBefore = time.Now().Add(wait)
-	s.pace.mu.Unlock()
+	p := s.paces[PublicMetaDB]
+	p.mu.Lock()
+	p.notBefore = time.Now().Add(wait)
+	p.mu.Unlock()
 }
 
 // read reads the history of the connection: the titles watched and the

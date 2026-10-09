@@ -88,11 +88,11 @@ func (s *Service) connect(ctx context.Context, user accounts.ID, service string,
 // none the key can open.
 var ErrNotConnected = errors.New("tracking service not connected")
 
-// Key returns the API key user connected a key service with, for them to
-// read it again. Code services' tokens are never handed out:
-// ErrUnknownService.
+// Key returns the API key or user token user connected a key service with,
+// for them to read it again. The tokens and session keys of code and
+// sign-in services are never handed out: ErrUnknownService.
 func (s *Service) Key(ctx context.Context, user accounts.ID, service string) (string, error) {
-	if !known(service) || ByCode(service) {
+	if !ByKey(service) {
 		return "", ErrUnknownService
 	}
 	c, ok, err := s.connection(ctx, user, service)
@@ -109,9 +109,14 @@ func (s *Service) Key(ctx context.Context, user accounts.ID, service string) (st
 type Status struct {
 	Service string
 	// ByCode tells that the user connects by entering a code on the
-	// service's site, rather than by pasting an API key.
-	ByCode bool
-	// Available is false for a code service whose app the settings lack.
+	// service's site, and BySignIn by signing in there and allowing
+	// Polyfin, rather than by pasting an API key.
+	ByCode, BySignIn bool
+	// Music tells that the service is told the songs the user plays rather
+	// than the movies and episodes they watch; it has no history to import.
+	Music bool
+	// Available is false for a code or sign-in service whose app the
+	// settings lack.
 	Available bool
 	Connected bool
 	// Account is the account name the service gave, empty when unknown.
@@ -121,7 +126,8 @@ type Status struct {
 	LastSentAt *time.Time
 	// Problem is empty, ProblemReconnect or ProblemUnreachable.
 	Problem string
-	// Code is the code the user is asked to enter, while one waits.
+	// Code is the code the user is asked to enter, or the page they are
+	// asked to allow Polyfin on, while one waits.
 	Code *Code
 	// ImportHistory tells that the service's watch history is imported
 	// into Polyfin; Importing, that an import runs now; LastImport, how
@@ -131,7 +137,9 @@ type Status struct {
 	LastImport    *ImportResult
 }
 
-// Code is a code waiting for a user to enter it on a service's site.
+// Code is a code waiting for a user to enter it on a service's site, or,
+// for a sign-in service, the page of its site waiting for them to allow
+// Polyfin, UserCode empty.
 type Code struct {
 	UserCode, VerificationURL string
 	ExpiresAt                 time.Time
@@ -152,7 +160,8 @@ func (s *Service) Statuses(ctx context.Context, user accounts.ID) ([]Status, err
 }
 
 func (s *Service) status(ctx context.Context, user accounts.ID, service string) (Status, error) {
-	status := Status{Service: service, ByCode: ByCode(service), Available: Available(service, s.settings())}
+	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), Music: Music(service),
+		Available: Available(service, s.settings())}
 	c, ok, err := s.connection(ctx, user, service)
 	if err != nil {
 		return status, err
@@ -178,7 +187,7 @@ func (s *Service) status(ctx context.Context, user accounts.ID, service string) 
 		}
 	}
 	s.mu.Unlock()
-	if ok {
+	if ok && imports(service) {
 		if err := s.importStatus(ctx, key, &status); err != nil {
 			return status, err
 		}
@@ -200,10 +209,11 @@ func validKey(key string) bool {
 	return true
 }
 
-// ConnectKey connects user to a key service with their API key, once the
-// service accepted it, in place of the connection there was.
+// ConnectKey connects user to a key service with their API key or user
+// token, once the service accepted it, in place of the connection there
+// was.
 func (s *Service) ConnectKey(ctx context.Context, user accounts.ID, service, key string) (Status, error) {
-	if !known(service) || ByCode(service) {
+	if !ByKey(service) {
 		return Status{}, ErrUnknownService
 	}
 	key = strings.TrimSpace(key)
@@ -251,11 +261,12 @@ type codeAnswer struct {
 	Interval                int    `json:"interval"`
 }
 
-// StartCode asks a code service for a code the user enters on its site, in
-// place of the one waiting, and waits for them in the background. Their
-// connection, if any, stays until they enter it.
+// StartCode asks a code service for a code the user enters on its site, or
+// a sign-in service for the page where the user allows Polyfin, in place of
+// the one waiting, and waits for them in the background. Their connection,
+// if any, stays until they enter it.
 func (s *Service) StartCode(ctx context.Context, user accounts.ID, service string) (Status, error) {
-	if !ByCode(service) {
+	if !ByCode(service) && !BySignIn(service) {
 		return Status{}, ErrUnknownService
 	}
 	settings := s.settings()
@@ -267,6 +278,14 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 	s.mu.Lock()
 	delete(s.refusedApps, key)
 	s.mu.Unlock()
+	if service == LastFM {
+		p, err := s.lastFMToken(ctx, user, settings)
+		if err != nil {
+			return Status{}, err
+		}
+		s.wait(key, p)
+		return s.status(ctx, user, service)
+	}
 	var (
 		r   reply
 		err error
@@ -303,14 +322,19 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 			p.verificationURL = answer.VerificationURI
 		}
 	}
+	s.wait(key, p)
+	return s.status(ctx, user, service)
+}
+
+// wait has p wait for its user in place of the code waiting for key.
+func (s *Service) wait(key laneKey, p *pending) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if old := s.pending[key]; old != nil {
 		old.cancel()
 	}
 	s.pending[key] = p
 	s.spawn(func() { s.poll(p) })
-	s.mu.Unlock()
-	return s.status(ctx, user, service)
 }
 
 // pollState is what a poll of a code tells.
@@ -326,13 +350,14 @@ const (
 )
 
 // tokens are what Trakt and Simkl answer once a user lets Polyfin in, or
-// to a refresh.
+// to a refresh; for Last.fm, the session key and the account it is for.
 type tokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int64  `json:"expires_in"`
 	CreatedAt    int64  `json:"created_at"`
 	Scope        string `json:"scope"`
+	account      string
 }
 
 // expiry is when the access token of t expires, nil when not said.
@@ -388,7 +413,7 @@ func (s *Service) poll(p *pending) {
 				delete(s.pending, key)
 			}
 			s.mu.Unlock()
-			s.logger.Info("A tracking service refused this server's app: its client ID and secret need checking under Settings › Tracking",
+			s.logger.Info("A tracking service refused this server's app: its credentials need checking under Settings › Tracking",
 				"user_id", p.user.String(), "service", p.service)
 			return
 		case approved:
@@ -399,7 +424,11 @@ func (s *Service) poll(p *pending) {
 			default:
 			}
 			c := connection{token: t.AccessToken, refresh: t.RefreshToken, expires: s.expiry(t), connectedAt: s.now().UTC().Truncate(time.Second)}
-			if account := s.account(p.service, t.AccessToken); account != "" {
+			account := t.account
+			if ByCode(p.service) {
+				account = s.account(p.service, t.AccessToken)
+			}
+			if account != "" {
 				c.account = &account
 			}
 			if err := s.connect(s.ctx, p.user, p.service, c); err != nil {
@@ -413,6 +442,9 @@ func (s *Service) poll(p *pending) {
 // pollCode asks the service of p whether its user entered the code.
 func (s *Service) pollCode(p *pending) (pollState, tokens) {
 	settings := s.settings()
+	if p.service == LastFM {
+		return s.pollLastFM(p, settings)
+	}
 	var (
 		r   reply
 		err error
@@ -475,8 +507,11 @@ func refusesApp(r reply) bool {
 // appCredentials are the credentials of the app the settings name for
 // service.
 func appCredentials(service string, settings accounts.Settings) string {
-	if service == Trakt {
+	switch service {
+	case Trakt:
 		return settings.TraktClientID + "\x00" + settings.TraktClientSecret
+	case LastFM:
+		return settings.LastFMAPIKey + "\x00" + settings.LastFMSecret
 	}
 	return settings.SimklClientID
 }

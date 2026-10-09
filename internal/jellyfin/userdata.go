@@ -512,6 +512,19 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 			},
 		})
 	}
+	// Songs go to the music services, by their artist and title.
+	if h.Trackers != nil && item.Kind == library.KindTrack {
+		if song, ok := trackers.SongOf(item, runtime); ok {
+			h.Trackers.Listen(user.ID, trackers.Listening{
+				Event:         trackedEvents[event],
+				Device:        deviceID,
+				Position:      state.Position,
+				PositionKnown: positionKnown,
+				Paused:        state.Paused,
+				Song:          song,
+			})
+		}
+	}
 }
 
 // playedRuntime is the runtime of the version a report names, as analyzed,
