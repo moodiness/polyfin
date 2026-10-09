@@ -26,6 +26,9 @@ func jellyfinError(w http.ResponseWriter, err error) bool {
 		{jellyfinimport.ErrInvalidAddress, http.StatusBadRequest, "invalid_jellyfin_address"},
 		// Not 401, which the admin app reads as its own session ending.
 		{jellyfinimport.ErrKeyRefused, http.StatusBadRequest, "jellyfin_key_refused"},
+		// The key is known but may not list the server's users.
+		{jellyfinimport.ErrForbidden, http.StatusBadRequest, "jellyfin_key_limited"},
+		{jellyfinimport.ErrNotKeyOwner, http.StatusBadRequest, "jellyfin_key_owner_only"},
 		{jellyfinimport.ErrUnreachable, http.StatusBadGateway, "jellyfin_unreachable"},
 		{jellyfinimport.ErrNotJellyfin, http.StatusBadGateway, "not_jellyfin"},
 		{jellyfinimport.ErrRunning, http.StatusConflict, "jellyfin_import_running"},
@@ -94,10 +97,14 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 	for _, user := range own {
 		byName[strings.ToLower(user.Name)] = user.ID.String()
 	}
+	// KeyOwner is the Jellyfin user the key belongs to, null for an API key
+	// of the server: a user's key imports only its owner's watch data.
 	result := struct {
-		Server jellyfinServerJSON `json:"server"`
-		Users  []jellyfinUserJSON `json:"users"`
-	}{Server: jellyfinServerJSON{Name: server.Name, Version: server.Version, Address: server.Address}, Users: make([]jellyfinUserJSON, 0, len(users))}
+		Server   jellyfinServerJSON `json:"server"`
+		Users    []jellyfinUserJSON `json:"users"`
+		KeyOwner *string            `json:"keyOwner"`
+	}{Server: jellyfinServerJSON{Name: server.Name, Version: server.Version, Address: server.Address}, Users: make([]jellyfinUserJSON, 0, len(users)),
+		KeyOwner: optional(server.KeyOwner)}
 	for _, user := range users {
 		listed := jellyfinUserJSON{ID: user.ID, Name: user.Name, IsAdministrator: user.Administrator, IsDisabled: user.Disabled,
 			IsHidden: user.Hidden, LastActivityAt: utcSeconds(user.LastActivity)}
@@ -166,7 +173,7 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	}
 	var created []accounts.User
 	status, err := h.JellyfinImport.Start(r.Context(), body.Address, strings.TrimSpace(body.APIKey),
-		func(_ jellyfinimport.Server, users []jellyfinimport.User) ([]jellyfinimport.Target, error) {
+		func(server jellyfinimport.Server, users []jellyfinimport.User) ([]jellyfinimport.Target, error) {
 			listed := make(map[string]bool, len(users))
 			for _, user := range users {
 				listed[user.ID] = true
@@ -180,6 +187,10 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 			for i, entry := range body.Users {
 				if !listed[entry.JellyfinID] {
 					return nil, &jellyfinEntryError{http.StatusBadRequest, "unknown_jellyfin_user", entry.JellyfinID}
+				}
+				if entry.WatchData && server.KeyOwner != "" && entry.JellyfinID != server.KeyOwner {
+					// A user's key reads that user's watch data only.
+					return nil, &jellyfinEntryError{http.StatusBadRequest, "jellyfin_key_owner_only", entry.JellyfinID}
 				}
 				if entry.Create != nil {
 					hidden := entry.Create.IsHidden == nil || *entry.Create.IsHidden
