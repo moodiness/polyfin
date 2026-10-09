@@ -22,6 +22,7 @@ import (
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/notifications"
@@ -76,6 +77,9 @@ type Options struct {
 	// IPTV stores the IPTV sources, which the addon routes list among the
 	// addons.
 	IPTV *iptv.Service
+	// Folders stores the local folders, which the addon routes list among
+	// the addons; nil offers none.
+	Folders *localfiles.Service
 	// Segments checks the keys of the segment databases before the settings
 	// save them; nil saves no key.
 	Segments *mediasegments.Service
@@ -208,6 +212,12 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv", h.signedIn(h.addSource))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}", h.signedIn(h.updateSource))
+	mux.Handle("POST /admin/api/scopes/{scope}/folders", h.signedIn(h.addFolder))
+	mux.Handle("PATCH /admin/api/scopes/{scope}/folders/{id}", h.signedIn(h.updateFolder))
+	mux.Handle("POST /admin/api/scopes/{scope}/folders/{id}/scan", h.signedIn(h.startFolderScan))
+	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/unmatched", h.signedIn(h.folderUnmatched))
+	mux.Handle("PUT /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.linkFolderFile))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.unlinkFolderFile))
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
@@ -369,6 +379,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidRecordingPadding, http.StatusBadRequest, "invalid_recording_padding"},
 		{accounts.ErrInvalidRecordingRetentionDays, http.StatusBadRequest, "invalid_recording_retention_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
+		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},

@@ -30,6 +30,7 @@ import (
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -208,6 +209,11 @@ func serve(ctx context.Context) error {
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
+	// Local folders match their files through the library's searches of
+	// the metadata addons.
+	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings)
+	defer folders.Close()
+	lib.UseLocal(folders)
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)
 	}
@@ -219,6 +225,10 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	defer player.Close()
+	// The files of local folders are read through the loopback interface,
+	// as the addons' files are.
+	folders.UseFiles(player.LocalFiles(folders.Open))
+	registerLocalFoldersTask(registry, folders)
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
 	player.LiveSources(channels.Connections, func(ctx context.Context, v library.Version, failure string) {
@@ -319,6 +329,7 @@ func serve(ctx context.Context) error {
 		Logger:        logger,
 		Guides:        lib,
 		IPTV:          channels,
+		Folders:       folders,
 		Segments:      skipSegments,
 		Activity:      activityLog,
 		DataDir:       cfg.DataDir,
@@ -481,6 +492,23 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			logger.Info("Ratings refreshed", "titles", asked)
 			return err
 		},
+	})
+}
+
+// registerLocalFoldersTask registers the scans of local folders: each
+// folder at startup, then every LocalScanHours, all of them when run by
+// hand.
+func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Service) {
+	registry.Register(tasks.Task{
+		Key:      "ScanLocalFolders",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Scan local folders", Description: "Looks in the local folders for the files added, changed or removed since their last scan, and matches the new ones to titles: each folder at startup, then every number of hours set under Settings › Catalogs; run by hand, scans every folder now."},
+			"fr": {Name: "Analyser les dossiers locaux", Description: "Cherche dans les dossiers locaux les fichiers ajoutés, modifiés ou supprimés depuis leur dernière analyse, et associe les nouveaux à des titres : chaque dossier au démarrage, puis toutes les heures choisies dans Paramètres › Catalogues ; lancée à la main, analyse tous les dossiers tout de suite."},
+		},
+		Interval: localfiles.ScanCheck,
+		AtStart:  true,
+		Run:      func(ctx context.Context) error { return folders.ScanDue(ctx, tasks.ByHand(ctx)) },
 	})
 }
 

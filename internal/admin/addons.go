@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -30,11 +31,13 @@ type addonJSON struct {
 	CatalogCount int       `json:"catalogCount"`
 	RefreshedAt  time.Time `json:"refreshedAt"`
 	// Kind is "stremio" for a Stremio addon, "eclipse" for an Eclipse
-	// music addon, which Music then describes, or "m3u" or "xtream" for an
-	// IPTV source, which Source then describes.
+	// music addon, which Music then describes, "m3u" or "xtream" for an
+	// IPTV source, which Source then describes, or "local" for a local
+	// folder, which Folder then describes.
 	Kind   string      `json:"kind"`
 	Source *sourceJSON `json:"source"`
 	Music  *musicJSON  `json:"music"`
+	Folder *folderJSON `json:"folder"`
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -102,7 +105,10 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		types = []string{}
 	}
 	manifestURL := stremio.RedactManifestURL(addon.ManifestURL)
-	if !addon.Stremio() && !addon.Eclipse() {
+	switch {
+	case addon.Local():
+		manifestURL = addon.ManifestURL
+	case !addon.Stremio() && !addon.Eclipse():
 		manifestURL = iptv.Redact(addon.ManifestURL)
 	}
 	return addonJSON{
@@ -122,10 +128,19 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	}
 }
 
-// addonJSON describes an addon, and an IPTV source's list.
+// addonJSON describes an addon, an IPTV source's list, and a local
+// folder's scans.
 func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Addon) (addonJSON, error) {
 	result := newAddonJSON(addon)
 	if addon.Stremio() || addon.Eclipse() {
+		return result, nil
+	}
+	if addon.Local() {
+		folder, err := h.Folders.Folder(r.Context(), addon.ID)
+		if err != nil {
+			return addonJSON{}, err
+		}
+		result.Folder = newFolderJSON(folder)
 		return result, nil
 	}
 	source, err := h.IPTV.Source(r.Context(), scope, addon.ID)
@@ -417,6 +432,10 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
 		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
+		{localfiles.ErrInvalidName, http.StatusBadRequest, "invalid_folder_name"},
+		{localfiles.ErrInvalidPath, http.StatusBadRequest, "invalid_folder_path"},
+		{localfiles.ErrInvalidKind, http.StatusBadRequest, "invalid_folder_kind"},
+		{localfiles.ErrInvalidIMDb, http.StatusBadRequest, "invalid_imdb_id"},
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},
 		{iptv.ErrTooLarge, http.StatusUnprocessableEntity, "channel_list_too_large"},
 		{iptv.ErrLoginRefused, http.StatusUnprocessableEntity, "iptv_login_refused"},
@@ -548,6 +567,14 @@ func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
 		return
+	}
+	// A local folder is scanned again, in the background: the answer
+	// tells the scan under way.
+	if h.Folders != nil && scope.Owner == nil {
+		if _, err := h.Folders.Folder(r.Context(), id); err == nil {
+			h.scanFolder(w, r, scope, id)
+			return
+		}
 	}
 	// An IPTV source fetches its channel list again; how it went is in the
 	// answer.
