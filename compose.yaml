@@ -25,6 +25,10 @@ services:
     # The cache, and by default the recordings and backups.
     volumes:
       - polyfin_data:/data
+      # Folders of your own videos, read-only, then added under Sources as
+      # local folders (see docs/local-folders.md); user 65532 must read them.
+      # - /srv/media/movies:/media/movies:ro
+      # - /srv/media/shows:/media/shows:ro
     # Reachable on the LAN: TVs and phones connect to it directly.
     ports:
       - "8096:8096"
