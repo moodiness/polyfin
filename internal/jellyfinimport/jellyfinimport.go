@@ -13,6 +13,12 @@
 // stays. Running an import again adds nothing twice. The Jellyfin server is
 // only read.
 //
+// An API key of the server's dashboard reads every user's watch data. A
+// user's own key or access token reads that user's only: Jellyfin refuses
+// it the others', and some servers that speak Jellyfin's API answer it
+// with its owner's data whatever user is asked, which would land in the
+// wrong accounts. With such a key, only its owner's watch data is imported.
+//
 // One import runs at a time, in the background. It and the last one's
 // result are kept in memory: an import cut by a restart is lost and is
 // started again.
@@ -32,8 +38,14 @@ import (
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
-// ErrRunning reports an import asked while one runs.
-var ErrRunning = errors.New("a Jellyfin import is running")
+// The ways asking for an import fails before it starts.
+var (
+	// ErrRunning reports an import asked while one runs.
+	ErrRunning = errors.New("a Jellyfin import is running")
+	// ErrNotKeyOwner reports watch data asked, with a user's key, of
+	// another user than the key's owner (see Server.KeyOwner).
+	ErrNotKeyOwner = errors.New("a user's key reads only that user's watch data")
+)
 
 // Titles finds the items of titles named by other services' identifiers
 // (see library.Service.Resolve).
@@ -148,12 +160,14 @@ const (
 
 // The problems that end an import: ProblemUnreachable, ProblemKeyRefused
 // and ProblemNotJellyfin come from the server, ProblemInternal from
-// Polyfin's database.
+// Polyfin's database. ProblemForbidden, a user whose data the server does
+// not let the key read, fails that user only: the import goes on.
 const (
 	ProblemUnreachable = "jellyfin_unreachable"
 	ProblemKeyRefused  = "jellyfin_key_refused"
 	ProblemNotJellyfin = "not_jellyfin"
 	ProblemInternal    = "internal"
+	ProblemForbidden   = "jellyfin_user_forbidden"
 )
 
 // The reasons a title is not matched: it has no identifier at all, as a
@@ -257,9 +271,12 @@ type Target struct {
 // Start reads the server at address with key again, hands it and its users
 // to choose, which maps them to Polyfin accounts, creating them as needed,
 // and imports in the background the watch data of the users it returns.
-// It returns the import, nil when choose returned no one. While an import
-// runs, it fails with ErrRunning before reading anything; it fails as
-// Users does, or with choose's error.
+// With a user's key (see Server.KeyOwner), choose must return its owner
+// only: it checks so before creating any account, and Start fails with
+// ErrNotKeyOwner, reading no one, when it does not. It returns the import,
+// nil when choose returned no one. While an import runs, it fails with
+// ErrRunning before reading anything; it fails as Users does, or with
+// choose's error.
 func (s *Service) Start(ctx context.Context, address, key string, choose func(Server, []User) ([]Target, error)) (*Status, error) {
 	s.mu.Lock()
 	if s.busy {
@@ -284,6 +301,11 @@ func (s *Service) Start(ctx context.Context, address, key string, choose func(Se
 	targets, err := choose(server, users)
 	if err != nil || len(targets) == 0 {
 		return nil, err
+	}
+	for _, t := range targets {
+		if server.KeyOwner != "" && t.JellyfinID != server.KeyOwner {
+			return nil, ErrNotKeyOwner
+		}
 	}
 	names := make(map[string]string, len(users))
 	for _, u := range users {

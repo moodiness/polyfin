@@ -51,8 +51,8 @@ func (r *run) update(i int, change func(*UserStatus)) {
 	change(&r.status.Users[i])
 }
 
-// run imports the watch data of each user in turn, until one fails or the
-// import is stopped.
+// run imports the watch data of each user in turn, until one fails in a
+// way that stops the import (see user) or the import is stopped.
 func (r *run) run(ctx context.Context) {
 	s := r.s
 	state, problem := StateDone, ""
@@ -81,7 +81,8 @@ type history struct {
 }
 
 // user imports the watch data of the i-th user, and returns the problem
-// that stops the import, if any. Once read, the data is saved even if the
+// that stops the import, if any: a user whose data the server does not let
+// the key read fails alone. Once read, the data is saved even if the
 // import is stopped meanwhile; stopped while reading, nothing is.
 func (r *run) user(ctx context.Context, i int) string {
 	jellyfinID := r.status.Users[i].JellyfinID
@@ -104,6 +105,10 @@ func (r *run) user(ctx context.Context, i int) string {
 			u.State = UserFailed
 		}
 	})
+	if problem == ProblemForbidden {
+		// The key may still read the next users.
+		return ""
+	}
 	return problem
 }
 
@@ -114,6 +119,8 @@ func readProblem(err error) string {
 		return ""
 	case errors.Is(err, ErrKeyRefused):
 		return ProblemKeyRefused
+	case errors.Is(err, ErrForbidden):
+		return ProblemForbidden
 	case errors.Is(err, ErrNotJellyfin):
 		return ProblemNotJellyfin
 	}

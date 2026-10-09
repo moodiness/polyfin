@@ -27,8 +27,8 @@ import (
 const goodKey = "0123456789abcdef0123456789abcdef"
 
 // fakeJellyfin answers as a Jellyfin server does the requests of an
-// import, with the API key goodKey: its users, and their items by the
-// filter asked, a page at a time.
+// import, with the API key goodKey, the server's, or a user's own key: its
+// users, and their items by the filter asked, a page at a time.
 type fakeJellyfin struct {
 	url string
 
@@ -40,14 +40,21 @@ type fakeJellyfin struct {
 	items  map[string]map[string][]map[string]any
 	series map[string]map[string]string
 	// refused are the users whose items answer 401, as after the key was
-	// revoked; hold, when set, holds every items request until closed.
-	refused map[string]bool
-	hold    chan struct{}
+	// revoked; forbidden, those whose items answer 403, which the key may
+	// not read; hold, when set, holds every items request until closed.
+	refused, forbidden map[string]bool
+	hold               chan struct{}
+	// userKeys are users' own keys, by key, which /Users/Me answers with
+	// their owner. Another user's items answer them 403, as Jellyfin's do,
+	// or, with ignoresUser, the owner's items, as some servers answer.
+	userKeys    map[string]string
+	ignoresUser bool
 }
 
 func newFakeJellyfin(t *testing.T) *fakeJellyfin {
 	t.Helper()
-	f := &fakeJellyfin{items: map[string]map[string][]map[string]any{}, series: map[string]map[string]string{}, refused: map[string]bool{}}
+	f := &fakeJellyfin{items: map[string]map[string][]map[string]any{}, series: map[string]map[string]string{}, refused: map[string]bool{},
+		forbidden: map[string]bool{}, userKeys: map[string]string{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
@@ -64,22 +71,38 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"}`)
 		return
 	}
-	if r.Header.Get("Authorization") != `MediaBrowser Token="`+goodKey+`"` {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 	query := r.URL.Query()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	key := strings.TrimSuffix(strings.TrimPrefix(r.Header.Get("Authorization"), `MediaBrowser Token="`), `"`)
+	owner, userKey := f.userKeys[key]
+	if key != goodKey && !userKey {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	switch user, found := strings.CutPrefix(r.URL.Path, "/Users/"); {
 	case r.URL.Path == "/Users":
 		_ = json.NewEncoder(w).Encode(f.users)
+	case r.URL.Path == "/Users/Me":
+		if !userKey {
+			// Jellyfin's answer to the server's key, which is no user's.
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"Id": owner, "Name": "Owner"})
 	case found && strings.HasSuffix(user, "/Items"):
 		user = strings.TrimSuffix(user, "/Items")
 		if hold != nil {
 			f.mu.Unlock()
 			<-hold
 			f.mu.Lock()
+		}
+		switch {
+		case userKey && user != owner && f.ignoresUser:
+			user = owner
+		case userKey && user != owner, f.forbidden[user]:
+			w.WriteHeader(http.StatusForbidden)
+			return
 		}
 		if f.refused[user] {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -470,5 +493,79 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 	}
 	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) { return nil, nil }); err != nil {
 		t.Errorf("after a failed choice: %v", err)
+	}
+}
+
+// A user's own key reads only that user's watch data. Some servers answer
+// it with its owner's data whatever user is asked, which an import would
+// put in another user's account: only its owner is imported with it.
+func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}}
+	h.f.items["jf-alice"] = map[string][]map[string]any{"IsPlayed": {movie("m1", "Alice's", map[string]string{"Imdb": "tt0000001"},
+		map[string]any{"Played": true})}}
+	const aliceKey = "alices-own-key"
+	h.f.userKeys[aliceKey] = "jf-alice"
+	h.f.ignoresUser = true
+
+	if server, _, err := h.Users(t.Context(), h.f.url, goodKey); err != nil || server.KeyOwner != "" {
+		t.Errorf("the server's key: %+v %v", server, err)
+	}
+	if server, _, err := h.Users(t.Context(), h.f.url, aliceKey); err != nil || server.KeyOwner != "jf-alice" {
+		t.Fatalf("Alice's key: %+v %v", server, err)
+	}
+
+	// Bob's watch data with Alice's key: refused, before anything is read.
+	_, err := h.Start(t.Context(), h.f.url, aliceKey, func(Server, []User) ([]Target, error) {
+		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
+	})
+	if !errors.Is(err, ErrNotKeyOwner) {
+		if err == nil {
+			h.ended(t)
+		}
+		t.Errorf("Bob with Alice's key: %v", err)
+	}
+	aliceMovie := library.TitleRef{IMDb: "tt0000001"}
+	if d := h.dataOf(t, bob.ID, aliceMovie); d.Played {
+		t.Errorf("Bob was given Alice's movie: %+v", d)
+	}
+	for _, r := range h.f.sent() {
+		if strings.HasPrefix(r.URL.Path, "/Users/jf-bob") {
+			t.Errorf("read %s", r.URL.Path)
+		}
+	}
+
+	// Alice's, with her key: imported.
+	if _, err := h.Start(t.Context(), h.f.url, aliceKey, func(Server, []User) ([]Target, error) {
+		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if status := h.ended(t); status.State != StateDone || status.Users[0].Played != 1 {
+		t.Errorf("Alice: %+v", status)
+	}
+	if d := h.dataOf(t, alice.ID, aliceMovie); !d.Played {
+		t.Errorf("Alice's movie: %+v", d)
+	}
+}
+
+// A user whose data the server does not let the key read fails alone, and
+// says so: the import goes on with the next users.
+func TestAUserTheKeyMayNotReadFailsAlone(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.items["jf-alice"] = map[string][]map[string]any{"IsPlayed": {movie("m1", "Alice's", map[string]string{"Imdb": "tt0000001"},
+		map[string]any{"Played": true})}}
+	h.f.forbidden["jf-bob"] = true
+	status := h.imported(t, Target{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}, Target{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"})
+	if status.State != StateDone || status.Problem != "" {
+		t.Errorf("import: %+v", status)
+	}
+	if bobs := status.Users[0]; bobs.State != UserFailed || bobs.Problem != ProblemForbidden {
+		t.Errorf("Bob: %+v", bobs)
+	}
+	if alices := status.Users[1]; alices.State != UserDone || alices.Played != 1 {
+		t.Errorf("Alice: %+v", alices)
 	}
 }
