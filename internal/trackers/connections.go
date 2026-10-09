@@ -283,8 +283,7 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 		if err != nil {
 			return Status{}, err
 		}
-		s.wait(key, p)
-		return s.status(ctx, user, service)
+		return s.wait(ctx, key, p)
 	}
 	var (
 		r   reply
@@ -322,19 +321,24 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 			p.verificationURL = answer.VerificationURI
 		}
 	}
-	s.wait(key, p)
-	return s.status(ctx, user, service)
+	return s.wait(ctx, key, p)
 }
 
-// wait has p wait for its user in place of the code waiting for key.
-func (s *Service) wait(key laneKey, p *pending) {
+// wait has p wait for its user in place of the code waiting for key, and
+// returns the status of the user's connection with p: the first poll,
+// which may end p at once, starts once the status shows p.
+func (s *Service) wait(ctx context.Context, key laneKey, p *pending) (Status, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if old := s.pending[key]; old != nil {
 		old.cancel()
 	}
 	s.pending[key] = p
+	s.mu.Unlock()
+	status, err := s.status(ctx, p.user, p.service)
+	s.mu.Lock()
 	s.spawn(func() { s.poll(p) })
+	s.mu.Unlock()
+	return status, err
 }
 
 // pollState is what a poll of a code tells.
