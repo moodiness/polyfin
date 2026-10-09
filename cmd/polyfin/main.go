@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/lyrics"
@@ -265,6 +266,11 @@ func serve(ctx context.Context) error {
 	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
 		Titles: lib, UserData: userData})
 	defer tracking.Close()
+	// Users and their watch data imported from a Jellyfin server find
+	// their titles and merge the same way.
+	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
+		Logger: logger})
+	defer fromJellyfin.Close()
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -328,9 +334,10 @@ func serve(ctx context.Context) error {
 					SecretKey:    box.Enabled(),
 					Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
 				},
-				Variables: config.Variables(os.Environ(), cfg),
-				Trackers:  tracking,
-				Backups:   backups,
+				Variables:      config.Variables(os.Environ(), cfg),
+				Trackers:       tracking,
+				Backups:        backups,
+				JellyfinImport: fromJellyfin,
 			}),
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
