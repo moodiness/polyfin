@@ -667,8 +667,9 @@ type Settings struct {
 	// jellyfin-web applies to every page, unless a user turns it off in
 	// their display settings, and the text, Markdown or HTML it shows
 	// under its sign-in form. CustomJs is a script Polyfin adds to
-	// jellyfin-web's page, which Jellyfin has no setting for. All three
-	// are empty by default, which shows nothing.
+	// jellyfin-web's page, which Jellyfin has no setting for. CustomCss and
+	// CustomJs load the LumaaGlaass theme by default (see DefaultCustomCss);
+	// LoginDisclaimer is empty by default, which shows nothing.
 	CustomCss       string
 	CustomJs        string
 	LoginDisclaimer string

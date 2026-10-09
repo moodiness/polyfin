@@ -398,6 +398,12 @@ func TestResponsesMatchJellyfin(t *testing.T) {
 	_, publicInfo := s.call(http.MethodGet, "/System/Info/Public", "", nil)
 	_, systemInfo := s.call(http.MethodGet, "/System/Info", signedIn, nil)
 	_, user := s.call(http.MethodGet, "/Users/Me", signedIn, nil)
+	// A new Jellyfin has no custom CSS; a new Polyfin's loads a theme.
+	settings := s.store.Settings()
+	settings.CustomCss = ""
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
 	_, branding := s.call(http.MethodGet, "/Branding/Configuration", "", nil)
 
 	for fixture, body := range map[string][]byte{

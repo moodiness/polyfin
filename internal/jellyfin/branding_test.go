@@ -27,13 +27,17 @@ func (s testServer) css(path string) (int, string, string) {
 
 func TestBrandingComesFromTheSettings(t *testing.T) {
 	s, _, member := administrated(t)
-	// Nothing set: what a new Jellyfin answers.
+	settings := s.store.Settings()
+	settings.CustomCss = ""
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	// No CSS: what a new Jellyfin answers.
 	for _, path := range []string{"/Branding/Css", "/Branding/Css.css"} {
 		if status, contentType, body := s.css(path); status != http.StatusOK || contentType != "text/css; charset=utf-8" || body != "" {
 			t.Errorf("%s with no CSS: %d %q %q", path, status, contentType, body)
 		}
 	}
-	settings := s.store.Settings()
 	settings.CustomCss = ".skinHeader { background: teal; }"
 	settings.LoginDisclaimer = "Private server: **members only**. <a href=\"https://example.com\">Rules</a>"
 	settings.CustomJs = "console.log('not branding')"
@@ -89,7 +93,7 @@ func TestBrandingIsSavedByAdministratorsOnly(t *testing.T) {
 	if status, _ := s.call(http.MethodPost, "/System/Configuration/branding", "", branding); status != http.StatusUnauthorized {
 		t.Errorf("anonymous: %d", status)
 	}
-	if got := s.store.Settings(); got.CustomCss != "" || got.LoginDisclaimer != "" {
+	if got := s.store.Settings(); got.CustomCss != settings.CustomCss || got.LoginDisclaimer != settings.LoginDisclaimer {
 		t.Fatalf("refused writes changed the branding: %+v", got)
 	}
 	if status, body := s.call(http.MethodPost, "/System/Configuration/Branding", admin, branding); status != http.StatusNoContent {

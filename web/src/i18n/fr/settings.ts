@@ -322,10 +322,10 @@ const settings: typeof en = {
     openWebPlayer: 'Ouvrir le lecteur web',
     customCss: 'CSS personnalisé',
     customCssHelp:
-      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage.',
+      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage. Par défaut, il contient la feuille de style du thème LumaaGlaass, qui va avec le JavaScript personnalisé par défaut : videz les deux pour garder l’apparence d’origine du lecteur web.',
     customJs: 'JavaScript personnalisé',
     customJsHelp:
-      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé.',
+      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé. Par défaut, il charge le script du thème LumaaGlaass, qui va avec le CSS personnalisé par défaut.',
     customJsWarningTitle: 'Ne collez que du code de confiance',
     customJsWarning:
       'Ce script s’exécute dans le navigateur de chaque utilisateur qui ouvre le lecteur web de ce serveur, avec son compte. Il peut lire ce qu’il voit et agir à sa place.',
