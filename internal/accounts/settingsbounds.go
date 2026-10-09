@@ -92,6 +92,9 @@ func DefaultSettings() Settings {
 		CustomCss: DefaultCustomCss,
 		CustomJs:  DefaultCustomJs,
 
+		LastFMAPIKey: "",
+		LastFMSecret: "",
+
 		BackupHour:         DefaultBackupHour,
 		BackupsKept:        DefaultBackupsKept,
 		CollectionReadHour: DefaultCollectionReadHour,
@@ -210,6 +213,8 @@ func SettingsBounds() map[string]SettingBounds {
 		"traktClientId":     text(MaxTrackingAppBytes, d.TraktClientID),
 		"traktClientSecret": text(MaxTrackingAppBytes, d.TraktClientSecret),
 		"simklClientId":     text(MaxTrackingAppBytes, d.SimklClientID),
+		"lastFmApiKey":      text(MaxTrackingAppBytes, d.LastFMAPIKey),
+		"lastFmSecret":      text(MaxTrackingAppBytes, d.LastFMSecret),
 
 		"backupHour":         between(0, 23, d.BackupHour),
 		"backupsKept":        between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),

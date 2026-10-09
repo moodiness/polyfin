@@ -358,6 +358,11 @@ type settingsJSON struct {
 	TraktClientSecret    *string `json:"traktClientSecret,omitempty"`
 	TraktClientSecretSet bool    `json:"traktClientSecretSet"`
 	SimklClientID        *string `json:"simklClientId"`
+	// LastFMAPIKey and LastFMSecret, the Last.fm API account, are the same:
+	// LastFMSecretSet tells whether a shared secret is saved.
+	LastFMAPIKey    *string `json:"lastFmApiKey"`
+	LastFMSecret    *string `json:"lastFmSecret,omitempty"`
+	LastFMSecretSet bool    `json:"lastFmSecretSet"`
 	// BackupHour, BackupsKept and CollectionReadHour keep their current
 	// values when a PUT leaves them out.
 	BackupHour         *int `json:"backupHour"`
@@ -481,6 +486,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TraktClientID:        &settings.TraktClientID,
 		TraktClientSecretSet: settings.TraktClientSecret != "",
 		SimklClientID:        &settings.SimklClientID,
+		LastFMAPIKey:         &settings.LastFMAPIKey,
+		LastFMSecretSet:      settings.LastFMSecret != "",
 
 		BackupHour:         &settings.BackupHour,
 		BackupsKept:        &settings.BackupsKept,
@@ -962,6 +969,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),
 		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),
 		SimklClientID:     valueOr(body.SimklClientID, current.SimklClientID),
+		LastFMAPIKey:      valueOr(body.LastFMAPIKey, current.LastFMAPIKey),
+		LastFMSecret:      valueOr(body.LastFMSecret, current.LastFMSecret),
 
 		BackupHour:         valueOr(body.BackupHour, current.BackupHour),
 		BackupsKept:        valueOr(body.BackupsKept, current.BackupsKept),

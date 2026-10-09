@@ -336,16 +336,19 @@ func validSegmentSources(names []string) bool {
 	return true
 }
 
-// ErrInvalidTraktApp and ErrInvalidSimklApp report a Settings.TraktClientID,
-// TraktClientSecret or SimklClientID longer than MaxTrackingAppBytes, or
-// holding anything but printable ASCII without spaces, which the services'
-// credentials are made of.
+// ErrInvalidTraktApp, ErrInvalidSimklApp and ErrInvalidLastFMApp report a
+// Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey or
+// LastFMSecret longer than MaxTrackingAppBytes, or holding anything but
+// printable ASCII without spaces, which the services' credentials are made
+// of.
 var (
-	ErrInvalidTraktApp = errors.New("invalid Trakt app")
-	ErrInvalidSimklApp = errors.New("invalid Simkl app")
+	ErrInvalidTraktApp  = errors.New("invalid Trakt app")
+	ErrInvalidSimklApp  = errors.New("invalid Simkl app")
+	ErrInvalidLastFMApp = errors.New("invalid Last.fm API account")
 )
 
-// MaxTrackingAppBytes is the longest Trakt or Simkl credential, in bytes.
+// MaxTrackingAppBytes is the longest Trakt, Simkl or Last.fm credential, in
+// bytes.
 const MaxTrackingAppBytes = 256
 
 // ErrInvalidBackupHour reports a BackupHour outside [0, 23],
@@ -685,6 +688,12 @@ type Settings struct {
 	TraktClientID     string
 	TraktClientSecret string
 	SimklClientID     string
+	// LastFMAPIKey and LastFMSecret are the API key and shared secret of
+	// the API account an administrator created on Last.fm, through which
+	// users connect their Last.fm accounts to have the songs they play
+	// sent there. Empty by default, which offers Last.fm to nobody.
+	LastFMAPIKey string
+	LastFMSecret string
 	// BackupHour is the hour of the server's time zone, 0 to 23, the
 	// database is backed up at every day, and BackupsKept how many of the
 	// newest backups are kept, while Backups is on.
@@ -732,9 +741,15 @@ func (s Settings) SimklAvailable() bool {
 	return s.SimklClientID != ""
 }
 
-// validTrackingApp reports whether credential may be a Trakt or Simkl app
-// credential: empty, or up to MaxTrackingAppBytes of printable ASCII
-// without spaces.
+// LastFMAvailable reports whether users can connect Last.fm: its API
+// account's key and shared secret are saved.
+func (s Settings) LastFMAvailable() bool {
+	return s.LastFMAPIKey != "" && s.LastFMSecret != ""
+}
+
+// validTrackingApp reports whether credential may be a Trakt, Simkl or
+// Last.fm credential: empty, or up to MaxTrackingAppBytes of printable
+// ASCII without spaces.
 func validTrackingApp(credential string) bool {
 	if len(credential) > MaxTrackingAppBytes {
 		return false
@@ -763,7 +778,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
-	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, " +
+	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder"
 
@@ -791,6 +806,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
+		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder}
 }
@@ -818,6 +834,7 @@ func (settings *Settings) secrets() []struct {
 		{"publicMetaDbKey", &settings.PublicMetaDBKey},
 		{"theIntroDbKey", &settings.TheIntroDBKey},
 		{"traktClientSecret", &settings.TraktClientSecret},
+		{"lastFmSecret", &settings.LastFMSecret},
 	}
 }
 
@@ -1054,6 +1071,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validTrackingApp(settings.SimklClientID) {
 		return Settings{}, ErrInvalidSimklApp
+	}
+	if !validTrackingApp(settings.LastFMAPIKey) || !validTrackingApp(settings.LastFMSecret) {
+		return Settings{}, ErrInvalidLastFMApp
 	}
 	if settings.BackupHour < 0 || settings.BackupHour > 23 {
 		return Settings{}, ErrInvalidBackupHour

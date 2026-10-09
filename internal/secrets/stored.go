@@ -18,6 +18,7 @@ var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
 	{"trakt_client_secret", "traktClientSecret"},
+	{"lastfm_secret", "lastFmSecret"},
 }
 
 // Unreadable is a stored secret the key cannot open: a setting, by the

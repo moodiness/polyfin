@@ -250,8 +250,10 @@ var secretNames = map[string][2]string{
 	"publicMetaDbKey":   {"the PublicMetaDB key", "la clé PublicMetaDB"},
 	"theIntroDbKey":     {"the TheIntroDB key", "la clé TheIntroDB"},
 	"traktClientSecret": {"the Trakt client secret", "le client secret Trakt"},
+	"lastFmSecret":      {"the Last.fm shared secret", "le secret partagé Last.fm"},
 	"mdblist":           {"their MDBList API key", "sa clé d’API MDBList"},
 	"publicmetadb":      {"their PublicMetaDB API key", "sa clé d’API PublicMetaDB"},
+	"listenbrainz":      {"their ListenBrainz user token", "son jeton d’utilisateur ListenBrainz"},
 }
 
 // SecretRevealed records that user had a stored secret shown, by its name
