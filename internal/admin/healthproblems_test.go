@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sync/atomic"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -32,8 +34,8 @@ func (p switchPinger) Ping(context.Context) error {
 // The admin API tells the problems System › Health shows, errors first,
 // with what the admin app names them by and the place that describes them;
 // notifications tell the same, in the server language. Keys stored
-// unencrypted stop counting once a key is set; with the database down, it
-// alone is told.
+// unencrypted stop counting once a key is set; a local folder Polyfin
+// cannot read is an error; with the database down, it alone is told.
 func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"id": "own", "name": "Own TV", "version": "1.0.0", "resources": ["catalog"],
@@ -54,6 +56,8 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 		o.Health = HealthSources{Addons: deps.client, Secrets: func(context.Context) (secrets.Report, error) {
 			return secrets.Report{Plaintext: 2, Unreadable: []secrets.Unreadable{{Target: "Team pager"}}}, nil
 		}}
+		o.Folders = localfiles.New(deps.pool, deps.addons, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), o.Accounts.Settings)
+		t.Cleanup(o.Folders.Close)
 		options, store = o, deps.addons
 	})
 	admin := api.signedIn("root", true)
@@ -79,11 +83,28 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 		info, _ := registry.Task(tasks.ID("Refresh"), "en")
 		return info.Last != nil
 	})
+	// A local folder whose mount is missing.
+	var folder struct {
+		ID string `json:"id"`
+	}
+	if status := admin.raw(http.MethodPost, "/scopes/shared/folders", `{"name": "Shelf", "kind": "movies", "path": "`+
+		filepath.Join(t.TempDir(), "gone")+`"}`, &folder); status != http.StatusCreated {
+		t.Fatalf("folder: %d", status)
+	}
+	folderID, err := accounts.ParseID(folder.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, func() bool {
+		f, err := options.Folders.Folder(t.Context(), folderID)
+		return err == nil && f.Error != ""
+	})
 
 	target := "Team pager"
 	want := []healthProblemJSON{
 		{Key: "secrets:unreadable", Code: problemSecretsUnreadable, Tone: "error", To: "/system/health#secrets",
 			Secrets: []unreadableJSON{{Target: &target}}},
+		{Key: "folder:" + folder.ID, Code: problemFolder, Tone: "error", To: "/sources/shared/" + folder.ID, Name: "Shelf"},
 		{Key: "addon:" + own.ID.String(), Code: problemAddon, Tone: "warning", To: "/system/health#addons", Name: "Own TV",
 			Owner: &ownerJSON{ID: sam.ID.String(), Name: "sam"}, Failure: "private_network"},
 		{Key: "secrets:plaintext", Code: problemSecretsPlaintext, Tone: "warning", To: "/system/health#secrets"},
@@ -102,7 +123,7 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 	if got := problems("en"); !reflect.DeepEqual(got, want) {
 		t.Errorf("problems:\n%+v\nwant\n%+v", got, want)
 	}
-	if got := problems("fr"); len(got) != 4 || got[3].Task != "Actualiser des choses" {
+	if got := problems("fr"); len(got) != 5 || got[4].Task != "Actualiser des choses" {
 		t.Errorf("tasks in French: %+v", got)
 	}
 
@@ -118,6 +139,9 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 	wantTold := []notifications.Problem{
 		{Key: "secrets:unreadable", Severity: notifications.SeverityError,
 			Text: "1 clé enregistrée ne peut pas être déchiffrée avec POLYFIN_SECRET_KEY et compte comme absente.", Page: "/system/health#secrets"},
+		{Key: "folder:" + folder.ID, Severity: notifications.SeverityError,
+			Text: "Shelf : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.",
+			Page: "/sources/shared/" + folder.ID},
 		{Key: "addon:" + own.ID.String(), Severity: notifications.SeverityWarning, Text: "Own TV (Addons de sam) : est sur un réseau local",
 			Page: "/system/health#addons"},
 		{Key: "secrets:plaintext", Severity: notifications.SeverityWarning,
@@ -134,7 +158,7 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 	// not a problem.
 	withKey := *options
 	withKey.Health.SecretKey = true
-	if told, _ := HealthProblems(withKey)(t.Context()); len(told) != 3 || slices.ContainsFunc(told, func(p notifications.Problem) bool {
+	if told, _ := HealthProblems(withKey)(t.Context()); len(told) != 4 || slices.ContainsFunc(told, func(p notifications.Problem) bool {
 		return p.Key == "secrets:plaintext"
 	}) {
 		t.Errorf("with a key: %+v", told)

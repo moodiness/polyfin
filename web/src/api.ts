@@ -1830,6 +1830,7 @@ export type HealthProblem = {
   | { code: 'backup_failed' }
   | { code: 'backup_stale' }
   | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
+  | { code: 'folder'; name: string }
   | { code: 'task'; task: string }
 )
 
