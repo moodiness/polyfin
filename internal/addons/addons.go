@@ -70,23 +70,27 @@ func Shared() Scope { return Scope{} }
 func Personal(user accounts.ID) Scope { return Scope{Owner: &user} }
 
 // Kinds of addons: Stremio addons and Eclipse music addons, installed from
-// their manifest, and Polyfin's own IPTV sources, an M3U playlist or an
+// their manifest, Polyfin's own IPTV sources, an M3U playlist or an
 // Xtream Codes account, which answer as an addon with one live TV catalog
-// (see package iptv).
+// (see package iptv), and its local folders, which answer as an addon with
+// one catalog of the titles their files were matched to (see package
+// localfiles).
 const (
 	KindStremio = "stremio"
 	KindEclipse = "eclipse"
 	KindM3U     = "m3u"
 	KindXtream  = "xtream"
+	KindLocal   = "local"
 )
 
-// Addon is an installed Stremio or Eclipse addon, or an IPTV source. For an
-// IPTV source, ManifestURL is the address of its list, which embeds its
-// credentials, and Manifest describes its live TV catalog. For an Eclipse
-// addon, Music is its manifest, Manifest what libraries see of it (its
-// name, icon and catalog rows, and eclipse.MyMusic, see
-// eclipse.Manifest.Stremio), and Settings the values chosen for its
-// settings.
+// Addon is an installed Stremio or Eclipse addon, an IPTV source or a
+// local folder. For an IPTV source, ManifestURL is the address of its
+// list, which embeds its credentials, and Manifest describes its live TV
+// catalog. For a local folder, ManifestURL is the folder's path in the
+// container. For an Eclipse addon, Music is its manifest, Manifest what
+// libraries see of it (its name, icon and catalog rows, and
+// eclipse.MyMusic, see eclipse.Manifest.Stremio), and Settings the values
+// chosen for its settings.
 type Addon struct {
 	ID          accounts.ID
 	Kind        string
@@ -104,6 +108,9 @@ func (a Addon) Stremio() bool { return a.Kind == KindStremio }
 
 // IPTV reports whether the addon is one of Polyfin's own IPTV sources.
 func (a Addon) IPTV() bool { return a.Kind == KindM3U || a.Kind == KindXtream }
+
+// Local reports whether the addon is one of Polyfin's own local folders.
+func (a Addon) Local() bool { return a.Kind == KindLocal }
 
 // Eclipse reports whether the addon is an Eclipse music addon.
 func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
@@ -429,11 +436,11 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 	return addon, err
 }
 
-// Create adds an IPTV source of kind at the end of the scope, with address
-// as its manifest URL and the manifest build makes from its new
-// identifier; setup stores, in the same transaction, what the source needs.
-// Its live TV catalog is enabled whatever the number of libraries: it is
-// the source's reason to be.
+// Create adds an IPTV source or a local folder of kind at the end of the
+// scope, with address as its manifest URL and the manifest build makes from
+// its new identifier; setup stores, in the same transaction, what the
+// source needs. Its catalogs are enabled whatever the number of libraries:
+// they are the source's reason to be.
 func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, build func(accounts.ID) stremio.Manifest,
 	setup func(pgx.Tx, Addon) error) (Addon, error) {
 	defer s.changed()
@@ -476,9 +483,10 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 	return addon, err
 }
 
-// Update changes an IPTV source's address and manifest, keeping its
-// libraries; setup stores, in the same transaction, what changes with
-// them. It answers ErrNotFound for an addon of another kind.
+// Update changes an IPTV source's or a local folder's address and
+// manifest, keeping its libraries; setup stores, in the same transaction,
+// what changes with them. It answers ErrNotFound for an addon of another
+// kind.
 func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, address string, manifest stremio.Manifest,
 	setup func(pgx.Tx) error) (Addon, error) {
 	defer s.changed()
