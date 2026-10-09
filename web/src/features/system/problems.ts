@@ -92,8 +92,9 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.iptv(ownedName(t, problem.name, problem.owner ?? null))
     case 'guide':
       return text.guide(ownedName(t, problem.name, problem.owner ?? null))
+    case 'folder':
+      return text.folder(problem.name)
     case 'task':
       return text.task(problem.task)
   }
-
 }

@@ -41,6 +41,7 @@ const (
 	problemBackupFailed      = "backup_failed"
 	problemBackupStale       = "backup_stale"
 	problemIPTV              = "iptv"
+	problemFolder            = "folder"
 	problemGuide             = "guide"
 	problemTask              = "task"
 )
@@ -48,11 +49,12 @@ const (
 // healthProblemJSON is something System › Health shows as needing
 // attention. Key names it for as long as it lasts; Code tells what it is,
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
-// Owner (nil for the server's) for an addon, IPTV source or guide, with
-// Failure, the failure's code, for an addon; Host for paused thumbnails;
-// Task, in the language asked, for a task; Secrets for those the key cannot
-// decrypt. To is the admin app's page that describes it, with its anchor.
-// Transient ones come and go with the load: notifications leave them out.
+// Owner (nil for the server's) for an addon, IPTV source, local folder or
+// guide, with Failure, the failure's code, for an addon; Host for paused
+// thumbnails; Task, in the language asked, for a task; Secrets for those
+// the key cannot decrypt. To is the admin app's page that describes it,
+// with its anchor. Transient ones come and go with the load: notifications
+// leave them out.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -140,6 +142,20 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					p := warning("addon:"+addon.ID.String(), problemAddon, "addons")
 					p.Name, p.Owner, p.Failure = addon.Manifest.Name, scope.Owner, health.Failure
 					add(p)
+				}
+				continue
+			}
+			if addon.Local() {
+				if h.Folders == nil {
+					continue
+				}
+				folder, err := h.Folders.Folder(ctx, addon.ID)
+				if err != nil {
+					return nil, err
+				}
+				if folder.Error != "" {
+					sources = append(sources, healthProblemJSON{Key: "folder:" + addon.ID.String(), Code: problemFolder,
+						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name})
 				}
 				continue
 			}
@@ -321,6 +337,9 @@ func (p healthProblemJSON) text(language string) string {
 		return say("%s: %s", "%s : %s", name, pick(failure))
 	case problemIPTV:
 		return say("%s: the last channel list download failed.", "%s : le dernier téléchargement de la liste a échoué.", name)
+	case problemFolder:
+		return say("%s: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.",
+			"%s : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", name)
 	case problemGuide:
 		return say("%s: the last programme guide fetch failed.", "%s : la dernière récupération du guide a échoué.", name)
 	case problemSecretsUnreadable:
