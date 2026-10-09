@@ -277,6 +277,18 @@ function Summary({ scope, addon, source }: { scope: Scope; addon: Addon; source:
               {t.lineup.unmappedNotice(number(lineup.unmapped))}
             </Notice>
           )}
+          {lineup.archived > 0 && (
+            <Notice
+              className="mt-5"
+              action={
+                <TextLink to={`${lineupPath(scope, addon.id, 'channels')}?archive=yes`}>
+                  {t.lineup.openArchived}
+                </TextLink>
+              }
+            >
+              {t.lineup.archivedNotice(lineup.archived, number(lineup.archived))}
+            </Notice>
+          )}
         </Block>
       ) : (
         <LiveOff scope={scope} id={addon.id} />

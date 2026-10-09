@@ -40,6 +40,11 @@ const iptv = {
     upToDate: 'No unsaved changes',
     unmappedNotice: (count: string) => `${count} channels have no guide.`,
     openMapping: 'Open the mapping',
+    archivedNotice: (count: number, formatted: string) =>
+      count === 1
+        ? 'One channel keeps its past programmes: Jellyfin apps play them from Replay.'
+        : `${formatted} channels keep their past programmes: Jellyfin apps play them from Replay.`,
+    openArchived: 'See them',
     channelsEmpty: 'No channel yet',
     channelsEmptyHelp:
       'The list has not been downloaded, or nothing is imported. Download it again from the header, or change what to import.',
@@ -242,6 +247,7 @@ const iptv = {
       enabledFilter: 'On or off',
       shownFilter: 'In apps',
       mappedFilter: 'Guide',
+      archiveFilter: 'Archive',
       any: 'Any',
       on: 'On',
       off: 'Off',
@@ -250,6 +256,11 @@ const iptv = {
       hiddenHelp: 'On, but its category is off or none of its streams is on.',
       mapped: 'With a guide',
       unmapped: 'No guide',
+      archived: 'With an archive',
+      notArchived: 'No archive',
+      archiveDays: (days: number) => (days === 1 ? 'Replay, 1 day' : `Replay, ${days} days`),
+      archiveHelp:
+        'The provider keeps this channel’s past programmes that long: Jellyfin apps play them from Replay.',
       manual: 'Guide set by hand',
       streamCount: (count: number) => `${count} streams`,
       selectPage: 'Select this page',

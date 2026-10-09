@@ -42,6 +42,11 @@ const iptv: typeof en = {
     upToDate: 'Aucune modification en attente',
     unmappedNotice: (count: string) => `${count} chaînes n’ont pas de guide.`,
     openMapping: 'Ouvrir la correspondance',
+    archivedNotice: (count: number, formatted: string) =>
+      count === 1
+        ? 'Une chaîne garde ses programmes passés : les applis Jellyfin les lisent depuis Replay.'
+        : `${formatted} chaînes gardent leurs programmes passés : les applis Jellyfin les lisent depuis Replay.`,
+    openArchived: 'Les voir',
     channelsEmpty: 'Aucune chaîne pour l’instant',
     channelsEmptyHelp:
       'La liste n’a pas été téléchargée, ou rien n’est importé. Téléchargez-la à nouveau depuis l’en-tête, ou changez ce qu’il faut importer.',
@@ -255,6 +260,7 @@ const iptv: typeof en = {
       enabledFilter: 'Activée ou non',
       shownFilter: 'Dans les applis',
       mappedFilter: 'Guide',
+      archiveFilter: 'Archive',
       any: 'Toutes',
       on: 'Activées',
       off: 'Désactivées',
@@ -263,6 +269,11 @@ const iptv: typeof en = {
       hiddenHelp: 'Activée, mais sa catégorie est désactivée ou aucun de ses flux ne l’est.',
       mapped: 'Avec un guide',
       unmapped: 'Sans guide',
+      archived: 'Avec archive',
+      notArchived: 'Sans archive',
+      archiveDays: (days: number) => (days === 1 ? 'Replay, 1 jour' : `Replay, ${days} jours`),
+      archiveHelp:
+        'Le fournisseur garde aussi longtemps les programmes passés de cette chaîne : les applis Jellyfin les lisent depuis Replay.',
       manual: 'Guide choisi à la main',
       streamCount: (count: number) => `${count} flux`,
       selectPage: 'Sélectionner cette page',
