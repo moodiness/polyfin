@@ -162,3 +162,66 @@ func (d Data) PlayedPercentage() (float64, bool) {
 	}
 	return float64(d.Position) / float64(d.Runtime) * 100, true
 }
+
+// ImportPlayed adds a played mark another service's watch history gives,
+// watched at at (nil when the history gives no date): the item is played,
+// at least once, on the later of its date and at; an earlier resume point
+// goes, as the item was watched elsewhere after it was set here. Nothing
+// already recorded is taken back. It reports whether the item was not
+// played.
+func (d *Data) ImportPlayed(at *time.Time) bool {
+	was := d.Played
+	d.Played = true
+	d.PlayCount = max(d.PlayCount, 1)
+	if at != nil && (d.LastPlayed == nil || d.LastPlayed.Before(*at)) {
+		d.Position = 0
+		d.LastPlayed = new(at.UTC())
+	}
+	return !was
+}
+
+// ImportedResume is a resume point another service keeps: at Position of
+// Runtime when the service tells them, else at Percent of the item, set at
+// At.
+type ImportedResume struct {
+	Percent           float64
+	Position, Runtime time.Duration
+	At                time.Time
+}
+
+// What ImportResume did with a resume point.
+const (
+	ResumeKept = iota
+	ResumeSet
+	ResumePlayed
+)
+
+// ImportResume adds a resume point another service keeps, under
+// thresholds: none for a played item, nor when Polyfin's is newer; past
+// the played threshold the item is played, before the resume one nothing
+// is kept. It reports ResumeKept, ResumeSet or ResumePlayed.
+func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
+	if d.Played || d.Position > 0 && d.LastPlayed != nil && !d.LastPlayed.Before(p.At) {
+		return ResumeKept
+	}
+	position, runtime := p.Position, p.Runtime
+	if runtime <= 0 {
+		// The runtime Polyfin measured its own resume point against.
+		runtime = d.Runtime
+	}
+	if position <= 0 && runtime > 0 {
+		position = time.Duration(p.Percent / 100 * float64(runtime))
+	}
+	switch {
+	case runtime > 0 && thresholds.Reaches(position, runtime),
+		runtime <= 0 && p.Percent > float64(thresholds.Played):
+		d.ImportPlayed(&p.At)
+		return ResumePlayed
+	case runtime <= 0 || float64(position)/float64(runtime)*100 < float64(thresholds.Resume):
+		// Without a runtime there is no position to resume from.
+		return ResumeKept
+	}
+	d.Position, d.Runtime = position, runtime
+	d.LastPlayed = new(p.At.UTC())
+	return ResumeSet
+}

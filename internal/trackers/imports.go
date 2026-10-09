@@ -307,10 +307,8 @@ type played struct {
 
 // resumed is a resume point an import sets.
 type resumed struct {
-	item              userdata.Item
-	percent           float64
-	position, runtime time.Duration
-	at                time.Time
+	item userdata.Item
+	userdata.ImportedResume
 }
 
 // merge finds the titles of h and adds them to the user's data: played
@@ -356,7 +354,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			unmapped[r.ref] = true
 		}
 		for _, t := range found {
-			if p := points[t.ID]; p != nil && !r.at.After(p.at) {
+			if p := points[t.ID]; p != nil && !r.at.After(p.At) {
 				continue
 			}
 			if _, listed := points[t.ID]; !listed {
@@ -366,8 +364,8 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			if runtime <= 0 {
 				runtime = t.Runtime
 			}
-			points[t.ID] = &resumed{item: userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season}, percent: r.percent,
-				position: r.position, runtime: runtime, at: r.at}
+			points[t.ID] = &resumed{item: userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season},
+				ImportedResume: userdata.ImportedResume{Percent: r.percent, Position: r.position, Runtime: runtime, At: r.at}}
 		}
 	}
 	result.Unmapped = len(unmapped)
@@ -378,7 +376,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			items = append(items, marks[id].item)
 		}
 		if _, err := s.userData.ChangeEach(ctx, key.user, items, func(item userdata.Item, d *userdata.Data) {
-			if markPlayed(d, marks[item.ID].at) {
+			if d.ImportPlayed(marks[item.ID].at) {
 				result.Played++
 			}
 		}); err != nil {
@@ -393,10 +391,10 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			items = append(items, points[id].item)
 		}
 		if _, err := s.userData.ChangeEach(ctx, key.user, items, func(item userdata.Item, d *userdata.Data) {
-			switch resume(d, points[item.ID], thresholds) {
-			case resumePlayed:
+			switch d.ImportResume(points[item.ID].ImportedResume, thresholds) {
+			case userdata.ResumePlayed:
 				result.Played++
-			case resumeSet:
+			case userdata.ResumeSet:
 				result.Resumed++
 			}
 		}); err != nil {
@@ -415,58 +413,6 @@ func chunks(ids []accounts.ID) func(func([]accounts.ID) bool) {
 			}
 		}
 	}
-}
-
-// markPlayed adds a played mark a history gives to d, watched at at: the
-// item is played, at least once, on the later of its date and at; an
-// earlier resume point goes. It reports whether the item was not played.
-func markPlayed(d *userdata.Data, at *time.Time) bool {
-	was := d.Played
-	d.Played = true
-	d.PlayCount = max(d.PlayCount, 1)
-	if at != nil && (d.LastPlayed == nil || d.LastPlayed.Before(*at)) {
-		// Watched elsewhere after the resume point was set here.
-		d.Position = 0
-		d.LastPlayed = new(at.UTC())
-	}
-	return !was
-}
-
-// What resume did with a resume point.
-const (
-	resumeKept = iota
-	resumeSet
-	resumePlayed
-)
-
-// resume adds a resume point a service keeps to d, under the thresholds
-// of the settings: none for a played title, nor when Polyfin's is newer;
-// past the played threshold the title is played, before the resume one
-// nothing is kept.
-func resume(d *userdata.Data, p *resumed, thresholds userdata.Thresholds) int {
-	if d.Played || d.Position > 0 && d.LastPlayed != nil && !d.LastPlayed.Before(p.at) {
-		return resumeKept
-	}
-	position, runtime := p.position, p.runtime
-	if runtime <= 0 {
-		// The runtime Polyfin measured its own resume point against.
-		runtime = d.Runtime
-	}
-	if position <= 0 && runtime > 0 {
-		position = time.Duration(p.percent / 100 * float64(runtime))
-	}
-	switch {
-	case runtime > 0 && thresholds.Reaches(position, runtime),
-		runtime <= 0 && p.percent > float64(thresholds.Played):
-		markPlayed(d, &p.at)
-		return resumePlayed
-	case runtime <= 0 || float64(position)/float64(runtime)*100 < float64(thresholds.Resume):
-		// Without a runtime there is no position to resume from.
-		return resumeKept
-	}
-	d.Position, d.Runtime = position, runtime
-	d.LastPlayed = new(p.at.UTC())
-	return resumeSet
 }
 
 // resolve finds the items of refs. PublicMetaDB names titles by their
