@@ -208,7 +208,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		h.addAudioSources(r, user, dto, item, detail)
 		return
 	}
-	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindRecording {
+	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindRecording && item.Kind != library.KindReplay {
 		return
 	}
 	var sources []MediaSourceInfo
@@ -312,8 +312,11 @@ var itemTypes = map[library.Kind]string{
 	library.KindPerson:     "Person",
 	library.KindChannel:    "TvChannel",
 	library.KindProgram:    "Program",
-	// Jellyfin's recordings are videos of its recordings folders.
+	// Jellyfin's recordings are videos of its recordings folders; Replay's
+	// programmes are as well, in a folder per channel.
 	library.KindRecording:     "Video",
+	library.KindReplayFolder:  "Folder",
+	library.KindReplay:        "Video",
 	library.KindArtist:        "MusicArtist",
 	library.KindAlbum:         "MusicAlbum",
 	library.KindTrack:         "Audio",
@@ -325,7 +328,7 @@ var itemTypes = map[library.Kind]string{
 func isFolder(kind library.Kind) bool {
 	switch kind {
 	case library.KindLibrary, library.KindCollection, library.KindSeries, library.KindSeason,
-		library.KindArtist, library.KindAlbum, library.KindMusicPlaylist:
+		library.KindArtist, library.KindAlbum, library.KindMusicPlaylist, library.KindReplayFolder:
 		return true
 	}
 	return false
@@ -352,7 +355,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	// Items Polyfin makes itself, its collections, views and recordings,
 	// show administrators' edits too; the library's already do.
 	item = h.Library.Overridden(item)[0]
-	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode || item.Kind == library.KindRecording
+	playable := item.Kind == library.KindMovie || item.Kind == library.KindEpisode || item.Kind == library.KindRecording || item.Kind == library.KindReplay
 	folder := isFolder(item.Kind)
 	dto := BaseItemDto{
 		Name:              item.Name,
@@ -442,7 +445,12 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.ProviderIds = &providers
 	}
 	if detail || fields.has("DateCreated") {
-		dto.DateCreated = new(Time(time.Unix(0, 0).UTC()))
+		created := time.Unix(0, 0).UTC()
+		// A replay was made when it aired.
+		if item.Kind == library.KindReplay {
+			created = *item.StartDate
+		}
+		dto.DateCreated = new(Time(created))
 	}
 	if detail || fields.has("CanDelete") {
 		dto.CanDelete = new(false)
@@ -541,9 +549,9 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		ratio := 2.0 / 3.0
 		switch item.Kind {
-		case library.KindEpisode, library.KindProgram, library.KindRecording:
+		case library.KindEpisode, library.KindProgram, library.KindRecording, library.KindReplay:
 			ratio = 16.0 / 9.0
-		case library.KindChannel:
+		case library.KindChannel, library.KindReplayFolder:
 			// Channel logos are square, as Jellyfin's tuners give them.
 			ratio = 1
 		case library.KindArtist, library.KindAlbum, library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
@@ -656,7 +664,7 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 // have none.
 func mediaType(kind library.Kind) string {
 	switch kind {
-	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording:
+	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording, library.KindReplay:
 		return "Video"
 	case library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
 		return "Audio"

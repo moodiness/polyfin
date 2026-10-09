@@ -104,7 +104,8 @@ func (h *Handler) guideInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, GuideInfo{StartDate: Time(now), EndDate: Time(now.AddDate(0, 0, guideDays))})
 }
 
-// describeLive adds to a DTO what describes a channel or a programme.
+// describeLive adds to a DTO what describes a channel or a programme, a
+// replay included: its channel and its times.
 func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
 	switch item.Kind {
 	case library.KindChannel:
@@ -113,7 +114,7 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 		if detail {
 			dto.ParentId = liveTvViewID.String()
 		}
-	case library.KindProgram:
+	case library.KindProgram, library.KindReplay:
 		channel := item.Channel
 		dto.ChannelId = new(channel.ID.String())
 		dto.StartDate, dto.EndDate = new(Time(*item.StartDate)), new(Time(*item.EndDate))

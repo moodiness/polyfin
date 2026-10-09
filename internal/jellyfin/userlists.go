@@ -86,8 +86,10 @@ func (h *Handler) writeItems(w http.ResponseWriter, r *http.Request, user accoun
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: total, StartIndex: start})
 }
 
-// resume lists what the user can resume: movies and episodes with a resume
-// point, played or not, most recently played first.
+// resume lists what the user can resume: movies, episodes and replays with
+// a resume point, played or not, most recently played first. Jellyfin
+// lists its videos of other kinds there too, recordings and home videos:
+// apps show any video in Continue Watching.
 func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -106,11 +108,11 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	// Only movies and episodes resume, of the types asked: the others are
-	// left out before anything is described.
+	// Only movies, episodes and replays resume, of the types asked: the
+	// others are left out before anything is described.
 	keep := itemTypeFilter(r)
 	var kinds []library.Kind
-	for _, kind := range []library.Kind{library.KindMovie, library.KindEpisode} {
+	for _, kind := range []library.Kind{library.KindMovie, library.KindEpisode, library.KindReplay} {
 		if keep(library.Item{Kind: kind}) {
 			kinds = append(kinds, kind)
 		}
@@ -130,7 +132,7 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		playing = h.playingItems(r, user)
 	}
 	items = slices.DeleteFunc(items, func(item library.Item) bool {
-		return (item.Kind != library.KindMovie && item.Kind != library.KindEpisode) || !keep(item) || playing[item.ID] ||
+		return (item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindReplay) || !keep(item) || playing[item.ID] ||
 			(term != "" && !strings.Contains(strings.ToLower(item.Name), term))
 	})
 	if hasParent {
