@@ -21,7 +21,7 @@ import (
 
 // The plaintext values the test stores, which must never be found in the
 // database once a key is set, nor in the log.
-var plaintexts = []string{"pm-plain-key", "trakt-plain-secret", "access-plain", "refresh-plain", "mdblist-plain"}
+var plaintexts = []string{"pm-plain-key", "trakt-plain-secret", "access-plain", "refresh-plain", "mdblist-plain", "target-plain-token", "ntfy-plain-token"}
 
 func newBox(t *testing.T, key string) *secrets.Box {
 	t.Helper()
@@ -56,6 +56,18 @@ func stored(t *testing.T, pool *pgxpool.Pool) []string {
 			t.Fatal(err)
 		}
 		values = append(values, token, refresh)
+	}
+	targets, err := pool.Query(t.Context(), "SELECT secret FROM notification_targets ORDER BY name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer targets.Close()
+	for targets.Next() {
+		var secret string
+		if err := targets.Scan(&secret); err != nil {
+			t.Fatal(err)
+		}
+		values = append(values, secret)
 	}
 	return values
 }
@@ -118,13 +130,19 @@ func TestStoredSecretsAreSealedOnceAndUnreadableOnesCountAsUnset(t *testing.T) {
 		VALUES ($1, 'trakt', 'access-plain', 'refresh-plain', now()), ($1, 'mdblist', 'mdblist-plain', '', now())`, alice.ID); err != nil {
 		t.Fatal(err)
 	}
+	// A user's Discord target and the server's ntfy target, with a token.
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_targets (user_id, kind, name, address, topic, secret)
+		VALUES ($1, 'discord', 'Family', 'https://hooks.example.org', '', 'https://hooks.example.org/api/webhooks/1/target-plain-token'),
+			(NULL, 'ntfy', 'Phone', 'https://ntfy.example.org', 'alerts', 'ntfy-plain-token')`, alice.ID); err != nil {
+		t.Fatal(err)
+	}
 	log := &lockedLog{}
 	logger := slog.New(slog.NewTextHandler(log, nil))
 	var none *secrets.Box
 	if err := none.Prepare(ctx, pool, logger); err != nil {
 		t.Fatal(err)
 	}
-	if report, _ := none.Inspect(ctx, pool); report.Plaintext != 5 || len(report.Unreadable) != 0 {
+	if report, _ := none.Inspect(ctx, pool); report.Plaintext != 7 || len(report.Unreadable) != 0 {
 		t.Errorf("without a key: %+v", report)
 	}
 	if !strings.Contains(log.String(), "level=WARN") || !strings.Contains(log.String(), "POLYFIN_SECRET_KEY") {
@@ -200,13 +218,13 @@ func TestStoredSecretsAreSealedOnceAndUnreadableOnesCountAsUnset(t *testing.T) {
 			t.Errorf("%s: %d errors logged: %s", name, errors, log)
 		}
 		for _, named := range []string{"setting publicMetaDbKey", "setting theIntroDbKey", "setting traktClientSecret",
-			"trakt connection of alice", "mdblist connection of alice"} {
+			"trakt connection of alice", "mdblist connection of alice", "notification target Family of alice", "server notification target Phone"} {
 			if !strings.Contains(log.String(), named) {
 				t.Errorf("%s: %q not named: %s", name, named, log)
 			}
 		}
 		report, err := wrong.Inspect(ctx, pool)
-		if err != nil || len(report.Unreadable) != 5 {
+		if err != nil || len(report.Unreadable) != 7 {
 			t.Errorf("%s: %+v %v", name, report, err)
 		}
 		store, err := accounts.Open(ctx, pool, accounts.Sealing(wrong))

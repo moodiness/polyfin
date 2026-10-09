@@ -62,6 +62,14 @@ func NewClient(version string) *Client {
 // otherwise open new connections, with TLS handshakes, at each wave.
 const idleConnsPerHost = 32
 
+// HTTPClient returns an HTTP client following the rules of addon requests:
+// confined, it reaches public addresses only, checked when connecting so
+// that DNS answers and redirects cannot point it at the local network.
+// Other features sending requests on behalf of users use it.
+func HTTPClient(confined bool) *http.Client {
+	return newHTTPClient(confined)
+}
+
 func newHTTPClient(confined bool) *http.Client {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
