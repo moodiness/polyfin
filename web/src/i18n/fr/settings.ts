@@ -233,6 +233,9 @@ const settings: typeof en = {
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
+    lyrics: 'Paroles des chansons depuis LRCLIB',
+    lyricsHelp:
+      'Les applications affichent les paroles des chansons, synchronisées ligne par ligne quand LRCLIB, une base de paroles libre, les connaît. Polyfin recherche une chanson une seule fois, par son artiste, son titre, son album et sa durée, quand sa lecture commence ou que sa fiche ou ses paroles s’ouvrent. Si cette option est désactivée, les chansons n’ont pas de paroles et LRCLIB n’est jamais consulté.',
     playedPercent: 'Marqué comme vu après (%)',
     playedPercentHelp: (r: RangeText) =>
       `Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin.`,
@@ -357,7 +360,7 @@ const settings: typeof en = {
     ledes: {
       general: 'Le nom du serveur, sa langue et la connexion des applications.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
-      content: 'Passer l’intro, titres similaires et seuils de lecture.',
+      content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
       security: 'Addons des utilisateurs, comptes bloqués et appareils inutilisés.',
       liveTv:
@@ -367,6 +370,7 @@ const settings: typeof en = {
     groups: {
       skip: 'Passer l’intro et le générique',
       titlePages: 'Fiche des titres',
+      music: 'Musique',
       thresholds: 'Seuils de lecture',
     },
     leaveTitle: 'Partir sans enregistrer ?',

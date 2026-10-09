@@ -302,6 +302,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'lyrics',
+    label: (t) => s(t).lyrics,
+    help: (t) => s(t).lyricsHelp,
+    keywords: ['LRCLIB', 'lyrics', 'music', 'songs'],
+  },
+  {
+    section: 'content',
     anchor: 'played-percent',
     label: (t) => s(t).playedPercent,
     help: (t, r) => s(t).playedPercentHelp(r('playedPercent')),

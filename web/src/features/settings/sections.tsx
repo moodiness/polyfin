@@ -244,6 +244,15 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           onChange={(similarTitles) => update({ similarTitles })}
         />
       </SettingsGroup>
+      <SettingsGroup title={groups.music}>
+        <SwitchRow
+          anchor="lyrics"
+          label={s.lyrics}
+          help={s.lyricsHelp}
+          checked={form.lyrics}
+          onChange={(lyrics) => update({ lyrics })}
+        />
+      </SettingsGroup>
       <SettingsGroup title={groups.thresholds}>
         <div className="grid gap-x-8 sm:grid-cols-2">
           <FieldRow
