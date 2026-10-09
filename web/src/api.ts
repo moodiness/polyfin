@@ -178,6 +178,8 @@ export type Settings = {
   segmentSourcesOff: SegmentSource[]
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
+  /** Whether songs get lyrics from LRCLIB, which is sent their artist, title, album and length. */
+  lyrics: boolean
   /** Percent of a title's runtime past which a reported position marks it played. */
   playedPercent: number
   /** Percent of a title's runtime past which a reported position is kept to resume; below playedPercent. */

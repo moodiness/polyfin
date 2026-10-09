@@ -227,6 +227,9 @@ const settings = {
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',
+    lyrics: 'Song lyrics from LRCLIB',
+    lyricsHelp:
+      'Apps show the lyrics of songs, synced line by line when LRCLIB, a free lyrics database, has them. Polyfin looks a song up once, by its artist, title, album and length, when it starts playing or its details or lyrics open. When off, songs have no lyrics and LRCLIB is never asked.',
     playedPercent: 'Marked played after (%)',
     playedPercentHelp: (r: RangeText) =>
       `A title is marked played once playback goes past this share of its length. From ${r.min} to ${r.max}; ${r.default} by default, like Jellyfin.`,
@@ -350,7 +353,7 @@ const settings = {
     ledes: {
       general: 'The server’s name, its language and how apps sign in.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
-      content: 'Skip intro buttons, similar titles and playback thresholds.',
+      content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
       security: 'Users’ own addons, blocked accounts and unused devices.',
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
@@ -359,6 +362,7 @@ const settings = {
     groups: {
       skip: 'Skip intro and credits',
       titlePages: 'Title pages',
+      music: 'Music',
       thresholds: 'Playback thresholds',
     },
     leaveTitle: 'Leave without saving?',
