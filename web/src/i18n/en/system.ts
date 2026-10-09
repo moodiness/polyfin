@@ -210,6 +210,7 @@ const system = {
         publicMetaDbKey: 'PublicMetaDB key',
         theIntroDbKey: 'TheIntroDB key',
         traktClientSecret: 'Trakt client secret',
+        lastFmSecret: 'Last.fm shared secret',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',

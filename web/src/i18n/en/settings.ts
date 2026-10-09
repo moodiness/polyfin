@@ -6,7 +6,7 @@ const settings = {
   settings: {
     tracking: {
       description:
-        'Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts on their My account page, and Polyfin tells those services what they watch. Trakt and Simkl first need an app of this server’s, set up here. MDBList and PublicMetaDB need nothing.',
+        'Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts on their My account page, and Polyfin tells those services what they watch; Last.fm and ListenBrainz hear of the songs they play. Trakt, Simkl and Last.fm first need an app of this server’s, set up here. MDBList, PublicMetaDB and ListenBrainz need nothing.',
       traktSetup:
         'Create an app on trakt.tv, in Settings, Your API Apps, New application. Give it any name, then copy its client ID and client secret here.',
       redirectUri: 'Redirect URI to enter in the app',
@@ -19,6 +19,13 @@ const settings = {
         'Create an app on simkl.com, in Settings, Developer, Create new app, of the type “TV, devices & command line” (Simkl’s AUTH V2; it needs no redirect URI, and client IDs of older AUTH V1 apps are refused). Give it any name, then copy its client ID here.',
       simklClientId: 'Simkl client ID',
       simklClientIdHelp: 'Leave empty to turn Simkl off. No client secret is needed.',
+      lastFmSetup:
+        'Create an API account on last.fm, at last.fm/api/account/create. Give it any name and leave its callback URL empty: users allow Polyfin on Last.fm, and Polyfin asks Last.fm for their session itself. Then copy its API key and shared secret here.',
+      lastFmApiKey: 'Last.fm API key',
+      lastFmApiKeyHelp:
+        'Leave empty to turn Last.fm off. Users can connect once both the API key and the shared secret are saved.',
+      lastFmSecret: 'Last.fm shared secret',
+      lastFmSecretHelp: 'Shown on your API account’s page on last.fm, under the API key.',
     },
     title: 'Settings',
     description: 'Options that apply to the whole server.',

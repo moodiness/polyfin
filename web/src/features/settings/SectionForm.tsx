@@ -106,6 +106,7 @@ export default function SectionForm({
       serverName: form.serverName.trim(),
       traktClientId: form.traktClientId.trim(),
       simklClientId: form.simklClientId.trim(),
+      lastFmApiKey: form.lastFmApiKey.trim(),
     })
   }
 

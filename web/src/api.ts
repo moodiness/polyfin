@@ -282,6 +282,12 @@ export type Settings = {
   traktClientSecret?: string
   /** Simkl app users connect through. */
   simklClientId: string
+  /** Last.fm API account users connect through; both its API key and shared secret are needed. */
+  lastFmApiKey: string
+  /** Whether the Last.fm shared secret is saved. */
+  lastFmSecretSet: boolean
+  /** Sent only to change the shared secret: a new one, or "" to remove it. */
+  lastFmSecret?: string
   /** Hour of the server's time zone the database is backed up at every day, 0 to 23. */
   backupHour: number
   /** How many of the newest database backups are kept. */
@@ -901,14 +907,23 @@ export const signOutMyDevice = (id: string) =>
   request<void>('DELETE', `/account/devices/${seg(id)}`)
 
 /** The tracking services, in the order the server lists them. */
-export type TrackingServiceName = 'trakt' | 'simkl' | 'mdblist' | 'publicmetadb'
+export type TrackingServiceName =
+  'trakt' | 'simkl' | 'mdblist' | 'publicmetadb' | 'lastfm' | 'listenbrainz'
+
+/** The services users connect with an API key or user token, which they can show again. */
+export type TrackingKeyServiceName = 'mdblist' | 'publicmetadb' | 'listenbrainz'
 
 /** One of the signed-in user's tracking services, which Polyfin tells what the user watches. */
 export type TrackingService = {
   service: TrackingServiceName
-  /** "code": the user enters a code on the service's site; "key": the user pastes an API key. */
-  connection: 'code' | 'key'
-  /** False only for a code service whose app the server is not set up with. */
+  /**
+   * "code": the user enters a code on the service's site; "signin": the user signs in on the
+   * service's site and allows Polyfin; "key": the user pastes an API key or user token.
+   */
+  connection: 'code' | 'signin' | 'key'
+  /** The service is told the songs the user plays; it has no history to import. */
+  music: boolean
+  /** False only for a code or sign-in service whose app the server is not set up with. */
   available: boolean
   connected: boolean
   /** The account name the service reports. */
@@ -921,7 +936,10 @@ export type TrackingService = {
    * "app_refused": the service refused the server's app while the user's code waited.
    */
   problem: 'reconnect' | 'unreachable' | 'app_refused' | null
-  /** While a code connection waits for the user to enter the code on the service's site. */
+  /**
+   * While a code connection waits for the user to enter the code on the service's site, or a
+   * sign-in waits for the user to allow Polyfin on the page `verificationUrl` (`userCode` empty).
+   */
   code: { userCode: string; verificationUrl: string; expiresAt: string } | null
   /** Whether the service's watch history is imported into Polyfin, every 6 hours. */
   importHistory: boolean
@@ -968,8 +986,8 @@ export const importTracking = (service: TrackingServiceName) =>
 export const disconnectTracking = (service: TrackingServiceName) =>
   request<void>('DELETE', `/account/tracking/${seg(service)}`)
 
-/** Reads the signed-in user's saved MDBList or PublicMetaDB key again; never cached. */
-export const revealTrackingKey = async (service: 'mdblist' | 'publicmetadb') =>
+/** Reads the signed-in user's saved API key or user token again; never cached. */
+export const revealTrackingKey = async (service: TrackingKeyServiceName) =>
   (await request<{ value: string }>('POST', `/account/tracking/${seg(service)}/key/reveal`)).value
 
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
@@ -1014,7 +1032,8 @@ export const saveSettings = (settings: Settings) =>
   request<Settings>('PUT', '/settings', { ...settings, bounds: undefined })
 
 /** The server's secrets an administrator can read again. */
-export type ServerSecretName = 'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret'
+export type ServerSecretName =
+  'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret' | 'lastFmSecret'
 
 /** Reads one of the server's saved secrets again, for an administrator; never cached. */
 export const revealServerSecret = async (name: ServerSecretName) =>
