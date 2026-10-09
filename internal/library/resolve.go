@@ -15,16 +15,28 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// TitleRef names a movie, or an episode by its series and numbers, by the
-// identifiers another service knows it by, as a watch history gives them.
+// TitleRef names a movie, a series, or an episode by its series and
+// numbers, by the identifiers another service knows it by, as a watch
+// history gives them.
 type TitleRef struct {
-	Episode bool
+	// Episode names an episode of the series the identifiers name, Series
+	// the series itself; neither names a movie.
+	Episode, Series bool
 	// IMDb ("tt…"), TMDB and TVDB identify the movie or the series; any
 	// may be missing. Movies are not looked up by TVDB.
 	IMDb       string
 	TMDB, TVDB int
 	// Season and Number place an episode in its series.
 	Season, Number int
+}
+
+// kind is the kind of the title the identifiers of r name: a movie, or a
+// series for an episode or a series.
+func (r TitleRef) kind() Kind {
+	if r.Episode || r.Series {
+		return KindSeries
+	}
+	return KindMovie
 }
 
 // TitleTarget is an item a TitleRef designates, as Polyfin keeps the
@@ -62,10 +74,7 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	var seriesIDs []string
 	result := make([][]TitleTarget, len(refs))
 	for i, ref := range refs {
-		kind := KindMovie
-		if ref.Episode {
-			kind = KindSeries
-		}
+		kind := ref.kind()
 		var found []knownTitle
 		for _, title := range titles {
 			if title.kind == kind && title.matches(ref) {
@@ -77,7 +86,7 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 		}
 		for _, title := range found {
 			if !ref.Episode {
-				result[i] = append(result[i], TitleTarget{ID: itemID(titleKey(KindMovie, title.stremioID)), Runtime: title.runtime})
+				result[i] = append(result[i], TitleTarget{ID: itemID(titleKey(kind, title.stremioID)), Runtime: title.runtime})
 				continue
 			}
 			seriesOf[i] = append(seriesOf[i], title.stremioID)
@@ -135,7 +144,7 @@ func (t knownTitle) matches(ref TitleRef) bool {
 	if ref.TMDB > 0 {
 		tmdb = strconv.Itoa(ref.TMDB)
 	}
-	if ref.TVDB > 0 && ref.Episode {
+	if ref.TVDB > 0 && ref.kind() == KindSeries {
 		tvdb = strconv.Itoa(ref.TVDB)
 	}
 	switch {
@@ -154,10 +163,7 @@ func (t knownTitle) matches(ref TitleRef) bool {
 func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitle, error) {
 	var keys, imdbs, tmdbs, tvdbs []string
 	for _, ref := range refs {
-		kind := KindMovie
-		if ref.Episode {
-			kind = KindSeries
-		}
+		kind := ref.kind()
 		if ref.IMDb != "" {
 			keys, imdbs = append(keys, titleKey(kind, ref.IMDb)), append(imdbs, ref.IMDb)
 		}
@@ -165,7 +171,7 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 			id := strconv.Itoa(ref.TMDB)
 			keys, tmdbs = append(keys, titleKey(kind, "tmdb:"+id)), append(tmdbs, id)
 		}
-		if ref.TVDB > 0 && ref.Episode {
+		if ref.TVDB > 0 && kind == KindSeries {
 			id := strconv.Itoa(ref.TVDB)
 			keys, tvdbs = append(keys, titleKey(kind, "tvdb:"+id)), append(tvdbs, id)
 		}

@@ -41,7 +41,10 @@ func TestResolveFindsTitlesByAnyOfTheirIdentifiers(t *testing.T) {
 		{Episode: true, IMDb: "tt0903747", Season: 2, Number: 5},
 		{Episode: true, TMDB: 30, Season: 1, Number: 7}, // listed under its own name
 		{Episode: true, TMDB: 30, Season: 1, Number: 8}, // not listed, named an unknown way
-		{TVDB: 81189}, // movies are not looked up by TVDB
+		{TVDB: 81189},                     // movies are not looked up by TVDB
+		{Series: true, TVDB: 81189},       // a listed series, by TVDB
+		{Series: true, IMDb: "tt0903747"}, // a series never listed: by IMDb
+		{Series: true, TMDB: 278},         // never listed, TMDB only: not found
 	}
 	got, err := e.service.Resolve(t.Context(), refs)
 	if err != nil {
@@ -57,6 +60,9 @@ func TestResolveFindsTitlesByAnyOfTheirIdentifiers(t *testing.T) {
 		{{ID: itemID("episode|tt0903747:2:5"), Series: itemID("series|tt0903747"), Season: itemID("season|tt0903747|2")}},
 		{{ID: itemID("episode|kitsu:1-ep-7"), Series: itemID("series|kitsu:1"), Season: itemID("season|kitsu:1|1")}},
 		nil,
+		nil,
+		{{ID: itemID("series|tvdb:81189"), Runtime: 47 * time.Minute}},
+		{{ID: itemID("series|tt0903747")}},
 		nil,
 	}
 	if len(got) != len(want) {
