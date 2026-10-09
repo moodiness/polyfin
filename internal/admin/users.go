@@ -387,6 +387,9 @@ type settingsJSON struct {
 	RecordingsFolderDefault string   `json:"recordingsFolderDefault"`
 	BackupFolderDefault     string   `json:"backupFolderDefault"`
 	RenderNodes             []string `json:"renderNodes"`
+	// PublicAddress keeps its current value when a PUT leaves it out; empty
+	// sends notifications without links.
+	PublicAddress *string `json:"publicAddress"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -502,6 +505,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingsFolder: &settings.RecordingsFolder,
 		Backups:          &settings.Backups,
 		BackupFolder:     &settings.BackupFolder,
+
+		PublicAddress: &settings.PublicAddress,
 	}
 }
 
@@ -985,6 +990,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingsFolder: valueOr(body.RecordingsFolder, current.RecordingsFolder),
 		Backups:          valueOr(body.Backups, current.Backups),
 		BackupFolder:     valueOr(body.BackupFolder, current.BackupFolder),
+
+		PublicAddress: valueOr(body.PublicAddress, current.PublicAddress),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

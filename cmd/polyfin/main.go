@@ -33,6 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
@@ -237,9 +238,12 @@ func serve(ctx context.Context) error {
 	})
 	defer images.Close()
 	// Recording and backups follow the settings, which turn them on and
-	// choose their folders.
+	// choose their folders. Recordings that end are told to the
+	// notifications, made below, before any recording starts.
+	var notifier *notifications.Service
 	recorder := recordings.New(recordings.Config{DB: pool, Folder: func() string { return store.Settings().RecordingsDir(cfg.DataDir) },
-		Guide: lib, Recorder: player, Users: store, Logger: logger})
+		Guide: lib, Recorder: player, Users: store, Logger: logger,
+		Ended: func(ctx context.Context, ended recordings.Ended) { notifier.RecordingEnded(ctx, ended) }})
 	if recorder.Available() {
 		logger.Info("Live TV recording is on", "folder", recorder.Dir())
 	}
@@ -303,48 +307,55 @@ func serve(ctx context.Context) error {
 		Recordings:    recorder,
 		Trackers:      tracking,
 	})
+	adminOptions := admin.Options{
+		Version:       version,
+		ServerID:      serverID,
+		Database:      pool,
+		Accounts:      store,
+		Addons:        addonStore,
+		QuickConnect:  quickConnect,
+		SignIns:       signIns,
+		SetupCode:     setupCode,
+		Logger:        logger,
+		Guides:        lib,
+		IPTV:          channels,
+		Segments:      skipSegments,
+		Activity:      activityLog,
+		DataDir:       cfg.DataDir,
+		WebClient:     webClient != nil,
+		Sessions:      jellyfinAPI,
+		Tasks:         registry,
+		Logs:          recent,
+		Recordings:    recorder,
+		Library:       lib,
+		LibraryImages: lib,
+		Health: admin.HealthSources{
+			Addons:       addonClient,
+			Cache:        sources,
+			CacheDir:     cfg.CacheDir,
+			Encoder:      segments,
+			Thumbnails:   images,
+			DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
+			Started:      started,
+			SecretKey:    box.Enabled(),
+			Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
+		},
+		Variables:      config.Variables(os.Environ(), cfg),
+		Trackers:       tracking,
+		Backups:        backups,
+		JellyfinImport: fromJellyfin,
+	}
+	// Notifications tell of new episodes, ended recordings and the
+	// problems System › Health finds.
+	notifier = notifications.New(notifications.Options{DB: pool, Accounts: store, Library: lib, UserData: userData, Secrets: box,
+		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), Logger: logger})
+	defer notifier.Close()
+	adminOptions.Notifications = notifier
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
-			Database: pool,
-			Admin:    adminApp,
-			AdminAPI: admin.New(admin.Options{
-				Version:       version,
-				ServerID:      serverID,
-				Database:      pool,
-				Accounts:      store,
-				Addons:        addonStore,
-				QuickConnect:  quickConnect,
-				SignIns:       signIns,
-				SetupCode:     setupCode,
-				Logger:        logger,
-				Guides:        lib,
-				IPTV:          channels,
-				Segments:      skipSegments,
-				Activity:      activityLog,
-				DataDir:       cfg.DataDir,
-				WebClient:     webClient != nil,
-				Sessions:      jellyfinAPI,
-				Tasks:         registry,
-				Logs:          recent,
-				Recordings:    recorder,
-				Library:       lib,
-				LibraryImages: lib,
-				Health: admin.HealthSources{
-					Addons:       addonClient,
-					Cache:        sources,
-					CacheDir:     cfg.CacheDir,
-					Encoder:      segments,
-					Thumbnails:   images,
-					DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
-					Started:      started,
-					SecretKey:    box.Enabled(),
-					Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
-				},
-				Variables:      config.Variables(os.Environ(), cfg),
-				Trackers:       tracking,
-				Backups:        backups,
-				JellyfinImport: fromJellyfin,
-			}),
+			Database:      pool,
+			Admin:         adminApp,
+			AdminAPI:      admin.New(adminOptions),
 			Jellyfin:      jellyfinAPI,
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
@@ -362,6 +373,7 @@ func serve(ctx context.Context) error {
 	go recorder.Run(ctx)
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
+	go notifier.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
