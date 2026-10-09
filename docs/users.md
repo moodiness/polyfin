@@ -50,7 +50,14 @@ Two settings under **Settings › Content** decide when a title counts as played
 - **Server address**: the address Jellyfin opens at in a browser, such as `http://192.168.1.10:8096`, with the path it is served under if any. A host and port alone mean `http://`. Local network addresses work.
 - **API key**: create one in Jellyfin's dashboard, under API Keys. Polyfin uses it for this import only, and never saves it: each import asks for it again.
 
-**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
+**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, a key that may not list the server's users, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
+
+### Whose key it is
+
+- A key from the server's dashboard belongs to no user: it reads every user's watch data.
+- A user's own key, or the access token of a user's session, belongs to that user. Polyfin asks the server whose key it is, and names its owner on the page. With such a key, only the owner's watch data can be imported: **Import watch data** is turned off for the other users, whose accounts can still be created.
+
+Jellyfin refuses a member's key the other users' data. Some servers that speak Jellyfin's API answer a user's key with that user's data whatever user is asked, which would put one user's history into another's account. To import other users' watch data, connect with a key from the server's dashboard, or once with each user's own key.
 
 ### Choosing who to import
 
@@ -94,7 +101,7 @@ Nothing is ever written to the Jellyfin server: the import only reads it.
 
 - One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it added: titles marked played, resume points and favorites, and the titles not found.
 - **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
-- Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user.
+- Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user. A user whose data the server does not let the key read is marked so, and the import goes on with the next users.
 - Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
 
 **Compared with Jellyfin:**
@@ -103,8 +110,8 @@ Nothing is ever written to the Jellyfin server: the import only reads it.
 
 **For app developers:**
 
-- The admin API serves the import to administrators: `POST /admin/api/jellyfin-import/users` lists a server's users, `POST /admin/api/jellyfin-import` creates the accounts and starts the import, `GET /admin/api/jellyfin-import` reads it, and `POST /admin/api/jellyfin-import/stop` stops it. The API key is never answered back.
-- Polyfin reads Jellyfin with `GET` requests only, sending the key as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
+- The admin API serves the import to administrators: `POST /admin/api/jellyfin-import/users` lists a server's users, with `keyOwner`, the Jellyfin user the key belongs to, `null` for a server's key; `POST /admin/api/jellyfin-import` creates the accounts and starts the import, and refuses another user's watch data with a user's key (`jellyfin_key_owner_only`, naming the `jellyfinId`), before creating anyone; `GET /admin/api/jellyfin-import` reads it, and `POST /admin/api/jellyfin-import/stop` stops it. The API key is never answered back.
+- Polyfin reads Jellyfin with `GET` requests only, sending the key as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
 
 ## Parental control
 
