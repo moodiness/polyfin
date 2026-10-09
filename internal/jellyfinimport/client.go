@@ -19,6 +19,9 @@ var (
 	ErrInvalidAddress = errors.New("invalid Jellyfin address")
 	// ErrKeyRefused reports an API key the server refused.
 	ErrKeyRefused = errors.New("the Jellyfin server refused the API key")
+	// ErrForbidden reports a key the server knows but does not let read
+	// what was asked: its users, or another user's data.
+	ErrForbidden = errors.New("the Jellyfin server does not let the key read this")
 	// ErrUnreachable reports a server that did not answer, or kept failing.
 	ErrUnreachable = errors.New("Jellyfin server unreachable")
 	// ErrNotJellyfin reports an address that answered, but not as a
@@ -85,8 +88,10 @@ func (c *client) get(ctx context.Context, path string, query url.Values, into an
 				return ErrNotJellyfin
 			}
 			return nil
-		case err == nil && (status == http.StatusUnauthorized || status == http.StatusForbidden):
+		case err == nil && status == http.StatusUnauthorized:
 			return ErrKeyRefused
+		case err == nil && status == http.StatusForbidden:
+			return ErrForbidden
 		case err == nil && status == http.StatusTooManyRequests:
 			wait = max(retryAfter(header), time.Second)
 			if waits++; waits > c.retries || wait > c.s.timing.maxWait {
@@ -164,6 +169,11 @@ type Server struct {
 	Name, Version string
 	// Address is the server's address as ParseAddress gives it.
 	Address string
+	// KeyOwner is the Jellyfin user the key belongs to when it is a user's
+	// own key or access token, empty for an API key of the server's
+	// dashboard. A user's key reads that user's watch data only: some
+	// servers answer it with that user's data whatever user is asked.
+	KeyOwner string
 }
 
 // User is a user of a Jellyfin server.
@@ -191,11 +201,11 @@ type userJSON struct {
 }
 
 // server reads which server the address leads to, then its users, which
-// only an API key reads.
+// only an API key reads, and whose key it is.
 func (c *client) server(ctx context.Context) (Server, []User, error) {
 	var info serverInfoJSON
 	err := c.get(ctx, "/System/Info/Public", nil, &info)
-	if errors.Is(err, ErrKeyRefused) {
+	if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) {
 		// Jellyfin answers it to anyone.
 		err = ErrNotJellyfin
 	}
@@ -217,7 +227,28 @@ func (c *client) server(ctx context.Context) (Server, []User, error) {
 		users = append(users, User{ID: u.ID, Name: u.Name, Administrator: u.Policy.IsAdministrator, Disabled: u.Policy.IsDisabled,
 			Hidden: u.Policy.IsHidden, LastActivity: date(u.LastActivityDate)})
 	}
-	return Server{Name: info.ServerName, Version: info.Version, Address: c.address}, users, nil
+	owner, err := c.keyOwner(ctx)
+	if err != nil {
+		return Server{}, nil, err
+	}
+	return Server{Name: info.ServerName, Version: info.Version, Address: c.address, KeyOwner: owner}, users, nil
+}
+
+// keyOwner reads whose key c holds: /Users/Me answers a user's own key or
+// access token with that user, and an API key of the server's dashboard,
+// which belongs to no user, with an error (400 on Jellyfin). It returns the
+// user's identifier, empty for a server's key.
+func (c *client) keyOwner(ctx context.Context) (string, error) {
+	var me userJSON
+	err := c.get(ctx, "/Users/Me", nil, &me)
+	switch {
+	case err == nil:
+		return me.ID, nil
+	case errors.Is(err, ErrNotJellyfin), errors.Is(err, ErrKeyRefused), errors.Is(err, ErrForbidden):
+		// The key read the users: it is the server's, which no user is.
+		return "", nil
+	}
+	return "", err
 }
 
 // date reads a date as Jellyfin writes them, nil when there is none.
