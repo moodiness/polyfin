@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -108,6 +109,9 @@ type Options struct {
 	// JellyfinImport imports users and their watch data from Jellyfin
 	// servers; nil offers no import.
 	JellyfinImport *jellyfinimport.Service
+	// Notifications keeps the server's and users' notification targets;
+	// nil offers none.
+	Notifications *notifications.Service
 }
 
 type handler struct {
@@ -143,6 +147,12 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/account/tracking/{service}", h.signedIn(h.setTrackingImport))
 	mux.Handle("POST /admin/api/account/tracking/{service}/import", h.signedIn(h.importTracking))
 	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
+	own := notificationRoutes{h: h, owner: ownTargets}
+	mux.Handle("GET /admin/api/account/notifications", h.signedIn(own.list))
+	mux.Handle("POST /admin/api/account/notifications/targets", h.signedIn(own.create))
+	mux.Handle("PATCH /admin/api/account/notifications/targets/{id}", h.signedIn(own.update))
+	mux.Handle("DELETE /admin/api/account/notifications/targets/{id}", h.signedIn(own.remove))
+	mux.Handle("POST /admin/api/account/notifications/targets/{id}/test", h.signedIn(own.test))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
@@ -181,6 +191,12 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
 	mux.Handle("GET /admin/api/backup", h.administrator(h.backup))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
+	server := notificationRoutes{h: h, owner: serverTargets}
+	mux.Handle("GET /admin/api/notifications", h.administrator(server.list))
+	mux.Handle("POST /admin/api/notifications/targets", h.administrator(server.create))
+	mux.Handle("PATCH /admin/api/notifications/targets/{id}", h.administrator(server.update))
+	mux.Handle("DELETE /admin/api/notifications/targets/{id}", h.administrator(server.remove))
+	mux.Handle("POST /admin/api/notifications/targets/{id}/test", h.administrator(server.test))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
@@ -360,6 +376,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLastFMApp, http.StatusBadRequest, "invalid_lastfm_app"},
 		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
+		{accounts.ErrInvalidPublicAddress, http.StatusBadRequest, "invalid_public_address"},
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
