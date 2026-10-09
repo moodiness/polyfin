@@ -407,6 +407,21 @@ func ValidRemuxDBURL(address string) bool {
 	return err == nil && parsed.Hostname() != "" && parsed.User == nil
 }
 
+// ErrInvalidPublicAddress reports a Settings.PublicAddress that is not
+// empty nor a valid address (see ValidPublicAddress).
+var ErrInvalidPublicAddress = errors.New("invalid public address")
+
+// MaxPublicAddressBytes is the longest Settings.PublicAddress.
+const MaxPublicAddressBytes = 512
+
+// ValidPublicAddress reports whether address may be the address people
+// open Polyfin at: empty, or an absolute http or https URL with a host,
+// without user info, query or fragment, of at most MaxPublicAddressBytes,
+// holding no spaces or control characters.
+func ValidPublicAddress(address string) bool {
+	return address == "" || len(address) <= MaxPublicAddressBytes && ValidRemuxDBURL(address)
+}
+
 // ErrInvalidCacheSize reports a CacheSizeGB outside [MinCacheSizeGB,
 // MaxCacheSizeGB], and ErrInvalidVAAPIDevice a VAAPIDevice that is not a
 // render node (see ValidVAAPIDevice).
@@ -727,6 +742,10 @@ type Settings struct {
 	// folder (see BackupDir).
 	Backups      bool
 	BackupFolder string
+	// PublicAddress is the address people open Polyfin at, such as
+	// https://media.example.org, without a trailing slash: links in
+	// notifications start with it. Empty, messages carry no link.
+	PublicAddress string
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -780,7 +799,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
-	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder"
+	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -808,7 +827,8 @@ func (settings *Settings) fields() []any {
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
-		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder}
+		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
+		&settings.PublicAddress}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1102,6 +1122,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	settings.RemuxDBURL = strings.TrimRight(strings.TrimSpace(settings.RemuxDBURL), "/")
 	if !ValidRemuxDBURL(settings.RemuxDBURL) {
 		return Settings{}, ErrInvalidRemuxDBURL
+	}
+	settings.PublicAddress = strings.TrimRight(strings.TrimSpace(settings.PublicAddress), "/")
+	if !ValidPublicAddress(settings.PublicAddress) {
+		return Settings{}, ErrInvalidPublicAddress
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
