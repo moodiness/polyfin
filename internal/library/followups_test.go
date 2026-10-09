@@ -142,6 +142,21 @@ func (e followEnv) hurry() {
 	}
 }
 
+// schedule waits for the one schedule running, and returns it.
+func (e followEnv) schedule() *followUp {
+	e.t.Helper()
+	var f *followUp
+	e.eventually("a schedule", func() bool {
+		e.service.followUps.mu.Lock()
+		defer e.service.followUps.mu.Unlock()
+		for _, running := range e.service.followUps.running {
+			f = running
+		}
+		return len(e.service.followUps.running) == 1
+	})
+	return f
+}
+
 // known counts the versions known, asking no addon.
 func (e followEnv) known() int {
 	e.t.Helper()
@@ -240,12 +255,15 @@ func TestAListServedFromTheCacheIsNotFollowedUp(t *testing.T) {
 }
 
 func TestARefreshIsNotUndoneByAFollowUp(t *testing.T) {
-	e := newFollowEnv(t, 100*time.Millisecond, 100*time.Millisecond)
+	// Follow-ups wait an hour unless the test hurries them: on a slow
+	// machine, a short delay could ask one before the refresh that should
+	// cancel it.
+	e := newFollowEnv(t, time.Hour, time.Hour)
 	e.replies <- 1
 	e.service.Versions(t.Context(), e.member, e.movie)
 	// The follow-up is held while the title is refreshed; its answer, which
 	// lists more, comes after.
-	e.eventually("the follow-up", func() bool { return e.asked("stream") == 2 })
+	e.eventually("the follow-up", func() bool { e.hurry(); return e.asked("stream") == 2 })
 	if err := e.service.Refresh(t.Context(), e.member, e.movie); err != nil {
 		t.Fatal(err)
 	}
@@ -265,16 +283,27 @@ func TestARefreshIsNotUndoneByAFollowUp(t *testing.T) {
 	if versions, err := e.service.Versions(t.Context(), e.member, e.movie); err != nil || len(versions) != 2 {
 		t.Fatalf("after the refresh: %+v %v", versions, err)
 	}
+	e.eventually("the new follow-ups", func() bool { e.hurry(); return e.asked("stream") == 5 })
 	e.settles("stream", 5)
 	if got := e.known(); got != 3 {
 		t.Errorf("%d versions after the new follow-ups, want 3", got)
 	}
 
-	// Refreshed while a follow-up is scheduled, the title asks nothing.
+	// Refreshed while a follow-up is scheduled, the title asks nothing,
+	// even once the follow-up is due.
 	e.service.Refresh(t.Context(), e.member, e.movie)
 	e.replies <- 1
 	e.service.Versions(t.Context(), e.member, e.movie)
+	due := e.schedule()
 	e.service.Refresh(t.Context(), e.member, e.movie)
+	// What the addon would answer, were it asked.
+	e.replies <- 1
+	due.hurry <- struct{}{}
+	select {
+	case <-due.asked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the refreshed schedule did not end")
+	}
 	e.settles("stream", 6)
 }
 
