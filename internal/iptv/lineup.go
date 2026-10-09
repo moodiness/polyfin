@@ -296,23 +296,26 @@ type Channel struct {
 	GuideID          string
 	Mapping          *Mapping
 	Streams          []Stream
+	// ArchiveDays is how many days back the provider keeps the channel's
+	// past programmes, played from Replay; 0 for no archive.
+	ArchiveDays int
 
 	key string
 }
 
 // ChannelFilter narrows a channel listing.
 type ChannelFilter struct {
-	Category               *accounts.ID
-	Enabled, Shown, Mapped *bool
-	Q                      string
-	Offset, Limit          int
+	Category                        *accounts.ID
+	Enabled, Shown, Mapped, Archive *bool
+	Q                               string
+	Offset, Limit                   int
 }
 
 const channelQuery = `SELECT l.id, l.item_id, coalesce(l.name, l.provider_name), l.provider_name, l.name IS NOT NULL,
 	coalesce(l.logo, l.provider_logo), l.provider_logo, l.description, c.id, coalesce(c.name, c.provider_name), l.category_id,
 	l.moved_to IS NOT NULL, l.enabled, ` + shownSQL + `,
 	coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END), l.provider_number, l.number, l.guide_id,
-	m.manual, m.guide_id, m.xmltv_id, coalesce(gc.names[1], ''), count(*) OVER ()
+	m.manual, m.guide_id, m.xmltv_id, coalesce(gc.names[1], ''), coalesce(` + archiveSQL + `, 0), count(*) OVER ()
 	` + channelJoins + `
 	LEFT JOIN live_guide_maps m ON m.addon_id = l.addon_id AND m.catalog_type = 'tv' AND m.catalog_id = '` + catalogID + `' AND m.channel_id = l.item_id
 	LEFT JOIN live_guides g ON g.id = m.guide_id
@@ -338,7 +341,7 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 		var mappedName string
 		if err := row.Scan(&c.key, &c.ID, &c.Name, &c.ProviderName, &c.Renamed, &c.Logo, &c.ProviderLogo, &c.Description, &c.Category,
 			&c.CategoryName, &c.ProviderCategory, &c.Moved, &c.Enabled, &c.Shown, &c.Number, &c.ProviderNumber, &c.FixedNumber, &c.GuideID,
-			&manual, &guide, &xmltvID, &mappedName, &total); err != nil {
+			&manual, &guide, &xmltvID, &mappedName, &c.ArchiveDays, &total); err != nil {
 			return Channel{}, err
 		}
 		if manual != nil {
@@ -382,13 +385,18 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 }
 
 // ListChannels lists a line-up's channels in order, narrowed by filter:
-// its category, whether enabled, shown or mapped, and q in the shown name,
-// the provider name or the guide identifier. It reports how many match.
+// its category, whether enabled, shown, mapped or with an archive, and q
+// in the shown name, the provider name or the guide identifier. It
+// reports how many match.
 func (s *Service) ListChannels(ctx context.Context, scope addons.Scope, source accounts.ID, f ChannelFilter) (int, []Channel, error) {
 	if err := s.owned(ctx, scope, source); err != nil {
 		return 0, nil, err
 	}
 	filter, args := channelFilter(f.Category, f.Enabled, f.Shown, f.Mapped, f.Q)
+	if f.Archive != nil {
+		filter += " AND (" + archiveSQL + " IS NOT NULL) = $" + strconv.Itoa(len(args)+2)
+		args = append(args, *f.Archive)
+	}
 	return s.channels(ctx, source, filter, args, max(f.Offset, 0), cmp.Or(f.Limit, 100))
 }
 

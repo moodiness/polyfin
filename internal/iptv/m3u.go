@@ -30,6 +30,9 @@ type Entry struct {
 	Kind            string
 	Series          string
 	Season, Episode int
+	// Catchup is how the provider's archive of the channel's past
+	// programmes is reached; the zero value for none.
+	Catchup Catchup
 }
 
 // maxLine bounds a playlist line: a line longer than that is not M3U.
@@ -38,16 +41,19 @@ const maxLine = 1 << 20
 // ParseM3U reads an M3U playlist, handing each channel to entry in order:
 // the #EXTINF line's tvg-id, tvg-name, tvg-logo, tvg-chno and group-title
 // attributes (quoted with double or single quotes, or not at all) and the
-// name after its comma, then the #EXTVLCOPT lines giving the stream's user
-// agent and referrer, then the stream's address. A byte order mark and CRLF
-// line ends are accepted. Headings that are not channels are skipped (see
-// heading), as are entries without an address. A playlist that does not
-// start with #EXTM3U, or whose lines are too long, is not M3U.
+// name after its comma, its catch-up attributes over those the #EXTM3U
+// line gives every channel (see catchupOf), then the #EXTVLCOPT lines
+// giving the stream's user agent and referrer, then the stream's address.
+// A byte order mark and CRLF line ends are accepted. Headings that are not
+// channels are skipped (see heading), as are entries without an address.
+// A playlist that does not start with #EXTM3U, or whose lines are too
+// long, is not M3U.
 func ParseM3U(r io.Reader, entry func(Entry) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLine)
 	first := true
 	var current *Entry
+	var header Catchup
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if first {
@@ -58,13 +64,15 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 			if !strings.HasPrefix(text, "#EXTM3U") {
 				return ErrInvalidList
 			}
+			attributes, _ := readAttributes(text[len("#EXTM3U"):])
+			header = catchupOf(attributes, Catchup{})
 			first = false
 			continue
 		}
 		switch {
 		case text == "":
 		case hasPrefixFold(text, "#EXTINF:"):
-			e := parseExtinf(text[len("#EXTINF:"):])
+			e := parseExtinf(text[len("#EXTINF:"):], header)
 			current = &e
 		case hasPrefixFold(text, "#EXTVLCOPT:"):
 			if current == nil {
@@ -94,6 +102,7 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 				continue
 			}
 			e.classify()
+			e.Catchup = e.Catchup.normalized()
 			if err := entry(e); err != nil {
 				return err
 			}
@@ -123,14 +132,38 @@ func streamAddress(address string) bool {
 }
 
 // parseExtinf reads what follows "#EXTINF:": a duration, attributes, then
-// the name after the first comma outside quotes.
-func parseExtinf(text string) Entry {
-	attributes := map[string]string{}
+// the name after the first comma outside quotes. header is the catch-up
+// the playlist's #EXTM3U line gives every channel.
+func parseExtinf(text string, header Catchup) Entry {
 	i := 0
 	// The duration, such as -1 or 0.
 	for i < len(text) && text[i] != ' ' && text[i] != '\t' && text[i] != ',' {
 		i++
 	}
+	attributes, end := readAttributes(text[i:])
+	i += end
+	name := ""
+	if i < len(text) {
+		name = strings.TrimSpace(text[i+1:])
+	}
+	number, _ := strconv.Atoi(attributes["tvg-chno"])
+	return Entry{
+		Name:    cmpOr(name, attributes["tvg-name"]),
+		Number:  max(number, 0),
+		Logo:    attributes["tvg-logo"],
+		Group:   attributes["group-title"],
+		GuideID: attributes["tvg-id"],
+		Catchup: catchupOf(attributes, header),
+	}
+}
+
+// readAttributes reads attributes, key=value pairs whose value is quoted
+// with double or single quotes or not at all, up to the first comma
+// outside quotes, whose index it returns (the text's length without one).
+// Keys are lower-cased.
+func readAttributes(text string) (map[string]string, int) {
+	attributes := map[string]string{}
+	i := 0
 	for i < len(text) && text[i] != ',' {
 		if text[i] == ' ' || text[i] == '\t' {
 			i++
@@ -163,18 +196,7 @@ func parseExtinf(text string) Entry {
 		}
 		attributes[key] = strings.TrimSpace(value)
 	}
-	name := ""
-	if i < len(text) {
-		name = strings.TrimSpace(text[i+1:])
-	}
-	number, _ := strconv.Atoi(attributes["tvg-chno"])
-	return Entry{
-		Name:    cmpOr(name, attributes["tvg-name"]),
-		Number:  max(number, 0),
-		Logo:    attributes["tvg-logo"],
-		Group:   attributes["group-title"],
-		GuideID: attributes["tvg-id"],
-	}
+	return attributes, i
 }
 
 func cmpOr(a, b string) string {

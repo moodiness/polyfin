@@ -63,6 +63,9 @@ type downloaded struct {
 	// connections is how many streams an Xtream account may play at once,
 	// as its login says; nil when it does not say, 0 for no limit.
 	connections *int
+	// timezone is the zone an Xtream server writes its timeshift
+	// addresses in, as its login says; empty when it says none known.
+	timezone string
 }
 
 // merge adds to d the parts of more that d lacks.
@@ -71,6 +74,7 @@ func (d *downloaded) merge(more downloaded) {
 	if d.connections == nil {
 		d.connections = more.connections
 	}
+	d.timezone = cmp.Or(d.timezone, more.timezone)
 	if more.got.live && !d.got.live {
 		d.entries, d.got.live = more.entries, true
 	}
@@ -217,10 +221,11 @@ func (t *text) UnmarshalJSON(data []byte) error {
 }
 
 // fetchXtream reads the parts of an Xtream Codes account that want names
-// through its player API: the account's allowed formats, then the live
-// categories and streams, the VOD categories and streams, and the series
-// categories and series. Only list data is read: details of a title are
-// asked when it is opened (see Service.details).
+// through its player API: the account's allowed formats, connection limit
+// and time zone, then the live categories and streams, the VOD categories
+// and streams, and the series categories and series. Only list data is
+// read: details of a title are asked when it is opened (see
+// Service.details).
 func fetchXtream(ctx context.Context, client requester, account Account, confined bool, want parts) (downloaded, error) {
 	d := downloaded{got: want, xtream: true}
 	var login struct {
@@ -229,6 +234,9 @@ func fetchXtream(ctx context.Context, client requester, account Account, confine
 			Formats        []string `json:"allowed_output_formats"`
 			MaxConnections text     `json:"max_connections"`
 		} `json:"user_info"`
+		ServerInfo struct {
+			Timezone string `json:"timezone"`
+		} `json:"server_info"`
 	}
 	if err := download(ctx, client, account.api(""), confined, maxListSize, decodeJSON(&login)); err != nil {
 		return d, err
@@ -238,6 +246,9 @@ func fetchXtream(ctx context.Context, client requester, account Account, confine
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(string(login.UserInfo.MaxConnections))); err == nil && n >= 0 {
 		d.connections = &n
+	}
+	if zone := strings.TrimSpace(login.ServerInfo.Timezone); len(zone) <= 64 && providerZone(zone) != time.UTC {
+		d.timezone = zone
 	}
 	if want.live {
 		// MPEG-TS, unless the account only allows HLS.
@@ -312,7 +323,8 @@ func eachItem[T any](body io.Reader, item func(T) error) error {
 	return nil
 }
 
-// fetchXtreamLive lists an Xtream account's live channels.
+// fetchXtreamLive lists an Xtream account's live channels, with the days
+// of their archive (tv_archive and tv_archive_duration).
 func fetchXtreamLive(ctx context.Context, client requester, account Account, confined, hls bool, add func(Entry) error) error {
 	names, err := xtreamCategories(ctx, client, account, confined, "get_live_categories")
 	if err != nil {
@@ -325,6 +337,8 @@ func fetchXtreamLive(ctx context.Context, client requester, account Account, con
 		Icon     string `json:"stream_icon"`
 		Guide    string `json:"epg_channel_id"`
 		Category text   `json:"category_id"`
+		Archive  text   `json:"tv_archive"`
+		Days     text   `json:"tv_archive_duration"`
 	}
 	return download(ctx, client, account.api("get_live_streams"), confined, maxListSize, func(body io.Reader) error {
 		return eachItem(body, func(stream stream) error {
@@ -333,8 +347,14 @@ func fetchXtreamLive(ctx context.Context, client requester, account Account, con
 				return nil
 			}
 			number, _ := strconv.Atoi(string(stream.Number))
+			var catchup Catchup
+			if strings.TrimSpace(string(stream.Archive)) == "1" {
+				days, _ := strconv.Atoi(strings.TrimSpace(string(stream.Days)))
+				catchup = Catchup{Type: CatchupXtream, Days: days}.normalized()
+			}
 			return add(Entry{ID: string(stream.ID), Name: name, Number: max(number, 0), Logo: strings.TrimSpace(stream.Icon),
-				Group: names[stream.Category], GuideID: strings.TrimSpace(stream.Guide), URL: account.streamURL(string(stream.ID), hls)})
+				Group: names[stream.Category], GuideID: strings.TrimSpace(stream.Guide), URL: account.streamURL(string(stream.ID), hls),
+				Catchup: catchup})
 		})
 	})
 }

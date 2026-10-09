@@ -85,6 +85,8 @@ type lineupJSON struct {
 	ShownChannels     int `json:"shownChannels"`
 	Mapped            int `json:"mapped"`
 	Unmapped          int `json:"unmapped"`
+	// Archived counts the channels apps show that have an archive.
+	Archived int `json:"archived"`
 }
 
 func newAddonJSON(addon addons.Addon) addonJSON {
@@ -136,7 +138,7 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering,
 			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment},
 		Lineup: lineupJSON{Categories: n.Categories, EnabledCategories: n.EnabledCategories, Channels: n.Channels, EnabledChannels: n.EnabledChannels,
-			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped},
+			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped, Archived: n.Archived},
 		VOD: vodJSON(vod)}
 	return result, nil
 }

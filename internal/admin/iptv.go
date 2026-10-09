@@ -396,6 +396,9 @@ type channelJSON struct {
 	GuideID            string              `json:"guideId"`
 	Mapping            *mappingJSON        `json:"mapping"`
 	Streams            []lineupStreamJSON  `json:"streams"`
+	// ArchiveDays is how many days back the provider keeps the channel's
+	// past programmes, played from Replay; 0 for no archive.
+	ArchiveDays int `json:"archiveDays"`
 }
 
 type channelCategoryJSON struct {
@@ -434,7 +437,8 @@ func newChannelJSON(c iptv.Channel) channelJSON {
 	result := channelJSON{ID: c.ID.String(), Name: c.Name, ProviderName: c.ProviderName, Renamed: c.Renamed, Logo: c.Logo,
 		ProviderLogo: c.ProviderLogo, Description: c.Description, Category: channelCategoryJSON{ID: c.Category.String(), Name: c.CategoryName},
 		ProviderCategoryID: c.ProviderCategory.String(), Moved: c.Moved, Enabled: c.Enabled, Shown: c.Shown, Number: c.Number,
-		ProviderNumber: c.ProviderNumber, FixedNumber: c.FixedNumber, GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams))}
+		ProviderNumber: c.ProviderNumber, FixedNumber: c.FixedNumber, GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams)),
+		ArchiveDays: c.ArchiveDays}
 	if m := c.Mapping; m != nil {
 		result.Mapping = newMappingJSON(m.Guide, m.GuideChannel, m.GuideChannelName, m.Manual)
 	}
@@ -520,7 +524,7 @@ func (h *handler) listChannels(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.Category = &id
 	}
-	for name, into := range map[string]**bool{"enabled": &filter.Enabled, "shown": &filter.Shown, "mapped": &filter.Mapped} {
+	for name, into := range map[string]**bool{"enabled": &filter.Enabled, "shown": &filter.Shown, "mapped": &filter.Mapped, "archive": &filter.Archive} {
 		if *into, ok = queryBool(w, r, name); !ok {
 			return
 		}

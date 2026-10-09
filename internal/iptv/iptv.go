@@ -79,6 +79,9 @@ type Service struct {
 	// shown holds the channels each source shows, until its line-up
 	// changes.
 	shown map[accounts.ID][]stremio.Meta
+	// archives holds the days of the archive of each source's channels
+	// that show and have one (see Archives), until its line-up changes.
+	archives map[accounts.ID]map[string]int
 	// lists holds the lists previews of new accounts downloaded, for
 	// listCache, so that previewing again or adding the source does not
 	// download the list again.
@@ -149,7 +152,7 @@ func (s *Service) fetchCached(ctx context.Context, account Account, confined boo
 // whenever lists due are looked for.
 func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *slog.Logger, settings func() accounts.Settings) *Service {
 	return &Service{db: db, addons: store, client: client, logger: logger, settings: settings, now: time.Now,
-		shown: map[accounts.ID][]stremio.Meta{}, lists: map[string]cachedList{}, pacer: Hosts}
+		shown: map[accounts.ID][]stremio.Meta{}, archives: map[accounts.ID]map[string]int{}, lists: map[string]cachedList{}, pacer: Hosts}
 }
 
 // OnChange sets what is told, after the change, that a source's line-up
@@ -225,12 +228,13 @@ func (o Options) apply(patch *OptionsPatch) (Options, error) {
 
 // LineupCounts count a source's line-up: its categories, those enabled;
 // its channels, those enabled, those apps show (enabled, in an enabled
-// category, with an enabled stream); and those mapped to a guide channel
-// or not.
+// category, with an enabled stream); those mapped to a guide channel or
+// not; and those apps show that have an archive (see Archives).
 type LineupCounts struct {
 	Categories, EnabledCategories            int
 	Channels, EnabledChannels, ShownChannels int
 	Mapped, Unmapped                         int
+	Archived                                 int
 }
 
 // Source describes an IPTV source: its addon, how many entries its list
@@ -517,6 +521,9 @@ func storeDownload(ctx context.Context, tx pgx.Tx, source accounts.ID, list down
 			return err
 		}
 	}
+	if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET timezone = $2 WHERE addon_id = $1", source, list.timezone); err != nil {
+		return err
+	}
 	if list.got.movies {
 		if err := storeTitles(ctx, tx, source, typeMovie, list.movies, nil); err != nil {
 			return err
@@ -556,10 +563,12 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 		if kind == KindEpisode {
 			season, episode = &e.Season, &e.Episode
 		}
-		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers, kind, e.Series, season, episode})
+		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers, kind, e.Series, season, episode,
+			e.Catchup.Type, e.Catchup.Days, e.Catchup.Source})
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_entries"},
-		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers", "kind", "series_name", "season", "episode"},
+		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers", "kind", "series_name", "season", "episode",
+			"catchup", "catchup_days", "catchup_source"},
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
@@ -642,10 +651,11 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 		(SELECT count(*) FROM iptv_categories WHERE addon_id = $1),
 		(SELECT count(*) FROM iptv_categories WHERE addon_id = $1 AND enabled),
 		count(*), count(*) FILTER (WHERE l.enabled), count(*) FILTER (WHERE `+shownSQL+`),
-		count(*) FILTER (WHERE m.guide_id IS NOT NULL)
+		count(*) FILTER (WHERE m.guide_id IS NOT NULL), count(*) FILTER (WHERE `+shownSQL+` AND `+archiveSQL+` IS NOT NULL)
 		FROM iptv_lineup l JOIN iptv_categories c ON c.id = coalesce(l.moved_to, l.category_id)
 		LEFT JOIN live_guide_maps m ON m.addon_id = l.addon_id AND m.catalog_type = 'tv' AND m.catalog_id = $2 AND m.channel_id = l.item_id
-		WHERE l.addon_id = $1`, id, catalogID).Scan(&n.Categories, &n.EnabledCategories, &n.Channels, &n.EnabledChannels, &n.ShownChannels, &n.Mapped)
+		WHERE l.addon_id = $1`, id, catalogID).Scan(&n.Categories, &n.EnabledCategories, &n.Channels, &n.EnabledChannels, &n.ShownChannels, &n.Mapped,
+		&n.Archived)
 	n.Unmapped = n.Channels - n.Mapped
 	if err != nil {
 		return Source{}, err
@@ -659,6 +669,7 @@ func (s *Service) forget(source accounts.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.shown, source)
+	delete(s.archives, source)
 }
 
 // channelColumns are what a channel's meta is made of, from l joined with
@@ -779,10 +790,14 @@ const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 // its entries' addresses, requested with the headers their list gives, and
 // its custom streams. Each is labelled by its quality. Streams that failed
 // last (see ReportStream) come after the others, and those found dead or
-// silent are left out until their backoff ends (see hidden).
+// silent are left out until their backoff ends (see hidden). A replay's
+// stream is its programme's address in the provider's archive (see
+// ReplayID).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
 		return s.vodStreams(ctx, source, key)
+	} else if ok && strings.HasPrefix(key, replayKey) {
+		return s.replayStreams(ctx, source, key)
 	}
 	meta, err := s.Meta(ctx, source, id)
 	if errors.Is(err, stremio.ErrNotFound) {
