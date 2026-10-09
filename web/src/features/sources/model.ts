@@ -1,8 +1,14 @@
-import { BroadcastIcon, MusicNotesIcon, PuzzlePieceIcon, type Icon } from '@phosphor-icons/react'
+import {
+  BroadcastIcon,
+  FolderIcon,
+  MusicNotesIcon,
+  PuzzlePieceIcon,
+  type Icon,
+} from '@phosphor-icons/react'
 import { queryClient, queryKeys, type Addon, type Owner, type Scope } from '@/api'
 
 /** The kinds the list filters by: IPTV gathers M3U playlists and Xtream accounts. */
-export type KindFilter = 'stremio' | 'eclipse' | 'iptv'
+export type KindFilter = 'stremio' | 'eclipse' | 'iptv' | 'local'
 
 export const isIptv = (addon: Addon) => addon.kind === 'm3u' || addon.kind === 'xtream'
 
@@ -11,6 +17,7 @@ export const kindOf = (addon: Addon): KindFilter =>
 
 export function kindIcon(addon: Addon): Icon {
   if (isIptv(addon)) return BroadcastIcon
+  if (addon.kind === 'local') return FolderIcon
   return addon.kind === 'eclipse' ? MusicNotesIcon : PuzzlePieceIcon
 }
 
@@ -45,6 +52,11 @@ export function replaceCachedAddon(scope: Scope, updated: Addon) {
   )
 }
 
-/** When a source was last read: its manifest, or its IPTV list (null before the first download). */
-export const lastTime = (addon: Addon) =>
-  addon.source === null ? addon.refreshedAt : addon.source.fetchedAt
+/**
+ * When a source was last read: its manifest, its IPTV list, or its local folder's last scan (null
+ * before the first download or scan).
+ */
+export function lastTime(addon: Addon) {
+  if (addon.folder !== null) return addon.folder.scannedAt
+  return addon.source === null ? addon.refreshedAt : addon.source.fetchedAt
+}

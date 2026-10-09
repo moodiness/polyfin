@@ -70,6 +70,7 @@ const nav: typeof en = {
       stremio: 'Addon Stremio',
       eclipse: 'Addon Eclipse',
       iptv: 'Source IPTV',
+      local: 'Dossier local',
     },
     ownedBy: (kind: string, owner: string) => `${kind} de ${owner}`,
   },

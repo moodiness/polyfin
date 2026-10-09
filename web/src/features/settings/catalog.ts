@@ -357,6 +357,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).collectionReadHourHelp,
     codes: ['invalid_collection_read_hour'],
   },
+  {
+    section: 'catalogs',
+    anchor: 'local-scan-hours',
+    label: (t) => s(t).localScanHours,
+    help: (t, r) => s(t).localScanHoursHelp(r('localScanHours')),
+    keywords: ['folder', 'scan'],
+    codes: ['invalid_local_scan_hours'],
+  },
   // Thumbnails
   {
     section: 'thumbnails',

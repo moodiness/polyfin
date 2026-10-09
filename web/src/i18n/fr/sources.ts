@@ -3,14 +3,14 @@ import type en from '../en/sources'
 const sources: typeof en = {
   sources: {
     title: 'Sources',
-    lede: 'Addons Stremio, addons Eclipse et sources IPTV, réunis dans une seule liste. Les sources du serveur servent à tous ; celles d’un membre ne servent qu’à lui.',
+    lede: 'Addons Stremio, addons Eclipse, sources IPTV et dossiers locaux, réunis dans une seule liste. Les sources du serveur servent à tous ; celles d’un membre ne servent qu’à lui.',
     add: 'Ajouter une source',
     listLabel: 'Sources',
     listNote: 'Les sources personnelles des membres ne servent qu’à leur propriétaire.',
     loading: 'Chargement des sources',
     kindFilter: 'Filtrer par type',
     all: 'Toutes',
-    kinds: { stremio: 'Stremio', eclipse: 'Eclipse', iptv: 'IPTV' },
+    kinds: { stremio: 'Stremio', eclipse: 'Eclipse', iptv: 'IPTV', local: 'Dossiers' },
     owner: 'Propriétaire',
     everyOwner: 'Tous les propriétaires',
     server: 'Le serveur',
@@ -19,17 +19,18 @@ const sources: typeof en = {
     clearFilters: 'Effacer les filtres',
     emptyTitle: 'Aucune source pour l’instant',
     emptyShared:
-      'Ajoutez un addon Stremio, un addon Eclipse ou une source IPTV : il servira à tous les utilisateurs de ce serveur.',
+      'Ajoutez un addon Stremio, un addon Eclipse, une source IPTV ou un dossier local : il servira à tous les utilisateurs de ce serveur.',
     emptyMine:
       'Ajoutez un addon Stremio, un addon Eclipse ou une source IPTV : il ne servira qu’à vous, après ceux du serveur.',
     noMatchTitle: 'Aucune source ne correspond',
     noMatch: 'Changez le type, le propriétaire ou la recherche.',
-    tag: { stremio: 'Stremio', eclipse: 'Eclipse', m3u: 'M3U', xtream: 'Xtream' },
+    tag: { stremio: 'Stremio', eclipse: 'Eclipse', m3u: 'M3U', xtream: 'Xtream', local: 'Dossier' },
     kindName: {
       stremio: 'Addon Stremio',
       eclipse: 'Addon Eclipse',
       m3u: 'Playlist M3U',
       xtream: 'Compte Xtream Codes',
+      local: 'Dossier local',
     },
     ownedBy: (name: string) => `Source de ${name}`,
     yours: 'Votre propre source',
@@ -106,7 +107,12 @@ const sources: typeof en = {
   sourceAdd: {
     title: 'Ajouter une source',
     kind: 'Type de source',
-    kinds: { stremio: 'Addon Stremio', music: 'Addon Eclipse', iptv: 'Source IPTV' },
+    kinds: {
+      stremio: 'Addon Stremio',
+      music: 'Addon Eclipse',
+      iptv: 'Source IPTV',
+      local: 'Dossier local',
+    },
     stremioHelp:
       'Un addon Stremio apporte des catalogues, des métadonnées et des flux. Collez son lien d’installation.',
     musicHelp:
@@ -148,6 +154,81 @@ const sources: typeof en = {
     channels: (count: string) => `${count} chaînes`,
     movies: (count: string) => `${count} films`,
     series: (count: string) => `${count} séries`,
+  },
+  localFolders: {
+    help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
+    name: 'Nom',
+    nameHint: 'Le nom de sa bibliothèque dans les applications Jellyfin.',
+    path: 'Chemin dans le conteneur',
+    pathHint:
+      'L’endroit où le dossier est monté dans le conteneur de Polyfin, pas son chemin sur l’hôte.',
+    pathPlaceholder: '/media/films',
+    kind: 'Il contient',
+    kinds: { movies: 'Des films', shows: 'Des séries' },
+    kindHelp: {
+      movies:
+        'Un fichier par film, seul ou dans un dossier à lui, nommé d’après le film et son année.',
+      shows:
+        'Un dossier par série, avec la saison et l’épisode dans le nom de chaque fichier, comme S01E02.',
+    },
+    kindFixed:
+      'Le contenu d’un dossier ne peut pas changer : supprimez-le et ajoutez-le à nouveau.',
+    add: 'Ajouter le dossier',
+    added: (name: string) => `${name} a été ajouté. Sa première analyse a commencé.`,
+    edit: 'Modifier le dossier',
+    save: 'Enregistrer',
+    cancel: 'Annuler',
+    saved: 'Dossier enregistré.',
+    movedHint:
+      'Un nouveau chemin oublie les fichiers trouvés dans l’ancien, associations manuelles comprises.',
+    scan: 'Analyser maintenant',
+    scanLabel: (name: string) => `Analyser ${name} maintenant`,
+    scanStarted: (name: string) => `${name} : l’analyse a commencé.`,
+    scanning: 'Analyse en cours',
+    unreadable: 'Illisible',
+    figuresTitle: 'Fichiers',
+    files: 'Fichiers vidéo',
+    matched: 'Associés à un titre',
+    unmatched: 'Non associés',
+    holds: 'Contenu',
+    lastScan: 'Dernière analyse',
+    lastAttempt: 'Dernière tentative',
+    never: 'Pas encore',
+    errorTitle: 'Polyfin ne peut pas lire ce dossier',
+    errors: {
+      missing:
+        'Ce chemin n’existe pas dans le conteneur : vérifiez que le dossier, ou le partage où il se trouve, y est bien monté.',
+      unreadable:
+        'Le dossier existe mais Polyfin ne peut pas le lister : donnez à l’utilisateur 65532 le droit de le lire et d’ouvrir ses dossiers.',
+      not_folder: 'Ce chemin est un fichier, pas un dossier.',
+    } as Record<string, string>,
+    keptNote:
+      'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',
+    unmatchedTitle: 'Fichiers non associés',
+    unmatchedHelp:
+      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, puis lancez une analyse, ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série.',
+    noUnmatched: 'Chaque fichier est associé à un titre.',
+    shownOf: (shown: string, total: string) => `${shown} affichés sur ${total}.`,
+    reasons: {
+      unreadable_name: 'Son nom ne donne aucun titre, ou aucun numéro d’épisode',
+      not_found: 'Les addons de métadonnées ne connaissent aucun titre de ce nom',
+      ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
+      other_year: 'Les titres de ce nom sont d’autres années',
+      search_failed: 'La recherche auprès des addons de métadonnées a échoué',
+    } as Record<string, string>,
+    read: (title: string) => `Lu comme « ${title} »`,
+    showFolder: (unit: string) => `Dossier de la série : ${unit}`,
+    imdbId: 'Identifiant IMDb',
+    imdbPlaceholder: 'tt0000000',
+    link: 'Associer',
+    linkLabel: (path: string) => `Identifiant IMDb pour ${path}`,
+    linked: (unit: string, id: string) => `${unit} est associé à ${id}.`,
+    linksTitle: 'Associés à la main',
+    unlink: 'Retirer l’association',
+    unlinkLabel: (unit: string) => `Retirer l’association de ${unit}`,
+    unlinked: (unit: string) =>
+      `L’association de ${unit} a été retirée : il est à nouveau associé d’après son nom.`,
+    openPage: 'Ouvrir la page du dossier',
   },
   mySources: {
     lede: 'Ajoutez vos propres sources Stremio, Eclipse et IPTV et choisissez quels catalogues apparaissent comme bibliothèques dans vos applications Jellyfin.',

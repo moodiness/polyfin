@@ -185,7 +185,12 @@ export function SourceBrowser({
     stremio: byOwner.filter((e) => kindOf(e.addon) === 'stremio').length,
     eclipse: byOwner.filter((e) => kindOf(e.addon) === 'eclipse').length,
     iptv: byOwner.filter((e) => isIptv(e.addon)).length,
+    local: byOwner.filter((e) => kindOf(e.addon) === 'local').length,
   }
+  // Only the server has local folders: their filter shows once it has one.
+  const kindFilters = (['all', 'stremio', 'eclipse', 'iptv', 'local'] as const).filter(
+    (value) => value !== 'local' || counts.local > 0,
+  )
 
   const chosenKey = params.get('source')
   const chosen = entries.find((entry) => entry.key === chosenKey) ?? (wide ? visible[0] : undefined)
@@ -234,7 +239,7 @@ export function SourceBrowser({
             aria-label={text.kindFilter}
             className="scrollbar-none -mx-1 flex gap-1 overflow-x-auto px-1"
           >
-            {(['all', 'stremio', 'eclipse', 'iptv'] as const).map((value) => (
+            {kindFilters.map((value) => (
               <button
                 key={value}
                 type="button"

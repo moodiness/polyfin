@@ -99,6 +99,8 @@ const system = {
           `Little space left for the ${folder}: ${free} free.`,
         addon: (name: string, failure: string) => `${name}: ${failure}`,
         iptv: (name: string) => `${name}: the last channel list download failed.`,
+        folder: (name: string) =>
+          `${name}: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         task: (name: string) => `The task “${name}” failed.`,

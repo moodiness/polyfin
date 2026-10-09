@@ -1,4 +1,4 @@
-import { BroadcastIcon, MusicNotesIcon, PuzzlePieceIcon } from '@phosphor-icons/react'
+import { BroadcastIcon, FolderIcon, MusicNotesIcon, PuzzlePieceIcon } from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { installAddon, queryClient, queryKeys, type Addon, type Scope } from '@/api'
@@ -6,13 +6,15 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Button, Modal, Field, Segmented, TextInput, useToast } from '@/ui'
 import { addedParts, IptvAddFlow } from './IptvForms'
+import { LocalFolderAddForm } from './LocalFolders'
 import { invalidateScope } from './model'
 
-type AddKind = 'stremio' | 'music' | 'iptv'
+type AddKind = 'stremio' | 'music' | 'iptv' | 'local'
 
 /**
  * The "Add a source" panel: a Stremio or music addon from its manifest address (the server tells
- * which it is), or an IPTV source in two steps. `onAdded` receives the new source, to select it.
+ * which it is), an IPTV source in two steps, or, for the server, a local folder. `onAdded`
+ * receives the new source, to select it.
  */
 export function AddSourceModal({
   scope,
@@ -50,10 +52,16 @@ export function AddSourceModal({
             { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
             { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
             { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
+            // Local folders are the server's: a member's own sources have none.
+            ...(scope === 'shared'
+              ? [{ value: 'local' as const, label: text.kinds.local, icon: FolderIcon }]
+              : []),
           ]}
           className="self-start max-sm:self-stretch"
         />
-        {kind === 'iptv' ? (
+        {kind === 'local' ? (
+          <LocalFolderAddForm onAdded={(added) => done(added, t.localFolders.added(added.name))} />
+        ) : kind === 'iptv' ? (
           <IptvAddFlow
             scope={scope}
             onAdded={(added) =>

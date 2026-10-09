@@ -374,6 +374,20 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
           className="max-w-[10rem]"
         />
       </FieldRow>
+      <FieldRow
+        anchor="local-scan-hours"
+        label={s.localScanHours}
+        help={s.localScanHoursHelp(range('localScanHours'))}
+        error={error('local-scan-hours')}
+      >
+        <NumberInput
+          {...limits('localScanHours')}
+          step={1}
+          {...number('local-scan-hours', form.localScanHours, (value) =>
+            update({ localScanHours: Math.trunc(value) }),
+          )}
+        />
+      </FieldRow>
     </SettingsGroup>
   )
 }

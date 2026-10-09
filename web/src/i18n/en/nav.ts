@@ -70,6 +70,7 @@ const nav = {
       stremio: 'Stremio addon',
       eclipse: 'Eclipse addon',
       iptv: 'IPTV source',
+      local: 'Local folder',
     },
     /** A user's own source, as the palette describes it: "IPTV source of sam". */
     ownedBy: (kind: string, owner: string) => `${kind} of ${owner}`,
