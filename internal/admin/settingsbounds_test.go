@@ -44,7 +44,7 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	if got := entry("segmentOrder"); !reflect.DeepEqual(got["default"], []any{"theintrodb", "introdb", "publicmetadb"}) {
 		t.Errorf("segmentOrder: %v", got)
 	}
-	if got := entry("customCss"); got["max"] != float64(accounts.MaxCustomCodeBytes) || got["default"] != "" {
+	if got := entry("customCss"); got["max"] != float64(accounts.MaxCustomCodeBytes) {
 		t.Errorf("customCss: %v", got)
 	}
 	// Every setting a PUT saves has bounds, and every bounds a setting;

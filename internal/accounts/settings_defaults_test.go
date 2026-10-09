@@ -3,6 +3,7 @@ package accounts
 import (
 	"errors"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -28,6 +29,18 @@ func TestDefaultSettingsAreTheColumnDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(columns, DefaultSettings()) {
 		t.Errorf("the column defaults:\n%+v\nwant\n%+v", columns, DefaultSettings())
+	}
+}
+
+// The web player's default CSS and script load the theme from one pinned
+// commit: a branch would change every server's theme behind its back, and
+// two commits would mix versions of its stylesheet and its script.
+func TestDefaultThemeIsPinnedToOneCommit(t *testing.T) {
+	pin := regexp.MustCompile(`/LumaaGlaass@([^/]+)/assets/`)
+	css, js := pin.FindAllStringSubmatch(DefaultCustomCss, -1), pin.FindAllStringSubmatch(DefaultCustomJs, -1)
+	commit := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	if len(css) != 1 || len(js) != 1 || css[0][1] != js[0][1] || !commit.MatchString(css[0][1]) {
+		t.Errorf("the theme's pins: stylesheet %q, script %q", css, js)
 	}
 }
 

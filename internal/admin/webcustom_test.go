@@ -9,14 +9,15 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// The web player's CSS, script and sign-in disclaimer: empty by default,
-// kept when a PUT leaves them out, bounded, and set by administrators only.
+// The web player's CSS, script and sign-in disclaimer: kept when a PUT
+// leaves them out, bounded, and set by administrators only. The disclaimer
+// is empty by default.
 func TestSettingsWebPlayerCode(t *testing.T) {
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["customCss"] != "" || body["customJs"] != "" || body["loginDisclaimer"] != "" {
-		t.Errorf("defaults: %v %v %v", body["customCss"], body["customJs"], body["loginDisclaimer"])
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["loginDisclaimer"] != "" {
+		t.Errorf("default disclaimer: %v", body["loginDisclaimer"])
 	}
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
 	set := maps.Clone(base)

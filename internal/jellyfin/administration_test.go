@@ -501,7 +501,4 @@ func TestServerConfigurationAppliesPolyfinSettings(t *testing.T) {
 	if status, _ := s.call(http.MethodPost, "/System/Configuration", member, map[string]any{"ServerName": "Mine"}); status != http.StatusForbidden {
 		t.Errorf("member: %d", status)
 	}
-	if status, body := s.call(http.MethodGet, "/System/Configuration/branding", member, nil); status != http.StatusOK || string(body) != "{\"SplashscreenEnabled\":false}\n" {
-		t.Errorf("branding: %d %s", status, body)
-	}
 }

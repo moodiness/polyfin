@@ -2,6 +2,34 @@ package accounts
 
 import "slices"
 
+// DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
+// script on a new server: they load the LumaaGlaass theme from jsDelivr at a
+// pinned commit of its repository, with its settings page for each user.
+// Moving to another commit takes both, and a migration replacing the column
+// defaults and the values still equal to these.
+const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@f1afec5e4b924ef26553056e88688bdeba3fafca/assets/lumaaglaass.css');`
+
+const DefaultCustomJs = `(() => {
+    window.LumaaGlaassOptions = {
+        preferences: true,
+        homeCarousel: true,
+        collectionFilter: true
+    };
+
+    const id = 'lg-script';
+    if (document.getElementById(id)) return;
+
+    const script = document.createElement('script');
+    script.id = id;
+    script.src = 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@f1afec5e4b924ef26553056e88688bdeba3fafca/assets/lumaaglaass.js';
+    script.onerror = () => {
+        script.remove();
+        console.error('LumaaGlaass could not be loaded.');
+    };
+
+    document.head.appendChild(script);
+})();`
+
 // DefaultSettings are the settings of a new server, those the columns of
 // the settings default to: changing a default takes this and a migration
 // setting the column's.
@@ -59,6 +87,9 @@ func DefaultSettings() Settings {
 		RecordingPostPadding:   DefaultRecordingPostPadding,
 		RecordingRetentionDays: DefaultRecordingRetentionDays,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
+
+		CustomCss: DefaultCustomCss,
+		CustomJs:  DefaultCustomJs,
 
 		BackupHour:         DefaultBackupHour,
 		BackupsKept:        DefaultBackupsKept,
