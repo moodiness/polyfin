@@ -17,7 +17,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 |---|---|
 | [Addons and libraries](addons-and-libraries.md) | Stremio and music addons, libraries, song lyrics, catalog limits, collections, people, similar titles, artwork, and editing items |
 | [Live TV](live-tv.md) | Channels from addons, programme guides (Native EPG and XMLTV), and recordings |
-| [IPTV](iptv.md) | M3U and Xtream Codes sources, the line-up page, and IPTV movies and series |
+| [IPTV](iptv.md) | M3U and Xtream Codes sources, the line-up page, Replay of the providers' archives, and IPTV movies and series |
 
 ## Watching
 

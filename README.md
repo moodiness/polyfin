@@ -16,7 +16,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): a short tour, a v
 
 - **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.2 API.
 - **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
-- **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV movies and series become libraries.
+- **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV providers' archives of past programmes play from a Replay view. IPTV movies and series become libraries.
 - **Music, audiobooks and podcasts:** Eclipse music addons install like Stremio addons and become music and books libraries. Tracks play as they are, or are converted when the app needs it.
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapping.
 - **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
