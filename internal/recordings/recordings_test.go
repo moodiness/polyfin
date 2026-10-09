@@ -57,6 +57,8 @@ type fixture struct {
 	// folder is the recordings folder the service is given, f.dir at
 	// first; empty turns recording off.
 	folder *atomic.Pointer[string]
+	// ended are the recordings the service told ended.
+	ended *[]Ended
 }
 
 func newFixture(t *testing.T) fixture {
@@ -73,10 +75,10 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{store: store, guide: &guide{}, user: user, dir: t.TempDir(), folder: &atomic.Pointer[string]{}}
+	f := fixture{store: store, guide: &guide{}, user: user, dir: t.TempDir(), folder: &atomic.Pointer[string]{}, ended: &[]Ended{}}
 	f.folder.Store(&f.dir)
 	f.service = New(Config{DB: pool, Folder: func() string { return *f.folder.Load() }, Guide: f.guide, Recorder: recorder{}, Users: store,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Ended: func(_ context.Context, e Ended) { *f.ended = append(*f.ended, e) }})
 	return f
 }
 
@@ -238,6 +240,19 @@ func TestRestartKeepsInterruptedRecordingsAsPartial(t *testing.T) {
 	}
 	if _, err := f.service.Recording(ctx, recorded[1].ID); err != ErrNotFound {
 		t.Errorf("a recording that wrote nothing: %v", err)
+	}
+	// Both are told ended, for notifications: the one that wrote nothing
+	// as failed, with whose and which programme each was.
+	told := map[string]Ended{}
+	for _, e := range *f.ended {
+		told[e.Name] = e
+	}
+	if e := told["Airing"]; len(*f.ended) != 2 || e.Recording != recorded[0].ID || e.Failed || !e.Partial || e.User == nil || *e.User != f.user.ID ||
+		e.Channel != id(t, channelX) || !e.Start.Equal(airing.StartDate.Truncate(time.Microsecond)) {
+		t.Errorf("ended: %+v", *f.ended)
+	}
+	if e := told["Ended"]; e.Recording != recorded[1].ID || !e.Failed || e.User == nil || *e.User != f.user.ID {
+		t.Errorf("failed: %+v", e)
 	}
 	timers, err := f.service.Timers(ctx)
 	if err != nil {

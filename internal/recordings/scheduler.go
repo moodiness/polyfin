@@ -86,6 +86,22 @@ type Config struct {
 	Logger   *slog.Logger
 	// RetryDelay replaces retryDelay when set.
 	RetryDelay time.Duration
+	// Ended is told of each recording that ended, finished or failed; nil
+	// tells no one. It must not block.
+	Ended func(context.Context, Ended)
+}
+
+// Ended is a recording that ended: finished, with its file, partial when
+// part of its programme is missing, or failed, having recorded nothing.
+// User is the user who made its timer, nil once deleted.
+type Ended struct {
+	Recording  accounts.ID
+	User       *accounts.ID
+	Channel    accounts.ID
+	Name       string
+	Start, End time.Time
+	Partial    bool
+	Failed     bool
 }
 
 // Service keeps timers, series timers and recordings, and records.
@@ -98,6 +114,7 @@ type Service struct {
 	logger   *slog.Logger
 	retry    time.Duration
 	now      func() time.Time
+	ended    func(context.Context, Ended)
 
 	wake chan struct{}
 	wg   sync.WaitGroup
@@ -130,7 +147,7 @@ var errStopped = errors.New("the recording was stopped")
 // New returns the recordings service.
 func New(c Config) *Service {
 	s := &Service{db: c.DB, folder: c.Folder, guide: c.Guide, recorder: c.Recorder, users: c.Users, logger: c.Logger,
-		retry: retryDelay, now: time.Now, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}, skipped: map[accounts.ID]bool{}}
+		retry: retryDelay, now: time.Now, ended: c.Ended, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}, skipped: map[accounts.ID]bool{}}
 	if s.folder == nil {
 		s.folder = func() string { return "" }
 	}
@@ -402,14 +419,18 @@ func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until 
 	if len(parts) == 0 {
 		s.logger.Warn("A recording wrote nothing", "recording", id.String())
 		var timer *accounts.ID
-		if err := s.db.QueryRow(ctx, "DELETE FROM live_recordings WHERE id = $1 RETURNING timer_id", id).Scan(&timer); err != nil {
+		ended := Ended{Recording: id, Failed: true}
+		if err := s.db.QueryRow(ctx, "DELETE FROM live_recordings WHERE id = $1 RETURNING timer_id, user_id, channel_id, name, start_at, end_at", id).
+			Scan(&timer, &ended.User, &ended.Channel, &ended.Name, &ended.Start, &ended.End); err != nil {
 			s.logger.Warn("An empty recording could not be deleted", "error", err)
+			return
 		}
 		if timer != nil {
 			if _, err := s.db.Exec(ctx, "UPDATE live_timers SET status = 'Error' WHERE id = $1 AND status = 'InProgress'", *timer); err != nil {
 				s.logger.Warn("A failed timer could not be marked", "error", err)
 			}
 		}
+		s.tell(ctx, ended)
 		return
 	}
 	if info, err := os.Stat(parts[len(parts)-1]); err == nil && info.ModTime().Before(until.Add(-lateStop)) {
@@ -426,8 +447,11 @@ func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until 
 		partial = partial || len(parts) > 1
 	}
 	var timer, series *accounts.ID
+	ended := Ended{Recording: id, Partial: partial}
 	err := s.db.QueryRow(ctx, `UPDATE live_recordings SET status = 'Completed', ended_at = $2, partial = $3, file = $4, size = $5
-		WHERE id = $1 RETURNING timer_id, series_timer_id`, id, s.now(), partial, file, size(filepath.Join(dir, file))).Scan(&timer, &series)
+		WHERE id = $1 RETURNING timer_id, series_timer_id, user_id, channel_id, name, start_at, end_at`,
+		id, s.now(), partial, file, size(filepath.Join(dir, file))).
+		Scan(&timer, &series, &ended.User, &ended.Channel, &ended.Name, &ended.Start, &ended.End)
 	for _, part := range parts {
 		_ = os.Remove(part)
 	}
@@ -448,6 +472,14 @@ func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until 
 	}
 	if series != nil {
 		s.keepUpTo(ctx, *series)
+	}
+	s.tell(ctx, ended)
+}
+
+// tell tells Config.Ended, if any, that a recording ended.
+func (s *Service) tell(ctx context.Context, ended Ended) {
+	if s.ended != nil {
+		s.ended(ctx, ended)
 	}
 }
 
