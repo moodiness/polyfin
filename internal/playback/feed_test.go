@@ -36,6 +36,11 @@ type liveSource struct {
 	// closing, when set, holds each stream's connection, its request
 	// ended, until it is closed in turn: a connection slow to close.
 	closing chan struct{}
+	// more paces the streams of "paced" addresses: each sends enough at
+	// once for readers to start, then as many chunks as each value on
+	// more asks for, telling sent once they were read, and nothing else.
+	more chan int
+	sent chan struct{}
 
 	mu     sync.Mutex
 	open   int
@@ -72,6 +77,8 @@ func (l *liveSource) Open(ctx context.Context, _, target string, _ http.Header, 
 		return l.stream(ctx, 64), nil
 	case strings.HasPrefix(name, "reset"):
 		return answer(http.StatusOK, "video/mp2t", io.MultiReader(bytes.NewReader(bytes.Repeat(tsChunk, 4)), failing{})), nil
+	case strings.HasPrefix(name, "paced"):
+		return l.paced(ctx), nil
 	default:
 		return l.stream(ctx, -1), nil
 	}
@@ -116,6 +123,40 @@ func (l *liveSource) stream(ctx context.Context, chunks int) *http.Response {
 	}}
 	context.AfterFunc(ctx, func() { _ = body.Close() })
 	return answer(http.StatusOK, "video/mp2t", body)
+}
+
+// paced answers an MPEG-TS stream the test paces (see liveSource.more),
+// open until its request ends.
+func (l *liveSource) paced(ctx context.Context) *http.Response {
+	reader, writer := io.Pipe()
+	go func() {
+		defer writer.Close()
+		send := func(chunks int) bool {
+			for range chunks {
+				if _, err := writer.Write(tsChunk); err != nil {
+					return false
+				}
+			}
+			return true
+		}
+		// Readers start without a keyframe once that much came.
+		if !send(keyframeWait/len(tsChunk) + 1) {
+			return
+		}
+		for {
+			select {
+			case chunks := <-l.more:
+				if !send(chunks) {
+					return
+				}
+				l.sent <- struct{}{}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	context.AfterFunc(ctx, func() { _ = reader.Close() })
+	return answer(http.StatusOK, "video/mp2t", reader)
 }
 
 // countedBody stops counting its connection when closed, then closes it:
@@ -281,19 +322,30 @@ func TestStalledAndCutStreamsEndTheirFeed(t *testing.T) {
 }
 
 // A reader that falls further behind than the feed keeps is dropped; the
-// others read on.
+// others read on. The source moves on only when the test says, so neither
+// reader's speed matters.
 func TestSlowReadersAreDropped(t *testing.T) {
-	s := liveService(t, &liveSource{}, "ffprobe-not-installed")
-	version := channelVersion(1, "1.ts", accounts.ID{})
+	src := &liveSource{more: make(chan int), sent: make(chan struct{})}
+	s := liveService(t, src, "ffprobe-not-installed")
+	// The source pauses as long as the test takes between what it sends.
+	s.feeds.times.stall = time.Minute
+	version := channelVersion(1, "paced.ts", accounts.ID{})
 	slow, err := s.openFeed(t.Context(), version)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The slow reader starts at the stream's start, then stops reading.
+	if _, err := slow.Read(make([]byte, tsPacket)); err != nil {
+		t.Fatalf("the slow reader's start: %v", err)
 	}
 	fast, err := s.openFeed(t.Context(), version)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := io.CopyN(io.Discard, fast, 3*feedBuffer); err != nil {
+	// The stream moves on by more than the feed keeps.
+	src.more <- feedBuffer/len(tsChunk) + 1
+	<-src.sent
+	if _, err := io.CopyN(io.Discard, fast, feedJoin/2); err != nil {
 		t.Fatalf("the fast reader: %v", err)
 	}
 	if _, err := io.ReadAll(slow); !errors.Is(err, ErrSlowReader) {
