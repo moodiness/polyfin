@@ -211,12 +211,15 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 }
 
 // userViews describes the views user sees, in the order apps list them:
-// their libraries and Polyfin's Live TV, Playlists and Collections views,
-// those they hide included when includeHidden is set.
+// their libraries and Polyfin's Live TV, Replay, Playlists and Collections
+// views, those they hide included when includeHidden is set.
 func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden bool) ([]BaseItemDto, error) {
 	items, err := h.libraryViews(r, user)
 	if err == nil {
 		items, err = h.addLiveTvView(r, user, items)
+	}
+	if err == nil {
+		items, err = h.addReplayView(r, user, items)
 	}
 	if err == nil {
 		items, err = h.addPlaylistsView(r, user, items)
@@ -246,8 +249,8 @@ type MenuView struct {
 
 // menuViews answers /Polyfin/UserViews: the views /UserViews lists the
 // caller, in the same order, each with whether the web player's menus
-// leave it out. Polyfin's own Live TV, Playlists and Collections views
-// never are.
+// leave it out. Polyfin's own Live TV, Replay, Playlists and Collections
+// views never are.
 func (h *Handler) menuViews(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	views, err := h.userViews(r, user, false)

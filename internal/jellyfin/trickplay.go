@@ -107,9 +107,11 @@ func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item
 // images of the version a playback on device started with, when the
 // settings turn them on: they are made once it stopped.
 func (h *Handler) queueImages(ctx context.Context, user accounts.User, device accounts.ID, item library.Item, mediaSource string) {
-	// Recordings are Polyfin's own files, which may be deleted at any time:
-	// they get no thumbnails or chapter images.
-	if h.Thumbnails == nil || item.Kind == library.KindRecording {
+	// Recordings are Polyfin's own files, which may be deleted at any time;
+	// a replay's file would take one of its provider's connections for
+	// the length of the programme: neither gets thumbnails or chapter
+	// images.
+	if h.Thumbnails == nil || item.Kind == library.KindRecording || item.Kind == library.KindReplay {
 		return
 	}
 	if settings := h.Accounts.Settings(); !settings.Trickplay && !settings.ChapterImages {

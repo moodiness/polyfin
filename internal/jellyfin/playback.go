@@ -201,9 +201,9 @@ func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts
 	return item, err
 }
 
-// played resolves what a player opens: a movie, an episode, a channel, a
-// recording, a track or an audiobook, by its own identifier or by one of
-// its versions'.
+// played resolves what a player opens: a movie, an episode, a replay, a
+// channel, a recording, a track or an audiobook, by its own identifier or
+// by one of its versions'.
 func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
@@ -217,7 +217,7 @@ func (h *Handler) played(ctx context.Context, user accounts.User, opened account
 		return library.Item{}, err
 	}
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindChannel, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook:
 		return item, nil
 	}
 	return library.Item{}, library.ErrNotFound
@@ -327,6 +327,17 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.browseError(w, r, err)
 		return
+	}
+	// A replay takes one of its provider's connections from now, as a
+	// channel does when it plays: with none free, no stream suits.
+	for _, version := range p.versions {
+		release, err := h.Playback.Hold(playback.ForUser(r.Context(), user.ID), version)
+		if err != nil {
+			h.Logger.Info("A replay could not play: its provider's connections are all in use", "addon", version.Addon)
+			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
+			return
+		}
+		defer release()
 	}
 	settings := h.Accounts.Settings()
 	// The title's own identifier names no version in particular: Jellyfin

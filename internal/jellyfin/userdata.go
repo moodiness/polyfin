@@ -106,7 +106,7 @@ func (s userState) of(item library.Item) UserItemData {
 	data := s.data[item.ID]
 	result.IsFavorite, result.Rating, result.Likes = data.Favorite, data.Rating, data.Likes()
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook:
 		result.PlaybackPositionTicks = int64(data.Position / 100)
 		result.PlayCount = data.PlayCount
 		result.Played = data.Played
@@ -267,7 +267,7 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 	var episodes []library.Item
 	var err error
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook:
 		return []library.Item{item}, nil
 	case library.KindAlbum, library.KindMusicPlaylist:
 		// As Jellyfin marks a folder's tracks.
