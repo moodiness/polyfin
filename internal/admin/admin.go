@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
@@ -104,6 +105,9 @@ type Options struct {
 	// Backups backs the database up into the folder the settings give
 	// while backups are on; nil makes none.
 	Backups *backup.Service
+	// JellyfinImport imports users and their watch data from Jellyfin
+	// servers; nil offers no import.
+	JellyfinImport *jellyfinimport.Service
 }
 
 type handler struct {
@@ -154,6 +158,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 	mux.Handle("POST /admin/api/users/downloads/off", h.administrator(h.turnOffDownloads))
+	mux.Handle("GET /admin/api/jellyfin-import", h.administrator(h.jellyfinImport))
+	mux.Handle("POST /admin/api/jellyfin-import", h.administrator(h.startJellyfinImport))
+	mux.Handle("POST /admin/api/jellyfin-import/users", h.administrator(h.jellyfinImportUsers))
+	mux.Handle("POST /admin/api/jellyfin-import/stop", h.administrator(h.stopJellyfinImport))
 	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
 	mux.Handle("GET /admin/api/api-keys", h.administrator(h.apiKeys))
 	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
