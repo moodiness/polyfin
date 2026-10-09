@@ -99,6 +99,8 @@ type Service struct {
 	guideDir string
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
+	// local answers for Polyfin's own local folders (see UseLocal).
+	local Local
 
 	// music asks Eclipse addons for their resources, which musicCache
 	// keeps (see musicCaches).
@@ -130,6 +132,23 @@ type IPTV interface {
 // UseIPTV sets what answers for IPTV sources; it is called before the
 // service is used. Without it, IPTV sources list nothing.
 func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
+
+// Local answers, for Polyfin's own local folders, the catalog, meta and
+// stream requests addons answer over HTTP (see package localfiles).
+type Local interface {
+	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
+	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
+	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
+}
+
+// UseLocal sets what answers for local folders; it is called before the
+// service is used. Without it, local folders list nothing.
+func (s *Service) UseLocal(local Local) { s.local = local }
+
+// own reports whether an addon is one of Polyfin's own sources, an IPTV
+// source or a local folder, whose answers are read from the database:
+// they ask no addon, and are not kept.
+func own(addon addons.Addon) bool { return addon.IPTV() || addon.Local() }
 
 type pageKey struct {
 	addon       accounts.ID
@@ -268,14 +287,15 @@ type view struct {
 // channel limit for a live TV catalog, else the maximum of the library it
 // lists for, lower or higher than the catalog limit, else the catalog
 // limit. Some catalogs are nearly endless; an IPTV source's movies and
-// series are a stored list, read whole unless the library has a maximum.
+// series, and a local folder's titles, are a stored list, read whole unless
+// the library has a maximum.
 func (v view) limit(src source) int {
 	switch {
 	case LiveCatalog(src.catalog.Type):
 		return v.channelLimit
 	case src.max > 0:
 		return src.max
-	case src.addon.addon.IPTV():
+	case own(src.addon.addon):
 		return math.MaxInt32
 	}
 	return v.catalogLimit
@@ -975,7 +995,7 @@ const prefetchLimit = 2
 // for a user whose listings wait for ratings, nor from an addon whose last
 // request failed, which would only be asked more.
 func (s *Service) prefetch(ctx context.Context, v view, addon installed, read func(context.Context)) {
-	if !s.readAhead || v.restricted() || keptOnly(ctx) || whole(ctx) || addon.addon.IPTV() {
+	if !s.readAhead || v.restricted() || keptOnly(ctx) || whole(ctx) || own(addon.addon) {
 		return
 	}
 	if health, ok := s.client.Health(addon.addon.ManifestURL); ok && health.Failure != "" {
@@ -1299,13 +1319,18 @@ func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent a
 	return WholeListing, false, nil
 }
 
-// fetchMeta asks an addon, or an IPTV source, for its description of a
-// title.
+// fetchMeta asks an addon, an IPTV source or a local folder for its
+// description of a title.
 func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
-	if addon.addon.Stremio() {
+	switch {
+	case addon.addon.Stremio():
 		return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
-	}
-	if s.iptv == nil {
+	case addon.addon.Local():
+		if s.local == nil {
+			return stremio.Meta{}, stremio.ErrNotFound
+		}
+		return s.local.Meta(ctx, addon.addon.ID, id)
+	case s.iptv == nil:
 		return stremio.Meta{}, stremio.ErrNotFound
 	}
 	return s.iptv.Meta(ctx, addon.addon.ID, id)
@@ -1319,8 +1344,10 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 
 // describe finds the complete description of a title among the user's
 // addons, the server's only when shared is set, starting with the one that
-// listed it. A description from one of the server's addons gives the
-// rating kept for the title.
+// listed it. A local folder comes last, whoever listed the title: it
+// describes its titles from what their files tell, for when no addon does.
+// A description from one of the server's addons gives the rating kept for
+// the title.
 func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (stremio.Meta, bool) {
 	if r.Meta == nil {
 		return stremio.Meta{}, false
@@ -1337,6 +1364,15 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 			return 0
 		})
 	}
+	slices.SortStableFunc(candidates, func(a, b installed) int {
+		switch {
+		case a.addon.Local() == b.addon.Local():
+			return 0
+		case b.addon.Local():
+			return -1
+		}
+		return 1
+	})
 	for _, candidate := range candidates {
 		if shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			continue
@@ -1347,12 +1383,33 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 			if candidate.addon.IPTV() {
 				meta = s.enrich(ctx, v, candidate, meta, shared)
 			}
-			if candidate.shared {
+			if candidate.shared && !candidate.addon.Local() {
 				s.learnTraits(ctx, r, meta, kept.at)
 			}
 			return meta, true
 		}
 		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+	}
+	return stremio.Meta{}, false
+}
+
+// TitleMeta returns the description the server's addons give of a title by
+// its Stremio type and identifier, from the first of them that describes
+// it, Polyfin's own sources left out: local folders name the files linked
+// to a title after it.
+func (s *Service) TitleMeta(ctx context.Context, metaType, id string) (stremio.Meta, bool) {
+	// A view without a user is the server's addons'.
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil {
+		return stremio.Meta{}, false
+	}
+	for _, candidate := range v.addons {
+		if own(candidate.addon) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
+			continue
+		}
+		if kept, err := s.keptMeta(ctx, candidate, metaType, id); err == nil {
+			return kept.value, true
+		}
 	}
 	return stremio.Meta{}, false
 }

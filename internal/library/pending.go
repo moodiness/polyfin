@@ -146,8 +146,9 @@ func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.
 		s.versions.Delete(version.ID)
 	}
 	for _, entry := range serving {
-		// An IPTV source's streams are Polyfin's own, never kept.
-		if !entry.addon.IPTV() {
+		// An IPTV source's or a local folder's streams are Polyfin's own,
+		// never kept.
+		if !own(entry.addon) {
 			s.forgetStreams(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
 		}
 	}

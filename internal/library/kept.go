@@ -168,6 +168,13 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 		}
 		return s.iptv.Channels(ctx, src.addon.addon.ID)
 	}
+	// A local folder's catalog reads its titles from its stored files.
+	if src.addon.addon.Local() {
+		if s.local == nil || src.date != "" || src.genre != "" {
+			return nil, nil
+		}
+		return s.local.Catalog(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, skip, src.search)
+	}
 	key := src.key(skip)
 	if kept, ok := s.pagesOf(key).Get(key); ok {
 		if key.search == "" && !kept.fresh(s.now(), s.catalogLife()) {
@@ -340,8 +347,9 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 func (s *Service) keptMeta(ctx context.Context, addon installed, metaType, id string) (fetched[stremio.Meta], error) {
 	// An IPTV source describes its titles from its database, with details
 	// once a title was opened: it is not cached here, lest a listing's
-	// description hide the details.
-	if addon.addon.IPTV() {
+	// description hide the details. A local folder describes its titles
+	// from its database too.
+	if own(addon.addon) {
 		meta, err := s.fetchMeta(ctx, addon, metaType, id)
 		return fetched[stremio.Meta]{meta, s.now()}, err
 	}
