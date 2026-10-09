@@ -11,6 +11,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/lyrics"
 )
 
 // The music of Eclipse addons reaches Jellyfin apps as Jellyfin's music
@@ -54,9 +55,10 @@ func creditNames(list []library.Credit) *[]string {
 }
 
 // describeMusic adds to a DTO what describes music: a song's album and
-// artists, an album's artists and, in its details, its tracks and length,
-// as Jellyfin's do; an artist's details count their albums.
-func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
+// artists, and whether it has lyrics, an album's artists and, in its
+// details, its tracks and length, as Jellyfin's do; an artist's details
+// count their albums.
+func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail, hasLyrics bool) {
 	if !library.MusicKind(item.Kind) {
 		return
 	}
@@ -71,7 +73,7 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail 
 	}
 	switch item.Kind {
 	case library.KindTrack, library.KindAudiobook:
-		dto.HasLyrics = new(false)
+		dto.HasLyrics = new(hasLyrics)
 		if dto.Container == "" && item.Kind == library.KindTrack {
 			// Until its stream is described: the format its addon labels it with.
 			dto.Container = audioContainer(item.Container, "")
@@ -433,14 +435,120 @@ func (h *Handler) instantMix(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: total})
 }
 
-// lyrics answers as Jellyfin does for a track without lyrics, which every
-// track of a music addon is: addons give none.
-func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
-	notFoundProblem(w)
+// lyricsWait is how long a request for a track's lyrics waits for LRCLIB,
+// when the track was never looked up; detailsWait, how long a track's
+// details wait for it, so that they tell whether it has lyrics. An answer
+// that comes later serves the next request.
+const (
+	lyricsWait  = 5 * time.Second
+	detailsWait = time.Second
+)
+
+// LyricDto is a track's lyrics as Jellyfin answers them: each line with
+// its start when synced (LRC), without when plain.
+type LyricDto struct {
+	Metadata LyricMetadata
+	Lyrics   []LyricLine
 }
 
-// remoteLyrics answers a lyrics search: Polyfin has no lyrics provider,
-// as a Jellyfin server without a lyrics plugin.
+// LyricMetadata describes lyrics. Jellyfin reads it from the tags of LRC
+// files; Polyfin fills it from the track.
+type LyricMetadata struct {
+	Artist   string `json:",omitempty"`
+	Album    string `json:",omitempty"`
+	Title    string `json:",omitempty"`
+	Length   *int64 `json:",omitempty"`
+	IsSynced *bool  `json:",omitempty"`
+}
+
+// LyricLine is a line of lyrics. Start, in ticks, is only on synced lines,
+// which apps tell synced lyrics by; Cues, the timing of words within the
+// line, is empty on them, as Jellyfin gives it for LRC without word timing,
+// and missing from plain lines, as for Jellyfin's text lyrics.
+type LyricLine struct {
+	Text  string
+	Start *int64      `json:",omitempty"`
+	Cues  *[]LyricCue `json:",omitempty"`
+}
+
+// LyricCue is the timing of a word of a line, which Polyfin never has.
+type LyricCue struct {
+	Position, EndPosition int
+	Start                 int64
+	End                   *int64 `json:",omitempty"`
+}
+
+// lyricsTrack is what LRCLIB is asked about a music track: its artist,
+// title, album and length. Only songs have lyrics: audiobooks, as on
+// Jellyfin, have none.
+func lyricsTrack(item library.Item) (lyrics.Track, bool) {
+	if item.Kind != library.KindTrack {
+		return lyrics.Track{}, false
+	}
+	track := lyrics.Track{ID: item.ID, Title: item.Name, Album: item.Album, Duration: item.Runtime}
+	if len(item.Artists) > 0 {
+		track.Artist = item.Artists[0].Name
+	} else if item.AlbumArtist != nil {
+		track.Artist = item.AlbumArtist.Name
+	}
+	return track, true
+}
+
+// lookUpLyrics asks LRCLIB about a track played, in the background, so
+// that its lyrics are known when an app asks for them.
+func (h *Handler) lookUpLyrics(item library.Item) {
+	if track, ok := lyricsTrack(item); ok {
+		h.Lyrics.LookUp(track)
+	}
+}
+
+// lyrics answers a track's lyrics, from LRCLIB (see lyrics.Service), as
+// Jellyfin answers those of a track with an LRC or text file: synced line
+// by line when LRCLIB has them, plain otherwise. A track without lyrics,
+// an instrumental, one LRCLIB does not know, and every track while lyrics
+// are turned off, answers as Jellyfin does without lyrics. A track never
+// looked up is looked up now, waited for lyricsWait at most.
+func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
+	b := bindErrors{}
+	id := b.pathID(r, "itemId")
+	user, ok := h.viewer(w, r, b, notFoundProblem)
+	if !ok {
+		return
+	}
+	item, err := h.Library.Item(r.Context(), user, id)
+	if err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	track, ok := lyricsTrack(item)
+	if !ok {
+		notFoundProblem(w)
+		return
+	}
+	found, ok := h.Lyrics.Lyrics(r.Context(), track, lyricsWait)
+	if !ok {
+		notFoundProblem(w)
+		return
+	}
+	dto := LyricDto{
+		Metadata: LyricMetadata{Artist: track.Artist, Album: track.Album, Title: track.Title, IsSynced: new(found.Synced)},
+		Lyrics:   make([]LyricLine, 0, len(found.Lines)),
+	}
+	if item.Runtime > 0 {
+		dto.Metadata.Length = new(int64(item.Runtime / 100))
+	}
+	for _, line := range found.Lines {
+		l := LyricLine{Text: line.Text}
+		if found.Synced {
+			l.Start, l.Cues = new(int64(line.Start/100)), &[]LyricCue{}
+		}
+		dto.Lyrics = append(dto.Lyrics, l)
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// remoteLyrics answers a lyrics search, which lists none: Polyfin serves
+// the lyrics LRCLIB has without a search to choose them from.
 func (h *Handler) remoteLyrics(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")

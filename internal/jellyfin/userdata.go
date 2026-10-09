@@ -42,7 +42,8 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
 }
 
-// userState is what a user did with the items of one response.
+// userState is what a user did with the items of one response, and what
+// is known of its songs' lyrics.
 type userState struct {
 	data map[accounts.ID]userdata.Data
 	// counts are the played and resumable episodes under series and
@@ -51,16 +52,23 @@ type userState struct {
 	// contents describes the episodes of series listed without them that
 	// the user started, so that their progress shows.
 	contents map[accounts.ID]*library.Contents
+	// lyrics holds the songs known to have lyrics (see lyrics.Known):
+	// listings never look songs up.
+	lyrics map[accounts.ID]bool
 }
 
-// userState loads what user did with items.
+// userState loads what user did with items, and which of its songs have
+// lyrics.
 func (h *Handler) userState(ctx context.Context, user accounts.User, items []library.Item) (userState, error) {
 	ids := make([]accounts.ID, 0, len(items))
-	var parents []accounts.ID
+	var parents, songs []accounts.ID
 	for _, item := range items {
 		ids = append(ids, item.ID)
 		if item.Kind == library.KindSeries || item.Kind == library.KindSeason {
 			parents = append(parents, item.ID)
+		}
+		if item.Kind == library.KindTrack {
+			songs = append(songs, item.ID)
 		}
 	}
 	data, err := h.UserData.Get(ctx, user.ID, ids)
@@ -71,7 +79,7 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 	if err != nil {
 		return userState{}, err
 	}
-	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}}
+	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs)}
 	var incomplete []accounts.ID
 	for _, item := range items {
 		if item.Kind == library.KindSeries && item.Contents == nil && counts[item.ID].Played > 0 {
@@ -452,6 +460,9 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	}
 	if audio && event == playbackStarted {
 		h.prepareNextTrack(user, item, state)
+		// A song played is looked up once, so that its lyrics are there
+		// when the app asks.
+		h.lookUpLyrics(item)
 	}
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()

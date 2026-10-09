@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
@@ -61,6 +62,8 @@ type Options struct {
 	Segments *mediasegments.Service
 	// RemuxDB describes the versions not analyzed yet; nil describes none.
 	RemuxDB *remuxdb.Service
+	// Lyrics finds songs' lyrics on LRCLIB; nil finds none.
+	Lyrics *lyrics.Service
 	// Playlists stores the playlists users make.
 	Playlists *playlists.Store
 	// Collections stores the collections users make.

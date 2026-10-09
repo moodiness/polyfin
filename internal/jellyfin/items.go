@@ -491,7 +491,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		}
 	}
 	describeLive(&dto, item, fields, detail)
-	describeMusic(&dto, item, fields, detail)
+	describeMusic(&dto, item, fields, detail, state.lyrics[item.ID])
 	return dto
 }
 

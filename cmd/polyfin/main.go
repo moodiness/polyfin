@@ -29,6 +29,7 @@ import (
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
@@ -277,6 +278,7 @@ func serve(ctx context.Context) error {
 		UserData:      userData,
 		Segments:      skipSegments,
 		RemuxDB:       remuxdb.New(serverID, version, logger, store.Settings),
+		Lyrics:        lyrics.New(pool, lyrics.LRCLIB, version, logger, store.Settings),
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
 		Thumbnails:    images,
