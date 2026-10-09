@@ -1,0 +1,15 @@
+name: Private security contact request
+description: Only when GitHub's private vulnerability reporting is unavailable. It asks for a private channel and contains no details.
+title: Private security contact request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use [private vulnerability reporting](https://github.com/moodiness/polyfin/security/advisories/new) whenever you can. This form only asks for a private channel: wait for one before you send the report, as the [security policy](https://github.com/moodiness/polyfin/blob/main/SECURITY.md) explains.
+  - type: checkboxes
+    id: no-details
+    attributes:
+      label: Confirmation
+      options:
+        - label: This request contains no exploit, affected endpoint, credentials or technical details.
+          required: true

@@ -1,0 +1,56 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search [Q&A](https://github.com/moodiness/polyfin/discussions/categories/q-a) and the [documentation](https://moodiness.github.io/polyfin/docs/) first. If something is broken, [report a bug](https://github.com/moodiness/polyfin/issues/new?template=bug_report.yml) instead.
+
+        Polyfin does not host or distribute content: questions about where to find content, and posts with links to it or with credentials, are removed.
+  - type: input
+    id: version
+    attributes:
+      label: Polyfin version
+      description: Shown in the admin app's dashboard, under Server state.
+      placeholder: 0.24.1
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Stremio addons and libraries
+        - Eclipse addons (music, audiobooks, podcasts)
+        - Live TV and IPTV
+        - Playback and transcoding
+        - Subtitles
+        - Users, parental control and tracking
+        - Admin app or web client
+        - Installation and configuration
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Jellyfin app, version and device
+      description: If the question is about an app.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What you want to do, what you tried, and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The server's log lines, from `docker compose logs polyfin`, if they help. Remove secrets and URLs first.
+      render: text
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before you post
+      options:
+        - label: This question contains no credentials, addon manifest URLs, playlist URLs, signed stream URLs or links to content.
+          required: true

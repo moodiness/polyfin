@@ -1,0 +1,31 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search [Ideas](https://github.com/moodiness/polyfin/discussions/categories/ideas) first, and vote for an existing idea rather than posting it again. The ideas that are picked become issues on the [roadmap](https://github.com/users/moodiness/projects/1).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you want to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: How Polyfin could help, as a user would see it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: The workaround you use, or how another project does it.
+  - type: checkboxes
+    id: no-content
+    attributes:
+      label: Before you post
+      options:
+        - label: This idea is not about finding or sharing content, and contains no links to it.
+          required: true

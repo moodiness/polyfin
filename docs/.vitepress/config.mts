@@ -113,6 +113,7 @@ export default defineConfig({
     nav: [
       { text: 'Docs', link: '/docs/', activeMatch: '^/docs/' },
       { text: 'Releases', link: `${repo}/releases` },
+      { text: 'Community', link: `${repo}/discussions` },
     ],
     socialLinks: [{ icon: 'github', link: repo, ariaLabel: 'Polyfin on GitHub' }],
     sidebar: { '/docs/': sidebar() },

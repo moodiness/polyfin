@@ -1,0 +1,88 @@
+name: Bug report
+description: Something in Polyfin does not work as the documentation describes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the [open issues](https://github.com/moodiness/polyfin/issues) first. For help with a setup, ask in [Q&A](https://github.com/moodiness/polyfin/discussions/categories/q-a).
+
+        **Never post** credentials, addon manifest URLs (they often embed credentials), playlist URLs, signed stream URLs or links to content. Vulnerabilities go through the [security policy](https://github.com/moodiness/polyfin/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Polyfin version
+      description: Shown in the admin app's dashboard, under Server state.
+      placeholder: 0.24.1
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Stremio addons and libraries
+        - Eclipse addons (music, audiobooks, podcasts)
+        - Live TV and IPTV
+        - Playback and transcoding
+        - Subtitles
+        - Users, parental control and tracking
+        - Admin app or web client
+        - Installation and configuration
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: app
+    attributes:
+      label: Jellyfin app
+      description: The app where it happens.
+      options:
+        - Not specific to an app
+        - Infuse
+        - Swiftfin
+        - Streamyfin
+        - Findroid
+        - Strand
+        - Odin
+        - VidHub
+        - Nuvio
+        - Kodi
+        - An official Jellyfin app
+        - Jellyfin web client (/web/)
+        - Another app
+    validations:
+      required: true
+  - type: input
+    id: app-details
+    attributes:
+      label: App version and device
+      placeholder: App version, device and operating system
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The server's log lines around the problem, from `docker compose logs polyfin`. Remove secrets and URLs first.
+      render: text
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before you submit
+      options:
+        - label: This report contains no credentials, addon manifest URLs, playlist URLs, signed stream URLs or links to content.
+          required: true

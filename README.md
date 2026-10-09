@@ -84,6 +84,10 @@ The full documentation is in [`docs/`](docs/README.md), and on the [website](htt
 
 With the Compose file, the only value you must set is `POSTGRES_PASSWORD` in `.env`, and `POLYFIN_SECRET_KEY` is advised. Every option is set in the admin app, under **Settings**. See [Configuration](docs/configuration.md).
 
+## Community
+
+Ask questions in [Q&A](https://github.com/moodiness/polyfin/discussions/categories/q-a), post and vote for ideas in [Ideas](https://github.com/moodiness/polyfin/discussions/categories/ideas), follow the [roadmap](https://github.com/users/moodiness/projects/1), and report bugs with the [bug report form](https://github.com/moodiness/polyfin/issues/new?template=bug_report.yml). See [Contributing](CONTRIBUTING.md), [Getting help](SUPPORT.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Legal disclaimer
 
 Polyfin does not host, store, or distribute any content. It only relays what the addons and services configured by its operator provide. You are solely responsible for the addons and services you configure and for complying with the laws that apply to you.
