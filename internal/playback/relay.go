@@ -36,9 +36,16 @@ var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 // replaces the source's: players recognize media by it, and sources often
 // answer application/octet-stream. When the source cannot be reached or
 // does not answer with content, the player receives a 502 and the error is
-// returned for logging. A file analyzed as one, not a live stream, is
-// served from the source cache, which reads it the way remuxes do.
+// returned for logging; when its source's connections are all in use, a
+// 503. A file analyzed as one, not a live stream, is served from the
+// source cache, which reads it the way remuxes do.
 func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	release, err := s.Hold(r.Context(), version)
+	if err != nil {
+		http.Error(w, "the provider's connections are all in use", http.StatusServiceUnavailable)
+		return err
+	}
+	defer release()
 	if s.cacheable(r.Context(), version) {
 		return s.relayCached(w, r, version, delivery)
 	}

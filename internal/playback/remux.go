@@ -399,7 +399,8 @@ func (r Remux) key() hls.Key {
 // what FFmpeg reads for the next seek. FFmpeg extracts the version's text
 // subtitles at the same time, until the version's are all extracted. A
 // source failing meanwhile has the version kept as failed, so that the
-// next PlaybackInfo plays another.
+// next PlaybackInfo plays another. A version that holds one of its
+// source's connections takes it while FFmpeg reads (see Hold).
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -410,6 +411,10 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			return hls.Remux{}, nil, fmt.Errorf("%w: its video can only be cut converted", ErrNotRemuxable)
 		}
 		analysis, err := s.Analyze(ctx, remux.Version)
+		if err != nil {
+			return hls.Remux{}, nil, err
+		}
+		hold, err := s.Hold(ForUser(ctx, remux.User), remux.Version)
 		if err != nil {
 			return hls.Remux{}, nil, err
 		}
@@ -432,6 +437,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			unregister()
 			unurge()
 			src.Release()
+			hold()
 			s.saveExtracted(context.Background(), remux.Version.ID, x)
 		}
 		// The encoding stops as soon as the source fails, rather than
