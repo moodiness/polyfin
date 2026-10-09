@@ -65,6 +65,9 @@ const settings: typeof en = {
       'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
     remuxDbUrl: 'Adresse de RemuxDB',
     remuxDbUrlHelp: 'Le serveur RemuxDB que Polyfin interroge.',
+    publicAddress: 'Adresse publique',
+    publicAddressHelp:
+      'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien.',
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
@@ -373,6 +376,8 @@ const settings: typeof en = {
       liveTv:
         'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',
+      notifications:
+        'Où Polyfin signale les nouveaux épisodes, les enregistrements et les problèmes de santé, pour tous les utilisateurs.',
     },
     groups: {
       skip: 'Passer l’intro et le générique',

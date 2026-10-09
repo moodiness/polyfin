@@ -219,6 +219,8 @@ const system: typeof en = {
         lastFmSecret: 'Secret partagé Last.fm',
       },
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
+      targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,
+      serverTargetOf: (target: string) => `Cible de notification du serveur « ${target} »`,
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
       noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
       noGuides: 'Aucun guide des programmes.',

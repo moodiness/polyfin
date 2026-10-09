@@ -183,6 +183,19 @@ const common: typeof en = {
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_remuxdb_url:
       'L’adresse de RemuxDB doit être une adresse web commençant par http:// ou https://.',
+    invalid_public_address:
+      'L’adresse publique doit être une adresse web commençant par http:// ou https://, sans paramètres.',
+    invalid_target_kind: 'Choisissez un webhook, Discord ou ntfy.',
+    invalid_target_name: 'Le nom d’une cible doit faire de 1 à 64 caractères.',
+    invalid_target_address: 'Saisissez une adresse web commençant par https:// ou http://.',
+    private_target_address:
+      'Cette adresse est sur un réseau local : seules les cibles d’un administrateur peuvent y accéder.',
+    invalid_topic: 'Un sujet ntfy fait de 1 à 64 lettres, chiffres, tirets et tirets bas.',
+    invalid_token: 'Un jeton d’accès fait au plus 256 caractères, sans espaces.',
+    invalid_events: 'Un des événements choisis n’est pas disponible pour cette cible.',
+    too_many_targets: 'Il y a déjà 20 cibles. Supprimez-en une pour en ajouter une autre.',
+    target_unreadable:
+      'L’adresse ou le jeton de cette cible ne peut pas être déchiffré avec POLYFIN_SECRET_KEY. Saisissez-le de nouveau.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',

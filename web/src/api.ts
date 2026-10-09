@@ -304,6 +304,8 @@ export type Settings = {
   remuxDb: boolean
   /** Address of the RemuxDB server asked: an http or https URL, without a trailing slash. */
   remuxDbUrl: string
+  /** Address people open Polyfin at, which links in notifications start with; empty for no link. */
+  publicAddress: string
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1002,6 +1004,91 @@ export const disconnectTracking = (service: TrackingServiceName) =>
 export const revealTrackingKey = async (service: TrackingKeyServiceName) =>
   (await request<{ value: string }>('POST', `/account/tracking/${seg(service)}/key/reveal`)).value
 
+/** The kinds of notification targets. */
+export type NotificationKind = 'webhook' | 'discord' | 'ntfy'
+
+/** The events targets choose from. */
+export type NotificationEvent =
+  'new_episode' | 'recording_finished' | 'recording_failed' | 'health_problem' | 'health_solved'
+
+/**
+ * Where notifications go. Its secret address and token are never sent back: `address` is only the
+ * scheme and host of a webhook's or Discord target's address, and an ntfy target's server.
+ */
+export type NotificationTarget = {
+  id: string
+  kind: NotificationKind
+  name: string
+  address: string
+  /** An ntfy target's topic, empty for the others. */
+  topic: string
+  /** Whether an ntfy target has an access token. */
+  tokenSet: boolean
+  events: NotificationEvent[]
+  enabled: boolean
+  createdAt: string
+  /** The last time the target accepted a message. */
+  lastSentAt: string | null
+  /**
+   * "refused": it answered 401, 403, 404 or 410; "rejected": it refused a message (another 4xx);
+   * "unreachable": messages could not be delivered; "unreadable": its address or token cannot be
+   * decrypted with POLYFIN_SECRET_KEY.
+   */
+  problem: 'refused' | 'rejected' | 'unreachable' | 'unreadable' | null
+  /** The HTTP status the target answered with its problem, when it answered. */
+  problemStatus: number | null
+  problemAt: string | null
+}
+
+/** The targets of the server, or of the signed-in user, and what they may choose. */
+export type Notifications = {
+  targets: NotificationTarget[]
+  /** The events these targets may receive: health events only for the server and administrators. */
+  events: NotificationEvent[]
+  kinds: NotificationKind[]
+}
+
+/** A target to add, or the changes to one: fields left out keep their values. */
+export type NotificationDraft = {
+  kind?: NotificationKind
+  name?: string
+  /** A webhook's or Discord target's address, or an ntfy target's server (empty: the public one). */
+  address?: string
+  topic?: string
+  /** An ntfy target's access token; empty removes it. */
+  token?: string
+  events?: NotificationEvent[]
+  enabled?: boolean
+}
+
+/** Whose targets: the server's (Settings › Notifications) or the signed-in user's own. */
+export type NotificationScope = 'server' | 'own'
+
+const notificationsPath = (scope: NotificationScope) =>
+  scope === 'server' ? '/notifications' : '/account/notifications'
+
+export const fetchNotifications = (scope: NotificationScope, signal?: AbortSignal) =>
+  request<Notifications>('GET', notificationsPath(scope), undefined, signal)
+
+export const createNotificationTarget = (scope: NotificationScope, draft: NotificationDraft) =>
+  request<NotificationTarget>('POST', `${notificationsPath(scope)}/targets`, draft)
+
+export const updateNotificationTarget = (
+  scope: NotificationScope,
+  id: string,
+  draft: NotificationDraft,
+) => request<NotificationTarget>('PATCH', `${notificationsPath(scope)}/targets/${seg(id)}`, draft)
+
+export const deleteNotificationTarget = (scope: NotificationScope, id: string) =>
+  request<void>('DELETE', `${notificationsPath(scope)}/targets/${seg(id)}`)
+
+/** Sends a test message at once: whether the target accepted it, and how it stands after. */
+export const testNotificationTarget = (scope: NotificationScope, id: string) =>
+  request<{ delivered: boolean; status: number | null; target: NotificationTarget }>(
+    'POST',
+    `${notificationsPath(scope)}/targets/${seg(id)}/test`,
+  )
+
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)
 
@@ -1631,10 +1718,14 @@ export type Health = {
     encrypted: boolean
     /** How many are stored unencrypted. */
     plaintext: number
-    /** Those POLYFIN_SECRET_KEY cannot decrypt: a server setting, or a user's connection. */
+    /**
+     * Those POLYFIN_SECRET_KEY cannot decrypt: a server setting, a user's connection, or a
+     * notification target, by its name, of a user or of the server (`user` null).
+     */
     unreadable: {
       setting: ServerSecretName | null
       service: TrackingServiceName | null
+      target: string | null
       user: string | null
     }[]
   } | null
@@ -1733,6 +1824,7 @@ export const queryKeys = {
   backup: ['backup'] as const,
   sources: ['sources'] as const,
   variables: ['variables'] as const,
+  notifications: (scope: NotificationScope) => ['notifications', scope] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */

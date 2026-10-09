@@ -534,6 +534,15 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).lastBackup,
     keywords: ['backup'],
   },
+  // Notifications
+  {
+    section: 'notifications',
+    anchor: 'public-address',
+    label: (t) => s(t).publicAddress,
+    help: (t) => s(t).publicAddressHelp,
+    keywords: ['webhook', 'Discord', 'ntfy', 'URL'],
+    codes: ['invalid_public_address'],
+  },
   // Web player
   {
     section: 'web-player',

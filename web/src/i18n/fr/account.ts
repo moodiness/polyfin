@@ -5,7 +5,14 @@ const account: typeof en = {
     title: 'Mon compte',
     signedInAs: 'Connecté en tant que ',
     sectionsLabel: 'Sections du compte',
-    sections: { tracking: 'Suivi', devices: 'Appareils', password: 'Mot de passe' },
+    sections: {
+      tracking: 'Suivi',
+      notifications: 'Notifications',
+      devices: 'Appareils',
+      password: 'Mot de passe',
+    },
+    notificationsHelp:
+      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, ou quand vos enregistrements se terminent.',
     devicesHelp:
       'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',

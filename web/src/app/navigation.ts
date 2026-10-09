@@ -1,5 +1,6 @@
 import {
   ArchiveIcon,
+  BellIcon,
   BooksIcon,
   BrowserIcon,
   CalendarDotsIcon,
@@ -70,6 +71,7 @@ export const settingsSections = [
   { id: 'live-tv', key: 'liveTv', icon: TelevisionSimpleIcon },
   { id: 'recordings', key: 'recordings', icon: RecordIcon },
   { id: 'backups', key: 'backups', icon: ArchiveIcon },
+  { id: 'notifications', key: 'notifications', icon: BellIcon },
   { id: 'web-player', key: 'webPlayer', icon: BrowserIcon },
   { id: 'diagnostics', key: 'diagnostics', icon: StethoscopeIcon },
 ] as const satisfies readonly {

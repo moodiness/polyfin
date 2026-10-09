@@ -55,15 +55,22 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
   return owner === null ? name : `${name} (${t.system.health.owner.user(owner.name)})`
 }
 
-/** The name of a stored secret the key cannot decrypt: a server setting or a user's connection. */
+/**
+ * The name of a stored secret the key cannot decrypt: a server setting, a user's connection, or a
+ * notification target of a user or of the server.
+ */
 export function unreadableName(
   t: Messages,
   secret: NonNullable<Health['secrets']>['unreadable'][number],
 ): string {
   const text = t.system.health
-  return secret.setting !== null
-    ? text.secretNames[secret.setting]
-    : text.connectionOf(serviceNames[secret.service ?? 'trakt'], secret.user ?? '')
+  if (secret.setting !== null) return text.secretNames[secret.setting]
+  if (secret.target !== null) {
+    return secret.user === null
+      ? text.serverTargetOf(secret.target)
+      : text.targetOf(secret.target, secret.user)
+  }
+  return text.connectionOf(serviceNames[secret.service ?? 'trakt'], secret.user ?? '')
 }
 
 /** The tracking services by their names. */
