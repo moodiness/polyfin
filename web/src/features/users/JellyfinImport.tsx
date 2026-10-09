@@ -48,7 +48,7 @@ const importPollMs = 2000
 
 /** Connection codes about the address or the key, shown under that field rather than above. */
 const addressCodes = ['invalid_jellyfin_address', 'jellyfin_unreachable', 'not_jellyfin']
-const keyCodes = ['jellyfin_key_refused']
+const keyCodes = ['jellyfin_key_refused', 'jellyfin_key_limited']
 /** Codes about a new user's name or password, shown under that field of its row. */
 const nameCodes = ['invalid_name', 'name_taken']
 const passwordCodes = ['invalid_password']
@@ -411,6 +411,10 @@ function ChooseUsers({
   const toast = useToast()
   const formId = useId()
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
+  // A user's key reads its owner's watch data only: the others' accounts can still be created.
+  const owner = connection.keyOwner
+  const ownerName =
+    owner === null ? null : (connection.users.find((user) => user.id === owner)?.name ?? null)
   const [choices, setChoices] = useState<Record<string, Choice>>(() =>
     Object.fromEntries(
       connection.users.map((user): [string, Choice] => [
@@ -420,7 +424,7 @@ function ChooseUsers({
           name: user.name,
           password: '',
           isAdministrator: user.isAdministrator,
-          watchData: true,
+          watchData: owner === null || user.id === owner,
         },
       ]),
     ),
@@ -523,21 +527,28 @@ function ChooseUsers({
         ) : connection.users.length === 0 ? (
           <p className="text-small text-ink-3">{text.noUsers}</p>
         ) : (
-          <RowList variant="plain" aria-label={text.chooseTitle}>
-            {connection.users.map((user) => (
-              <ChoiceRow
-                key={user.id}
-                user={user}
-                choice={choices[user.id]}
-                options={options}
-                nameError={field === 'name' && failed?.jellyfinId === user.id ? message : undefined}
-                passwordError={
-                  field === 'password' && failed?.jellyfinId === user.id ? message : undefined
-                }
-                onChange={(patch) => update(user.id, patch)}
-              />
-            ))}
-          </RowList>
+          <>
+            {owner !== null && <Notice>{text.userKey(ownerName)}</Notice>}
+            <RowList variant="plain" aria-label={text.chooseTitle}>
+              {connection.users.map((user) => (
+                <ChoiceRow
+                  key={user.id}
+                  user={user}
+                  choice={choices[user.id]}
+                  options={options}
+                  ownerOnly={owner !== null && user.id !== owner}
+                  ownerName={ownerName}
+                  nameError={
+                    field === 'name' && failed?.jellyfinId === user.id ? message : undefined
+                  }
+                  passwordError={
+                    field === 'password' && failed?.jellyfinId === user.id ? message : undefined
+                  }
+                  onChange={(patch) => update(user.id, patch)}
+                />
+              ))}
+            </RowList>
+          </>
         )}
         {otherError && (
           <Notice tone="danger" live>
@@ -554,6 +565,8 @@ function ChoiceRow({
   user,
   choice,
   options,
+  ownerOnly,
+  ownerName,
   nameError,
   passwordError,
   onChange,
@@ -561,6 +574,9 @@ function ChoiceRow({
   user: JellyfinUser
   choice: Choice
   options: SelectOption<Target>[]
+  /** The key is another user's: this user's watch data cannot be read with it. */
+  ownerOnly: boolean
+  ownerName: string | null
   nameError: string | undefined
   passwordError: string | undefined
   onChange: (patch: Partial<Choice>) => void
@@ -630,8 +646,15 @@ function ChoiceRow({
         {choice.target !== 'skip' && (
           <Checkbox
             label={text.watchData}
-            help={existing && !choice.watchData ? text.watchDataNeeded : text.watchDataHelp}
-            checked={choice.watchData}
+            help={
+              ownerOnly
+                ? text.watchDataOwnerOnly(ownerName)
+                : existing && !choice.watchData
+                  ? text.watchDataNeeded
+                  : text.watchDataHelp
+            }
+            checked={!ownerOnly && choice.watchData}
+            disabled={ownerOnly}
             onChange={(watchData) => onChange({ watchData })}
           />
         )}

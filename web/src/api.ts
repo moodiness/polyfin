@@ -1184,9 +1184,16 @@ export type JellyfinImportEntry = {
   watchData: boolean
 }
 
-/** Why an import, or one of its users, failed. */
+/**
+ * Why an import, or one of its users, failed. `jellyfin_user_forbidden` fails that user only: the
+ * server does not let the key read their data.
+ */
 export type JellyfinImportProblem =
-  'jellyfin_unreachable' | 'jellyfin_key_refused' | 'not_jellyfin' | 'internal'
+  | 'jellyfin_unreachable'
+  | 'jellyfin_key_refused'
+  | 'not_jellyfin'
+  | 'internal'
+  | 'jellyfin_user_forbidden'
 
 /** A title of a Jellyfin user's watch data that no Polyfin title matches. */
 export type JellyfinUnmatched = {
@@ -1232,8 +1239,15 @@ export type JellyfinImportStatus = {
   users: JellyfinUserImport[]
 }
 
-/** What connecting to a Jellyfin server reads: the server and its users. */
-export type JellyfinConnection = { server: JellyfinServer; users: JellyfinUser[] }
+/**
+ * What connecting to a Jellyfin server reads: the server, its users, and the user the key belongs
+ * to, null for an API key of the server's dashboard: a user's key imports only its owner's watch data.
+ */
+export type JellyfinConnection = {
+  server: JellyfinServer
+  users: JellyfinUser[]
+  keyOwner: string | null
+}
 
 /** Reads a Jellyfin server's users with its API key, which the server never keeps. */
 export const connectJellyfin = (body: { address: string; apiKey: string }) =>
