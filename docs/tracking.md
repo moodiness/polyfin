@@ -45,7 +45,7 @@ Polyfin can also read what you watched elsewhere, in other apps that report to t
 - **Import now**: imports at once.
 - A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, and what stopped it, if anything.
 
-Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play.
+Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play. An administrator moving from a Jellyfin server imports its users' watch data the same way (see [Moving from Jellyfin](users.md#moving-from-jellyfin)).
 
 ### What is imported
 
