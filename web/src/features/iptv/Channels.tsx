@@ -64,6 +64,8 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
   const [enabled, setEnabled] = useState<Tristate>('any')
   const [shown, setShown] = useState<Tristate>('any')
   const [mapped, setMapped] = useState<Tristate>('any')
+  // The source page links here with ?archive=yes, to the channels Replay lists.
+  const [archive, setArchive] = useState<Tristate>(params.get('archive') === 'yes' ? 'yes' : 'any')
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [editing, setEditing] = useState<LineupChannel | null>(null)
@@ -76,6 +78,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
     enabled: asFilter(enabled),
     shown: asFilter(shown),
     mapped: asFilter(mapped),
+    archive: asFilter(archive),
     q: q || undefined,
   }
   const key = [...queryKeys.lineup(scope, id), 'channels', filters, offset]
@@ -89,11 +92,11 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
     placeholderData: keepPreviousData,
   })
   const items = channels.data?.items ?? []
-  const unfiltered =
-    category === '' && q === '' && enabled === 'any' && shown === 'any' && mapped === 'any'
+  const noFilter =
+    q === '' && enabled === 'any' && shown === 'any' && mapped === 'any' && archive === 'any'
+  const unfiltered = category === '' && noFilter
   // Channels move within their category: only while it alone is listed, in its order.
-  const reorder =
-    category !== '' && q === '' && enabled === 'any' && shown === 'any' && mapped === 'any'
+  const reorder = category !== '' && noFilter
 
   function refilter(change: () => void) {
     change()
@@ -179,7 +182,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             {t.lineup.keyword.title}
           </Button>
         </div>
-        <div className="grid gap-3 px-6 pt-5 pb-4 max-sm:px-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_repeat(3,minmax(0,0.8fr))]">
+        <div className="grid gap-3 px-6 pt-5 pb-4 max-sm:px-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_repeat(4,minmax(0,0.8fr))]">
           <Field label={text.search}>
             <TextInput
               type="search"
@@ -206,7 +209,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               }
             />
           </Field>
-          <div className="grid grid-cols-3 gap-3 md:col-span-2 xl:col-span-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:col-span-2 xl:col-span-4">
             <TristateSelect
               label={text.enabledFilter}
               value={enabled}
@@ -227,6 +230,13 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               yes={text.mapped}
               no={text.unmapped}
               onChange={(value) => refilter(() => setMapped(value))}
+            />
+            <TristateSelect
+              label={text.archiveFilter}
+              value={archive}
+              yes={text.archived}
+              no={text.notArchived}
+              onChange={(value) => refilter(() => setArchive(value))}
             />
           </div>
         </div>
@@ -485,6 +495,15 @@ function ChannelRow({
             )}
             {noGuide && <Badge>{text.unmapped}</Badge>}
             {channel.mapping?.manual && <Badge tone="accent">{text.manual}</Badge>}
+            {channel.archiveDays > 0 && (
+              <Tooltip content={text.archiveHelp}>
+                <span tabIndex={0} className="rounded-full">
+                  <Badge>
+                    <span className="tabular-nums">{text.archiveDays(channel.archiveDays)}</span>
+                  </Badge>
+                </span>
+              </Tooltip>
+            )}
             {channel.streams.length > 1 && (
               <Badge>
                 <span className="tabular-nums">{text.streamCount(channel.streams.length)}</span>
@@ -501,6 +520,9 @@ function ChannelRow({
           {channel.category.name || t.lineup.exclusions.noGroup}
           {channel.renamed && ` · ${channel.providerName}`}
           {noGuide && <span className="md:hidden"> · {text.unmapped}</span>}
+          {channel.archiveDays > 0 && (
+            <span className="md:hidden"> · {text.archiveDays(channel.archiveDays)}</span>
+          )}
           {channel.enabled && !channel.shown && (
             <span className="text-warn md:hidden"> · {text.hidden}</span>
           )}

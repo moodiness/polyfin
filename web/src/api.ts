@@ -513,6 +513,8 @@ export type LineupCounts = {
   shownChannels: number
   mapped: number
   unmapped: number
+  /** Channels shown in apps whose provider keeps past programmes: the folders of Replay. */
+  archived: number
 }
 
 /** What a preview counts: live entries by group or country, or the titles of a VOD type. */
@@ -603,6 +605,8 @@ export type LineupChannel = {
   guideId: string
   mapping: GuideMapping | null
   streams: ChannelStream[]
+  /** How many days back the provider keeps the channel's programmes, played from Replay; 0 for no archive. */
+  archiveDays: number
 }
 
 export type ChannelFilters = {
@@ -610,6 +614,7 @@ export type ChannelFilters = {
   enabled?: boolean
   shown?: boolean
   mapped?: boolean
+  archive?: boolean
   q?: string
 }
 
