@@ -16,7 +16,7 @@ A bar at the top holds the sections, for administrators:
 
 The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
 
-**My account** has three sections: **Tracking** (see [Tracking services](tracking.md)), **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
+**My account** has four sections: **Tracking** (see [Tracking services](tracking.md)), **Notifications** (see [Notifications](notifications.md)), **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
 
 **Search** (⌘K on a Mac, Ctrl K elsewhere, or `/`) finds pages, settings, users and sources by name, with or without accents. Use the arrows and Enter to open one, Escape to close it.
 
@@ -66,7 +66,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Polyfin**: memory, goroutines, uptime and version;
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
 
-Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary.
+Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord or ntfy: see [Notifications](notifications.md).
 
 ## Logs
 

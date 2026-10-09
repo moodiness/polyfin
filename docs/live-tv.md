@@ -148,6 +148,8 @@ Polyfin records Live TV programmes, as Jellyfin's DVR does, once **Record Live T
 
 While recording is off, Polyfin answers as a server that records nothing: the recording, timer and series timer lists stay empty, what they would hold is not found, and new timers are refused (400).
 
+A recording that finished or failed can be sent to the targets of the user who scheduled it and to the server's: see [Notifications](notifications.md).
+
 ### Who can record
 
 On a user's page under **Users**, **Can record Live TV** at the end of **Playback and access** lets a user schedule, change and cancel recordings and delete them. It is on for administrators and off for other users by default. Seeing recordings needs the **Live TV** permission only. See [Users](users.md).
