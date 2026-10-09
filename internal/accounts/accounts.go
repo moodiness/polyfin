@@ -317,6 +317,43 @@ func (s *Store) CreateUser(ctx context.Context, user NewUser) (User, error) {
 	return createUser(ctx, s.db, user)
 }
 
+// UserError is why one of the accounts CreateUsers was given could not be
+// created; Index is its place in the list.
+type UserError struct {
+	Index int
+	Err   error
+}
+
+func (e *UserError) Error() string {
+	return fmt.Sprintf("user %d: %v", e.Index, e.Err)
+}
+
+func (e *UserError) Unwrap() error {
+	return e.Err
+}
+
+// CreateUsers adds accounts, under the rules of CreateUser, all of them or
+// none: when one cannot be created, nothing is, and the error is a
+// *UserError naming it. Two of them with the same name make the second's
+// ErrNameTaken.
+func (s *Store) CreateUsers(ctx context.Context, users []NewUser) ([]User, error) {
+	created := make([]User, 0, len(users))
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		for i, user := range users {
+			added, err := createUser(ctx, tx, user)
+			if err != nil {
+				return &UserError{Index: i, Err: err}
+			}
+			created = append(created, added)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
 func createUser(ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, user NewUser) (User, error) {

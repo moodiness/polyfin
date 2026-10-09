@@ -91,6 +91,28 @@ func TestUserNamesAreUniqueWithoutCaseAndValidated(t *testing.T) {
 	}
 }
 
+func TestCreateUsersCreatesAllOrNone(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	// Two names that differ by case only: the second is taken.
+	_, err := store.CreateUsers(ctx, []NewUser{{Name: "Dana", Password: "correct horse"}, {Name: "Eve", Password: "correct horse"},
+		{Name: "dana", Password: "correct horse"}})
+	if failed, ok := errors.AsType[*UserError](err); !ok || failed.Index != 2 || !errors.Is(err, ErrNameTaken) {
+		t.Fatalf("a name twice: %v", err)
+	}
+	if users, err := store.Users(ctx); err != nil || len(users) != 0 {
+		t.Fatalf("created anyway: %v %v", users, err)
+	}
+	created, err := store.CreateUsers(ctx, []NewUser{{Name: "Dana", Password: "correct horse", IsAdministrator: true},
+		{Name: "Eve", Password: "correct horse"}})
+	if err != nil || len(created) != 2 || created[0].Name != "Dana" || !created[0].IsAdministrator || created[1].Name != "Eve" {
+		t.Fatalf("created: %+v %v", created, err)
+	}
+	if _, err := store.Authenticate(ctx, "eve", "correct horse"); err != nil {
+		t.Errorf("Eve signs in: %v", err)
+	}
+}
+
 func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
