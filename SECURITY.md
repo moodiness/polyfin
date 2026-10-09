@@ -8,7 +8,7 @@ Security fixes go to the `main` branch and ship in the next release; only the la
 
 **Do not publish vulnerability details in issues, pull requests or discussions.**
 
-Use [GitHub's private vulnerability reporting](https://github.com/moodiness/polyfin/security/advisories/new), enabled for this repository. If that channel is unavailable, [request a private reporting contact](https://github.com/moodiness/polyfin/issues/new?title=Private%20security%20contact%20request). That request must contain only a request for contact: no exploit, affected endpoint, credentials or technical details. Wait for a private channel before sending the report.
+Use [GitHub's private vulnerability reporting](https://github.com/moodiness/polyfin/security/advisories/new), enabled for this repository. If that channel is unavailable, [request a private reporting contact](https://github.com/moodiness/polyfin/issues/new?template=security-contact.yml). That request must contain only a request for contact: no exploit, affected endpoint, credentials or technical details. Wait for a private channel before sending the report.
 
 A useful private report includes:
 
