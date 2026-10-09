@@ -193,6 +193,10 @@ const users = {
       watchData: 'Import watch data',
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
+      watchDataOwnerOnly: (owner: string | null) =>
+        `With this key, only ${owner === null ? 'its owner’s' : `${owner}’s`} watch data can be imported.`,
+      userKey: (owner: string | null) =>
+        `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data. To import the other users’ watch data, connect with an API key from the server’s dashboard, or with each user’s own key. Their accounts can still be created here.`,
       nothingToImport: 'Choose a user to create, or watch data to import.',
       start: 'Start import',
       starting: 'Starting…',
@@ -223,6 +227,8 @@ const users = {
           'The server stopped answering like Jellyfin during the import. What was imported is kept.',
         internal:
           'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
+        jellyfin_user_forbidden:
+          'The server does not let this key read this user’s data. Import it with an API key from the server’s dashboard, or with the user’s own key.',
       },
       userStates: {
         waiting: 'Waiting',

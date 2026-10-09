@@ -231,6 +231,10 @@ const common = {
       'Enter the address of the Jellyfin server, such as http://192.168.1.10:8096.',
     jellyfin_key_refused:
       'Jellyfin refused this API key. Create one in its dashboard, under API Keys, and paste it again.',
+    jellyfin_key_limited:
+      'This key cannot list the server’s users. Create an API key in its dashboard, under API Keys, and paste it.',
+    jellyfin_key_owner_only:
+      'This key reads only its owner’s watch data. Untick “Import watch data” for the other users, or connect with an API key from the server’s dashboard.',
     jellyfin_unreachable:
       'Nothing answered at this address. Check it, and that Jellyfin is running.',
     not_jellyfin: 'A server answered at this address, but it is not Jellyfin. Check the address.',

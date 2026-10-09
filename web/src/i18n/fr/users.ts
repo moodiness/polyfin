@@ -203,6 +203,10 @@ const users: typeof en = {
       watchData: 'Importer les données de visionnage',
       watchDataHelp: 'Titres vus avec leurs dates, points de reprise et favoris.',
       watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
+      watchDataOwnerOnly: (owner: string | null) =>
+        `Avec cette clé, seules les données de visionnage ${owner === null ? 'de son propriétaire' : `du compte ${owner}`} peuvent être importées.`,
+      userKey: (owner: string | null) =>
+        `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage. Pour importer celles des autres utilisateurs, connectez-vous avec une clé d’API du tableau de bord du serveur, ou avec la clé de chacun. Leurs comptes peuvent quand même être créés ici.`,
       nothingToImport:
         'Choisissez un utilisateur à créer, ou des données de visionnage à importer.',
       start: 'Lancer l’importation',
@@ -234,6 +238,8 @@ const users: typeof en = {
           'Le serveur a cessé de répondre comme Jellyfin pendant l’importation. Ce qui a été importé est gardé.',
         internal:
           'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur donne le détail. Ce qui a été importé est gardé.',
+        jellyfin_user_forbidden:
+          'Le serveur ne laisse pas cette clé lire les données de cet utilisateur. Importez-les avec une clé d’API du tableau de bord du serveur, ou avec sa propre clé.',
       },
       userStates: {
         waiting: 'En attente',

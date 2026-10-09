@@ -246,6 +246,10 @@ const common: typeof en = {
       'Saisissez l’adresse du serveur Jellyfin, par exemple http://192.168.1.10:8096.',
     jellyfin_key_refused:
       'Jellyfin a refusé cette clé d’API. Créez-en une dans son tableau de bord, sous Clés API, puis collez-la à nouveau.',
+    jellyfin_key_limited:
+      'Cette clé ne peut pas lister les utilisateurs du serveur. Créez une clé d’API dans son tableau de bord, sous Clés API, puis collez-la.',
+    jellyfin_key_owner_only:
+      'Cette clé ne lit que les données de visionnage de son propriétaire. Décochez « Importer les données de visionnage » pour les autres utilisateurs, ou connectez-vous avec une clé d’API du tableau de bord du serveur.',
     jellyfin_unreachable:
       'Rien n’a répondu à cette adresse. Vérifiez-la, et que Jellyfin est bien lancé.',
     not_jellyfin:
