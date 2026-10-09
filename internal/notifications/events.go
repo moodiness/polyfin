@@ -129,14 +129,17 @@ func (s *Service) webLink(item accounts.ID) *string {
 	return &link
 }
 
-// healthLink is the address of System › Health, nil without a public
-// address.
-func (s *Service) healthLink() *string {
+// healthLink is the address of the admin app's page that shows a problem,
+// System › Health when it names none; nil without a public address.
+func (s *Service) healthLink(page string) *string {
 	base := s.accounts.Settings().PublicAddress
 	if base == "" {
 		return nil
 	}
-	link := base + "/admin/system/health"
+	if page == "" {
+		page = "/system/health"
+	}
+	link := base + "/admin" + page
 	return &link
 }
 
@@ -210,7 +213,7 @@ func (s *Service) healthEventOf(problem Problem, since time.Time, solved bool) E
 	}
 	ev := s.newEvent(kind)
 	ev.Problem = &ProblemJSON{Key: problem.Key, Severity: problem.Severity, Text: problem.Text, Since: since.UTC()}
-	ev.Title, ev.Message, ev.URL = title, problem.Text, s.healthLink()
+	ev.Title, ev.Message, ev.URL = title, problem.Text, s.healthLink(problem.Page)
 	return ev
 }
 

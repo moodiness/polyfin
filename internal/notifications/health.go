@@ -22,12 +22,13 @@ type healthState struct {
 // meanwhile never.
 func (s *Service) loadHealth(ctx context.Context) {
 	s.health = map[string]*healthState{}
-	rows, err := s.db.Query(ctx, "SELECT key, severity, text, since, seen, missing, announced FROM notification_health")
+	rows, err := s.db.Query(ctx, "SELECT key, severity, text, page, since, seen, missing, announced FROM notification_health")
 	if err == nil {
 		var states []*healthState
 		states, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (*healthState, error) {
 			var st healthState
-			err := row.Scan(&st.problem.Key, &st.problem.Severity, &st.problem.Text, &st.since, &st.seen, &st.missing, &st.announced)
+			err := row.Scan(&st.problem.Key, &st.problem.Severity, &st.problem.Text, &st.problem.Page, &st.since, &st.seen, &st.missing,
+				&st.announced)
 			return &st, err
 		})
 		for _, st := range states {
@@ -105,11 +106,11 @@ func (s *Service) CheckHealth(ctx context.Context) {
 
 // saveHealth keeps st for the next run.
 func (s *Service) saveHealth(ctx context.Context, st *healthState) {
-	_, err := s.db.Exec(ctx, `INSERT INTO notification_health (key, severity, text, since, seen, missing, announced)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (key) DO UPDATE SET severity = excluded.severity, text = excluded.text, seen = excluded.seen,
+	_, err := s.db.Exec(ctx, `INSERT INTO notification_health (key, severity, text, page, since, seen, missing, announced)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (key) DO UPDATE SET severity = excluded.severity, text = excluded.text, page = excluded.page, seen = excluded.seen,
 			missing = excluded.missing, announced = excluded.announced`,
-		st.problem.Key, st.problem.Severity, st.problem.Text, st.since, st.seen, st.missing, st.announced)
+		st.problem.Key, st.problem.Severity, st.problem.Text, st.problem.Page, st.since, st.seen, st.missing, st.announced)
 	if err != nil && ctx.Err() == nil {
 		s.logger.Debug("A health problem could not be kept", "error", err)
 	}
