@@ -208,6 +208,17 @@ const common = {
     invalid_guide: 'This guide no longer exists. Reload the page.',
     invalid_mode: 'This mapping mode is not supported. Reload the page.',
     invalid_mapping: 'This guide channel is no longer in the catalog’s guides. Search again.',
+    invalid_jellyfin_address:
+      'Enter the address of the Jellyfin server, such as http://192.168.1.10:8096.',
+    jellyfin_key_refused:
+      'Jellyfin refused this API key. Create one in its dashboard, under API Keys, and paste it again.',
+    jellyfin_unreachable:
+      'Nothing answered at this address. Check it, and that Jellyfin is running.',
+    not_jellyfin: 'A server answered at this address, but it is not Jellyfin. Check the address.',
+    jellyfin_import_running:
+      'An import from Jellyfin is already running. Wait for it to end, or stop it.',
+    unknown_jellyfin_user:
+      'A Jellyfin user is no longer on that server. Connect again to read its users.',
   },
   status: {
     title: 'Server status',

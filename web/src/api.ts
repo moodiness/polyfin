@@ -804,16 +804,21 @@ export type ActivityEntry = {
 
 export type ActivityPage = { items: ActivityEntry[]; total: number }
 
-/** An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`. */
+/**
+ * An HTTP error from the admin API. `code` is the machine code from `{"error": "..."}`;
+ * `jellyfinId` names the Jellyfin user a Jellyfin import error is about, when the server adds one.
+ */
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
+  readonly jellyfinId: string | null
 
-  constructor(status: number, code: string) {
+  constructor(status: number, code: string, jellyfinId: string | null = null) {
     super(`Admin API error ${status}: ${code}`)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.jellyfinId = jellyfinId
   }
 }
 
@@ -838,13 +843,15 @@ export async function request<T>(
   })
   if (!response.ok) {
     let code = 'unknown'
+    let jellyfinId: string | null = null
     try {
-      const payload = (await response.json()) as { error?: unknown }
+      const payload = (await response.json()) as { error?: unknown; jellyfinId?: unknown }
       if (typeof payload.error === 'string') code = payload.error
+      if (typeof payload.jellyfinId === 'string') jellyfinId = payload.jellyfinId
     } catch {
       // Non-JSON error body (proxy page, empty response): keep the generic code.
     }
-    throw new ApiError(response.status, code)
+    throw new ApiError(response.status, code, jellyfinId)
   }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
@@ -1017,6 +1024,113 @@ export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(i
 
 /** Takes the permission to download away from every user; answers with those who had it. */
 export const turnOffDownloads = () => request<User[]>('POST', '/users/downloads/off')
+
+/** A Jellyfin server as the import reads it; `address` is the normalized one to send back. */
+export type JellyfinServer = { name: string; version: string; address: string }
+
+/** A user of the Jellyfin server, with the Polyfin user of the same name as a suggestion. */
+export type JellyfinUser = {
+  id: string
+  name: string
+  isAdministrator: boolean
+  isDisabled: boolean
+  isHidden: boolean
+  lastActivityAt: string | null
+  /** The Polyfin user with the same name (case ignored), else null. */
+  userId: string | null
+}
+
+/**
+ * One Jellyfin user to import, with exactly one of `userId` (an existing Polyfin user) or
+ * `create` (a new one). An existing user without `watchData` gets nothing.
+ */
+export type JellyfinImportEntry = {
+  jellyfinId: string
+  userId?: string
+  create?: NewUser
+  watchData: boolean
+}
+
+/** Why an import, or one of its users, failed. */
+export type JellyfinImportProblem =
+  'jellyfin_unreachable' | 'jellyfin_key_refused' | 'not_jellyfin' | 'internal'
+
+/** A title of a Jellyfin user's watch data that no Polyfin title matches. */
+export type JellyfinUnmatched = {
+  name: string
+  type: 'movie' | 'episode' | 'series'
+  year: number | null
+  /** For an episode: its series, season and number, when Jellyfin knows them. */
+  series: string | null
+  season: number | null
+  episode: number | null
+  /** `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it. */
+  reason: 'no_identifier' | 'not_found'
+}
+
+/** How the import of one Jellyfin user's watch data goes. */
+export type JellyfinUserImport = {
+  jellyfinId: string
+  jellyfinName: string
+  userId: string
+  userName: string
+  /** A finished import's `waiting` users were not reached: it stopped or failed first. */
+  state: 'waiting' | 'reading' | 'saving' | 'done' | 'failed'
+  /** Items read from Jellyfin so far. */
+  read: number
+  /** Titles newly marked played, resume points set, titles newly marked favorite. */
+  played: number
+  resumed: number
+  favorites: number
+  /** Every title not matched; `unmatched` lists the first 500 only. */
+  unmatchedCount: number
+  unmatched: JellyfinUnmatched[]
+  problem: JellyfinImportProblem | null
+}
+
+/** The running import, else the last one since Polyfin started: a restart forgets it. */
+export type JellyfinImportStatus = {
+  id: string
+  server: { name: string; address: string }
+  state: 'running' | 'done' | 'stopped' | 'failed'
+  problem: JellyfinImportProblem | null
+  startedAt: string
+  endedAt: string | null
+  users: JellyfinUserImport[]
+}
+
+/** What connecting to a Jellyfin server reads: the server and its users. */
+export type JellyfinConnection = { server: JellyfinServer; users: JellyfinUser[] }
+
+/** Reads a Jellyfin server's users with its API key, which the server never keeps. */
+export const connectJellyfin = (body: { address: string; apiKey: string }) =>
+  request<JellyfinConnection>('POST', '/jellyfin-import/users', body)
+
+/**
+ * Creates the new users (all or none), then starts importing the watch data in the background;
+ * `import` is null when no entry asked for watch data.
+ */
+export const startJellyfinImport = (body: {
+  address: string
+  apiKey: string
+  users: JellyfinImportEntry[]
+}) =>
+  request<{ created: User[]; import: JellyfinImportStatus | null }>(
+    'POST',
+    '/jellyfin-import',
+    body,
+  )
+
+/** The answer of the status and stop routes. */
+type JellyfinImportAnswer = { import: JellyfinImportStatus | null }
+
+/** The running import, else the last one, else null. */
+export const fetchJellyfinImport = async (signal?: AbortSignal) =>
+  (await request<JellyfinImportAnswer>('GET', '/jellyfin-import', undefined, signal)).import
+
+/** Stops the running import; what it imported stays. */
+export const stopJellyfinImport = async () =>
+  (await request<JellyfinImportAnswer>('POST', '/jellyfin-import/stop')).import
 
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
@@ -1588,6 +1702,7 @@ export const queryKeys = {
   myDevices: ['account', 'devices'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
+  jellyfinImport: ['jellyfin-import'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   parentalRatings: ['parental-ratings'] as const,

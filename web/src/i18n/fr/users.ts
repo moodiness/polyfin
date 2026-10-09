@@ -176,6 +176,97 @@ const users: typeof en = {
     accessHelp: 'Chaque changement est enregistré tout de suite.',
     noServerLibrariesHelp:
       'Ajoutez une bibliothèque dans Contenu › Bibliothèques, puis choisissez ici celles que cet utilisateur voit.',
+    jellyfinImport: {
+      open: 'Importer depuis Jellyfin',
+      title: 'Importer depuis Jellyfin',
+      description:
+        'Reprenez les comptes d’un serveur Jellyfin et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans Jellyfin. Les mots de passe ne peuvent pas être importés : vous en choisissez un pour chaque nouveau compte.',
+      connectTitle: 'Se connecter à Jellyfin',
+      connectHelp:
+        'L’adresse et la clé d’API servent seulement à cette importation : Polyfin ne les enregistre pas.',
+      address: 'Adresse du serveur',
+      addressHelp:
+        'L’adresse à laquelle Jellyfin s’ouvre dans un navigateur. Une adresse du réseau local fonctionne.',
+      apiKey: 'Clé d’API',
+      apiKeyHelp: 'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API.',
+      connect: 'Se connecter',
+      connecting: 'Connexion…',
+      chooseTitle: 'Choisir qui importer',
+      chooseHelp: (server: string, version: string) =>
+        `${server}, Jellyfin ${version}. Pour chaque utilisateur, choisissez le compte Polyfin dans lequel importer, ou créez-en un.`,
+      changeServer: 'Changer de serveur',
+      noUsers: 'Ce serveur Jellyfin n’a aucun utilisateur.',
+      lastActivityLabel: 'Dernière activité :',
+      importAs: 'Importer dans',
+      skip: 'Ne pas importer',
+      newUser: 'Nouvel utilisateur',
+      watchData: 'Importer les données de visionnage',
+      watchDataHelp: 'Titres vus avec leurs dates, points de reprise et favoris.',
+      watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
+      nothingToImport:
+        'Choisissez un utilisateur à créer, ou des données de visionnage à importer.',
+      start: 'Lancer l’importation',
+      starting: 'Lancement…',
+      started: (created: number, importing: boolean) =>
+        created === 0
+          ? 'L’importation a commencé.'
+          : `${created === 1 ? '1 utilisateur créé.' : `${created} utilisateurs créés.`}${importing ? ' L’importation a commencé.' : ''}`,
+      currentTitle: 'Importation en cours',
+      lastTitle: 'Dernière importation',
+      startedLabel: 'Commencée',
+      endedLabel: 'Terminée',
+      runningHelp:
+        'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, l’importation s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien en double.',
+      stop: 'Arrêter l’importation',
+      stopping: 'Arrêt…',
+      states: {
+        running: 'En cours',
+        done: 'Terminée',
+        stopped: 'Arrêtée',
+        failed: 'Échouée',
+      },
+      problems: {
+        jellyfin_unreachable:
+          'Jellyfin est devenu injoignable pendant l’importation. Ce qui a été importé est gardé.',
+        jellyfin_key_refused:
+          'Jellyfin a refusé la clé d’API pendant l’importation : elle a peut-être été révoquée. Ce qui a été importé est gardé.',
+        not_jellyfin:
+          'Le serveur a cessé de répondre comme Jellyfin pendant l’importation. Ce qui a été importé est gardé.',
+        internal:
+          'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur donne le détail. Ce qui a été importé est gardé.',
+      },
+      userStates: {
+        waiting: 'En attente',
+        reading: 'Lecture',
+        saving: 'Enregistrement',
+        done: 'Terminé',
+        failed: 'Échoué',
+      },
+      notImported: 'Non importé',
+      userMapping: (jellyfinName: string, userName: string) => `${jellyfinName} → ${userName}`,
+      read: (count: number) => (count <= 1 ? `${count} élément lu` : `${count} éléments lus`),
+      counts: (played: number, resumed: number, favorites: number) =>
+        `${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}`,
+      unmatched: (count: number) =>
+        count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
+      unmatchedTitle: (name: string) => `Titres introuvables pour ${name}`,
+      unmatchedHelp:
+        'Ces titres n’ont pas été importés : aucun titre de Polyfin ne leur correspond par IMDb, TMDB ou TVDB.',
+      titleColumn: 'Titre',
+      kindColumn: 'Type',
+      yearColumn: 'Année',
+      reasonColumn: 'Raison',
+      kinds: {
+        movie: 'Film',
+        episode: 'Épisode',
+        series: 'Série',
+      },
+      reasons: {
+        no_identifier: 'Aucun identifiant IMDb, TMDB ou TVDB',
+        not_found: 'Absent de Polyfin',
+      },
+      more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
+    },
   },
 }
 
