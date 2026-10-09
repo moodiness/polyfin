@@ -183,8 +183,8 @@ type harness struct {
 }
 
 // newHarness is a service on a fresh database, sending to fakes with
-// Trakt's and Simkl's apps set, at a fixed time, without waiting between
-// requests.
+// Trakt's and Simkl's apps and Last.fm's API account set, at a fixed time,
+// without waiting between requests.
 func newHarness(t *testing.T) harness {
 	t.Helper()
 	pool := testdb.New(t)
@@ -197,6 +197,7 @@ func newHarness(t *testing.T) harness {
 	}
 	settings := store.Settings()
 	settings.TraktClientID, settings.TraktClientSecret, settings.SimklClientID = "trakt-client", "trakt-secret", "simkl-client"
+	settings.LastFMAPIKey, settings.LastFMSecret = "lastfm-key", "lastfm-secret"
 	if _, err := store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
@@ -213,12 +214,13 @@ func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writ
 	logger := slog.New(slog.NewTextHandler(log, nil))
 	client := stremio.NewClient("test")
 	s := New(Options{DB: pool, Settings: store.Settings, Version: "1.2.3", Logger: logger,
-		URLs:     map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb"},
+		URLs: map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb",
+			LastFM: f.url + "/lastfm/2.0/", ListenBrainz: f.url + "/listenbrainz"},
 		Titles:   library.New(pool, addons.New(pool, client), client, logger, store.Settings),
 		UserData: userdata.New(pool)})
 	s.now = func() time.Time { return clockStart }
 	s.timing.gaps = map[string]time.Duration{}
-	s.timing.publicMetaDBGap = 0
+	s.timing.sharedGaps = map[string]time.Duration{}
 	s.timing.retryFirst, s.timing.retryMax = 10*time.Millisecond, 40*time.Millisecond
 	s.timing.pollUnit = 5 * time.Millisecond
 	s.timing.importGaps = map[string]time.Duration{}

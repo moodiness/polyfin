@@ -1,16 +1,19 @@
-// Package trackers sends what each Polyfin user watches to the tracking
-// services they connect to their account: Trakt, Simkl and MDBList, which
-// follow playback as it happens (scrobbling) and keep a watch history, and
-// PublicMetaDB, which keeps resume points and a watch history. Only movies
-// and episodes known by an IMDb, TMDB or TVDB identifier are sent, episodes
-// by their series' identifiers and their numbers.
+// Package trackers sends what each Polyfin user watches and listens to to
+// the tracking services they connect to their account: Trakt, Simkl and
+// MDBList, which follow playback as it happens (scrobbling) and keep a
+// watch history, and PublicMetaDB, which keeps resume points and a watch
+// history. Only movies and episodes known by an IMDb, TMDB or TVDB
+// identifier are sent to them, episodes by their series' identifiers and
+// their numbers. The songs of music addons go to the music services only,
+// Last.fm and ListenBrainz (see music.go), by their artist and title.
 //
 // Nothing is sent while a request is answered: playback reports and played
 // marks are queued and sent in the background, one user and service at a
 // time, at the pace each service allows. Changes to the history and resume
-// points are kept in the database until the service accepts them or they
-// are too old to matter; the start and pause of playback are sent once, as
-// they mean nothing late.
+// points, and scrobbled songs, are kept in the database until the service
+// accepts them or they are too old to matter; the start and pause of
+// playback, and the song playing now, are sent once, as they mean nothing
+// late.
 package trackers
 
 import (
@@ -36,10 +39,12 @@ const (
 	Simkl        = "simkl"
 	MDBList      = "mdblist"
 	PublicMetaDB = "publicmetadb"
+	LastFM       = "lastfm"
+	ListenBrainz = "listenbrainz"
 )
 
 // Services lists the services in the order the admin app shows them.
-var Services = []string{Trakt, Simkl, MDBList, PublicMetaDB}
+var Services = []string{Trakt, Simkl, MDBList, PublicMetaDB, LastFM, ListenBrainz}
 
 // publicURLs are the base URLs of the services' APIs.
 var publicURLs = map[string]string{
@@ -47,6 +52,8 @@ var publicURLs = map[string]string{
 	Simkl:        "https://api.simkl.com",
 	MDBList:      "https://api.mdblist.com",
 	PublicMetaDB: "https://publicmetadb.com",
+	LastFM:       "https://ws.audioscrobbler.com/2.0/",
+	ListenBrainz: "https://api.listenbrainz.org",
 }
 
 // ByCode reports whether users connect service by entering a code on its
@@ -55,9 +62,34 @@ func ByCode(service string) bool {
 	return service == Trakt || service == Simkl
 }
 
-// scrobbles reports whether service follows playback as it happens.
+// BySignIn reports whether users connect service by signing in on its site
+// and allowing Polyfin there (Last.fm).
+func BySignIn(service string) bool {
+	return service == LastFM
+}
+
+// ByKey reports whether users connect service by pasting their API key or
+// user token (MDBList, PublicMetaDB, ListenBrainz), which they may read
+// again.
+func ByKey(service string) bool {
+	return known(service) && !ByCode(service) && !BySignIn(service)
+}
+
+// Music reports whether service is told the songs users play, rather than
+// the movies and episodes they watch.
+func Music(service string) bool {
+	return service == LastFM || service == ListenBrainz
+}
+
+// scrobbles reports whether service follows the playback of movies and
+// episodes as it happens.
 func scrobbles(service string) bool {
-	return service != PublicMetaDB
+	return service != PublicMetaDB && !Music(service)
+}
+
+// imports reports whether Polyfin reads the watch history of service.
+func imports(service string) bool {
+	return known(service) && !Music(service)
 }
 
 // known reports whether service is one of Services.
@@ -67,13 +99,16 @@ func known(service string) bool {
 }
 
 // Available reports whether users can connect service with settings: a
-// code service needs the app an administrator registered with it.
+// code or sign-in service needs the app an administrator registered with
+// it.
 func Available(service string, settings accounts.Settings) bool {
 	switch service {
 	case Trakt:
 		return settings.TraktAvailable()
 	case Simkl:
 		return settings.SimklAvailable()
+	case LastFM:
+		return settings.LastFMAvailable()
 	}
 	return true
 }
@@ -134,9 +169,10 @@ type timing struct {
 	// gaps are the least time between two requests for one user to a
 	// service: Trakt and Simkl take one write a second.
 	gaps map[string]time.Duration
-	// publicMetaDBGap spaces every request to PublicMetaDB, which limits
-	// the server's address to 300 requests every 10 seconds.
-	publicMetaDBGap time.Duration
+	// sharedGaps space every request to a service whose limit counts the
+	// server's address rather than each user: PublicMetaDB takes 300
+	// requests every 10 seconds, Last.fm about 5 a second.
+	sharedGaps map[string]time.Duration
 	// retryFirst is the first wait after a failed send, doubling up to
 	// retryMax; giveUp is how old a change gets before it is dropped.
 	retryFirst, retryMax, giveUp time.Duration
@@ -155,6 +191,10 @@ type timing struct {
 	// pollUnit is the unit of the intervals the services poll codes at,
 	// a second.
 	pollUnit time.Duration
+	// signInTime is how long Polyfin waits for a user to allow it on
+	// Last.fm, asking every signInPoll pollUnits.
+	signInTime time.Duration
+	signInPoll int
 	// request bounds each request.
 	request time.Duration
 	// importEvery is how long after an import of a watch history the
@@ -169,8 +209,8 @@ type timing struct {
 }
 
 var defaultTiming = timing{
-	gaps:             map[string]time.Duration{Trakt: time.Second, Simkl: time.Second, MDBList: 250 * time.Millisecond},
-	publicMetaDBGap:  40 * time.Millisecond,
+	gaps:             map[string]time.Duration{Trakt: time.Second, Simkl: time.Second, MDBList: 250 * time.Millisecond, ListenBrainz: 250 * time.Millisecond},
+	sharedGaps:       map[string]time.Duration{PublicMetaDB: 40 * time.Millisecond, LastFM: 250 * time.Millisecond},
 	retryFirst:       30 * time.Second,
 	retryMax:         30 * time.Minute,
 	giveUp:           48 * time.Hour,
@@ -180,6 +220,8 @@ var defaultTiming = timing{
 	refreshEvery:     time.Hour,
 	watchedWindow:    6 * time.Hour,
 	pollUnit:         time.Second,
+	signInTime:       15 * time.Minute,
+	signInPoll:       5,
 	request:          15 * time.Second,
 	importEvery:      6 * time.Hour,
 	importCheck:      10 * time.Minute,
@@ -219,13 +261,15 @@ type Service struct {
 	refusedApps map[laneKey]string
 	// intakes are the reports and marks waiting to be looked at, by user.
 	intakes map[accounts.ID]*intake
-	// sessions are the playbacks under way, by user and device.
+	// sessions are the playbacks of movies and episodes under way, and
+	// listens those of songs, by user and device.
 	sessions map[sessionKey]*session
+	listens  map[sessionKey]*listen
 	// lanes are what waits to be sent, by user and service.
 	lanes map[laneKey]*lane
 	seq   int64
-	// pace spaces every request to PublicMetaDB.
-	pace pace
+	// paces space every request to the services of sharedGaps.
+	paces map[string]*pace
 
 	titles   Titles
 	userData *userdata.Store
@@ -263,6 +307,8 @@ func New(options Options) *Service {
 		refusedApps: map[laneKey]string{},
 		intakes:     map[accounts.ID]*intake{},
 		sessions:    map[sessionKey]*session{},
+		listens:     map[sessionKey]*listen{},
+		paces:       map[string]*pace{PublicMetaDB: {}, LastFM: {}},
 		lanes:       map[laneKey]*lane{},
 		titles:      options.Titles,
 		userData:    options.UserData,

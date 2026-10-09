@@ -38,8 +38,8 @@ type lane struct {
 	last, notBefore time.Time
 }
 
-// pace spaces requests shared by every lane, as PublicMetaDB's limit per
-// address asks.
+// pace spaces requests shared by every lane of a service, as limits per
+// address ask.
 type pace struct {
 	mu        sync.Mutex
 	last      time.Time
@@ -125,7 +125,7 @@ func (s *Service) deliver(key laneKey, l *lane, t ticket) time.Duration {
 		case err != nil:
 			return s.timing.retryFirst
 		}
-		if json.Unmarshal(payload, &ev) != nil || len(ev.Titles) == 0 {
+		if json.Unmarshal(payload, &ev) != nil || !ev.complete() {
 			s.forget(t.id)
 			return 0
 		}
@@ -169,10 +169,10 @@ func (s *Service) deliver(key laneKey, l *lane, t ticket) time.Duration {
 		l.notBefore = l.last.Add(res.after)
 	}
 	s.mu.Unlock()
-	if key.service == PublicMetaDB && res.after > 0 {
-		s.pace.mu.Lock()
-		s.pace.notBefore = time.Now().Add(res.after)
-		s.pace.mu.Unlock()
+	if p := s.paces[key.service]; p != nil && res.after > 0 {
+		p.mu.Lock()
+		p.notBefore = time.Now().Add(res.after)
+		p.mu.Unlock()
 	}
 
 	switch res.outcome {
@@ -221,13 +221,13 @@ func (s *Service) waitTurn(key laneKey, l *lane) bool {
 	if !s.sleep(time.Until(next)) {
 		return false
 	}
-	if key.service != PublicMetaDB {
+	p := s.paces[key.service]
+	if p == nil {
 		return true
 	}
-	p := &s.pace
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !s.sleep(time.Until(latest(p.last.Add(s.timing.publicMetaDBGap), p.notBefore))) {
+	if !s.sleep(time.Until(latest(p.last.Add(s.timing.sharedGaps[key.service]), p.notBefore))) {
 		return false
 	}
 	p.last = time.Now()

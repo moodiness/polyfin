@@ -14,10 +14,11 @@ import (
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
-// trackingServices stands in for Trakt (/trakt), MDBList (/mdblist) and
-// PublicMetaDB (/publicmetadb): MDBList takes the key "good", refuses
-// "bad" and fails for any other; Trakt hands out a code to any app but
-// "unknown-id".
+// trackingServices stands in for Trakt (/trakt), MDBList (/mdblist),
+// PublicMetaDB (/publicmetadb) and Last.fm (/lastfm): MDBList takes the
+// key "good", refuses "bad" and fails for any other; Trakt hands out a
+// code to any app but "unknown-id"; Last.fm hands out a request token
+// nobody allows.
 func trackingServices(t *testing.T) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +50,13 @@ func trackingServices(t *testing.T) string {
 			}
 		case "/mdblist/sync/playback":
 			_, _ = io.WriteString(w, `[]`)
+		case "/lastfm/2.0/":
+			if r.URL.Query().Get("method") == "auth.getToken" {
+				_, _ = io.WriteString(w, `{"token":"request-token"}`)
+				return
+			}
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `{"error":14,"message":"Unauthorized Token - This token has not been authorized"}`)
 		default:
 			_, _ = io.WriteString(w, `{}`)
 		}
@@ -62,7 +70,8 @@ func newTrackingAPI(t *testing.T) testAPI {
 	services := trackingServices(t)
 	return newTestAPI(t, 10, func(options *Options, deps testDeps) {
 		tracker := trackers.New(trackers.Options{DB: deps.pool, Settings: options.Accounts.Settings, Version: "test", Logger: options.Logger,
-			URLs:     map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb"},
+			URLs: map[string]string{trackers.Trakt: services + "/trakt", trackers.MDBList: services + "/mdblist", trackers.PublicMetaDB: services + "/publicmetadb",
+				trackers.LastFM: services + "/lastfm/2.0/"},
 			Titles:   library.New(deps.pool, deps.addons, deps.client, options.Logger, options.Accounts.Settings),
 			UserData: userdata.New(deps.pool)})
 		t.Cleanup(tracker.Close)
@@ -81,10 +90,12 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 
 	status, body, _ := member.call(http.MethodGet, "/account/tracking", nil)
 	want := `{"services":[
-		{"service":"trakt","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"simkl","connection":"code","available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"mdblist","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"publicmetadb","connection":"key","available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null}]}`
+		{"service":"trakt","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"simkl","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"mdblist","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"publicmetadb","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"lastfm","connection":"signin","music":true,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
+		{"service":"listenbrainz","connection":"key","music":true,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null}]}`
 	var expected map[string]any
 	_ = json.Unmarshal([]byte(want), &expected)
 	if encoded, _ := json.Marshal(body); status != http.StatusOK || string(encoded) != mustCompact(t, expected) {
@@ -100,6 +111,8 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 		{http.MethodPost, "/account/tracking/other", map[string]string{}, http.StatusNotFound, "not_found"},
 		{http.MethodDelete, "/account/tracking/other", nil, http.StatusNotFound, "not_found"},
 		{http.MethodPost, "/account/tracking/trakt", map[string]string{}, http.StatusConflict, "not_available"},
+		{http.MethodPost, "/account/tracking/lastfm", map[string]string{}, http.StatusConflict, "not_available"},
+		{http.MethodPost, "/account/tracking/lastfm/key/reveal", nil, http.StatusBadRequest, "not_revealable"},
 		{http.MethodPost, "/account/tracking/mdblist", map[string]string{"key": "bad"}, http.StatusBadRequest, "invalid_key"},
 		{http.MethodPost, "/account/tracking/mdblist", map[string]string{"key": "  "}, http.StatusBadRequest, "invalid_key"},
 		{http.MethodPost, "/account/tracking/mdblist", map[string]string{"key": "down"}, http.StatusBadGateway, "service_unreachable"},
@@ -151,7 +164,19 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 		t.Errorf("a secret is listed: %s", encoded)
 	}
 
-	for _, service := range []string{"mdblist", "trakt", "publicmetadb"} {
+	// With Last.fm's API account saved, a sign-in waits for the user.
+	settings["lastFmApiKey"], settings["lastFmSecret"] = "lastfm-key", "lastfm-shared"
+	if status, _, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
+		t.Fatalf("settings: %d", status)
+	}
+	status, body, _ = member.call(http.MethodPost, "/account/tracking/lastfm", map[string]string{})
+	code, _ = body["code"].(map[string]any)
+	if status != http.StatusOK || body["connection"] != "signin" || body["available"] != true || body["connected"] != false || code["userCode"] != "" ||
+		code["verificationUrl"] != "https://www.last.fm/api/auth/?api_key=lastfm-key&token=request-token" {
+		t.Errorf("sign-in: %d %v", status, body)
+	}
+
+	for _, service := range []string{"mdblist", "trakt", "publicmetadb", "lastfm"} {
 		if status, body, _ := member.call(http.MethodDelete, "/account/tracking/"+service, nil); status != http.StatusNoContent {
 			t.Errorf("disconnecting %s: %d %v", service, status, body)
 		}
@@ -193,6 +218,9 @@ func TestHistoryImportFollowsTheContract(t *testing.T) {
 		{http.MethodPatch, "/account/tracking/publicmetadb", map[string]bool{"importHistory": true}, http.StatusConflict, "not_connected"},
 		{http.MethodPost, "/account/tracking/publicmetadb/import", nil, http.StatusConflict, "not_connected"},
 		{http.MethodPost, "/account/tracking/mdblist/import", nil, http.StatusConflict, "import_off"},
+		// The music services have no history.
+		{http.MethodPatch, "/account/tracking/listenbrainz", map[string]bool{"importHistory": true}, http.StatusNotFound, "not_found"},
+		{http.MethodPost, "/account/tracking/lastfm/import", nil, http.StatusNotFound, "not_found"},
 	} {
 		if status, body, _ := member.call(check.method, check.path, check.body); status != check.status || body["error"] != check.code {
 			t.Errorf("%s %s: %d %v", check.method, check.path, status, body)
