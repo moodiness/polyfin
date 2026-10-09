@@ -91,8 +91,8 @@ A **Web player** link appears when the server serves a web client. See [configur
 
 Fields that hold a key or a secret hide it. While you type one, an eye button (**Show key**, **Hide key**) shows what you typed. Once saved, the key shows as dots, with its own eye:
 
-- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key** and **Trakt client secret**.
-- Under **My account › Tracking**, each user can show their own **MDBList** and **PublicMetaDB** API keys. Trakt and Simkl hold tokens rather than keys, which are never shown.
+- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key**, **Trakt client secret** and **Last.fm shared secret**.
+- Under **My account › Tracking**, each user can show their own **MDBList** and **PublicMetaDB** API keys and their **ListenBrainz user token**. Trakt, Simkl and Last.fm hold tokens or session keys rather than keys, which are never shown.
 
 The key is fetched from the server when the eye is clicked, and hidden again on a second click, after a minute, or when you leave the page. Each time, the activity log records who showed which key, never the key itself, and the answer is never cached. A key that cannot be decrypted with `POLYFIN_SECRET_KEY` counts as not saved and cannot be shown.
 

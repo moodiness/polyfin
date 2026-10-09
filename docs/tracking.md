@@ -1,12 +1,13 @@
 # Tracking services
 
-Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts. These services then hear of the movies and episodes the user watches and marks played. This page covers what is sent, how users connect, and what an administrator sets up.
+Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts, which hear of the movies and episodes the user watches and marks played, and their own Last.fm and ListenBrainz accounts, which hear of the songs they play. This page covers what is sent, how users connect, and what an administrator sets up.
 
 ## What gets sent
 
-Only movies and episodes known by an IMDb, TMDB or TVDB identifier are sent. Episodes are sent by their series' identifiers and their season and episode numbers.
+Only movies and episodes known by an IMDb, TMDB or TVDB identifier are sent to Trakt, Simkl, MDBList and PublicMetaDB. Episodes are sent by their series' identifiers and their season and episode numbers.
 
-- Live TV, recordings, music and titles without an identifier send nothing.
+- Live TV, recordings, audiobooks and titles without an identifier send nothing.
+- Songs go to Last.fm and ListenBrainz only, and movies and episodes never reach those two. See [Music: Last.fm and ListenBrainz](#music-last-fm-and-listenbrainz).
 - One user's activity never reaches another user's accounts.
 
 ### Playback
@@ -27,12 +28,14 @@ Marking a movie, an episode, a season or a series played or unplayed from an app
 Each user connects their accounts under **My account › Tracking** in the admin app.
 
 - **Trakt** and **Simkl** show a code to enter on their site, after **Connect**.
+- **Last.fm** opens its site after **Connect**: sign in there if asked, and allow Polyfin.
 - **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences.
 - **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from **Settings → API** on its site.
+- For ListenBrainz, the user pastes their token in **ListenBrainz user token**, from the settings of its site.
 
-Polyfin checks an API key with the service before saving it.
+Polyfin checks an API key or user token with the service before saving it.
 
-Trakt and Simkl are offered only once an administrator has set them up; see [Setting up Trakt and Simkl](#setting-up-trakt-and-simkl-administrators).
+Trakt, Simkl and Last.fm are offered only once an administrator has set them up; see [Setting up Trakt, Simkl and Last.fm](#setting-up-trakt-simkl-and-last-fm-administrators).
 
 ## Importing your watch history
 
@@ -42,7 +45,7 @@ Polyfin can also read what you watched elsewhere, in other apps that report to t
 - **Import now**: imports at once.
 - A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, and what stopped it, if anything.
 
-Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user.
+Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play.
 
 ### What is imported
 
@@ -69,15 +72,44 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 - When the history cannot be read whole, what was read is imported, and the status line says why: the service refused the connection (**Connect again**), could not be reached, or asked to wait too long.
 - **Disconnect** asks first. Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
 
-## Setting up Trakt and Simkl (administrators)
+## Music: Last.fm and ListenBrainz
 
-MDBList and PublicMetaDB need nothing from the administrator. Trakt and Simkl are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.
+The songs users play from music addons go to Last.fm and ListenBrainz: what is playing now, and a scrobble once a song has played long enough. Podcast episodes, which Polyfin serves as songs, go too. Audiobooks do not.
+
+### Connecting Last.fm and ListenBrainz
+
+Under **My account › Tracking**:
+
+- Last.fm: **Connect** shows a button that opens Last.fm. Sign in there if asked, and allow Polyfin to use your account. The page updates by itself once you have. The request ends after 15 minutes; **Start again** makes a new one.
+- ListenBrainz: paste your token in **ListenBrainz user token**. You find it on listenbrainz.org, in your settings, under User token. Polyfin asks ListenBrainz whether the token is valid before saving it, and shows the account name ListenBrainz gives.
+
+A connected ListenBrainz token shows as dots, and its owner can show it with its eye. Last.fm gives Polyfin a session key, which is never shown. Last.fm is offered once an administrator has set it up; see [Last.fm](#last-fm).
+
+### What is sent and when
+
+- What is playing now: sent when a song starts, and when it plays on after a pause. It is sent once: Last.fm and ListenBrainz show it for a moment only, so it is not worth sending late.
+- The scrobble: sent once the song has played for half its length or for 4 minutes, whichever comes first. Last.fm and ListenBrainz both get it, with the time the song started.
+- Songs of 30 seconds or less are never scrobbled, as Last.fm asks. A song whose length is unknown is scrobbled after 4 minutes of playing.
+- Only the time the song actually played counts. Time paused counts for nothing, and so do skips: seeking forward adds nothing, and after seeking back the song counts again only as it plays on. Polyfin takes the smaller of the time between two reports from the app and how far the song moved meanwhile, so a pause the app does not report counts for nothing either.
+- A song is scrobbled once per play. Played again from its start, or repeated, it counts anew.
+- A song is sent with its artist, title, album, album artist (when not the song's artist), place on its album, and length, as its music addon names them. ListenBrainz also gets its ISRC, when the addon gives one, and Polyfin's name and version as the player.
+- A song whose start Polyfin did not see, as after a server restart, counts from its first report.
+
+**Compared with Jellyfin:** Jellyfin sends songs to Last.fm or ListenBrainz only through a plugin installed apart. Polyfin does it itself, for each user who connects an account, from the playback reports apps already send.
+
+**For app developers:** there is nothing to add. Polyfin follows the reports apps send for songs: `POST /Sessions/Playing`, `/Sessions/Playing/Progress` and `/Sessions/Playing/Stopped` (and the older `/PlayingItems` ones). Send `PositionTicks` and `IsPaused` as playback goes, every few seconds as Jellyfin's apps do, and a new start for each play of a song, repeats included. The scrobble goes out with the first report past the threshold, or the stop.
+
+## Setting up Trakt, Simkl and Last.fm (administrators)
+
+MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trakt, Simkl and Last.fm are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Trakt client ID** | **Settings › Tracking** | Empty | Client ID of your Trakt app. |
 | **Trakt client secret** | **Settings › Tracking** | Empty | Client secret of your Trakt app. Shown as dots once saved; administrators can show it again with its eye. |
 | **Simkl client ID** | **Settings › Tracking** | Empty | Client ID of your Simkl app. |
+| **Last.fm API key** | **Settings › Tracking** | Empty | API key of your Last.fm API account. |
+| **Last.fm shared secret** | **Settings › Tracking** | Empty | Shared secret of your Last.fm API account. Shown as dots once saved; administrators can show it again with its eye. |
 
 ### Trakt
 
@@ -93,27 +125,37 @@ The secret is never sent back with the settings. Once saved, it shows as dots, a
 
 Client IDs of older AUTH V1 apps are refused.
 
+### Last.fm
+
+1. Create an [API account on Last.fm](https://www.last.fm/api/account/create). Give it any name, and leave its callback URL empty.
+2. Paste its API key and shared secret, shown on its page, in **Last.fm API key** and **Last.fm shared secret**.
+
+The shared secret is kept as the Trakt client secret is: never sent back with the settings, shown as dots once saved, and shown again on demand with its eye.
+
+Users connect through Last.fm's desktop authentication: they allow Polyfin on Last.fm's page, then Polyfin asks Last.fm for their session itself. Nothing comes back to Polyfin through the browser, so no callback address has to reach the server. Connecting works the same behind a reverse proxy, at any address, and on a server only reachable on the local network. Last.fm's web authentication would send the browser back to an address of Polyfin's, which the server cannot know for sure behind a proxy.
+
 ### When the server's app is refused
 
-When Trakt or Simkl refuses the server's app (a wrong client ID or secret), users connecting are told that an administrator has to check it under **Settings › Tracking**, rather than that the service is down.
+When Trakt, Simkl or Last.fm refuses the server's app (a wrong client ID, client secret, API key or shared secret), users connecting are told that an administrator has to check it under **Settings › Tracking**, rather than that the service is down.
 
 ## Delivery and retries
 
 Nothing waits for the services: reports and marks are sent in the background.
 
-- They are sent at the pace each service allows: one change a second per user for Trakt and Simkl, and PublicMetaDB's limit per server address.
+- They are sent at the pace each service allows: one change a second per user for Trakt and Simkl, four a second per user for MDBList and ListenBrainz, and the limits per server address of PublicMetaDB and Last.fm (four requests a second for Last.fm, shared by all users).
 - When a service answers that it gets too many requests, Polyfin waits as long as it asks.
-- Changes to the history and resume points are kept in the database and sent again, with longer waits each time, for up to two days, restarts included.
-- Starts and pauses are sent once.
+- Changes to the history and resume points, and scrobbles, are kept in the database and sent again, with longer waits each time, for up to two days, restarts included. A scrobble sent again keeps the time the song started, and is sent once the service takes it, never twice.
+- Starts, pauses and what is playing now are sent once.
+- A scrobble Last.fm ignores (an artist or a song it ignores, or a time too old) is dropped. One past the account's daily limit is sent again later.
 
 ### Connection status
 
-- A service that refuses the user's token or key shows **Connect again**. It gets nothing more until the user connects it again.
+- A service that refuses the user's token or key shows **Connect again**. It gets nothing more until the user connects it again, and what waited for it is dropped. Last.fm refuses the session once the user removed Polyfin from the applications of their Last.fm account.
 - A service that keeps failing shows as unreachable while Polyfin retries.
 
 ### Tokens and keys
 
-- Trakt and Simkl tokens are refreshed before they expire, and revoked when the user disconnects.
+- Trakt and Simkl tokens are refreshed before they expire, and revoked when the user disconnects. Last.fm session keys do not expire; disconnecting forgets the key, and removing Polyfin from the applications of the Last.fm account revokes it.
 - Deleting a user deletes their connections and what waited to be sent.
-- Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key shows as dots, and its owner can show it with its eye; Trakt and Simkl tokens are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
+- Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key or ListenBrainz token shows as dots, and its owner can show it with its eye; Trakt and Simkl tokens and Last.fm session keys are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
 - With `POLYFIN_SECRET_KEY` set, tokens and keys are stored encrypted. A connection whose tokens cannot be decrypted with it counts as not connected until the user connects again or the right key is set; nothing is sent with it meanwhile. See [Stored keys and tokens](configuration.md#stored-keys-and-tokens).
