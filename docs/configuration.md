@@ -40,7 +40,7 @@ The Compose file reads `POSTGRES_PASSWORD` and `POLYFIN_SECRET_KEY` from `.env`.
 
 ## Stored keys and tokens
 
-Polyfin stores a few secrets in its database: the server's PublicMetaDB key, TheIntroDB key and Trakt client secret, and each user's tracking tokens and API keys (Trakt, Simkl, MDBList, PublicMetaDB). With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out:
+Polyfin stores a few secrets in its database: the server's PublicMetaDB key, TheIntroDB key, Trakt client secret and Last.fm shared secret, and each user's tracking tokens and API keys (Trakt, Simkl, MDBList, PublicMetaDB, Last.fm, ListenBrainz). With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out:
 
 - At startup, the secrets still stored unencrypted are encrypted in place, in one go. Running again changes nothing.
 - New values are written encrypted, and read back decrypted.
@@ -50,4 +50,4 @@ If the key is missing, changed or wrong while encrypted secrets exist, Polyfin s
 
 Addon addresses, IPTV passwords and guide addresses stay unencrypted.
 
-Administrators can read the server's saved keys again, and each user their own MDBList and PublicMetaDB keys: see [Administration](administration.md#showing-a-saved-key).
+Administrators can read the server's saved keys again, and each user their own MDBList and PublicMetaDB keys and ListenBrainz token: see [Administration](administration.md#showing-a-saved-key).
