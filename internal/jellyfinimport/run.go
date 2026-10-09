@@ -196,11 +196,12 @@ func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 	switch item.Type {
 	case "Movie":
 		if ref, ok := identified(item.ProviderIDs, false); ok {
+			ref.Name = item.Name
 			return []library.TitleRef{ref}, true
 		}
 	case "Series":
 		if ref, ok := identified(item.ProviderIDs, true); ok {
-			ref.Series = true
+			ref.Series, ref.Name = true, item.Name
 			return []library.TitleRef{ref}, true
 		}
 	case "Episode":
@@ -209,6 +210,7 @@ func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
 			return nil, false
 		}
 		ref, ok := identified(providers, true)
+		ref.Name = item.SeriesName
 		if !ok || item.ParentIndexNumber == nil || item.IndexNumber == nil || *item.ParentIndexNumber < 0 || *item.IndexNumber <= 0 {
 			return nil, true
 		}
