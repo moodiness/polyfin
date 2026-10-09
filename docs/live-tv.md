@@ -1,6 +1,6 @@
 # Live TV
 
-This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md).
+This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md). The past programmes an IPTV provider keeps play from a Replay view, described there under [Replay](iptv.md#replay).
 
 ## Channels from addons
 
@@ -94,7 +94,7 @@ The catalog's row then shows when its first guide was last fetched, when it will
 #### What a download keeps
 
 - The guide's channels, with their names and icons. A channel its programmes name without declaring it counts as one without a name.
-- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers and image.
+- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers and image. The guide channels of IPTV channels whose provider keeps past programmes keep theirs as far back as that archive, at most 30 days (see [Replay](iptv.md#guides-and-the-archive-window)).
 - A failed fetch keeps those of the last one.
 
 #### How channels are matched to the guide
