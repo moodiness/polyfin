@@ -4,6 +4,7 @@
 package playback
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -47,6 +48,13 @@ const (
 // after it failed. It may become the title later, so it is retried like
 // other failures and its analysis is not kept.
 var ErrStandIn = errors.New("the source is a short clip, not the title")
+
+// ErrPlaylistReplay reports a replay whose provider's archive answers an
+// HLS playlist. Replays play as titles' files do, read through the source
+// cache, and the HLS path Polyfin has for sources is the live one, which
+// keeps a sliding window of an endless stream: neither plays a finite
+// playlist, so such a replay is refused rather than played wrong.
+var ErrPlaylistReplay = errors.New("the provider's archive answered an HLS playlist, which a replay cannot play")
 
 // Renewer asks the addon that listed a version for a fresh link to the
 // same file; library.Service.Renew is one.
@@ -234,7 +242,10 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 // analyze is Analyze, the version read with probe. ffprobe is stopped as
 // soon as the version's source fails, rather than left to its deadline,
 // and the source's failure is the analysis's: what is kept as the
-// version's failure tells what its host answered.
+// version's failure tells what its host answered. A version that holds
+// one of its source's connections takes it meanwhile (see Hold): the
+// source's connections all in use fail the analysis, which is not kept as
+// the version's failure.
 func (s *Service) analyze(ctx context.Context, version library.Version, probe func(media.Prober, context.Context, string) (media.Analysis, error)) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
@@ -242,6 +253,11 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	if err, failed := s.failures.Get(version.ID); failed {
 		return media.Analysis{}, err
 	}
+	release, err := s.Hold(ctx, version)
+	if err != nil {
+		return media.Analysis{}, err
+	}
+	defer release()
 	if !background(ctx) {
 		src := s.open(version)
 		defer src.Release()
@@ -269,7 +285,14 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 			case <-probing.Done():
 			}
 		}()
-		analysis, err := probe(s.ffprobe(), probing, target)
+		var analysis media.Analysis
+		var err error
+		if version.HoldsConnection {
+			err = notPlaylist(probing, src)
+		}
+		if err == nil {
+			analysis, err = probe(s.ffprobe(), probing, target)
+		}
 		stop()
 		if err != nil {
 			if failure := failureOf(src, failed); failure != nil {
@@ -288,6 +311,11 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		if analysis.Size == 0 {
 			analysis.Size = version.Size
 		}
+		// A replay's MPEG-TS file, read from an IPTV archive that tells not
+		// its length, lasts as long as its programme.
+		if analysis.Duration <= 0 && version.HoldsConnection && version.Runtime > 0 && transportStream(analysis) {
+			analysis.Duration = version.Runtime
+		}
 		data, err := json.Marshal(analysis)
 		if err != nil {
 			return nil, err
@@ -304,6 +332,21 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		return media.Analysis{}, err
 	}
 	return result.(media.Analysis), nil
+}
+
+// notPlaylist fails with ErrPlaylistReplay when src starts as an HLS
+// playlist does. A source that cannot be read is left to the analysis,
+// which tells why.
+func notPlaylist(ctx context.Context, src *source.Source) error {
+	head := make([]byte, 16)
+	n, err := src.ReadAt(ctx, head, 0)
+	if n == 0 && err != nil {
+		return nil
+	}
+	if bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U")) {
+		return ErrPlaylistReplay
+	}
+	return nil
 }
 
 // failureOf is why src failed, when failed, its Failed channel, closed.
@@ -383,10 +426,11 @@ type Delivery struct {
 // Serve answers a player's request for a version's bytes. The player is
 // redirected to the source when it can fetch it itself: the source needs
 // no headers, is on a public address, and answers now. Otherwise, or when
-// the delivery says so, Polyfin relays the bytes. An expired link is
-// renewed once.
+// the delivery says so, Polyfin relays the bytes, as it always does those
+// of a version that holds one of its source's connections (see Hold). An
+// expired link is renewed once.
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
-	if !delivery.Relay && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
+	if !delivery.Relay && !version.HoldsConnection && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)

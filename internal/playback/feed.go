@@ -113,14 +113,17 @@ func LiveFailure(err error) string {
 }
 
 // liveState is what a Service shares of live streams: one feed per
-// channel stream, the limits of the sources' connections, and who is told
-// how streams answer. Its zero value is ready.
+// channel stream, the holds of replays (see Hold), the limits of the
+// sources' connections, and who is told how streams answer. Its zero
+// value is ready.
 type liveState struct {
 	mu    sync.Mutex
 	feeds map[accounts.ID]*feed
 	// closing holds the feeds closed whose connection is not closed yet:
 	// their source still counts it (see makeRoom).
 	closing map[*feed]bool
+	// holds are the connections replays take, by version.
+	holds map[accounts.ID]*hold
 	// manifests are the streams found to be HLS playlists.
 	manifests map[accounts.ID]bool
 	// connections and health are set by LiveSources.
@@ -487,7 +490,7 @@ func (f *feed) open(user accounts.ID) {
 		close(f.closed)
 		st.mu.Unlock()
 	}()
-	freed, err := f.s.makeRoom(ctx, f, user)
+	freed, err := f.s.makeRoom(ctx, f.source, f, user)
 	var body io.ReadCloser
 	var head []byte
 	if err == nil {
@@ -590,33 +593,73 @@ func (s *Service) closeIdle(f *feed) bool {
 	return len(idle) > 0
 }
 
-// makeRoom keeps a source within its connections before f opens one: the
-// feeds of the source still closing are waited for, as the source counts
-// their connections until they are closed; then feeds of the source that
-// no reader uses are closed, then the oldest only user reads; else it
-// fails with ErrSlotsInUse. It reports whether it closed or waited for
-// one, which the provider may still count a moment.
-func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool, error) {
+// occupant takes one of a source's connections: a feed, or a hold (see
+// Hold).
+type occupant interface {
+	// since is when it took the connection.
+	since() time.Time
+	// unread reports whether no one uses it: it only lingers for its
+	// grace.
+	unread() bool
+	// onlyFor reports whether user alone uses it, and it may be ended for
+	// another of their streams.
+	onlyFor(user accounts.ID) bool
+	// evict ends it for another stream of its source.
+	evict()
+}
+
+func (f *feed) since() time.Time { return f.opened }
+
+func (f *feed) unread() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.readers) == 0
+}
+
+func (f *feed) onlyFor(user accounts.ID) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for r := range f.readers {
+		if r.user != user {
+			return false
+		}
+	}
+	return user != (accounts.ID{})
+}
+
+// makeRoom keeps a source within its connections before self takes one:
+// the feeds of the source still closing are waited for, as the source
+// counts their connections until they are closed; then feeds and holds of
+// the source that no one uses are ended, then the oldest feed only user
+// reads; else it fails with ErrSlotsInUse. It reports whether it closed or
+// waited for one, which the provider may still count a moment.
+func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupant, user accounts.ID) (bool, error) {
 	st := &s.feeds
 	st.mu.Lock()
 	limits := st.connections
 	st.mu.Unlock()
-	if limits == nil || f.source == (accounts.ID{}) {
+	if limits == nil || source == (accounts.ID{}) {
 		return false, nil
 	}
-	limit, err := limits(ctx, f.source)
+	limit, err := limits(ctx, source)
 	if err != nil || limit <= 0 {
 		return false, err
 	}
 	st.mu.Lock()
-	var open, closing []*feed
+	var open []occupant
+	var closing []*feed
 	for _, other := range st.feeds {
-		if other != f && other.source == f.source && !other.finished() {
+		if other != self && other.source == source && !other.finished() {
+			open = append(open, other)
+		}
+	}
+	for _, other := range st.holds {
+		if other != self && other.source == source {
 			open = append(open, other)
 		}
 	}
 	for other := range st.closing {
-		if other.source == f.source {
+		if other.source == source {
 			closing = append(closing, other)
 		}
 	}
@@ -631,31 +674,17 @@ func (s *Service) makeRoom(ctx context.Context, f *feed, user accounts.ID) (bool
 	if len(open) < limit {
 		return freed, nil
 	}
-	slices.SortFunc(open, func(a, b *feed) int { return a.opened.Compare(b.opened) })
-	idle := func(other *feed) bool {
-		other.mu.Lock()
-		defer other.mu.Unlock()
-		return len(other.readers) == 0
-	}
-	mine := func(other *feed) bool {
-		other.mu.Lock()
-		defer other.mu.Unlock()
-		for r := range other.readers {
-			if r.user != user {
-				return false
-			}
-		}
-		return user != (accounts.ID{})
-	}
-
-	for _, choose := range []func(*feed) bool{idle, mine} {
+	slices.SortFunc(open, func(a, b occupant) int { return a.since().Compare(b.since()) })
+	idle := func(other occupant) bool { return other.unread() }
+	mine := func(other occupant) bool { return other.onlyFor(user) }
+	for _, choose := range []func(occupant) bool{idle, mine} {
 		for _, other := range open {
 			if len(open) < limit {
 				return freed, nil
 			}
 			if choose(other) {
 				other.evict()
-				open = slices.DeleteFunc(open, func(o *feed) bool { return o == other })
+				open = slices.DeleteFunc(open, func(o occupant) bool { return o == other })
 				freed = true
 			}
 		}
