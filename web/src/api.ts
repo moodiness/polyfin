@@ -1694,6 +1694,8 @@ export type Health = {
     free: number
     used: number
     mount: string
+    /** Whether the disk is short of room, which Health shows as a problem. */
+    low: boolean
   }[]
   transcoder: {
     hardware: { method: string; device: string; encoders: string[]; toneMapping: boolean } | null
@@ -1718,20 +1720,57 @@ export type Health = {
     encrypted: boolean
     /** How many are stored unencrypted. */
     plaintext: number
-    /**
-     * Those POLYFIN_SECRET_KEY cannot decrypt: a server setting, a user's connection, or a
-     * notification target, by its name, of a user or of the server (`user` null).
-     */
-    unreadable: {
-      setting: ServerSecretName | null
-      service: TrackingServiceName | null
-      target: string | null
-      user: string | null
-    }[]
+    /** Those POLYFIN_SECRET_KEY cannot decrypt. */
+    unreadable: UnreadableSecret[]
   } | null
   /** How the database backups go; null when they are off. */
   backup: Backup | null
 }
+
+/**
+ * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting, a user's connection, or a
+ * notification target, by its name, of a user or of the server (`user` null).
+ */
+export type UnreadableSecret = {
+  setting: ServerSecretName | null
+  service: TrackingServiceName | null
+  target: string | null
+  user: string | null
+}
+
+/**
+ * Something Health shows as needing attention, as the server finds it: `key` names it while it
+ * lasts, `code` tells what it is, with its details; `to` is the page that describes it, with its
+ * anchor. `transient` ones come and go with the load. An addon, source or guide has an `owner`
+ * when it is a user's own.
+ */
+export type HealthProblem = {
+  key: string
+  tone: 'error' | 'warning'
+  to: string
+  transient: boolean
+} & (
+  | { code: 'database' }
+  | { code: 'disk'; folder: 'cache' | 'recordings' | 'backups'; free: number }
+  | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
+  | { code: 'conversions_full' }
+  | { code: 'thumbnails_paused'; host: string }
+  | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
+  | { code: 'secrets_plaintext' }
+  | { code: 'backup_failed' }
+  | { code: 'backup_stale' }
+  | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
+  | { code: 'task'; task: string }
+)
+
+/** The problems Health shows, errors first, with the tasks named in `language`. */
+export const fetchHealthProblems = (language: Language, signal?: AbortSignal) =>
+  request<{ problems: HealthProblem[] }>(
+    'GET',
+    `/health/problems?language=${seg(language)}`,
+    undefined,
+    signal,
+  )
 
 /** How the database backups go; `folder` is empty when they are off. */
 export type Backup = {
@@ -1821,6 +1860,8 @@ export const queryKeys = {
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
   health: ['health'] as const,
+  /** Under the health's key: refreshing the health refreshes them too. */
+  healthProblems: (language: Language) => ['health', 'problems', language] as const,
   backup: ['backup'] as const,
   sources: ['sources'] as const,
   variables: ['variables'] as const,

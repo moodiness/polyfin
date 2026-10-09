@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ArrowsClockwiseIcon,
   CalendarDotsIcon,
@@ -11,6 +11,7 @@ import {
 } from '@phosphor-icons/react'
 import {
   checkAddon,
+  fetchSources,
   queryClient,
   queryKeys,
   type AddonHealth,
@@ -37,7 +38,12 @@ import {
   RelativeTime,
 } from '@/ui'
 import { lineupPath } from '@/features/iptv/lineup'
-import { findProblems, lowOnSpace, unreadableName, useHealthData } from '@/features/system/problems'
+import {
+  problemText,
+  unreadableName,
+  useHealth,
+  useHealthProblems,
+} from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
@@ -49,7 +55,13 @@ import { Anchor, Facts, Meter } from './parts'
 export default function HealthRoute() {
   const { t } = useI18n()
   const text = t.system.health
-  const { health, sources, tasks } = useHealthData()
+  const health = useHealth()
+  // The server's addons, IPTV sources and guides, then each user's own.
+  const sources = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: ({ signal }) => fetchSources(signal),
+    refetchInterval: 30_000,
+  })
   const location = useLocation()
   const loaded = health.data !== undefined
 
@@ -70,7 +82,7 @@ export default function HealthRoute() {
         </InlineError>
       ) : (
         <>
-          <Problems health={health.data} sources={sources.data} tasks={tasks.data} />
+          <Problems health={health.data} />
           <Addons health={health.data} sources={sources.data} />
           <div className="grid gap-x-8 gap-y-block xl:grid-cols-2">
             <Iptv sources={sources.data} />
@@ -117,18 +129,11 @@ function HealthSkeleton() {
   )
 }
 
-function Problems({
-  health,
-  sources,
-  tasks,
-}: {
-  health: Health
-  sources: Parameters<typeof findProblems>[3]
-  tasks: Parameters<typeof findProblems>[4]
-}) {
+function Problems({ health }: { health: Health }) {
   const { language, t } = useI18n()
   const text = t.system.health
-  const problems = findProblems(t, language, health, sources, tasks)
+  const query = useHealthProblems()
+  const problems = query.data ?? []
   const checked = text.checkedAt(
     new Intl.DateTimeFormat(language, { timeStyle: 'medium' }).format(new Date(health.checkedAt)),
   )
@@ -138,13 +143,19 @@ function Problems({
       count={problems.length > 0 ? problems.length : undefined}
       aside={<span className="tabular-nums">{checked}</span>}
     >
-      {problems.length === 0 ? (
+      {query.isPending ? (
+        <SkeletonRows rows={1} />
+      ) : query.isError ? (
+        <InlineError onRetry={() => void query.refetch()} retrying={query.isFetching}>
+          {errorMessage(t, query.error)}
+        </InlineError>
+      ) : problems.length === 0 ? (
         <Notice tone="ok">{text.allGood}</Notice>
       ) : (
         <RowList aria-label={text.problemsTitle}>
           {problems.map((problem) => (
             <Row
-              key={problem.text}
+              key={problem.key}
               to={problem.to}
               leading={
                 <IconTile
@@ -152,7 +163,7 @@ function Problems({
                   tone="warn"
                 />
               }
-              title={<span className="whitespace-normal">{problem.text}</span>}
+              title={<span className="whitespace-normal">{problemText(t, language, problem)}</span>}
               trailing={
                 problem.tone === 'error' ? (
                   <StatusPill tone="danger">{text.error}</StatusPill>
@@ -584,7 +595,7 @@ function Disks({ health }: { health: Health }) {
         <ul className="space-y-5">
           {health.disks.map((disk) => {
             const total = disk.free + disk.used
-            const low = lowOnSpace(disk)
+            const low = disk.low
             const name = text.folderTitle[disk.folder]
             return (
               <li key={disk.folder} className="space-y-1.5">
