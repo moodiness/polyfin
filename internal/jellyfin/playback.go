@@ -170,8 +170,13 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 		return
 	}
 	// Jellyfin describes the item as on its page, without what concerns
-	// the user or managing the item.
-	dto := h.newItemDto(item, nil, true, userState{})
+	// the user or managing the item; a song tells whether it has lyrics,
+	// for the lyrics button of the apps controlling it.
+	var state userState
+	if item.Kind == library.KindTrack {
+		state.lyrics = h.Lyrics.Known(r.Context(), []accounts.ID{item.ID})
+	}
+	dto := h.newItemDto(item, nil, true, state)
 	h.addMediaSources(r, user, &dto, item, playing.Item, false)
 	// The chapters are those of the version playing, which the app may
 	// have picked among the item's.
