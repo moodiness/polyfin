@@ -4,7 +4,14 @@ const account = {
     title: 'My account',
     signedInAs: 'Signed in as ',
     sectionsLabel: 'Account sections',
-    sections: { tracking: 'Tracking', devices: 'Devices', password: 'Password' },
+    sections: {
+      tracking: 'Tracking',
+      notifications: 'Notifications',
+      devices: 'Devices',
+      password: 'Password',
+    },
+    notificationsHelp:
+      'Where Polyfin tells you when a new episode of a series you follow is out, or when your recordings end.',
     devicesHelp:
       'The apps signed in with your account. A device you sign out asks for your password the next time it opens.',
     passwordHelp: 'Changing your password signs out all your Jellyfin devices.',

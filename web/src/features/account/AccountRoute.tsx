@@ -1,18 +1,19 @@
-import { DevicesIcon, ListChecksIcon, PasswordIcon } from '@phosphor-icons/react'
+import { BellIcon, DevicesIcon, ListChecksIcon, PasswordIcon } from '@phosphor-icons/react'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { fetchMyDevices, queryKeys, signOutMyDevice } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
+import NotificationTargets from '@/features/notifications/NotificationTargets'
 import { useI18n } from '@/i18n'
 import { SectionNav } from '@/ui'
 import PasswordForm from './PasswordForm'
 import TrackingServices from './TrackingServices'
 
-const sectionIds = ['tracking', 'devices', 'password'] as const
+const sectionIds = ['tracking', 'notifications', 'devices', 'password'] as const
 type SectionId = (typeof sectionIds)[number]
 
-/** `/me/account`: tracking services, devices and password, with a list of sections beside them. */
+/** `/me/account`: tracking services, notifications, devices and password, with a list of sections beside them. */
 export default function AccountRoute() {
   const { t } = useI18n()
   const text = t.account
@@ -39,6 +40,12 @@ export default function AccountRoute() {
               icon: ListChecksIcon,
               to: '#tracking',
             },
+            {
+              id: 'notifications',
+              label: text.sections.notifications,
+              icon: BellIcon,
+              to: '#notifications',
+            },
             { id: 'devices', label: text.sections.devices, icon: DevicesIcon, to: '#devices' },
             { id: 'password', label: text.sections.password, icon: PasswordIcon, to: '#password' },
           ]}
@@ -47,6 +54,13 @@ export default function AccountRoute() {
     >
       <AccountSection id="tracking" title={text.sections.tracking} help={text.tracking.description}>
         <TrackingServices />
+      </AccountSection>
+      <AccountSection
+        id="notifications"
+        title={text.sections.notifications}
+        help={text.notificationsHelp}
+      >
+        <NotificationTargets scope="own" />
       </AccountSection>
       <AccountSection id="devices" title={text.sections.devices} help={text.devicesHelp}>
         <DeviceList

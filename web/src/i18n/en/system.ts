@@ -213,6 +213,8 @@ const system = {
         lastFmSecret: 'Last.fm shared secret',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
+      targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
+      serverTargetOf: (target: string) => `server notification target “${target}”`,
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',
       noIptvHint: 'Add an IPTV account under Content › Sources.',
       noGuides: 'No programme guide.',

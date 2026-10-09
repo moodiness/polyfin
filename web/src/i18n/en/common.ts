@@ -171,6 +171,19 @@ const common = {
       'Choose the hour collections are read at, or Never, from the list.',
     invalid_remuxdb_url:
       'The RemuxDB address must be a web address starting with http:// or https://.',
+    invalid_public_address:
+      'The public address must be a web address starting with http:// or https://, without a query.',
+    invalid_target_kind: 'Choose a webhook, Discord or ntfy.',
+    invalid_target_name: 'Target names must be 1 to 64 characters long.',
+    invalid_target_address: 'Enter a web address starting with https:// or http://.',
+    private_target_address:
+      'This address is on a local network: only an administrator’s targets may reach one.',
+    invalid_topic: 'An ntfy topic is 1 to 64 letters, digits, dashes and underscores.',
+    invalid_token: 'An access token is up to 256 characters, without spaces.',
+    invalid_events: 'One of the events chosen is not available for this target.',
+    too_many_targets: 'There are 20 targets already. Delete one to add another.',
+    target_unreadable:
+      'This target’s address or token cannot be decrypted with POLYFIN_SECRET_KEY. Enter it again.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',

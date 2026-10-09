@@ -6,6 +6,7 @@ import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 import { ExternalButtonLink, Notice, NumberInput, SecretField, Select, TextInput } from '@/ui'
+import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
@@ -29,6 +30,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   'live-tv': (api) => <LiveTv {...api} />,
   recordings: (api) => <Recordings {...api} />,
   backups: (api) => <Backups {...api} />,
+  notifications: (api) => <Notifications {...api} />,
   'web-player': (api) => <WebPlayer {...api} />,
   diagnostics: (api) => <DiagnosticsFields {...api} />,
 }
@@ -834,6 +836,41 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
         />
       </SettingsGroup>
       <Variables />
+    </>
+  )
+}
+
+function Notifications({ form, update, error, limits }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings
+  const text = t.notifications
+  return (
+    <>
+      <SettingsGroup>
+        <FieldRow
+          anchor="public-address"
+          label={s.publicAddress}
+          help={s.publicAddressHelp}
+          error={error('public-address')}
+        >
+          <TextInput
+            value={form.publicAddress}
+            onValue={(publicAddress) => update({ publicAddress })}
+            placeholder="https://media.example.org"
+            maxLength={limits('publicAddress').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title={text.serverTargets}>
+        <SettingRow anchor="notification-targets">
+          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{text.serverTargetsHelp}</p>
+          <NotificationTargets scope="server" />
+        </SettingRow>
+      </SettingsGroup>
     </>
   )
 }

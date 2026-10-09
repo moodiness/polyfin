@@ -1,5 +1,6 @@
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
 import enAccount from './en/account'
+import enNotifications from './en/notifications'
 import enAuth from './en/auth'
 import enCommon from './en/common'
 import enHome from './en/home'
@@ -12,6 +13,7 @@ import enSources from './en/sources'
 import enSystem from './en/system'
 import enUsers from './en/users'
 import frAccount from './fr/account'
+import frNotifications from './fr/notifications'
 import frAuth from './fr/auth'
 import frCommon from './fr/common'
 import frHome from './fr/home'
@@ -47,6 +49,7 @@ const en = {
   ...enSystem,
   ...enSettings,
   ...enAccount,
+  ...enNotifications,
 }
 
 /** Every message of the interface, in one language. */
@@ -65,6 +68,7 @@ const fr: Messages = {
   ...frSystem,
   ...frSettings,
   ...frAccount,
+  ...frNotifications,
 }
 
 // Two areas defining the same top-level key would silently hide one of them.
@@ -83,6 +87,7 @@ if (import.meta.env.DEV) {
     enSystem,
     enSettings,
     enAccount,
+    enNotifications,
   ]) {
     for (const key of Object.keys(area)) {
       if (seen.has(key)) throw new Error(`i18n: the key "${key}" is defined by two areas`)

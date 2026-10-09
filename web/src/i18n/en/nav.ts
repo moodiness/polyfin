@@ -33,6 +33,7 @@ const nav = {
       liveTv: 'Live TV',
       recordings: 'Recordings',
       backups: 'Backups',
+      notifications: 'Notifications',
       webPlayer: 'Web player',
       diagnostics: 'Diagnostics',
     },

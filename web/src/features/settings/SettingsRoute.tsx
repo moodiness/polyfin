@@ -182,6 +182,8 @@ function sectionLede(
       return settings?.backups
         ? s.backupsFolder(settings.backupFolder || settings.backupFolderDefault)
         : undefined
+    case 'notifications':
+      return ledes.notifications
     case 'web-player':
       return s.webPlayerHelp
     case 'diagnostics':

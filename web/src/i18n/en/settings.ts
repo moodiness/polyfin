@@ -62,6 +62,9 @@ const settings = {
       'Shows the audio, subtitle and video tracks of a version before it is first played, as RemuxDB found them in the same file. When a title’s details open, Polyfin asks RemuxDB, a community database, by the title’s IMDb identifier, and finds the versions by their file names. Playback still analyzes each version.',
     remuxDbUrl: 'RemuxDB address',
     remuxDbUrlHelp: 'The RemuxDB server Polyfin asks.',
+    publicAddress: 'Public address',
+    publicAddressHelp:
+      'The address people open Polyfin at, such as https://media.example.org. Links in notifications start with it; empty, messages carry no link.',
     maxConversions: 'Video conversions at once (0 = no limit)',
     maxConversionsHelp: (r: RangeText) =>
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,
@@ -365,6 +368,8 @@ const settings = {
       security: 'Users’ own addons, blocked accounts and unused devices.',
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
+      notifications:
+        'Where Polyfin tells of new episodes, recordings and Health problems, for every user.',
     },
     groups: {
       skip: 'Skip intro and credits',
