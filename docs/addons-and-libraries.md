@@ -1,6 +1,6 @@
 # Addons and libraries
 
-This page explains how Polyfin turns Stremio addons and Eclipse music addons into Jellyfin libraries. It also covers catalog limits, collections, genre and people pages, similar titles, artwork and editing items.
+This page explains how Polyfin turns Stremio addons and Eclipse music addons into Jellyfin libraries. It also covers song lyrics, catalog limits, collections, genre and people pages, similar titles, artwork and editing items.
 
 ## Addons
 
@@ -138,13 +138,47 @@ Asked for another kind, it lists the albums and artists its songs name (and its 
 
 An addon installed without catalog rows of its own gets "My music" enabled as its library, so that music apps starting from a library show something. An addon with rows keeps them as its libraries, with "My music" offered but off. Addons installed before keep their libraries: an administrator enables "My music" under **Content › Libraries** (users, under **My sources**). Polyfin never asks the addon for this catalog, and it has no automatic image, since every user sees a different list.
 
-### Instant mixes and lyrics
+### Instant mixes
 
 - A song's instant mix is that song, then its album's and its artist's other songs.
 - An album's mix is its songs and its artist's songs.
 - An artist's or a playlist's mix is their songs.
 - Every mix is shuffled.
-- Addons give no lyrics.
+
+### Lyrics
+
+Addons give no lyrics. With **Song lyrics from LRCLIB** on, Polyfin finds them on [LRCLIB](https://lrclib.net), a free and open lyrics database, and apps show them:
+
+- synced line by line when LRCLIB has them, so that apps follow the song;
+- else as plain text.
+
+Instrumentals, songs LRCLIB doesn't know and audiobooks have no lyrics.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Song lyrics from LRCLIB** | **Settings › Content** | On | Looks songs up on LRCLIB and gives apps their lyrics. Off, songs have no lyrics and LRCLIB is never asked. Lyrics found before are kept, and shown again once it is back on. |
+
+Polyfin looks a song up when it starts playing, when its details open, or when an app asks for its lyrics. It never looks up a whole album or list at once: listings only show what is already known.
+
+- Polyfin asks LRCLIB by the song's artist, title, album and length, and sends nothing else. Its requests name Polyfin, its version and its repository, as LRCLIB asks.
+- Each song is asked about once. Polyfin keeps what LRCLIB answered, lyrics or not, in its database. A song LRCLIB didn't know is asked about again after 30 days, as LRCLIB grows every day.
+- A request that fails (LRCLIB unreachable, an error, or no answer within 10 seconds) is not taken for "no lyrics": the song is asked about again later. After a failure, Polyfin leaves LRCLIB alone for a minute, or as long as LRCLIB asks.
+- Playback and listings never wait for LRCLIB. A song's details wait for it one second at most, and a request for its lyrics 5 seconds. A later answer serves the next request.
+- At most 4 requests go to LRCLIB at a time.
+
+Apps show their lyrics button once a song's lyrics are known. The web player takes it from the list the song was played from: a song looked up as it plays for the first time shows the button the next time it is played from a list, or at once on its own page.
+
+**Compared with Jellyfin:**
+
+- Jellyfin reads lyrics from the `.lrc` and `.txt` files next to the songs, or downloads them with a lyrics plugin. Polyfin asks LRCLIB itself, without a plugin.
+- The lyrics search, in the web player's lyrics editor, finds nothing, as on a Jellyfin server without a lyrics plugin.
+- Lines are synced, not words: the word timing of enhanced LRC is left out.
+
+**For app developers:**
+
+- `GET /Audio/{itemId}/Lyrics` answers Jellyfin's `LyricDto`. Synced lines have `Text`, `Start` in ticks and an empty `Cues`; plain lines have only `Text`, which apps tell plain lyrics by. `Metadata` gives the song's `Artist`, `Album`, `Title`, `Length` and `IsSynced`.
+- A song without lyrics answers `404`, as in Jellyfin.
+- Songs carry `HasLyrics`, `true` once their lyrics are known, in listings as in details. `/Audio/{itemId}/RemoteSearch/Lyrics` answers an empty list.
 
 ### Music playback
 
@@ -175,7 +209,6 @@ Music addon requests count in **System › Health** like a Stremio addon's: last
 **Compared with Jellyfin:**
 
 - Jellyfin's instant mixes pick songs that share genres, which addons rarely give. Polyfin's mixes are built from album and artist instead.
-- The lyrics endpoints answer as Jellyfin does for a song without lyrics.
 - Songs have no resume points, as in Jellyfin.
 
 **For app developers:**
