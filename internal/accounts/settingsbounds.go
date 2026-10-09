@@ -108,6 +108,8 @@ func DefaultSettings() Settings {
 		RecordingsFolder: "",
 		Backups:          false,
 		BackupFolder:     "",
+
+		PublicAddress: "",
 	}
 }
 
@@ -229,6 +231,8 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingsFolder": text(MaxFolderBytes, d.RecordingsFolder),
 		"backups":          is(d.Backups),
 		"backupFolder":     text(MaxFolderBytes, d.BackupFolder),
+
+		"publicAddress": text(MaxPublicAddressBytes, d.PublicAddress),
 	}
 }
 

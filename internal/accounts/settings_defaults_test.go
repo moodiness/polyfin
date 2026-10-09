@@ -120,7 +120,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			// rest. A folder is an absolute path.
 			letter, start := "a", ""
 			switch name {
-			case "remuxDbUrl":
+			case "remuxDbUrl", "publicAddress":
 				start = "https://"
 			case "recordingsFolder", "backupFolder":
 				start = "/"
