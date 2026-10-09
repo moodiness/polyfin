@@ -147,11 +147,13 @@ type UserData interface {
 
 // Problem is something System › Health shows as needing attention. Key
 // names it the same way from one check to the next; Text describes it in
-// the server language.
+// the server language; Page is the page of the admin app that shows it,
+// as System › Health links it (such as "/system/health#addons").
 type Problem struct {
 	Key      string
 	Severity string
 	Text     string
+	Page     string
 }
 
 // The severities of problems.

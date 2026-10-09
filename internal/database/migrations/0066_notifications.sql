@@ -63,14 +63,16 @@ CREATE TABLE notification_server_episodes (
     seen_at timestamptz NOT NULL
 );
 
--- The problems System › Health shows, as the health check last found them:
--- seen counts the checks in a row that found a problem, missing those that
--- no longer did; announced tells that its message was sent, so that a
--- restart neither sends it again nor forgets to tell when it is solved.
+-- The problems System › Health shows, as the health check last found them,
+-- with the page of the admin app that shows each: seen counts the checks
+-- in a row that found a problem, missing those that no longer did;
+-- announced tells that its message was sent, so that a restart neither
+-- sends it again nor forgets to tell when it is solved.
 CREATE TABLE notification_health (
     key text PRIMARY KEY,
     severity text NOT NULL CHECK (severity IN ('error', 'warning')),
     text text NOT NULL,
+    page text NOT NULL DEFAULT '',
     since timestamptz NOT NULL,
     seen integer NOT NULL DEFAULT 1,
     missing integer NOT NULL DEFAULT 0,

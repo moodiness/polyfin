@@ -484,9 +484,15 @@ func TestRecordingsEndedReachTheirOwnerAndTheServer(t *testing.T) {
 // A problem System › Health shows is told once two checks in a row found
 // it, to the server's targets and administrators' own, and once solved
 // when two checks in a row no longer do; a brief one is never told, and a
-// restart neither tells a problem again nor forgets it.
+// restart neither tells a problem again nor forgets it, nor the page that
+// shows it, which both messages open.
 func TestHealthProblemsFoundAndSolved(t *testing.T) {
 	h := newHarness(t)
+	settings := h.store.Settings()
+	settings.PublicAddress = "https://media.example.org"
+	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
 	events := []string{HealthProblem, HealthSolved}
 	h.add(t, nil, h.webhook("/server", events...))
 	h.add(t, &h.admin, h.webhook("/admin", events...))
@@ -504,7 +510,7 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disk := Problem{Key: "disk:cache", Severity: SeverityWarning, Text: "Little space left for the cache: 1.0 GB free."}
+	disk := Problem{Key: "disk:cache", Severity: SeverityWarning, Text: "Little space left for the cache: 1.0 GB free.", Page: "/system/health#disks"}
 	blip := Problem{Key: "addon:x", Severity: SeverityWarning, Text: "Addon: could not be reached"}
 	check := func(problems ...Problem) {
 		*h.problems = problems
@@ -519,12 +525,18 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 		t.Fatalf("after three checks: %v, want %v", got, want)
 	}
 
-	// A restart keeps what was told.
-	restarted := New(Options{DB: h.db, Accounts: h.store, Library: h.library, UserData: h.userData, Secrets: h.box, Version: "1.2.3",
-		Logger: h.logger, Problems: h.problems2()})
-	t.Cleanup(restarted.Close)
+	// A restart keeps what was told, and the page that shows it: a second
+	// restart finds the problem gone without seeing it again.
+	restart := func() *Service {
+		s := New(Options{DB: h.db, Accounts: h.store, Library: h.library, UserData: h.userData, Secrets: h.box, Version: "1.2.3",
+			Logger: h.logger, Problems: h.problems2()})
+		t.Cleanup(s.Close)
+		return s
+	}
+	restarted := restart()
 	*h.problems = []Problem{disk}
 	restarted.CheckHealth(t.Context())
+	restarted = restart()
 	*h.problems = nil
 	restarted.CheckHealth(t.Context())
 	if got := len(h.targets.at("/server")); got != 1 {
@@ -541,8 +553,12 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 			t.Errorf("%s: %v, want %v", path, got, want)
 		}
 	}
+	const page = "https://media.example.org/admin/system/health#disks"
+	if found := h.targets.at("/server")[0].body; found["url"] != page {
+		t.Errorf("found message opens %v, want %s", found["url"], page)
+	}
 	solved := h.targets.at("/server")[1].body
-	if solved["title"] != "Problem solved" || solved["message"] != disk.Text || solved["user"] != nil {
+	if solved["title"] != "Problem solved" || solved["message"] != disk.Text || solved["user"] != nil || solved["url"] != page {
 		t.Errorf("solved message: %v", solved)
 	}
 	if got := len(h.targets.at("/demoted")); got != 0 {
