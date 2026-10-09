@@ -8,7 +8,7 @@ Polyfin has separate accounts for each user, with Jellyfin authentication and Qu
 
 An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md).
+Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin server, an administrator can bring its accounts and what each user watched over with **Import from Jellyfin**; see [Moving from Jellyfin](#moving-from-jellyfin).
 
 ## Watch state
 
@@ -40,6 +40,71 @@ Two settings under **Settings › Content** decide when a title counts as played
 
 - These settings replace Jellyfin's `MaxResumePct` and `MinResumePct`, and default to Jellyfin's 90 and 5.
 - Jellyfin takes any values; Polyfin keeps them in the ranges above.
+
+## Moving from Jellyfin
+
+**Import from Jellyfin**, at the top of **Users** next to **Create a user**, brings a Jellyfin server's accounts over, and what each of their users watched. It sits under **Users** because it creates accounts and fills each account's watch state. Only administrators see it.
+
+### Connecting to the server
+
+- **Server address**: the address Jellyfin opens at in a browser, such as `http://192.168.1.10:8096`, with the path it is served under if any. A host and port alone mean `http://`. Local network addresses work.
+- **API key**: create one in Jellyfin's dashboard, under API Keys. Polyfin uses it for this import only, and never saves it: each import asks for it again.
+
+**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
+
+### Choosing who to import
+
+For each Jellyfin user, **Import into** chooses where their data goes:
+
+- **New user**: a Polyfin account is created, named as in Jellyfin, an administrator if they were one, hidden from the sign-in screen if they were. Jellyfin does not give out passwords: set one for each new account, under the same rules as **Create a user**. The name can be changed too.
+- An existing Polyfin user: the one with the same name, whatever its case, is chosen at first. Several Jellyfin users can go into one account.
+- **Do not import**: the user is left out. Disabled Jellyfin users start so.
+
+**Import watch data** tells, user by user, whether their watch data comes along; a new account can be created without it. **Start import** creates the new accounts, all of them or none: when one name is taken or one password is too short, nothing is created, and the row says why. Then the watch data is imported in the background.
+
+### What is imported
+
+| From Jellyfin | Into Polyfin |
+|---|---|
+| User names, administrator status, hidden from the sign-in screen | New accounts, with the passwords the administrator sets. |
+| Played movies and episodes, with the date last played and the play count | Played marks. |
+| Resume points of movies and episodes | Resume points, for titles not played. |
+| Favorite movies, series and episodes | Favorites. |
+
+Nothing else comes over: passwords, ratings, playlists, collections, users' limits and settings, profile pictures, and music, books and Live TV.
+
+### How titles are matched
+
+Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by the IMDb identifier Jellyfin gives, then by TMDB, then by TVDB for series, among the titles Polyfin's catalogs listed. Episodes are found by their series' identifiers and their season and episode numbers; a file holding several episodes counts for each of them.
+
+A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (no title of Polyfin's catalogs has its identifiers).
+
+### How the data merges with Polyfin's
+
+The data merges as an imported watch history does (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)):
+
+- Played marks, resume points and favorites are only added, never removed.
+- A title keeps Polyfin's date when it is later than Jellyfin's, and the larger of the two play counts.
+- Of two resume points, the more recent one stays.
+- Importing again adds nothing twice and never overwrites newer Polyfin data, so an import can safely run again.
+
+Nothing is ever written to the Jellyfin server: the import only reads it.
+
+### Progress and limits
+
+- One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it added: titles marked played, resume points and favorites, and the titles not found.
+- **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
+- Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user.
+- Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
+
+**Compared with Jellyfin:**
+
+- Jellyfin keeps watch data for the files of its libraries; Polyfin keeps it for the titles of its catalogs. Titles are therefore matched by their identifiers, not by their files.
+
+**For app developers:**
+
+- The admin API serves the import to administrators: `POST /admin/api/jellyfin-import/users` lists a server's users, `POST /admin/api/jellyfin-import` creates the accounts and starts the import, `GET /admin/api/jellyfin-import` reads it, and `POST /admin/api/jellyfin-import/stop` stops it. The API key is never answered back.
+- Polyfin reads Jellyfin with `GET` requests only, sending the key as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
 
 ## Parental control
 

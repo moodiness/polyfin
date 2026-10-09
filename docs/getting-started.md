@@ -18,6 +18,8 @@ Enter the code on the setup page to create the administrator.
 
 Create the other accounts with **Create a user** under **Users**. See [Users](users.md) for more.
 
+Moving from a Jellyfin server? **Import from Jellyfin**, under **Users** too, creates its accounts in Polyfin and brings over what each user watched: played movies and episodes, resume points and favorites. See [Moving from Jellyfin](users.md#moving-from-jellyfin).
+
 ### Sign in from Jellyfin apps
 
 Jellyfin apps sign in with these accounts, in one of two ways:

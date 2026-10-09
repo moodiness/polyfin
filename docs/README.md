@@ -33,7 +33,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 
 | Page | What it covers |
 |---|---|
-| [Users](users.md) | Watch state, parental control, per-user limits, quality groups, and the security settings |
+| [Users](users.md) | Watch state, moving from Jellyfin, parental control, per-user limits, quality groups, and the security settings |
 | [Administration](administration.md) | The admin app (home, search, system pages, settings) and API keys |
 | [Web client](web-client.md) | The built-in jellyfin-web, single sign-on to the admin app, and custom CSS and JavaScript |
 | [Jellyfin compatibility](jellyfin-compatibility.md) | Compatible apps, what apps get, and the Jellyfin features Polyfin does without |
