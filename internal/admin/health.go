@@ -88,6 +88,8 @@ type diskJSON struct {
 	Free  int64  `json:"free"`
 	Used  int64  `json:"used"`
 	Mount string `json:"mount"`
+	// Low tells whether the disk is short of room: a problem Health shows.
+	Low bool `json:"low"`
 }
 
 type transcoderJSON struct {
@@ -184,7 +186,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		}
 		disk := diskJSON{Folder: folder.name, Path: filepath.Clean(folder.path), Free: -1, Used: -1}
 		if free, used, mount, ok := diskspace.Measure(folder.path); ok {
-			disk.Free, disk.Used, disk.Mount = free, used, mount
+			disk.Free, disk.Used, disk.Mount, disk.Low = free, used, mount, lowOnSpace(free, used)
 		}
 		result.Disks = append(result.Disks, disk)
 	}

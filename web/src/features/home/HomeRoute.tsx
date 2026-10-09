@@ -8,10 +8,10 @@ import {
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { fetchStatus, queryKeys } from '@/api'
+import { fetchStatus, queryKeys, type HealthProblem } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { findProblems, useHealthData, type Problem } from '@/features/system/problems'
+import { problemText, useHealth, useHealthProblems } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -46,19 +46,19 @@ export default function HomeRoute() {
 }
 
 function Overview({ name }: { name: string }) {
-  const { language, t } = useI18n()
+  const { t } = useI18n()
   const text = t.dashboard.overview
   const sessions = useLiveSessions()
-  const { health, sources, tasks } = useHealthData()
-  const problems = findProblems(t, language, health.data, sources.data, tasks.data)
+  const health = useHealth()
+  const problems = useHealthProblems()
   const transcoder = health.data?.transcoder
 
   return (
     <PageLayout
       title={text.greeting(new Date().getHours(), name)}
       lede={
-        sessions.data !== undefined && health.data !== undefined
-          ? text.summary(sessions.data.length, problems.length)
+        sessions.data !== undefined && problems.data !== undefined
+          ? text.summary(sessions.data.length, problems.data.length)
           : text.description
       }
     >
@@ -79,11 +79,11 @@ function Overview({ name }: { name: string }) {
         }
       />
       <Problems
-        problems={problems}
-        loading={health.isPending}
-        error={health.error}
-        retrying={health.isFetching}
-        onRetry={() => void health.refetch()}
+        problems={problems.data ?? []}
+        loading={problems.isPending}
+        error={problems.error}
+        retrying={problems.isFetching}
+        onRetry={() => void problems.refetch()}
       />
       <ServerFigures />
       <RecentActivity />
@@ -98,13 +98,13 @@ function Problems({
   retrying,
   onRetry,
 }: {
-  problems: Problem[]
+  problems: HealthProblem[]
   loading: boolean
   error: Error | null
   retrying: boolean
   onRetry: () => void
 }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.dashboard.overview
   return (
     <Block title={text.problems} count={loading ? undefined : problems.length}>
@@ -129,7 +129,7 @@ function Problems({
         <ul className="flex flex-col gap-3">
           {problems.map((problem) => (
             <li
-              key={`${problem.to}-${problem.text}`}
+              key={problem.key}
               className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-panel border border-line-2 bg-s1 px-5 py-[18px] max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-4 max-sm:p-4"
             >
               <span
@@ -150,7 +150,7 @@ function Problems({
                   {problem.tone === 'error' ? text.problemError : text.problemWarning}
                 </StatusPill>
                 <p className="mt-1 text-[15px] font-medium tracking-[-0.01em] text-ink">
-                  {problem.text}
+                  {problemText(t, language, problem)}
                 </p>
               </div>
               <ButtonLink
@@ -173,7 +173,7 @@ function Problems({
 function ServerFigures() {
   const { language, t } = useI18n()
   const text = t.dashboard.overview
-  const { health } = useHealthData()
+  const health = useHealth()
   const status = useQuery({
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
