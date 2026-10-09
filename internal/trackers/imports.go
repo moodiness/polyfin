@@ -3,6 +3,7 @@ package trackers
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -224,10 +225,13 @@ type resumeEntry struct {
 	at                time.Time
 }
 
-// history is what an import read of a service.
+// history is what an import read of a service: what it watched and its
+// resume points, and the titles it names that no mapping knows, which
+// count as not found.
 type watchHistory struct {
 	watched []watchedEntry
 	resumes []resumeEntry
+	unknown map[string]bool
 }
 
 // runImport imports the watch history of key: reads it from the service,
@@ -299,16 +303,27 @@ func importProblem(err error) string {
 }
 
 // played is an item an import marks played, at the latest date the history
-// gives, nil when it gives none.
+// gives, nil when it gives none. counts tells whether marking it counts in
+// the import's result (see counts).
 type played struct {
-	item userdata.Item
-	at   *time.Time
+	item   userdata.Item
+	at     *time.Time
+	counts bool
 }
 
 // resumed is a resume point an import sets.
 type resumed struct {
-	item userdata.Item
+	item   userdata.Item
+	counts bool
 	userdata.ImportedResume
+}
+
+// counts reports whether t, among the targets found of one title, counts
+// in the import's result: the title an anime catalog lists under the
+// title's anime entry is the one also found by its usual identifiers,
+// counted once, unless it was found that way only.
+func counts(found []library.TitleTarget, t library.TitleTarget) bool {
+	return !t.Anime || !slices.ContainsFunc(found, func(o library.TitleTarget) bool { return !o.Anime })
 }
 
 // merge finds the titles of h and adds them to the user's data: played
@@ -341,6 +356,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 				marks[t.ID] = p
 				markOrder = append(markOrder, t.ID)
 			}
+			p.counts = p.counts || counts(targets[i], t)
 			if w.at != nil && (p.at == nil || w.at.After(*p.at)) {
 				p.at = w.at
 			}
@@ -364,11 +380,11 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			if runtime <= 0 {
 				runtime = t.Runtime
 			}
-			points[t.ID] = &resumed{item: userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season},
+			points[t.ID] = &resumed{item: userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season}, counts: counts(found, t),
 				ImportedResume: userdata.ImportedResume{Percent: r.percent, Position: r.position, Runtime: runtime, At: r.at}}
 		}
 	}
-	result.Unmapped = len(unmapped)
+	result.Unmapped = len(unmapped) + len(h.unknown)
 
 	for batch := range chunks(markOrder) {
 		items := make([]userdata.Item, 0, len(batch))
@@ -376,7 +392,7 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			items = append(items, marks[id].item)
 		}
 		if _, err := s.userData.ChangeEach(ctx, key.user, items, func(item userdata.Item, d *userdata.Data) {
-			if d.ImportPlayed(marks[item.ID].at) {
+			if d.ImportPlayed(marks[item.ID].at) && marks[item.ID].counts {
 				result.Played++
 			}
 		}); err != nil {
@@ -391,11 +407,16 @@ func (s *Service) merge(ctx context.Context, r *reader, h watchHistory, result *
 			items = append(items, points[id].item)
 		}
 		if _, err := s.userData.ChangeEach(ctx, key.user, items, func(item userdata.Item, d *userdata.Data) {
-			switch d.ImportResume(points[item.ID].ImportedResume, thresholds) {
+			point := points[item.ID]
+			switch d.ImportResume(point.ImportedResume, thresholds) {
 			case userdata.ResumePlayed:
-				result.Played++
+				if point.counts {
+					result.Played++
+				}
 			case userdata.ResumeSet:
-				result.Resumed++
+				if point.counts {
+					result.Resumed++
+				}
 			}
 		}); err != nil {
 			return err

@@ -4,7 +4,9 @@
 // watch history, and PublicMetaDB, which keeps resume points and a watch
 // history. Only movies and episodes known by an IMDb, TMDB or TVDB
 // identifier are sent to them, episodes by their series' identifiers and
-// their numbers. The songs of music addons go to the music services only,
+// their numbers; anime that addons name by their Kitsu, MyAnimeList or
+// AniDB identifier are sent by those the anime mapping gives (see
+// anime.go). The songs of music addons go to the music services only,
 // Last.fm and ListenBrainz (see music.go), by their artist and title.
 //
 // Nothing is sent while a request is answered: playback reports and played
@@ -29,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -162,6 +165,10 @@ type Options struct {
 	// without both, nothing is imported.
 	Titles   Titles
 	UserData *userdata.Store
+	// Anime maps anime between identifiers and numberings: Simkl's anime
+	// history, and the titles anime addons name, are found and sent by it.
+	// Nil leaves them out.
+	Anime *anime.Service
 }
 
 // timing is how long the service waits for what. Tests shorten it.
@@ -278,6 +285,8 @@ type Service struct {
 	// publicMetaDBIMDb caches the IMDb identifiers PublicMetaDB maps TMDB
 	// identifiers to (see mapPublicMetaDB).
 	publicMetaDBIMDb map[string]string
+	// anime maps anime between identifiers and numberings.
+	anime *anime.Service
 }
 
 // New returns a service keeping connections and queued changes in the
@@ -315,6 +324,7 @@ func New(options Options) *Service {
 		importing:   map[laneKey]*importRun{},
 
 		publicMetaDBIMDb: map[string]string{},
+		anime:            options.Anime,
 	}
 }
 
