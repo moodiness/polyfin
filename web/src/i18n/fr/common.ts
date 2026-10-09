@@ -222,6 +222,18 @@ const common: typeof en = {
     invalid_mode: 'Ce mode de correspondance n’est pas pris en charge. Rechargez la page.',
     invalid_mapping:
       'Cette chaîne de guide n’est plus dans les guides du catalogue. Cherchez à nouveau.',
+    invalid_jellyfin_address:
+      'Saisissez l’adresse du serveur Jellyfin, par exemple http://192.168.1.10:8096.',
+    jellyfin_key_refused:
+      'Jellyfin a refusé cette clé d’API. Créez-en une dans son tableau de bord, sous Clés API, puis collez-la à nouveau.',
+    jellyfin_unreachable:
+      'Rien n’a répondu à cette adresse. Vérifiez-la, et que Jellyfin est bien lancé.',
+    not_jellyfin:
+      'Un serveur a répondu à cette adresse, mais ce n’est pas Jellyfin. Vérifiez l’adresse.',
+    jellyfin_import_running:
+      'Une importation depuis Jellyfin est déjà en cours. Attendez qu’elle se termine, ou arrêtez-la.',
+    unknown_jellyfin_user:
+      'Un utilisateur Jellyfin n’est plus sur ce serveur. Reconnectez-vous pour relire ses utilisateurs.',
   },
   status: {
     title: 'État du serveur',

@@ -167,6 +167,95 @@ const users = {
     accessHelp: 'Each change is saved at once.',
     noServerLibrariesHelp:
       'Add a library in Content › Libraries, then choose here which ones this user sees.',
+    jellyfinImport: {
+      open: 'Import from Jellyfin',
+      title: 'Import from Jellyfin',
+      description:
+        'Bring accounts and their watch data over from a Jellyfin server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to Jellyfin. Passwords cannot be imported: you set one for each new account.',
+      connectTitle: 'Connect to Jellyfin',
+      connectHelp:
+        'The address and API key are only used for this import: Polyfin does not save them.',
+      address: 'Server address',
+      addressHelp: 'The address Jellyfin opens at in a browser. A local network address works.',
+      apiKey: 'API key',
+      apiKeyHelp: 'Create one in Jellyfin’s dashboard, under API Keys.',
+      connect: 'Connect',
+      connecting: 'Connecting…',
+      chooseTitle: 'Choose who to import',
+      chooseHelp: (server: string, version: string) =>
+        `${server}, Jellyfin ${version}. For each user, choose the Polyfin account to import into, or create one.`,
+      changeServer: 'Change server',
+      noUsers: 'This Jellyfin server has no user.',
+      lastActivityLabel: 'Last activity:',
+      importAs: 'Import into',
+      skip: 'Do not import',
+      newUser: 'New user',
+      watchData: 'Import watch data',
+      watchDataHelp: 'Played titles with their dates, resume points and favorites.',
+      watchDataNeeded: 'Without it, nothing is imported for this user.',
+      nothingToImport: 'Choose a user to create, or watch data to import.',
+      start: 'Start import',
+      starting: 'Starting…',
+      started: (created: number, importing: boolean) =>
+        created === 0
+          ? 'The import has started.'
+          : `${created === 1 ? '1 user created.' : `${created} users created.`}${importing ? ' The import has started.' : ''}`,
+      currentTitle: 'Import in progress',
+      lastTitle: 'Last import',
+      startedLabel: 'Started',
+      endedLabel: 'Ended',
+      runningHelp:
+        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
+      stop: 'Stop import',
+      stopping: 'Stopping…',
+      states: {
+        running: 'Running',
+        done: 'Done',
+        stopped: 'Stopped',
+        failed: 'Failed',
+      },
+      problems: {
+        jellyfin_unreachable:
+          'Jellyfin could not be reached during the import. What was imported is kept.',
+        jellyfin_key_refused:
+          'Jellyfin refused the API key during the import: it may have been revoked. What was imported is kept.',
+        not_jellyfin:
+          'The server stopped answering like Jellyfin during the import. What was imported is kept.',
+        internal:
+          'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
+      },
+      userStates: {
+        waiting: 'Waiting',
+        reading: 'Reading',
+        saving: 'Saving',
+        done: 'Done',
+        failed: 'Failed',
+      },
+      notImported: 'Not imported',
+      userMapping: (jellyfinName: string, userName: string) => `${jellyfinName} → ${userName}`,
+      read: (count: number) => (count === 1 ? '1 item read' : `${count} items read`),
+      counts: (played: number, resumed: number, favorites: number) =>
+        `${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}`,
+      unmatched: (count: number) =>
+        count === 1 ? '1 title not found' : `${count} titles not found`,
+      unmatchedTitle: (name: string) => `Titles not found for ${name}`,
+      unmatchedHelp:
+        'These titles were not imported: no Polyfin title matches them by IMDb, TMDB or TVDB.',
+      titleColumn: 'Title',
+      kindColumn: 'Kind',
+      yearColumn: 'Year',
+      reasonColumn: 'Reason',
+      kinds: {
+        movie: 'Movie',
+        episode: 'Episode',
+        series: 'Series',
+      },
+      reasons: {
+        no_identifier: 'No IMDb, TMDB or TVDB identifier',
+        not_found: 'Not in Polyfin',
+      },
+      more: (count: number) => `And ${count} more.`,
+    },
   },
 }
 

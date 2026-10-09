@@ -20,6 +20,7 @@ import ApiKeysRoute from '@/features/system/ApiKeysRoute'
 import HealthRoute from '@/features/system/HealthRoute'
 import LogsRoute from '@/features/system/LogsRoute'
 import ScheduleRoute from '@/features/system/ScheduleRoute'
+import JellyfinImportRoute from '@/features/users/JellyfinImport'
 import UsersRoute from '@/features/users/UsersRoute'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
@@ -125,6 +126,7 @@ export const router = createBrowserRouter(
         {
           element: <AdminOnly />,
           children: [
+            { path: 'users/jellyfin-import', element: <JellyfinImportRoute /> },
             { path: 'users/:id?', element: <UsersRoute /> },
             {
               path: 'system',

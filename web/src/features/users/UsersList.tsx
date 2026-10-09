@@ -1,4 +1,10 @@
-import { CaretRightIcon, DownloadSimpleIcon, PlusIcon, UsersIcon } from '@phosphor-icons/react'
+import {
+  ArrowSquareInIcon,
+  CaretRightIcon,
+  DownloadSimpleIcon,
+  PlusIcon,
+  UsersIcon,
+} from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
@@ -18,6 +24,7 @@ import {
   Badge,
   Block,
   Button,
+  ButtonLink,
   ConfirmDialog,
   EmptyState,
   InlineError,
@@ -32,8 +39,8 @@ import CreateUserModal from './CreateUserModal'
 import { clockTime, useRestrictions } from './shared'
 
 /**
- * `/users`: every account, each opening its page, the button to create one, and the one turning
- * downloads off for everyone.
+ * `/users`: every account, each opening its page, the button to create one, the one importing
+ * accounts from a Jellyfin server, and the one turning downloads off for everyone.
  */
 export default function UsersList() {
   const { t } = useI18n()
@@ -66,6 +73,9 @@ export default function UsersList() {
       >
         {t.users.turnOffDownloads}
       </Button>
+      <ButtonLink to="/users/jellyfin-import" icon={ArrowSquareInIcon}>
+        {t.users.jellyfinImport.open}
+      </ButtonLink>
       {create}
     </span>
   )
