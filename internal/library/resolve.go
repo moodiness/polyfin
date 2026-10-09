@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"regexp"
@@ -26,12 +27,48 @@ type TitleRef struct {
 	// may be missing. Movies are not looked up by TVDB.
 	IMDb       string
 	TMDB, TVDB int
-	// Season and Number place an episode in its series.
+	// Season and Number place an episode in its series. When Absolute,
+	// Number counts the episode among the regular episodes of its series,
+	// from the first of its first season, across its seasons (TVDB's
+	// absolute numbering), and Season is not read.
 	Season, Number int
+	Absolute       bool
+	// Anime names the anime entry as anime catalogs list it, when the
+	// ref is of one.
+	Anime AnimeRef
 	// Name is the title's name as the other service gives it, the series'
 	// for an episode; empty when it gives none. It names the record of a
 	// title Polyfin had none of until its addons describe it.
 	Name string
+}
+
+// AnimeRef names an anime entry, as AniDB, Kitsu and MyAnimeList split
+// series into entries, the way anime catalogs list them: "kitsu:<id>",
+// "mal:<id>" or "anidb:<id>", and an episode as the entry numbers it,
+// from 1, "kitsu:<id>:<episode>". Zero identifiers are unknown.
+type AnimeRef struct {
+	Kitsu, MyAnimeList, AniDB int
+	// Episode is the episode's number in the entry, for an episode ref.
+	Episode int
+}
+
+// animePrefixes begin the Stremio identifiers of anime catalogs' titles.
+var animePrefixes = [...]string{"kitsu:", "mal:", "anidb:"}
+
+// ids are the Stremio identifiers of the entry.
+func (a AnimeRef) ids() []string {
+	var ids []string
+	for i, id := range [...]int{a.Kitsu, a.MyAnimeList, a.AniDB} {
+		if id > 0 {
+			ids = append(ids, animePrefixes[i]+strconv.Itoa(id))
+		}
+	}
+	return ids
+}
+
+// animeNamed reports whether an anime catalog names the title id.
+func animeNamed(id string) bool {
+	return slices.ContainsFunc(animePrefixes[:], func(prefix string) bool { return strings.HasPrefix(id, prefix) })
 }
 
 // kind is the kind of the title the identifiers of r name: a movie, or a
@@ -44,11 +81,15 @@ func (r TitleRef) kind() Kind {
 }
 
 // TitleTarget is an item a TitleRef designates, as Polyfin keeps the
-// user's data of it: an episode with its series and season. Runtime is
-// the title's runtime when the addons told it, zero otherwise.
+// user's data of it: an episode with its series and season, which it is
+// numbered Number of, SeasonNumber. Runtime is the title's runtime when
+// the addons told it, zero otherwise. Anime is set for an item an anime
+// catalog listed under the ref's AnimeRef.
 type TitleTarget struct {
-	ID, Series, Season accounts.ID
-	Runtime            time.Duration
+	ID, Series, Season   accounts.ID
+	SeasonNumber, Number int
+	Runtime              time.Duration
+	Anime                bool
 }
 
 var (
@@ -66,7 +107,12 @@ var (
 // titles ("tt…" for a movie or series, "tt…:<season>:<episode>" for an
 // episode). An episode of a series listed under another identifier is
 // found among the episodes Polyfin listed, else named the way the listed
-// ones of its series are. A ref nothing designates gets no target.
+// ones of its series are. An episode numbered as TVDB's absolute
+// numbering is the one of that place among the regular episodes Polyfin
+// listed of its series, in order. The titles an anime catalog listed
+// under the ref's AnimeRef are found too, an episode by its number in the
+// entry ("kitsu:<id>:<episode>"), and only once listed. A ref nothing
+// designates gets no target.
 //
 // Nothing is asked of the addons. The items Resolve names that Polyfin
 // has no record of, as a title no catalog listed, are recorded as the
@@ -80,20 +126,36 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	if err != nil {
 		return nil, err
 	}
-	// The Stremio identifiers of the series each episode ref belongs to.
+	// The Stremio identifiers of the series each episode ref belongs to,
+	// and of those an anime catalog listed under its AnimeRef.
 	seriesOf := make([][]string, len(refs))
+	animeOf := make([][]string, len(refs))
 	var seriesIDs []string
 	var unlisted []record
 	result := make([][]TitleTarget, len(refs))
+	addSeries := func(id string) {
+		if !slices.Contains(seriesIDs, id) {
+			seriesIDs = append(seriesIDs, id)
+		}
+	}
 	for i, ref := range refs {
 		kind := ref.kind()
-		var found []knownTitle
+		animeIDs := ref.Anime.ids()
+		var found, anime []knownTitle
 		for _, title := range titles {
-			if title.kind == kind && title.matches(ref) {
+			switch {
+			case title.kind != kind:
+			case slices.Contains(animeIDs, title.stremioID):
+				anime = append(anime, title)
+			// An anime catalog numbers the episodes of each entry apart:
+			// another entry's are not those of the series' seasons.
+			case len(animeIDs) > 0 && ref.Episode && animeNamed(title.stremioID):
+			case title.matches(ref):
 				found = append(found, title)
 			}
 		}
-		if len(found) == 0 && imdbID.MatchString(ref.IMDb) {
+		// An episode numbered absolutely is placed among those listed only.
+		if len(found) == 0 && imdbID.MatchString(ref.IMDb) && !(ref.Episode && ref.Absolute) {
 			found = append(found, knownTitle{kind: kind, stremioID: ref.IMDb})
 			unlisted = append(unlisted, unlistedTitle(kind, ref))
 		}
@@ -103,8 +165,15 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 				continue
 			}
 			seriesOf[i] = append(seriesOf[i], title.stremioID)
-			if !slices.Contains(seriesIDs, title.stremioID) {
-				seriesIDs = append(seriesIDs, title.stremioID)
+			addSeries(title.stremioID)
+		}
+		for _, title := range anime {
+			switch {
+			case !ref.Episode:
+				result[i] = append(result[i], TitleTarget{ID: itemID(titleKey(kind, title.stremioID)), Runtime: title.runtime, Anime: true})
+			case ref.Anime.Episode > 0:
+				animeOf[i] = append(animeOf[i], title.stremioID)
+				addSeries(title.stremioID)
 			}
 		}
 	}
@@ -124,26 +193,43 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	for i, ref := range refs {
 		for _, series := range seriesOf[i] {
 			episodes := known[series]
-			target := TitleTarget{Series: itemID(titleKey(KindSeries, series)), Season: itemID(seasonKey(series, ref.Season)),
-				Runtime: runtimes[series]}
-			if episode, ok := episodes.find(ref.Season, ref.Number); ok {
+			season, number := ref.Season, ref.Number
+			if ref.Absolute {
+				episode, ok := episodes.absolute(ref.Number)
+				if !ok {
+					continue
+				}
+				season, number = episode.season, episode.number
+			}
+			target := TitleTarget{Series: itemID(titleKey(KindSeries, series)), Season: itemID(seasonKey(series, season)),
+				SeasonNumber: season, Number: number, Runtime: runtimes[series]}
+			if episode, ok := episodes.find(season, number); ok {
 				target.ID = episode.id
 				if episode.runtime > 0 {
 					target.Runtime = episode.runtime
 				}
 			} else if imdbID.MatchString(series) || len(episodes) > 0 && episodes.conventional(series) {
-				videoID := series + ":" + strconv.Itoa(ref.Season) + ":" + strconv.Itoa(ref.Number)
+				videoID := series + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(number)
 				target.ID = itemID(episodeKey(videoID))
 				// Recorded as Episodes records the episodes of a series.
-				video := &stremio.Video{ID: videoID, Season: stremio.Number(ref.Season), Episode: stremio.Number(ref.Number)}
+				video := &stremio.Video{ID: videoID, Season: stremio.Number(season), Episode: stremio.Number(number)}
 				unlisted = append(unlisted,
-					record{ID: target.Season, Key: seasonKey(series, ref.Season), Kind: KindSeason, Parent: new(target.Series),
-						SeriesID: series, Season: ref.Season},
+					record{ID: target.Season, Key: seasonKey(series, season), Kind: KindSeason, Parent: new(target.Series),
+						SeriesID: series, Season: season},
 					record{ID: target.ID, Key: episodeKey(videoID), Kind: KindEpisode, Parent: new(target.Season), SeriesID: series,
-						Season: ref.Season, Video: video})
+						Season: season, Video: video})
 			} else {
 				continue
 			}
+			result[i] = append(result[i], target)
+		}
+		for _, series := range animeOf[i] {
+			episode, ok := known[series].video(series + ":" + strconv.Itoa(ref.Anime.Episode))
+			if !ok {
+				continue
+			}
+			target := TitleTarget{ID: episode.id, Series: itemID(titleKey(KindSeries, series)), Season: itemID(seasonKey(series, episode.season)),
+				SeasonNumber: episode.season, Number: episode.number, Runtime: cmp.Or(episode.runtime, runtimes[series]), Anime: true}
 			result[i] = append(result[i], target)
 		}
 	}
@@ -194,7 +280,8 @@ func (t knownTitle) matches(ref TitleRef) bool {
 }
 
 // knownTitles loads the movies and series Polyfin listed under one of the
-// identifiers of refs.
+// identifiers of refs, or that an anime catalog listed under their
+// AnimeRef.
 func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitle, error) {
 	var keys, imdbs, tmdbs, tvdbs []string
 	for _, ref := range refs {
@@ -209,6 +296,9 @@ func (s *Service) knownTitles(ctx context.Context, refs []TitleRef) ([]knownTitl
 		if ref.TVDB > 0 && kind == KindSeries {
 			id := strconv.Itoa(ref.TVDB)
 			keys, tvdbs = append(keys, titleKey(kind, "tvdb:"+id)), append(tvdbs, id)
+		}
+		for _, id := range ref.Anime.ids() {
+			keys = append(keys, titleKey(kind, id))
 		}
 	}
 	if len(keys) == 0 {
@@ -252,6 +342,35 @@ func (l episodeList) find(season, number int) (knownEpisode, bool) {
 		return knownEpisode{}, false
 	}
 	return l[i], true
+}
+
+// video finds the episode whose video identifier is id.
+func (l episodeList) video(id string) (knownEpisode, bool) {
+	i := slices.IndexFunc(l, func(e knownEpisode) bool { return e.videoID == id })
+	if i < 0 {
+		return knownEpisode{}, false
+	}
+	return l[i], true
+}
+
+// absolute finds the episode numbered n in the absolute numbering of its
+// series: the nth of its regular episodes listed, by season then number.
+func (l episodeList) absolute(n int) (knownEpisode, bool) {
+	regular := make([]knownEpisode, 0, len(l))
+	for _, e := range l {
+		if e.season > 0 && e.number > 0 {
+			regular = append(regular, e)
+		}
+	}
+	place := func(a, b knownEpisode) int {
+		return cmp.Or(cmp.Compare(a.season, b.season), cmp.Compare(a.number, b.number))
+	}
+	slices.SortFunc(regular, place)
+	regular = slices.CompactFunc(regular, func(a, b knownEpisode) bool { return place(a, b) == 0 })
+	if n <= 0 || n > len(regular) {
+		return knownEpisode{}, false
+	}
+	return regular[n-1], true
 }
 
 // conventional reports whether the episodes listed of series are named
