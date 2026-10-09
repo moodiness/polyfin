@@ -661,7 +661,8 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	}
 	var sources []source
 	for _, entry := range v.addons {
-		if !entry.addon.Manifest.HasResource("meta") {
+		// A local folder's titles are those this search finds.
+		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() {
 			continue
 		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {

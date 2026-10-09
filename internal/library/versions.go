@@ -240,9 +240,9 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	var unknown []installed
 	var wg sync.WaitGroup
 	for i, entry := range serving {
-		// An IPTV source's streams are Polyfin's own: reading them asks
-		// no addon.
-		if entry.addon.IPTV() && mode != waitAll {
+		// An IPTV source's or a local folder's streams are Polyfin's own:
+		// reading them asks no addon.
+		if own(entry.addon) && mode != waitAll {
 			lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
 			continue
 		}
@@ -368,7 +368,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	if old.HoldsConnection {
 		t.kind = KindReplay
 	}
-	if addon.IPTV() {
+	if own(addon) {
 		streams, err := s.fetchStreams(ctx, entry, t.metaType, t.id)
 		if err != nil {
 			return Version{}, err
@@ -453,8 +453,9 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 // streams lists an addon's streams for a title: those remembered while
 // fresh, else its answer (see streamAnswer).
 func (s *Service) streams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
-	// An IPTV source's line-up changes its streams at once.
-	if entry.addon.IPTV() {
+	// An IPTV source's line-up, and a local folder's scans, change its
+	// streams at once.
+	if own(entry.addon) {
 		return s.fetchStreams(ctx, entry, contentType, id)
 	}
 	key := streamKey{entry.addon.ID, contentType, id}
@@ -539,13 +540,18 @@ func shared[T any](ctx context.Context, flight *singleflight.Group, key string, 
 	}
 }
 
-// fetchStreams asks an addon, or an IPTV source, for the streams of a
-// title.
+// fetchStreams asks an addon, an IPTV source or a local folder for the
+// streams of a title.
 func (s *Service) fetchStreams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
-	if entry.addon.Stremio() {
+	switch {
+	case entry.addon.Stremio():
 		return s.client.Streams(ctx, entry.addon.ManifestURL, contentType, id, entry.confined)
-	}
-	if s.iptv == nil {
+	case entry.addon.Local():
+		if s.local == nil {
+			return nil, nil
+		}
+		return s.local.Streams(ctx, entry.addon.ID, id)
+	case s.iptv == nil:
 		return nil, nil
 	}
 	return s.iptv.Streams(ctx, entry.addon.ID, id)

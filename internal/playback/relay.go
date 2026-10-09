@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -162,8 +163,10 @@ type loopback struct {
 	sources map[string]*source.Source
 	feeds   map[string]library.Version
 	// files are Polyfin's own files, recordings, by version (see
-	// FileVersion), served under fileKey.
+	// FileVersion), served under fileKey, as the files of local folders
+	// are, which local opens (see LocalFiles).
 	files   map[accounts.ID]string
+	local   func(ctx context.Context, key string) (*os.File, error)
 	fileKey string
 }
 
@@ -208,6 +211,10 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if rest, ok := strings.CutPrefix(r.URL.Path, "/file/"); ok {
 		l.serveFile(w, r, rest)
+		return
+	}
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/local/"); ok {
+		l.serveLocal(w, r, rest)
 		return
 	}
 	l.mu.Lock()

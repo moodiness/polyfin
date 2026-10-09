@@ -33,7 +33,7 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 	opening := iptv.IsOpening(ctx)
 	for _, id := range ids {
 		for _, candidate := range v.addons {
-			if candidate.addon.IPTV() || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
+			if own(candidate.addon) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
 				continue
 			}
 			var described stremio.Meta
