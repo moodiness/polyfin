@@ -153,6 +153,8 @@ const common: typeof en = {
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
     invalid_live_tv_refresh_hours:
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
+    invalid_local_scan_hours:
+      'L’intervalle d’analyse doit être un nombre entier d’heures de 0 à 168.',
     invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 2 Mo.',
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
     invalid_login_disclaimer: 'Le message de connexion ne doit pas dépasser 8 Ko.',
@@ -199,6 +201,11 @@ const common: typeof en = {
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
+    invalid_folder_name: 'Le nom d’un dossier doit faire de 1 à 64 caractères.',
+    invalid_folder_path:
+      'Saisissez le chemin complet du dossier dans le conteneur de Polyfin, commençant par /, autre que / lui-même.',
+    invalid_folder_kind: 'Choisissez si le dossier contient des films ou des séries.',
+    invalid_imdb_id: 'Un identifiant IMDb est tt suivi de chiffres, comme tt0063350.',
     invalid_channel_list:
       'Cette adresse n’a pas renvoyé de liste de chaînes. Vérifiez-la, et que le compte est toujours valable.',
     channel_list_too_large:

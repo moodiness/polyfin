@@ -2,13 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAddons, fetchSources, queryKeys, type Addon, type Owner } from '@/api'
 import { registerPaletteSource, type PaletteEntry } from '@/app/palette/registry'
 import type { Messages } from '@/i18n'
-import { isIptv, kindIcon, sourcePath } from './model'
+import { kindIcon, kindOf, sourcePath } from './model'
 
 /** One source as a palette entry, opening its page when it has one, else its list. */
 function entry(t: Messages, selfId: string, addon: Addon, owner: Owner): PaletteEntry {
-  const kind = isIptv(addon)
-    ? t.palette.kinds.iptv
-    : t.palette.kinds[addon.kind as 'stremio' | 'eclipse']
+  const kind = t.palette.kinds[kindOf(addon)]
   const mine = owner?.id === selfId
   // Another user's source has no page an administrator can open: their row in the list shows it.
   const to =

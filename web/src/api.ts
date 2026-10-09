@@ -268,6 +268,8 @@ export type Settings = {
   recordingsFolderDefault: string
   /** Hours after which the XMLTV guides and IPTV channel lists are fetched again. */
   liveTvRefreshHours: number
+  /** Hours after its last scan a local folder is scanned again; 0 for never on a schedule. */
+  localScanHours: number
   /** CSS jellyfin-web applies to every page, unless a user turns it off (Jellyfin's branding). */
   customCss: string
   /** Script Polyfin adds to jellyfin-web's page; it runs in every user's browser. */
@@ -402,12 +404,51 @@ export type Addon = {
   refreshedAt: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
-   * 'm3u' or 'xtream' for an IPTV source, which `source` describes.
+   * 'm3u' or 'xtream' for an IPTV source, which `source` describes; 'local' for a local folder,
+   * which `folder` describes.
    */
-  kind: 'stremio' | 'eclipse' | 'm3u' | 'xtream'
+  kind: 'stremio' | 'eclipse' | 'm3u' | 'xtream' | 'local'
   source: IptvSource | null
   music: AddonMusic | null
+  folder: LocalFolder | null
 }
+
+/** What a local folder holds. */
+export type FolderKind = 'movies' | 'shows'
+
+/** A local folder: a folder mounted in the container, scanned for the titles of its files. */
+export type LocalFolder = {
+  kind: FolderKind
+  /** Its path in the container. */
+  path: string
+  /** The last scan attempt, and the last scan that could read the folder; null before the first. */
+  checkedAt: string | null
+  scannedAt: string | null
+  /** Why the last scan could not read the folder: 'missing', 'unreadable', 'not_folder'; else empty. */
+  error: string
+  /** Whether a scan is under way. */
+  scanning: boolean
+  files: number
+  matched: number
+  unmatched: number
+  /** The files, or shows' folders, linked to an IMDb identifier by hand. */
+  links: { unit: string; imdbId: string }[]
+}
+
+/** A file of a local folder no title was matched to, with why. */
+export type UnmatchedFile = {
+  path: string
+  /** What a link would link: the file, or its show's folder. */
+  unit: string
+  title: string
+  year: number | null
+  size: number
+  reason: 'unreadable_name' | 'not_found' | 'ambiguous' | 'other_year' | 'search_failed'
+}
+
+export type NewLocalFolder = { name: string; path: string; kind: FolderKind }
+
+export type LocalFolderPatch = Partial<{ name: string; path: string }>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */
 export type MusicContent = 'music' | 'audiobook' | 'podcast'
@@ -1265,6 +1306,35 @@ export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
 export const updateIptvSource = (scope: Scope, id: string, patch: IptvSourcePatch) =>
   request<Addon>('PATCH', `${scopePath(scope)}/iptv/${seg(id)}`, patch)
 
+/** Adds a local folder to the server's sources; it is scanned at once, in the background. */
+export const addLocalFolder = (folder: NewLocalFolder) =>
+  request<Addon>('POST', `${scopePath('shared')}/folders`, folder)
+
+export const updateLocalFolder = (id: string, patch: LocalFolderPatch) =>
+  request<Addon>('PATCH', `${scopePath('shared')}/folders/${seg(id)}`, patch)
+
+/** Starts a scan of a local folder; the answer tells the scan under way. */
+export const scanLocalFolder = (id: string) =>
+  request<Addon>('POST', `${scopePath('shared')}/folders/${seg(id)}/scan`)
+
+export const fetchUnmatchedFiles = (id: string, signal?: AbortSignal) =>
+  request<{ total: number; files: UnmatchedFile[] }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/unmatched`,
+    undefined,
+    signal,
+  )
+
+/** Links a file, or a show's folder, to an IMDb identifier; the link survives rescans. */
+export const linkLocalFile = (id: string, path: string, imdbId: string) =>
+  request<Addon>('PUT', `${scopePath('shared')}/folders/${seg(id)}/links`, { path, imdbId })
+
+export const unlinkLocalFile = (id: string, path: string) =>
+  request<Addon>(
+    'DELETE',
+    `${scopePath('shared')}/folders/${seg(id)}/links?path=${encodeURIComponent(path)}`,
+  )
+
 /** Replaces the values of an Eclipse addon's settings; the addon receives them on every request. */
 export const saveAddonSettings = (scope: Scope, id: string, values: Record<string, string>) =>
   request<Addon>('PUT', `${scopePath(scope)}/addons/${seg(id)}/settings`, { values })
@@ -1864,6 +1934,8 @@ export const queryKeys = {
   healthProblems: (language: Language) => ['health', 'problems', language] as const,
   backup: ['backup'] as const,
   sources: ['sources'] as const,
+  /** The unmatched files of a local folder. */
+  unmatched: (id: string) => ['unmatched', id] as const,
   variables: ['variables'] as const,
   notifications: (scope: NotificationScope) => ['notifications', scope] as const,
 }

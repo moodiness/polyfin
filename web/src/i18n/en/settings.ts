@@ -256,6 +256,9 @@ const settings = {
     collectionReadHourNever: 'Never',
     collectionReadHourHelp:
       'Reads every collection of the server’s collection libraries at this hour, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others.',
+    localScanHours: 'Scan local folders every (hours, 0 = never)',
+    localScanHoursHelp: (r: RangeText) =>
+      `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup and when you ask. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',

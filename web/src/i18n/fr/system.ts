@@ -104,6 +104,8 @@ const system: typeof en = {
           `Il reste peu de place pour le dossier ${folder} : ${free} libres.`,
         addon: (name: string, failure: string) => `${name} : ${failure}`,
         iptv: (name: string) => `${name} : le dernier téléchargement de la liste a échoué.`,
+        folder: (name: string) =>
+          `${name} : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.`,
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,

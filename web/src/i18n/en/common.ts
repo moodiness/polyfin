@@ -142,6 +142,7 @@ const common = {
     invalid_quality_group: 'Choose the quality group from the list.',
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',
+    invalid_local_scan_hours: 'The scan interval must be a whole number of hours from 0 to 168.',
     invalid_custom_css: 'The custom CSS must take at most 2 MB.',
     invalid_custom_js: 'The custom JavaScript must take at most 2 MB.',
     invalid_login_disclaimer: 'The sign-in message must take at most 8 KB.',
@@ -187,6 +188,11 @@ const common = {
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
+    invalid_folder_name: 'Folder names must be 1 to 64 characters long.',
+    invalid_folder_path:
+      'Enter the folder’s full path in Polyfin’s container, starting with /, other than / itself.',
+    invalid_folder_kind: 'Choose whether the folder holds movies or shows.',
+    invalid_imdb_id: 'An IMDb identifier is tt followed by digits, such as tt0063350.',
     invalid_channel_list:
       'This address did not return a channel list. Check it, and that the account is still valid.',
     channel_list_too_large: 'This channel list is too large (100 MB or 100,000 channels at most).',
