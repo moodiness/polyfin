@@ -28,7 +28,9 @@ func markScope(kind library.Kind) trackers.Scope {
 
 // trackedTitles identifies to the tracking services the movies and
 // episodes among items that they can know: episodes by their series'
-// identifiers, loaded once per series. It is called in the background.
+// identifiers, loaded once per series. Those an anime addon names by
+// their Kitsu, MyAnimeList or AniDB identifier go by those the anime
+// mapping gives, when it knows them. It is called in the background.
 func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(context.Context) []trackers.Title {
 	return func(ctx context.Context) []trackers.Title {
 		series := map[accounts.ID]map[string]string{}
@@ -40,8 +42,13 @@ func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(c
 			)
 			switch item.Kind {
 			case library.KindMovie:
-				title, ok = trackers.Movie(item.ID, item.ProviderIDs)
+				if title, ok = h.Trackers.Anime(ctx, item.ID, item.StremioID, true); !ok {
+					title, ok = trackers.Movie(item.ID, item.ProviderIDs)
+				}
 			case library.KindEpisode:
+				if title, ok = h.Trackers.Anime(ctx, item.ID, item.StremioID, false); ok {
+					break
+				}
 				ids, loaded := series[item.SeriesID]
 				if !loaded {
 					if show, err := h.Library.Item(ctx, user, item.SeriesID); err == nil {

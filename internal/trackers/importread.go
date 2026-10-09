@@ -379,7 +379,8 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 	return h, next, nil
 }
 
-// simklShows are the shows of an all-items answer of Simkl.
+// simklItems are the movies, shows and anime of an all-items answer of
+// Simkl.
 type simklItems struct {
 	Movies []struct {
 		LastWatchedAt string    `json:"last_watched_at"`
@@ -395,12 +396,15 @@ type simklItems struct {
 			} `json:"episodes"`
 		} `json:"seasons"`
 	} `json:"shows"`
+	Anime []simklAnime `json:"anime"`
 }
 
 // readSimkl reads Simkl's watched movies and the watched episodes of its
-// shows, one list status at a time and only what changed since the last
-// import unless its activities tell nothing did, and its resume points.
-// Anime, numbered as AniDB numbers them, is left out.
+// shows and anime, one list status at a time and only what changed since
+// the last import unless its activities tell nothing did, and its resume
+// points. Anime, numbered as AniDB numbers them, is found through the
+// anime mapping: until the mapping is read, it is left for the next
+// import, which the cursor's second part tells.
 func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, string, error) {
 	var h watchHistory
 	answer, err := r.get(ctx, "/sync/activities", nil)
@@ -413,42 +417,55 @@ func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, st
 	if json.Unmarshal(answer.body, &activities) != nil {
 		return h, cursor, ErrUnreachable
 	}
-	next := activities.All
-	if next == "" || next != cursor {
-		lists := []string{"movies/completed", "shows/watching", "shows/completed", "shows/hold", "shows/dropped"}
-		for _, list := range lists {
-			query := url.Values{"extended": {"full"}}
-			if strings.HasPrefix(list, "shows/") {
-				query.Set("episode_watched_at", "yes")
-				query.Set("include_all_episodes", "original")
+	showsAt, animeAt := animeCursor(cursor)
+	all := activities.All
+	mapping := animeEntry{mapping: r.s.anime, unknown: map[string]bool{}}
+	mapped := r.s.anime.Ready()
+	type read struct{ list, from string }
+	var reads []read
+	if all == "" || all != showsAt {
+		for _, list := range []string{"movies/completed", "shows/watching", "shows/completed", "shows/hold", "shows/dropped"} {
+			reads = append(reads, read{list, showsAt})
+		}
+	}
+	if mapped && (all == "" || all != animeAt) {
+		for _, list := range []string{"anime/watching", "anime/completed", "anime/hold", "anime/dropped"} {
+			reads = append(reads, read{list, animeAt})
+		}
+	}
+	for _, read := range reads {
+		query := url.Values{"extended": {"full"}}
+		if !strings.HasPrefix(read.list, "movies/") {
+			query.Set("episode_watched_at", "yes")
+			query.Set("include_all_episodes", "original")
+		}
+		if read.from != "" {
+			query.Set("date_from", read.from)
+		}
+		answer, err := r.get(ctx, "/sync/all-items/"+read.list, query)
+		if err != nil {
+			return h, cursor, err
+		}
+		var items simklItems
+		// An empty list is {} or null.
+		if json.Unmarshal(answer.body, &items) != nil && strings.TrimSpace(string(answer.body)) != "null" {
+			return h, cursor, ErrUnreachable
+		}
+		for _, movie := range items.Movies {
+			if ref := movie.Movie.ref(false, 0, 0); usable(ref) {
+				h.watched = append(h.watched, watchedEntry{ref: ref, at: date(movie.LastWatchedAt)})
 			}
-			if cursor != "" {
-				query.Set("date_from", cursor)
-			}
-			answer, err := r.get(ctx, "/sync/all-items/"+list, query)
-			if err != nil {
-				return h, cursor, err
-			}
-			var items simklItems
-			// An empty list is {} or null.
-			if json.Unmarshal(answer.body, &items) != nil && strings.TrimSpace(string(answer.body)) != "null" {
-				return h, cursor, ErrUnreachable
-			}
-			for _, movie := range items.Movies {
-				if ref := movie.Movie.ref(false, 0, 0); usable(ref) {
-					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(movie.LastWatchedAt)})
-				}
-			}
-			for _, show := range items.Shows {
-				for _, season := range show.Seasons {
-					for _, episode := range season.Episodes {
-						if ref := show.Show.ref(true, season.Number, episode.Number); usable(ref) {
-							h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.WatchedAt)})
-						}
+		}
+		for _, show := range items.Shows {
+			for _, season := range show.Seasons {
+				for _, episode := range season.Episodes {
+					if ref := show.Show.ref(true, season.Number, episode.Number); usable(ref) {
+						h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.WatchedAt)})
 					}
 				}
 			}
 		}
+		h.addAnime(mapping, items.Anime)
 	}
 	answer, err = r.get(ctx, "/sync/playback", nil)
 	if err != nil {
@@ -456,6 +473,19 @@ func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, st
 	}
 	if h.addPlayback(answer.body) != nil {
 		return h, cursor, ErrUnreachable
+	}
+	if mapped {
+		var playbacks []animePlaybackJSON
+		if json.Unmarshal(answer.body, &playbacks) != nil {
+			return h, cursor, ErrUnreachable
+		}
+		h.addAnimePlayback(mapping, playbacks)
+		animeAt = all
+	}
+	h.unknown = mapping.unknown
+	next := all
+	if all != "" {
+		next = all + "|" + animeAt
 	}
 	return h, next, nil
 }

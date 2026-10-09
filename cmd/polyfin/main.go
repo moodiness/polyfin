@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
+	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
@@ -261,10 +262,15 @@ func serve(ctx context.Context) error {
 	}
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(accounts.SegmentSources), version, logger, store.Settings)
 	userData := userdata.New(pool)
+	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
+	// anime addons name them, are mapped to IMDb and TVDB from two lists
+	// kept in the data folder.
+	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
+	defer animeMapping.Close()
 	// Imported watch histories find their titles in the library and add to
 	// the users' data.
 	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
-		Titles: lib, UserData: userData})
+		Titles: lib, UserData: userData, Anime: animeMapping})
 	defer tracking.Close()
 	// Users and their watch data imported from a Jellyfin server find
 	// their titles and merge the same way.
