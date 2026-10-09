@@ -56,7 +56,7 @@ Importing only adds to your data in Polyfin. It never sends anything to any serv
 | MDBList | Its watched movies and episodes, 1,000 at a time, only what changed since the last import. Whole shows or seasons marked watched without their episodes are left out. | Its paused playbacks. |
 | PublicMetaDB | Its watch history, 500 plays at a time, whole every time. | Its resume points. |
 
-Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. PublicMetaDB names titles by TMDB only: those Polyfin does not know by it are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Titles found no way are counted as not found, and the import goes on.
+Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. A title no catalog listed yet shows in your lists at once, described by the addons. PublicMetaDB names titles by TMDB only: those Polyfin does not know by it are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Titles found no way are counted as not found, and the import goes on.
 
 ### How the history merges with Polyfin's
 

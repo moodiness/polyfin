@@ -75,9 +75,9 @@ Nothing else comes over: passwords, ratings, playlists, collections, users' limi
 
 ### How titles are matched
 
-Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by the IMDb identifier Jellyfin gives, then by TMDB, then by TVDB for series, among the titles Polyfin's catalogs listed. Episodes are found by their series' identifiers and their season and episode numbers; a file holding several episodes counts for each of them.
+Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by the IMDb identifier Jellyfin gives, the way the usual metadata addons name titles, or by TMDB, or by TVDB for series, when a catalog listed the title under one of those. Episodes are found by their series' identifiers and their season and episode numbers; a file holding several episodes counts for each of them. A title no catalog listed yet shows in the user's lists at once, described by the addons.
 
-A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (no title of Polyfin's catalogs has its identifiers).
+A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (it has no IMDb identifier, and no catalog listed it under its TMDB or TVDB one).
 
 ### How the data merges with Polyfin's
 

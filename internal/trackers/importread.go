@@ -220,10 +220,19 @@ type idsJSON struct {
 	TVDBID flexInt `json:"tvdbid"`
 }
 
-// ref names a movie by i, or the episode numbered so of the series i
-// identifies.
-func (i idsJSON) ref(episode bool, season, number int) library.TitleRef {
-	ref := library.TitleRef{Episode: episode, IMDb: cmpOr(i.IMDb, i.IMDbID), TMDB: int(cmpOr(i.TMDB, i.TMDBID)), TVDB: int(cmpOr(i.TVDB, i.TVDBID))}
+// titleJSON is a movie or show as Trakt, Simkl and MDBList give them: its
+// title, when they give it, and its identifiers.
+type titleJSON struct {
+	Title string  `json:"title"`
+	IDs   idsJSON `json:"ids"`
+}
+
+// ref names the movie t is, or the episode numbered so of the show t is,
+// by its identifiers and title.
+func (t titleJSON) ref(episode bool, season, number int) library.TitleRef {
+	i := t.IDs
+	ref := library.TitleRef{Episode: episode, IMDb: cmpOr(i.IMDb, i.IMDbID), TMDB: int(cmpOr(i.TMDB, i.TMDBID)), TVDB: int(cmpOr(i.TVDB, i.TVDBID)),
+		Name: strings.TrimSpace(t.Title)}
 	if episode {
 		ref.Season, ref.Number = season, number
 	}
@@ -261,17 +270,15 @@ type playbackJSON struct {
 	Type     string    `json:"type"`
 	Runtime  flexInt   `json:"runtime"`
 	Movie    *struct {
+		titleJSON
 		Runtime flexInt `json:"runtime"`
-		IDs     idsJSON `json:"ids"`
 	} `json:"movie"`
 	Episode *struct {
 		Season  int     `json:"season"`
 		Number  int     `json:"number"`
 		Runtime flexInt `json:"runtime"`
 	} `json:"episode"`
-	Show *struct {
-		IDs idsJSON `json:"ids"`
-	} `json:"show"`
+	Show *titleJSON `json:"show"`
 }
 
 // addPlayback adds the resume points of a playback list to h.
@@ -288,10 +295,10 @@ func (h *watchHistory) addPlayback(body []byte) error {
 		entry := resumeEntry{percent: float64(item.Progress), at: *at}
 		switch {
 		case item.Type == "movie" && item.Movie != nil:
-			entry.ref = item.Movie.IDs.ref(false, 0, 0)
+			entry.ref = item.Movie.ref(false, 0, 0)
 			entry.runtime = time.Duration(cmpOr(item.Movie.Runtime, item.Runtime)) * time.Minute
 		case item.Type == "episode" && item.Episode != nil && item.Show != nil:
-			entry.ref = item.Show.IDs.ref(true, item.Episode.Season, item.Episode.Number)
+			entry.ref = item.Show.ref(true, item.Episode.Season, item.Episode.Number)
 			entry.runtime = time.Duration(cmpOr(item.Episode.Runtime, item.Runtime)) * time.Minute
 		default:
 			continue
@@ -329,18 +336,14 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 					return h, cursor, err
 				}
 				var plays []struct {
-					WatchedAt string `json:"watched_at"`
-					Type      string `json:"type"`
-					Movie     *struct {
-						IDs idsJSON `json:"ids"`
-					} `json:"movie"`
-					Episode *struct {
+					WatchedAt string     `json:"watched_at"`
+					Type      string     `json:"type"`
+					Movie     *titleJSON `json:"movie"`
+					Episode   *struct {
 						Season int `json:"season"`
 						Number int `json:"number"`
 					} `json:"episode"`
-					Show *struct {
-						IDs idsJSON `json:"ids"`
-					} `json:"show"`
+					Show *titleJSON `json:"show"`
 				}
 				if json.Unmarshal(answer.body, &plays) != nil {
 					return h, cursor, ErrUnreachable
@@ -349,9 +352,9 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 					var ref library.TitleRef
 					switch {
 					case play.Type == "movie" && play.Movie != nil:
-						ref = play.Movie.IDs.ref(false, 0, 0)
+						ref = play.Movie.ref(false, 0, 0)
 					case play.Type == "episode" && play.Episode != nil && play.Show != nil:
-						ref = play.Show.IDs.ref(true, play.Episode.Season, play.Episode.Number)
+						ref = play.Show.ref(true, play.Episode.Season, play.Episode.Number)
 					default:
 						continue
 					}
@@ -379,15 +382,11 @@ func (r *reader) readTrakt(ctx context.Context, cursor string) (watchHistory, st
 // simklShows are the shows of an all-items answer of Simkl.
 type simklItems struct {
 	Movies []struct {
-		LastWatchedAt string `json:"last_watched_at"`
-		Movie         struct {
-			IDs idsJSON `json:"ids"`
-		} `json:"movie"`
+		LastWatchedAt string    `json:"last_watched_at"`
+		Movie         titleJSON `json:"movie"`
 	} `json:"movies"`
 	Shows []struct {
-		Show struct {
-			IDs idsJSON `json:"ids"`
-		} `json:"show"`
+		Show    titleJSON `json:"show"`
 		Seasons []struct {
 			Number   int `json:"number"`
 			Episodes []struct {
@@ -436,14 +435,14 @@ func (r *reader) readSimkl(ctx context.Context, cursor string) (watchHistory, st
 				return h, cursor, ErrUnreachable
 			}
 			for _, movie := range items.Movies {
-				if ref := movie.Movie.IDs.ref(false, 0, 0); usable(ref) {
+				if ref := movie.Movie.ref(false, 0, 0); usable(ref) {
 					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(movie.LastWatchedAt)})
 				}
 			}
 			for _, show := range items.Shows {
 				for _, season := range show.Seasons {
 					for _, episode := range season.Episodes {
-						if ref := show.Show.IDs.ref(true, season.Number, episode.Number); usable(ref) {
+						if ref := show.Show.ref(true, season.Number, episode.Number); usable(ref) {
 							h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.WatchedAt)})
 						}
 					}
@@ -496,19 +495,15 @@ func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, 
 			}
 			var page struct {
 				Movies []struct {
-					LastWatchedAt string `json:"last_watched_at"`
-					Movie         struct {
-						IDs idsJSON `json:"ids"`
-					} `json:"movie"`
+					LastWatchedAt string    `json:"last_watched_at"`
+					Movie         titleJSON `json:"movie"`
 				} `json:"movies"`
 				Episodes []struct {
 					LastWatchedAt string `json:"last_watched_at"`
 					Episode       struct {
-						Season int `json:"season"`
-						Number int `json:"number"`
-						Show   struct {
-							IDs idsJSON `json:"ids"`
-						} `json:"show"`
+						Season int       `json:"season"`
+						Number int       `json:"number"`
+						Show   titleJSON `json:"show"`
 					} `json:"episode"`
 				} `json:"episodes"`
 				Pagination struct {
@@ -519,12 +514,12 @@ func (r *reader) readMDBList(ctx context.Context, cursor string) (watchHistory, 
 				return h, cursor, ErrUnreachable
 			}
 			for _, movie := range page.Movies {
-				if ref := movie.Movie.IDs.ref(false, 0, 0); usable(ref) {
+				if ref := movie.Movie.ref(false, 0, 0); usable(ref) {
 					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(movie.LastWatchedAt)})
 				}
 			}
 			for _, episode := range page.Episodes {
-				if ref := episode.Episode.Show.IDs.ref(true, episode.Episode.Season, episode.Episode.Number); usable(ref) {
+				if ref := episode.Episode.Show.ref(true, episode.Episode.Season, episode.Episode.Number); usable(ref) {
 					h.watched = append(h.watched, watchedEntry{ref: ref, at: date(episode.LastWatchedAt)})
 				}
 			}
