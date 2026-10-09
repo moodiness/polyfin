@@ -21,15 +21,17 @@ type words struct {
 	songs, albums, artists, playlists string
 	// myMusic names a music addon's My music (see eclipse.MyMusic).
 	myMusic string
+	// replay names the Replay view (see ReplayViewID).
+	replay string
 }
 
 var vocabulary = map[string]words{
 	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", collections: "Collections",
-		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music"},
+		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay"},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", collections: "Collections",
-		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique"},
+		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay"},
 }
 
 // vocabularyOf returns the words of a server language, English when the

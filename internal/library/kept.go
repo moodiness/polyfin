@@ -635,7 +635,7 @@ func (s *Service) ReadCollections(ctx context.Context) error {
 	}
 	read, failed := 0, 0
 	whole := func(parent accounts.ID) (Page, error) {
-		most, err := s.listingLimit(ctx, server, parent)
+		most, _, err := s.listingLimit(ctx, server, parent)
 		if err != nil {
 			return Page{}, err
 		}

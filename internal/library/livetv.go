@@ -445,12 +445,19 @@ func (s *Service) searchProgram(ctx context.Context, id accounts.ID) (programRef
 
 // SweepPrograms deletes the programmes kept as items that ended more than
 // two days ago and that no timer or recording names: Native EPG programmes
-// listed, and those of guides kept before they no longer were.
+// listed, and those of guides kept before they no longer were; and the
+// Replay programmes no archive keeps any more, past maxReplayDays.
 func (s *Service) SweepPrograms(ctx context.Context) (int64, error) {
 	tag, err := s.db.Exec(ctx, `DELETE FROM items WHERE kind = 'program'
 		AND CASE WHEN data->'video'->>'endTime' ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d' THEN (data->'video'->>'endTime')::timestamptz < $1 ELSE false END
 		AND id NOT IN (SELECT program_id FROM live_timers WHERE program_id IS NOT NULL
 			UNION SELECT program_id FROM live_series_timers WHERE program_id IS NOT NULL
 			UNION SELECT program_id FROM live_recordings WHERE program_id IS NOT NULL)`, s.now().Add(-48*time.Hour))
-	return tag.RowsAffected(), err
+	if err != nil {
+		return 0, err
+	}
+	replays, err := s.db.Exec(ctx, `DELETE FROM items WHERE kind = $1
+		AND CASE WHEN data->'video'->>'endTime' ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d' THEN (data->'video'->>'endTime')::timestamptz < $2 ELSE true END`,
+		string(KindReplay), s.now().AddDate(0, 0, -maxReplayDays))
+	return tag.RowsAffected() + replays.RowsAffected(), err
 }

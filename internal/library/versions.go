@@ -52,6 +52,10 @@ type Version struct {
 	// not say; Audio is what a music addon tells of a track's stream.
 	Expires time.Time
 	Audio   *AudioSource
+	// HoldsConnection marks a stream that takes one of its source's
+	// connections while it plays, as a channel's stream does: a replay
+	// programme's, from an IPTV provider's archive.
+	HoldsConnection bool
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
@@ -121,6 +125,13 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		return target{item: id, kind: KindMovie, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
+	case r.Kind == KindReplay:
+		// A programme plays while its channel's archive keeps it.
+		replay, err := s.replayProgramme(ctx, v, r)
+		if err != nil {
+			return target{}, view{}, err
+		}
+		return target{item: id, kind: KindReplay, metaType: replay.StremioType, id: replay.StremioID, runtime: replay.Runtime}, v, nil
 	case r.Kind == KindEpisode && r.Video != nil:
 		series, err := s.load(ctx, r.seriesItemID())
 		if err != nil || series.Meta == nil {
@@ -354,6 +365,9 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		return s.resolveTrack(ctx, entry, r, true)
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
+	if old.HoldsConnection {
+		t.kind = KindReplay
+	}
 	if addon.IPTV() {
 		streams, err := s.fetchStreams(ctx, entry, t.metaType, t.id)
 		if err != nil {
@@ -429,6 +443,8 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Confined: entry.confined,
 		Runtime:  t.runtime,
 		Height:   LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		// A replay holds one of its provider's connections, as a channel does.
+		HoldsConnection: t.kind == KindReplay,
 	}
 	version.ID = versionID(t.item, version)
 	return version
