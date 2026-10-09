@@ -323,7 +323,7 @@ func TestSettingsCatalogLimits(t *testing.T) {
 func TestSettingsContent(t *testing.T) {
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
-	defaults := map[string]any{"skipButtons": true, "similarTitles": true, "playedPercent": float64(90), "resumePercent": float64(5),
+	defaults := map[string]any{"skipButtons": true, "similarTitles": true, "lyrics": true, "playedPercent": float64(90), "resumePercent": float64(5),
 		"versionListMinutes": float64(10), "catalogRefreshMinutes": float64(60)}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	for key, want := range defaults {
@@ -334,7 +334,7 @@ func TestSettingsContent(t *testing.T) {
 	base := func() map[string]any {
 		return map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	}
-	saved := map[string]any{"skipButtons": false, "similarTitles": false, "playedPercent": float64(95), "resumePercent": float64(20),
+	saved := map[string]any{"skipButtons": false, "similarTitles": false, "lyrics": false, "playedPercent": float64(95), "resumePercent": float64(20),
 		"versionListMinutes": float64(60), "catalogRefreshMinutes": float64(720)}
 	settings := base()
 	for key, value := range saved {
