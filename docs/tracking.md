@@ -6,6 +6,7 @@ Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts,
 
 Only movies and episodes known by an IMDb, TMDB or TVDB identifier are sent to Trakt, Simkl, MDBList and PublicMetaDB. Episodes are sent by their series' identifiers and their season and episode numbers.
 
+- Anime that an addon names by its Kitsu, MyAnimeList or AniDB identifier (`kitsu:<id>`, `mal:<id>`, `anidb:<id>`, and `kitsu:<id>:<episode>` for an episode) are sent by the identifiers the [anime mapping](#anime) gives: a movie by its IMDb and TMDB identifiers, an episode by its series' TVDB and IMDb identifiers and its season and episode on TVDB. Those the mapping does not know are sent by the identifiers the addon gives, if any.
 - Live TV, recordings, audiobooks and titles without an identifier send nothing.
 - Songs go to Last.fm and ListenBrainz only, and movies and episodes never reach those two. See [Music: Last.fm and ListenBrainz](#music-last-fm-and-listenbrainz).
 - One user's activity never reaches another user's accounts.
@@ -52,11 +53,11 @@ Importing only adds to your data in Polyfin. It never sends anything to any serv
 | Service | Watched movies and episodes | Resume points |
 |---|---|---|
 | Trakt | Its watch history, a page of 250 plays at a time, read again only when its last activities changed. | Its playback progress. |
-| Simkl | Its watched movies and the watched episodes of its shows, one list status at a time, only what changed since the last import. Anime is left out: Simkl numbers it as AniDB does. | Its paused playbacks. |
+| Simkl | Its watched movies and the watched episodes of its shows and anime, one list status at a time, only what changed since the last import. Anime, which Simkl numbers as AniDB does, is translated to the seasons and episodes of IMDb and TVDB through the [anime mapping](#anime). | Its paused playbacks, anime included. |
 | MDBList | Its watched movies and episodes, 1,000 at a time, only what changed since the last import. Whole shows or seasons marked watched without their episodes are left out. | Its paused playbacks. |
 | PublicMetaDB | Its watch history, 500 plays at a time, whole every time. | Its resume points. |
 
-Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. A title no catalog listed yet shows in your lists at once, described by the addons. PublicMetaDB names titles by TMDB only: those Polyfin does not know by it are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Titles found no way are counted as not found, and the import goes on.
+Polyfin finds the titles by their IMDb identifier, the way the usual metadata addons name them: a movie `tt…`, an episode `tt…:<season>:<episode>`. A title that a catalog listed under its TMDB or TVDB identifier is found that way too. A title no catalog listed yet shows in your lists at once, described by the addons. PublicMetaDB names titles by TMDB only: those Polyfin does not know by it are looked up by the IMDb identifier PublicMetaDB maps them to, when its contributors agree on one. Simkl's anime are found by the identifiers and numbers the [anime mapping](#anime) gives them. Titles found no way are counted as not found, and the import goes on.
 
 ### How the history merges with Polyfin's
 
@@ -71,6 +72,30 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 - One import runs at a time per user and service. An import interrupted by a restart runs again later.
 - When the history cannot be read whole, what was read is imported, and the status line says why: the service refused the connection (**Connect again**), could not be reached, or asked to wait too long.
 - **Disconnect** asks first. Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
+
+## Anime
+
+AniDB, and Simkl's and Kitsu's anime that follow it, make each season of a series, and often each half of a season, a title of its own, with its episodes numbered from 1. Polyfin's titles, like the usual metadata addons', follow the seasons of IMDb and TVDB. Polyfin maps the two with two community lists:
+
+- [Fribb/anime-lists](https://github.com/Fribb/anime-lists) (`anime-list-full.json`) gives the AniDB, Kitsu, MyAnimeList, AniList, TVDB, TMDB and IMDb identifiers of each anime.
+- [Anime-Lists/anime-lists](https://github.com/Anime-Lists/anime-lists) (`anime-list-master.xml`) gives where each AniDB episode is on TVDB: the season of each anime and the number to add to its episodes, the episodes it maps one by one, and the series numbered as TVDB's absolute numbering.
+
+### How numbering is translated
+
+- An episode goes to its series' TVDB identifier, and IMDb's when the lists give the same series, with the season and episode on TVDB. For example, the first episode of an anime the lists place at the 13th episode of TVDB's first season is that episode of the series.
+- Episodes the list maps one by one, or by range, follow it first; the others follow the anime's season and offset.
+- An anime numbered as TVDB's absolute numbering, a long series counted from its first episode across its seasons, is placed among the episodes Polyfin listed of the series: its 30th episode is the 30th of the series' regular episodes, by season then number. A series Polyfin has not listed yet leaves such episodes not found.
+- Specials are mapped only where the list names them.
+- An anime movie is the movie its IMDb and TMDB identifiers name. One that TVDB lists among a series' specials, without a movie identifier, is that special.
+- Simkl's anime are also marked on the titles anime catalogs list under the anime's Kitsu, MyAnimeList or AniDB identifier (`kitsu:<id>`), an episode as the anime numbers it (`kitsu:<id>:<episode>`), when a catalog listed them: these count once with the title found by IMDb and TVDB. Specials are not marked there, and nothing is recorded for an anime no catalog listed.
+
+### What stays unmatched
+
+An anime the lists do not know and no anime catalog listed, an episode they map to nothing, and a special they do not name are counted as not found, as other titles are. Until the lists are read, Simkl's anime is left for a later import, which then reads all the anime that changed since the last one that read them, or all of it the first time. A title an addon names by its Kitsu, MyAnimeList or AniDB identifier that the lists do not know is sent by the identifiers the addon gives, if any.
+
+### Refreshing the lists
+
+Polyfin downloads both lists from GitHub when it first starts, keeps them in `anime` in its data folder, and reads that copy at each start, downloading nothing while it is less than a day old. It checks each list again once a day, with a conditional request, so that a list downloads only when it changed. When a download fails, or brings something that is not the list, the copy in use stays, and Polyfin tries again after 10 minutes, then less often, up to every 6 hours. Nothing waits for a download: until the first one ends, anime is not mapped.
 
 ## Music: Last.fm and ListenBrainz
 
