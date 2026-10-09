@@ -112,7 +112,8 @@ type Service struct {
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
-// stream requests addons answer over HTTP (see package iptv).
+// stream requests addons answer over HTTP (see package iptv), and which
+// channels have an archive of past programmes (see replay.go).
 type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, genre, search string) ([]stremio.Meta, error)
@@ -122,6 +123,8 @@ type IPTV interface {
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
 	MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Logo(ctx context.Context, item accounts.ID) (string, bool, error)
+	Archives(ctx context.Context, source accounts.ID) (map[string]int, error)
+	GuideArchives(ctx context.Context, guide accounts.ID) (map[string]int, error)
 }
 
 // UseIPTV sets what answers for IPTV sources; it is called before the
@@ -850,6 +853,13 @@ func (s *Service) children(ctx context.Context, user accounts.User, parent accou
 	if l, ok := v.library(parent); ok {
 		return s.libraryChildren(ctx, v, l, start, count, genre, first)
 	}
+	if parent == ReplayViewID {
+		if _, err := s.replayView(ctx, v); err != nil {
+			return Page{}, err
+		}
+		folders, err := s.replayFolders(ctx, v)
+		return slicePage(folders, start, count), err
+	}
 	r, err := s.load(ctx, parent)
 	if err != nil {
 		return Page{}, err
@@ -863,6 +873,9 @@ func (s *Service) children(ctx context.Context, user accounts.User, parent accou
 	case KindSeason:
 		episodes, err := s.Episodes(ctx, user, r.seriesItemID(), &parent)
 		return slicePage(episodes, start, count), err
+	case KindReplayFolder:
+		programmes, err := s.replayProgrammes(ctx, v, r)
+		return slicePage(programmes, start, count), err
 	case KindAlbum, KindArtist, KindMusicPlaylist:
 		folder, entry, err := s.musicFolder(ctx, v, parent)
 		if err != nil {
@@ -1170,7 +1183,7 @@ func whole(ctx context.Context) bool {
 // home row waits for it. What it did not wait for is read on in the
 // background, to the end, for the next listing (see readRest).
 func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
-	most, err := s.listingLimit(ctx, user, parent)
+	most, replay, err := s.listingLimit(ctx, user, parent)
 	if err != nil {
 		return Page{}, err
 	}
@@ -1178,6 +1191,11 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	// listings (see withinMax).
 	if most <= count {
 		return s.Children(ctx, user, parent, start, count, genre)
+	}
+	// The Replay view and its folders ask no addon: they are listed whole
+	// at once.
+	if replay {
+		return s.Children(ctx, user, parent, start, most, genre)
 	}
 	// From the start, a kept listing that wants no more is the whole
 	// listing; from an index, it may only know less than the index.
@@ -1247,32 +1265,38 @@ func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (
 
 // listingLimit is how many items a listing of parent that asks for no
 // limit gets: WholeListing, or the maximum of the library the library or
-// collection parent belongs to when lower; 0 for any other parent.
-func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (int, error) {
+// collection parent belongs to when lower; 0 for any other parent but the
+// Replay view and its folders, which get WholeListing, replay set.
+func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (most int, replay bool, err error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	most := 0
 	if l, ok := v.library(parent); ok {
 		most = l.maxItems
+	} else if parent == ReplayViewID {
+		return WholeListing, true, nil
 	} else {
 		r, err := s.load(ctx, parent)
 		if errors.Is(err, ErrNotFound) {
-			return 0, nil
+			return 0, false, nil
 		}
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
-		if r.Kind != KindCollection {
-			return 0, nil
+		switch r.Kind {
+		case KindCollection:
+			most = s.collectionMax(ctx, v, r)
+		case KindReplayFolder:
+			return WholeListing, true, nil
+		default:
+			return 0, false, nil
 		}
-		most = s.collectionMax(ctx, v, r)
 	}
 	if most > 0 && most < WholeListing {
-		return most, nil
+		return most, false, nil
 	}
-	return WholeListing, nil
+	return WholeListing, false, nil
 }
 
 // fetchMeta asks an addon, or an IPTV source, for its description of a
@@ -1437,6 +1461,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		}
 		return item, nil
 	}
+	if id == ReplayViewID {
+		return s.replayView(ctx, v)
+	}
 	r, err := s.load(ctx, id)
 	if errors.Is(err, ErrNotFound) {
 		return s.unsavedProgram(ctx, v, id)
@@ -1522,6 +1549,10 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		return s.channel(ctx, v, r)
 	case KindProgram:
 		return s.program(ctx, v, r)
+	case KindReplayFolder:
+		return s.replayFolderItem(ctx, v, r)
+	case KindReplay:
+		return s.replayProgramme(ctx, v, r)
 	case KindArtist, KindAlbum, KindTrack, KindAudiobook, KindMusicPlaylist:
 		return s.musicDetails(ctx, v, r)
 	default:
@@ -1986,12 +2017,17 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	if err != nil {
 		return "", false, err
 	}
+	// A Replay folder shows its channel's artwork, as does a programme of
+	// it whose guide gives no image.
+	if r.Kind == KindReplayFolder || r.Kind == KindReplay && r.Video != nil && r.Video.Thumbnail == "" {
+		return s.Artwork(ctx, itemID(channelKey(r.Channel)), imageType)
+	}
 	var images Images
 	confined := r.Confined
 	switch {
 	case r.Kind == KindChannel && r.Meta != nil:
 		images = channelImages(*r.Meta)
-	case r.Kind == KindProgram && r.Video != nil:
+	case (r.Kind == KindProgram || r.Kind == KindReplay) && r.Video != nil:
 		// The guide that listed the programme may come from another addon
 		// than its channel: either one confines its artwork.
 		images.Primary = r.Video.Thumbnail

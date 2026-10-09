@@ -219,9 +219,12 @@ func (s *Service) refreshCatalog(ctx context.Context, c addons.LiveCatalog, guid
 
 // fetchGuide downloads a guide of a catalog and stores its channels and
 // the programmes within the window around the download, once at a time
-// for each guide. They are written under the guide's next generation as
-// the guide is read, then made the current one; a failure keeps the last
-// download's and records why.
+// for each guide: from guidePast before it, or as far back as the archive
+// of the channels mapped to a guide channel reaches (see guideArchives).
+// They are written under the guide's next generation as the guide is
+// read, then made the current one, with the past programmes of the last
+// download that such archives still keep and the new one no longer gives;
+// a failure keeps the last download's and records why.
 func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons.Guide) error {
 	_, err, _ := s.flight.Do("guide "+g.ID.String(), func() (any, error) {
 		at := s.now()
@@ -232,7 +235,11 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 				return nil, err
 			}
 		}
-		channels, programmes, err := s.downloadGuide(ctx, c, g, generation, at)
+		archives, err := s.guideArchives(ctx, g.ID)
+		if err != nil {
+			return nil, err
+		}
+		channels, programmes, err := s.downloadGuide(ctx, c, g, generation, at, archives)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -276,8 +283,12 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			return nil, err
 		}
 		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+			kept, err := keepArchived(ctx, tx, g, generation, at, archives)
+			if err != nil {
+				return err
+			}
 			tag, err := tx.Exec(ctx, `UPDATE live_guides SET generation = $2, checked_at = $3, fetched_at = $3, error = '', channels = $4,
-				programmes = $5, failures = 0, next_try_at = NULL WHERE id = $1`, g.ID, generation, at, channels, programmes)
+				programmes = $5, failures = 0, next_try_at = NULL WHERE id = $1`, g.ID, generation, at, channels, programmes+kept)
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
@@ -311,8 +322,11 @@ func (p *programmeRows) Values() ([]any, error) { return p.current, nil }
 func (p *programmeRows) Err() error { return nil }
 
 // downloadGuide reads a guide and writes its channels and programmes under
-// generation. It reports how many it wrote.
-func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g addons.Guide, generation int, at time.Time) (int, int, error) {
+// generation: those from guidePast before at, and those of the guide
+// channels archives names as far back as the days it gives. It reports
+// how many it wrote.
+func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g addons.Guide, generation int, at time.Time,
+	archives map[string]time.Duration) (int, int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	from, to := at.Add(-guidePast), at.AddDate(0, 0, guideAhead)
@@ -349,7 +363,7 @@ func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g add
 				return nil
 			},
 			func(p xmltv.Programme) error {
-				if !p.Stop.After(from) || !p.Start.Before(to) {
+				if !p.Stop.After(from) && !p.Stop.After(at.Add(-archives[p.Channel])) || !p.Start.Before(to) {
 					return nil
 				}
 				if count++; count > maxGuideProgrammes {

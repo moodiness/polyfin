@@ -39,6 +39,11 @@ const (
 	// KindRecording is a Live TV recording, a file of Polyfin's own (see
 	// the recordings package), never listed by the library.
 	KindRecording Kind = "recording"
+	// KindReplayFolder is a folder of the Replay view: a channel whose
+	// provider keeps past programmes; KindReplay is one of them, played
+	// from the provider's archive (see replay.go).
+	KindReplayFolder Kind = "replayfolder"
+	KindReplay       Kind = "replay"
 	// The items of Eclipse music addons (see music.go): artists, albums,
 	// tracks, the tracks of audiobook addons, and the addons' playlists.
 	KindArtist        Kind = "artist"
@@ -222,6 +227,12 @@ func personKey(name string) string { return "person|" + strings.ToLower(name) }
 func channelKey(stremioID string) string { return "channel|" + stremioID }
 
 func programKey(channel, programme string) string { return "program|" + channel + "|" + programme }
+
+func replayFolderKey(channel string) string { return "replayfolder|" + channel }
+
+func replayKey(channel string, start time.Time) string {
+	return "replay|" + channel + "|" + start.UTC().Format(time.RFC3339)
+}
 
 // ImageTag identifies a version of an artwork for HTTP caching; it is empty
 // when there is no artwork.
