@@ -289,6 +289,7 @@ type settingsJSON struct {
 	SegmentOrder          []string  `json:"segmentOrder"`
 	SegmentSourcesOff     *[]string `json:"segmentSourcesOff"`
 	SimilarTitles         *bool     `json:"similarTitles"`
+	Lyrics                *bool     `json:"lyrics"`
 	PlayedPercent         *int      `json:"playedPercent"`
 	ResumePercent         *int      `json:"resumePercent"`
 	VersionListMinutes    *int      `json:"versionListMinutes"`
@@ -428,6 +429,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SegmentOrder:          settings.SegmentOrder,
 		SegmentSourcesOff:     &settings.SegmentSourcesOff,
 		SimilarTitles:         &settings.SimilarTitles,
+		Lyrics:                &settings.Lyrics,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
 		VersionListMinutes:    &settings.VersionListMinutes,
@@ -908,6 +910,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SegmentOrder:          segmentOrder,
 		SegmentSourcesOff:     valueOr(body.SegmentSourcesOff, current.SegmentSourcesOff),
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
+		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
 		VersionListMinutes:    valueOr(body.VersionListMinutes, current.VersionListMinutes),

@@ -550,6 +550,10 @@ type Settings struct {
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
+	// Lyrics looks music tracks up on LRCLIB and serves their lyrics to
+	// apps, synced line by line when LRCLIB has them; off, LRCLIB is never
+	// asked and tracks have no lyrics.
+	Lyrics bool
 	// PlayedPercent is how far into a title, in percent of its runtime, a
 	// reported position marks it played; ResumePercent is how far it must
 	// be to keep a resume point. ResumePercent is below PlayedPercent.
@@ -751,7 +755,7 @@ func validWebText(text string, max int) bool {
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
-	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -778,7 +782,7 @@ func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
-		&settings.SimilarTitles, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
