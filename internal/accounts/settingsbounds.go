@@ -88,6 +88,7 @@ func DefaultSettings() Settings {
 		RecordingPostPadding:   DefaultRecordingPostPadding,
 		RecordingRetentionDays: DefaultRecordingRetentionDays,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
+		LocalScanHours:         DefaultLocalScanHours,
 
 		CustomCss: DefaultCustomCss,
 		CustomJs:  DefaultCustomJs,
@@ -208,6 +209,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingPostPadding":   between(0, MaxRecordingPadding, d.RecordingPostPadding),
 		"recordingRetentionDays": between(0, MaxRecordingRetentionDays, d.RecordingRetentionDays),
 		"liveTvRefreshHours":     between(MinLiveTvRefreshHours, MaxLiveTvRefreshHours, d.LiveTvRefreshHours),
+		"localScanHours":         between(0, MaxLocalScanHours, d.LocalScanHours),
 
 		"customCss":         text(MaxCustomCodeBytes, d.CustomCss),
 		"customJs":          text(MaxCustomCodeBytes, d.CustomJs),

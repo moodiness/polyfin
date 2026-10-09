@@ -265,6 +265,17 @@ const (
 	DefaultLiveTvRefreshHours = 12
 )
 
+// ErrInvalidLocalScanHours reports a LocalScanHours outside
+// [0, MaxLocalScanHours].
+var ErrInvalidLocalScanHours = errors.New("invalid local scan hours")
+
+// The bound and default of Settings.LocalScanHours: by default, local
+// folders are scanned again every 6 hours.
+const (
+	MaxLocalScanHours     = 168
+	DefaultLocalScanHours = 6
+)
+
 // ErrInvalidCustomCss, ErrInvalidCustomJs and ErrInvalidLoginDisclaimer
 // report a Settings.CustomCss, CustomJs or LoginDisclaimer longer than its
 // maximum, or holding a NUL character, which no web page has.
@@ -685,6 +696,10 @@ type Settings struct {
 	// LiveTvRefreshHours is how many hours after it was fetched an XMLTV
 	// guide or an IPTV source's channel list is fetched again.
 	LiveTvRefreshHours int
+	// LocalScanHours is how many hours after its last scan a local folder
+	// is scanned again, 0 for never on a schedule: folders are still
+	// scanned at startup and when an administrator asks.
+	LocalScanHours int
 	// CustomCss and LoginDisclaimer are Jellyfin's branding: the CSS
 	// jellyfin-web applies to every page, unless a user turns it off in
 	// their display settings, and the text, Markdown or HTML it shows
@@ -796,7 +811,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
-	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, " +
+	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address"
@@ -823,7 +838,7 @@ func (settings *Settings) fields() []any {
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
-		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours,
+		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
@@ -1076,6 +1091,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LiveTvRefreshHours < MinLiveTvRefreshHours || settings.LiveTvRefreshHours > MaxLiveTvRefreshHours {
 		return Settings{}, ErrInvalidLiveTvRefreshHours
+	}
+	if settings.LocalScanHours < 0 || settings.LocalScanHours > MaxLocalScanHours {
+		return Settings{}, ErrInvalidLocalScanHours
 	}
 	if !validWebText(settings.CustomCss, MaxCustomCodeBytes) {
 		return Settings{}, ErrInvalidCustomCss
