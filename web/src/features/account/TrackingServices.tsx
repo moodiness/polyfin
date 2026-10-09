@@ -16,6 +16,7 @@ import {
   queryKeys,
   revealTrackingKey,
   setTrackingImport,
+  type TrackingKeyServiceName,
   type TrackingService,
   type TrackingServiceName,
 } from '@/api'
@@ -44,6 +45,8 @@ const serviceNames: Record<TrackingServiceName, string> = {
   simkl: 'Simkl',
   mdblist: 'MDBList',
   publicmetadb: 'PublicMetaDB',
+  lastfm: 'Last.fm',
+  listenbrainz: 'ListenBrainz',
 }
 
 /** The letters in each service's tile. */
@@ -52,6 +55,8 @@ const monograms: Record<TrackingServiceName, string> = {
   simkl: 'Si',
   mdblist: 'M',
   publicmetadb: 'P',
+  lastfm: 'L',
+  listenbrainz: 'LB',
 }
 
 /** How often the services are read while a code waits to be entered on a service's site. */
@@ -82,7 +87,7 @@ export default function TrackingServices() {
           : false,
   })
 
-  if (tracking.isPending) return <SkeletonRows rows={4} label={t.account.tracking.loading} />
+  if (tracking.isPending) return <SkeletonRows rows={6} label={t.account.tracking.loading} />
   if (tracking.isError) {
     return (
       <InlineError onRetry={() => void tracking.refetch()} retrying={tracking.isFetching}>
@@ -120,10 +125,11 @@ function store(service: TrackingService) {
 }
 
 /** The text of a failed connection, naming the service it is about. */
-function connectError(t: Messages, name: string, error: unknown): string {
+function connectError(t: Messages, name: string, error: unknown, music = false): string {
   const text = t.account.tracking
   if (error instanceof ApiError) {
-    if (error.code === 'invalid_key') return text.invalidKey(name)
+    // The music service connected with a key takes a user token.
+    if (error.code === 'invalid_key') return music ? text.invalidToken(name) : text.invalidKey(name)
     if (error.code === 'service_unreachable') return text.serviceUnreachable(name)
     if (error.code === 'not_available') return text.notAvailable(name)
     if (error.code === 'app_refused') return text.appRefused(name)
@@ -153,7 +159,8 @@ function ServiceRow({ service }: { service: TrackingService }) {
   const [confirming, setConfirming] = useState(false)
 
   // A code the server dropped without connecting the service expired or was refused on its site.
-  const codeKey = code?.userCode ?? null
+  // A sign-in has no code to show: its page names it.
+  const codeKey = code === null ? null : code.userCode || code.verificationUrl
   const [lastCodeKey, setLastCodeKey] = useState(codeKey)
   const [codeEnded, setCodeEnded] = useState(false)
   if (codeKey !== lastCodeKey) {
@@ -195,12 +202,17 @@ function ServiceRow({ service }: { service: TrackingService }) {
     },
   })
 
+  const signIn = service.connection === 'signin'
   const waiting = code !== null && !expired
   const status: { tone: StatusTone; label: string; icon?: typeof HourglassIcon } =
     !service.available
       ? { tone: 'muted', label: text.status.unavailable }
       : waiting
-        ? { tone: 'muted', label: text.status.waiting, icon: HourglassIcon }
+        ? {
+            tone: 'muted',
+            label: signIn ? text.status.waitingSignIn : text.status.waiting,
+            icon: HourglassIcon,
+          }
         : service.problem === 'app_refused'
           ? { tone: 'danger', label: text.status.appRefused }
           : service.problem === 'reconnect'
@@ -225,27 +237,28 @@ function ServiceRow({ service }: { service: TrackingService }) {
   )
   const keyForm = (label: string) => (
     <KeyForm
-      name={name}
-      help={text.keyHelp[service.service as 'mdblist' | 'publicmetadb']}
+      keyLabel={service.music ? text.tokenLabel(name) : text.keyLabel(name)}
+      help={text.keyHelp[service.service as TrackingKeyServiceName]}
       label={label}
       pending={connect.isPending}
-      error={connect.isError ? connectError(t, name, connect.error) : undefined}
+      error={connect.isError ? connectError(t, name, connect.error, service.music) : undefined}
       onChange={() => connect.reset()}
       onConnect={(key) => connect.mutate(key)}
     />
   )
   const appRefused =
     connect.isError && connect.error instanceof ApiError && connect.error.code === 'app_refused'
-  const codeError = service.connection === 'code' && connect.isError && (
+  const codeError = service.connection !== 'key' && connect.isError && (
     <Notice tone="danger" live action={appRefused ? setUpLink : undefined}>
       {connectError(t, name, connect.error)}
     </Notice>
   )
   const ended = (expired || codeEnded) && (
     <Notice tone="warn" live>
-      {text.codeEnded}
+      {signIn ? text.signInEnded : text.codeEnded}
     </Notice>
   )
+  const startAgain = signIn ? text.signInAgain : text.newCode
   // The server's app was refused while the code waited; another attempt clears it.
   const refusedApp = service.problem === 'app_refused' && !connect.isError && (
     <Notice tone="danger" action={setUpLink || undefined}>
@@ -267,36 +280,52 @@ function ServiceRow({ service }: { service: TrackingService }) {
     body = setUpLink || null
   } else if (waiting) {
     const host = new URL(code.verificationUrl).host
-    sub = text.codeIntro(name)
+    sub = signIn ? text.signInIntro(name) : text.codeIntro(name)
     actions = (
       <Button variant="ghost" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
         {t.common.cancel}
       </Button>
     )
+    const open = (
+      <ExternalButtonLink
+        variant="primary"
+        href={code.verificationUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        iconEnd={ArrowSquareOutIcon}
+      >
+        {text.openSite(host)}
+      </ExternalButtonLink>
+    )
+    const expiry = relativeTime(code.expiresAt, language, t.time.justNow)
     body = (
       <>
         <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
-          <p className="text-control text-ink">{text.enterCode(host)}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <p
-              aria-label={text.codeLabel}
-              className="rounded-field border border-accent/50 bg-s2 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
-            >
-              {code.userCode}
-            </p>
-            <ExternalButtonLink
-              variant="primary"
-              href={code.verificationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              iconEnd={ArrowSquareOutIcon}
-            >
-              {text.openSite(host)}
-            </ExternalButtonLink>
-          </div>
-          <p role="status" className="text-small text-ink-3">
-            {text.waiting} {text.expires(relativeTime(code.expiresAt, language, t.time.justNow))}
-          </p>
+          {signIn ? (
+            <>
+              <p className="text-control text-ink">{text.signInStep(host)}</p>
+              <div className="flex flex-wrap items-center gap-3">{open}</div>
+              <p role="status" className="text-small text-ink-3">
+                {text.signInWaiting} {text.signInExpires(expiry)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-control text-ink">{text.enterCode(host)}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p
+                  aria-label={text.codeLabel}
+                  className="rounded-field border border-accent/50 bg-s2 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
+                >
+                  {code.userCode}
+                </p>
+                {open}
+              </div>
+              <p role="status" className="text-small text-ink-3">
+                {text.waiting} {text.expires(expiry)}
+              </p>
+            </>
+          )}
         </div>
         {cancelError}
       </>
@@ -327,12 +356,12 @@ function ServiceRow({ service }: { service: TrackingService }) {
     )
     const reconnectByCode =
       (service.problem === 'reconnect' || service.problem === 'app_refused') &&
-      service.connection === 'code'
+      service.connection !== 'key'
     actions = (
       <>
         {reconnectByCode &&
           codeConnect(
-            ended || service.problem === 'app_refused' ? text.newCode : text.reconnect,
+            ended || service.problem === 'app_refused' ? startAgain : text.reconnect,
             'secondary',
           )}
         <Button variant="ghost" onClick={() => setConfirming(true)}>
@@ -344,11 +373,11 @@ function ServiceRow({ service }: { service: TrackingService }) {
       <>
         {service.connection === 'key' && (
           <SecretField
-            label={text.keyLabel(name)}
+            label={service.music ? text.tokenLabel(name) : text.keyLabel(name)}
             help={text.savedKeyHelp}
             saved
             value={undefined}
-            reveal={() => revealTrackingKey(service.service as 'mdblist' | 'publicmetadb')}
+            reveal={() => revealTrackingKey(service.service as TrackingKeyServiceName)}
             replaceable={false}
             removable={false}
           />
@@ -363,13 +392,20 @@ function ServiceRow({ service }: { service: TrackingService }) {
         {ended}
         {codeError}
         {service.problem === 'reconnect' && service.connection === 'key' && keyForm(text.reconnect)}
-        <HistoryImport service={service} name={name} />
+        {!service.music && <HistoryImport service={service} name={name} />}
       </>
     )
   } else {
-    sub = service.connection === 'code' ? text.codeIntro(name) : text.keyIntro(name)
-    if (service.connection === 'code')
-      actions = codeConnect(ended ? text.newCode : text.connect, 'primary')
+    sub =
+      service.connection === 'code'
+        ? text.codeIntro(name)
+        : signIn
+          ? text.signInIntro(name)
+          : service.music
+            ? text.tokenIntro(name)
+            : text.keyIntro(name)
+    if (service.connection !== 'key')
+      actions = codeConnect(ended ? startAgain : text.connect, 'primary')
     const notes = [refusedApp, ended, codeError, cancelError].some(Boolean)
     body =
       service.connection === 'key' || notes ? (
@@ -447,7 +483,7 @@ function ServiceRow({ service }: { service: TrackingService }) {
 }
 
 function KeyForm({
-  name,
+  keyLabel,
   help,
   label,
   pending,
@@ -455,7 +491,7 @@ function KeyForm({
   onChange,
   onConnect,
 }: {
-  name: string
+  keyLabel: string
   help: string
   label: string
   pending: boolean
@@ -476,7 +512,7 @@ function KeyForm({
   return (
     <form onSubmit={submit} noValidate>
       <SecretField
-        label={text.keyLabel(name)}
+        label={keyLabel}
         help={help}
         saved={false}
         status={null}

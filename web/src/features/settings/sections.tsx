@@ -550,6 +550,38 @@ function Tracking({ form, update, error }: SectionFormApi) {
           />
         </FieldRow>
       </SettingsGroup>
+      <SettingsGroup title="Last.fm">
+        <TextRow anchor="lastfm-setup">
+          <p className="max-w-[60ch]">{s.lastFmSetup}</p>
+        </TextRow>
+        <FieldRow
+          anchor="lastfm-api-key"
+          label={s.lastFmApiKey}
+          help={s.lastFmApiKeyHelp}
+          error={error('lastfm-api-key')}
+        >
+          <TextInput
+            value={form.lastFmApiKey}
+            onValue={(lastFmApiKey) => update({ lastFmApiKey })}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+          />
+        </FieldRow>
+        <SettingRow
+          anchor="lastfm-secret"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.lastFmSecret}
+            help={s.lastFmSecretHelp}
+            saved={form.lastFmSecretSet}
+            value={form.lastFmSecret}
+            onValue={(lastFmSecret) => update({ lastFmSecret })}
+            reveal={() => revealServerSecret('lastFmSecret')}
+          />
+        </SettingRow>
+      </SettingsGroup>
     </>
   )
 }

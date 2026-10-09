@@ -5,7 +5,7 @@ const settings: typeof en = {
   settings: {
     tracking: {
       description:
-        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList et PublicMetaDB depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde. Trakt et Simkl ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList et PublicMetaDB n’ont besoin de rien.',
+        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList et PublicMetaDB depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde ; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
       traktSetup:
         'Créez une application sur trakt.tv, dans Settings, Your API Apps, New application. Donnez-lui le nom de votre choix, puis copiez ici son client ID et son client secret.',
       redirectUri: 'Adresse de redirection (redirect URI) à saisir dans l’application',
@@ -20,6 +20,13 @@ const settings: typeof en = {
       simklClientId: 'Client ID Simkl',
       simklClientIdHelp:
         'Laissez vide pour désactiver Simkl. Aucun client secret n’est nécessaire.',
+      lastFmSetup:
+        'Créez un compte d’API sur last.fm, à l’adresse last.fm/api/account/create. Donnez-lui le nom de votre choix et laissez son adresse de rappel (callback URL) vide : les utilisateurs autorisent Polyfin sur Last.fm, et Polyfin demande lui-même leur session à Last.fm. Copiez ensuite ici sa clé d’API et son secret partagé.',
+      lastFmApiKey: 'Clé d’API Last.fm',
+      lastFmApiKeyHelp:
+        'Laissez vide pour désactiver Last.fm. Les utilisateurs peuvent se connecter une fois la clé d’API et le secret partagé enregistrés.',
+      lastFmSecret: 'Secret partagé Last.fm',
+      lastFmSecretHelp: 'Affiché sur la page de votre compte d’API sur last.fm, sous la clé d’API.',
     },
     title: 'Paramètres',
     description: 'Options qui s’appliquent à l’ensemble du serveur.',

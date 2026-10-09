@@ -72,6 +72,8 @@ const serviceNames = {
   simkl: 'Simkl',
   mdblist: 'MDBList',
   publicmetadb: 'PublicMetaDB',
+  lastfm: 'Last.fm',
+  listenbrainz: 'ListenBrainz',
 }
 
 /** The problems the health data shows, errors first; users' own sources count too. */

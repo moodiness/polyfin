@@ -216,6 +216,7 @@ const system: typeof en = {
         publicMetaDbKey: 'Clé PublicMetaDB',
         theIntroDbKey: 'Clé TheIntroDB',
         traktClientSecret: 'Client secret Trakt',
+        lastFmSecret: 'Secret partagé Last.fm',
       },
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',

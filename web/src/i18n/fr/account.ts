@@ -18,12 +18,13 @@ const account: typeof en = {
     tracking: {
       title: 'Suivi',
       description:
-        'Connectez les services qui gardent la trace de ce que vous regardez. Polyfin indique à chaque service connecté les films et les épisodes que vous regardez dans vos applications Jellyfin.',
+        'Connectez les services qui gardent la trace de ce que vous regardez et écoutez. Polyfin indique à chaque service connecté les films et les épisodes que vous regardez, ou les morceaux que vous écoutez, dans vos applications Jellyfin.',
       loading: 'Chargement des services de suivi…',
       status: {
         connected: 'Connecté',
         notConnected: 'Non connecté',
         waiting: 'En attente du code',
+        waitingSignIn: 'En attente de vous',
         reconnect: 'À reconnecter',
         unreachable: 'Nouvelles tentatives',
         unavailable: 'Non configuré',
@@ -35,18 +36,25 @@ const account: typeof en = {
       codeIntro: (name: string) =>
         `Connectez votre compte ${name} : Polyfin vous donne un code à saisir sur le site de ${name}.`,
       keyIntro: (name: string) => `Connectez votre compte ${name} avec votre clé d’API ${name}.`,
+      signInIntro: (name: string) =>
+        `Connectez votre compte ${name} : connectez-vous sur le site de ${name} et autorisez Polyfin à y envoyer les morceaux que vous écoutez.`,
+      tokenIntro: (name: string) =>
+        `Connectez votre compte ${name} avec votre jeton d’utilisateur ${name}, pour y envoyer les morceaux que vous écoutez.`,
       keyLabel: (name: string) => `Clé d’API ${name}`,
+      tokenLabel: (name: string) => `Jeton d’utilisateur ${name}`,
       savedKeyHelp:
         'Vous seul pouvez l’afficher. Pour utiliser une autre clé, déconnectez-vous, puis connectez-vous de nouveau.',
       keyHelp: {
         mdblist: 'Elle se trouve sur mdblist.com, dans Preferences, sous API key.',
         publicmetadb: 'Elle se trouve dans votre compte PublicMetaDB.',
+        listenbrainz: 'Il se trouve sur listenbrainz.org, dans vos paramètres, sous User token.',
       },
       connect: 'Connecter',
       connecting: 'Connexion…',
       checking: 'Vérification de la clé…',
       reconnect: 'Reconnecter',
       newCode: 'Obtenir un nouveau code',
+      signInAgain: 'Recommencer',
       enterCode: (site: string) => `Allez sur ${site}, connectez-vous et saisissez ce code :`,
       codeLabel: 'Code à saisir',
       openSite: (site: string) => `Ouvrir ${site}`,
@@ -54,6 +62,12 @@ const account: typeof en = {
       expires: (when: string) => `Le code expire ${when}.`,
       codeEnded:
         'Le code a expiré ou a été refusé avant d’être saisi. Obtenez un nouveau code pour réessayer.',
+      signInStep: (site: string) =>
+        `Allez sur ${site}, connectez-vous si on vous le demande et autorisez Polyfin à utiliser votre compte.`,
+      signInWaiting: 'Cette page se met à jour toute seule une fois l’autorisation donnée.',
+      signInExpires: (when: string) => `Cette demande expire ${when}.`,
+      signInEnded:
+        'Polyfin n’a pas été autorisé à temps, ou a été refusé. Recommencez pour réessayer.',
       connectedAs: 'Connecté en tant que ',
       connectedWithKey: 'Connecté avec votre clé d’API',
       connected: 'Connecté',
@@ -72,12 +86,14 @@ const account: typeof en = {
         `Polyfin cesse de lui indiquer ce que vous regardez. Ce qu’il a déjà reste sur ${name}.`,
       invalidKey: (name: string) =>
         `${name} n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte ${name}.`,
+      invalidToken: (name: string) =>
+        `${name} n’a pas accepté ce jeton. Copiez-le de nouveau depuis vos paramètres ${name}.`,
       serviceUnreachable: (name: string) =>
         `${name} n’a pas pu être joint. Réessayez dans quelques minutes.`,
       notAvailable: (name: string) =>
         `${name} n’est pas configuré sur ce serveur : un administrateur doit d’abord ajouter l’application ${name}.`,
       appRefused: (name: string) =>
-        `${name} a refusé l’application de ce serveur. Un administrateur doit vérifier son client ID et son client secret dans Paramètres › Suivi.`,
+        `${name} a refusé l’application de ce serveur. Un administrateur doit vérifier ses identifiants dans Paramètres › Suivi.`,
       history: {
         toggle: (name: string) => `Importer mon historique ${name}`,
         toggleHelp: (name: string) =>

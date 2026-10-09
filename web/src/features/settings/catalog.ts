@@ -437,6 +437,21 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['Simkl'],
     codes: ['invalid_simkl_app'],
   },
+  {
+    section: 'tracking',
+    anchor: 'lastfm-api-key',
+    label: (t) => tr(t).lastFmApiKey,
+    help: (t) => `${tr(t).lastFmApiKeyHelp} ${tr(t).lastFmSetup}`,
+    keywords: ['Last.fm', 'scrobble'],
+    codes: ['invalid_lastfm_app'],
+  },
+  {
+    section: 'tracking',
+    anchor: 'lastfm-secret',
+    label: (t) => tr(t).lastFmSecret,
+    help: (t) => tr(t).lastFmSecretHelp,
+    keywords: ['Last.fm', 'scrobble'],
+  },
   // Live TV
   {
     section: 'live-tv',
