@@ -48,37 +48,43 @@ Two settings under **Settings › Content** decide when a title counts as played
 ### Connecting to the server
 
 - **Server address**: the address Jellyfin opens at in a browser, such as `http://192.168.1.10:8096`, with the path it is served under if any. A host and port alone mean `http://`. Local network addresses work.
-- **API key**: create one in Jellyfin's dashboard, under API Keys. Polyfin uses it for this import only, and never saves it: each import asks for it again.
+- **Connect with** chooses how Polyfin reads the server:
+  - **An API key**: create one in Jellyfin's dashboard, under API Keys. It reads every user's watch data at once.
+  - **A user account**: a **User name** and its **Password** on the server, empty if the account has none. Polyfin signs in as Jellyfin's apps do, which every server that speaks Jellyfin's API allows, even one without API keys, and signs out once done. An administrator's account lists every user.
 
-**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, a key that may not list the server's users, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
+Polyfin uses the key and passwords for this import only, and never saves them: each import asks for them again.
 
-### Whose key it is
+**Connect** lists the server's users, with their administrator status and whether they are disabled. A wrong key, name or password, a key or account that may not list the server's users, an address where nothing answers, and an address where something other than Jellyfin answers each say so.
+
+### Reading each user's watch data
 
 - A key from the server's dashboard belongs to no user: it reads every user's watch data.
-- A user's own key, or the access token of a user's session, belongs to that user. Polyfin asks the server whose key it is, and names its owner on the page. With such a key, only the owner's watch data can be imported: **Import watch data** is turned off for the other users, whose accounts can still be created.
+- A user's own key, the access token of a user's session, or a user account belongs to that user, and reads only their watch data. Polyfin asks the server whose key it is, and names its owner on the page.
 
-Jellyfin refuses a member's key the other users' data. Some servers that speak Jellyfin's API answer a user's key with that user's data whatever user is asked, which would put one user's history into another's account. To import other users' watch data, connect with a key from the server's dashboard, or once with each user's own key.
+Jellyfin refuses a user's key the other users' data. Some servers that speak Jellyfin's API answer it with that user's data whatever user is asked, which would put one user's history into another's account. So, connected as one user, Polyfin reads each other user's watch data signed in as them: with **Import watch data** ticked, their row asks for their **Password on …** the server, left empty if their account has none. Polyfin signs in as them when the import starts, reads their watch data, then signs out. Without their password, untick **Import watch data**: their account can still be created.
+
+For a new account, **Keep this password in Polyfin** gives it that same password, so the user signs in to Polyfin as before. Polyfin passwords have at least 8 characters: a shorter one is refused, and the row asks for another.
 
 ### Choosing who to import
 
 For each Jellyfin user, **Import into** chooses where their data goes:
 
-- **New user**: a Polyfin account is created, named as in Jellyfin, an administrator if they were one, hidden from the sign-in screen if they were. Jellyfin does not give out passwords: set one for each new account, under the same rules as **Create a user**. The name can be changed too.
+- **New user**: a Polyfin account is created, named as in Jellyfin, an administrator if they were one, hidden from the sign-in screen if they were. Jellyfin does not give out passwords: set one for each new account, under the same rules as **Create a user**, or keep the one the user signs in with (see above). The name can be changed too.
 - An existing Polyfin user: the one with the same name, whatever its case, is chosen at first. Several Jellyfin users can go into one account.
 - **Do not import**: the user is left out. Disabled Jellyfin users start so.
 
-**Import watch data** tells, user by user, whether their watch data comes along; a new account can be created without it. **Start import** creates the new accounts, all of them or none: when one name is taken or one password is too short, nothing is created, and the row says why. Then the watch data is imported in the background.
+**Import watch data** tells, user by user, whether their watch data comes along; a new account can be created without it. **Start import** creates the new accounts, all of them or none: when one name is taken, one password is too short, or the server refuses a user's password, nothing is created, and the row says why. Then the watch data is imported in the background.
 
 ### What is imported
 
 | From Jellyfin | Into Polyfin |
 |---|---|
-| User names, administrator status, hidden from the sign-in screen | New accounts, with the passwords the administrator sets. |
+| User names, administrator status, hidden from the sign-in screen | New accounts, with the passwords the administrator sets or keeps. |
 | Played movies and episodes, with the date last played and the play count | Played marks. |
 | Resume points of movies and episodes | Resume points, for titles not played. |
 | Favorite movies, series and episodes | Favorites. |
 
-Nothing else comes over: passwords, ratings, playlists, collections, users' limits and settings, profile pictures, and music, books and Live TV.
+Nothing else comes over: ratings, playlists, collections, users' limits and settings, profile pictures, and music, books and Live TV.
 
 ### How titles are matched
 
@@ -95,13 +101,14 @@ The data merges as an imported watch history does (see [How the history merges w
 - Of two resume points, the more recent one stays.
 - Importing again adds nothing twice and never overwrites newer Polyfin data, so an import can safely run again.
 
-Nothing is ever written to the Jellyfin server: the import only reads it.
+Nothing is written to the Jellyfin server: the import only reads it. Signing in opens a session there, as an app does, which Polyfin ends as soon as it is done with it.
 
 ### Progress and limits
 
 - One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it added: titles marked played, resume points and favorites, and the titles not found.
 - **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
 - Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user. A user whose data the server does not let the key read is marked so, and the import goes on with the next users.
+- A user signed in is signed out once their watch data is read, and the import's own session when it ends, stopped or failed. A restart during an import leaves them open: they show among the users' devices on the server, which can end them.
 - Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
 
 **Compared with Jellyfin:**
@@ -110,8 +117,13 @@ Nothing is ever written to the Jellyfin server: the import only reads it.
 
 **For app developers:**
 
-- The admin API serves the import to administrators: `POST /admin/api/jellyfin-import/users` lists a server's users, with `keyOwner`, the Jellyfin user the key belongs to, `null` for a server's key; `POST /admin/api/jellyfin-import` creates the accounts and starts the import, and refuses another user's watch data with a user's key (`jellyfin_key_owner_only`, naming the `jellyfinId`), before creating anyone; `GET /admin/api/jellyfin-import` reads it, and `POST /admin/api/jellyfin-import/stop` stops it. The API key is never answered back.
-- Polyfin reads Jellyfin with `GET` requests only, sending the key as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
+- The admin API serves the import to administrators:
+  - `POST /admin/api/jellyfin-import/users` lists a server's users, given `apiKey`, or `account` with `name` and `password`. It answers `keyOwner`, the Jellyfin user the key belongs to or who signed in, `null` for a server's key. An account the server refuses is `jellyfin_sign_in_refused`, and one it does not let sign in `jellyfin_sign_in_forbidden`.
+  - `POST /admin/api/jellyfin-import` takes the same, creates the accounts and starts the import. An entry's `jellyfinPassword`, given with `watchData`, has the import sign in as that user. Connected as a user, another user's watch data needs it: without it, the answer is `jellyfin_key_owner_only`. A password the server refuses is `jellyfin_password_refused`, an account it does not let sign in `jellyfin_sign_in_forbidden`, and a sign-in that opens another user's session `jellyfin_other_user`. Each names the `jellyfinId`, and comes before anyone is created.
+  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it.
+  - The key and passwords are never answered back.
+- Polyfin reads Jellyfin with `GET` requests, sending the key or session token as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
+- It signs in with `POST /Users/AuthenticateByName`, naming itself and a device of its own in the `Authorization` header as Jellyfin's apps do, and signs out with `POST /Sessions/Logout`.
 
 ## Parental control
 
