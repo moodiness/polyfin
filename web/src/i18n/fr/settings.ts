@@ -68,6 +68,26 @@ const settings: typeof en = {
     publicAddress: 'Adresse publique',
     publicAddressHelp:
       'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien.',
+    email: 'E-mail',
+    emailHelp:
+      'Les cibles e-mail passent par ce serveur SMTP. On peut les ajouter une fois un serveur et une adresse d’expéditeur enregistrés.',
+    smtpHost: 'Serveur SMTP',
+    smtpHostHelp:
+      'Son nom d’hôte, comme smtp.example.org. Vide, les cibles e-mail ne peuvent pas être ajoutées.',
+    smtpPort: 'Port SMTP',
+    smtpPortHelp: 'En général 587 avec STARTTLS, et 465 avec TLS dès la connexion.',
+    smtpSecurity: 'Chiffrement SMTP',
+    smtpSecurityHelp:
+      'Comment la connexion est chiffrée. Avec STARTTLS, rien n’est envoyé si le serveur ne le propose pas. Sans chiffrement, le mot de passe n’est envoyé qu’à cette machine.',
+    smtpSecurities: { starttls: 'STARTTLS', tls: 'TLS dès la connexion', none: 'Aucun' },
+    smtpUser: 'Utilisateur SMTP',
+    smtpUserHelp: 'Vide pour envoyer sans se connecter.',
+    smtpPassword: 'Mot de passe SMTP',
+    smtpPasswordHelp: 'Il est gardé chiffré et n’est plus jamais affiché.',
+    smtpFrom: 'Adresse de l’expéditeur',
+    smtpFromHelp: 'L’adresse d’où viennent les messages, comme polyfin@example.org.',
+    smtpFromName: 'Nom de l’expéditeur',
+    smtpFromNameHelp: 'Affiché avec l’adresse. Vide, c’est le nom du serveur.',
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,

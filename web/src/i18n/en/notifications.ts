@@ -6,8 +6,8 @@ const notifications = {
     empty: 'No target yet.',
     emptyHint: {
       server:
-        'Add a webhook, a Discord channel or an ntfy topic to be told of new episodes, recordings and Health problems.',
-      own: 'Add a webhook, a Discord channel or an ntfy topic to be told when a new episode of a series you follow is out, or when your recordings end.',
+        'Add a target, such as an email address, a Telegram chat or an ntfy topic, to be told of new episodes, recordings and Health problems.',
+      own: 'Add a target, such as an email address, a Telegram chat or an ntfy topic, to be told when a new episode of a series you follow is out, or when your recordings end.',
     },
     serverTargets: 'Server targets',
     serverTargetsHelp:
@@ -16,12 +16,30 @@ const notifications = {
     addTitle: 'Add a target',
     editTitle: (name: string) => `Edit ${name}`,
     kind: 'Kind',
-    kinds: { webhook: 'Webhook', discord: 'Discord', ntfy: 'ntfy' },
+    kinds: {
+      webhook: 'Webhook',
+      discord: 'Discord',
+      ntfy: 'ntfy',
+      email: 'Email',
+      telegram: 'Telegram',
+      gotify: 'Gotify',
+      pushover: 'Pushover',
+    },
     kindHelp: {
       webhook:
         'Polyfin posts each event to this address as JSON, described in the documentation for app developers.',
       discord: 'Polyfin posts each event to a Discord channel, as a message with a link.',
       ntfy: 'Polyfin publishes each event to an ntfy topic, which the ntfy app shows on your phone.',
+      email: 'Polyfin emails each event to this address, in plain text and HTML.',
+      telegram: 'Polyfin posts each event to a Telegram chat through your bot, with a link.',
+      gotify: 'Polyfin posts each event to an application of your Gotify server.',
+      pushover:
+        'Polyfin sends each event to your Pushover devices, through one of your applications.',
+    },
+    emailUnavailable: {
+      server:
+        'Email needs an SMTP server: save one, with a sender address, under Email above, then add the target.',
+      own: 'Email needs an SMTP server, which an administrator sets under Settings › Notifications.',
     },
     name: 'Name',
     nameHelp: 'Shown here only, 1 to 64 characters.',
@@ -40,6 +58,26 @@ const notifications = {
       'The topic you subscribe to in the ntfy app. Anyone who knows a topic on a public server can read it: choose one that is hard to guess.',
     token: 'Access token',
     tokenHelp: 'For a topic that needs signing in. It is kept encrypted and never shown again.',
+    emailAddress: 'Email address',
+    emailAddressHelp: 'Where the messages go.',
+    chat: 'Chat',
+    chatHelp:
+      'The chat’s number, such as -1001234567890, or a public channel’s name, such as @news_example. Add the bot to the chat first.',
+    botToken: 'Bot token',
+    botTokenHelp:
+      'BotFather gives it when the bot is created. It is kept encrypted and never shown again.',
+    gotifyServer: 'Gotify server',
+    gotifyServerHelp: 'Its address, such as https://gotify.example.org.',
+    appToken: 'Application token',
+    appTokenHelp: {
+      gotify:
+        'In Gotify: Apps, Create Application, then copy its token. It is kept encrypted and never shown again.',
+      pushover:
+        'The API token of an application created on Pushover. It is kept encrypted and never shown again.',
+    },
+    userKey: 'User key',
+    userKeyHelp:
+      'Shown on Pushover’s dashboard once signed in, or a group key. It is kept encrypted and never shown again.',
     events: 'Events',
     eventsHelp: {
       server: 'What it is told of, for every user.',
@@ -85,14 +123,18 @@ const notifications = {
       unreachable: 'Not reached',
       unreadable: 'Enter it again',
     },
+    /** The code a target answered with: an HTTP status, or an SMTP server's code for email. */
+    answer: (code: string, email: boolean) => (email ? `SMTP ${code}` : `HTTP ${code}`),
     problem: {
-      refused: (status: string) =>
-        `The target refused Polyfin (HTTP ${status}): check its address or token.`,
-      rejected: (status: string) => `The target refused the last message (HTTP ${status}).`,
+      refused: (answer: string) =>
+        `The target refused Polyfin (${answer}): check its address, token or key.`,
+      refusedEmail: (answer: string) =>
+        `The SMTP server refused Polyfin (${answer}): check its user and password, the sender address and this address.`,
+      rejected: (answer: string) => `The target refused the last message (${answer}).`,
       unreachable:
         'Recent messages could not be delivered: the target did not answer, or answered with errors. Each message is tried again for an hour.',
       unreadable:
-        'Its address or token cannot be decrypted with POLYFIN_SECRET_KEY: nothing is sent to it until it is entered again.',
+        'Its address, token or key cannot be decrypted with POLYFIN_SECRET_KEY: nothing is sent to it until it is entered again.',
     },
     lastSent: 'Last message ',
     nothingSent: 'No message sent yet',

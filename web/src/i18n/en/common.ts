@@ -174,13 +174,27 @@ const common = {
       'The RemuxDB address must be a web address starting with http:// or https://.',
     invalid_public_address:
       'The public address must be a web address starting with http:// or https://, without a query.',
-    invalid_target_kind: 'Choose a webhook, Discord or ntfy.',
+    invalid_smtp_host:
+      'Enter the SMTP server’s host name, such as smtp.example.org, without spaces.',
+    invalid_smtp_port: 'The SMTP port must be a whole number from 1 to 65535.',
+    invalid_smtp_security: 'Choose how the SMTP connection is encrypted from the list.',
+    invalid_smtp_account: 'The SMTP user and password are up to 256 characters, on one line.',
+    invalid_smtp_sender:
+      'Enter the sender’s address alone, such as polyfin@example.org, and a name of up to 128 characters.',
+    invalid_target_kind: 'Choose a kind of target from the list.',
     invalid_target_name: 'Target names must be 1 to 64 characters long.',
     invalid_target_address: 'Enter a web address starting with https:// or http://.',
     private_target_address:
       'This address is on a local network: only an administrator’s targets may reach one.',
+    invalid_email_address: 'Enter an email address, such as sam@example.org.',
+    email_unavailable:
+      'Email needs an SMTP server: an administrator sets it under Settings › Notifications.',
     invalid_topic: 'An ntfy topic is 1 to 64 letters, digits, dashes and underscores.',
-    invalid_token: 'An access token is up to 256 characters, without spaces.',
+    invalid_chat:
+      'Enter the chat’s number, such as -1001234567890, or a public channel’s name, such as @news_example.',
+    invalid_token:
+      'Enter the token: up to 256 characters, without spaces. A Telegram bot’s looks like 123456:ABC-DEF.',
+    invalid_user_key: 'A Pushover user key is letters and digits only.',
     invalid_events: 'One of the events chosen is not available for this target.',
     too_many_targets: 'There are 20 targets already. Delete one to add another.',
     target_unreadable:

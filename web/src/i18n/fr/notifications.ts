@@ -7,8 +7,8 @@ const notifications: typeof en = {
     empty: 'Aucune cible pour l’instant.',
     emptyHint: {
       server:
-        'Ajoutez un webhook, un salon Discord ou un sujet ntfy pour être prévenu des nouveaux épisodes, des enregistrements et des problèmes que Système › Santé détecte.',
-      own: 'Ajoutez un webhook, un salon Discord ou un sujet ntfy pour être prévenu quand un nouvel épisode d’une série que vous suivez sort, ou quand vos enregistrements se terminent.',
+        'Ajoutez une cible, comme une adresse e-mail, une discussion Telegram ou un sujet ntfy, pour être prévenu des nouveaux épisodes, des enregistrements et des problèmes que Système › Santé détecte.',
+      own: 'Ajoutez une cible, comme une adresse e-mail, une discussion Telegram ou un sujet ntfy, pour être prévenu quand un nouvel épisode d’une série que vous suivez sort, ou quand vos enregistrements se terminent.',
     },
     serverTargets: 'Cibles du serveur',
     serverTargetsHelp:
@@ -17,12 +17,32 @@ const notifications: typeof en = {
     addTitle: 'Ajouter une cible',
     editTitle: (name: string) => `Modifier ${name}`,
     kind: 'Type',
-    kinds: { webhook: 'Webhook', discord: 'Discord', ntfy: 'ntfy' },
+    kinds: {
+      webhook: 'Webhook',
+      discord: 'Discord',
+      ntfy: 'ntfy',
+      email: 'E-mail',
+      telegram: 'Telegram',
+      gotify: 'Gotify',
+      pushover: 'Pushover',
+    },
     kindHelp: {
       webhook:
         'Polyfin envoie chaque événement à cette adresse en JSON, décrit dans la documentation pour les développeurs d’applis.',
       discord: 'Polyfin envoie chaque événement à un salon Discord, en message avec un lien.',
       ntfy: 'Polyfin publie chaque événement dans un sujet ntfy, que l’appli ntfy affiche sur votre téléphone.',
+      email:
+        'Polyfin envoie chaque événement par e-mail à cette adresse, en texte brut et en HTML.',
+      telegram:
+        'Polyfin envoie chaque événement à une discussion Telegram par votre bot, avec un lien.',
+      gotify: 'Polyfin envoie chaque événement à une application de votre serveur Gotify.',
+      pushover:
+        'Polyfin envoie chaque événement à vos appareils Pushover, par l’une de vos applications.',
+    },
+    emailUnavailable: {
+      server:
+        'L’e-mail demande un serveur SMTP : enregistrez-en un, avec une adresse d’expéditeur, dans E-mail plus haut, puis ajoutez la cible.',
+      own: 'L’e-mail demande un serveur SMTP, qu’un administrateur règle dans Paramètres › Notifications.',
     },
     name: 'Nom',
     nameHelp: 'Affiché ici seulement, de 1 à 64 caractères.',
@@ -42,6 +62,26 @@ const notifications: typeof en = {
     token: 'Jeton d’accès',
     tokenHelp:
       'Pour un sujet qui demande une connexion. Il est gardé chiffré et n’est plus jamais affiché.',
+    emailAddress: 'Adresse e-mail',
+    emailAddressHelp: 'Où vont les messages.',
+    chat: 'Discussion',
+    chatHelp:
+      'Le numéro de la discussion, comme -1001234567890, ou le nom d’une chaîne publique, comme @news_example. Ajoutez d’abord le bot à la discussion.',
+    botToken: 'Jeton du bot',
+    botTokenHelp:
+      'BotFather le donne à la création du bot. Il est gardé chiffré et n’est plus jamais affiché.',
+    gotifyServer: 'Serveur Gotify',
+    gotifyServerHelp: 'Son adresse, comme https://gotify.example.org.',
+    appToken: 'Jeton de l’application',
+    appTokenHelp: {
+      gotify:
+        'Dans Gotify : Apps, Create Application, puis copiez son jeton. Il est gardé chiffré et n’est plus jamais affiché.',
+      pushover:
+        'Le jeton d’API d’une application créée sur Pushover. Il est gardé chiffré et n’est plus jamais affiché.',
+    },
+    userKey: 'Clé d’utilisateur',
+    userKeyHelp:
+      'Affichée sur le tableau de bord de Pushover une fois connecté, ou une clé de groupe. Elle est gardée chiffrée et n’est plus jamais affichée.',
     events: 'Événements',
     eventsHelp: {
       server: 'Ce qui lui est signalé, pour tous les utilisateurs.',
@@ -88,14 +128,17 @@ const notifications: typeof en = {
       unreachable: 'Injoignable',
       unreadable: 'À saisir de nouveau',
     },
+    answer: (code: string, email: boolean) => (email ? `SMTP ${code}` : `HTTP ${code}`),
     problem: {
-      refused: (status: string) =>
-        `La cible a refusé Polyfin (HTTP ${status}) : vérifiez son adresse ou son jeton.`,
-      rejected: (status: string) => `La cible a refusé le dernier message (HTTP ${status}).`,
+      refused: (answer: string) =>
+        `La cible a refusé Polyfin (${answer}) : vérifiez son adresse, son jeton ou sa clé.`,
+      refusedEmail: (answer: string) =>
+        `Le serveur SMTP a refusé Polyfin (${answer}) : vérifiez son utilisateur et son mot de passe, l’adresse de l’expéditeur et cette adresse.`,
+      rejected: (answer: string) => `La cible a refusé le dernier message (${answer}).`,
       unreachable:
         'Les derniers messages n’ont pas pu être remis : la cible n’a pas répondu, ou a répondu par des erreurs. Chaque message est retenté pendant une heure.',
       unreadable:
-        'Son adresse ou son jeton ne peut pas être déchiffré avec POLYFIN_SECRET_KEY : rien ne lui est envoyé tant qu’il n’est pas saisi de nouveau.',
+        'Son adresse, son jeton ou sa clé ne peut pas être déchiffré avec POLYFIN_SECRET_KEY : rien ne lui est envoyé tant qu’il n’est pas saisi de nouveau.',
     },
     lastSent: 'Dernier message ',
     nothingSent: 'Aucun message envoyé',

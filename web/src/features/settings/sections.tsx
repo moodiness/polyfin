@@ -854,7 +854,7 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
   )
 }
 
-function Notifications({ form, update, error, limits }: SectionFormApi) {
+function Notifications({ form, update, error, number, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const text = t.notifications
@@ -875,6 +875,118 @@ function Notifications({ form, update, error, limits }: SectionFormApi) {
             autoComplete="off"
             spellCheck={false}
             mono
+            className="max-w-md"
+          />
+        </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title={s.email}>
+        <TextRow anchor="email-setup">
+          <p className="max-w-[60ch]">{s.emailHelp}</p>
+        </TextRow>
+        <FieldRow
+          anchor="smtp-host"
+          label={s.smtpHost}
+          help={s.smtpHostHelp}
+          error={error('smtp-host')}
+        >
+          <TextInput
+            value={form.smtpHost}
+            onValue={(smtpHost) => update({ smtpHost })}
+            placeholder="smtp.example.org"
+            maxLength={limits('smtpHost').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="smtp-port"
+          label={s.smtpPort}
+          help={s.smtpPortHelp}
+          error={error('smtp-port')}
+        >
+          <NumberInput
+            {...limits('smtpPort')}
+            step={1}
+            {...number('smtp-port', form.smtpPort, (value) =>
+              update({ smtpPort: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="smtp-security"
+          label={s.smtpSecurity}
+          help={s.smtpSecurityHelp}
+          error={error('smtp-security')}
+        >
+          <Select
+            value={form.smtpSecurity}
+            options={(['starttls', 'tls', 'none'] as const).map((value) => ({
+              value,
+              label: s.smtpSecurities[value],
+            }))}
+            onValue={(smtpSecurity) => update({ smtpSecurity })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="smtp-user"
+          label={s.smtpUser}
+          help={s.smtpUserHelp}
+          error={error('smtp-user')}
+        >
+          <TextInput
+            value={form.smtpUser}
+            onValue={(smtpUser) => update({ smtpUser })}
+            maxLength={limits('smtpUser').max}
+            autoComplete="off"
+            spellCheck={false}
+            className="max-w-md"
+          />
+        </FieldRow>
+        <SettingRow
+          anchor="smtp-password"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.smtpPassword}
+            help={s.smtpPasswordHelp}
+            saved={form.smtpPasswordSet}
+            value={form.smtpPassword}
+            onValue={(smtpPassword) => update({ smtpPassword })}
+          />
+        </SettingRow>
+        <FieldRow
+          anchor="smtp-from"
+          label={s.smtpFrom}
+          help={s.smtpFromHelp}
+          error={error('smtp-from')}
+        >
+          <TextInput
+            type="email"
+            value={form.smtpFrom}
+            onValue={(smtpFrom) => update({ smtpFrom })}
+            placeholder="polyfin@example.org"
+            maxLength={limits('smtpFrom').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="smtp-from-name"
+          label={s.smtpFromName}
+          help={s.smtpFromNameHelp}
+          error={error('smtp-from-name')}
+        >
+          <TextInput
+            value={form.smtpFromName}
+            onValue={(smtpFromName) => update({ smtpFromName })}
+            placeholder={form.serverName}
+            maxLength={limits('smtpFromName').max}
+            autoComplete="off"
             className="max-w-md"
           />
         </FieldRow>

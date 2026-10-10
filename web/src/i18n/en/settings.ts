@@ -65,6 +65,25 @@ const settings = {
     publicAddress: 'Public address',
     publicAddressHelp:
       'The address people open Polyfin at, such as https://media.example.org. Links in notifications start with it; empty, messages carry no link.',
+    email: 'Email',
+    emailHelp:
+      'Email targets go through this SMTP server. They can be added once a server and a sender address are saved.',
+    smtpHost: 'SMTP server',
+    smtpHostHelp: 'Its host name, such as smtp.example.org. Empty, email targets cannot be added.',
+    smtpPort: 'SMTP port',
+    smtpPortHelp: 'Usually 587 with STARTTLS, and 465 with TLS from the start.',
+    smtpSecurity: 'SMTP encryption',
+    smtpSecurityHelp:
+      'How the connection is encrypted. With STARTTLS, nothing is sent if the server does not offer it. Without encryption, the password is only sent to this machine.',
+    smtpSecurities: { starttls: 'STARTTLS', tls: 'TLS from the start', none: 'None' },
+    smtpUser: 'SMTP user',
+    smtpUserHelp: 'Empty to send without signing in.',
+    smtpPassword: 'SMTP password',
+    smtpPasswordHelp: 'It is kept encrypted and never shown again.',
+    smtpFrom: 'Sender address',
+    smtpFromHelp: 'The address messages come from, such as polyfin@example.org.',
+    smtpFromName: 'Sender name',
+    smtpFromNameHelp: 'Shown with the address. Empty, the server name is.',
     maxConversions: 'Video conversions at once (0 = no limit)',
     maxConversionsHelp: (r: RangeText) =>
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,

@@ -66,6 +66,8 @@ export default function SectionForm({
       void queryClient.invalidateQueries({ queryKey: queryKeys.status })
       // Library names in apps follow the server language.
       void queryClient.invalidateQueries({ queryKey: queryKeys.scopes })
+      // Email targets can be added once an SMTP server is saved.
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 

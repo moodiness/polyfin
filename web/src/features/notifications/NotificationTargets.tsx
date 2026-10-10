@@ -28,8 +28,8 @@ import {
   InlineError,
   Modal,
   Notice,
-  Segmented,
   SecretField,
+  Select,
   SkeletonRows,
   StatusPill,
   TextInput,
@@ -38,7 +38,15 @@ import {
 } from '@/ui'
 
 /** The letters in each kind's tile. */
-const monograms: Record<NotificationKind, string> = { webhook: 'W', discord: 'D', ntfy: 'N' }
+const monograms: Record<NotificationKind, string> = {
+  webhook: 'W',
+  discord: 'D',
+  ntfy: 'N',
+  email: 'E',
+  telegram: 'T',
+  gotify: 'G',
+  pushover: 'P',
+}
 
 /**
  * The notification targets of the server (Settings › Notifications) or of the signed-in user
@@ -61,7 +69,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
       </InlineError>
     )
   }
-  const { targets, events, kinds } = notifications.data
+  const { targets, events, kinds, emailAvailable } = notifications.data
   return (
     <div className="flex flex-col gap-4">
       {targets.length === 0 ? (
@@ -91,6 +99,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
           target={editing === 'new' ? null : editing}
           events={events}
           kinds={kinds}
+          emailAvailable={emailAvailable}
           onClose={() => setEditing(null)}
         />
       )}
@@ -154,15 +163,19 @@ function TargetRow({
         : target.lastSentAt !== null
           ? { tone: 'ok', label: text.status.working }
           : { tone: 'muted', label: text.status.waiting }
-  const httpStatus = String(target.problemStatus ?? '?')
+  const answer = text.answer(String(target.problemStatus ?? '?'), target.kind === 'email')
   const problem =
     target.problem === 'refused'
-      ? text.problem.refused(httpStatus)
+      ? target.kind === 'email'
+        ? text.problem.refusedEmail(answer)
+        : text.problem.refused(answer)
       : target.problem === 'rejected'
-        ? text.problem.rejected(httpStatus)
+        ? text.problem.rejected(answer)
         : target.problem === null
           ? null
           : text.problem[target.problem]
+  // What the target is: its address, or a Telegram target's chat; a Pushover target shows none.
+  const detail = target.kind === 'telegram' ? target.chat : target.address
   const headingId = useId()
   return (
     <li
@@ -178,7 +191,13 @@ function TargetRow({
           {target.name}
         </h3>
         <p className="-mt-1.5 text-control break-words text-ink-2">
-          {text.kinds[target.kind]} · <span className="font-mono">{target.address}</span>
+          {text.kinds[target.kind]}
+          {detail !== '' && (
+            <>
+              {' · '}
+              <span className="font-mono">{detail}</span>
+            </>
+          )}
           {target.topic !== '' && <span className="font-mono">/{target.topic}</span>}
         </p>
         <p className="mt-1 text-small text-ink-3">
@@ -242,7 +261,7 @@ function TargetRow({
 }
 
 /** The codes about the address, shown under it. */
-const addressCodes = ['invalid_target_address', 'private_target_address']
+const addressCodes = ['invalid_target_address', 'private_target_address', 'invalid_email_address']
 
 /** The form to add a target, or to change one, in a floating panel. */
 function TargetModal({
@@ -250,12 +269,14 @@ function TargetModal({
   target,
   events,
   kinds,
+  emailAvailable,
   onClose,
 }: {
   scope: NotificationScope
   target: NotificationTarget | null
   events: NotificationEvent[]
   kinds: NotificationKind[]
+  emailAvailable: boolean
   onClose: () => void
 }) {
   const { t } = useI18n()
@@ -266,9 +287,16 @@ function TargetModal({
   const [name, setName] = useState(target?.name ?? '')
   // A webhook's or Discord target's secret address: undefined keeps the saved one.
   const [secretAddress, setSecretAddress] = useState<string | undefined>(undefined)
-  const [server, setServer] = useState(target?.kind === 'ntfy' ? target.address : '')
+  // An ntfy or Gotify target's server, and an email target's recipient.
+  const [server, setServer] = useState(
+    target?.kind === 'ntfy' || target?.kind === 'gotify' ? target.address : '',
+  )
+  const [recipient, setRecipient] = useState(target?.kind === 'email' ? target.address : '')
   const [topic, setTopic] = useState(target?.topic ?? '')
+  const [chat, setChat] = useState(target?.chat ?? '')
+  // Tokens and keys: undefined keeps the saved one.
   const [token, setToken] = useState<string | undefined>(undefined)
+  const [userKey, setUserKey] = useState<string | undefined>(undefined)
   const [chosen, setChosen] = useState<NotificationEvent[]>(target?.events ?? events)
   const [enabled, setEnabled] = useState(target?.enabled ?? true)
 
@@ -290,22 +318,46 @@ function TargetModal({
   const nameError = fieldError(['invalid_target_name'])
   const addressError = fieldError(addressCodes)
   const topicError = fieldError(['invalid_topic'])
+  const chatError = fieldError(['invalid_chat'])
   const tokenError = fieldError(['invalid_token'])
+  const userKeyError = fieldError(['invalid_user_key'])
   const otherError =
-    mutation.isError && !nameError && !addressError && !topicError && !tokenError
+    mutation.isError &&
+    !nameError &&
+    !addressError &&
+    !topicError &&
+    !chatError &&
+    !tokenError &&
+    !userKeyError
       ? message
       : undefined
+  // An email target cannot be added without the server's SMTP server.
+  const blocked = target === null && kind === 'email' && !emailAvailable
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const draft: NotificationDraft = { name: name.trim(), events: chosen, enabled }
     if (target === null) draft.kind = kind
-    if (kind === 'ntfy') {
-      draft.address = server.trim()
-      draft.topic = topic.trim()
-      if (token !== undefined) draft.token = token.trim()
-    } else if (secretAddress !== undefined) {
-      draft.address = secretAddress.trim()
+    if (token !== undefined) draft.token = token.trim()
+    switch (kind) {
+      case 'ntfy':
+        draft.address = server.trim()
+        draft.topic = topic.trim()
+        break
+      case 'gotify':
+        draft.address = server.trim()
+        break
+      case 'email':
+        draft.address = recipient.trim()
+        break
+      case 'telegram':
+        draft.chat = chat.trim()
+        break
+      case 'pushover':
+        if (userKey !== undefined) draft.userKey = userKey.trim()
+        break
+      default:
+        if (secretAddress !== undefined) draft.address = secretAddress.trim()
     }
     mutation.mutate(draft)
   }
@@ -328,7 +380,13 @@ function TargetModal({
           <Button variant="ghost" onClick={onClose}>
             {t.common.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} loading={mutation.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            form={formId}
+            loading={mutation.isPending}
+            disabled={blocked}
+          >
             {target === null
               ? mutation.isPending
                 ? text.creating
@@ -342,16 +400,14 @@ function TargetModal({
     >
       <form id={formId} onSubmit={submit} noValidate className="space-y-5 p-5">
         {target === null && (
-          <div className="space-y-2">
-            <Segmented
-              label={text.kind}
-              size="md"
+          <Field label={text.kind} help={text.kindHelp[kind]}>
+            <Select
               value={kind}
               options={kinds.map((value) => ({ value, label: text.kinds[value] }))}
-              onChange={change(setKind)}
+              onValue={change(setKind)}
+              className="max-w-xs"
             />
-            <p className="text-small text-ink-3">{text.kindHelp[kind]}</p>
-          </div>
+          </Field>
         )}
         <Field label={text.name} help={text.nameHelp} error={nameError}>
           <TextInput
@@ -362,49 +418,23 @@ function TargetModal({
             invalid={nameError !== undefined}
           />
         </Field>
-        {kind === 'ntfy' ? (
-          <>
-            <Field label={text.ntfyServer} help={text.ntfyServerHelp} error={addressError}>
-              <TextInput
-                value={server}
-                onValue={change(setServer)}
-                placeholder="https://ntfy.sh"
-                autoComplete="off"
-                spellCheck={false}
-                mono
-                invalid={addressError !== undefined}
-              />
-            </Field>
-            <Field label={text.topic} help={text.topicHelp} error={topicError}>
-              <TextInput
-                value={topic}
-                onValue={change(setTopic)}
-                autoComplete="off"
-                spellCheck={false}
-                mono
-                maxLength={64}
-                invalid={topicError !== undefined}
-              />
-            </Field>
-            <SecretField
-              label={text.token}
-              help={text.tokenHelp}
-              saved={target?.tokenSet ?? false}
-              value={token}
-              onValue={change(setToken)}
-              error={tokenError}
-            />
-          </>
+        {blocked ? (
+          <Notice tone="warn">{text.emailUnavailable[scope]}</Notice>
         ) : (
-          <SecretField
-            label={kind === 'discord' ? text.discordAddress : text.webhookAddress}
-            help={text.addressHelp[kind]}
-            saved={target !== null && target.problem !== 'unreadable'}
-            value={secretAddress}
-            onValue={change(setSecretAddress)}
-            removable={false}
-            status={target === null ? null : text.savedAddress(target.address)}
-            error={addressError}
+          <KindFields
+            kind={kind}
+            target={target}
+            values={{ secretAddress, server, recipient, topic, chat, token, userKey }}
+            set={{
+              secretAddress: change(setSecretAddress),
+              server: change(setServer),
+              recipient: change(setRecipient),
+              topic: change(setTopic),
+              chat: change(setChat),
+              token: change(setToken),
+              userKey: change(setUserKey),
+            }}
+            errors={{ addressError, topicError, chatError, tokenError, userKeyError }}
           />
         )}
         <fieldset className="space-y-3">
@@ -430,4 +460,168 @@ function TargetModal({
       </form>
     </Modal>
   )
+}
+
+/** What a target's own fields hold, by field. */
+type KindValues = {
+  secretAddress: string | undefined
+  server: string
+  recipient: string
+  topic: string
+  chat: string
+  token: string | undefined
+  userKey: string | undefined
+}
+
+/** The fields of a target of kind: its address, server, topic, chat, tokens and keys. */
+function KindFields({
+  kind,
+  target,
+  values,
+  set,
+  errors,
+}: {
+  kind: NotificationKind
+  target: NotificationTarget | null
+  values: KindValues
+  set: { [field in keyof KindValues]: (value: KindValues[field]) => void }
+  errors: {
+    addressError: string | undefined
+    topicError: string | undefined
+    chatError: string | undefined
+    tokenError: string | undefined
+    userKeyError: string | undefined
+  }
+}) {
+  const { t } = useI18n()
+  const text = t.notifications
+  const { addressError, topicError, chatError, tokenError, userKeyError } = errors
+  // A token that is required: it may be replaced, not removed.
+  const requiredToken = (label: string, help: string) => (
+    <SecretField
+      label={label}
+      help={help}
+      saved={target?.tokenSet ?? false}
+      value={values.token}
+      onValue={set.token}
+      removable={false}
+      error={tokenError}
+    />
+  )
+  switch (kind) {
+    case 'ntfy':
+      return (
+        <>
+          <Field label={text.ntfyServer} help={text.ntfyServerHelp} error={addressError}>
+            <TextInput
+              value={values.server}
+              onValue={set.server}
+              placeholder="https://ntfy.sh"
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              invalid={addressError !== undefined}
+            />
+          </Field>
+          <Field label={text.topic} help={text.topicHelp} error={topicError}>
+            <TextInput
+              value={values.topic}
+              onValue={set.topic}
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              maxLength={64}
+              invalid={topicError !== undefined}
+            />
+          </Field>
+          <SecretField
+            label={text.token}
+            help={text.tokenHelp}
+            saved={target?.tokenSet ?? false}
+            value={values.token}
+            onValue={set.token}
+            error={tokenError}
+          />
+        </>
+      )
+    case 'email':
+      return (
+        <Field label={text.emailAddress} help={text.emailAddressHelp} error={addressError}>
+          <TextInput
+            type="email"
+            value={values.recipient}
+            onValue={set.recipient}
+            placeholder="sam@example.org"
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            maxLength={254}
+            invalid={addressError !== undefined}
+          />
+        </Field>
+      )
+    case 'telegram':
+      return (
+        <>
+          <Field label={text.chat} help={text.chatHelp} error={chatError}>
+            <TextInput
+              value={values.chat}
+              onValue={set.chat}
+              placeholder="-1001234567890"
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              maxLength={33}
+              invalid={chatError !== undefined}
+            />
+          </Field>
+          {requiredToken(text.botToken, text.botTokenHelp)}
+        </>
+      )
+    case 'gotify':
+      return (
+        <>
+          <Field label={text.gotifyServer} help={text.gotifyServerHelp} error={addressError}>
+            <TextInput
+              value={values.server}
+              onValue={set.server}
+              placeholder="https://gotify.example.org"
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              invalid={addressError !== undefined}
+            />
+          </Field>
+          {requiredToken(text.appToken, text.appTokenHelp.gotify)}
+        </>
+      )
+    case 'pushover':
+      return (
+        <>
+          <SecretField
+            label={text.userKey}
+            help={text.userKeyHelp}
+            saved={target !== null && target.problem !== 'unreadable'}
+            value={values.userKey}
+            onValue={set.userKey}
+            removable={false}
+            error={userKeyError}
+          />
+          {requiredToken(text.appToken, text.appTokenHelp.pushover)}
+        </>
+      )
+    default:
+      return (
+        <SecretField
+          label={kind === 'discord' ? text.discordAddress : text.webhookAddress}
+          help={text.addressHelp[kind]}
+          saved={target !== null && target.problem !== 'unreadable'}
+          value={values.secretAddress}
+          onValue={set.secretAddress}
+          removable={false}
+          status={target === null ? null : text.savedAddress(target.address)}
+          error={addressError}
+        />
+      )
+  }
 }
