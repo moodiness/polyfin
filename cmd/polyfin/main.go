@@ -216,6 +216,7 @@ func serve(ctx context.Context) error {
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
 	defer folders.Close()
 	lib.UseLocal(folders)
+	folders.Watch()
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)
 	}

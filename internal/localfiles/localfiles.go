@@ -8,7 +8,10 @@
 // other addons' streams.
 //
 // Folders are scanned at startup, every Settings.LocalScanHours and when an
-// administrator asks, never watched. A scan reads only what changed since
+// administrator asks. The folders in the container are also watched for
+// changes, unless Settings.WatchLocalFolders is off, each scanned again a
+// few seconds after its files stop changing; network shares are not
+// watched. A scan reads only what changed since
 // the last one, by path, size and modification time; each new file is
 // matched to a title by the identifiers its name gives, else by its name
 // and year through the metadata addons' searches, kept only when they find
@@ -95,6 +98,10 @@ type Service struct {
 	// folder, kept between requests.
 	sharesMu sync.Mutex
 	shares   map[accounts.ID]*pooledRemote
+
+	// watch watches the folders in the container for changes, nil until
+	// Watch.
+	watch *watcher
 }
 
 // matchWorkers bounds the units a scan matches at once, each asking the
@@ -102,7 +109,8 @@ type Service struct {
 const matchWorkers = 4
 
 // New returns the service. settings gives LocalScanHours, read whenever
-// folders due are looked for; box seals the shares' passwords.
+// folders due are looked for, and WatchLocalFolders, read whenever the
+// folders to watch are; box seals the shares' passwords.
 func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logger, settings func() accounts.Settings,
 	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -116,8 +124,36 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 // service is used.
 func (s *Service) UseFiles(base string) { s.files = base }
 
-// Close stops the scans under way, waits for them, and closes the
-// shares' connections.
+// Watch watches the folders in the container for changes until Close; it
+// is called once, before the service is used.
+func (s *Service) Watch() {
+	s.watch = newWatcher(s.ctx, s.logger, s.watchable, s.watchScan, openNotifyWatcher, s.wg.Go)
+	s.wg.Go(s.watch.run)
+}
+
+// watchable lists the folders to watch.
+func (s *Service) watchable(ctx context.Context) ([]watchFolder, error) {
+	settings := s.settings()
+	if !settings.WatchLocalFolders {
+		return nil, nil
+	}
+	installed, err := s.addons.Addons(ctx, addons.Shared())
+	if err != nil {
+		return nil, err
+	}
+	return watchable(settings, installed), nil
+}
+
+// watchScan scans a folder that changed, once a scan of it under way
+// ended.
+func (s *Service) watchScan(ctx context.Context, id accounts.ID) {
+	if err := s.Scan(ctx, id); err != nil && ctx.Err() == nil {
+		s.logger.Warn("A local folder could not be scanned", "folder", id, "error", err)
+	}
+}
+
+// Close stops the watch and the scans under way, waits for them, and
+// closes the shares' connections.
 func (s *Service) Close() {
 	s.cancel()
 	s.wg.Wait()
@@ -142,7 +178,11 @@ type NewFolder struct {
 // the folder, Error the code of the last failure: "missing",
 // "unreadable", "not_folder", or for a share "unreachable" or "refused"),
 // whether a scan is under way, its files, those matched to a title and the
-// others, and the links made by hand.
+// others, and the links made by hand. Unwatched tells why a folder in the
+// container Polyfin should watch is not: "watch_limit" when the system's
+// limit of watches is reached, "instance_limit" when its limit of watchers
+// or of open files is, "failed" otherwise; empty when it is watched or
+// need not be.
 type Folder struct {
 	Addon       addons.Addon
 	Kind        string
@@ -157,6 +197,7 @@ type Folder struct {
 	Matched     int
 	Unmatched   int
 	Links       []Link
+	Unwatched   string
 }
 
 // Link is a unit of a folder linked by hand to an IMDb identifier: a
@@ -208,6 +249,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 		return addons.Addon{}, err
 	}
 	s.StartScan(addon.ID)
+	s.watch.kick()
 	return addon, nil
 }
 
@@ -293,6 +335,9 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if moved || share != "" && credentials {
 		s.StartScan(id)
 	}
+	if moved {
+		s.watch.kick()
+	}
 	return addon, nil
 }
 
@@ -334,6 +379,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	s.mu.Lock()
 	_, f.Scanning = s.running[id]
 	s.mu.Unlock()
+	f.Unwatched = s.watch.reason(id)
 	return f, nil
 }
 
