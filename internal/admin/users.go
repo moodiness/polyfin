@@ -406,6 +406,11 @@ type settingsJSON struct {
 	SMTPPasswordSet bool    `json:"smtpPasswordSet"`
 	SMTPFrom        *string `json:"smtpFrom"`
 	SMTPFromName    *string `json:"smtpFromName"`
+	// PlaybackHistory and PlaybackHistoryDays, whether the videos played
+	// are kept for the statistics and for how many days, keep their current
+	// values when a PUT leaves them out.
+	PlaybackHistory     *bool `json:"playbackHistory"`
+	PlaybackHistoryDays *int  `json:"playbackHistoryDays"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -533,6 +538,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SMTPPasswordSet: settings.SMTPPassword != "",
 		SMTPFrom:        &settings.SMTPFrom,
 		SMTPFromName:    &settings.SMTPFromName,
+
+		PlaybackHistory:     &settings.PlaybackHistory,
+		PlaybackHistoryDays: &settings.PlaybackHistoryDays,
 	}
 }
 
@@ -1028,6 +1036,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SMTPPassword: valueOr(body.SMTPPassword, current.SMTPPassword),
 		SMTPFrom:     valueOr(body.SMTPFrom, current.SMTPFrom),
 		SMTPFromName: valueOr(body.SMTPFromName, current.SMTPFromName),
+
+		PlaybackHistory:     valueOr(body.PlaybackHistory, current.PlaybackHistory),
+		PlaybackHistoryDays: valueOr(body.PlaybackHistoryDays, current.PlaybackHistoryDays),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
