@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
+	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
@@ -93,6 +94,9 @@ type Options struct {
 	// Trackers sends what users watch to the tracking services they
 	// connected; nil sends nothing.
 	Trackers *trackers.Service
+	// Plays follows the playbacks apps report, for the statistics and the
+	// notifications; nil follows none.
+	Plays *plays.Tracker
 }
 
 // Handler serves the Jellyfin API.
