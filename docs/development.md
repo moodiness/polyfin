@@ -25,6 +25,7 @@ make check                    # formatting, vet and tests
 - Database tests run when `POLYFIN_TEST_DATABASE_URL` points to a disposable PostgreSQL database. Each database test works in its own schema.
 - Remux tests run when `POLYFIN_TEST_FFMPEG` names an `ffmpeg` executable with `ffprobe` beside it.
 - CI always provides both.
+- The SMB share test runs when `POLYFIN_TEST_SMB` names a share holding video files, its user and password in the address: `smb://user:password@host:port/share/folder`. CI does not run it; WebDAV folders are tested against a server in the tests themselves.
 
 ## Jellyfin fixtures
 
