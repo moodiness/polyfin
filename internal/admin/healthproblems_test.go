@@ -187,3 +187,24 @@ func TestDisksShortOfRoom(t *testing.T) {
 		}
 	}
 }
+
+// A local folder Polyfin cannot watch tells why, what to raise, and that
+// its schedule still scans it.
+func TestUnwatchedFolderText(t *testing.T) {
+	for _, c := range []struct {
+		failure, language, want string
+	}{
+		{"watch_limit", "en", "Movies: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. " +
+			"It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host."},
+		{"watch_limit", "fr", "Movies : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. " +
+			"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte."},
+		{"instance_limit", "en", "Movies: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. " +
+			"It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files."},
+		{"failed", "en", "Movies: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule."},
+	} {
+		p := healthProblemJSON{Code: problemFolderUnwatched, Name: "Movies", Failure: c.failure}
+		if got := p.text(c.language); got != c.want {
+			t.Errorf("%s in %s:\n%s\nwant\n%s", c.failure, c.language, got, c.want)
+		}
+	}
+}
