@@ -270,6 +270,20 @@ const (
 	DefaultPlaybackHistoryDays = 365
 )
 
+// ErrInvalidWeeklySummaryDay reports a WeeklySummaryDay outside [0, 6], and
+// ErrInvalidWeeklySummaryHour a WeeklySummaryHour outside [0, 23].
+var (
+	ErrInvalidWeeklySummaryDay  = errors.New("invalid weekly summary day")
+	ErrInvalidWeeklySummaryHour = errors.New("invalid weekly summary hour")
+)
+
+// The defaults of Settings.WeeklySummaryDay and WeeklySummaryHour: Monday
+// at 9:00.
+const (
+	DefaultWeeklySummaryDay  = 1
+	DefaultWeeklySummaryHour = 9
+)
+
 // ErrInvalidLiveTvRefreshHours reports a LiveTvRefreshHours outside
 // [MinLiveTvRefreshHours, MaxLiveTvRefreshHours].
 var ErrInvalidLiveTvRefreshHours = errors.New("invalid Live TV refresh hours")
@@ -862,6 +876,11 @@ type Settings struct {
 	// playback stays in it.
 	PlaybackHistory     bool
 	PlaybackHistoryDays int
+	// WeeklySummaryDay is the day of the week the weekly summary is sent,
+	// 0 for Sunday to 6 for Saturday, as time.Weekday counts them, and
+	// WeeklySummaryHour its hour, 0 to 23, both in the server's time zone.
+	WeeklySummaryDay  int
+	WeeklySummaryHour int
 }
 
 // SMTPAvailable reports whether email notifications can be sent: an SMTP
@@ -924,7 +943,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
-	"playback_history, playback_history_days"
+	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -958,7 +977,7 @@ func (settings *Settings) fields() []any {
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
-		&settings.PlaybackHistory, &settings.PlaybackHistoryDays}
+		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1277,6 +1296,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.PlaybackHistoryDays < 1 || settings.PlaybackHistoryDays > MaxPlaybackHistoryDays {
 		return Settings{}, ErrInvalidPlaybackHistoryDays
+	}
+	if settings.WeeklySummaryDay < 0 || settings.WeeklySummaryDay > 6 {
+		return Settings{}, ErrInvalidWeeklySummaryDay
+	}
+	if settings.WeeklySummaryHour < 0 || settings.WeeklySummaryHour > 23 {
+		return Settings{}, ErrInvalidWeeklySummaryHour
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
