@@ -405,9 +405,6 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 		defer s.wg.Done()
 		defer stop()
 		r.run(runCtx)
-		s.mu.Lock()
-		s.busy, s.stop = false, nil
-		s.mu.Unlock()
 	}()
 	s.logger.Info("A Jellyfin import started", "server", server.Name, "users", len(targets))
 	return snapshot, nil

@@ -82,6 +82,8 @@ func (r *run) run(ctx context.Context) {
 	signingOut.Wait()
 	s.mu.Lock()
 	r.status.State, r.status.Problem, r.status.EndedAt = state, problem, new(s.now().UTC())
+	// An import shown ended lets the next one start at once.
+	s.busy, s.stop = false, nil
 	s.mu.Unlock()
 	s.logger.Info("A Jellyfin import ended", "server", r.status.ServerName, "state", state, "problem", problem)
 }
