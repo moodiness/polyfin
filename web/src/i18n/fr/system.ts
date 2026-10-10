@@ -106,6 +106,12 @@ const system: typeof en = {
         iptv: (name: string) => `${name} : le dernier téléchargement de la liste a échoué.`,
         folder: (name: string) =>
           `${name} : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.`,
+        share: (name: string) =>
+          `${name} : Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.`,
+        shareUnreachable: (name: string) =>
+          `${name} : Polyfin ne peut pas joindre ce partage réseau.`,
+        shareRefused: (name: string) =>
+          `${name} : le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.`,
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,
@@ -207,7 +213,7 @@ const system: typeof en = {
       goroutines: 'Goroutines',
       secretsTitle: 'Clés enregistrées',
       secretsHelp:
-        'Les clés du serveur, et les jetons et clés de suivi des utilisateurs, chiffrés dans la base de données avec POLYFIN_SECRET_KEY (openssl rand -base64 32).',
+        'Les clés du serveur, les jetons et clés de suivi des utilisateurs, et les mots de passe des partages réseau, chiffrés dans la base de données avec POLYFIN_SECRET_KEY (openssl rand -base64 32).',
       encryption: 'Chiffrement',
       encrypted: 'Activé',
       notEncrypted: 'Désactivé : POLYFIN_SECRET_KEY n’est pas définie',
@@ -224,6 +230,7 @@ const system: typeof en = {
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
       targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,
       serverTargetOf: (target: string) => `Cible de notification du serveur « ${target} »`,
+      sharePasswordOf: (folder: string) => `Mot de passe du partage « ${folder} »`,
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
       noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
       noGuides: 'Aucun guide des programmes.',

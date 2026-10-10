@@ -430,15 +430,28 @@ export type Addon = {
 /** What a local folder holds. */
 export type FolderKind = 'movies' | 'shows'
 
-/** A local folder: a folder mounted in the container, scanned for the titles of its files. */
+/** Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder. */
+export type FolderShare = '' | 'smb' | 'webdav'
+
+/**
+ * A local folder: a folder mounted in the container, or a network share Polyfin reads itself,
+ * scanned for the titles of its files.
+ */
 export type LocalFolder = {
   kind: FolderKind
-  /** Its path in the container. */
+  /** Its path in the container, or the share's address. */
   path: string
+  share: FolderShare
+  /** The share's user, and whether a password is stored; the server never sends the password. */
+  user: string
+  passwordSet: boolean
   /** The last scan attempt, and the last scan that could read the folder; null before the first. */
   checkedAt: string | null
   scannedAt: string | null
-  /** Why the last scan could not read the folder: 'missing', 'unreadable', 'not_folder'; else empty. */
+  /**
+   * Why the last scan could not read the folder: 'missing', 'unreadable', 'not_folder', or for a
+   * share 'unreachable', 'refused'; else empty.
+   */
   error: string
   /** Whether a scan is under way. */
   scanning: boolean
@@ -460,9 +473,21 @@ export type UnmatchedFile = {
   reason: 'unreadable_name' | 'not_found' | 'ambiguous' | 'other_year' | 'search_failed'
 }
 
-export type NewLocalFolder = { name: string; path: string; kind: FolderKind }
+export type NewLocalFolder = {
+  name: string
+  path: string
+  kind: FolderKind
+  user?: string
+  password?: string
+}
 
-export type LocalFolderPatch = Partial<{ name: string; path: string }>
+/** A change of a folder; a password left out keeps the stored one, an empty one removes it. */
+export type LocalFolderPatch = Partial<{
+  name: string
+  path: string
+  user: string
+  password: string
+}>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */
 export type MusicContent = 'music' | 'audiobook' | 'podcast'
@@ -1857,6 +1882,8 @@ export type UnreadableSecret = {
   service: TrackingServiceName | null
   target: string | null
   user: string | null
+  /** A network share's password, by its folder's name. */
+  folder: string | null
 }
 
 /**
@@ -1881,7 +1908,7 @@ export type HealthProblem = {
   | { code: 'backup_failed' }
   | { code: 'backup_stale' }
   | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
-  | { code: 'folder'; name: string }
+  | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'task'; task: string }
 )
 

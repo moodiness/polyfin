@@ -1,6 +1,8 @@
 import {
   BroadcastIcon,
   FolderIcon,
+  GlobeIcon,
+  HardDrivesIcon,
   MusicNotesIcon,
   PuzzlePieceIcon,
   type Icon,
@@ -17,6 +19,8 @@ export const kindOf = (addon: Addon): KindFilter =>
 
 export function kindIcon(addon: Addon): Icon {
   if (isIptv(addon)) return BroadcastIcon
+  if (addon.folder?.share === 'smb') return HardDrivesIcon
+  if (addon.folder?.share === 'webdav') return GlobeIcon
   if (addon.kind === 'local') return FolderIcon
   return addon.kind === 'eclipse' ? MusicNotesIcon : PuzzlePieceIcon
 }

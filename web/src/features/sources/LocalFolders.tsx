@@ -1,4 +1,11 @@
-import { FilmSlateIcon, LinkBreakIcon, TelevisionSimpleIcon } from '@phosphor-icons/react'
+import {
+  FilmSlateIcon,
+  FolderIcon,
+  GlobeIcon,
+  HardDrivesIcon,
+  LinkBreakIcon,
+  TelevisionSimpleIcon,
+} from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -12,6 +19,7 @@ import {
   updateLocalFolder,
   type Addon,
   type FolderKind,
+  type FolderShare,
   type LocalFolder,
   type UnmatchedFile,
 } from '@/api'
@@ -27,6 +35,7 @@ import {
   InlineError,
   Notice,
   PanelSection,
+  SecretField,
   Segmented,
   Skeleton,
   TextInput,
@@ -48,15 +57,34 @@ export function useFolderScanFollowed(addon: Addon) {
   })
 }
 
-/** The form adding a local folder to the server's sources. */
+/** Where an address leads: an SMB share, a WebDAV folder, or else a path in the container. */
+export function shareOf(path: string): FolderShare {
+  const address = path.trim().toLowerCase()
+  if (address.startsWith('smb://')) return 'smb'
+  if (address.startsWith('http://') || address.startsWith('https://')) return 'webdav'
+  return ''
+}
+
+type Location = 'local' | 'smb' | 'webdav'
+
+/** The form adding a local folder or a network share to the server's sources. */
 export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => void }) {
   const { t } = useI18n()
   const text = t.localFolders
+  const [location, setLocation] = useState<Location>('local')
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
   const [kind, setKind] = useState<FolderKind>('movies')
+  const share = location === 'local' ? null : location
   const mutation = useMutation({
-    mutationFn: () => addLocalFolder({ name: name.trim(), path: path.trim(), kind }),
+    mutationFn: () =>
+      addLocalFolder(
+        share === null
+          ? { name: name.trim(), path: path.trim(), kind }
+          : { name: name.trim(), path: path.trim(), kind, user: user.trim(), password },
+      ),
     onSuccess: (added) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons('shared'), (old) =>
         old === undefined ? old : [...old, added],
@@ -73,21 +101,66 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-      <p className="text-small text-ink-3">{text.help}</p>
+      <Field label={text.location} help={share === null ? text.help : text.shareHelp[share]}>
+        <Segmented<Location>
+          label={text.location}
+          value={location}
+          onChange={(next) => {
+            mutation.reset()
+            setLocation(next)
+            setPath('')
+          }}
+          options={[
+            { value: 'local', label: text.locations.local, icon: FolderIcon },
+            { value: 'smb', label: text.locations.smb, icon: HardDrivesIcon },
+            { value: 'webdav', label: text.locations.webdav, icon: GlobeIcon },
+          ]}
+          className="self-start max-sm:self-stretch"
+        />
+      </Field>
       <Field label={text.name} help={text.nameHint}>
         <TextInput value={name} onValue={setName} maxLength={64} required autoFocus />
       </Field>
-      <Field label={text.path} help={text.pathHint}>
+      <Field
+        label={share === null ? text.path : text.address}
+        help={share === null ? text.pathHint : text.addressHint[share]}
+      >
         <TextInput
+          key={location}
+          type={share === null ? 'text' : 'url'}
+          inputMode={share === null ? undefined : 'url'}
           value={path}
           onValue={setPath}
-          placeholder={text.pathPlaceholder}
+          placeholder={share === null ? text.pathPlaceholder : text.addressPlaceholder[share]}
           autoComplete="off"
           spellCheck={false}
           required
           mono
         />
       </Field>
+      {share !== null && (
+        <>
+          <Field label={text.user} help={text.userHint[share]}>
+            <TextInput
+              value={user}
+              onValue={setUser}
+              maxLength={256}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Field>
+          <Field label={text.password} help={text.passwordHint}>
+            <TextInput
+              type="password"
+              revealable
+              value={password}
+              onValue={setPassword}
+              maxLength={1024}
+              autoComplete="new-password"
+            />
+          </Field>
+        </>
+      )}
       <Field label={text.kind} help={text.kindHelp[kind]}>
         <Segmented<FolderKind>
           label={text.kind}
@@ -110,7 +183,10 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   )
 }
 
-/** The form changing a folder's name or path; what it holds stays. */
+/**
+ * The form changing a folder's name, path or address, and a share's user and password; what it
+ * holds stays.
+ */
 export function LocalFolderEditForm({
   addon,
   folder,
@@ -126,11 +202,21 @@ export function LocalFolderEditForm({
   const text = t.localFolders
   const [name, setName] = useState(addon.name)
   const [path, setPath] = useState(folder.path)
+  const [user, setUser] = useState(folder.user)
+  // undefined keeps the stored password, '' removes it.
+  const [password, setPassword] = useState<string | undefined>(undefined)
+  const share = shareOf(path)
   const mutation = useMutation({
-    mutationFn: () => updateLocalFolder(addon.id, { name: name.trim(), path: path.trim() }),
+    mutationFn: () =>
+      updateLocalFolder(addon.id, {
+        name: name.trim(),
+        path: path.trim(),
+        ...(share === '' ? {} : { user: user.trim(), password }),
+      }),
     onSuccess: onSaved,
     onSettled: () => invalidateScope('shared'),
   })
+  const moved = path.trim() !== folder.path
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -142,7 +228,18 @@ export function LocalFolderEditForm({
       <Field label={text.name} help={text.nameHint}>
         <TextInput value={name} onValue={setName} maxLength={64} required />
       </Field>
-      <Field label={text.path} help={path.trim() !== folder.path ? text.movedHint : text.pathHint}>
+      <Field
+        label={share === '' ? text.path : text.address}
+        help={
+          share === ''
+            ? moved
+              ? text.movedHint
+              : text.pathHint
+            : moved
+              ? text.movedShareHint
+              : text.addressHint[share]
+        }
+      >
         <TextInput
           value={path}
           onValue={setPath}
@@ -152,6 +249,26 @@ export function LocalFolderEditForm({
           mono
         />
       </Field>
+      {share !== '' && (
+        <>
+          <Field label={text.user} help={text.userHint[share]}>
+            <TextInput
+              value={user}
+              onValue={setUser}
+              maxLength={256}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Field>
+          <SecretField
+            label={text.password}
+            help={text.passwordHint}
+            saved={folder.passwordSet}
+            value={password}
+            onValue={setPassword}
+          />
+        </>
+      )}
       <p className="text-small text-ink-3">
         {text.holds}: {text.kinds[folder.kind]}. {text.kindFixed}
       </p>
@@ -178,6 +295,7 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
     { label: text.matched, value: folder.matched, warn: false },
     { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
   ]
+  const errors = folder.share === '' ? text.errors : text.shareErrors
   return (
     <PanelSection>
       <dl className="grid grid-cols-3 gap-y-4">
@@ -200,8 +318,10 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
       </dl>
       {folder.error !== '' && (
         <Notice tone="danger" className="mt-5">
-          <strong className="font-medium">{text.errorTitle}.</strong>{' '}
-          {Object.hasOwn(text.errors, folder.error) ? text.errors[folder.error] : t.errors.generic}{' '}
+          <strong className="font-medium">
+            {folder.share === '' ? text.errorTitle : text.errorTitleShare}.
+          </strong>{' '}
+          {Object.hasOwn(errors, folder.error) ? errors[folder.error] : t.errors.generic}{' '}
           {folder.files > 0 && text.keptNote}
         </Notice>
       )}

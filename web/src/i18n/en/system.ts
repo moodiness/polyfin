@@ -101,6 +101,11 @@ const system = {
         iptv: (name: string) => `${name}: the last channel list download failed.`,
         folder: (name: string) =>
           `${name}: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.`,
+        share: (name: string) =>
+          `${name}: Polyfin cannot read this network share. Check its address, and that its user may read it.`,
+        shareUnreachable: (name: string) => `${name}: Polyfin cannot reach this network share.`,
+        shareRefused: (name: string) =>
+          `${name}: the network share refuses Polyfin’s user or password.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         task: (name: string) => `The task “${name}” failed.`,
@@ -201,7 +206,7 @@ const system = {
       goroutines: 'Goroutines',
       secretsTitle: 'Stored keys',
       secretsHelp:
-        'The server’s keys and the users’ tracking tokens and keys, encrypted in the database with POLYFIN_SECRET_KEY (openssl rand -base64 32).',
+        'The server’s keys, the users’ tracking tokens and keys, and the network shares’ passwords, encrypted in the database with POLYFIN_SECRET_KEY (openssl rand -base64 32).',
       encryption: 'Encryption',
       encrypted: 'On',
       notEncrypted: 'Off: POLYFIN_SECRET_KEY is not set',
@@ -218,6 +223,7 @@ const system = {
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
       targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
       serverTargetOf: (target: string) => `server notification target “${target}”`,
+      sharePasswordOf: (folder: string) => `password of the share “${folder}”`,
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',
       noIptvHint: 'Add an IPTV account under Content › Sources.',
       noGuides: 'No programme guide.',

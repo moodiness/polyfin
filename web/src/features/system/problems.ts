@@ -36,12 +36,13 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
 }
 
 /**
- * The name of a stored secret the key cannot decrypt: a server setting, a user's connection, or a
- * notification target of a user or of the server.
+ * The name of a stored secret the key cannot decrypt: a server setting, a network share's
+ * password, a user's connection, or a notification target of a user or of the server.
  */
 export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
   if (secret.setting !== null) return text.secretNames[secret.setting]
+  if (secret.folder !== null) return text.sharePasswordOf(secret.folder)
   if (secret.target !== null) {
     return secret.user === null
       ? text.serverTargetOf(secret.target)
@@ -93,7 +94,9 @@ export function problemText(t: Messages, language: string, problem: HealthProble
     case 'guide':
       return text.guide(ownedName(t, problem.name, problem.owner ?? null))
     case 'folder':
-      return text.folder(problem.name)
+      if (problem.failure === 'unreachable') return text.shareUnreachable(problem.name)
+      if (problem.failure === 'refused') return text.shareRefused(problem.name)
+      return problem.share !== undefined ? text.share(problem.name) : text.folder(problem.name)
     case 'task':
       return text.task(problem.task)
   }
