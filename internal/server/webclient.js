@@ -37,10 +37,16 @@
 // versions in the page's version menu, in place, keeping the version picked.
 // It reloads the page's details instead, as jellyfin-web does when the page
 // is shown again, when the version picked is gone or no longer the same
-// version, since the track menus describe it. It never changes the page
-// while a video plays or while the version menu has focus, where it could be
-// open: it tries again at the next answer, or as soon as the menu loses
-// focus. Any error just stops it.
+// version, since the track menus describe it. The first version carries the
+// title's own identifier: when a version listed first takes it, the version
+// picked that had it, by jellyfin-web or the user, is picked under its own
+// identifier before the reload, which jellyfin-web then keeps. It never
+// changes the page while a video plays or while the version menu has focus,
+// where it could be open: it tries again at the next answer, or as soon as
+// the menu loses focus. When the answers say AddVersions false (Settings ›
+// Web player › Add versions to an open title's page, off), it only brings
+// a menu that lists the placeholder to the versions: the others show when
+// the page opens again. Any error just stops it.
 //
 // Third, on the same page, it holds the play buttons (.btnPlay, .btnResume,
 // .btnReplay) until a version is known, as /Polyfin/Items/{id}/Versions and
@@ -203,7 +209,9 @@
   // jellyfin-web fills the menu with new options, which forgets both.
   var added = new WeakSet()
   var sizes = new WeakMap()
-  // The version picked among those added, until jellyfin-web lists it.
+  // The version picked among those added, until jellyfin-web lists it: the
+  // observer that waits for jellyfin-web's options, and the identifier of
+  // the version picked.
   var picking = null
   // shownPage returns the title page shown, unless a video is.
   function shownPage() {
@@ -220,36 +228,35 @@
   // stale tells whether an option no longer stands for a source with its
   // identifier: jellyfin-web names an option after its source, and the
   // title's own identifier passes from the placeholder to the first version,
-  // then to whichever version comes first.
+  // then to whichever version comes first, the version it leaves taking an
+  // identifier of its own.
   function stale(option, source) {
     return option.textContent !== source.Name || (sizes.has(option) && sizes.get(option) !== source.Size)
   }
   // place lists sources in the version menu, in their order, keeping the
   // version picked, and tells whether it could. An option jellyfin-web
   // listed is kept while it stands for the same source, as jellyfin-web
-  // knows that source's tracks.
+  // knows that source's tracks. When the version picked lost its identifier
+  // to another, it cannot: it is picked under its new one (see keep).
   function place(menu, sources) {
     var picked = menu.options[menu.selectedIndex]
     var kept = {}
     for (var i = 0; i < menu.options.length; i++) kept[menu.options[i].value] = menu.options[i]
     var found = false
+    var moved = false
     var options = sources.map(function (source) {
       var option = kept[source.Id]
       if (option && stale(option, source)) {
-        if (option === picked) return null
+        if (option === picked) moved = true
         option = null
       }
-      if (!option) {
-        option = document.createElement('option')
-        option.value = source.Id
-        option.textContent = source.Name
-        added.add(option)
-      }
+      if (!option) option = sourceOption(source)
       if (option === picked) found = true
       sizes.set(option, source.Size)
       return option
     })
-    if (!found || options.indexOf(null) >= 0) return false
+    if (moved) keep(menu, picked, sources)
+    if (!found) return false
     options.forEach(function (option, i) {
       if (menu.options[i] !== option) menu.insertBefore(option, menu.options[i] || null)
     })
@@ -259,14 +266,49 @@
     if (container) container.classList.toggle('hide', options.length < 2)
     return true
   }
+  // sourceOption makes an option for a source, as jellyfin-web does.
+  function sourceOption(source) {
+    var option = document.createElement('option')
+    option.value = source.Id
+    option.textContent = source.Name
+    added.add(option)
+    sizes.set(option, source.Size)
+    return option
+  }
+  // keep picks, in place of the option picked, the version it stood for
+  // when the title's identifier passed from it to a version listed first:
+  // the source with its name, and its size when the script knows it, under
+  // another identifier. The page's details are then reloaded, and
+  // jellyfin-web keeps the identifier picked when it lists it, where it
+  // would pick the version that took the old one. Without such a source,
+  // as when the placeholder gives way to the first version, the option
+  // stays, and jellyfin-web picks the version that took its identifier. A
+  // version picked among those added is then made again under its new
+  // identifier (see pick).
+  function keep(menu, picked, sources) {
+    for (var i = 0; i < sources.length; i++) {
+      var source = sources[i]
+      if (source.Id === picked.value || source.Name !== picked.textContent) continue
+      if (sizes.has(picked) && sizes.get(picked) !== source.Size) continue
+      menu.insertBefore(sourceOption(source), picked)
+      menu.removeChild(picked)
+      menu.value = source.Id
+      if (picking) picking.value = source.Id
+      return
+    }
+  }
   // update brings the title page to the versions Polyfin knows when an
   // answer tells it lists fewer, or a different number once no addon is
-  // pending. A hidden or empty version menu counts as one.
+  // pending. A hidden or empty version menu counts as one. When Polyfin
+  // adds no version to an open page (AddVersions false), only a menu that
+  // lists the placeholder, named after the title, is brought to them.
   function update(progress) {
     var id = title
     var page = shownPage()
     if (!id || !page || asking || progress.Count < 1 || progress.Count === updatedFor) return
+    var adding = progress.AddVersions !== false
     var menu = page.querySelector('.selectSource')
+    if (!adding && (!menu || !placeholder(page))) return
     var listed = !menu || menu.closest('.hide') ? 1 : Math.max(menu.options.length, 1)
     if (progress.Count < listed ? progress.Pending > 0 : progress.Count === listed) return
     if (!menu) {
@@ -282,7 +324,9 @@
         asking = false
         if (title !== id || shownPage() !== page || page.querySelector('.selectSource') !== menu) return
         if (document.activeElement === menu) return
-        if (!place(menu, item.MediaSources || [])) reload(page)
+        if (adding || (placeholder(page) && menu.options[0].textContent === item.Name)) {
+          if (!place(menu, item.MediaSources || [])) reload(page)
+        }
         updatedFor = progress.Count
       },
       function () {
@@ -531,7 +575,7 @@
     latest = null
     updatedFor = 0
     pushed = false
-    if (picking) picking.disconnect()
+    if (picking) picking.observer.disconnect()
     picking = null
     release()
     if (watcher) watcher.disconnect()
@@ -598,25 +642,26 @@
   // that version's details: a version this script added is not in it. Such a
   // pick goes to jellyfin-web only once it lists that version: the page's
   // details are reloaded, which keeps the pick, and it is made again when
-  // jellyfin-web has filled the menu anew.
+  // jellyfin-web has filled the menu anew, under the version's identifier
+  // then, which keep follows when the title's identifier leaves it.
   function pick(event) {
     var menu = event.target
     var option = menu && menu.options && menu.options[menu.selectedIndex]
     var page = option && added.has(option) && menu.closest('.itemDetailPage')
     if (!page) return
     event.stopPropagation()
-    if (picking) picking.disconnect()
-    var value = menu.value
-    var observer = new MutationObserver(function () {
+    if (picking) picking.observer.disconnect()
+    var entry = { observer: null, value: menu.value }
+    entry.observer = new MutationObserver(function () {
       var picked = menu.options[menu.selectedIndex]
       // This script's own changes leave the pick among its options.
       if (picked && added.has(picked)) return
-      observer.disconnect()
-      if (picking === observer) picking = null
-      if (picked && picked.value === value) menu.dispatchEvent(new Event('change', { bubbles: true }))
+      entry.observer.disconnect()
+      if (picking === entry) picking = null
+      if (picked && picked.value === entry.value) menu.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    picking = observer
-    observer.observe(menu, { childList: true })
+    picking = entry
+    entry.observer.observe(menu, { childList: true })
     reload(page)
   }
   // A version menu that had focus is updated as soon as it loses it.
