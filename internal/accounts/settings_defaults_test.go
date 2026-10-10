@@ -117,13 +117,16 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			}
 		case b.Bounded && kind == reflect.String:
 			// An address is a URL: its scheme starts it, letters fill the
-			// rest. A folder is an absolute path.
+			// rest. A folder is an absolute path, and a sender an email
+			// address.
 			letter, start := "a", ""
 			switch name {
 			case "remuxDbUrl", "publicAddress":
 				start = "https://"
 			case "recordingsFolder", "backupFolder":
 				start = "/"
+			case "smtpFrom":
+				start = "polyfin@"
 			}
 			if err := try(name, start+strings.Repeat(letter, int(b.Max)-len(start))); err != nil {
 				t.Errorf("%s: %v long refused: %v", name, b.Max, err)
