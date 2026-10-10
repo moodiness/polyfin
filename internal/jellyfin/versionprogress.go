@@ -59,10 +59,25 @@ const (
 
 // versionsPush is the data of a PolyfinVersions message.
 type versionsPush struct {
-	ItemId  string
-	Pending int
-	Count   int
-	Known   int
+	ItemId      string
+	Pending     int
+	Count       int
+	Known       int
+	AddVersions bool
+}
+
+// versionsAnswer answers /Polyfin/Items/{itemId}/Versions and its search:
+// the title's progress, and whether the web player adds the versions that
+// come to a title's page while it is open (Settings.AddVersionsToOpenPage);
+// when it does not, the script only replaces the placeholder.
+type versionsAnswer struct {
+	VersionProgress
+	AddVersions bool
+}
+
+// writeProgress answers progress, with the web player's setting.
+func (h *Handler) writeProgress(w http.ResponseWriter, progress VersionProgress) {
+	writeJSON(w, http.StatusOK, versionsAnswer{VersionProgress: progress, AddVersions: h.Accounts.Settings().AddVersionsToOpenPage})
 }
 
 // watchedPages are the title pages users opened lately, by title, then by
@@ -161,7 +176,7 @@ func (h *Handler) pushVersions(title accounts.ID) {
 	w.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), socketWrite)
 	defer cancel()
-	prepare := h.Accounts.Settings().PrepareAhead
+	settings := h.Accounts.Settings()
 	for _, p := range pages {
 		pending, versions, ok := h.Library.FollowedProgress(ctx, p.user, title)
 		if !ok {
@@ -171,11 +186,12 @@ func (h *Handler) pushVersions(title accounts.ID) {
 		conns := h.userSockets(p.user.ID)
 		for _, opened := range p.opened {
 			progress := newProgress(pending, offered)
-			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known})
+			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known,
+				AddVersions: settings.AddVersionsToOpenPage})
 			for _, conn := range conns {
 				_ = conn.Write(ctx, websocket.MessageText, payload)
 			}
-			if prepare {
+			if settings.PrepareAhead {
 				h.prepareOpened(ctx, p.user, library.Item{ID: title}, offered, opened)
 			}
 		}
@@ -208,7 +224,7 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if progress, ok := h.followedProgress(r.Context(), user, id); ok {
-		writeJSON(w, http.StatusOK, progress)
+		h.writeProgress(w, progress)
 		return
 	}
 	item, ok := h.versionedItem(w, r, user, id)
@@ -221,7 +237,7 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, progress)
+	h.writeProgress(w, progress)
 }
 
 // searchVersions answers POST /Polyfin/Items/{itemId}/Versions/Search for
@@ -242,7 +258,7 @@ func (h *Handler) searchVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
-		writeJSON(w, http.StatusOK, VersionProgress{})
+		h.writeProgress(w, VersionProgress{})
 		return
 	}
 	if allowed, wait := h.searches.allow(user.ID, item.ID, h.now()); !allowed {
@@ -256,11 +272,11 @@ func (h *Handler) searchVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if progress, ok := h.followedProgress(r.Context(), user, id); ok {
-		writeJSON(w, http.StatusOK, progress)
+		h.writeProgress(w, progress)
 		return
 	}
 	if progress, ok := h.titleProgress(w, r, user, item.ID, id); ok {
-		writeJSON(w, http.StatusOK, progress)
+		h.writeProgress(w, progress)
 	}
 }
 

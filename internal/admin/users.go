@@ -360,6 +360,9 @@ type settingsJSON struct {
 	CustomCss       *string `json:"customCss"`
 	CustomJs        *string `json:"customJs"`
 	LoginDisclaimer *string `json:"loginDisclaimer"`
+	// AddVersionsToOpenPage keeps its current value when a PUT leaves it
+	// out.
+	AddVersionsToOpenPage *bool `json:"addVersionsToOpenPage"`
 	// TraktClientID, TraktClientSecret and SimklClientID keep their current
 	// values when a PUT leaves them out; empty removes them. The secret is
 	// never sent back: TraktClientSecretSet tells whether one is saved, and
@@ -522,9 +525,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LocalScanHours:         &settings.LocalScanHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
 
-		CustomCss:       &settings.CustomCss,
-		CustomJs:        &settings.CustomJs,
-		LoginDisclaimer: &settings.LoginDisclaimer,
+		CustomCss:             &settings.CustomCss,
+		CustomJs:              &settings.CustomJs,
+		LoginDisclaimer:       &settings.LoginDisclaimer,
+		AddVersionsToOpenPage: &settings.AddVersionsToOpenPage,
 
 		TraktClientID:        &settings.TraktClientID,
 		TraktClientSecretSet: settings.TraktClientSecret != "",
@@ -1034,9 +1038,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),
 
-		CustomCss:       valueOr(body.CustomCss, current.CustomCss),
-		CustomJs:        valueOr(body.CustomJs, current.CustomJs),
-		LoginDisclaimer: valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
+		CustomCss:             valueOr(body.CustomCss, current.CustomCss),
+		CustomJs:              valueOr(body.CustomJs, current.CustomJs),
+		LoginDisclaimer:       valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
+		AddVersionsToOpenPage: valueOr(body.AddVersionsToOpenPage, current.AddVersionsToOpenPage),
 
 		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),
 		TraktClientSecret: valueOr(body.TraktClientSecret, current.TraktClientSecret),

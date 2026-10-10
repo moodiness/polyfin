@@ -249,6 +249,66 @@ func TestVersionsArePushedToTheTitlePage(t *testing.T) {
 	}
 }
 
+// A title's progress, asked, asked again or pushed, tells whether the web
+// player adds the versions that come to an open page, as the setting says.
+func TestVersionsTellWhetherTheWebPlayerAddsThem(t *testing.T) {
+	addon := newHeldAddon(t, "Alpha", false)
+	h := heldOn(t, newTestServer(t, 10), addon.url)
+	socket, _, err := h.openSocket(t, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adds := func() any {
+		var answer map[string]any
+		if status := h.get(t, "/Polyfin/Items/"+h.movie+"/Versions", h.token, &answer); status != http.StatusOK {
+			t.Fatalf("progress: %d", status)
+		}
+		return answer["AddVersions"]
+	}
+	h.sources(t)
+	if got := adds(); got != true {
+		t.Errorf("by default: %v", got)
+	}
+	h.setting(t, func(s *accounts.Settings) { s.AddVersionsToOpenPage = false })
+	if got := adds(); got != false {
+		t.Errorf("turned off: %v", got)
+	}
+	addon.answer()
+	deadline := time.After(5 * time.Second)
+	for pushed := false; !pushed; {
+		select {
+		case message := <-socket.messages:
+			if message.MessageType != versionsMessage {
+				continue
+			}
+			data, _ := json.Marshal(message.Data)
+			var push map[string]any
+			if err := json.Unmarshal(data, &push); err != nil {
+				t.Fatal(err)
+			}
+			if push["Count"] == float64(2) {
+				if push["AddVersions"] != false {
+					t.Errorf("pushed: %v", push)
+				}
+				pushed = true
+			}
+		case <-deadline:
+			t.Fatal("no push of the versions")
+		}
+	}
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, h.url+"/Polyfin/Items/"+h.movie+"/Versions/Search", nil)
+	request.Header.Set("Authorization", app("tv", h.token))
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var searched map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&searched); err != nil || response.StatusCode != http.StatusOK || searched["AddVersions"] != false {
+		t.Errorf("asked again: %d %v %v", response.StatusCode, searched, err)
+	}
+}
+
 // listsAddon lists, for every movie, the streams named in the next list
 // sent on replies, holding each request until it comes.
 type listsAddon struct {
