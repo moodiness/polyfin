@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -164,9 +163,9 @@ type loopback struct {
 	feeds   map[string]library.Version
 	// files are Polyfin's own files, recordings, by version (see
 	// FileVersion), served under fileKey, as the files of local folders
-	// are, which local opens (see LocalFiles).
+	// and network shares are, which local opens (see LocalFiles).
 	files   map[accounts.ID]string
-	local   func(ctx context.Context, key string) (*os.File, error)
+	local   func(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
 	fileKey string
 }
 

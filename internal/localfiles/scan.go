@@ -202,6 +202,12 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	if err != nil {
 		return err
 	}
+	// The connections of the shares removed since are closed.
+	local := map[accounts.ID]bool{}
+	for _, addon := range installed {
+		local[addon.ID] = addon.Local()
+	}
+	s.forgetRemotes(func(id accounts.ID) bool { return local[id] })
 	hours := s.settings().LocalScanHours
 	for _, addon := range installed {
 		if !addon.Local() || !addon.Enabled && !all {
@@ -254,18 +260,29 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	root := folder.Addon.ManifestURL
 	at := s.now()
-	if failure := readable(root); failure != "" {
+	var files map[string]found
+	var skipped []string
+	failure := ""
+	if folder.Share != "" {
+		var sealed string
+		if err := s.db.QueryRow(ctx, "SELECT share_password FROM local_folders WHERE addon_id = $1", id).Scan(&sealed); err != nil {
+			return err
+		}
+		if files, skipped, failure, err = s.shareFiles(ctx, id, root, folder.User, sealed); err != nil {
+			return err
+		}
+	} else if failure = readable(root); failure != "" {
 		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "reason", failure)
-		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
-		return err
-	}
-	files, skipped, err := walk(ctx, root)
-	if err != nil {
+	} else if files, skipped, err = walk(ctx, root); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "error", err)
-		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, errUnreadable)
+		failure = errUnreadable
+	}
+	if failure != "" {
+		// What was found before stays.
+		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
 	}
 	known, err := s.storedFiles(ctx, id)

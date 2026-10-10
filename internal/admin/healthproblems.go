@@ -50,11 +50,12 @@ const (
 // attention. Key names it for as long as it lasts; Code tells what it is,
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
-// guide, with Failure, the failure's code, for an addon; Host for paused
-// thumbnails; Task, in the language asked, for a task; Secrets for those
-// the key cannot decrypt. To is the admin app's page that describes it,
-// with its anchor. Transient ones come and go with the load: notifications
-// leave them out.
+// guide, with Failure, the failure's code, for an addon or a local folder,
+// and Share, the kind of network share a folder is ("smb", "webdav"); Host
+// for paused thumbnails; Task, in the language asked, for a task; Secrets
+// for those the key cannot decrypt. To is the admin app's page that
+// describes it, with its anchor. Transient ones come and go with the load:
+// notifications leave them out.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -66,6 +67,7 @@ type healthProblemJSON struct {
 	Name      string           `json:"name,omitempty"`
 	Owner     *ownerJSON       `json:"owner,omitempty"`
 	Failure   string           `json:"failure,omitempty"`
+	Share     string           `json:"share,omitempty"`
 	Host      string           `json:"host,omitempty"`
 	Task      string           `json:"task,omitempty"`
 	Secrets   []unreadableJSON `json:"secrets,omitempty"`
@@ -155,7 +157,8 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 				}
 				if folder.Error != "" {
 					sources = append(sources, healthProblemJSON{Key: "folder:" + addon.ID.String(), Code: problemFolder,
-						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name})
+						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Failure: folder.Error, Share: folder.Share})
 				}
 				continue
 			}
@@ -338,6 +341,16 @@ func (p healthProblemJSON) text(language string) string {
 	case problemIPTV:
 		return say("%s: the last channel list download failed.", "%s : le dernier téléchargement de la liste a échoué.", name)
 	case problemFolder:
+		switch {
+		case p.Failure == "unreachable":
+			return say("%s: Polyfin cannot reach this network share.", "%s : Polyfin ne peut pas joindre ce partage réseau.", name)
+		case p.Failure == "refused":
+			return say("%s: the network share refuses Polyfin’s user or password.",
+				"%s : le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.", name)
+		case p.Share != "":
+			return say("%s: Polyfin cannot read this network share. Check its address, and that its user may read it.",
+				"%s : Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.", name)
+		}
 		return say("%s: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.",
 			"%s : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", name)
 	case problemGuide:

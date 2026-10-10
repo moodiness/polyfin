@@ -10,20 +10,26 @@ import (
 	"github.com/moodiness/polyfin/internal/localfiles"
 )
 
-// folderJSON describes a local folder: what it holds, its path, how its
-// last scan went and whether one is under way, its files, those matched to
-// a title and the others, and the links made by hand.
+// folderJSON describes a local folder: what it holds, its path or share
+// address, the kind of share it is ("smb", "webdav", empty for a path in
+// the container) with its user and whether a password is stored, never
+// the password itself, how its last scan went and whether one is under
+// way, its files, those matched to a title and the others, and the links
+// made by hand.
 type folderJSON struct {
-	Kind      string     `json:"kind"`
-	Path      string     `json:"path"`
-	CheckedAt *time.Time `json:"checkedAt"`
-	ScannedAt *time.Time `json:"scannedAt"`
-	Error     string     `json:"error"`
-	Scanning  bool       `json:"scanning"`
-	Files     int        `json:"files"`
-	Matched   int        `json:"matched"`
-	Unmatched int        `json:"unmatched"`
-	Links     []linkJSON `json:"links"`
+	Kind        string     `json:"kind"`
+	Path        string     `json:"path"`
+	Share       string     `json:"share"`
+	User        string     `json:"user"`
+	PasswordSet bool       `json:"passwordSet"`
+	CheckedAt   *time.Time `json:"checkedAt"`
+	ScannedAt   *time.Time `json:"scannedAt"`
+	Error       string     `json:"error"`
+	Scanning    bool       `json:"scanning"`
+	Files       int        `json:"files"`
+	Matched     int        `json:"matched"`
+	Unmatched   int        `json:"unmatched"`
+	Links       []linkJSON `json:"links"`
 }
 
 type linkJSON struct {
@@ -36,8 +42,9 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	for _, l := range f.Links {
 		links = append(links, linkJSON{Unit: l.Unit, ImdbID: l.IMDb})
 	}
-	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error,
-		Scanning: f.Scanning, Files: f.Files, Matched: f.Matched, Unmatched: f.Unmatched, Links: links}
+	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
+		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
+		Unmatched: f.Unmatched, Links: links}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -55,11 +62,15 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 }
 
 // folderRequest adds or changes a local folder: its name, its path in the
-// container, and, on adding, what it holds, "movies" or "shows".
+// container or a share's address, and, on adding, what it holds, "movies"
+// or "shows"; a share's user and password. On a change, a password left
+// out keeps the one stored, and an empty one removes it.
 type folderRequest struct {
-	Name *string `json:"name"`
-	Path *string `json:"path"`
-	Kind string  `json:"kind"`
+	Name     *string `json:"name"`
+	Path     *string `json:"path"`
+	Kind     string  `json:"kind"`
+	User     *string `json:"user"`
+	Password *string `json:"password"`
 }
 
 // addFolder adds a local folder to the server's addons and scans it in
@@ -74,11 +85,13 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	folder := localfiles.NewFolder{Kind: body.Kind}
-	if body.Name != nil {
-		folder.Name = *body.Name
-	}
-	if body.Path != nil {
-		folder.Path = *body.Path
+	for _, field := range []struct {
+		from *string
+		to   *string
+	}{{body.Name, &folder.Name}, {body.Path, &folder.Path}, {body.User, &folder.User}, {body.Password, &folder.Password}} {
+		if field.from != nil {
+			*field.to = *field.from
+		}
 	}
 	ctx := context.WithoutCancel(r.Context())
 	addon, err := h.Folders.Add(ctx, folder)
@@ -88,8 +101,9 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	h.answerAddon(w, r, scope, http.StatusCreated, addon, err)
 }
 
-// updateFolder changes a local folder's name or path; a new path is
-// scanned at once.
+// updateFolder changes a local folder's name, path or address, or a
+// share's user or password; a new path or address, a new user or
+// password, is scanned at once.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -103,11 +117,12 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.Name == nil && body.Path == nil {
+	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id, localfiles.Changes{Name: body.Name, Path: body.Path})
+	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id,
+		localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password})
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 

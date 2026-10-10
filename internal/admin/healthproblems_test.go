@@ -56,7 +56,7 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 		o.Health = HealthSources{Addons: deps.client, Secrets: func(context.Context) (secrets.Report, error) {
 			return secrets.Report{Plaintext: 2, Unreadable: []secrets.Unreadable{{Target: "Team pager"}}}, nil
 		}}
-		o.Folders = localfiles.New(deps.pool, deps.addons, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), o.Accounts.Settings)
+		o.Folders = localfiles.New(deps.pool, deps.addons, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), o.Accounts.Settings, nil)
 		t.Cleanup(o.Folders.Close)
 		options, store = o, deps.addons
 	})
@@ -104,7 +104,7 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 	want := []healthProblemJSON{
 		{Key: "secrets:unreadable", Code: problemSecretsUnreadable, Tone: "error", To: "/system/health#secrets",
 			Secrets: []unreadableJSON{{Target: &target}}},
-		{Key: "folder:" + folder.ID, Code: problemFolder, Tone: "error", To: "/sources/shared/" + folder.ID, Name: "Shelf"},
+		{Key: "folder:" + folder.ID, Code: problemFolder, Tone: "error", To: "/sources/shared/" + folder.ID, Name: "Shelf", Failure: "missing"},
 		{Key: "addon:" + own.ID.String(), Code: problemAddon, Tone: "warning", To: "/system/health#addons", Name: "Own TV",
 			Owner: &ownerJSON{ID: sam.ID.String(), Name: "sam"}, Failure: "private_network"},
 		{Key: "secrets:plaintext", Code: problemSecretsPlaintext, Tone: "warning", To: "/system/health#secrets"},

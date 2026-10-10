@@ -2,10 +2,11 @@ package playback
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
@@ -103,19 +104,20 @@ func (l *loopback) serveFile(w http.ResponseWriter, r *http.Request, rest string
 	http.ServeFile(w, r, path)
 }
 
-// LocalFiles serves the files of local folders on the loopback interface,
-// as FileVersion serves recordings, played like an addon's files: open
-// finds the file a key names (see localfiles.Service.Open). It returns the
-// address the keys are appended to.
-func (s *Service) LocalFiles(open func(ctx context.Context, key string) (*os.File, error)) string {
+// LocalFiles serves the files of local folders and network shares on the
+// loopback interface, as FileVersion serves recordings, played like an
+// addon's files: open finds the file a key names, with its modification
+// time (see localfiles.Service.Open). It returns the address the keys are
+// appended to.
+func (s *Service) LocalFiles(open func(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)) string {
 	s.loopback.mu.Lock()
 	s.loopback.local = open
 	s.loopback.mu.Unlock()
 	return "http://" + s.loopback.listener.Addr().String() + "/local/" + s.loopback.fileKey + "/"
 }
 
-// serveLocal answers the requests for a file of a local folder, byte
-// ranges included: /local/{fileKey}/{key}.
+// serveLocal answers the requests for a file of a local folder or network
+// share, byte ranges included: /local/{fileKey}/{key}.
 func (l *loopback) serveLocal(w http.ResponseWriter, r *http.Request, rest string) {
 	key, name, _ := strings.Cut(rest, "/")
 	l.mu.Lock()
@@ -125,16 +127,11 @@ func (l *loopback) serveLocal(w http.ResponseWriter, r *http.Request, rest strin
 		http.NotFound(w, r)
 		return
 	}
-	file, err := open(r.Context(), name)
+	file, modified, err := open(r.Context(), name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	http.ServeContent(w, r, name, info.ModTime(), file)
+	http.ServeContent(w, r, name, modified, file)
 }
