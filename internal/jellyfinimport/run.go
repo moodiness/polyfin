@@ -85,7 +85,7 @@ func (r *run) run(ctx context.Context) {
 	// An import shown ended lets the next one start at once.
 	s.busy, s.stop = false, nil
 	s.mu.Unlock()
-	s.logger.Info("A Jellyfin import ended", "server", r.status.ServerName, "state", state, "problem", problem)
+	s.logger.Info("An import ended", "kind", r.status.Kind, "server", r.status.ServerName, "state", state, "problem", problem)
 }
 
 // history is what was read of a user: the items played, those with a
@@ -153,6 +153,9 @@ func readProblem(err error) string {
 // read reads, with c, the watch data of user, and the identifiers of the
 // series of its episodes.
 func (r *run) read(ctx context.Context, i int, c *client, user string) (history, error) {
+	if c.kind == Plex {
+		return c.plexWatched(ctx, user, r.series, func() { r.update(i, func(u *UserStatus) { u.Read++ }) })
+	}
 	var h history
 	for _, pass := range []struct {
 		types, filter string

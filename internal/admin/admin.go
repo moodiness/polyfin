@@ -153,6 +153,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/account/tracking/{service}", h.signedIn(h.setTrackingImport))
 	mux.Handle("POST /admin/api/account/tracking/{service}/import", h.signedIn(h.importTracking))
 	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
+	mux.Handle("GET /admin/api/account/server-import", h.signedIn(h.ownImport))
+	mux.Handle("POST /admin/api/account/server-import", h.signedIn(h.startOwnImport))
 	own := notificationRoutes{h: h, owner: ownTargets}
 	mux.Handle("GET /admin/api/account/notifications", h.signedIn(own.list))
 	mux.Handle("POST /admin/api/account/notifications/targets", h.signedIn(own.create))
