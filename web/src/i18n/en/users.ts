@@ -228,6 +228,8 @@ const users = {
         'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points, but only the played titles of the other accounts, from their playback history: their resume points stay on Plex. Plex has no favorites to import.',
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
+      ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
+        `${signedIn ? `Signed in as ${owner ?? 'this user'}` : `This key belongs to ${owner ?? 'a user'}`}, who is not an administrator of this server: Polyfin imports only this account. To list the server’s other users, connect with an administrator’s account or an API key.`,
       serverPassword: (server: string) => `Password on ${server}`,
       serverPasswordHelp: (user: string) =>
         `Polyfin signs in as ${user} to read their watch data, then signs out. Leave it empty if the account has none.`,

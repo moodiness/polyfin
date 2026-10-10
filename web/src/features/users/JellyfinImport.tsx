@@ -579,10 +579,12 @@ function ChooseUsers({
   const formId = useId()
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
   // A user's key or account reads its owner's watch data only: another user's is read signed in
-  // as them, with their password on the server.
+  // as them, with their password on the server. Connected as a user who is not an administrator
+  // there, Polyfin lists that user alone.
   const owner = connection.keyOwner
-  const ownerName =
-    owner === null ? null : (connection.users.find((user) => user.id === owner)?.name ?? null)
+  const ownerUser = owner === null ? undefined : connection.users.find((user) => user.id === owner)
+  const ownerName = ownerUser?.name ?? null
+  const ownerOnly = ownerUser !== undefined && !ownerUser.isAdministrator
   const signsIn = (user: JellyfinUser) => owner !== null && user.id !== owner
   const [choices, setChoices] = useState<Record<string, Choice>>(() =>
     Object.fromEntries(
@@ -705,7 +707,11 @@ function ChooseUsers({
         ) : (
           <>
             {owner !== null && (
-              <Notice>{text.ownerNotice(ownerName, 'account' in credentials)}</Notice>
+              <Notice>
+                {ownerOnly
+                  ? text.ownerOnlyNotice(ownerName, 'account' in credentials)
+                  : text.ownerNotice(ownerName, 'account' in credentials)}
+              </Notice>
             )}
             {/* Plex's owner's token reads the other accounts' played history, not their resume points. */}
             {kind === 'plex' && <Notice>{text.plexNotice}</Notice>}
