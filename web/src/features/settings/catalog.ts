@@ -695,6 +695,13 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['markdown', 'disclaimer'],
     codes: ['invalid_login_disclaimer'],
   },
+  {
+    section: 'web-player',
+    anchor: 'add-versions-to-open-page',
+    label: (t) => s(t).addVersionsToOpenPage,
+    help: (t) => s(t).addVersionsToOpenPageHelp,
+    keywords: ['versions', 'jellyfin-web'],
+  },
   // Diagnostics
   {
     section: 'diagnostics',

@@ -397,6 +397,9 @@ const settings = {
     loginDisclaimer: 'Sign-in message',
     loginDisclaimerHelp:
       'Shown under the sign-in form of the web player. Plain text, Markdown or HTML; the web player removes unsafe HTML.',
+    addVersionsToOpenPage: 'Add versions to an open title’s page',
+    addVersionsToOpenPageHelp:
+      'Adds the versions the addons find to the version menu of a movie’s or an episode’s page while it is open, keeping the version picked. When off, a page opened before any version was found still lists the first ones as they come, and its play buttons still wait for a version; the others show when the page is opened again.',
     codeSize: (used: number, max: number) =>
       `${used} KB of ${max >= 1024 ? `${max / 1024} MB` : `${max} KB`}`,
     codeKeys: 'Tab inserts spaces; press Escape, then Tab, to leave the field.',

@@ -877,6 +877,13 @@ function WebPlayer({ form, update, error, limits }: SectionFormApi) {
           error={error('login-disclaimer')}
         />
       </SettingRow>
+      <SwitchRow
+        anchor="add-versions-to-open-page"
+        label={s.addVersionsToOpenPage}
+        help={s.addVersionsToOpenPageHelp}
+        checked={form.addVersionsToOpenPage}
+        onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
+      />
     </SettingsGroup>
   )
 }
