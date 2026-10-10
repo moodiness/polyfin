@@ -422,7 +422,7 @@ func (a *addonSlots) acquire(ctx context.Context, addon accounts.ID) (release fu
 // Concurrent requests share one request to the addon, which waits for a
 // place among those under way to it.
 func remember[V any](ctx context.Context, s *Service, c musicCache[V], key musicKey, fetch func(context.Context) (V, error)) (V, error) {
-	flightKey := fmt.Sprintf("music %v", key)
+	flightKey := musicFlight(key)
 	ask := func(ctx context.Context) (V, error) {
 		release, err := s.musicCache.fetches.acquire(ctx, key.addon)
 		if err != nil {
@@ -454,8 +454,11 @@ func remember[V any](ctx context.Context, s *Service, c musicCache[V], key music
 		}
 		return kept.value, nil
 	}
-	return shared(ctx, &s.flight, flightKey, ask)
+	return shared(ctx, s, flightKey, ask)
 }
+
+// musicFlight is the key in s.flight of the requests for key to its addon.
+func musicFlight(key musicKey) string { return fmt.Sprintf("music %v", key) }
 
 func (s *Service) musicCatalogPage(ctx context.Context, entry installed, catalog eclipse.Catalog, skip int) (musicPage, error) {
 	return remember(ctx, s, s.musicCache.pages, entry.musicKey("catalog", catalog.ID, skip), func(ctx context.Context) (musicPage, error) {
@@ -1468,7 +1471,7 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 		s.versions.Put(version.ID, version)
 		return version, nil
 	}
-	return shared(ctx, &s.flight, "track "+r.ID.String(), func(ctx context.Context) (Version, error) {
+	return shared(ctx, s, "track "+r.ID.String(), func(ctx context.Context) (Version, error) {
 		stream, err := s.music.Stream(ctx, entry.eclipseAddon(), e.ID)
 		if errors.Is(err, stremio.ErrNotFound) {
 			return Version{}, ErrNotFound

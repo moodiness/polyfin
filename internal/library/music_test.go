@@ -2,16 +2,22 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // musicService is a service with only what music caching needs, on a
@@ -61,18 +67,11 @@ func TestStaleMusicPagesAreServedWhileTheAddonIsAskedAgain(t *testing.T) {
 		}
 	}
 	answers <- "second"
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if got, _ := remember(t.Context(), s, cache, key, fetch); got == "second" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the page was not read again")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if asked.Load() != 2 {
-		t.Errorf("%d requests, want 2", asked.Load())
+	// The refresh ends with its flight, after it keeps its answer: joining
+	// the flight waits for its end.
+	s.flight.Do(musicFlight(key), func() (any, error) { return nil, nil })
+	if got, _ := remember(t.Context(), s, cache, key, fetch); got != "second" || asked.Load() != 2 {
+		t.Fatalf("read after the refresh: %q, %d requests, want 2", got, asked.Load())
 	}
 	// Once kept staleMusic past its age, a page is forgotten: a read waits
 	// for the addon.
@@ -107,14 +106,32 @@ func TestAStalePageStaysWhenTheAddonFails(t *testing.T) {
 func TestRequestsToOneAddonAreBounded(t *testing.T) {
 	s, _ := musicService(t)
 	cache := newMusicCache(100, 1<<20, func(int) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
+	busy, other := accounts.ID{1}, accounts.ID{2}
 	var mu sync.Mutex
 	running, most := map[accounts.ID]int{}, map[accounts.ID]int{}
+	// Requests to an addon are held until addonFetches of them run at
+	// once, whatever the machine's speed, or until the test gives up; then
+	// a little longer, so that a request past the bound would show.
+	full := map[accounts.ID]chan struct{}{busy: make(chan struct{}), other: make(chan struct{})}
+	held, giveUp := context.WithTimeout(t.Context(), 10*time.Second)
+	defer giveUp()
 	fetch := func(addon accounts.ID) func(context.Context) (int, error) {
 		return func(context.Context) (int, error) {
 			mu.Lock()
 			running[addon]++
 			most[addon] = max(most[addon], running[addon])
+			if running[addon] == addonFetches {
+				select {
+				case <-full[addon]:
+				default:
+					close(full[addon])
+				}
+			}
 			mu.Unlock()
+			select {
+			case <-full[addon]:
+			case <-held.Done():
+			}
 			time.Sleep(20 * time.Millisecond)
 			mu.Lock()
 			running[addon]--
@@ -124,7 +141,6 @@ func TestRequestsToOneAddonAreBounded(t *testing.T) {
 	}
 	// Two listings of 3 × addonFetches pages each from one addon, and one
 	// from another, at once.
-	busy, other := accounts.ID{1}, accounts.ID{2}
 	var wg sync.WaitGroup
 	for i := range 3 * addonFetches {
 		for _, key := range []musicKey{{addon: busy, resource: "album", id: string(rune('a' + i))},
@@ -204,5 +220,55 @@ func TestMusicAnswersAreBoundedInBytes(t *testing.T) {
 	}
 	if _, ok := playlists.answers.Get(musicKey{addon: accounts.ID{1}, resource: "playlist", id: string(rune('a' + 39))}); !ok {
 		t.Error("the last playlist is not kept")
+	}
+}
+
+func TestPlaysOfOneTrackShareItsResolution(t *testing.T) {
+	s, _ := musicService(t)
+	s.music = eclipse.NewClient(stremio.NewClient("test"))
+	s.versions = cache.New[accounts.ID, Version](10, time.Hour)
+	// The addon holds its answer until the four plays wait on the same
+	// resolution.
+	var asked atomic.Int32
+	hold := make(chan struct{})
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		<-hold
+		_ = json.NewEncoder(w).Encode(map[string]any{"url": "http://tracks.example/t1.mp3", "codec": "mp3", "container": "mp3"})
+	}))
+	t.Cleanup(addon.Close)
+	release := sync.OnceFunc(func() { close(hold) })
+	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		release()
+		wg.Wait()
+	})
+	entry := installed{addon: addons.Addon{ID: accounts.ID{1}, Kind: addons.KindEclipse, ManifestURL: addon.URL + "/manifest.json",
+		Manifest: stremio.Manifest{Name: "Rig"}, Music: &eclipse.Manifest{}}}
+	track := record{ID: accounts.ID{2}, Music: &musicEntry{Type: "track", ID: "t1", Title: "Song", Duration: 10}}
+	waiting := make(chan string, 4)
+	s.joined = func(key string) { waiting <- key }
+	for range 4 {
+		wg.Go(func() {
+			if version, err := s.resolveTrack(t.Context(), entry, track, false); err != nil || version.URL != "http://tracks.example/t1.mp3" {
+				t.Errorf("a play: %+v %v", version, err)
+			}
+		})
+	}
+	giveUp := time.After(10 * time.Second)
+	for range 4 {
+		select {
+		case key := <-waiting:
+			if key != "track "+track.ID.String() {
+				t.Errorf("a play waits on %q", key)
+			}
+		case <-giveUp:
+			t.Fatal("the four plays never waited on a resolution")
+		}
+	}
+	release()
+	wg.Wait()
+	if n := asked.Load(); n != 1 {
+		t.Errorf("4 plays at once asked the addon %d times", n)
 	}
 }

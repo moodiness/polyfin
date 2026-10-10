@@ -248,7 +248,7 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			if _, fresh, _ := listOf(s, lists, key); !fresh || !s.followingUp(followed, f) {
 				return
 			}
-			answer, err := shared(detached, &s.flight, flightKey, fetch)
+			answer, err := shared(detached, s, flightKey, fetch)
 			if err != nil {
 				s.logger.Debug("An addon asked again for a list failed", "addon", addon, "list", kind.name, "error", err)
 				return

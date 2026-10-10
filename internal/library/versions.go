@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -473,7 +471,7 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // notices alone, nothing to play, is not stored over a list that has
 // streams to play: it is errOnlyNotices, an addon failing.
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
-	return shared(ctx, &s.flight, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
+	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
@@ -520,13 +518,16 @@ func (s *Service) KnownSubtitles(ctx context.Context, user accounts.User, id acc
 	return s.subtitlesOf(ctx, user, id, knownOnly)
 }
 
-// shared runs fetch once for every caller asking for key at the same time.
-// fetch runs detached from the callers, bounded by the timeouts of what it
-// asks (the client's, for addons): a caller that stops waiting, when its
-// ctx ends, does not cut it short for the others.
-func shared[T any](ctx context.Context, flight *singleflight.Group, key string, fetch func(context.Context) (T, error)) (T, error) {
+// shared runs fetch once for every caller asking for key at the same time,
+// in s.flight. fetch runs detached from the callers, bounded by the
+// timeouts of what it asks (the client's, for addons): a caller that stops
+// waiting, when its ctx ends, does not cut it short for the others.
+func shared[T any](ctx context.Context, s *Service, key string, fetch func(context.Context) (T, error)) (T, error) {
 	detached := context.WithoutCancel(ctx)
-	answer := flight.DoChan(key, func() (any, error) { return fetch(detached) })
+	answer := s.flight.DoChan(key, func() (any, error) { return fetch(detached) })
+	if s.joined != nil {
+		s.joined(key)
+	}
 	select {
 	case result := <-answer:
 		if result.Err != nil {
@@ -687,7 +688,7 @@ func (s *Service) subtitleList(ctx context.Context, entry installed, t target) (
 	if l, fresh, _ := listOf(s, s.subtitleLists, key); fresh {
 		return l.items, nil
 	}
-	return shared(ctx, &s.flight, "subtitles "+key.addon.String()+" "+t.metaType+" "+t.id, func(ctx context.Context) ([]stremio.Subtitle, error) {
+	return shared(ctx, s, "subtitles "+key.addon.String()+" "+t.metaType+" "+t.id, func(ctx context.Context) ([]stremio.Subtitle, error) {
 		subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
 		if err != nil {
 			return nil, err
