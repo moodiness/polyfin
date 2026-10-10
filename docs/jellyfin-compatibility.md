@@ -51,13 +51,13 @@ Search hints answer from the same search as the main item search, in this order:
 2. the episodes Polyfin knows by name from series already opened (addons search titles, not episodes);
 3. the people credited in titles the user reaches.
 
-All results stay within the user's libraries, parental control and blocked genres.
+All results stay within the user's libraries, parental control and blocked genres. Channels and programmes, which the item search also finds (see [Searching](live-tv.md#searching)), are left out of search hints.
 
 **Compared with Jellyfin:**
 
 - Jellyfin ranks every kind together; Polyfin keeps the order above.
 
-**For app developers:** `/Search/Hints` answers from the same search as `/Items`.
+**For app developers:** `/Search/Hints` answers from the same search as `/Items`, without its channels and programmes.
 
 ### Movie recommendations
 

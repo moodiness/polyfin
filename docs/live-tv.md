@@ -43,6 +43,17 @@ A live stream has no end: when its source closes the connection, or sends nothin
 
 How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#stream-health)): a stream found dead is left out of its channel for a while, so the next start goes to a stream that works.
 
+### Searching
+
+An app's search finds the user's channels by name, those of TV catalogs and IPTV sources alike, as their apps list them. It also finds the programmes of their guides that have not ended, airing now or in the guide's days ahead. Case and accents do not count: "tele" finds "Télé Orbe".
+
+- jellyfin-web lists the channels found under "Channels". Searched from the Live TV page, it also lists the programmes under "Movies", "Episodes", "Sports", "Kids", "News" and "Programs", by their guide categories.
+- Polyfin searches the channels it lists, not the addons' own searches: a channel no TV catalog lists, or one turned off in an IPTV line-up, is not found.
+
+**For app developers:**
+- `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.
+- Search hints leave channels and programmes out.
+
 ## Programme guide
 
 Without a guide, the programme guide is empty and the channels play all the same. A guide can come from the addon itself (Native EPG) or from XMLTV files you attach to the catalog.
@@ -128,7 +139,7 @@ A choice made by hand survives downloads, refreshes and **Map channels without a
 
 #### Where XMLTV programmes appear
 
-XMLTV programmes appear wherever Native EPG programmes do, with the same filters: the programme listings, recommended programmes, a programme's details, and the programme each channel airs now. A guide category such as "Movie", "News" or "Sports" marks programmes as a Native EPG genre does.
+XMLTV programmes appear wherever Native EPG programmes do, with the same filters: the programme listings, recommended programmes, searches, a programme's details, and the programme each channel airs now. A guide category such as "Movie", "News" or "Sports" marks programmes as a Native EPG genre does.
 
 XMLTV programmes are read from the guide when asked: a guide page reads only its channels' programmes, and a listing by start time (such as the upcoming rows of the Live TV page) reads no further than it shows. They are not stored apart from the guide; a programme opened by its identifier is found again in the guide. A programme's image, its guide's `icon`, is relayed for the programmes listed in the last day, as images are served without signing in. Native EPG programmes listed are kept, and deleted two days after they end, unless a recording or a timer names them.
 
