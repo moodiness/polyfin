@@ -114,6 +114,19 @@ func (s *smtpSink) wait(n int) []sunkMail {
 	}
 }
 
+// waitSignIns waits until n sign-ins were tried.
+func (s *smtpSink) waitSignIns(n int) {
+	s.t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		if _, _, signIns := s.received(); signIns >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.t.Fatalf("the SMTP server saw fewer than %d sign-ins", n)
+		}
+	}
+}
+
 func (s *smtpSink) serve(conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 	_, encrypted := conn.(*tls.Conn)
@@ -336,7 +349,9 @@ func TestEmailRefusedSignInAndBusyServer(t *testing.T) {
 		t.Errorf("a refused password: %+v, %v", result, err)
 	}
 	h.RecordingEnded(t.Context(), recordings.Ended{Recording: accounts.ID{1}, User: &h.member.ID, Name: "Show"})
-	time.Sleep(100 * time.Millisecond)
+	// The message is prepared in the background: its sign-in tells it was
+	// sent.
+	sink.waitSignIns(2)
 	h.idle(t)
 	if mails, tries, signIns := sink.received(); len(mails) != 0 || tries != 0 || signIns != 2 {
 		t.Errorf("with a refused password: %d messages, %d tries, %d sign-ins, want 2", len(mails), tries, signIns)
