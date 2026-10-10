@@ -607,6 +607,9 @@ type Settings struct {
 	// LegacyAuthorization accepts the X-Emby-* headers, the api_key query
 	// parameter and the Emby scheme, which Jellyfin 12.2 refuses by default.
 	LegacyAuthorization bool
+	// UpdateCheck asks GitHub once a day for Polyfin's latest release, to
+	// tell administrators about a new version (see package updates).
+	UpdateCheck bool
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.
 	Language string
@@ -903,6 +906,7 @@ func validWebText(text string, max int) bool {
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
+	"update_check, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
@@ -931,6 +935,7 @@ var updateSettingsQuery = func() string {
 func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
+		&settings.UpdateCheck,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
 		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,

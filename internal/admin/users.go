@@ -269,6 +269,7 @@ type settingsJSON struct {
 	Transcoding         *bool  `json:"transcoding"`
 	CatalogLimit        *int   `json:"catalogLimit"`
 	ChannelLimit        *int   `json:"channelLimit"`
+	UpdateCheck         *bool  `json:"updateCheck"`
 	// The content settings keep their current values too when a PUT
 	// leaves them out.
 	SkipButtons *bool `json:"skipButtons"`
@@ -455,6 +456,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		Transcoding:         &settings.Transcoding,
 		CatalogLimit:        &settings.CatalogLimit,
 		ChannelLimit:        &settings.ChannelLimit,
+		UpdateCheck:         &settings.UpdateCheck,
 
 		SkipButtons:           &settings.SkipButtons,
 		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
@@ -962,6 +964,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		Transcoding:         valueOr(body.Transcoding, current.Transcoding),
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
+		UpdateCheck:         valueOr(body.UpdateCheck, current.UpdateCheck),
 
 		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
 		PublicMetaDBKey:       publicMetaDBKey,

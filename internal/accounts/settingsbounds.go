@@ -43,6 +43,7 @@ func DefaultSettings() Settings {
 		Transcoding:         true,
 		CatalogLimit:        DefaultCatalogLimit,
 		ChannelLimit:        DefaultChannelLimit,
+		UpdateCheck:         true,
 
 		SkipButtons:           true,
 		SegmentOrder:          slices.Clone(SegmentSources),
@@ -170,6 +171,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"transcoding":         is(d.Transcoding),
 		"catalogLimit":        between(MinCatalogLimit, MaxCatalogLimit, d.CatalogLimit),
 		"channelLimit":        between(MinChannelLimit, MaxChannelLimit, d.ChannelLimit),
+		"updateCheck":         is(d.UpdateCheck),
 
 		"skipButtons":           is(d.SkipButtons),
 		"publicMetaDbKey":       text(MaxSegmentKeyBytes, d.PublicMetaDBKey),
