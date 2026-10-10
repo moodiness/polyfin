@@ -406,6 +406,9 @@ const settings: typeof en = {
     loginDisclaimer: 'Message de connexion',
     loginDisclaimerHelp:
       'Affiché sous le formulaire de connexion du lecteur web. Texte, Markdown ou HTML ; le lecteur web retire le HTML dangereux.',
+    addVersionsToOpenPage: 'Ajouter les versions à la page ouverte d’un titre',
+    addVersionsToOpenPageHelp:
+      'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version ; les autres apparaissent à la prochaine ouverture de la page.',
     codeSize: (used: number, max: number) =>
       `${used} Ko sur ${max >= 1024 ? `${max / 1024} Mo` : `${max} Ko`}`,
     codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',

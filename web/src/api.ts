@@ -286,6 +286,8 @@ export type Settings = {
   customJs: string
   /** Text, Markdown or HTML jellyfin-web shows under its sign-in form (Jellyfin's branding). */
   loginDisclaimer: string
+  /** Whether the web player adds the versions that come to a title's page while it is open. */
+  addVersionsToOpenPage: boolean
   /** Trakt app users connect through; both its client ID and secret are needed. */
   traktClientId: string
   /** Whether the Trakt client secret is saved. */
