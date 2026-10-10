@@ -230,6 +230,10 @@ export type Settings = {
   toneMappingAlgorithm: ToneMappingAlgorithm
   toneMappingPeak: number
   toneMappingDesat: number
+  /** Tone maps HDR on a GPU that can (NVIDIA, Intel through VAAPI); off, the processor does. */
+  gpuToneMapping: boolean
+  /** Most height of HDR the processor tone maps: 720 to 2160, 0 for Automatic (measured at startup). */
+  processorToneMappingHeight: number
   /** Deinterlacer, and whether it makes a frame of each field. */
   deinterlaceMethod: DeinterlaceMethod
   deinterlaceDoubleRate: boolean
@@ -370,6 +374,8 @@ export type ConversionHardware = {
   encoders: string[]
   /** Whether FFmpeg tone maps HDR on the processor. */
   toneMapping: boolean
+  /** Height Automatic caps HDR tone mapped on the processor at, as measured at startup (720 until then); 0 when it cannot. */
+  toneMappingHeight: number
   /** Whether FFmpeg has the bwdif deinterlacer. */
   bwdif: boolean
 }

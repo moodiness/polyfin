@@ -100,7 +100,7 @@ const settings: typeof en = {
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     maxConversionHeight: 'Qualité max des vidéos converties',
     maxConversionHeightHelp:
-      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et à 720p quand il convertit du HDR en SDR.',
+      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et quand il convertit du HDR en SDR, à « Qualité max du HDR converti par le processeur » (Conversion › HDR).',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
     conversion: {
@@ -135,7 +135,8 @@ const settings: typeof en = {
       gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD ou Intel (VAAPI)' },
       encoders: 'Encodeurs de la carte',
       gpuToneMapping: 'HDR vers SDR sur la carte',
-      processorToneMappingHint: 'Le HDR est alors converti par le processeur, en 720p au plus.',
+      processorToneMappingHint:
+        'Le HDR est alors converti par le processeur, jusqu’à « Qualité max du HDR converti par le processeur ».',
       qualityFactor: 'Accepte un niveau de qualité',
       processor: 'Encodeurs du processeur',
       processorToneMapping: 'HDR vers SDR sur le processeur',
@@ -188,16 +189,28 @@ const settings: typeof en = {
         'Ni la carte graphique ni FFmpeg ne savent le faire sur ce serveur : les vidéos HDR ne sont converties que si cette option est désactivée.',
       toneMappingAlgorithm: 'Méthode de conversion HDR',
       toneMappingAlgorithmHelp:
-        'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur la carte graphique et Hable sur le processeur.',
+        'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur les cartes NVIDIA et Hable sur le processeur. Les cartes Intel ont leur propre méthode et ignorent ce choix.',
       algorithms: {
         auto: 'Automatique',
-        bt2390: 'BT.2390 (carte graphique seulement)',
+        bt2390: 'BT.2390 (cartes NVIDIA seulement)',
         hable: 'Hable',
         reinhard: 'Reinhard',
         mobius: 'Möbius',
         clip: 'Écrêtage',
         linear: 'Linéaire',
       },
+      gpuToneMappingSetting: 'Convertir le HDR sur la carte graphique',
+      gpuToneMappingSettingHelp:
+        'Les cartes NVIDIA, et les cartes Intel par VAAPI, convertissent elles-mêmes le HDR en SDR, jusqu’en 4K. Désactivez cette option si leurs couleurs semblent fausses : le processeur s’en charge alors, en qualité moindre. Les cartes Intel ne prennent que les vidéos HDR10 qui portent les informations de leur écran de mastering ; le processeur convertit les autres, et le Dolby Vision sans couche HDR10 n’est converti que sur les cartes NVIDIA. Les cartes AMD ne le font jamais : leur pilote Linux a échoué ou s’est bloqué à chaque façon essayée par Polyfin.',
+      gpuToneMappingUnavailable:
+        'La carte graphique de ce serveur ne sait pas le faire : le processeur convertit le HDR en SDR.',
+      processorToneMappingHeight: 'Qualité max du HDR converti par le processeur',
+      processorToneMappingHeightHelp:
+        'Convertir le HDR en SDR est un gros travail pour le processeur : environ quatre fois l’encodage lui-même en 1080p. Automatique mesure ce serveur au démarrage : 1080p s’il convertit au moins une fois et demie plus vite que la lecture, sinon 720p, utilisé aussi tant que la mesure n’est pas finie. Au-delà de 1080p, le choix ne compte que si une carte graphique encode la vidéo : seul, le processeur s’arrête à 1080p.',
+      toneMappingHeightAuto: 'Automatique (mesuré au démarrage)',
+      height4k: '4K',
+      measuredHeight: (height: number) => `Mesuré : ${height}p`,
+      upToHeight: (height: number) => `jusqu’en ${height}p`,
       toneMappingPeak: 'Luminosité max en nits (0 = celle de la vidéo)',
       toneMappingDesat: 'Désaturation des zones claires (0 = aucune)',
       toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>

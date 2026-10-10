@@ -92,6 +92,8 @@ const common: typeof en = {
     invalid_tone_mapping_peak:
       'La luminosité max doit être 0, ou un nombre entier de nits de 100 à 10 000.',
     invalid_tone_mapping_desat: 'La désaturation des zones claires doit être un nombre de 0 à 10.',
+    invalid_processor_tone_mapping_height:
+      'Choisissez la qualité max du HDR converti par le processeur dans la liste.',
     invalid_deinterlace_method: 'Choisissez une méthode de désentrelacement dans la liste.',
     invalid_downmix_algorithm: 'Choisissez un mixage stéréo dans la liste.',
     invalid_downmix_boost: 'Le volume du mixage stéréo doit être un nombre de 0,5 à 3.',

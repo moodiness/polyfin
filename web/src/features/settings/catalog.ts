@@ -214,6 +214,21 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'gpu-tone-mapping',
+    label: (t) => c(t).gpuToneMappingSetting,
+    help: (t) => c(t).gpuToneMappingSettingHelp,
+    keywords: ['hdr', 'sdr', 'gpu', 'nvidia', 'intel', 'vaapi'],
+  },
+  {
+    section: 'conversion',
+    anchor: 'processor-tone-mapping-height',
+    label: (t) => c(t).processorToneMappingHeight,
+    help: (t) => c(t).processorToneMappingHeightHelp,
+    keywords: ['hdr', 'sdr', '720p', '1080p'],
+    codes: ['invalid_processor_tone_mapping_height'],
+  },
+  {
+    section: 'conversion',
     anchor: 'tone-mapping-peak',
     label: (t) => `${c(t).toneMappingPeak}, ${c(t).toneMappingDesat}`,
     help: (t, r) => c(t).toneMappingPeakHelp(r('toneMappingPeak'), r('toneMappingDesat')),

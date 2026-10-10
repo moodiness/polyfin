@@ -17,7 +17,7 @@ import type { SectionFormApi } from './SectionForm'
  * The Conversion section: whether and how much the server converts, the graphics card and what
  * it was found to do, then video, HDR, interlaced video, audio and performance. Options the
  * hardware cannot do are disabled; the tone mapping peak and desaturation, which only the
- * processor uses, show only when no graphics card tone maps.
+ * processor uses, show unless an NVIDIA card tone maps every HDR video.
  */
 export default function ConversionSection({
   form,
@@ -35,8 +35,16 @@ export default function ConversionSection({
   const encodesHevc =
     hardware.encoders.includes('libx265') ||
     (gpu?.encoders.some((encoder) => encoder.startsWith('hevc_')) ?? false)
-  const gpuToneMaps = gpu?.toneMapping ?? false
+  const gpuCanToneMap = gpu?.toneMapping ?? false
+  const gpuToneMaps = gpuCanToneMap && form.gpuToneMapping
+  /** NVIDIA cards tone map with libplacebo, which takes BT.2390 and leaves nothing to the processor. */
+  const placeboToneMaps = gpuToneMaps && gpu?.method === 'cuda'
   const toneMapsAnywhere = hardware.toneMapping || gpuToneMaps
+  /** The height the processor tone maps HDR up to: the setting, else what was measured. */
+  const toneMappedHeight = Math.min(
+    form.processorToneMappingHeight || hardware.toneMappingHeight || 720,
+    gpu === null ? 1080 : 2160,
+  )
   const decodedOnGpu = (codec: string) =>
     form.hardwareDecodingCodecs.some((decoded) => decoded === codec)
   /** The values the server accepts for a setting. */
@@ -158,6 +166,9 @@ export default function ConversionSection({
               <Codes names={hardware.encoders} />
             </Detail>
             <Detail term={c.processorToneMapping}>
+              {hardware.toneMapping && (
+                <span className="text-ink-2">{c.upToHeight(toneMappedHeight)}</span>
+              )}
               <YesNo value={hardware.toneMapping} />
             </Detail>
           </dl>
@@ -285,13 +296,52 @@ export default function ConversionSection({
               value: algorithm,
               label: c.algorithms[algorithm],
               disabled:
-                algorithm === 'bt2390' && !gpuToneMaps && form.toneMappingAlgorithm !== 'bt2390',
+                algorithm === 'bt2390' &&
+                !placeboToneMaps &&
+                form.toneMappingAlgorithm !== 'bt2390',
             }))}
             onValue={(toneMappingAlgorithm) => update({ toneMappingAlgorithm })}
             className="max-w-xs"
           />
         </FieldRow>
-        {!gpuToneMaps && (
+        <SwitchRow
+          anchor="gpu-tone-mapping"
+          label={c.gpuToneMappingSetting}
+          help={gpuCanToneMap ? c.gpuToneMappingSettingHelp : c.gpuToneMappingUnavailable}
+          checked={form.gpuToneMapping}
+          disabled={!form.toneMapping || !gpuCanToneMap}
+          onChange={(gpuToneMapping) => update({ gpuToneMapping })}
+        />
+        <FieldRow
+          anchor="processor-tone-mapping-height"
+          label={c.processorToneMappingHeight}
+          help={hardware.toneMapping ? c.processorToneMappingHeightHelp : c.processorCannotToneMap}
+          error={error('processor-tone-mapping-height')}
+        >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Select
+              value={form.processorToneMappingHeight}
+              disabled={!form.toneMapping || !hardware.toneMapping}
+              options={choices<number>('processorToneMappingHeight').map((height) => ({
+                value: height,
+                label:
+                  height === 0
+                    ? c.toneMappingHeightAuto
+                    : height === 2160
+                      ? c.height4k
+                      : s.conversionHeight(height),
+              }))}
+              onValue={(processorToneMappingHeight) => update({ processorToneMappingHeight })}
+              className="max-w-xs"
+            />
+            {form.processorToneMappingHeight === 0 && hardware.toneMappingHeight > 0 && (
+              <span className="text-small text-ink-3">
+                {c.measuredHeight(hardware.toneMappingHeight)}
+              </span>
+            )}
+          </div>
+        </FieldRow>
+        {!placeboToneMaps && (
           <SettingRow anchor="tone-mapping-peak">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
