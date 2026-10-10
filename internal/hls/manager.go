@@ -131,6 +131,9 @@ type VideoEncoding struct {
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
+	// ToneMapOnCPU tone maps HDR on the processor even on a GPU that tone
+	// maps.
+	ToneMapOnCPU bool
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
 	// video, nil for none.
 	Burn *int
@@ -165,17 +168,21 @@ type VideoEncoding struct {
 // filters is the filter chain of the video: 8-bit, at the size asked, in
 // SDR, as the encoder takes it, on the GPU when its frames stay there.
 func (v *VideoEncoding) filters() string {
-	if v.pipeline() == onGPU {
+	switch v.pipeline() {
+	case onGPU:
 		return v.gpuFilters()
+	case throughVAAPI:
+		return v.vaapiToneMapping()
 	}
 	return v.convert() + "," + v.Hardware.output()
 }
 
 // convert is the filter chain bringing the video to the size asked, in
-// SDR, before the pixel format the encoder takes. On a GPU that tone maps,
-// libplacebo scales and tone maps in one pass, applying the Dolby Vision
-// metadata FFmpeg's decoder exports, and with the BT.2390 curve, which keeps
-// midtones brighter than the processor's Hable.
+// SDR, before the pixel format the encoder takes, in memory. On NVIDIA's
+// GPU, libplacebo scales and tone maps in one pass, applying the Dolby
+// Vision metadata FFmpeg's decoder exports, and with the BT.2390 curve,
+// which keeps midtones brighter than the processor's Hable. Intel's tone
+// mapping keeps the frames on the GPU (see vaapiToneMapping).
 func (v *VideoEncoding) convert() string {
 	var filters []string
 	if v.Deinterlace {
@@ -236,14 +243,18 @@ func (v *VideoEncoding) cpuCurve() string {
 // keeping its shape, and laid at the bottom: a video cropped since keeps
 // the subtitles near its bottom edge. It is laid after the conversion to
 // SDR, which would dim its colors, and in memory, before a GPU encoder
-// takes the frames.
+// takes the frames: Intel's tone mapped frames come down to memory for it.
 //
 // FFmpeg repeats the canvas for every packet read from the source, which
 // is over a thousand a second with TrueHD audio: the canvas is first
 // brought to the video's frame rate, or scaling the repeats makes the
 // conversion several times slower.
 func (v *VideoEncoding) burnGraph(video, burn int) string {
-	return "[0:" + strconv.Itoa(video) + "]" + v.convert() + ",format=yuv420p[converted];" +
+	converted := v.convert() + ",format=yuv420p"
+	if v.pipeline() == throughVAAPI {
+		converted = v.vaapiToneMapping() + ",hwdownload,format=nv12"
+	}
+	return "[0:" + strconv.Itoa(video) + "]" + converted + "[converted];" +
 		"[0:" + strconv.Itoa(burn) + "]fps=" + strconv.FormatFloat(v.FrameRate, 'f', -1, 64) + ",scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
 		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + "[video]"
 }
@@ -363,10 +374,20 @@ type Manager struct {
 	hardware  atomic.Pointer[Hardware]
 	detecting sync.Mutex
 	detected  map[string]*Hardware
-	// measuring counts the timings of GPU chains under way (see
-	// measureLater); run, when set, runs FFmpeg in their place, for tests.
+	// measuring counts the timings under way (see measureLater and
+	// timeToneMappingLater), and timingGPU those of the GPU's chains; run,
+	// when set, runs FFmpeg in their place, for tests.
 	measuring sync.WaitGroup
+	timingGPU sync.WaitGroup
 	run       func(ctx context.Context, args []string) (time.Duration, error)
+	// toneMappingTimed times HDR tone mapped on the processor once, and
+	// toneMappedHeight keeps the height it chose, 0 until then (see
+	// ToneMappedHeight).
+	toneMappingTimed sync.Once
+	toneMappedHeight atomic.Int32
+	// vendor, when set, tells the PCI vendor of a render node in place of
+	// Linux, for tests.
+	vendor func(node string) string
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
