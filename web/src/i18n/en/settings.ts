@@ -96,7 +96,7 @@ const settings = {
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,
     maxConversionHeight: 'Maximum quality of converted video',
     maxConversionHeightHelp:
-      'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p, and at 720p when it converts HDR to SDR.',
+      'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p, and when it converts HDR to SDR, at "Maximum quality of HDR converted by the processor" (Conversion › HDR).',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
     conversion: {
@@ -131,7 +131,8 @@ const settings = {
       gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD or Intel (VAAPI)' },
       encoders: 'Encoders on the card',
       gpuToneMapping: 'HDR to SDR on the card',
-      processorToneMappingHint: 'HDR is then converted by the processor, at 720p at most.',
+      processorToneMappingHint:
+        'HDR is then converted by the processor, up to "Maximum quality of HDR converted by the processor".',
       qualityFactor: 'Takes a quality number',
       processor: 'Encoders on the processor',
       processorToneMapping: 'HDR to SDR on the processor',
@@ -183,16 +184,28 @@ const settings = {
         'Neither the graphics card nor FFmpeg can do it on this server: HDR videos are only converted when this is off.',
       toneMappingAlgorithm: 'Tone mapping method',
       toneMappingAlgorithmHelp:
-        'How bright parts are brought down to SDR. Automatic uses BT.2390 on the graphics card and Hable on the processor.',
+        'How bright parts are brought down to SDR. Automatic uses BT.2390 on NVIDIA cards and Hable on the processor. Intel cards use their own method and ignore this choice.',
       algorithms: {
         auto: 'Automatic',
-        bt2390: 'BT.2390 (graphics card only)',
+        bt2390: 'BT.2390 (NVIDIA cards only)',
         hable: 'Hable',
         reinhard: 'Reinhard',
         mobius: 'Möbius',
         clip: 'Clip',
         linear: 'Linear',
       },
+      gpuToneMappingSetting: 'Tone map HDR on the graphics card',
+      gpuToneMappingSettingHelp:
+        'NVIDIA cards, and Intel cards through VAAPI, convert HDR to SDR themselves, up to 4K. Turn this off if their colors look wrong: the processor then does it, at a lower quality. Intel cards only take HDR10 videos that carry their mastering display information; the processor converts the others, and Dolby Vision without an HDR10 layer is only converted on NVIDIA cards. AMD cards never do it: their Linux driver failed or froze each way Polyfin tried.',
+      gpuToneMappingUnavailable:
+        'The graphics card on this server cannot do it: the processor converts HDR to SDR.',
+      processorToneMappingHeight: 'Maximum quality of HDR converted by the processor',
+      processorToneMappingHeightHelp:
+        'Converting HDR to SDR is heavy work for the processor: about four times the encoding itself at 1080p. Automatic times this server at startup: 1080p when it converts at least one and a half times as fast as the video plays, else 720p, which is also used until the timing ends. Above 1080p only counts when a graphics card encodes the video: on its own, the processor stops at 1080p.',
+      toneMappingHeightAuto: 'Automatic (measured at startup)',
+      height4k: '4K',
+      measuredHeight: (height: number) => `Measured: ${height}p`,
+      upToHeight: (height: number) => `up to ${height}p`,
       toneMappingPeak: 'Peak brightness in nits (0 = from the video)',
       toneMappingDesat: 'Highlight desaturation (0 = off)',
       toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>

@@ -86,6 +86,8 @@ const common = {
     invalid_tone_mapping_peak:
       'Peak brightness must be 0, or a whole number of nits from 100 to 10,000.',
     invalid_tone_mapping_desat: 'Highlight desaturation must be a number from 0 to 10.',
+    invalid_processor_tone_mapping_height:
+      'Choose the maximum quality of HDR converted by the processor from the list.',
     invalid_deinterlace_method: 'Choose a deinterlacing method from the list.',
     invalid_downmix_algorithm: 'Choose a stereo mix from the list.',
     invalid_downmix_boost: 'The volume when mixing to stereo must be a number from 0.5 to 3.',
