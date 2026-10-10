@@ -152,6 +152,8 @@ export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
   legacyAuthorization: boolean
+  /** Asks GitHub once a day for Polyfin's latest release, to tell administrators of a new version. */
+  updateCheck: boolean
   /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
   language: Language
   /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
@@ -1107,6 +1109,7 @@ export type NotificationEvent =
   | 'health_problem'
   | 'health_solved'
   | 'user_joined'
+  | 'new_version'
   | 'playback_started'
   | 'playback_paused'
   | 'playback_resumed'
@@ -1987,6 +1990,11 @@ export type Health = {
   } | null
   /** How the database backups go; null when they are off. */
   backup: Backup | null
+  /**
+   * The new version of Polyfin the daily check found, with its release notes; null when there is
+   * none, or while Check for new versions is off.
+   */
+  update: { version: string; url: string } | null
 }
 
 /**

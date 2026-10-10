@@ -52,6 +52,9 @@ const home: typeof en = {
         'Polyfin surveille ses disques, sources, guides, sauvegardes et tâches. Ce qui demande votre attention apparaît ici.',
       problemError: 'Problème',
       problemWarning: 'À vérifier',
+      update: (version: string, running: string) =>
+        `Polyfin ${version} est disponible. Ce serveur est en version ${running}.`,
+      releaseNotes: 'Notes de version',
       open: 'Ouvrir',
       openHealth: 'Ouvrir Santé',
       serverTitle: 'État du serveur',

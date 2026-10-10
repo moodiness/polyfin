@@ -94,6 +94,7 @@ const notifications: typeof en = {
       health_problem: 'Problème détecté',
       health_solved: 'Problème résolu',
       user_joined: 'Nouvel utilisateur',
+      new_version: 'Nouvelle version',
       playback_started: 'Lecture commencée',
       playback_paused: 'Lecture en pause',
       playback_resumed: 'Lecture reprise',
@@ -108,6 +109,8 @@ const notifications: typeof en = {
       health_problem: 'Système › Santé a détecté un problème, lors de deux vérifications de suite.',
       health_solved: 'Un problème détecté par Système › Santé a disparu.',
       user_joined: 'Quelqu’un a créé son compte grâce à un lien d’invitation.',
+      new_version:
+        'Une nouvelle version de Polyfin est sortie, trouvée par la vérification quotidienne : une fois par version, avec ses notes de version.',
       playback_started:
         'Une vidéo ou un morceau commence dans une appli Jellyfin, avec qui le lit, sur quel appareil, et s’il est converti.',
       playback_paused:

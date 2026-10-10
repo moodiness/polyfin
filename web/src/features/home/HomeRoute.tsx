@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import {
   ArrowRightIcon,
+  ArrowSquareOutIcon,
   CheckCircleIcon,
   CpuIcon,
   WarningCircleIcon,
@@ -19,7 +20,9 @@ import {
   ButtonLink,
   cx,
   EmptyState,
+  ExternalButtonLink,
   InlineError,
+  Notice,
   ProgressBar,
   Skeleton,
   StatusPill,
@@ -52,6 +55,7 @@ function Overview({ name }: { name: string }) {
   const health = useHealth()
   const problems = useHealthProblems()
   const transcoder = health.data?.transcoder
+  const update = health.data?.update
 
   return (
     <PageLayout
@@ -62,6 +66,23 @@ function Overview({ name }: { name: string }) {
           : text.description
       }
     >
+      {update && health.data && (
+        <Notice
+          action={
+            <ExternalButtonLink
+              href={update.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              size="sm"
+              iconEnd={ArrowSquareOutIcon}
+            >
+              {text.releaseNotes}
+            </ExternalButtonLink>
+          }
+        >
+          {text.update(update.version, health.data.process.version)}
+        </Notice>
+      )}
       <NowPlaying
         aside={
           transcoder ? (

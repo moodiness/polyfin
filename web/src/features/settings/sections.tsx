@@ -85,6 +85,13 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
           <strong className="font-medium">{s.legacyWarningTitle}.</strong> {s.legacyWarning}
         </Notice>
       </SwitchRow>
+      <SwitchRow
+        anchor="update-check"
+        label={s.updateCheck}
+        help={s.updateCheckHelp}
+        checked={form.updateCheck}
+        onChange={(updateCheck) => update({ updateCheck })}
+      />
     </SettingsGroup>
   )
 }

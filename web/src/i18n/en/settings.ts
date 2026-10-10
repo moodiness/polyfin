@@ -39,6 +39,9 @@ const settings = {
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
       'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.2.',
+    updateCheck: 'Check for new versions',
+    updateCheckHelp:
+      'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
@@ -407,7 +410,7 @@ const settings = {
     noMatchHelp: 'Try another word, such as the name of a variable or a service.',
     variableHint: 'Environment variable',
     ledes: {
-      general: 'The server’s name, its language and how apps sign in.',
+      general: 'The server’s name, its language, how apps sign in and the check for new versions.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
       content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
