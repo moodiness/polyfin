@@ -1,18 +1,21 @@
 // Package jellyfinimport moves users and what they watched from a Jellyfin
-// server, or a server that speaks Jellyfin's API, to Polyfin. An
-// administrator connects to the server with its address and a key, or a
-// user's name and password, and lists its users, then chooses the Polyfin
-// account each one's watch data goes to, creating those that do not exist
-// yet. The import then reads, user by user, the movies and episodes played
-// with their dates and play counts, the resume points, and the favorite
-// movies, series and episodes, and adds them to the accounts.
+// server, a server that speaks Jellyfin's API, an Emby server or a Plex
+// Media Server, to Polyfin. An administrator connects to the server with its
+// address and a key, or a user's name and password, and lists its users,
+// then chooses the Polyfin account each one's watch data goes to, creating
+// those that do not exist yet. The import then reads, user by user, the
+// movies and episodes played with their dates and play counts, the resume
+// points, and the favorite movies, series and episodes, and adds them to the
+// accounts. A user may also import their own watch data into their own
+// account, signing in to a Jellyfin or Emby server as themselves (see
+// Service.ImportOwn).
 //
 // Titles are found by their IMDb, TMDB or TVDB identifiers, episodes by
 // their series' and their numbers, as the watch histories of tracking
 // services are (see trackers), and merge the same way: Polyfin's data is
 // only added to, never taken back, and a newer resume point of Polyfin's
-// stays. Running an import again adds nothing twice. The Jellyfin server is
-// only read, but for the sessions signing in opens and the import ends.
+// stays. Running an import again adds nothing twice. The server is only
+// read, but for the sessions signing in opens and the import ends.
 //
 // An API key of the server's dashboard reads every user's watch data. A
 // user's own key or access token, or a user signed in, reads that user's
@@ -20,7 +23,12 @@
 // Jellyfin's API answer it with its owner's data whatever user is asked,
 // which would land in the wrong accounts. Another user's watch data is
 // then read signed in as them, with their password, as Jellyfin's apps
-// sign in: every such server lets its apps do so.
+// sign in: every such server lets its apps do so. Emby does not tell whose
+// a user's key is: only its API keys and users signed in are taken.
+//
+// Plex is read with its owner's token, which reads the owner's watch data
+// from the library sections, and every other account's played history,
+// but not their resume points. Plex has no favorites.
 //
 // One import runs at a time, in the background. It and the last one's
 // result are kept in memory: an import cut by a restart is lost and is
@@ -44,12 +52,35 @@ import (
 // The ways asking for an import fails before it starts.
 var (
 	// ErrRunning reports an import asked while one runs.
-	ErrRunning = errors.New("a Jellyfin import is running")
+	ErrRunning = errors.New("an import is running")
 	// ErrNotKeyOwner reports watch data asked, with a user's key, of
 	// another user than the key's owner, without signing in as them (see
 	// Server.KeyOwner).
 	ErrNotKeyOwner = errors.New("a user's key reads only that user's watch data")
+	// ErrNotSignedIn reports a user's own import asked of a Plex server, or
+	// without a name to sign in with: it reads only the user who signs in.
+	ErrNotSignedIn = errors.New("a user's own import signs in to a Jellyfin or Emby server")
 )
+
+// Kind is the kind of server an import reads.
+type Kind string
+
+const (
+	// Jellyfin is a Jellyfin server, or a server that speaks its API.
+	Jellyfin Kind = "jellyfin"
+	// Emby is an Emby server, which takes its own token header, and serves
+	// its API under /emby.
+	Emby Kind = "emby"
+	// Plex is a Plex Media Server, read with its owner's token.
+	Plex Kind = "plex"
+)
+
+// Connection is a server an import reads, and what it connects with.
+type Connection struct {
+	Kind    Kind
+	Address string
+	Credentials
+}
 
 // Titles finds the items of titles named by other services' identifiers
 // (see library.Service.Resolve).
@@ -64,7 +95,7 @@ type Options struct {
 	Settings func() accounts.Settings
 	Titles   Titles
 	UserData *userdata.Store
-	// Version is Polyfin's, which the Jellyfin server is told.
+	// Version is Polyfin's, which the server is told.
 	Version string
 	Logger  *slog.Logger
 }
@@ -95,8 +126,8 @@ var defaultTiming = timing{
 	pageSize:   200,
 }
 
-// Service lists the users of Jellyfin servers and imports their watch
-// data, one import at a time.
+// Service lists the users of Jellyfin, Emby and Plex servers and imports
+// their watch data, one import at a time.
 type Service struct {
 	settings func() accounts.Settings
 	titles   Titles
@@ -106,16 +137,21 @@ type Service struct {
 	client   *http.Client
 	timing   timing
 	now      func() time.Time
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	// device names Polyfin to Plex, which lists the devices reading it:
+	// one for as long as Polyfin runs.
+	device string
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	mu sync.Mutex
 	// busy is set from the moment an import is asked until it ends.
 	busy bool
 	// current is the import running, else the last one; stop ends the
-	// one running.
+	// one running. own are the last imports users made of their own watch
+	// data, by the user.
 	current *Status
+	own     map[accounts.ID]*Status
 	stop    context.CancelFunc
 }
 
@@ -131,8 +167,10 @@ func New(options Options) *Service {
 		client:   &http.Client{},
 		timing:   defaultTiming,
 		now:      time.Now,
+		device:   newID(),
 		ctx:      ctx,
 		cancel:   cancel,
+		own:      map[accounts.ID]*Status{},
 	}
 }
 
@@ -189,6 +227,7 @@ const maxUnmatched = 500
 // Status is how an import goes, or went.
 type Status struct {
 	ID         string
+	Kind       Kind
 	ServerName string
 	Address    string
 	State      string
@@ -196,7 +235,12 @@ type Status struct {
 	Problem   string
 	StartedAt time.Time
 	EndedAt   *time.Time
-	Users     []UserStatus
+	// StartedBy is the Polyfin user who started the import, StartedByName
+	// their name then. Own tells an import of their own watch data.
+	StartedBy     accounts.ID
+	StartedByName string
+	Own           bool
+	Users         []UserStatus
 }
 
 // UserStatus is how the import of one Jellyfin user's watch data goes.
@@ -250,30 +294,42 @@ func (s *Service) Current() *Status {
 	return s.current.clone()
 }
 
-// Credentials are what Polyfin connects to a Jellyfin server with: a key,
-// which is an API key of the server's dashboard or a user's own key or
-// access token, or a user's name and password, which it signs in with as
-// Jellyfin's apps do, then signs out once done. A password may be empty: a
-// Jellyfin account may have none. A name, when given, is used over a key.
+// Own returns user's import of their own watch data running, else their
+// last one, nil when they made none since Polyfin started.
+func (s *Service) Own(user accounts.ID) *Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.own[user] == nil {
+		return nil
+	}
+	return s.own[user].clone()
+}
+
+// Credentials are what Polyfin connects to a server with: a key, which is
+// an API key of the server's dashboard, a user's own key or access token,
+// or Plex's owner's token, or a user's name and password, which it signs in
+// with as Jellyfin's apps do, then signs out once done. A password may be
+// empty: an account may have none. A name, when given, is used over a key.
+// Plex takes its owner's token only.
 type Credentials struct {
 	Key            string
 	Name, Password string
 }
 
-// Users reads the server at address with credentials: which server it is,
-// and its users. Signed in, it signs out before returning. It fails with
+// Users reads the server connection leads to: which server it is, and its
+// users. Signed in, it signs out before returning. It fails with
 // ErrInvalidAddress, ErrUnreachable, ErrNotJellyfin, ErrKeyRefused,
-// ErrForbidden, ErrSignInRefused or ErrSignInForbidden.
-func (s *Service) Users(ctx context.Context, address string, credentials Credentials) (Server, []User, error) {
-	address, err := ParseAddress(address)
+// ErrForbidden, ErrUserKey, ErrSignInRefused or ErrSignInForbidden.
+func (s *Service) Users(ctx context.Context, connection Connection) (Server, []User, error) {
+	address, err := ParseAddress(connection.Address)
 	if err != nil {
 		return Server{}, nil, err
 	}
 	// An administrator waits on the answer: a server that fails is told
 	// at once.
-	c := &client{s: s, address: address}
+	c := &client{s: s, kind: connection.Kind, address: address}
 	defer c.signOut()
-	return c.connect(ctx, credentials)
+	return c.connect(ctx, connection.Credentials)
 }
 
 // Target is a Jellyfin user whose watch data an import adds to a Polyfin
@@ -284,35 +340,33 @@ type Target struct {
 	UserName   string
 }
 
-// SignIn signs in, while an import starts, as the Jellyfin user jellyfinID
-// names, with their password on the server: the import reads their watch
-// data as them. It fails as Users does, or with ErrOtherUser.
+// SignIn signs in, while an import starts, as the user jellyfinID names,
+// with their password on the server: the import reads their watch data as
+// them. It fails as Users does, or with ErrOtherUser. Plex has no sign-in:
+// it fails with ErrNotSignedIn.
 type SignIn func(jellyfinID, password string) error
 
-// Start reads the server at address with credentials again, hands it and
-// its users to choose, which maps them to Polyfin accounts, creating them
-// as needed, and imports in the background the watch data of the users it
-// returns. With a user's key (see Server.KeyOwner), choose must sign in as
-// each other user it returns, with signIn, before creating any account:
-// Start fails with ErrNotKeyOwner, reading no one, when it did not. The
-// import reads the users signed in as themselves, ends each session once
-// that user is read, and its own at its end. Start returns the import,
-// nil when choose returned no one. While an import runs, it fails with
-// ErrRunning before reading anything; it fails as Users does, or with
-// choose's error.
-func (s *Service) Start(ctx context.Context, address string, credentials Credentials, choose func(Server, []User, SignIn) ([]Target, error)) (*Status, error) {
-	s.mu.Lock()
-	if s.busy {
-		s.mu.Unlock()
+// Start reads the server connection leads to again, hands it and its users
+// to choose, which maps them to Polyfin accounts, creating them as needed,
+// and imports in the background the watch data of the users it returns.
+// With a user's key (see Server.KeyOwner), choose must sign in as each
+// other user it returns, with signIn, before creating any account: Start
+// fails with ErrNotKeyOwner, reading no one, when it did not. The import
+// reads the users signed in as themselves, ends each session once that
+// user is read, and its own at its end. by is the Polyfin user who starts
+// it. Start returns the import, nil when choose returned no one. While an
+// import runs, it fails with ErrRunning before reading anything; it fails
+// as Users does, or with choose's error.
+func (s *Service) Start(ctx context.Context, connection Connection, by accounts.User,
+	choose func(Server, []User, SignIn) ([]Target, error)) (*Status, error) {
+	if !s.claim() {
 		return nil, ErrRunning
 	}
-	s.busy = true
-	s.mu.Unlock()
 	// own reads with the credentials; sessions read as the users signed in
-	// as themselves, by their Jellyfin identifier. Until the import takes
-	// them over, failing ends them.
-	address, err := ParseAddress(address)
-	own := &client{s: s, address: address}
+	// as themselves, by their identifier on the server. Until the import
+	// takes them over, failing ends them.
+	address, err := ParseAddress(connection.Address)
+	own := &client{s: s, kind: connection.Kind, address: address}
 	sessions := map[string]*client{}
 	started := false
 	defer func() {
@@ -321,16 +375,14 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 			for _, session := range sessions {
 				session.signOut()
 			}
-			s.mu.Lock()
-			s.busy = false
-			s.mu.Unlock()
+			s.release()
 		}
 	}()
 	if err != nil {
 		return nil, err
 	}
 
-	server, users, err := own.connect(ctx, credentials)
+	server, users, err := own.connect(ctx, connection.Credentials)
 	if err != nil {
 		return nil, err
 	}
@@ -340,13 +392,15 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 	}
 	signIn := func(jellyfinID, password string) error {
 		name, ok := names[jellyfinID]
-		if !ok {
-			return errors.New("not a user of the Jellyfin server")
-		}
-		if sessions[jellyfinID] != nil {
+		switch {
+		case server.Kind == Plex:
+			return ErrNotSignedIn
+		case !ok:
+			return errors.New("not a user of the server")
+		case sessions[jellyfinID] != nil:
 			return nil
 		}
-		session := &client{s: s, address: server.Address}
+		session := &client{s: s, kind: server.Kind, address: server.Address}
 		signed, err := session.signIn(ctx, name, password)
 		if err != nil {
 			return err
@@ -371,7 +425,6 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 	used := make(map[string]*client, len(sessions))
 	for _, t := range targets {
 		if session := sessions[t.JellyfinID]; session != nil {
-			session.retries = s.timing.retries
 			used[t.JellyfinID] = session
 		}
 	}
@@ -381,11 +434,85 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 		}
 	}
 	sessions = used
-	status := &Status{ID: newID(), ServerName: server.Name, Address: server.Address, State: StateRunning, StartedAt: s.now().UTC()}
+	status := s.newStatus(server, by, false)
 	for _, t := range targets {
 		status.Users = append(status.Users, UserStatus{JellyfinID: t.JellyfinID, JellyfinName: names[t.JellyfinID], User: t.User,
 			UserName: t.UserName, State: UserWaiting})
 	}
+	snapshot, err := s.launch(status, own, sessions)
+	started = err == nil
+	return snapshot, err
+}
+
+// ImportOwn imports, in the background, the watch data of the user who
+// signs in to the Jellyfin or Emby server connection leads to with its name
+// and password, into the account of user, who starts it. It never lists
+// the server's users, which a user's session may not, and reads the user
+// signed in as themselves only: even a server that answers every user with
+// the session's data gives them their own. The session ends with the
+// import, and the password is not kept. It fails as Start does, or with
+// ErrNotSignedIn for a Plex server or without a name.
+func (s *Service) ImportOwn(ctx context.Context, connection Connection, user accounts.User) (*Status, error) {
+	if connection.Kind == Plex || connection.Name == "" {
+		return nil, ErrNotSignedIn
+	}
+	if !s.claim() {
+		return nil, ErrRunning
+	}
+	address, err := ParseAddress(connection.Address)
+	c := &client{s: s, kind: connection.Kind, address: address}
+	started := false
+	defer func() {
+		if !started {
+			c.signOut()
+			s.release()
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+	server, err := c.open(ctx, connection.Credentials)
+	if err != nil {
+		return nil, err
+	}
+	status := s.newStatus(server, user, true)
+	status.Users = []UserStatus{{JellyfinID: server.KeyOwner, JellyfinName: connection.Name, User: user.ID, UserName: user.Name,
+		State: UserWaiting}}
+	snapshot, err := s.launch(status, c, nil)
+	started = err == nil
+	return snapshot, err
+}
+
+// claim marks the service busy for an import about to start, and reports
+// false when one runs or starts already.
+func (s *Service) claim() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.busy {
+		return false
+	}
+	s.busy = true
+	return true
+}
+
+// release frees the service after an import that could not start.
+func (s *Service) release() {
+	s.mu.Lock()
+	s.busy = false
+	s.mu.Unlock()
+}
+
+// newStatus is a running import of server that by starts, without users
+// yet; own tells an import of by's own watch data.
+func (s *Service) newStatus(server Server, by accounts.User, own bool) *Status {
+	return &Status{ID: newID(), Kind: server.Kind, ServerName: server.Name, Address: server.Address, State: StateRunning,
+		StartedAt: s.now().UTC(), StartedBy: by.ID, StartedByName: by.Name, Own: own}
+}
+
+// launch runs the import of status in the background, reading with own and
+// the sessions of the users signed in, and returns a copy of status. It
+// fails only once the service is closed.
+func (s *Service) launch(status *Status, own *client, sessions map[string]*client) (*Status, error) {
 	runCtx, stop := context.WithCancel(s.ctx)
 	s.mu.Lock()
 	if s.ctx.Err() != nil {
@@ -394,19 +521,24 @@ func (s *Service) Start(ctx context.Context, address string, credentials Credent
 		return nil, s.ctx.Err()
 	}
 	s.current, s.stop = status, stop
+	if status.Own {
+		s.own[status.StartedBy] = status
+	}
 	s.wg.Add(1)
-	started = true
 	snapshot := status.clone()
 	s.mu.Unlock()
 
 	own.retries = s.timing.retries
+	for _, session := range sessions {
+		session.retries = s.timing.retries
+	}
 	r := &run{s: s, status: status, client: own, sessions: sessions, series: map[string]map[string]string{}}
 	go func() {
 		defer s.wg.Done()
 		defer stop()
 		r.run(runCtx)
 	}()
-	s.logger.Info("A Jellyfin import started", "server", server.Name, "users", len(targets))
+	s.logger.Info("An import started", "kind", status.Kind, "server", status.ServerName, "users", len(status.Users), "own", status.Own)
 	return snapshot, nil
 }
 

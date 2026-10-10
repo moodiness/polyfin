@@ -3,6 +3,7 @@ package jellyfinimport
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,29 +14,32 @@ import (
 	"time"
 )
 
-// The ways reading a Jellyfin server fails.
+// The ways reading a server fails.
 var (
 	// ErrInvalidAddress reports an address that is not an http or https
 	// URL, or that holds a user name or password.
-	ErrInvalidAddress = errors.New("invalid Jellyfin address")
-	// ErrKeyRefused reports an API key the server refused.
-	ErrKeyRefused = errors.New("the Jellyfin server refused the API key")
+	ErrInvalidAddress = errors.New("invalid server address")
+	// ErrKeyRefused reports an API key or token the server refused.
+	ErrKeyRefused = errors.New("the server refused the API key")
 	// ErrForbidden reports a key the server knows but does not let read
 	// what was asked: its users, or another user's data.
-	ErrForbidden = errors.New("the Jellyfin server does not let the key read this")
+	ErrForbidden = errors.New("the server does not let the key read this")
 	// ErrUnreachable reports a server that did not answer, or kept failing.
-	ErrUnreachable = errors.New("Jellyfin server unreachable")
-	// ErrNotJellyfin reports an address that answered, but not as a
-	// Jellyfin server does.
-	ErrNotJellyfin = errors.New("not a Jellyfin server")
+	ErrUnreachable = errors.New("server unreachable")
+	// ErrNotJellyfin reports an address that answered, but not as the kind
+	// of server asked does.
+	ErrNotJellyfin = errors.New("not a server of the kind asked")
 	// ErrSignInRefused reports a user name or password the server refused.
-	ErrSignInRefused = errors.New("the Jellyfin server refused the name or password")
+	ErrSignInRefused = errors.New("the server refused the name or password")
 	// ErrSignInForbidden reports an account the server does not let sign
 	// in: disabled, or outside its allowed hours.
-	ErrSignInForbidden = errors.New("the Jellyfin server does not let the account sign in")
+	ErrSignInForbidden = errors.New("the server does not let the account sign in")
 	// ErrOtherUser reports a sign-in as a user that opened another user's
 	// session.
-	ErrOtherUser = errors.New("the Jellyfin server signed in another user")
+	ErrOtherUser = errors.New("the server signed in another user")
+	// ErrUserKey reports an Emby key that is not one of the server's API
+	// keys: a user's, which Emby does not tell the owner of.
+	ErrUserKey = errors.New("the Emby key is not one of the server's API keys")
 )
 
 // maxAddress bounds the length of an address.
@@ -45,11 +49,14 @@ const maxAddress = 2048
 // their images takes well under a megabyte.
 const maxReply = 32 << 20
 
-// ParseAddress reads the address of a Jellyfin server as an administrator
-// types it: an http or https URL, possibly with the path Jellyfin is served
-// under, or a bare host and port, which means http. It returns it without
-// a trailing slash. Local network addresses are allowed: the server to
-// move from usually runs next to Polyfin.
+// embyPath is the path Emby serves its API under, as well as at its root.
+const embyPath = "/emby"
+
+// ParseAddress reads the address of a server as an administrator types it:
+// an http or https URL, possibly with the path the server is served under,
+// or a bare host and port, which means http. It returns it without a
+// trailing slash. Local network addresses are allowed: the server to move
+// from usually runs next to Polyfin.
 func ParseAddress(text string) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" || len(text) > maxAddress {
@@ -66,11 +73,12 @@ func ParseAddress(text string) (string, error) {
 	return strings.TrimRight(parsed.Scheme+"://"+parsed.Host+parsed.EscapedPath(), "/"), nil
 }
 
-// client reads one Jellyfin server with a key, one request at a time,
-// spaced by the service's gap: an API key of the server's dashboard, a
-// user's own key, or the token of a session the client signed in.
+// client reads one server with a key, one request at a time, spaced by the
+// service's gap: an API key of the server's dashboard, a user's own key,
+// the token of a session the client signed in, or Plex's owner's token.
 type client struct {
 	s            *Service
+	kind         Kind
 	address, key string
 	// session tells that key is the token of a session the client signed
 	// in, which signOut ends.
@@ -79,6 +87,8 @@ type client struct {
 	// while an administrator waits on the answer, a few during an import.
 	retries int
 	last    time.Time
+	// plex is what was read of a Plex server's libraries, once.
+	plex *plexLibrary
 }
 
 // get reads path, with query, into into.
@@ -122,7 +132,7 @@ func (c *client) send(ctx context.Context, method, path string, query url.Values
 			}
 			wait = c.s.timing.retryFirst << (failures - 1)
 		default:
-			// Jellyfin answers every route an import reads.
+			// The server answers every route an import reads.
 			return ErrNotJellyfin
 		}
 		if !sleep(ctx, wait) {
@@ -132,10 +142,12 @@ func (c *client) send(ctx context.Context, method, path string, query url.Values
 }
 
 // do sends one request, a POST of body as JSON when there is one. The key
-// goes in the header Jellyfin reads keys from, never in the URL, which
-// errors would hold. Without a key, the header names Polyfin as the app and
-// device signing in, as Jellyfin's apps do: a server missing the device
-// may sign the user out of every other device.
+// goes in the header the server reads keys from, never in the URL, which
+// errors would hold: Authorization for Jellyfin, X-Emby-Token for Emby, and
+// X-Plex-Token for Plex, which is also told Polyfin's device. Without a
+// key, the header names Polyfin as the app and device signing in, as
+// Jellyfin's and Emby's apps do: a server missing the device may sign the
+// user out of every other device.
 func (c *client) do(ctx context.Context, method, path string, query url.Values, body []byte) (int, http.Header, []byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.s.timing.request)
 	defer cancel()
@@ -151,11 +163,24 @@ func (c *client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	authorization := `MediaBrowser Token="` + c.key + `"`
-	if c.key == "" {
-		authorization = `MediaBrowser Client="Polyfin", Device="Polyfin", DeviceId="` + newID() + `", Version="` + c.s.version + `"`
+	signIn := `MediaBrowser Client="Polyfin", Device="Polyfin", DeviceId="` + newID() + `", Version="` + c.s.version + `"`
+	switch {
+	case c.kind == Plex:
+		if c.key != "" {
+			request.Header.Set("X-Plex-Token", c.key)
+		}
+		request.Header.Set("X-Plex-Client-Identifier", c.s.device)
+		request.Header.Set("X-Plex-Product", "Polyfin")
+		request.Header.Set("X-Plex-Version", c.s.version)
+	case c.kind == Emby && c.key != "":
+		request.Header.Set("X-Emby-Token", c.key)
+	case c.kind == Emby:
+		request.Header.Set("X-Emby-Authorization", signIn)
+	case c.key != "":
+		request.Header.Set("Authorization", `MediaBrowser Token="`+c.key+`"`)
+	default:
+		request.Header.Set("Authorization", signIn)
 	}
-	request.Header.Set("Authorization", authorization)
 	request.Header.Set("User-Agent", "Polyfin/"+c.s.version)
 	request.Header.Set("Accept", "application/json")
 	if body != nil {
@@ -242,28 +267,33 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// Server is the Jellyfin server an address leads to.
+// Server is the server an address leads to.
 type Server struct {
+	Kind          Kind
 	Name, Version string
-	// Address is the server's address as ParseAddress gives it.
+	// Address is the server's address as ParseAddress gives it, with the
+	// path Emby's API answers under.
 	Address string
-	// KeyOwner is the Jellyfin user the import reads as: the owner of a
-	// user's own key or access token, or the user signed in with a name and
-	// password; empty for an API key of the server's dashboard. A user's
-	// key reads that user's watch data only: some servers answer it with
-	// that user's data whatever user is asked.
+	// KeyOwner is the user the import reads as: the owner of a user's own
+	// key or access token, or the user signed in with a name and password;
+	// empty for an API key of the server's dashboard, or Plex's owner's
+	// token, which reads every user's played history. A user's key reads
+	// that user's watch data only: some servers answer it with that user's
+	// data whatever user is asked.
 	KeyOwner string
 }
 
-// User is a user of a Jellyfin server.
+// User is a user of a server.
 type User struct {
 	ID, Name                        string
 	Administrator, Disabled, Hidden bool
-	// LastActivity is when the user last used the server, nil when never.
+	// LastActivity is when the user last used the server, nil when never
+	// or when the server does not tell.
 	LastActivity *time.Time
 }
 
-// serverInfoJSON is what Jellyfin tells of itself without a key.
+// serverInfoJSON is what Jellyfin and Emby tell of themselves without a
+// key.
 type serverInfoJSON struct {
 	ID         string `json:"Id"`
 	ServerName string
@@ -283,26 +313,12 @@ type userJSON struct {
 // credentials name a user, then reads the server's users, which only a
 // server's key or an administrator lists, and whose key it reads with.
 func (c *client) connect(ctx context.Context, credentials Credentials) (Server, []User, error) {
-	var info serverInfoJSON
-	err := c.get(ctx, "/System/Info/Public", nil, &info)
-	if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) {
-		// Jellyfin answers it to anyone.
-		err = ErrNotJellyfin
+	if c.kind == Plex {
+		return c.plexConnect(ctx, credentials.Key)
 	}
+	server, err := c.open(ctx, credentials)
 	if err != nil {
 		return Server{}, nil, err
-	}
-	if info.ID == "" {
-		return Server{}, nil, ErrNotJellyfin
-	}
-	// A password goes only to a server that answered as Jellyfin does.
-	owner := ""
-	if credentials.Name != "" {
-		if owner, err = c.signIn(ctx, credentials.Name, credentials.Password); err != nil {
-			return Server{}, nil, err
-		}
-	} else {
-		c.key = credentials.Key
 	}
 	var listed []userJSON
 	if err := c.get(ctx, "/Users", nil, &listed); err != nil {
@@ -319,18 +335,69 @@ func (c *client) connect(ctx context.Context, credentials Credentials) (Server, 
 	// A session is its user's whatever /Users/Me answers: a server that does
 	// not answer it would pass the session for a server's key.
 	if credentials.Name == "" {
-		if owner, err = c.keyOwner(ctx); err != nil {
+		if server.KeyOwner, err = c.keyOwner(ctx); err != nil {
 			return Server{}, nil, err
 		}
 	}
-	return Server{Name: info.ServerName, Version: info.Version, Address: c.address, KeyOwner: owner}, users, nil
+	return server, users, nil
+}
+
+// open reads which Jellyfin or Emby server the address leads to, then
+// signs in when credentials name a user, or else reads with their key. It
+// returns the server, whose KeyOwner is the user signed in, if any.
+func (c *client) open(ctx context.Context, credentials Credentials) (Server, error) {
+	info, err := c.locate(ctx)
+	if err != nil {
+		return Server{}, err
+	}
+	server := Server{Kind: c.kind, Name: info.ServerName, Version: info.Version, Address: c.address}
+	// A password goes only to a server that answered as the kind asked
+	// does.
+	if credentials.Name == "" {
+		c.key = credentials.Key
+		return server, nil
+	}
+	if server.KeyOwner, err = c.signIn(ctx, credentials.Name, credentials.Password); err != nil {
+		return Server{}, err
+	}
+	return server, nil
+}
+
+// locate reads, without a key, which server the address leads to. Emby
+// serves its API under /emby, and at its root too when reached directly:
+// an Emby address without that path tries it first, so that a proxy
+// passing only that path on works too. c reads at the address that
+// answered from then on.
+func (c *client) locate(ctx context.Context) (serverInfoJSON, error) {
+	addresses := []string{c.address}
+	if c.kind == Emby && !strings.HasSuffix(c.address, embyPath) {
+		addresses = []string{c.address + embyPath, c.address}
+	}
+	var err error
+	for _, address := range addresses {
+		c.address = address
+		var info serverInfoJSON
+		err = c.get(ctx, "/System/Info/Public", nil, &info)
+		if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) || err == nil && info.ID == "" {
+			// Jellyfin and Emby answer it to anyone.
+			err = ErrNotJellyfin
+		}
+		if !errors.Is(err, ErrNotJellyfin) {
+			return info, err
+		}
+	}
+	return serverInfoJSON{}, err
 }
 
 // keyOwner reads whose key c holds: /Users/Me answers a user's own key or
 // access token with that user, and an API key of the server's dashboard,
 // which belongs to no user, with an error (400 on Jellyfin). It returns the
-// user's identifier, empty for a server's key.
+// user's identifier, empty for a server's key. Emby has no /Users/Me: see
+// embyKey.
 func (c *client) keyOwner(ctx context.Context) (string, error) {
+	if c.kind == Emby {
+		return "", c.embyKey(ctx)
+	}
 	var me userJSON
 	err := c.get(ctx, "/Users/Me", nil, &me)
 	switch {
@@ -341,6 +408,29 @@ func (c *client) keyOwner(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	return "", err
+}
+
+// embyKey checks that c's key is one of the Emby server's API keys, which
+// /Auth/Keys lists, and fails with ErrUserKey otherwise. Emby has no way
+// to tell whose a user's key is, and answers another user's items to some
+// keys: a user's key, whose owner the import could not know, is not taken.
+// The keys listed are only compared, never kept.
+func (c *client) embyKey(ctx context.Context) error {
+	var keys struct {
+		Items []struct{ AccessToken string }
+	}
+	err := c.get(ctx, "/Auth/Keys", nil, &keys)
+	if errors.Is(err, ErrUnreachable) || ctx.Err() != nil {
+		return err
+	}
+	if err == nil {
+		for _, key := range keys.Items {
+			if subtle.ConstantTimeCompare([]byte(key.AccessToken), []byte(c.key)) == 1 {
+				return nil
+			}
+		}
+	}
+	return ErrUserKey
 }
 
 // date reads a date as Jellyfin writes them, nil when there is none.
@@ -389,15 +479,20 @@ type pageJSON struct {
 }
 
 // items reads, page by page, the items of user that types and filter
-// select, handing each to found.
+// select, handing each to found. Emby leaves the play count and the date
+// last played out of a list's user data unless its fields name them.
 func (c *client) items(ctx context.Context, user, types, filter string, found func(itemJSON)) error {
 	path := "/Users/" + url.PathEscape(user) + "/Items"
+	fields := "ProviderIds"
+	if c.kind == Emby {
+		fields += ",UserDataPlayCount,UserDataLastPlayedDate"
+	}
 	for start := 0; ; {
 		query := url.Values{
 			"Recursive":              {"true"},
 			"IncludeItemTypes":       {types},
 			"Filters":                {filter},
-			"Fields":                 {"ProviderIds"},
+			"Fields":                 {fields},
 			"EnableUserData":         {"true"},
 			"EnableImages":           {"false"},
 			"EnableTotalRecordCount": {"true"},

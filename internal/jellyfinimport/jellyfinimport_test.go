@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -54,12 +55,19 @@ type fakeJellyfin struct {
 	// them by, as Jellyfin's apps do; barred users may not sign in, and
 	// signsInAs signs a user named in as another, by id. sessions are the
 	// users signed in by their token, until they sign out: a session reads
-	// as its user's own key does. noMe leaves /Users/Me out.
-	passwords map[string]string
-	barred    map[string]bool
-	signsInAs map[string]string
-	sessions  map[string]string
-	noMe      bool
+	// as its user's own key does. noMe leaves /Users/Me out, and
+	// adminsOnly lists the users to administrators' sessions only, as
+	// Jellyfin does.
+	passwords  map[string]string
+	barred     map[string]bool
+	signsInAs  map[string]string
+	sessions   map[string]string
+	noMe       bool
+	adminsOnly bool
+	// emby answers as Emby behind a proxy passing on only /emby: the key
+	// in X-Emby-Token, a sign-in's app and device in X-Emby-Authorization,
+	// no /Users/Me, and the server's API keys under /Auth/Keys.
+	emby bool
 }
 
 func newFakeJellyfin(t *testing.T) *fakeJellyfin {
@@ -77,6 +85,9 @@ func newFakeJellyfin(t *testing.T) *fakeJellyfin {
 // signing in, and a user's name and password.
 func (f *fakeJellyfin) signIn(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
+	if f.emby {
+		auth = r.Header.Get("X-Emby-Authorization")
+	}
 	for _, field := range []string{`Client="`, `Device="`, `DeviceId="`, `Version="`} {
 		if !strings.Contains(auth, field) || strings.Contains(auth, field+`"`) {
 			w.WriteHeader(http.StatusBadRequest)
@@ -120,18 +131,30 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 	hold := f.hold
 	f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	if r.URL.Path == "/System/Info/Public" {
+	path := r.URL.Path
+	if f.emby {
+		trimmed, under := strings.CutPrefix(path, "/emby")
+		if !under {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		path = trimmed
+	}
+	if path == "/System/Info/Public" {
 		_, _ = io.WriteString(w, `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"}`)
 		return
 	}
 	query := r.URL.Query()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName" {
+	if r.Method == http.MethodPost && path == "/Users/AuthenticateByName" {
 		f.signIn(w, r)
 		return
 	}
 	key := strings.TrimSuffix(strings.TrimPrefix(r.Header.Get("Authorization"), `MediaBrowser Token="`), `"`)
+	if f.emby {
+		key = r.Header.Get("X-Emby-Token")
+	}
 	owner, userKey := f.userKeys[key]
 	if id, session := f.sessions[key]; session {
 		owner, userKey = id, true
@@ -140,13 +163,22 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	switch user, found := strings.CutPrefix(r.URL.Path, "/Users/"); {
-	case r.Method == http.MethodPost && r.URL.Path == "/Sessions/Logout":
+	switch user, found := strings.CutPrefix(path, "/Users/"); {
+	case r.Method == http.MethodPost && path == "/Sessions/Logout":
 		delete(f.sessions, key)
 		w.WriteHeader(http.StatusNoContent)
-	case r.URL.Path == "/Users":
+	case path == "/Users":
+		if f.adminsOnly && userKey && !f.administrator(owner) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(f.users)
-	case r.URL.Path == "/Users/Me":
+	case f.emby && path == "/Auth/Keys":
+		_ = json.NewEncoder(w).Encode(map[string]any{"Items": []map[string]any{{"Id": 2, "AccessToken": goodKey, "AppName": "Polyfin"}}})
+	case f.emby && path == "/Users/Me":
+		// Emby reads "Me" as a user's identifier.
+		w.WriteHeader(http.StatusInternalServerError)
+	case path == "/Users/Me":
 		if !userKey || f.noMe {
 			// Jellyfin's answer to the server's key, which is no user's;
 			// without /Users/Me, every key gets it.
@@ -188,10 +220,35 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 			limit = len(all)
 		}
 		page := all[min(start, len(all)):min(start+limit, len(all))]
+		if fields := query.Get("Fields"); f.emby && !strings.Contains(fields, "UserDataPlayCount,UserDataLastPlayedDate") {
+			// Emby lists user data without these unless asked.
+			var bare []map[string]any
+			for _, item := range page {
+				item = maps.Clone(item)
+				if data, ok := item["UserData"].(map[string]any); ok {
+					data = maps.Clone(data)
+					delete(data, "PlayCount")
+					delete(data, "LastPlayedDate")
+					item["UserData"] = data
+				}
+				bare = append(bare, item)
+			}
+			page = bare
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"Items": page, "TotalRecordCount": len(all), "StartIndex": start})
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// administrator tells whether the user id names is an administrator.
+func (f *fakeJellyfin) administrator(id string) bool {
+	for _, user := range f.users {
+		if policy, _ := user["Policy"].(map[string]any); user["Id"] == id && policy["IsAdministrator"] == true {
+			return true
+		}
+	}
+	return false
 }
 
 // movie is a movie item with providers and the user's data.
@@ -292,7 +349,7 @@ func (h harness) dataOf(t *testing.T, user accounts.ID, ref library.TitleRef) us
 // imported starts an import of targets and waits for it to end.
 func (h harness) imported(t *testing.T, targets ...Target) Status {
 	t.Helper()
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
 		t.Fatal(err)
 	}
 	return h.ended(t)
@@ -313,6 +370,11 @@ func (h harness) ended(t *testing.T) Status {
 	}
 }
 
+// to is a connection to the Jellyfin server at address with credentials.
+func to(address string, credentials Credentials) Connection {
+	return Connection{Kind: Jellyfin, Address: address, Credentials: credentials}
+}
+
 func at(text string) time.Time {
 	t, err := time.Parse(time.RFC3339, text)
 	if err != nil {
@@ -328,7 +390,7 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		{"Id": "b2", "Name": "Bob", "LastActivityDate": "0001-01-01T00:00:00.0000000Z",
 			"Policy": map[string]any{"IsDisabled": true, "IsHidden": true}},
 	}
-	server, users, err := h.Users(t.Context(), h.f.url+"/", Credentials{Key: goodKey})
+	server, users, err := h.Users(t.Context(), to(h.f.url+"/", Credentials{Key: goodKey}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,12 +410,12 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		}
 	}
 
-	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: "wrong-key"}); !errors.Is(err, ErrKeyRefused) {
+	if _, _, err := h.Users(t.Context(), to(h.f.url, Credentials{Key: "wrong-key"})); !errors.Is(err, ErrKeyRefused) {
 		t.Errorf("wrong key: %v", err)
 	}
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	if _, _, err := h.Users(t.Context(), closed.URL, Credentials{Key: goodKey}); !errors.Is(err, ErrUnreachable) {
+	if _, _, err := h.Users(t.Context(), to(closed.URL, Credentials{Key: goodKey})); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("nothing at the address: %v", err)
 	}
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -361,11 +423,11 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		_, _ = io.WriteString(w, "<html>A web page</html>")
 	}))
 	defer web.Close()
-	if _, _, err := h.Users(t.Context(), web.URL, Credentials{Key: goodKey}); !errors.Is(err, ErrNotJellyfin) {
+	if _, _, err := h.Users(t.Context(), to(web.URL, Credentials{Key: goodKey})); !errors.Is(err, ErrNotJellyfin) {
 		t.Errorf("a web page: %v", err)
 	}
 	for _, address := range []string{"", "ftp://192.168.1.10", "http://user:secret@192.168.1.10:8096", "http://:8096"} {
-		if _, _, err := h.Users(t.Context(), address, Credentials{Key: goodKey}); !errors.Is(err, ErrInvalidAddress) {
+		if _, _, err := h.Users(t.Context(), to(address, Credentials{Key: goodKey})); !errors.Is(err, ErrInvalidAddress) {
 			t.Errorf("%q: %v", address, err)
 		}
 	}
@@ -517,11 +579,11 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 	hold := make(chan struct{})
 	h.f.hold = hold
 	targets := []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}, {JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
 		t.Fatal(err)
 	}
 	chose := false
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		chose = true
 		return targets, nil
 	}); !errors.Is(err, ErrRunning) || chose {
@@ -550,12 +612,12 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 	}
 
 	// A choice that fails starts nothing, and leaves the next free.
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		return nil, errors.New("name taken")
 	}); err == nil || errors.Is(err, ErrRunning) {
 		t.Errorf("failed choice: %v", err)
 	}
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return nil, nil }); err != nil {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) { return nil, nil }); err != nil {
 		t.Errorf("after a failed choice: %v", err)
 	}
 }
@@ -573,15 +635,15 @@ func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
 	h.f.userKeys[aliceKey] = "jf-alice"
 	h.f.ignoresUser = true
 
-	if server, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: goodKey}); err != nil || server.KeyOwner != "" {
+	if server, _, err := h.Users(t.Context(), to(h.f.url, Credentials{Key: goodKey})); err != nil || server.KeyOwner != "" {
 		t.Errorf("the server's key: %+v %v", server, err)
 	}
-	if server, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: aliceKey}); err != nil || server.KeyOwner != "jf-alice" {
+	if server, _, err := h.Users(t.Context(), to(h.f.url, Credentials{Key: aliceKey})); err != nil || server.KeyOwner != "jf-alice" {
 		t.Fatalf("Alice's key: %+v %v", server, err)
 	}
 
 	// Bob's watch data with Alice's key: refused, before anything is read.
-	_, err := h.Start(t.Context(), h.f.url, Credentials{Key: aliceKey}, func(Server, []User, SignIn) ([]Target, error) {
+	_, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: aliceKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
 	})
 	if !errors.Is(err, ErrNotKeyOwner) {
@@ -601,7 +663,7 @@ func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
 	}
 
 	// Alice's, with her key: imported.
-	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: aliceKey}, func(Server, []User, SignIn) ([]Target, error) {
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: aliceKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -653,7 +715,7 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 	h.f.noMe = true
 	asAlice := Credentials{Name: "Alice", Password: "alice's password"}
 
-	server, _, err := h.Users(t.Context(), h.f.url, asAlice)
+	server, _, err := h.Users(t.Context(), to(h.f.url, asAlice))
 	if err != nil || server.KeyOwner != "jf-alice" {
 		t.Fatalf("signed in as Alice: %+v %v", server, err)
 	}
@@ -662,7 +724,7 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 	}
 
 	// Bob's watch data, Bob not signed in: refused.
-	_, err = h.Start(t.Context(), h.f.url, asAlice, func(Server, []User, SignIn) ([]Target, error) {
+	_, err = h.Start(t.Context(), to(h.f.url, asAlice), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
 	})
 	if !errors.Is(err, ErrNotKeyOwner) {
@@ -672,7 +734,7 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 		t.Errorf("Bob not signed in: %v", err)
 	}
 
-	_, err = h.Start(t.Context(), h.f.url, asAlice, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+	_, err = h.Start(t.Context(), to(h.f.url, asAlice), accounts.User{}, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
 		if err := signIn("jf-bob", "bob's password"); err != nil {
 			return nil, err
 		}
@@ -713,10 +775,10 @@ func TestASignInThatFailsStartsNothing(t *testing.T) {
 	h.f.signsInAs["Dan"] = "jf-alice"
 	asAlice := Credentials{Name: "Alice", Password: "alice's password"}
 
-	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Name: "Alice", Password: "wrong"}); !errors.Is(err, ErrSignInRefused) {
+	if _, _, err := h.Users(t.Context(), to(h.f.url, Credentials{Name: "Alice", Password: "wrong"})); !errors.Is(err, ErrSignInRefused) {
 		t.Errorf("a wrong password: %v", err)
 	}
-	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Name: "Bob", Password: "bob's password"}); !errors.Is(err, ErrSignInForbidden) {
+	if _, _, err := h.Users(t.Context(), to(h.f.url, Credentials{Name: "Bob", Password: "bob's password"})); !errors.Is(err, ErrSignInForbidden) {
 		t.Errorf("a disabled account: %v", err)
 	}
 	for _, c := range []struct {
@@ -727,7 +789,7 @@ func TestASignInThatFailsStartsNothing(t *testing.T) {
 		{"jf-carol", "wrong", ErrSignInRefused},
 		{"jf-dan", "dan's password", ErrOtherUser},
 	} {
-		_, err := h.Start(t.Context(), h.f.url, asAlice, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+		_, err := h.Start(t.Context(), to(h.f.url, asAlice), accounts.User{}, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
 			if c.jellyfinID != "jf-carol" {
 				if err := signIn("jf-carol", "carol's password"); err != nil {
 					return nil, err
@@ -744,5 +806,360 @@ func TestASignInThatFailsStartsNothing(t *testing.T) {
 	}
 	if current := h.Current(); current != nil {
 		t.Errorf("an import started: %+v", current)
+	}
+}
+
+// A user imports their own watch data: Polyfin signs in as them, never
+// lists the server's users, which their session may not, and reads only
+// theirs, into their own account, even from a server that answers every
+// user with the session's data. A refused password starts nothing, and one
+// import runs at a time, the administrator's included.
+func TestAUserImportsOnlyTheirOwnWatchData(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"}}
+	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password"}
+	h.f.items["jf-alice"] = map[string][]map[string]any{"IsPlayed": {movie("m1", "Alice's", map[string]string{"Imdb": "tt0000001"},
+		map[string]any{"Played": true})}}
+	h.f.items["jf-bob"] = map[string][]map[string]any{
+		"IsPlayed":   {movie("m2", "Bob's", map[string]string{"Imdb": "tt0000002"}, map[string]any{"Played": true})},
+		"IsFavorite": {movie("m3", "Bob's favorite", map[string]string{"Imdb": "tt0000003"}, map[string]any{"IsFavorite": true})},
+	}
+	h.f.ignoresUser, h.f.noMe, h.f.adminsOnly = true, true, true
+	asBob := Connection{Kind: Jellyfin, Address: h.f.url, Credentials: Credentials{Name: "Bob", Password: "wrong"}}
+
+	if _, err := h.ImportOwn(t.Context(), asBob, bob); !errors.Is(err, ErrSignInRefused) {
+		t.Errorf("a wrong password: %v", err)
+	}
+	if current := h.Current(); current != nil {
+		t.Errorf("a wrong password started an import: %+v", current)
+	}
+	asBob.Password = "bob's password"
+	started, err := h.ImportOwn(t.Context(), asBob, bob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := h.ended(t)
+	if status.State != StateDone || !status.Own || status.StartedBy != bob.ID || len(status.Users) != 1 || status.Users[0].User != bob.ID ||
+		status.Users[0].Played != 1 || status.Users[0].Favorites != 1 {
+		t.Errorf("Bob's import: %+v", status)
+	}
+	aliceMovie, bobMovie, bobFavorite := library.TitleRef{IMDb: "tt0000001"}, library.TitleRef{IMDb: "tt0000002"}, library.TitleRef{IMDb: "tt0000003"}
+	if !h.dataOf(t, bob.ID, bobMovie).Played || !h.dataOf(t, bob.ID, bobFavorite).Favorite || h.dataOf(t, bob.ID, aliceMovie).Played {
+		t.Error("Bob's watch data")
+	}
+	for _, ref := range []library.TitleRef{aliceMovie, bobMovie, bobFavorite} {
+		if d := h.dataOf(t, alice.ID, ref); d.Played || d.Favorite {
+			t.Errorf("Alice was given %+v: %+v", ref, d)
+		}
+	}
+	if own := h.Own(bob.ID); own == nil || own.ID != started.ID {
+		t.Errorf("Bob's own import: %+v", own)
+	}
+	if own := h.Own(alice.ID); own != nil {
+		t.Errorf("Alice sees %+v", own)
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left: %d", open)
+	}
+	if _, err := h.ImportOwn(t.Context(), Connection{Kind: Plex, Address: h.f.url, Credentials: Credentials{Key: goodKey}}, bob); !errors.Is(err, ErrNotSignedIn) {
+		t.Errorf("from Plex: %v", err)
+	}
+
+	// While the administrator's import runs, Bob waits.
+	hold := make(chan struct{})
+	h.f.mu.Lock()
+	h.f.hold = hold
+	h.f.mu.Unlock()
+	if _, err := h.Start(t.Context(), to(h.f.url, Credentials{Key: goodKey}), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ImportOwn(t.Context(), asBob, bob); !errors.Is(err, ErrRunning) {
+		t.Errorf("while another import runs: %v", err)
+	}
+	h.Stop()
+	close(hold)
+	h.ended(t)
+	if own := h.Own(bob.ID); own == nil || own.ID != started.ID {
+		t.Errorf("Bob's own import after the administrator's: %+v", own)
+	}
+}
+
+// Emby takes its key in X-Emby-Token, and serves its API under /emby. It
+// has no /Users/Me: one of its API keys is taken, but not a user's key,
+// whose owner Polyfin could not tell, as some servers answer it with its
+// owner's data whatever user is asked. Signed in, each user is read signed
+// in as themselves.
+func TestEmbyIsReadWithItsHeaderAndUnderItsPath(t *testing.T) {
+	h := newHarness(t)
+	h.f.emby = true
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"}}
+	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password"}
+	movies := map[string]string{"jf-alice": "tt0000001", "jf-bob": "tt0000002"}
+	for user, imdb := range movies {
+		h.f.items[user] = map[string][]map[string]any{"IsPlayed": {movie(user, user, map[string]string{"Imdb": imdb},
+			map[string]any{"Played": true, "PlayCount": 3, "LastPlayedDate": "2026-09-01T20:00:00.0000000Z"})}}
+	}
+	h.f.ignoresUser = true
+	h.f.userKeys["alices-own-key"] = "jf-alice"
+	emby := func(credentials Credentials) Connection {
+		return Connection{Kind: Emby, Address: h.f.url, Credentials: credentials}
+	}
+
+	server, users, err := h.Users(t.Context(), emby(Credentials{Key: goodKey}))
+	if err != nil || server.Kind != Emby || server.Address != h.f.url+"/emby" || server.KeyOwner != "" || len(users) != 2 {
+		t.Fatalf("with the server's key: %+v %v %v", server, users, err)
+	}
+	if _, _, err := h.Users(t.Context(), emby(Credentials{Key: "alices-own-key"})); !errors.Is(err, ErrUserKey) {
+		t.Errorf("with Alice's own key: %v", err)
+	}
+
+	_, err = h.Start(t.Context(), emby(Credentials{Name: "Alice", Password: "alice's password"}), accounts.User{},
+		func(server Server, _ []User, signIn SignIn) ([]Target, error) {
+			if server.KeyOwner != "jf-alice" {
+				t.Errorf("signed in as Alice: %+v", server)
+			}
+			if err := signIn("jf-bob", "bob's password"); err != nil {
+				return nil, err
+			}
+			return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}, {JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := h.ended(t); status.State != StateDone || status.Kind != Emby {
+		t.Errorf("import: %+v", status)
+	}
+	for jellyfinID, user := range map[string]accounts.User{"jf-alice": alice, "jf-bob": bob} {
+		for other, imdb := range movies {
+			d := h.dataOf(t, user.ID, library.TitleRef{IMDb: imdb})
+			if d.Played != (other == jellyfinID) {
+				t.Errorf("%s has %s's movie: %v", user.Name, other, d.Played)
+			}
+			// Emby tells the play count and date only when asked.
+			if other == jellyfinID && (d.PlayCount != 3 || d.LastPlayed == nil || !d.LastPlayed.Equal(at("2026-09-01T20:00:00Z"))) {
+				t.Errorf("%s's plays: %+v", user.Name, d)
+			}
+		}
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left: %d", open)
+	}
+	for _, r := range h.f.sent() {
+		if strings.Contains(r.URL.String(), goodKey) || strings.Contains(r.Header.Get("Authorization"), "Token") {
+			t.Errorf("%s %s sent the key elsewhere than in X-Emby-Token", r.Method, r.URL.Path)
+		}
+	}
+}
+
+const plexToken = "plex-owners-token"
+
+// fakePlex answers as a Plex Media Server does, in JSON, to its owner's
+// token: its accounts, its library sections with their items and the
+// owner's data of them, and each account's playback history, a page at a
+// time.
+type fakePlex struct {
+	url string
+
+	mu       sync.Mutex
+	requests []*http.Request
+	accounts []map[string]any
+	sections []map[string]any
+	// items are each section's items by type number ("1" movies, "2"
+	// shows, "4" episodes), and history each account's plays, by id.
+	items   map[string]map[string][]map[string]any
+	history map[string][]map[string]any
+}
+
+func newFakePlex(t *testing.T) *fakePlex {
+	t.Helper()
+	f := &fakePlex{items: map[string]map[string][]map[string]any{}, history: map[string][]map[string]any{}}
+	server := httptest.NewServer(http.HandlerFunc(f.serve))
+	t.Cleanup(server.Close)
+	f.url = server.URL
+	return f
+}
+
+func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.requests = append(f.requests, r.Clone(r.Context()))
+	// Plex answers XML unless asked for JSON.
+	if r.Header.Get("Accept") != "application/json" {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, `<MediaContainer size="0"/>`)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	answer := func(container map[string]any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"MediaContainer": container})
+	}
+	if r.URL.Path == "/identity" {
+		answer(map[string]any{"machineIdentifier": "0a1b2c", "version": "1.42.2.10156"})
+		return
+	}
+	if r.Header.Get("X-Plex-Token") != plexToken {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	query := r.URL.Query()
+	// page answers the part of all the paging asks for.
+	page := func(all []map[string]any) {
+		start, _ := strconv.Atoi(query.Get("X-Plex-Container-Start"))
+		size, err := strconv.Atoi(query.Get("X-Plex-Container-Size"))
+		if err != nil {
+			size = len(all)
+		}
+		part := all[min(start, len(all)):min(start+size, len(all))]
+		answer(map[string]any{"size": len(part), "totalSize": len(all), "offset": start, "Metadata": part})
+	}
+	section, inSection := strings.CutPrefix(r.URL.Path, "/library/sections/")
+	switch {
+	case r.URL.Path == "/":
+		answer(map[string]any{"friendlyName": "Living room", "version": "1.42.2.10156"})
+	case r.URL.Path == "/accounts":
+		answer(map[string]any{"size": len(f.accounts), "Account": f.accounts})
+	case r.URL.Path == "/library/sections":
+		answer(map[string]any{"size": len(f.sections), "Directory": f.sections})
+	case inSection && strings.HasSuffix(section, "/all"):
+		items := f.items[strings.TrimSuffix(section, "/all")][query.Get("type")]
+		if query.Get("includeGuids") != "1" {
+			// Plex leaves the identifiers out unless asked.
+			var bare []map[string]any
+			for _, item := range items {
+				copied := maps.Clone(item)
+				delete(copied, "Guid")
+				bare = append(bare, copied)
+			}
+			items = bare
+		}
+		page(items)
+	case r.URL.Path == "/status/sessions/history/all":
+		page(f.history[query.Get("accountID")])
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+// guids are the Guid list of a Plex item.
+func guids(ids ...string) []map[string]any {
+	list := []map[string]any{}
+	for _, id := range ids {
+		list = append(list, map[string]any{"id": id})
+	}
+	return list
+}
+
+// The owner's watch data comes from the library sections: played movies
+// and episodes with their play counts and dates, and resume points.
+// Another account's comes from its playback history: its plays, counted
+// and dated. Episodes are found by their show's identifiers and their
+// numbers, and Plex is only read.
+func TestPlexImportsTheOwnersAndEachAccountsWatchData(t *testing.T) {
+	h := newHarness(t)
+	p := newFakePlex(t)
+	owner, carol := h.user(t, "owner"), h.user(t, "carol")
+	// A catalog listed a movie by TMDB, and a series by TVDB with its
+	// first episode.
+	h.listed(t, "movie", "movie|tmdb:550", `{"meta":{"id":"tmdb:550","type":"movie","name":"Listed by TMDB"}}`)
+	h.listed(t, "series", "series|tvdb:81189", `{"meta":{"id":"tvdb:81189","type":"series","name":"Listed by TVDB"}}`)
+	h.listed(t, "episode", "episode|tvdb:81189:1:1",
+		`{"seriesId":"tvdb:81189","video":{"id":"tvdb:81189:1:1","season":1,"episode":1}}`)
+	unix := func(text string) int64 { return at(text).Unix() }
+	p.accounts = []map[string]any{{"id": 0, "key": "/accounts/0", "name": ""}, {"id": 5, "key": "/accounts/5", "name": "Carol"},
+		{"id": 1, "key": "/accounts/1", "name": "Owner"}}
+	p.sections = []map[string]any{{"key": "1", "type": "movie", "title": "Movies"}, {"key": "2", "type": "show", "title": "Shows"},
+		{"key": "3", "type": "artist", "title": "Music"}}
+	p.items["1"] = map[string][]map[string]any{"1": {
+		{"ratingKey": "11", "type": "movie", "title": "Twice seen", "year": 2019, "Guid": guids("imdb://tt0000001", "tmdb://10"),
+			"viewCount": 2, "lastViewedAt": unix("2026-09-01T20:00:00Z"), "duration": 6000000},
+		{"ratingKey": "12", "type": "movie", "title": "Half seen", "year": 2020, "Guid": guids("tmdb://550"),
+			"viewOffset": 1800000, "lastViewedAt": unix("2026-09-02T20:00:00Z"), "duration": 6000000},
+		{"ratingKey": "13", "type": "movie", "title": "Holiday", "viewCount": 1, "lastViewedAt": unix("2026-09-03T20:00:00Z")},
+		{"ratingKey": "14", "type": "movie", "title": "Carol's", "year": 2021, "Guid": guids("imdb://tt0000004"), "duration": 6000000},
+	}}
+	// The show's identifiers, never the episodes' own, find its episodes.
+	p.items["2"] = map[string][]map[string]any{
+		"2": {{"ratingKey": "20", "type": "show", "title": "A show", "Guid": guids("tvdb://81189", "imdb://tt0100")}},
+		"4": {
+			{"ratingKey": "21", "type": "episode", "title": "Pilot", "grandparentRatingKey": "20", "grandparentTitle": "A show",
+				"parentIndex": 1, "index": 1, "Guid": guids("imdb://tt0900001", "tvdb://900001"), "viewCount": 1, "lastViewedAt": unix("2026-09-04T20:00:00Z")},
+			{"ratingKey": "22", "type": "episode", "title": "Second", "grandparentRatingKey": "20", "grandparentTitle": "A show",
+				"parentIndex": 1, "index": 2, "Guid": guids("imdb://tt0900002"), "viewOffset": 600000, "duration": 3000000,
+				"lastViewedAt": unix("2026-09-05T20:00:00Z")},
+		},
+	}
+	p.history["5"] = []map[string]any{
+		{"historyKey": "/status/sessions/history/3", "ratingKey": "14", "key": "/library/metadata/14", "type": "movie", "title": "Carol's",
+			"viewedAt": unix("2026-09-08T20:00:00Z"), "accountID": 5},
+		{"historyKey": "/status/sessions/history/2", "ratingKey": "21", "key": "/library/metadata/21", "type": "episode", "title": "Pilot",
+			"grandparentKey": "/library/metadata/20", "grandparentTitle": "A show", "parentIndex": 1, "index": 1,
+			"viewedAt": unix("2026-09-07T20:00:00Z"), "accountID": 5},
+		{"historyKey": "/status/sessions/history/1", "ratingKey": "14", "key": "/library/metadata/14", "type": "movie", "title": "Carol's",
+			"viewedAt": unix("2026-09-06T20:00:00Z"), "accountID": 5},
+		{"historyKey": "/status/sessions/history/0", "ratingKey": "31", "key": "/library/metadata/31", "type": "track", "title": "A song",
+			"viewedAt": unix("2026-09-05T20:00:00Z"), "accountID": 5},
+	}
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}}
+
+	server, users, err := h.Users(t.Context(), plex)
+	if err != nil || server.Name != "Living room" || server.KeyOwner != "" || len(users) != 2 || users[0].ID != "1" || !users[0].Administrator ||
+		users[1].ID != "5" || users[1].Name != "Carol" || users[1].Administrator {
+		t.Fatalf("users: %+v %+v %v", server, users, err)
+	}
+	if _, _, err := h.Users(t.Context(), Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: "wrong"}}); !errors.Is(err, ErrKeyRefused) {
+		t.Errorf("a wrong token: %v", err)
+	}
+	if _, err := h.Start(t.Context(), plex, accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: "1", User: owner.ID, UserName: "owner"}, {JellyfinID: "5", User: carol.ID, UserName: "carol"}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status := h.ended(t)
+	if status.State != StateDone || status.Kind != Plex {
+		t.Fatalf("import: %+v", status)
+	}
+	// The owner: two movies and an episode played (the home video is not
+	// found), a movie and an episode resumed.
+	if got := status.Users[0]; got.Played != 2 || got.Resumed != 2 || got.UnmatchedCount != 1 || got.Unmatched[0].Name != "Holiday" ||
+		got.Unmatched[0].Reason != ReasonNoIdentifier {
+		t.Errorf("owner: %+v", got)
+	}
+	if got := status.Users[1]; got.Played != 2 || got.Resumed != 0 || got.UnmatchedCount != 0 {
+		t.Errorf("Carol: %+v", got)
+	}
+	check := func(name string, user accounts.ID, ref library.TitleRef, want func(userdata.Data) bool) {
+		t.Helper()
+		if d := h.dataOf(t, user, ref); !want(d) {
+			t.Errorf("%s: %+v", name, d)
+		}
+	}
+	twice, half, carols := library.TitleRef{IMDb: "tt0000001"}, library.TitleRef{TMDB: 550}, library.TitleRef{IMDb: "tt0000004"}
+	pilot, second := library.TitleRef{Episode: true, TVDB: 81189, Season: 1, Number: 1}, library.TitleRef{Episode: true, TVDB: 81189, Season: 1, Number: 2}
+	check("owner's movie seen twice", owner.ID, twice, func(d userdata.Data) bool {
+		return d.Played && d.PlayCount == 2 && d.LastPlayed.Equal(at("2026-09-01T20:00:00Z"))
+	})
+	check("owner's movie half seen", owner.ID, half, func(d userdata.Data) bool {
+		return !d.Played && d.Position == 30*time.Minute && d.Runtime == 100*time.Minute && d.LastPlayed.Equal(at("2026-09-02T20:00:00Z"))
+	})
+	check("owner's pilot", owner.ID, pilot, func(d userdata.Data) bool { return d.Played && d.LastPlayed.Equal(at("2026-09-04T20:00:00Z")) })
+	check("owner's second episode", owner.ID, second, func(d userdata.Data) bool { return d.Position == 10*time.Minute })
+	check("Carol's movie, for the owner", owner.ID, carols, func(d userdata.Data) bool { return !d.Played })
+	check("Carol's movie", carol.ID, carols, func(d userdata.Data) bool {
+		return d.Played && d.PlayCount == 2 && d.LastPlayed.Equal(at("2026-09-08T20:00:00Z"))
+	})
+	check("Carol's pilot", carol.ID, pilot, func(d userdata.Data) bool { return d.Played && d.LastPlayed.Equal(at("2026-09-07T20:00:00Z")) })
+	check("the owner's movies, for Carol", carol.ID, twice, func(d userdata.Data) bool { return !d.Played })
+	check("the owner's resume point, for Carol", carol.ID, half, func(d userdata.Data) bool { return d.Position == 0 })
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, r := range p.requests {
+		if r.Method != http.MethodGet || strings.Contains(r.URL.String(), plexToken) {
+			t.Errorf("Plex was sent %s %s", r.Method, r.URL)
+		}
 	}
 }

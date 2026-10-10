@@ -28,7 +28,8 @@ const (
 // played one movie and Bob another, to the server's API key jellyfinKey, to
 // Alice's own key, which /Users/Me answers with her, and to Alice and Bob
 // signed in with their passwords. A session reads its own user's items
-// whatever user is asked, as some servers answer.
+// whatever user is asked, as some servers answer, and lists the users only
+// for Alice, the administrator, as Jellyfin does.
 func fakeJellyfin(t *testing.T) string {
 	t.Helper()
 	var mu sync.Mutex
@@ -79,6 +80,8 @@ func fakeJellyfin(t *testing.T) string {
 		case r.URL.Path == "/Sessions/Logout":
 			delete(sessions, token)
 			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/Users" && signedIn && session != "jf-alice":
+			w.WriteHeader(http.StatusForbidden)
 		case r.URL.Path == "/Users":
 			_, _ = io.WriteString(w, `[{"Id":"jf-alice","Name":"Alice","Policy":{"IsAdministrator":true}},
 				{"Id":"jf-bob","Name":"Bob","Policy":{"IsHidden":true}},{"Id":"jf-carol","Name":"CAROL","Policy":{}}]`)
@@ -315,5 +318,73 @@ func TestJellyfinImportSignsInAsEachUser(t *testing.T) {
 	}
 	if !playedMovie(t, lib, data, bobID, "tt0000002") || playedMovie(t, lib, data, bobID, "tt0000001") {
 		t.Error("Bob's movies")
+	}
+}
+
+// A user imports their own watch history under My account: signed in as
+// themselves on the server, they get their own data, and see only their
+// own import, which the administrator sees too. The password is never
+// answered back, a refused one says so, and with the setting off the
+// section is gone and the import refused.
+func TestUsersImportTheirOwnWatchHistory(t *testing.T) {
+	jellyfin := fakeJellyfin(t)
+	api, lib, data := jellyfinImportAPI(t)
+	admin := api.signedIn("root", true)
+	bob, carol := api.signedIn("bob", false), api.signedIn("carol", false)
+	asBob := map[string]any{"kind": "jellyfin", "address": jellyfin, "name": "Bob", "password": "wrong"}
+
+	if status, body, _ := bob.call(http.MethodPost, "/account/server-import", asBob); status != http.StatusBadRequest ||
+		body["error"] != "jellyfin_sign_in_refused" {
+		t.Errorf("a wrong password: %d %v", status, body)
+	}
+	asBob["password"] = "bob's password"
+	status, body, _ := bob.call(http.MethodPost, "/account/server-import", asBob)
+	if status != http.StatusOK || body["import"] == nil {
+		t.Fatalf("Bob's import: %d %v", status, body)
+	}
+	if raw, _ := json.Marshal(body); strings.Contains(string(raw), "bob's password") {
+		t.Error("the answer holds Bob's password")
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		_, body, _ := bob.call(http.MethodGet, "/account/server-import", nil)
+		if current, _ := body["import"].(map[string]any); body["enabled"] == true && current != nil && current["state"] != "running" {
+			if current["state"] != "done" {
+				t.Fatalf("Bob's import: %v", current)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Bob's import never ended: %v", body)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_, session, _ := bob.call(http.MethodGet, "/session", nil)
+	bobID, err := accounts.ParseID(session["user"].(map[string]any)["id"].(string))
+	if err != nil {
+		t.Fatalf("Bob's session: %v %v", session, err)
+	}
+	if !playedMovie(t, lib, data, bobID, "tt0000002") || playedMovie(t, lib, data, bobID, "tt0000001") {
+		t.Error("Bob's movies")
+	}
+	if _, body, _ := carol.call(http.MethodGet, "/account/server-import", nil); body["enabled"] != true || body["import"] != nil {
+		t.Errorf("Carol sees %v", body)
+	}
+	_, body, _ = admin.call(http.MethodGet, "/jellyfin-import", nil)
+	if current, _ := body["import"].(map[string]any); current == nil || current["own"] != true ||
+		current["startedBy"].(map[string]any)["name"] != "bob" {
+		t.Errorf("the administrator sees %v", body)
+	}
+
+	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en", "serverImports": false}
+	if status, body, _ := admin.call(http.MethodPut, "/settings", settings); status != http.StatusOK || body["serverImports"] != false {
+		t.Fatalf("turning the setting off: %d %v", status, body)
+	}
+	if _, body, _ := bob.call(http.MethodGet, "/account/server-import", nil); body["enabled"] != false || body["import"] != nil {
+		t.Errorf("with the setting off: %v", body)
+	}
+	if status, body, _ := bob.call(http.MethodPost, "/account/server-import", asBob); status != http.StatusForbidden ||
+		body["error"] != "server_imports_disabled" {
+		t.Errorf("importing with the setting off: %d %v", status, body)
 	}
 }

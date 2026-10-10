@@ -10,13 +10,13 @@ import (
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 )
 
-// The import of users and watch data from a Jellyfin server lives under
-// the users: it creates accounts and fills each account's watch data. The
-// API key and passwords are never stored nor sent back: the admin app sends
-// them with each request.
+// The import of users and watch data from a Jellyfin, Emby or Plex server
+// lives under the users: it creates accounts and fills each account's watch
+// data. The API key, token and passwords are never stored nor sent back:
+// the admin app sends them with each request.
 
-// jellyfinError answers the errors of reading a Jellyfin server, and of
-// asking for an import while one runs. It reports whether err was one.
+// jellyfinError answers the errors of reading a server, and of asking for
+// an import while one runs. It reports whether err was one.
 func jellyfinError(w http.ResponseWriter, err error) bool {
 	for _, known := range []struct {
 		err    error
@@ -29,6 +29,7 @@ func jellyfinError(w http.ResponseWriter, err error) bool {
 		// The key or account is known but may not list the server's users.
 		{jellyfinimport.ErrForbidden, http.StatusBadRequest, "jellyfin_key_limited"},
 		{jellyfinimport.ErrNotKeyOwner, http.StatusBadRequest, "jellyfin_key_owner_only"},
+		{jellyfinimport.ErrUserKey, http.StatusBadRequest, "emby_user_key"},
 		{jellyfinimport.ErrSignInRefused, http.StatusBadRequest, "jellyfin_sign_in_refused"},
 		{jellyfinimport.ErrSignInForbidden, http.StatusBadRequest, "jellyfin_sign_in_forbidden"},
 		{jellyfinimport.ErrUnreachable, http.StatusBadGateway, "jellyfin_unreachable"},
@@ -43,9 +44,23 @@ func jellyfinError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
-// jellyfinConnectionJSON is the server an administrator connects to, with
-// an API key or a user's name and password: one of the two.
+// importKind reads the kind of server a request names, Jellyfin when it
+// names none, and reports false for an unknown one.
+func importKind(kind string) (jellyfinimport.Kind, bool) {
+	switch k := jellyfinimport.Kind(kind); k {
+	case "":
+		return jellyfinimport.Jellyfin, true
+	case jellyfinimport.Jellyfin, jellyfinimport.Emby, jellyfinimport.Plex:
+		return k, true
+	}
+	return "", false
+}
+
+// jellyfinConnectionJSON is the server an administrator connects to, of
+// Kind, with an API key or a user's name and password: one of the two.
+// Plex takes its owner's token as the API key, and no account.
 type jellyfinConnectionJSON struct {
+	Kind    string `json:"kind"`
 	Address string `json:"address"`
 	APIKey  string `json:"apiKey"`
 	Account *struct {
@@ -54,21 +69,26 @@ type jellyfinConnectionJSON struct {
 	} `json:"account"`
 }
 
-// credentials reads the key or the account given, and reports false
-// unless exactly one is. A password may be empty: an account may have none.
-func (c jellyfinConnectionJSON) credentials() (jellyfinimport.Credentials, bool) {
+// connection reads the server, and the key or the account given, and
+// reports false unless exactly one is, or for an unknown kind. A password
+// may be empty: an account may have none.
+func (c jellyfinConnectionJSON) connection() (jellyfinimport.Connection, bool) {
+	kind, ok := importKind(c.Kind)
 	key := strings.TrimSpace(c.APIKey)
+	connection := jellyfinimport.Connection{Kind: kind, Address: c.Address, Credentials: jellyfinimport.Credentials{Key: key}}
 	if c.Account == nil {
-		return jellyfinimport.Credentials{Key: key}, key != ""
+		return connection, ok && key != ""
 	}
 	name := strings.TrimSpace(c.Account.Name)
-	return jellyfinimport.Credentials{Name: name, Password: c.Account.Password}, key == "" && name != ""
+	connection.Credentials = jellyfinimport.Credentials{Name: name, Password: c.Account.Password}
+	return connection, ok && kind != jellyfinimport.Plex && key == "" && name != ""
 }
 
 type jellyfinServerJSON struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-	Address string `json:"address"`
+	Kind    jellyfinimport.Kind `json:"kind"`
+	Name    string              `json:"name"`
+	Version string              `json:"version,omitempty"`
+	Address string              `json:"address"`
 }
 
 // jellyfinUserJSON is a user of the Jellyfin server; UserID is the Polyfin
@@ -84,7 +104,7 @@ type jellyfinUserJSON struct {
 	UserID          *string    `json:"userId"`
 }
 
-// jellyfinImportUsers lists the users of a Jellyfin server.
+// jellyfinImportUsers lists the users of a server.
 func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 	if h.JellyfinImport == nil {
 		writeError(w, http.StatusNotFound, "not_found")
@@ -94,12 +114,12 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	credentials, ok := body.credentials()
+	connection, ok := body.connection()
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	server, users, err := h.JellyfinImport.Users(r.Context(), body.Address, credentials)
+	server, users, err := h.JellyfinImport.Users(r.Context(), connection)
 	if jellyfinError(w, err) {
 		return
 	}
@@ -116,14 +136,15 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 	for _, user := range own {
 		byName[strings.ToLower(user.Name)] = user.ID.String()
 	}
-	// KeyOwner is the Jellyfin user the key belongs to, null for an API key
-	// of the server: a user's key imports only its owner's watch data.
+	// KeyOwner is the user the key belongs to, null for an API key of the
+	// server or Plex's owner's token: a user's key imports only its owner's
+	// watch data.
 	result := struct {
 		Server   jellyfinServerJSON `json:"server"`
 		Users    []jellyfinUserJSON `json:"users"`
 		KeyOwner *string            `json:"keyOwner"`
-	}{Server: jellyfinServerJSON{Name: server.Name, Version: server.Version, Address: server.Address}, Users: make([]jellyfinUserJSON, 0, len(users)),
-		KeyOwner: optional(server.KeyOwner)}
+	}{Server: jellyfinServerJSON{Kind: server.Kind, Name: server.Name, Version: server.Version, Address: server.Address},
+		Users: make([]jellyfinUserJSON, 0, len(users)), KeyOwner: optional(server.KeyOwner)}
 	for _, user := range users {
 		listed := jellyfinUserJSON{ID: user.ID, Name: user.Name, IsAdministrator: user.Administrator, IsDisabled: user.Disabled,
 			IsHidden: user.Hidden, LastActivityAt: utcSeconds(user.LastActivity)}
@@ -168,7 +189,7 @@ func (e *jellyfinEntryError) Error() string {
 }
 
 // startJellyfinImport creates the Polyfin users chosen, all or none, then
-// imports the watch data of the Jellyfin users asked in the background.
+// imports the watch data of the server's users asked in the background.
 func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	if h.JellyfinImport == nil {
 		writeError(w, http.StatusNotFound, "not_found")
@@ -181,22 +202,23 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	connection, ok := body.connection()
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
 	seen := map[string]bool{}
 	for _, entry := range body.Users {
+		// Plex has no sign-in: its owner's token reads every account.
 		if entry.JellyfinID == "" || seen[entry.JellyfinID] || (entry.UserID == nil) == (entry.Create == nil) ||
-			entry.JellyfinPassword != nil && !entry.WatchData {
+			entry.JellyfinPassword != nil && (!entry.WatchData || connection.Kind == jellyfinimport.Plex) {
 			writeError(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
 		seen[entry.JellyfinID] = true
 	}
-	credentials, ok := body.credentials()
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid_request")
-		return
-	}
 	var created []accounts.User
-	status, err := h.JellyfinImport.Start(r.Context(), body.Address, credentials,
+	status, err := h.JellyfinImport.Start(r.Context(), connection, sessionFrom(r.Context()).User,
 		func(server jellyfinimport.Server, users []jellyfinimport.User, signIn jellyfinimport.SignIn) ([]jellyfinimport.Target, error) {
 			listed := make(map[string]bool, len(users))
 			for _, user := range users {
@@ -339,13 +361,21 @@ func (h *handler) stopJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	h.jellyfinImport(w, r)
 }
 
-// jellyfinImportJSON is how an import goes, or went.
+// jellyfinImportJSON is how an import goes, or went. StartedBy is the
+// Polyfin user who started it, and Own tells an import of their own watch
+// data, made under My account.
 type jellyfinImportJSON struct {
 	ID     string `json:"id"`
 	Server struct {
-		Name    string `json:"name"`
-		Address string `json:"address"`
+		Kind    jellyfinimport.Kind `json:"kind"`
+		Name    string              `json:"name"`
+		Address string              `json:"address"`
 	} `json:"server"`
+	StartedBy struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"startedBy"`
+	Own       bool                     `json:"own"`
 	State     string                   `json:"state"`
 	Problem   *string                  `json:"problem"`
 	StartedAt time.Time                `json:"startedAt"`
@@ -383,10 +413,11 @@ func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
 	if status == nil {
 		return nil
 	}
-	result := &jellyfinImportJSON{ID: status.ID, State: status.State, Problem: optional(status.Problem),
+	result := &jellyfinImportJSON{ID: status.ID, Own: status.Own, State: status.State, Problem: optional(status.Problem),
 		StartedAt: status.StartedAt.UTC().Truncate(time.Second), EndedAt: utcSeconds(status.EndedAt),
 		Users: make([]jellyfinUserImportJSON, 0, len(status.Users))}
-	result.Server.Name, result.Server.Address = status.ServerName, status.Address
+	result.Server.Kind, result.Server.Name, result.Server.Address = status.Kind, status.ServerName, status.Address
+	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
 	for _, u := range status.Users {
 		user := jellyfinUserImportJSON{JellyfinID: u.JellyfinID, JellyfinName: u.JellyfinName, UserID: u.User.String(), UserName: u.UserName,
 			State: u.State, Read: u.Read, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites, UnmatchedCount: u.UnmatchedCount,
