@@ -171,14 +171,23 @@ const users = {
       open: 'Import from Jellyfin',
       title: 'Import from Jellyfin',
       description:
-        'Bring accounts and their watch data over from a Jellyfin server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to Jellyfin. Passwords cannot be imported: you set one for each new account.',
+        'Bring accounts and their watch data over from a Jellyfin server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to Jellyfin. Jellyfin does not give out passwords: you set one for each new account, or keep the one a user signs in with.',
       connectTitle: 'Connect to Jellyfin',
       connectHelp:
-        'The address and API key are only used for this import: Polyfin does not save them.',
+        'The address, key and passwords are only used for this import: Polyfin does not save them.',
       address: 'Server address',
       addressHelp: 'The address Jellyfin opens at in a browser. A local network address works.',
+      connectWith: 'Connect with',
+      withApiKey: 'An API key',
+      withAccount: 'A user account',
       apiKey: 'API key',
-      apiKeyHelp: 'Create one in Jellyfin’s dashboard, under API Keys.',
+      apiKeyHelp:
+        'Create one in Jellyfin’s dashboard, under API Keys: it reads every user’s watch data.',
+      accountName: 'User name',
+      accountNameHelp:
+        'An administrator’s account lists every user. Polyfin signs in as Jellyfin’s apps do, then signs out.',
+      accountPassword: 'Password',
+      accountPasswordHelp: 'Leave it empty if the account has none.',
       connect: 'Connect',
       connecting: 'Connecting…',
       chooseTitle: 'Choose who to import',
@@ -193,10 +202,14 @@ const users = {
       watchData: 'Import watch data',
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
-      watchDataOwnerOnly: (owner: string | null) =>
-        `With this key, only ${owner === null ? 'its owner’s' : `${owner}’s`} watch data can be imported.`,
-      userKey: (owner: string | null) =>
-        `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data. To import the other users’ watch data, connect with an API key from the server’s dashboard, or with each user’s own key. Their accounts can still be created here.`,
+      ownerNotice: (owner: string | null, signedIn: boolean) =>
+        `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
+      serverPassword: (server: string) => `Password on ${server}`,
+      serverPasswordHelp: (user: string) =>
+        `Polyfin signs in as ${user} to read their watch data, then signs out. Leave it empty if the account has none.`,
+      keepPassword: 'Keep this password in Polyfin',
+      keepPasswordHelp:
+        'The new account signs in to Polyfin with the same password, if it has at least 8 characters.',
       nothingToImport: 'Choose a user to create, or watch data to import.',
       start: 'Start import',
       starting: 'Starting…',
