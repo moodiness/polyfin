@@ -12,6 +12,9 @@ type Options struct {
 	// back to the DeviceProfile's MaxStreamingBitrate, and to no limit when
 	// the profile has none.
 	MaxStreamingBitrate int64
+	// UserBitrate is the user's MaxBitrate, 0 for none: the bitrate limit
+	// is theirs, rather than the app's, when it is not lower.
+	UserBitrate int64
 	// AudioStreamIndex is the audio track asked for; nil plays the source's
 	// default.
 	AudioStreamIndex *int
@@ -31,8 +34,9 @@ type Options struct {
 	// MaxHeight is the tallest video the app is sent as it is, 0 for no
 	// limit: taller video only plays converted, refused direct play with
 	// VideoResolutionNotSupported, as a profile's height limit refuses it.
-	// Converted video is no taller than either height that is positive:
-	// ConversionHeight caps it whatever the source.
+	// It is the user's quality group. Converted video is no taller than
+	// either height that is positive: ConversionHeight, the settings' cap,
+	// caps it whatever the source.
 	MaxHeight, ConversionHeight int
 	// Can is what the installed FFmpeg converts with.
 	Can Capabilities
@@ -464,11 +468,9 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 	if options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
 		// Converted video is scaled down to the lower of the heights it is
 		// capped at, which never prevents a conversion.
-		height := options.ConversionHeight
-		if options.MaxHeight > 0 && (height == 0 || options.MaxHeight < height) {
-			height = options.MaxHeight
-		}
-		if video = ConvertVideo(t.VideoCodec, VideoLimit(limit, d.played), height, *d.video, options.Can); video == nil {
+		limits := Limits{Bitrate: limit, Video: VideoLimit(limit, d.played), Group: options.MaxHeight, Server: options.ConversionHeight}
+		limits.ByUser = options.UserBitrate > 0 && limit > 0 && limit >= options.UserBitrate
+		if video = ConvertVideo(t.VideoCodec, limits, *d.video, options.Can); video == nil {
 			return false, nil, nil
 		}
 	}

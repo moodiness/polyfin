@@ -257,7 +257,7 @@ type playbackInfoRequest struct {
 	// userLimit is the user's MaxBitrate, 0 for none (see limitBitrate).
 	userLimit int64
 	// group is the user's quality group, 0 for none, and conversionHeight
-	// the height converted video is scaled down to (see limitHeight).
+	// the settings' cap on the height of converted video (see limitHeight).
 	group, conversionHeight int
 }
 
@@ -555,6 +555,7 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	streams := source.MediaStreams
 	options := playback.Options{
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
+		UserBitrate:         request.userLimit,
 		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,

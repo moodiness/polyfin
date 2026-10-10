@@ -36,6 +36,9 @@ type LiveSession struct {
 	// Reasons are why the play session streamed over HLS, Jellyfin's
 	// TranscodeReasons, when known.
 	Reasons []string
+	// Size is what set the size of the video the play session converts,
+	// nil when not known.
+	Size *playback.ConversionSize
 }
 
 // LiveSessions lists the devices playing, the latest started first.
@@ -75,6 +78,9 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 			Encodings: encodings[now.PlaySessionID]}
 		if now.PlaySessionID != "" {
 			session.Reasons, _ = h.reasons.Get(now.PlaySessionID)
+			if size, ok := h.sizes.Get(now.PlaySessionID); ok {
+				session.Size = &size
+			}
 		}
 		if item, err := h.played(ctx, user, now.Item); err == nil {
 			session.Item, session.Found = item, true

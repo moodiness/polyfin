@@ -42,16 +42,16 @@ func TestTuningChangesConversions(t *testing.T) {
 		prefer bool
 		want   string
 	}{{"hevc,h264", false, "h264"}, {"hevc,h264", true, "hevc"}, {"h264,hevc", true, "h264"}, {"hevc", false, "hevc"}} {
-		if got := ConvertVideo(tc.codecs, 0, 0, sdr, tuned(Tuning{PreferHEVC: tc.prefer})); got == nil || got.Codec != tc.want {
+		if got := ConvertVideo(tc.codecs, Limits{}, sdr, tuned(Tuning{PreferHEVC: tc.prefer})); got == nil || got.Codec != tc.want {
 			t.Errorf("%s, HEVC preferred %v: %+v, want %s", tc.codecs, tc.prefer, got, tc.want)
 		}
 	}
 	// Without tone mapping, HDR converts as it is, at full height, but not
 	// Dolby Vision that other players cannot read.
-	if got := ConvertVideo("h264", 0, 0, hdr, tuned(Tuning{NoToneMapping: true})); got == nil || got.ToneMap || got.Height != 1080 {
+	if got := ConvertVideo("h264", Limits{}, hdr, tuned(Tuning{NoToneMapping: true})); got == nil || got.ToneMap || got.Height != 1080 {
 		t.Errorf("HDR without tone mapping: %+v", got)
 	}
-	if got := ConvertVideo("h264", 0, 0, dolby, tuned(Tuning{NoToneMapping: true})); got != nil {
+	if got := ConvertVideo("h264", Limits{}, dolby, tuned(Tuning{NoToneMapping: true})); got != nil {
 		t.Errorf("Dolby Vision without tone mapping: %+v", got)
 	}
 
@@ -129,7 +129,7 @@ func TestTuningChangesConversions(t *testing.T) {
 	} {
 		c := can
 		c.Hardware, c.Tuning = gpu, tuning
-		remux := Remux{ConvertVideo: ConvertVideo(tc.codecs, 0, 0, interlaced, c), ConvertAudio: &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}}
+		remux := Remux{ConvertVideo: ConvertVideo(tc.codecs, Limits{}, interlaced, c), ConvertAudio: &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}}
 		r := hls.Remux{Audio: 1}
 		remux.convert(&r, tc.stream, tuning)
 		if r.Encode == nil || !reflect.DeepEqual(*r.Encode, tc.want) || r.Threads != 4 {
@@ -144,7 +144,7 @@ func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 	gpu := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}}
 	can := Capabilities{Encoders: []string{"libx264"}, Hardware: gpu}
 	interlaced := MediaStream{Codec: "hevc", VideoRange: "SDR", Width: new(1920), Height: new(1080), IsInterlaced: true}
-	remux := Remux{ConvertVideo: ConvertVideo("h264", 0, 0, interlaced, can), ConvertAudio: &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}}
+	remux := Remux{ConvertVideo: ConvertVideo("h264", Limits{}, interlaced, can), ConvertAudio: &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}}
 	r := hls.Remux{Audio: 1}
 	remux.convert(&r, media.Stream{Codec: "hevc", BitDepth: 10, AverageRate: 25}, Tuning{})
 	want := hls.VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 25, Deinterlace: true, Hardware: gpu}
@@ -179,7 +179,7 @@ func TestTunedConversionPlays(t *testing.T) {
 	can := Capabilities{Encoders: m.Encoders(), Tuning: tuning}
 	stream := media.Stream{Index: 0, Type: "video", Codec: "h264", Width: 320, Height: 180, AverageRate: 24, BitDepth: 8}
 	remux := Remux{Format: hls.FMP4,
-		ConvertVideo: ConvertVideo("hevc,h264", 0, 0, MediaStream{Codec: "h264", VideoRange: "SDR", Width: new(320), Height: new(180)}, can),
+		ConvertVideo: ConvertVideo("hevc,h264", Limits{}, MediaStream{Codec: "h264", VideoRange: "SDR", Width: new(320), Height: new(180)}, can),
 		ConvertAudio: ConvertAudio("aac", "", 6, "5.1(side)", tuning)}
 	plan := hls.NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
 	r := hls.Remux{Input: input, Video: 0, Audio: 1, Format: hls.FMP4, Plan: plan}

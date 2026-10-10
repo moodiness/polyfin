@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // Sessions are the playbacks under way, and the commands administrators
@@ -111,6 +112,21 @@ type videoConversionJSON struct {
 	Bitrate  int64  `json:"bitrate"`
 	ToneMap  bool   `json:"toneMap"`
 	Burn     bool   `json:"burnSubtitles"`
+	// LimitedBy is what set the size: source when nothing made it smaller
+	// than the source; gpu (4K), processor (1080p) or toneMapping (HDR
+	// converted on the processor), the server's own caps; qualityGroup,
+	// the user's group; serverMax, the settings' maximum quality of
+	// converted video; bitrate, the bitrate limit. Empty when not known.
+	// On a tie the group comes first, then serverMax, then the server's
+	// caps. MaxHeight is the height that capped it, 0 for source and when
+	// not known.
+	LimitedBy string `json:"limitedBy"`
+	MaxHeight int    `json:"maxHeight"`
+	// BitrateLimit is, for bitrate, the limit in bits per second, and
+	// BitrateLimitOf whose it is: app, the app's MaxStreamingBitrate, or
+	// user, the user's maximum quality (MaxBitrate). Else 0 and empty.
+	BitrateLimit   int64  `json:"bitrateLimit"`
+	BitrateLimitOf string `json:"bitrateLimitOf"`
 }
 
 type audioConversionJSON struct {
@@ -179,6 +195,15 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 				ToneMap: v.ToneMap, Burn: v.Burn != nil}
 			if v.Hardware != nil {
 				result.Video.Hardware = v.Hardware.Method
+			}
+			if size := s.Size; size != nil {
+				result.Video.LimitedBy, result.Video.MaxHeight = size.Reason, size.MaxHeight
+				if size.Reason == playback.SizeBitrate {
+					result.Video.BitrateLimit, result.Video.BitrateLimitOf = size.Bitrate, "app"
+					if size.ByUser {
+						result.Video.BitrateLimitOf = "user"
+					}
+				}
 			}
 		}
 		result.Audio = nil

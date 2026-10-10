@@ -87,20 +87,20 @@ func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 		{"a cap above what Polyfin converts to", 2160, 0, video(3840, 2160), h264(1920, 1080, 10_000_000)},
 		{"a limit lower than the cap's bitrate", 720, 2_000_000, video(1920, 1080), h264(960, 540, 2_000_000)},
 	} {
-		if got := ConvertVideo("h264", test.limit, test.maxHeight, test.video, can); !reflect.DeepEqual(got, test.want) {
+		if got := sizeless(ConvertVideo("h264", Limits{Bitrate: test.limit, Video: test.limit, Server: test.maxHeight}, test.video, can)); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)
 		}
 	}
 	// HDR tone mapped on the processor stays at 720p at most.
 	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)}
 	for maxHeight, height := range map[int]int{1080: 720, 480: 480} {
-		if got := ConvertVideo("h264", 0, maxHeight, hdr, can); got == nil || got.Height != height || !got.ToneMap {
+		if got := ConvertVideo("h264", Limits{Server: maxHeight}, hdr, can); got == nil || got.Height != height || !got.ToneMap {
 			t.Errorf("HDR at most %dp: %+v", maxHeight, got)
 		}
 	}
 	// The encoding FFmpeg runs takes the size of the conversion.
 	stream := media.Stream{Index: 0, Type: "video", Codec: "mpeg2video", Width: 1920, Height: 800, AverageRate: 24}
-	remux := Remux{ConvertVideo: ConvertVideo("h264", 0, 480, video(1920, 800), can)}
+	remux := Remux{ConvertVideo: ConvertVideo("h264", Limits{Server: 480}, video(1920, 800), can)}
 	var encoding hls.Remux
 	remux.convert(&encoding, stream, Tuning{})
 	if e := encoding.Encode; e == nil || e.Width != 854 || e.Height != 354 || e.Bitrate != 2_000_000 {

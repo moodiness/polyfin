@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -354,8 +356,15 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 		_, _, playlist := fetchText(t, p.url+target)
 		return target, playlist
 	}
-	if _, playlist := master(video); !strings.Contains(playlist, "RESOLUTION=1920x800") {
-		t.Errorf("converted without a cap:\n%s", playlist)
+	// What set the size, as the dashboard reads it for the play session.
+	sizeOf := func(target string) playback.ConversionSize {
+		t.Helper()
+		parsed, _ := url.Parse(target)
+		size, _ := p.handler.sizes.Get(parsed.Query().Get("PlaySessionId"))
+		return size
+	}
+	if target, playlist := master(video); !strings.Contains(playlist, "RESOLUTION=1920x800") || sizeOf(target) != (playback.ConversionSize{Reason: playback.SizeSource}) {
+		t.Errorf("converted without a cap, %+v:\n%s", sizeOf(target), playlist)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.MaxConversionHeight = 480 })
 	// 854 × 480 at most, at the bitrate of 480p, 2 Mb/s, at most 3 Mb/s
@@ -363,6 +372,9 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 	target, playlist := master(video)
 	if !strings.Contains(playlist, "BANDWIDTH=3640000,") || !strings.Contains(playlist, "RESOLUTION=854x354") {
 		t.Errorf("converted under 480 lines:\n%s", playlist)
+	}
+	if size := sizeOf(target); size != (playback.ConversionSize{Reason: playback.SizeServerMax, MaxHeight: 480}) {
+		t.Errorf("what set the size under 480 lines: %+v", size)
 	}
 	if _, playlist := master(copied); !strings.Contains(playlist, "RESOLUTION=1920x800") {
 		t.Errorf("copied under 480 lines:\n%s", playlist)
@@ -378,5 +390,10 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 		"-show_entries", "stream=width,height", "-of", "csv=p=0", path).Output()
 	if got := strings.TrimSpace(string(out)); status != http.StatusOK || got != "854,354" {
 		t.Errorf("segment: %d, video %q", status, got)
+	}
+	// The user's bitrate limit, below what 480p needs, sets 360p.
+	p.limit(t, p.user, func(c *accounts.UserChanges) { c.MaxBitrate = new(600_000) })
+	if target, _ := master(video); sizeOf(target) != (playback.ConversionSize{Reason: playback.SizeBitrate, MaxHeight: 360, Bitrate: 600_000, ByUser: true}) {
+		t.Errorf("what set the size under the user's limit: %+v", sizeOf(target))
 	}
 }

@@ -81,11 +81,10 @@ func (h *Handler) inGroup(ctx context.Context, user accounts.User, versions []li
 }
 
 // limitHeight keeps in request the user's quality group, the tallest
-// video a PlaybackInfo sends as it is, and the height video converted for
-// them is scaled down to: the lower of the group and the settings' cap.
+// video a PlaybackInfo sends as it is, and the settings' cap on the height
+// of converted video: converted video is scaled down to the lower of them.
 func (h *Handler) limitHeight(request *playbackInfoRequest, user accounts.User) {
-	request.group = user.QualityGroup
-	request.conversionHeight = h.Accounts.ConversionHeight(user)
+	request.group, request.conversionHeight = h.Accounts.ConversionCaps(user)
 }
 
 // aboveGroup reports whether a decision would send video taller than the

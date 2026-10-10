@@ -116,6 +116,7 @@ func TestLiveSessionsTellHowEachPlaybackPlays(t *testing.T) {
 			Video:      &hls.VideoEncoding{Encoder: "h264_nvenc", Width: 1920, Height: 1080, Bitrate: 8_000_000, Hardware: gpu},
 			AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 192_000}},
 		Reasons: []string{"VideoCodecNotSupported", "ContainerBitrateExceedsLimit"},
+		Size:    &playback.ConversionSize{Reason: playback.SizeBitrate, MaxHeight: 1080, Bitrate: 8_400_000, ByUser: true},
 	}
 	direct := jellyfin.LiveSession{
 		User:    accounts.User{ID: randomID(), Name: "bob"},
@@ -144,6 +145,14 @@ func TestLiveSessionsTellHowEachPlaybackPlays(t *testing.T) {
 	if first.Source == nil || first.Source.Height != 2160 || first.Source.VideoCodec != "hevc" || first.Sent == nil ||
 		first.Sent.Height != 1080 || first.Sent.VideoCodec != "h264" || first.Sent.AudioCodec != "aac" || first.Sent.Bitrate != 8_192_000 {
 		t.Errorf("source and sent: %+v %+v", first.Source, first.Sent)
+	}
+	// What set the size, with the bitrate limit and whose it is, as the
+	// JSON names them.
+	var raw []map[string]any
+	admin.raw(http.MethodGet, "/sessions", "", &raw)
+	if video, _ := raw[0]["video"].(map[string]any); video["limitedBy"] != "bitrate" || video["maxHeight"] != float64(1080) ||
+		video["bitrateLimit"] != float64(8_400_000) || video["bitrateLimitOf"] != "user" {
+		t.Errorf("what set the size: %v", raw[0]["video"])
 	}
 	second := listed[1]
 	if second.Delivery != deliveryDirectPlay || second.Item != nil || second.Sent != nil || second.Video != nil || second.Reasons == nil {
