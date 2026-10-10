@@ -324,6 +324,8 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, defaultPageSize)
 	parent, hasParent := b.guid(r, "parentId")
+	var categories programQuery
+	readCategories(b, r, &categories)
 	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok {
 		return
@@ -360,18 +362,23 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if term := strings.TrimSpace(query(r, "searchTerm")); term != "" {
-		// What the user's music addons find comes after the titles; both
-		// are asked at once.
-		var music []library.Item
-		var musicErr error
+		// What the user's music addons find comes after the titles, then
+		// the channels and programmes of their Live TV; all are asked at
+		// once.
+		var music, live []library.Item
+		var musicErr, liveErr error
 		var searches sync.WaitGroup
 		if kinds := musicSearchKinds(keep); len(kinds) > 0 {
 			searches.Go(func() { music, musicErr = h.Library.SearchMusic(r.Context(), user, term, kinds, max(start, 0)+limit) })
 		}
+		searches.Go(func() { live, liveErr = h.searchLiveTv(r, user, term, keep, categories, max(start, 0)+limit) })
 		found, err := h.Library.Search(r.Context(), user, term, searchKinds(keep), max(start, 0)+limit)
 		searches.Wait()
 		if err == nil {
 			found, err = append(found, music...), musicErr
+		}
+		if err == nil {
+			found, err = append(found, live...), liveErr
 		}
 		if err != nil {
 			h.browseError(w, r, err)
@@ -382,6 +389,8 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			h.internalError(w, r, err)
 			return
 		}
+		h.addCurrentPrograms(r, user, items, fields)
+		h.addTimers(r.Context(), items)
 		writeJSON(w, http.StatusOK, pageOf(items, start, limit, len(items)))
 		return
 	}

@@ -97,6 +97,11 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 		!slices.Equal(programNames(programs), []string{"Talk Show"}) {
 		t.Errorf("posted query: %d %s", status, raw)
 	}
+	// A search finds the guide's programmes too, by name and category.
+	s.get(t, "/Items?recursive=true&searchTerm=talk&includeItemTypes=LiveTvProgram&isSports=true", token, &programs)
+	if names := programNames(programs); !slices.Equal(names, []string{"Talk Show"}) {
+		t.Errorf("programmes searched: %q", names)
+	}
 
 	// Upcoming, by start time, limited without a count: read no further.
 	s.get(t, "/LiveTv/Programs/Recommended?IsAiring=false&HasAired=false&Limit=1&EnableTotalRecordCount=false", token, &programs)

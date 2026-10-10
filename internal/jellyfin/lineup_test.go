@@ -126,6 +126,15 @@ func TestLineupsShowAndPlayAsArranged(t *testing.T) {
 	if channels.Items[2].Id != zeb.ID.String() {
 		t.Errorf("a channel's item is its line-up id: %s, want %s", channels.Items[2].Id, zeb.ID)
 	}
+	// A search finds the channels as apps list them: a merged channel once,
+	// by its own name, and none turned off.
+	for term, want := range map[string][]string{"zeb": {"Zeb One"}, "docs": {"Quill Docs"}} {
+		var found QueryResult
+		s.get(t, "/Items?recursive=true&includeItemTypes=LiveTvChannel&searchTerm="+term, token, &found)
+		if names := programNames(found); !slices.Equal(names, want) {
+			t.Errorf("channels searched for %q: %q, want %q", term, names, want)
+		}
+	}
 
 	// The merged channel's details list its streams, best first.
 	var details BaseItemDto

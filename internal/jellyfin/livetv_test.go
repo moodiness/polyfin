@@ -216,6 +216,44 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 	compareLive(t, "livetv-program", body)
 }
 
+// A search finds the user's channels and the programmes of their guide by
+// name, whatever the case and accents, under every name apps ask them by:
+// jellyfin-web searches TvChannel among other types, and LiveTvProgram
+// with the categories of its rows; Jellyfin's Android TV app searches
+// LiveTvChannel and LiveTvProgram.
+func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
+	addon := newTVAddon(t, true, "")
+	s, token, _ := tuned(t, addon)
+	search := func(query string) QueryResult {
+		t.Helper()
+		var found QueryResult
+		s.get(t, "/Items?recursive=true&"+query, token, &found)
+		return found
+	}
+	for query, want := range map[string][]string{
+		"searchTerm=one&includeItemTypes=Movie,Series,Episode,Playlist,MusicAlbum,Audio,TvChannel,PhotoAlbum,Photo,AudioBook,Book,BoxSet": {
+			"TvChannel One"},
+		"searchTerm=%C3%B3NE&includeItemTypes=LiveTvChannel":       {"TvChannel One"},
+		"searchTerm=n&includeItemTypes=LiveTvProgram":              {"Program Now", "Program Next"},
+		"searchTerm=n&includeItemTypes=LiveTvProgram&isMovie=true": {"Program Next"},
+		"searchTerm=n&includeItemTypes=LiveTvProgram&isNews=true":  {"Program Now"},
+		"searchTerm=one&includeItemTypes=Movie,Series":             {},
+	} {
+		var got []string
+		for _, item := range search(query).Items {
+			got = append(got, item.Type+" "+item.Name)
+		}
+		if !slices.Equal(got, want) && len(got)+len(want) > 0 {
+			t.Errorf("%s: %q, want %q", query, got, want)
+		}
+	}
+	// A channel found carries what it airs now, as listings of channels do.
+	if found := search("searchTerm=one&includeItemTypes=TvChannel"); len(found.Items) != 1 || found.Items[0].CurrentProgram == nil ||
+		found.Items[0].CurrentProgram.Name != "Now" {
+		t.Errorf("channel found: %+v", found.Items)
+	}
+}
+
 // The On Now rows ask what airs now: only today's guide is read for it,
 // not the week ahead.
 func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {

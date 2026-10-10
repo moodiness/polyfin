@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -244,6 +245,47 @@ func (h *Handler) channelListing(w http.ResponseWriter, r *http.Request, user ac
 	return true
 }
 
+// searchLiveTv finds, for a search, the user's channels whose name holds
+// term, and the programmes of their guides not ended yet whose name holds
+// it, those of the categories asked, when keep keeps channels and
+// programmes: Live TV comes from no addon search. Case and accents do not
+// count. It finds at most limit channels, and limit programmes, the first
+// to air.
+func (h *Handler) searchLiveTv(r *http.Request, user accounts.User, term string, keep func(library.Item) bool, categories programQuery,
+	limit int) ([]library.Item, error) {
+	channels, programs := keep(library.Item{Kind: library.KindChannel}), keep(library.Item{Kind: library.KindProgram})
+	if !channels && !programs || limit == 0 {
+		return nil, nil
+	}
+	if has, err := h.Library.HasChannels(r.Context(), user); err != nil || !has {
+		return nil, err
+	}
+	folded := iptv.Fold(term)
+	holds := func(name string) bool { return strings.Contains(iptv.Fold(name), folded) }
+	var found []library.Item
+	if channels {
+		all, err := h.Library.Channels(r.Context(), user)
+		if err != nil {
+			return nil, err
+		}
+		for _, channel := range all {
+			if holds(channel.Name) && (limit < 0 || len(found) < limit) {
+				found = append(found, channel)
+			}
+		}
+	}
+	if programs {
+		now := time.Now()
+		guide, err := h.Library.Guide(r.Context(), user, library.GuideQuery{From: now, To: now.AddDate(0, 0, guideDays),
+			Keep: func(p library.Item) bool { return holds(p.Name) && categories.keeps(p, now) }, Limit: max(limit, 0)})
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, guide...)
+	}
+	return found, nil
+}
+
 // liveChannels lists the user's channels, with the programme each airs
 // now when the guide has it.
 func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
@@ -443,8 +485,8 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 			*field = new(Time(parsed))
 		}
 	}
-	for name, field := range map[string]**bool{"hasAired": &q.HasAired, "isAiring": &q.IsAiring, "isMovie": &q.IsMovie,
-		"isSeries": &q.IsSeries, "isNews": &q.IsNews, "isKids": &q.IsKids, "isSports": &q.IsSports, "enableUserData": &q.EnableUserData,
+	readCategories(b, r, &q)
+	for name, field := range map[string]**bool{"hasAired": &q.HasAired, "isAiring": &q.IsAiring, "enableUserData": &q.EnableUserData,
 		"enableTotalRecordCount": &q.EnableTotalRecordCount} {
 		if value, ok := b.bool(r, name); ok {
 			*field = new(value)
@@ -462,6 +504,17 @@ func readProgramQuery(w http.ResponseWriter, r *http.Request) (programQuery, boo
 	}
 	q.readChannels()
 	return q, true
+}
+
+// readCategories reads the programme categories a listing keeps, isMovie,
+// isSeries, isNews, isKids and isSports, into q, each when set.
+func readCategories(b bindErrors, r *http.Request, q *programQuery) {
+	for name, field := range map[string]**bool{"isMovie": &q.IsMovie, "isSeries": &q.IsSeries, "isNews": &q.IsNews, "isKids": &q.IsKids,
+		"isSports": &q.IsSports} {
+		if value, ok := b.bool(r, name); ok {
+			*field = new(value)
+		}
+	}
 }
 
 // readChannels parses the channels asked once, rather than for each
