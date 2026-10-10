@@ -8,7 +8,7 @@ Polyfin has separate accounts for each user, with Jellyfin authentication and Qu
 
 An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin server, an administrator can bring its accounts and what each user watched over with **Import from Jellyfin**; see [Moving from Jellyfin](#moving-from-jellyfin).
+Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin server, an administrator can bring its accounts and what each user watched over with **Import from Jellyfin**; see [Moving from Jellyfin](#moving-from-jellyfin). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
 ## Watch state
 
@@ -124,6 +124,50 @@ Nothing is written to the Jellyfin server: the import only reads it. Signing in 
   - The key and passwords are never answered back.
 - Polyfin reads Jellyfin with `GET` requests, sending the key or session token as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
 - It signs in with `POST /Users/AuthenticateByName`, naming itself and a device of its own in the `Authorization` header as Jellyfin's apps do, and signs out with `POST /Sessions/Logout`.
+
+## Invite links
+
+An invite link lets the people an administrator sends it to create their own account, so that nobody has to choose a password for them and send it in a message. **Create an invite link**, at the top of **Users**, asks for:
+
+- **Accounts it may create**: from 1 to 100, 1 by default. One link can serve a whole family.
+- **Expires**: after 1, 7 (the default), 30 or 90 days, or **Never**.
+- **Settings of**: the user whose settings the new accounts copy, or a new user, as with **Create a user**.
+
+With a model, a new account copies everything the model's page sets except the name, the password and **Administrator**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. An invite link never makes an administrator.
+
+The link is shown once, with **Copy link**: Polyfin keeps only a hash of it and cannot show it again. It starts with the **Public address** (**Settings › Notifications**) when one is set, and with the address the admin app is open at otherwise.
+
+**Invite links**, under the accounts, lists each link with the accounts it created out of those it may create, whose settings it gives, when it expires, who created it, and its state: **Active**, **Used up**, **Expired** or **Revoked**. **Revoke** stops an active link at once; the accounts it created are kept. Deleting the user a link copies revokes the link too.
+
+### The guest's page
+
+The link opens a page of the admin app, `/admin/invite/…`, that needs no account, in English or French as the guest chooses. It shows the server's name and asks for **Your name**, a **Password** and **Confirm password**, under the rules of **Create a user**. Once the account is created, the guest lands on the [web client](web-client.md), signed in. Without the web client, they land on the admin app instead, signed in, where a member sees their own pages.
+
+A link that is used up, expired or revoked says so, and so does an address that is no link at all.
+
+Each account created through a link is written to the activity log, as "sam joined through alex's invite", and is told to the notification targets that chose **User joined** (see [Notifications](notifications.md#events)).
+
+### How links are kept safe
+
+- A link's token is the invite's ID followed by 32 random bytes, as many as an admin session's. Polyfin stores only the SHA-256 hash of the random part, and compares it in constant time.
+- The guest's requests count toward the client's failed sign-ins: a token that is no link's counts as a wrong password does. After too many failures, the client is refused for a while (429), as on the sign-in page.
+- A link's uses are counted in the transaction that creates the account, with the link locked: two guests on the last use of a link create one account, and the other is told the link is used up. A name or password that is refused uses nothing up.
+- The guest sends a name and a password only. Anything else in the request is ignored: the account's settings come from the link.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no invite links: its administrators create every account and choose its password.
+
+**For app developers:**
+
+- The admin API serves the links to administrators:
+  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted), and `state`: `active`, `used_up`, `expired` or `revoked`.
+  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never) and `modelUserId` (null or left out for a new user's settings). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry` and `invalid_invite_model`.
+  - `POST /admin/api/invites/{id}/revoke` revokes one, and answers it.
+- The guest's page uses two routes that need no session:
+  - `GET /admin/api/invite/{token}` answers `serverName` while the link may create an account.
+  - `POST /admin/api/invite/{token}` with `name` and `password` creates the account. It answers 201 with `user` (`id`, `name`, `isAdministrator`, `imageTag`) and `webClient`. Without the web client (`webClient` false), the answer opens an admin session, as signing in does. With it, the page signs in with `POST /Users/AuthenticateByName` as jellyfin-web does, naming jellyfin-web's app and device, and keeps the session where jellyfin-web 12.2 reads it, in `jellyfin_credentials` in the browser's local storage.
+  - A token that is no link's answers 404 `invite_unknown`, and a link used up, expired or revoked 410 `invite_used_up`, `invite_expired` or `invite_revoked`. A refused name or password answers as creating a user does: `invalid_name`, `invalid_password` or `name_taken`. Too many failures answer 429 `too_many_attempts`, with `Retry-After`.
 
 ## Parental control
 
