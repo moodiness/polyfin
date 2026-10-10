@@ -324,6 +324,23 @@ var itemTypes = map[library.Kind]string{
 	library.KindMusicPlaylist: "Playlist",
 }
 
+// typeAliases are the other names apps ask item types by: Jellyfin's
+// BaseItemKind names channels LiveTvChannel as well as TvChannel, and
+// programmes LiveTvProgram and TvProgram as well as Program. jellyfin-web
+// searches programmes as LiveTvProgram, and Jellyfin's Android TV app
+// channels as LiveTvChannel.
+var typeAliases = map[library.Kind][]string{
+	library.KindChannel: {"LiveTvChannel"},
+	library.KindProgram: {"LiveTvProgram", "TvProgram"},
+}
+
+// namesType reports whether name, whatever its case, is the type of the
+// items of kind, or another name of it.
+func namesType(name string, kind library.Kind) bool {
+	return strings.EqualFold(name, itemTypes[kind]) ||
+		slices.ContainsFunc(typeAliases[kind], func(alias string) bool { return strings.EqualFold(name, alias) })
+}
+
 // isFolder reports whether items of a kind hold other items.
 func isFolder(kind library.Kind) bool {
 	switch kind {
@@ -651,10 +668,12 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	}
 	folders, others := matches(filters, "IsFolder"), matches(filters, "IsNotFolder")
 	return func(item library.Item) bool {
-		itemType := itemTypes[item.Kind]
+		named := func(list []string) bool {
+			return slices.ContainsFunc(list, func(t string) bool { return namesType(t, item.Kind) })
+		}
 		folder := isFolder(item.Kind)
-		included := len(include) == 0 || matches(include, itemType) || item.Kind == library.KindCollection && matches(include, "Folder")
-		return included && !matches(exclude, itemType) &&
+		included := len(include) == 0 || named(include) || item.Kind == library.KindCollection && matches(include, "Folder")
+		return included && !named(exclude) &&
 			(len(media) == 0 || matches(media, mediaType(item.Kind))) && (!folders || folder) && (!others || !folder)
 	}
 }
