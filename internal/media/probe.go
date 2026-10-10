@@ -95,6 +95,13 @@ type Stream struct {
 	DolbyVision *DolbyVision `json:"dolbyVision,omitempty"`
 	// HDR10Plus marks dynamic HDR10+ metadata.
 	HDR10Plus bool `json:"hdr10Plus,omitempty"`
+	// MasteringDisplay tells whether the frames of a PQ (HDR10) video track
+	// carry the static metadata of the display it was mastered on (SMPTE
+	// ST 2086), which Intel's tone mapping requires: from the container at
+	// analysis, or from the first frame, read once for an Intel GPU. Nil is
+	// unknown: the container told nothing and no first frame was read yet,
+	// a track of another transfer, or a frame that could not be read.
+	MasteringDisplay *bool `json:"masteringDisplay,omitempty"`
 
 	// Audio.
 	Channels      int    `json:"channels,omitempty"`
@@ -124,11 +131,54 @@ type Prober struct {
 	Timeout time.Duration
 }
 
-// Probe analyzes the source at url, which ffprobe reads over HTTP.
+// Probe analyzes the source at url, which ffprobe reads over HTTP. A PQ
+// video track's mastering display is known only when its container tells
+// it: reading its first frame (see MasteringDisplay) is left to the Intel
+// GPUs that need it.
 func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
 	// Enough to find every track of a remote file without reading far.
 	return p.probe(ctx, url, "-probesize", "20M", "-analyzeduration", "10M")
 }
+
+// NeedsMasteringProbe reports whether stream is a PQ video track whose
+// mastering display is not known yet.
+func NeedsMasteringProbe(stream Stream) bool {
+	return stream.Type == "video" && !stream.AttachedPicture && stream.ColorTransfer == "smpte2084" && stream.MasteringDisplay == nil
+}
+
+// MasteringDisplay reports whether the first frame of the video track at
+// index in the source at url carries the mastering display metadata of
+// HDR10: from the video's own SEI, or from its container, which FFmpeg's
+// decoder passes on to every frame. ffprobe opens the source as Probe
+// does, then reads that track's first packet and decodes its frame.
+func (p Prober) MasteringDisplay(ctx context.Context, url string, index int) (bool, error) {
+	data, err := p.run(ctx, url, true, "-select_streams", strconv.Itoa(index), "-show_frames", "-read_intervals", "%+#1",
+		"-show_entries", "frame=stream_index:frame_side_data=side_data_type")
+	if err != nil {
+		return false, err
+	}
+	var frames struct {
+		Frames []struct {
+			SideData []sideData `json:"side_data_list"`
+		} `json:"frames"`
+	}
+	if err := json.Unmarshal(data, &frames); err != nil {
+		return false, err
+	}
+	if len(frames.Frames) == 0 {
+		return false, fmt.Errorf("%w: no frame of track %d", ErrNotMedia, index)
+	}
+	return slices.ContainsFunc(frames.Frames[0].SideData, func(s sideData) bool { return s.Type == masteringDisplayType }), nil
+}
+
+// sideData is the side data of a frame, as ffprobe names it.
+type sideData struct {
+	Type string `json:"side_data_type"`
+}
+
+// masteringDisplayType is FFmpeg's name of the mastering display metadata,
+// in a track's side data and in a frame's alike.
+const masteringDisplayType = "Mastering display metadata"
 
 // LiveOptions are the options FFmpeg and ffprobe read a live HLS stream
 // with: segments of any name, as some live sources name them oddly. The
@@ -139,7 +189,7 @@ var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_exten
 // stream, reading about a second of it. It never reconnects: a live
 // stream that ends while it is read is a failure, told at once.
 func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
-	data, err := p.run(ctx, url, false, append([]string{"-probesize", "1M", "-analyzeduration", "1M"}, LiveOptions...)...)
+	data, err := p.run(ctx, url, false, slices.Concat(analysisSections, []string{"-probesize", "1M", "-analyzeduration", "1M"}, LiveOptions)...)
 	if err != nil {
 		return Analysis{}, err
 	}
@@ -149,19 +199,22 @@ func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
 // probe runs ffprobe on url with options, reconnecting when the
 // connection drops, as remote files need.
 func (p Prober) probe(ctx context.Context, url string, options ...string) (Analysis, error) {
-	data, err := p.run(ctx, url, true, options...)
+	data, err := p.run(ctx, url, true, append(slices.Clone(analysisSections), options...)...)
 	if err != nil {
 		return Analysis{}, err
 	}
 	return Parse(data)
 }
 
-// run runs ffprobe on url and returns its JSON output, reconnecting when
-// asked.
+// analysisSections are the sections of ffprobe's output an analysis reads.
+var analysisSections = []string{"-show_format", "-show_streams", "-show_chapters"}
+
+// run runs ffprobe on url with options, which choose what it shows, and
+// returns its JSON output, reconnecting when asked.
 func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
-	args := append([]string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters"}, options...)
+	args := append([]string{"-v", "error", "-print_format", "json"}, options...)
 	if reconnect {
 		args = append(args, "-reconnect", "1", "-reconnect_streamed", "1")
 	}
@@ -273,6 +326,8 @@ func parse(data []byte) (Analysis, error) {
 				}
 			case "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)":
 				stream.HDR10Plus = true
+			case masteringDisplayType:
+				stream.MasteringDisplay = new(true)
 			}
 		}
 		analysis.Streams = append(analysis.Streams, stream)

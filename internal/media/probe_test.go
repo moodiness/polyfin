@@ -151,3 +151,59 @@ func TestLiveAnalysesNeverReconnect(t *testing.T) {
 		t.Errorf("a file's analysis: %s", file)
 	}
 }
+
+// A PQ track's mastering display is read from its container when it tells
+// it. Otherwise an analysis leaves it unknown, and MasteringDisplay reads
+// it from the track's first frame; other tracks never need it.
+func TestTheMasteringDisplayComesFromTheContainerOrTheFirstFrame(t *testing.T) {
+	analysis, err := Parse([]byte(`{"format": {"format_name": "matroska,webm"}, "streams": [
+		{"index": 0, "codec_type": "video", "codec_name": "hevc", "color_transfer": "smpte2084",
+		 "side_data_list": [{"side_data_type": "Mastering display metadata"}, {"side_data_type": "Content light level metadata"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := analysis.Streams[0].MasteringDisplay; got == nil || !*got || NeedsMasteringProbe(analysis.Streams[0]) {
+		t.Errorf("from the container: %v", got)
+	}
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	hdr := "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc"
+	for name, args := range map[string][]string{
+		"mastered.mkv": {"-vf", hdr, "-c:v", "libx265", "-x265-params",
+			"log-level=error:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"},
+		"bare.mkv": {"-vf", hdr, "-c:v", "libx265", "-x265-params", "log-level=error"},
+		"sdr.mkv":  {"-c:v", "mpeg4"},
+	} {
+		command := exec.Command(ffmpeg, slices.Concat([]string{"-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "sine=duration=1",
+			"-f", "lavfi", "-i", "testsrc2=size=64x64:rate=10:duration=1", "-map", "0:a", "-map", "1:v", "-c:a", "aac"}, args, []string{filepath.Join(dir, name)})...)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Skipf("ffmpeg cannot make %s: %v: %s", name, err, output)
+		}
+	}
+	server := httptest.NewServer(http.FileServer(http.Dir(dir)))
+	defer server.Close()
+	prober := Prober{Path: filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), Timeout: time.Minute}
+	analysis, err = prober.Probe(t.Context(), server.URL+"/bare.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The video is the second track: the first packets are audio's. An
+	// analysis reads no frame.
+	if video := analysis.Streams[1]; video.MasteringDisplay != nil || !NeedsMasteringProbe(video) {
+		t.Errorf("a bare HDR10 track's analysis: %+v", video)
+	}
+	if analysis, err := prober.Probe(t.Context(), server.URL+"/sdr.mkv"); err != nil || NeedsMasteringProbe(analysis.Streams[1]) {
+		t.Errorf("an SDR track's analysis: %+v, %v", analysis, err)
+	}
+	for name, want := range map[string]bool{"mastered.mkv": true, "bare.mkv": false} {
+		if got, err := prober.MasteringDisplay(t.Context(), server.URL+"/"+name, 1); err != nil || got != want {
+			t.Errorf("%s's first frame: mastering display %v, %v, want %v", name, got, err, want)
+		}
+	}
+	if _, err := prober.MasteringDisplay(t.Context(), server.URL+"/mastered.mkv", 5); err == nil {
+		t.Error("a track that does not exist has a mastering display")
+	}
+}
