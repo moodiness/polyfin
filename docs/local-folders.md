@@ -36,6 +36,8 @@ A folder Polyfin cannot read is reported on its page in the admin app and under 
 
 The files found before stay in the library while the folder cannot be read, so a share that is unmounted for a while empties no library.
 
+A folder Polyfin cannot watch for changes is listed under **System › Health** too, as a warning: see [watching for changes](#watching-for-changes).
+
 ## Network shares
 
 Polyfin reads folders shared over the network itself, without mounting them: SMB shares (Windows file sharing, which most NAS offer) and WebDAV folders. Open **Sources**, choose **Add a source › Folder**, choose **SMB share** or **WebDAV folder**, and give its name, its address, a user and a password, and whether it holds movies or shows. Everything else works as for a local folder: naming, matching, unmatched files, links, scans and versions.
@@ -57,7 +59,7 @@ The address holds no user or password: they have fields of their own, and an add
 
 - Files are read from the share at each request, with byte ranges, and never copied. Direct play, remuxing, conversions, analysis and thumbnails read them through Polyfin as they read a local file; seeking asks the share for the part needed only.
 - Connections are kept between requests: one SMB session per share, signed in again when it ends, such as when the server restarts; HTTP keep-alive for WebDAV.
-- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**: raise it for a large share on a slow link, or set it to 0 and choose **Scan now** when files change.
+- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**, but are not watched for changes: raise it for a large share on a slow link, or set it to 0 and choose **Scan now** when files change. A share mounted on the host and declared as a local folder is watched, but inotify only sees the changes made through that host, not those made on the NAS.
 - A video plays only as fast as the network carries it: a high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
 
 ### Health
@@ -112,7 +114,26 @@ A folder's page lists the files no title was found for, with why: the name gives
 
 ## Scanning
 
-Folders are scanned at startup, every **Settings › Catalogs › Scan local folders every (hours, 0 = never)** (6 by default, 0 turns the schedule off), and when an administrator chooses **Scan now** on a folder or runs **Scan local folders** under **System › Schedule** (which scans every folder). Changes are not watched as they happen.
+Folders are scanned at startup, every **Settings › Catalogs › Scan local folders every (hours, 0 = never)** (6 by default, 0 turns the schedule off), and when an administrator chooses **Scan now** on a folder or runs **Scan local folders** under **System › Schedule** (which scans every folder).
+
+### Watching for changes
+
+Folders mounted in the container are also watched for changes, with inotify on Linux. When files are added, renamed or removed in a folder, or in any folder under it, Polyfin waits until they stop changing for a few seconds, then scans that folder again. A movie copied into a folder shows in its library within a minute of the copy's end, without **Scan now**.
+
+- **Settings › Catalogs › Watch local folders for changes** turns it off or on (on by default). Off, no folder is watched.
+- Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
+- The schedule and **Scan now** stay, as a safety net for changes a watch misses.
+- A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos do not start a scan.
+
+Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
+
+```sh
+echo fs.inotify.max_user_watches=524288 | sudo tee /etc/sysctl.d/90-inotify.conf
+sudo sysctl --system
+```
+
+When Health says the limit of watchers or of open files is reached, raise `fs.inotify.max_user_instances` the same way, or the container's limit of open files (`--ulimit nofile=…` with Docker).
 
 A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it.
 
@@ -125,7 +146,7 @@ A matched file is one more version of its title, or of each of its episodes, nam
 ## Compared with Jellyfin
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
-- Jellyfin watches folders for changes; Polyfin scans them at startup, on its schedule and on demand.
+- Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
 - Jellyfin's "Identify" matches an item by hand; Polyfin links an unmatched file to an IMDb identifier.
 - NFO files, local artwork and side-car subtitle files are not read.
 
@@ -142,6 +163,6 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file or a show's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
-An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
+An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder in the container that cannot be watched is a problem of its own (`code` `folder_unwatched`), its `failure` being `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
 Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A share's files are served the same way.
