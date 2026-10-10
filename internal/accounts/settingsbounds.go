@@ -111,6 +111,14 @@ func DefaultSettings() Settings {
 		BackupFolder:     "",
 
 		PublicAddress: "",
+
+		SMTPHost:     "",
+		SMTPPort:     DefaultSMTPPort,
+		SMTPSecurity: SMTPSecurities[0],
+		SMTPUser:     "",
+		SMTPPassword: "",
+		SMTPFrom:     "",
+		SMTPFromName: "",
 	}
 }
 
@@ -235,6 +243,14 @@ func SettingsBounds() map[string]SettingBounds {
 		"backupFolder":     text(MaxFolderBytes, d.BackupFolder),
 
 		"publicAddress": text(MaxPublicAddressBytes, d.PublicAddress),
+
+		"smtpHost":     text(MaxSMTPHostBytes, d.SMTPHost),
+		"smtpPort":     between(1, 65535, d.SMTPPort),
+		"smtpSecurity": choice(d.SMTPSecurity, anys(SMTPSecurities)),
+		"smtpUser":     text(MaxSMTPUserBytes, d.SMTPUser),
+		"smtpPassword": text(MaxSMTPPasswordBytes, d.SMTPPassword),
+		"smtpFrom":     text(MaxEmailBytes, d.SMTPFrom),
+		"smtpFromName": text(MaxSMTPFromNameBytes, d.SMTPFromName),
 	}
 }
 

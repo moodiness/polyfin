@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -433,6 +434,55 @@ func ValidPublicAddress(address string) bool {
 	return address == "" || len(address) <= MaxPublicAddressBytes && ValidRemuxDBURL(address)
 }
 
+// The SMTP server email notifications go through: Settings.SMTPSecurity is
+// one of SMTPSecurities, the first by default, which upgrades a plain
+// connection with STARTTLS; "tls" is TLS from the start, "none" neither.
+var SMTPSecurities = []string{"starttls", "tls", "none"}
+
+// The bounds of the SMTP settings, and the default port, the submission
+// port.
+const (
+	DefaultSMTPPort      = 587
+	MaxSMTPHostBytes     = 253
+	MaxSMTPUserBytes     = 256
+	MaxSMTPPasswordBytes = 256
+	MaxEmailBytes        = 254
+	MaxSMTPFromNameBytes = 128
+)
+
+// ErrInvalidSMTPHost reports a Settings.SMTPHost longer than
+// MaxSMTPHostBytes or holding anything but printable ASCII without spaces;
+// ErrInvalidSMTPPort an SMTPPort outside [1, 65535]; ErrInvalidSMTPSecurity
+// an SMTPSecurity not among SMTPSecurities; ErrInvalidSMTPAccount an
+// SMTPUser or SMTPPassword too long or holding control characters; and
+// ErrInvalidSMTPSender an SMTPFrom that is not empty nor an email address
+// (see ValidEmail), or an SMTPFromName too long or holding control
+// characters.
+var (
+	ErrInvalidSMTPHost     = errors.New("invalid SMTP host")
+	ErrInvalidSMTPPort     = errors.New("invalid SMTP port")
+	ErrInvalidSMTPSecurity = errors.New("invalid SMTP security")
+	ErrInvalidSMTPAccount  = errors.New("invalid SMTP user or password")
+	ErrInvalidSMTPSender   = errors.New("invalid SMTP sender")
+)
+
+// ValidEmail reports whether address is an email address alone, such as
+// polyfin@example.org, without a name or angle brackets, of at most
+// MaxEmailBytes.
+func ValidEmail(address string) bool {
+	if len(address) > MaxEmailBytes || strings.ContainsFunc(address, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+		return false
+	}
+	parsed, err := mail.ParseAddress(address)
+	return err == nil && parsed.Name == "" && parsed.Address == address
+}
+
+// validLine reports whether text fits in max bytes and holds no control
+// character.
+func validLine(text string, max int) bool {
+	return len(text) <= max && utf8.ValidString(text) && !strings.ContainsFunc(text, unicode.IsControl)
+}
+
 // ErrInvalidCacheSize reports a CacheSizeGB outside [MinCacheSizeGB,
 // MaxCacheSizeGB], and ErrInvalidVAAPIDevice a VAAPIDevice that is not a
 // render node (see ValidVAAPIDevice).
@@ -761,6 +811,24 @@ type Settings struct {
 	// https://media.example.org, without a trailing slash: links in
 	// notifications start with it. Empty, messages carry no link.
 	PublicAddress string
+	// SMTPHost and SMTPPort are the SMTP server email notifications go
+	// through, empty for none, which offers no email target; SMTPSecurity
+	// how the connection is secured (see SMTPSecurities); SMTPUser and
+	// SMTPPassword what it is signed in with, empty for no sign-in; and
+	// SMTPFrom and SMTPFromName the sender's address and name.
+	SMTPHost     string
+	SMTPPort     int
+	SMTPSecurity string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPFromName string
+}
+
+// SMTPAvailable reports whether email notifications can be sent: an SMTP
+// server and a sender address are saved.
+func (s Settings) SMTPAvailable() bool {
+	return s.SMTPHost != "" && s.SMTPFrom != ""
 }
 
 // TraktAvailable reports whether users can connect Trakt: its app's ID and
@@ -814,7 +882,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
-	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address"
+	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
+	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -843,7 +912,8 @@ func (settings *Settings) fields() []any {
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
-		&settings.PublicAddress}
+		&settings.PublicAddress,
+		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -870,6 +940,7 @@ func (settings *Settings) secrets() []struct {
 		{"theIntroDbKey", &settings.TheIntroDBKey},
 		{"traktClientSecret", &settings.TraktClientSecret},
 		{"lastFmSecret", &settings.LastFMSecret},
+		{"smtpPassword", &settings.SMTPPassword},
 	}
 }
 
@@ -1144,6 +1215,20 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	settings.PublicAddress = strings.TrimRight(strings.TrimSpace(settings.PublicAddress), "/")
 	if !ValidPublicAddress(settings.PublicAddress) {
 		return Settings{}, ErrInvalidPublicAddress
+	}
+	settings.SMTPHost, settings.SMTPFrom = strings.TrimSpace(settings.SMTPHost), strings.TrimSpace(settings.SMTPFrom)
+	settings.SMTPFromName = strings.TrimSpace(settings.SMTPFromName)
+	switch {
+	case len(settings.SMTPHost) > MaxSMTPHostBytes || !validTrackingApp(settings.SMTPHost):
+		return Settings{}, ErrInvalidSMTPHost
+	case settings.SMTPPort < 1 || settings.SMTPPort > 65535:
+		return Settings{}, ErrInvalidSMTPPort
+	case !slices.Contains(SMTPSecurities, settings.SMTPSecurity):
+		return Settings{}, ErrInvalidSMTPSecurity
+	case !validLine(settings.SMTPUser, MaxSMTPUserBytes) || !validLine(settings.SMTPPassword, MaxSMTPPasswordBytes):
+		return Settings{}, ErrInvalidSMTPAccount
+	case settings.SMTPFrom != "" && !ValidEmail(settings.SMTPFrom), !validLine(settings.SMTPFromName, MaxSMTPFromNameBytes):
+		return Settings{}, ErrInvalidSMTPSender
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

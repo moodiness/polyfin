@@ -10,16 +10,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// The secrets Polyfin stores are the server's keys in the settings, named
-// below as the admin API names them, the tokens and API keys of the users'
-// tracking connections, and the addresses and access tokens of the
-// notification targets. Nothing else is sealed: addon addresses, IPTV
-// passwords and guide addresses are stored as they are.
+// The secrets Polyfin stores are the server's keys and passwords in the
+// settings, named below as the admin API names them, the tokens and API
+// keys of the users' tracking connections, and the addresses, tokens and
+// keys of the notification targets. Nothing else is sealed: addon
+// addresses, IPTV passwords and guide addresses are stored as they are.
 var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
 	{"trakt_client_secret", "traktClientSecret"},
 	{"lastfm_secret", "lastFmSecret"},
+	{"smtp_password", "smtpPassword"},
 }
 
 // Unreadable is a stored secret the key cannot open: a setting, by the
@@ -216,8 +217,8 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 	return report, targets.Err()
 }
 
-// sealTargets seals the addresses and access tokens of the notification
-// targets stored as plaintext, counting them into sealed.
+// sealTargets seals the addresses, access tokens and keys of the
+// notification targets stored as plaintext, counting them into sealed.
 func sealTargets(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	rows, err := tx.Query(ctx, "SELECT id, secret FROM notification_targets WHERE secret <> '' AND secret NOT LIKE $1 FOR UPDATE", prefix+"%")
 	if err != nil {

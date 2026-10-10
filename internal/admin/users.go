@@ -392,6 +392,19 @@ type settingsJSON struct {
 	// PublicAddress keeps its current value when a PUT leaves it out; empty
 	// sends notifications without links.
 	PublicAddress *string `json:"publicAddress"`
+	// SMTPHost, SMTPPort, SMTPSecurity, SMTPUser, SMTPFrom and SMTPFromName,
+	// the SMTP server email notifications go through, keep their current
+	// values when a PUT leaves them out; an empty host offers no email
+	// target. The password is the same, but never sent back:
+	// SMTPPasswordSet tells whether one is saved, and a PUT ignores it.
+	SMTPHost        *string `json:"smtpHost"`
+	SMTPPort        *int    `json:"smtpPort"`
+	SMTPSecurity    *string `json:"smtpSecurity"`
+	SMTPUser        *string `json:"smtpUser"`
+	SMTPPassword    *string `json:"smtpPassword,omitempty"`
+	SMTPPasswordSet bool    `json:"smtpPasswordSet"`
+	SMTPFrom        *string `json:"smtpFrom"`
+	SMTPFromName    *string `json:"smtpFromName"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -510,6 +523,14 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		BackupFolder:     &settings.BackupFolder,
 
 		PublicAddress: &settings.PublicAddress,
+
+		SMTPHost:        &settings.SMTPHost,
+		SMTPPort:        &settings.SMTPPort,
+		SMTPSecurity:    &settings.SMTPSecurity,
+		SMTPUser:        &settings.SMTPUser,
+		SMTPPasswordSet: settings.SMTPPassword != "",
+		SMTPFrom:        &settings.SMTPFrom,
+		SMTPFromName:    &settings.SMTPFromName,
 	}
 }
 
@@ -996,6 +1017,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		BackupFolder:     valueOr(body.BackupFolder, current.BackupFolder),
 
 		PublicAddress: valueOr(body.PublicAddress, current.PublicAddress),
+
+		SMTPHost:     valueOr(body.SMTPHost, current.SMTPHost),
+		SMTPPort:     valueOr(body.SMTPPort, current.SMTPPort),
+		SMTPSecurity: valueOr(body.SMTPSecurity, current.SMTPSecurity),
+		SMTPUser:     valueOr(body.SMTPUser, current.SMTPUser),
+		SMTPPassword: valueOr(body.SMTPPassword, current.SMTPPassword),
+		SMTPFrom:     valueOr(body.SMTPFrom, current.SMTPFrom),
+		SMTPFromName: valueOr(body.SMTPFromName, current.SMTPFromName),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
