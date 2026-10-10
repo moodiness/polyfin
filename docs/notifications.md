@@ -1,13 +1,13 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link. Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin. Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
 
 ## Targets
 
 There are two kinds of owners:
 
-- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events and the users who joined.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings. An administrator's own targets may receive the health events and the users who joined too.
+- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, the users who joined and new versions.
+- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings. An administrator's own targets may receive the health events, the users who joined and new versions too.
 
 **Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
 
@@ -71,6 +71,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Health problem found | `health_problem` | The server's targets, and administrators' own. |
 | Health problem solved | `health_solved` | The same. |
 | User joined | `user_joined` | The server's targets, and administrators' own. |
+| New version | `new_version` | The server's targets, and administrators' own. |
 | Playback started | `playback_started` | The targets of the user who plays, and the server's. |
 | Playback paused | `playback_paused` | The same. |
 | Playback resumed | `playback_resumed` | The same. |
@@ -91,6 +92,10 @@ Every five minutes, Polyfin looks at the problems **System › Health** shows un
 ### Users who joined
 
 A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+### New versions
+
+While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub once a day for its latest release (see [New versions](administration.md#new-versions)). A version newer than the running one is told once: the title is "New version: Polyfin 1.5.0", and the message "Polyfin 1.5.0 is available. This server runs version 1.4.0.". The message opens the release notes on GitHub, with or without a public address. The version told is kept in the database: a restart does not tell it again. A development build never tells one. Targets saved before this event existed do not receive it until it is chosen.
 
 ### Playbacks
 
@@ -156,19 +161,39 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. |
-| `url` | string or null | Opens what the event is about; null without a public address. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user. Null for health events, and for new episodes sent to the server's targets. |
+| `url` | string or null | Opens what the event is about; null without a public address. For `new_version`, the release notes on GitHub, always set. |
+| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user. Null for health events and new versions, and for new episodes sent to the server's targets. |
 | `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
 | `invite` | object | For `user_joined`: the invite link's `id`, and `createdBy`, the administrator who created it (`id`, `name`), null once deleted. |
+| `release` | object | For `new_version`: `version`, the new version, `url`, its release notes, and `current`, the version the server runs. |
 | `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
 
-The playback events were added within version 1: their `playback` object is new, and no other field changed.
+The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
+
+```json
+{
+  "version": 1,
+  "id": "5d4c3b2a1f0e49d8c7b6a5948372615f",
+  "type": "new_version",
+  "at": "2026-10-10T09:01:00Z",
+  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": null },
+  "title": "New version: Polyfin 1.5.0",
+  "message": "Polyfin 1.5.0 is available. This server runs version 1.4.0.",
+  "url": "https://github.com/moodiness/polyfin/releases/tag/v1.5.0",
+  "user": null,
+  "release": {
+    "version": "1.5.0",
+    "url": "https://github.com/moodiness/polyfin/releases/tag/v1.5.0",
+    "current": "1.4.0"
+  }
+}
+```
 
 ```json
 {
@@ -224,9 +249,9 @@ The playback events were added within version 1: their `playback` object is new,
 
 Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
 
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
+A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
 
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
+An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
 
 An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
 
