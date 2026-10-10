@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -38,7 +39,11 @@ type run struct {
 	s *Service
 	// status is the import's, which s.mu guards.
 	status *Status
-	client *client
+	// client reads with the credentials the import connected with;
+	// sessions read as the users signed in as themselves, by their
+	// Jellyfin identifier, until they are read.
+	client   *client
+	sessions map[string]*client
 	// series are the identifiers of the series read, by their Jellyfin
 	// identifier: every user sees them the same.
 	series map[string]map[string]string
@@ -52,7 +57,8 @@ func (r *run) update(i int, change func(*UserStatus)) {
 }
 
 // run imports the watch data of each user in turn, until one fails in a
-// way that stops the import (see user) or the import is stopped.
+// way that stops the import (see user) or the import is stopped, then ends
+// the sessions it still holds.
 func (r *run) run(ctx context.Context) {
 	s := r.s
 	state, problem := StateDone, ""
@@ -68,6 +74,12 @@ func (r *run) run(ctx context.Context) {
 	if state == StateDone && ctx.Err() != nil {
 		state = StateStopped
 	}
+	var signingOut sync.WaitGroup
+	signingOut.Go(r.client.signOut)
+	for _, session := range r.sessions {
+		signingOut.Go(session.signOut)
+	}
+	signingOut.Wait()
 	s.mu.Lock()
 	r.status.State, r.status.Problem, r.status.EndedAt = state, problem, new(s.now().UTC())
 	s.mu.Unlock()
@@ -86,11 +98,20 @@ type history struct {
 // import is stopped meanwhile; stopped while reading, nothing is.
 func (r *run) user(ctx context.Context, i int) string {
 	jellyfinID := r.status.Users[i].JellyfinID
+	c := r.client
+	if session := r.sessions[jellyfinID]; session != nil {
+		c = session
+	}
 	r.update(i, func(u *UserStatus) { u.State = UserReading })
-	h, err := r.read(ctx, i, jellyfinID)
+	h, err := r.read(ctx, i, c, jellyfinID)
 	if ctx.Err() != nil {
 		r.update(i, func(u *UserStatus) { u.State, u.Read = UserWaiting, 0 })
 		return ""
+	}
+	if c != r.client {
+		// The session read all it was opened for.
+		c.signOut()
+		delete(r.sessions, jellyfinID)
 	}
 	// What was read before the server failed is imported.
 	problem := readProblem(err)
@@ -127,9 +148,9 @@ func readProblem(err error) string {
 	return ProblemUnreachable
 }
 
-// read reads the watch data of user, and the identifiers of the series of
-// its episodes.
-func (r *run) read(ctx context.Context, i int, user string) (history, error) {
+// read reads, with c, the watch data of user, and the identifiers of the
+// series of its episodes.
+func (r *run) read(ctx context.Context, i int, c *client, user string) (history, error) {
 	var h history
 	for _, pass := range []struct {
 		types, filter string
@@ -139,7 +160,7 @@ func (r *run) read(ctx context.Context, i int, user string) (history, error) {
 		{"Movie,Episode", "IsResumable", &h.resumes},
 		{"Movie,Series,Episode", "IsFavorite", &h.favorites},
 	} {
-		err := r.client.items(ctx, user, pass.types, pass.filter, func(item itemJSON) {
+		err := c.items(ctx, user, pass.types, pass.filter, func(item itemJSON) {
 			*pass.into = append(*pass.into, item)
 			r.update(i, func(u *UserStatus) { u.Read++ })
 		})
@@ -157,7 +178,7 @@ func (r *run) read(ctx context.Context, i int, user string) (history, error) {
 			}
 		}
 	}
-	found, err := r.client.providers(ctx, user, missing)
+	found, err := c.providers(ctx, user, missing)
 	if err != nil {
 		return h, err
 	}

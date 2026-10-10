@@ -27,8 +27,9 @@ import (
 const goodKey = "0123456789abcdef0123456789abcdef"
 
 // fakeJellyfin answers as a Jellyfin server does the requests of an
-// import, with the API key goodKey, the server's, or a user's own key: its
-// users, and their items by the filter asked, a page at a time.
+// import, with the API key goodKey, the server's, a user's own key, or a
+// session signed in: its users, and their items by the filter asked, a
+// page at a time.
 type fakeJellyfin struct {
 	url string
 
@@ -49,16 +50,68 @@ type fakeJellyfin struct {
 	// or, with ignoresUser, the owner's items, as some servers answer.
 	userKeys    map[string]string
 	ignoresUser bool
+	// passwords are the users' passwords by name, which a sign-in names
+	// them by, as Jellyfin's apps do; barred users may not sign in, and
+	// signsInAs signs a user named in as another, by id. sessions are the
+	// users signed in by their token, until they sign out: a session reads
+	// as its user's own key does. noMe leaves /Users/Me out.
+	passwords map[string]string
+	barred    map[string]bool
+	signsInAs map[string]string
+	sessions  map[string]string
+	noMe      bool
 }
 
 func newFakeJellyfin(t *testing.T) *fakeJellyfin {
 	t.Helper()
 	f := &fakeJellyfin{items: map[string]map[string][]map[string]any{}, series: map[string]map[string]string{}, refused: map[string]bool{},
-		forbidden: map[string]bool{}, userKeys: map[string]string{}}
+		forbidden: map[string]bool{}, userKeys: map[string]string{}, passwords: map[string]string{}, barred: map[string]bool{},
+		signsInAs: map[string]string{}, sessions: map[string]string{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
 	return f
+}
+
+// signIn answers a sign-in as Jellyfin does: it needs the app and device
+// signing in, and a user's name and password.
+func (f *fakeJellyfin) signIn(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	for _, field := range []string{`Client="`, `Device="`, `DeviceId="`, `Version="`} {
+		if !strings.Contains(auth, field) || strings.Contains(auth, field+`"`) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+	var body struct{ Username, Pw string }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if password, known := f.passwords[body.Username]; !known || password != body.Pw {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if f.barred[body.Username] {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	id := f.signsInAs[body.Username]
+	for _, user := range f.users {
+		if id == "" && user["Name"] == body.Username {
+			id = user["Id"].(string)
+		}
+	}
+	token := "session-" + strconv.Itoa(len(f.requests))
+	f.sessions[token] = id
+	_ = json.NewEncoder(w).Encode(map[string]any{"User": map[string]any{"Id": id, "Name": body.Username}, "AccessToken": token})
+}
+
+// open counts the sessions signed in and not out.
+func (f *fakeJellyfin) open() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.sessions)
 }
 
 func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
@@ -74,18 +127,29 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName" {
+		f.signIn(w, r)
+		return
+	}
 	key := strings.TrimSuffix(strings.TrimPrefix(r.Header.Get("Authorization"), `MediaBrowser Token="`), `"`)
 	owner, userKey := f.userKeys[key]
+	if id, session := f.sessions[key]; session {
+		owner, userKey = id, true
+	}
 	if key != goodKey && !userKey {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	switch user, found := strings.CutPrefix(r.URL.Path, "/Users/"); {
+	case r.Method == http.MethodPost && r.URL.Path == "/Sessions/Logout":
+		delete(f.sessions, key)
+		w.WriteHeader(http.StatusNoContent)
 	case r.URL.Path == "/Users":
 		_ = json.NewEncoder(w).Encode(f.users)
 	case r.URL.Path == "/Users/Me":
-		if !userKey {
-			// Jellyfin's answer to the server's key, which is no user's.
+		if !userKey || f.noMe {
+			// Jellyfin's answer to the server's key, which is no user's;
+			// without /Users/Me, every key gets it.
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -228,7 +292,7 @@ func (h harness) dataOf(t *testing.T, user accounts.ID, ref library.TitleRef) us
 // imported starts an import of targets and waits for it to end.
 func (h harness) imported(t *testing.T, targets ...Target) Status {
 	t.Helper()
-	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) { return targets, nil }); err != nil {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
 		t.Fatal(err)
 	}
 	return h.ended(t)
@@ -264,7 +328,7 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		{"Id": "b2", "Name": "Bob", "LastActivityDate": "0001-01-01T00:00:00.0000000Z",
 			"Policy": map[string]any{"IsDisabled": true, "IsHidden": true}},
 	}
-	server, users, err := h.Users(t.Context(), h.f.url+"/", goodKey)
+	server, users, err := h.Users(t.Context(), h.f.url+"/", Credentials{Key: goodKey})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,12 +348,12 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		}
 	}
 
-	if _, _, err := h.Users(t.Context(), h.f.url, "wrong-key"); !errors.Is(err, ErrKeyRefused) {
+	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: "wrong-key"}); !errors.Is(err, ErrKeyRefused) {
 		t.Errorf("wrong key: %v", err)
 	}
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	if _, _, err := h.Users(t.Context(), closed.URL, goodKey); !errors.Is(err, ErrUnreachable) {
+	if _, _, err := h.Users(t.Context(), closed.URL, Credentials{Key: goodKey}); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("nothing at the address: %v", err)
 	}
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -297,11 +361,11 @@ func TestUsersAreListedWithTheKeyAndFailuresTellWhy(t *testing.T) {
 		_, _ = io.WriteString(w, "<html>A web page</html>")
 	}))
 	defer web.Close()
-	if _, _, err := h.Users(t.Context(), web.URL, goodKey); !errors.Is(err, ErrNotJellyfin) {
+	if _, _, err := h.Users(t.Context(), web.URL, Credentials{Key: goodKey}); !errors.Is(err, ErrNotJellyfin) {
 		t.Errorf("a web page: %v", err)
 	}
 	for _, address := range []string{"", "ftp://192.168.1.10", "http://user:secret@192.168.1.10:8096", "http://:8096"} {
-		if _, _, err := h.Users(t.Context(), address, goodKey); !errors.Is(err, ErrInvalidAddress) {
+		if _, _, err := h.Users(t.Context(), address, Credentials{Key: goodKey}); !errors.Is(err, ErrInvalidAddress) {
 			t.Errorf("%q: %v", address, err)
 		}
 	}
@@ -453,11 +517,11 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 	hold := make(chan struct{})
 	h.f.hold = hold
 	targets := []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}, {JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}
-	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) { return targets, nil }); err != nil {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return targets, nil }); err != nil {
 		t.Fatal(err)
 	}
 	chose := false
-	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) {
 		chose = true
 		return targets, nil
 	}); !errors.Is(err, ErrRunning) || chose {
@@ -486,12 +550,12 @@ func TestOneImportRunsAtATimeAndStops(t *testing.T) {
 	}
 
 	// A choice that fails starts nothing, and leaves the next free.
-	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) {
 		return nil, errors.New("name taken")
 	}); err == nil || errors.Is(err, ErrRunning) {
 		t.Errorf("failed choice: %v", err)
 	}
-	if _, err := h.Start(t.Context(), h.f.url, goodKey, func(Server, []User) ([]Target, error) { return nil, nil }); err != nil {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: goodKey}, func(Server, []User, SignIn) ([]Target, error) { return nil, nil }); err != nil {
 		t.Errorf("after a failed choice: %v", err)
 	}
 }
@@ -509,15 +573,15 @@ func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
 	h.f.userKeys[aliceKey] = "jf-alice"
 	h.f.ignoresUser = true
 
-	if server, _, err := h.Users(t.Context(), h.f.url, goodKey); err != nil || server.KeyOwner != "" {
+	if server, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: goodKey}); err != nil || server.KeyOwner != "" {
 		t.Errorf("the server's key: %+v %v", server, err)
 	}
-	if server, _, err := h.Users(t.Context(), h.f.url, aliceKey); err != nil || server.KeyOwner != "jf-alice" {
+	if server, _, err := h.Users(t.Context(), h.f.url, Credentials{Key: aliceKey}); err != nil || server.KeyOwner != "jf-alice" {
 		t.Fatalf("Alice's key: %+v %v", server, err)
 	}
 
 	// Bob's watch data with Alice's key: refused, before anything is read.
-	_, err := h.Start(t.Context(), h.f.url, aliceKey, func(Server, []User) ([]Target, error) {
+	_, err := h.Start(t.Context(), h.f.url, Credentials{Key: aliceKey}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
 	})
 	if !errors.Is(err, ErrNotKeyOwner) {
@@ -537,7 +601,7 @@ func TestAUserKeyImportsOnlyItsOwnersWatchData(t *testing.T) {
 	}
 
 	// Alice's, with her key: imported.
-	if _, err := h.Start(t.Context(), h.f.url, aliceKey, func(Server, []User) ([]Target, error) {
+	if _, err := h.Start(t.Context(), h.f.url, Credentials{Key: aliceKey}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -567,5 +631,118 @@ func TestAUserTheKeyMayNotReadFailsAlone(t *testing.T) {
 	}
 	if alices := status.Users[1]; alices.State != UserDone || alices.Played != 1 {
 		t.Errorf("Alice: %+v", alices)
+	}
+}
+
+// Signed in with a name and password, an import reads as that user, and
+// reads each other user signed in as them, with their password: even a
+// server that answers a session with its own user's data whatever user is
+// asked gives each user theirs. Every session ends.
+func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
+	h := newHarness(t)
+	alice, bob, carol := h.user(t, "alice"), h.user(t, "bob"), h.user(t, "carol")
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}, {"Id": "jf-carol", "Name": "Carol"}}
+	// Carol's account has no password.
+	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password", "Carol": ""}
+	movies := map[string]string{"jf-alice": "tt0000001", "jf-bob": "tt0000002", "jf-carol": "tt0000003"}
+	for user, imdb := range movies {
+		h.f.items[user] = map[string][]map[string]any{"IsPlayed": {movie(user, user, map[string]string{"Imdb": imdb}, map[string]any{"Played": true})}}
+	}
+	h.f.ignoresUser = true
+	// A session is its user's even where /Users/Me does not tell.
+	h.f.noMe = true
+	asAlice := Credentials{Name: "Alice", Password: "alice's password"}
+
+	server, _, err := h.Users(t.Context(), h.f.url, asAlice)
+	if err != nil || server.KeyOwner != "jf-alice" {
+		t.Fatalf("signed in as Alice: %+v %v", server, err)
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left after listing the users: %d", open)
+	}
+
+	// Bob's watch data, Bob not signed in: refused.
+	_, err = h.Start(t.Context(), h.f.url, asAlice, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
+	})
+	if !errors.Is(err, ErrNotKeyOwner) {
+		if err == nil {
+			h.ended(t)
+		}
+		t.Errorf("Bob not signed in: %v", err)
+	}
+
+	_, err = h.Start(t.Context(), h.f.url, asAlice, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+		if err := signIn("jf-bob", "bob's password"); err != nil {
+			return nil, err
+		}
+		if err := signIn("jf-carol", ""); err != nil {
+			return nil, err
+		}
+		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}, {JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"},
+			{JellyfinID: "jf-carol", User: carol.ID, UserName: "carol"}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := h.ended(t); status.State != StateDone {
+		t.Errorf("import: %+v", status)
+	}
+	for jellyfinID, user := range map[string]accounts.User{"jf-alice": alice, "jf-bob": bob, "jf-carol": carol} {
+		for other, imdb := range movies {
+			if played := h.dataOf(t, user.ID, library.TitleRef{IMDb: imdb}).Played; played != (other == jellyfinID) {
+				t.Errorf("%s has %s's movie: %v", user.Name, other, played)
+			}
+		}
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left after the import: %d", open)
+	}
+}
+
+// A password the server refuses, an account it does not let sign in, or a
+// sign-in that opens another user's session starts nothing, and says why;
+// the sessions opened meanwhile end.
+func TestASignInThatFailsStartsNothing(t *testing.T) {
+	h := newHarness(t)
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}, {"Id": "jf-carol", "Name": "Carol"},
+		{"Id": "jf-dan", "Name": "Dan"}}
+	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password", "Carol": "carol's password", "Dan": "dan's password"}
+	// Bob's account is disabled; signing Dan in opens Alice's session.
+	h.f.barred["Bob"] = true
+	h.f.signsInAs["Dan"] = "jf-alice"
+	asAlice := Credentials{Name: "Alice", Password: "alice's password"}
+
+	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Name: "Alice", Password: "wrong"}); !errors.Is(err, ErrSignInRefused) {
+		t.Errorf("a wrong password: %v", err)
+	}
+	if _, _, err := h.Users(t.Context(), h.f.url, Credentials{Name: "Bob", Password: "bob's password"}); !errors.Is(err, ErrSignInForbidden) {
+		t.Errorf("a disabled account: %v", err)
+	}
+	for _, c := range []struct {
+		jellyfinID, password string
+		want                 error
+	}{
+		{"jf-bob", "bob's password", ErrSignInForbidden},
+		{"jf-carol", "wrong", ErrSignInRefused},
+		{"jf-dan", "dan's password", ErrOtherUser},
+	} {
+		_, err := h.Start(t.Context(), h.f.url, asAlice, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+			if c.jellyfinID != "jf-carol" {
+				if err := signIn("jf-carol", "carol's password"); err != nil {
+					return nil, err
+				}
+			}
+			return nil, signIn(c.jellyfinID, c.password)
+		})
+		if !errors.Is(err, c.want) {
+			t.Errorf("%s: %v, want %v", c.jellyfinID, err, c.want)
+		}
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left: %d", open)
+	}
+	if current := h.Current(); current != nil {
+		t.Errorf("an import started: %+v", current)
 	}
 }

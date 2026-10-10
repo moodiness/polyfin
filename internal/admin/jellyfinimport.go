@@ -12,8 +12,8 @@ import (
 
 // The import of users and watch data from a Jellyfin server lives under
 // the users: it creates accounts and fills each account's watch data. The
-// API key is never stored nor sent back: the admin app sends it with each
-// request.
+// API key and passwords are never stored nor sent back: the admin app sends
+// them with each request.
 
 // jellyfinError answers the errors of reading a Jellyfin server, and of
 // asking for an import while one runs. It reports whether err was one.
@@ -26,9 +26,11 @@ func jellyfinError(w http.ResponseWriter, err error) bool {
 		{jellyfinimport.ErrInvalidAddress, http.StatusBadRequest, "invalid_jellyfin_address"},
 		// Not 401, which the admin app reads as its own session ending.
 		{jellyfinimport.ErrKeyRefused, http.StatusBadRequest, "jellyfin_key_refused"},
-		// The key is known but may not list the server's users.
+		// The key or account is known but may not list the server's users.
 		{jellyfinimport.ErrForbidden, http.StatusBadRequest, "jellyfin_key_limited"},
 		{jellyfinimport.ErrNotKeyOwner, http.StatusBadRequest, "jellyfin_key_owner_only"},
+		{jellyfinimport.ErrSignInRefused, http.StatusBadRequest, "jellyfin_sign_in_refused"},
+		{jellyfinimport.ErrSignInForbidden, http.StatusBadRequest, "jellyfin_sign_in_forbidden"},
 		{jellyfinimport.ErrUnreachable, http.StatusBadGateway, "jellyfin_unreachable"},
 		{jellyfinimport.ErrNotJellyfin, http.StatusBadGateway, "not_jellyfin"},
 		{jellyfinimport.ErrRunning, http.StatusConflict, "jellyfin_import_running"},
@@ -41,10 +43,26 @@ func jellyfinError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
-// jellyfinConnectionJSON is the server and API key an administrator gave.
+// jellyfinConnectionJSON is the server an administrator connects to, with
+// an API key or a user's name and password: one of the two.
 type jellyfinConnectionJSON struct {
 	Address string `json:"address"`
 	APIKey  string `json:"apiKey"`
+	Account *struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	} `json:"account"`
+}
+
+// credentials reads the key or the account given, and reports false
+// unless exactly one is. A password may be empty: an account may have none.
+func (c jellyfinConnectionJSON) credentials() (jellyfinimport.Credentials, bool) {
+	key := strings.TrimSpace(c.APIKey)
+	if c.Account == nil {
+		return jellyfinimport.Credentials{Key: key}, key != ""
+	}
+	name := strings.TrimSpace(c.Account.Name)
+	return jellyfinimport.Credentials{Name: name, Password: c.Account.Password}, key == "" && name != ""
 }
 
 type jellyfinServerJSON struct {
@@ -76,11 +94,12 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if strings.TrimSpace(body.APIKey) == "" {
+	credentials, ok := body.credentials()
+	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	server, users, err := h.JellyfinImport.Users(r.Context(), body.Address, strings.TrimSpace(body.APIKey))
+	server, users, err := h.JellyfinImport.Users(r.Context(), body.Address, credentials)
 	if jellyfinError(w, err) {
 		return
 	}
@@ -118,7 +137,9 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 
 // jellyfinImportEntryJSON maps a Jellyfin user to an existing Polyfin user
 // (UserID) or a new one (Create), and tells whether their watch data is
-// imported.
+// imported. JellyfinPassword, the user's password on the server, has the
+// import sign in as them to read their watch data, which a user's key or
+// account cannot read of another user.
 type jellyfinImportEntryJSON struct {
 	JellyfinID string  `json:"jellyfinId"`
 	UserID     *string `json:"userId"`
@@ -130,7 +151,8 @@ type jellyfinImportEntryJSON struct {
 		// is hidden, as created accounts are.
 		IsHidden *bool `json:"isHidden"`
 	} `json:"create"`
-	WatchData bool `json:"watchData"`
+	WatchData        bool    `json:"watchData"`
+	JellyfinPassword *string `json:"jellyfinPassword"`
 }
 
 // jellyfinEntryError is an entry of an import that cannot be done: the
@@ -161,19 +183,21 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	}
 	seen := map[string]bool{}
 	for _, entry := range body.Users {
-		if entry.JellyfinID == "" || seen[entry.JellyfinID] || (entry.UserID == nil) == (entry.Create == nil) {
+		if entry.JellyfinID == "" || seen[entry.JellyfinID] || (entry.UserID == nil) == (entry.Create == nil) ||
+			entry.JellyfinPassword != nil && !entry.WatchData {
 			writeError(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
 		seen[entry.JellyfinID] = true
 	}
-	if strings.TrimSpace(body.APIKey) == "" {
+	credentials, ok := body.credentials()
+	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	var created []accounts.User
-	status, err := h.JellyfinImport.Start(r.Context(), body.Address, strings.TrimSpace(body.APIKey),
-		func(server jellyfinimport.Server, users []jellyfinimport.User) ([]jellyfinimport.Target, error) {
+	status, err := h.JellyfinImport.Start(r.Context(), body.Address, credentials,
+		func(server jellyfinimport.Server, users []jellyfinimport.User, signIn jellyfinimport.SignIn) ([]jellyfinimport.Target, error) {
 			listed := make(map[string]bool, len(users))
 			for _, user := range users {
 				listed[user.ID] = true
@@ -188,7 +212,7 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 				if !listed[entry.JellyfinID] {
 					return nil, &jellyfinEntryError{http.StatusBadRequest, "unknown_jellyfin_user", entry.JellyfinID}
 				}
-				if entry.WatchData && server.KeyOwner != "" && entry.JellyfinID != server.KeyOwner {
+				if entry.WatchData && server.KeyOwner != "" && entry.JellyfinID != server.KeyOwner && entry.JellyfinPassword == nil {
 					// A user's key reads that user's watch data only.
 					return nil, &jellyfinEntryError{http.StatusBadRequest, "jellyfin_key_owner_only", entry.JellyfinID}
 				}
@@ -214,6 +238,29 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 					return nil, err
 				}
 				chosen[i] = &jellyfinimport.Target{JellyfinID: entry.JellyfinID, User: user.ID, UserName: user.Name}
+			}
+			// The users read as themselves sign in before anyone is created:
+			// a wrong password creates no one.
+			for _, entry := range body.Users {
+				if entry.JellyfinPassword == nil {
+					continue
+				}
+				err := signIn(entry.JellyfinID, *entry.JellyfinPassword)
+				for _, known := range []struct {
+					err  error
+					code string
+				}{
+					{jellyfinimport.ErrSignInRefused, "jellyfin_password_refused"},
+					{jellyfinimport.ErrSignInForbidden, "jellyfin_sign_in_forbidden"},
+					{jellyfinimport.ErrOtherUser, "jellyfin_other_user"},
+				} {
+					if errors.Is(err, known.err) {
+						return nil, &jellyfinEntryError{http.StatusBadRequest, known.code, entry.JellyfinID}
+					}
+				}
+				if err != nil {
+					return nil, err
+				}
 			}
 			var err error
 			created, err = h.Accounts.CreateUsers(r.Context(), fresh)

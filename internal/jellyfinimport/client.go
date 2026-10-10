@@ -1,6 +1,7 @@
 package jellyfinimport
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,14 @@ var (
 	// ErrNotJellyfin reports an address that answered, but not as a
 	// Jellyfin server does.
 	ErrNotJellyfin = errors.New("not a Jellyfin server")
+	// ErrSignInRefused reports a user name or password the server refused.
+	ErrSignInRefused = errors.New("the Jellyfin server refused the name or password")
+	// ErrSignInForbidden reports an account the server does not let sign
+	// in: disabled, or outside its allowed hours.
+	ErrSignInForbidden = errors.New("the Jellyfin server does not let the account sign in")
+	// ErrOtherUser reports a sign-in as a user that opened another user's
+	// session.
+	ErrOtherUser = errors.New("the Jellyfin server signed in another user")
 )
 
 // maxAddress bounds the length of an address.
@@ -57,26 +66,36 @@ func ParseAddress(text string) (string, error) {
 	return strings.TrimRight(parsed.Scheme+"://"+parsed.Host+parsed.EscapedPath(), "/"), nil
 }
 
-// client reads one Jellyfin server with an API key, one request at a time,
-// spaced by the service's gap.
+// client reads one Jellyfin server with a key, one request at a time,
+// spaced by the service's gap: an API key of the server's dashboard, a
+// user's own key, or the token of a session the client signed in.
 type client struct {
 	s            *Service
 	address, key string
+	// session tells that key is the token of a session the client signed
+	// in, which signOut ends.
+	session bool
 	// retries is how many times more a request that failed is tried: none
 	// while an administrator waits on the answer, a few during an import.
 	retries int
 	last    time.Time
 }
 
-// get reads path, with query, into into. It waits as long as the server
-// asks when it answers too many requests, and tries again after failures.
+// get reads path, with query, into into.
 func (c *client) get(ctx context.Context, path string, query url.Values, into any) error {
+	return c.send(ctx, http.MethodGet, path, query, nil, into)
+}
+
+// send sends a request, a GET or a POST of body as JSON, and reads the
+// answer into into. It waits as long as the server asks when it answers
+// too many requests, and tries again after failures.
+func (c *client) send(ctx context.Context, method, path string, query url.Values, body []byte, into any) error {
 	failures, waits := 0, 0
 	for {
 		if !sleep(ctx, time.Until(c.last.Add(c.s.timing.gap))) {
 			return ctx.Err()
 		}
-		status, header, body, err := c.do(ctx, path, query)
+		status, header, answer, err := c.do(ctx, method, path, query, body)
 		c.last = time.Now()
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -84,7 +103,7 @@ func (c *client) get(ctx context.Context, path string, query url.Values, into an
 		var wait time.Duration
 		switch {
 		case err == nil && status == http.StatusOK:
-			if json.Unmarshal(body, into) != nil {
+			if json.Unmarshal(answer, into) != nil {
 				return ErrNotJellyfin
 			}
 			return nil
@@ -112,32 +131,91 @@ func (c *client) get(ctx context.Context, path string, query url.Values, into an
 	}
 }
 
-// do sends one request. The API key goes in the header Jellyfin reads API
-// keys from, never in the URL, which errors would hold.
-func (c *client) do(ctx context.Context, path string, query url.Values) (int, http.Header, []byte, error) {
+// do sends one request, a POST of body as JSON when there is one. The key
+// goes in the header Jellyfin reads keys from, never in the URL, which
+// errors would hold. Without a key, the header names Polyfin as the app and
+// device signing in, as Jellyfin's apps do: a server missing the device
+// may sign the user out of every other device.
+func (c *client) do(ctx context.Context, method, path string, query url.Values, body []byte) (int, http.Header, []byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.s.timing.request)
 	defer cancel()
 	target := c.address + path
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	var content io.Reader
+	if body != nil {
+		content = bytes.NewReader(body)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, target, content)
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	request.Header.Set("Authorization", `MediaBrowser Token="`+c.key+`"`)
+	authorization := `MediaBrowser Token="` + c.key + `"`
+	if c.key == "" {
+		authorization = `MediaBrowser Client="Polyfin", Device="Polyfin", DeviceId="` + newID() + `", Version="` + c.s.version + `"`
+	}
+	request.Header.Set("Authorization", authorization)
 	request.Header.Set("User-Agent", "Polyfin/"+c.s.version)
 	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	response, err := c.s.client.Do(request)
 	if err != nil {
 		return 0, nil, nil, err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxReply))
+	answer, err := io.ReadAll(io.LimitReader(response.Body, maxReply))
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	return response.StatusCode, response.Header, body, nil
+	return response.StatusCode, response.Header, answer, nil
+}
+
+// signIn signs in as the user named name with password, as Jellyfin's apps
+// do, and reads with the session's token from then on. It returns the
+// identifier of the user signed in.
+func (c *client) signIn(ctx context.Context, name, password string) (string, error) {
+	body, err := json.Marshal(struct{ Username, Pw string }{name, password})
+	if err != nil {
+		return "", err
+	}
+	var signed struct {
+		User struct {
+			ID string `json:"Id"`
+		}
+		AccessToken string
+	}
+	err = c.send(ctx, http.MethodPost, "/Users/AuthenticateByName", nil, body, &signed)
+	switch {
+	case errors.Is(err, ErrKeyRefused):
+		return "", ErrSignInRefused
+	case errors.Is(err, ErrForbidden):
+		return "", ErrSignInForbidden
+	case err != nil:
+		return "", err
+	case signed.User.ID == "" || signed.AccessToken == "":
+		return "", ErrNotJellyfin
+	}
+	c.key, c.session = signed.AccessToken, true
+	return signed.User.ID, nil
+}
+
+// signOutWait bounds the wait for a session to end: the import does not
+// depend on it.
+const signOutWait = 5 * time.Second
+
+// signOut ends the session signIn opened, if any, so that the server does
+// not keep it among the user's devices.
+func (c *client) signOut() {
+	if !c.session {
+		return
+	}
+	c.session = false
+	ctx, cancel := context.WithTimeout(context.Background(), signOutWait)
+	defer cancel()
+	_, _, _, _ = c.do(ctx, http.MethodPost, "/Sessions/Logout", nil, nil)
 }
 
 // retryAfter reads a Retry-After header in seconds, zero when absent.
@@ -169,10 +247,11 @@ type Server struct {
 	Name, Version string
 	// Address is the server's address as ParseAddress gives it.
 	Address string
-	// KeyOwner is the Jellyfin user the key belongs to when it is a user's
-	// own key or access token, empty for an API key of the server's
-	// dashboard. A user's key reads that user's watch data only: some
-	// servers answer it with that user's data whatever user is asked.
+	// KeyOwner is the Jellyfin user the import reads as: the owner of a
+	// user's own key or access token, or the user signed in with a name and
+	// password; empty for an API key of the server's dashboard. A user's
+	// key reads that user's watch data only: some servers answer it with
+	// that user's data whatever user is asked.
 	KeyOwner string
 }
 
@@ -200,9 +279,10 @@ type userJSON struct {
 	}
 }
 
-// server reads which server the address leads to, then its users, which
-// only an API key reads, and whose key it is.
-func (c *client) server(ctx context.Context) (Server, []User, error) {
+// connect reads which server the address leads to, signs in when
+// credentials name a user, then reads the server's users, which only a
+// server's key or an administrator lists, and whose key it reads with.
+func (c *client) connect(ctx context.Context, credentials Credentials) (Server, []User, error) {
 	var info serverInfoJSON
 	err := c.get(ctx, "/System/Info/Public", nil, &info)
 	if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) {
@@ -214,6 +294,15 @@ func (c *client) server(ctx context.Context) (Server, []User, error) {
 	}
 	if info.ID == "" {
 		return Server{}, nil, ErrNotJellyfin
+	}
+	// A password goes only to a server that answered as Jellyfin does.
+	owner := ""
+	if credentials.Name != "" {
+		if owner, err = c.signIn(ctx, credentials.Name, credentials.Password); err != nil {
+			return Server{}, nil, err
+		}
+	} else {
+		c.key = credentials.Key
 	}
 	var listed []userJSON
 	if err := c.get(ctx, "/Users", nil, &listed); err != nil {
@@ -227,9 +316,12 @@ func (c *client) server(ctx context.Context) (Server, []User, error) {
 		users = append(users, User{ID: u.ID, Name: u.Name, Administrator: u.Policy.IsAdministrator, Disabled: u.Policy.IsDisabled,
 			Hidden: u.Policy.IsHidden, LastActivity: date(u.LastActivityDate)})
 	}
-	owner, err := c.keyOwner(ctx)
-	if err != nil {
-		return Server{}, nil, err
+	// A session is its user's whatever /Users/Me answers: a server that does
+	// not answer it would pass the session for a server's key.
+	if credentials.Name == "" {
+		if owner, err = c.keyOwner(ctx); err != nil {
+			return Server{}, nil, err
+		}
 	}
 	return Server{Name: info.ServerName, Version: info.Version, Address: c.address, KeyOwner: owner}, users, nil
 }
