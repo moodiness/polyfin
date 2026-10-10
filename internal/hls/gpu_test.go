@@ -47,6 +47,9 @@ func TestGPUPipelines(t *testing.T) {
 	vaapiInMemory := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
 	vaapiResident := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, Resident: true,
 		Deinterlacers: []string{"deinterlace_vaapi"}}
+	intel := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi", "hevc_vaapi"}, ToneMapping: true,
+		Deinterlacers: []string{"deinterlace_vaapi"}}
+	intelNoDeinterlacer := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 
 	cudaResident := []string{"-init_hw_device", "cuda=cu", "-filter_hw_device", "cu", "-hwaccel", "cuda", "-hwaccel_device", "cu", "-hwaccel_output_format", "cuda"}
 	cudaInMemory := []string{"-hwaccel", "cuda"}
@@ -58,11 +61,13 @@ func TestGPUPipelines(t *testing.T) {
 	vaapiInMemoryInputs := append(slices.Clone(vaapiDevices), "-hwaccel", "vaapi", "-hwaccel_device", "va")
 
 	const (
-		scaleCUDA  = "scale_cuda=w=1920:h=1080:interp_algo=bicubic:format=nv12"
-		scaleVAAPI = "scale_vaapi=w=1920:h=1080:format=nv12"
-		placebo    = "libplacebo=w=1920:h=1080:format=yuv420p:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping=bt.2390"
-		cpuToneMap = "scale=w=1920:h=1080,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv"
-		burn       = "[0:3]fps=24,scale=1920:-2[subtitle];[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass,"
+		scaleCUDA    = "scale_cuda=w=1920:h=1080:interp_algo=bicubic:format=nv12"
+		scaleVAAPI   = "scale_vaapi=w=1920:h=1080:format=nv12"
+		placebo      = "libplacebo=w=1920:h=1080:format=yuv420p:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping=bt.2390"
+		cpuToneMap   = "scale=w=1920:h=1080,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv"
+		burn         = "[0:3]fps=24,scale=1920:-2[subtitle];[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass,"
+		scale10      = "scale_vaapi=w=1920:h=1080:format=p010"
+		tonemapVAAPI = "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709"
 	)
 	burned := 3
 	encoding := func(hw *Hardware, change func(*VideoEncoding)) *VideoEncoding {
@@ -86,6 +91,7 @@ func TestGPUPipelines(t *testing.T) {
 	bwdif := func(e *VideoEncoding) { e.Deinterlace, e.Deinterlacer = true, "bwdif" }
 	bwdifDoubled := func(e *VideoEncoding) { e.Deinterlace, e.Deinterlacer, e.DoubleRate = true, "bwdif", true }
 	hdrInterlaced := func(e *VideoEncoding) { e.ToneMap, e.Deinterlace = true, true }
+	cpuToneMapping := func(e *VideoEncoding) { e.ToneMap, e.ToneMapOnCPU = true, true }
 
 	for _, tc := range []struct {
 		name    string
@@ -134,6 +140,27 @@ func TestGPUPipelines(t *testing.T) {
 			"[0:0]" + cpuToneMap + ",format=yuv420p[converted];" + burn + "format=nv12,hwupload[video]"},
 		{"VAAPI SDR, decoded on the processor", encoding(vaapiResident, cpuDecoding), vaapiDevices, "scale=w=1920:h=1080,format=nv12,hwupload"},
 		{"VAAPI SDR, frames not kept", encoding(vaapiInMemory, sdr), vaapiInMemoryInputs, "scale=w=1920:h=1080,format=nv12,hwupload"},
+		// Intel's GPU tone maps: frames stay on the GPU, decoded by VAAPI or
+		// uploaded in 10 bits, deinterlaced, scaled in 10 bits, tone mapped
+		// to 8-bit BT.709 there; burned subtitles come down to memory after
+		// the tone mapping.
+		{"Intel HDR", encoding(intel, hdr), vaapiResidentInputs, "hwupload," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR in HEVC", encoding(intel, func(e *VideoEncoding) { e.ToneMap, e.Encoder = true, "hevc_vaapi" }), vaapiResidentInputs,
+			"hwupload," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR, decoded on the processor", encoding(intel, hdrCPUDecoding), vaapiDevices, "format=p010le,hwupload," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR, interlaced", encoding(intel, hdrInterlaced), vaapiResidentInputs, "hwupload,deinterlace_vaapi," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR, interlaced doubled", encoding(intel, func(e *VideoEncoding) { e.ToneMap, e.Deinterlace, e.DoubleRate = true, true, true }),
+			vaapiResidentInputs, "hwupload,deinterlace_vaapi=rate=field," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR, interlaced, no GPU deinterlacer", encoding(intelNoDeinterlacer, hdrInterlaced), vaapiInMemoryInputs,
+			"yadif,format=p010le,hwupload," + scale10 + "," + tonemapVAAPI},
+		{"Intel HDR, burned", encoding(intel, hdrBurnIn), vaapiResidentInputs,
+			"[0:0]hwupload," + scale10 + "," + tonemapVAAPI + ",hwdownload,format=nv12[converted];" + burn + "format=nv12,hwupload[video]"},
+		{"Intel SDR, burned", encoding(intel, burnIn), vaapiInMemoryInputs,
+			"[0:0]scale=w=1920:h=1080,format=yuv420p[converted];" + burn + "format=nv12,hwupload[video]"},
+		// Tone mapping on the GPU turned off: the processor's, through
+		// memory, on Intel's and NVIDIA's alike.
+		{"Intel HDR, tone mapped on the processor", encoding(intel, cpuToneMapping), vaapiInMemoryInputs, cpuToneMap + ",format=nv12,hwupload"},
+		{"NVIDIA HDR, tone mapped on the processor", encoding(nvidiaFull, cpuToneMapping), cudaInMemory, cpuToneMap + ",format=yuv420p"},
 	} {
 		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, Encode: tc.e}.args(0)
 		inputs, filters := inputsAndFilters(t, args)

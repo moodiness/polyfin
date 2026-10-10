@@ -14,12 +14,12 @@ import (
 // Hardware is a GPU FFmpeg decodes and encodes video on. Decoded frames
 // either stay in the GPU's memory until they are encoded, scaled there in
 // SDR (see Resident) and tone mapped there from Vulkan frames (see
-// VulkanDecoding), or come back to memory for the filters and go to the
-// GPU again to be encoded: Polyfin times both at startup and keeps the
-// faster for each kind of conversion. Burned subtitles, tone mapping on
-// the processor and decoding left to the processor always go through
-// memory. A GPU that cannot decode a codec leaves it to FFmpeg's own
-// decoder, and the conversion looks the same either way.
+// VulkanDecoding) or by Intel's video processing, or come back to memory
+// for the filters and go to the GPU again to be encoded: Polyfin times
+// both at startup and keeps the faster for each kind of conversion. Burned
+// subtitles, tone mapping on the processor and decoding left to the
+// processor go through memory. A GPU that cannot decode a codec leaves it
+// to FFmpeg's own decoder, and the conversion looks the same either way.
 type Hardware struct {
 	// Method is cuda, for NVIDIA GPUs, or vaapi, for AMD and Intel ones.
 	Method string
@@ -28,9 +28,13 @@ type Hardware struct {
 	// Encoders are those that encoded on it at startup, such as h264_nvenc.
 	Encoders []string
 	// ToneMapping is set when the GPU also scales video and tone maps HDR
-	// to SDR, through libplacebo on its Vulkan driver, which applies Dolby
-	// Vision's metadata: NVIDIA GPUs only. On AMD GPUs, the frames libplacebo
-	// imports from memory set off a fault in the Linux driver.
+	// to SDR, which a short HDR10 sample proved at startup. NVIDIA's do it
+	// through libplacebo on their Vulkan driver, which applies Dolby
+	// Vision's metadata. Intel's do it through VAAPI's video processing
+	// (tonemap_vaapi), for HDR10 whose frames carry their mastering
+	// display. AMD's never do: on AMD GPUs, the frames libplacebo imports
+	// from memory set off a fault in the Linux driver, mapping VAAPI frames
+	// into Vulkan fails, and Vulkan's HEVC decoder hung the GPU.
 	ToneMapping bool
 	// QVBR is set when a VAAPI driver takes a quality factor within a
 	// maximum rate, which a quality set in the settings needs there: AMD's
@@ -39,8 +43,9 @@ type Hardware struct {
 	// Resident is set when SDR frames the GPU decoded stay in its memory to
 	// be scaled, by scale_cuda or scale_vaapi, and encoded, which worked and
 	// was faster than going through memory at startup. Deinterlacers are
-	// the deinterlacing filters FFmpeg has for such frames: yadif_cuda and
-	// bwdif_cuda, or deinterlace_vaapi.
+	// the deinterlacing filters FFmpeg has for such frames, and for those
+	// an Intel GPU tone maps: yadif_cuda and bwdif_cuda, or
+	// deinterlace_vaapi.
 	Resident      bool
 	Deinterlacers []string
 	// VulkanDecoding is set when the GPU of ToneMapping also decodes HEVC
@@ -95,7 +100,8 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 }
 
 // SelectHardware chooses the GPU as DetectHardware does, and logs the
-// outcome.
+// outcome. The first choice also times HDR tone mapped on the processor in
+// the background, once the GPU's chains are (see timeToneMapping).
 func (m *Manager) SelectHardware(want, device string) {
 	switch hw, ok := m.DetectHardware(want, device); {
 	case ok:
@@ -106,6 +112,7 @@ func (m *Manager) SelectHardware(want, device string) {
 	case want != "none":
 		m.logger.Warn("Video is converted in software: the GPU asked for does not encode", "hwaccel", want)
 	}
+	m.toneMappingTimed.Do(m.timeToneMappingLater)
 }
 
 // detect finds the GPU want asks for (see DetectHardware), nil for none.
@@ -126,7 +133,7 @@ func (m *Manager) detect(want, device string) *Hardware {
 				}
 			}
 			if len(hw.Encoders) > 0 {
-				hw.ToneMapping = hw.Method == "cuda" && slices.Contains(m.can.filters, "libplacebo") && m.toneMaps(hw)
+				hw.ToneMapping = m.toneMaps(hw)
 				hw.QVBR = hw.Method == "vaapi" && m.encodes(hw, hw.Encoders[0], "-rc_mode", "QVBR", "-global_quality", "25", "-b:v", "1000000", "-maxrate", "1500000")
 				return &hw
 			}
@@ -135,10 +142,23 @@ func (m *Manager) detect(want, device string) *Hardware {
 	return nil
 }
 
-// toneMaps reports whether hw tone maps a quarter of a second of test
-// pattern, tagged as HDR10, on its Vulkan device: NVIDIA's Vulkan driver
-// may be missing from the container, or fail.
+// toneMaps reports whether hw tone maps HDR to SDR, as conversions would:
+// NVIDIA's GPU with libplacebo, and Intel's with tonemap_vaapi. AMD's are
+// never tried (see Hardware.ToneMapping).
 func (m *Manager) toneMaps(hw Hardware) bool {
+	switch {
+	case hw.Method == "cuda":
+		return m.HasFilters("libplacebo") && m.placeboToneMaps(hw)
+	case hw.Method == "vaapi" && m.vendorOf(hw.Device) == intelVendor:
+		return m.HasFilters("hwupload", "scale_vaapi", "tonemap_vaapi") && slices.Contains(m.can.encoders, "libx265") && m.vaapiToneMaps(hw)
+	}
+	return false
+}
+
+// placeboToneMaps reports whether hw tone maps a quarter of a second of
+// test pattern, tagged as HDR10, on its Vulkan device: NVIDIA's Vulkan
+// driver may be missing from the container, or fail.
+func (m *Manager) placeboToneMaps(hw Hardware) bool {
 	hw.ToneMapping = true
 	v := VideoEncoding{Width: 160, Height: 90, ToneMap: true, Hardware: &hw}
 	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error"}, toneMappingDevices...)
@@ -146,6 +166,48 @@ func (m *Manager) toneMaps(hw Hardware) bool {
 		"-vf", "format=yuv420p10le,"+hdrTags+","+v.filters(),
 		"-c:v", hw.Encoders[0], "-f", "null", "-")
 	return m.succeeds(args...)
+}
+
+// vaapiToneMaps reports whether hw, an Intel GPU, tone maps a quarter of a
+// second of HDR10 through the chain conversions use, decoded by VAAPI.
+// tonemap_vaapi takes no frame without the mastering display of HDR10,
+// which no filter adds: the sample is HEVC from x265, which writes it,
+// and FFmpeg's decoder passes it on to the frames.
+func (m *Manager) vaapiToneMaps(hw Hardware) bool {
+	dir, err := os.MkdirTemp(m.dir, "tone-mapping-")
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(dir)
+	sample := filepath.Join(dir, "hdr10.mkv")
+	if !m.succeeds(slices.Concat(probeStart, []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
+		"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", hdr10Params, sample})...) {
+		return false
+	}
+	hw.ToneMapping = true
+	v := VideoEncoding{Width: 160, Height: 90, ToneMap: true, Hardware: &hw}
+	return m.succeeds(slices.Concat(probeStart, v.inputs(), []string{"-i", sample, "-vf", v.filters(), "-c:v", hw.Encoders[0], "-f", "null", "-"})...)
+}
+
+// hdr10Params are x265's options writing the static metadata of HDR10: a
+// BT.2020 display mastered at 1000 nits, and content up to 1000 nits.
+const hdr10Params = "log-level=error:hdr10=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
+
+// intelVendor is Intel's PCI vendor ID, as Linux names a render node's.
+const intelVendor = "0x8086"
+
+// vendorOf is the PCI vendor ID of the GPU behind a render node, such as
+// 0x8086 for Intel and 0x1002 for AMD, empty when unknown, through
+// m.vendor when tests set it.
+func (m *Manager) vendorOf(node string) string {
+	if m.vendor != nil {
+		return m.vendor(node)
+	}
+	data, err := os.ReadFile(filepath.Join("/sys/class/drm", filepath.Base(node), "device", "vendor"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // hdrTags tags test pattern as HDR10.
@@ -165,8 +227,10 @@ func (m *Manager) measureLater(want string, hw *Hardware) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.measuring.Add(1)
+	m.timingGPU.Add(1)
 	go func() {
 		defer m.measuring.Done()
+		defer m.timingGPU.Done()
 		defer cancel()
 		go func() {
 			select {
@@ -254,14 +318,15 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 			}
 		}
 	}
-	if hw.Resident {
+	if hw.Resident || hw.ToneMapping && hw.Method == "vaapi" {
 		for _, name := range method.deinterlacers {
 			if m.HasFilters(name) {
 				hw.Deinterlacers = append(hw.Deinterlacers, name)
 			}
 		}
 	}
-	if !hw.ToneMapping || ctx.Err() != nil {
+	// Only libplacebo, on NVIDIA's GPUs, takes Vulkan frames.
+	if !hw.ToneMapping || hw.Method != "cuda" || ctx.Err() != nil {
 		return hw
 	}
 	// The HDR sample is HEVC in 10 bits, as HDR files are, from the GPU's
@@ -414,16 +479,24 @@ const (
 	// throughVulkan decodes into Vulkan frames, which libplacebo scales
 	// and tone maps as they are, into memory for the encoder.
 	throughVulkan
+	// throughVAAPI keeps HDR frames in an Intel GPU's memory, which
+	// deinterlaces, scales and tone maps them there (see vaapiToneMapping).
+	throughVAAPI
 )
 
 // pipeline is the way the conversion's frames go: kept on the GPU when it
 // can do every filter the conversion needs, through memory for burned
 // subtitles, for decoding left to the processor, and for tone mapping on
-// the processor.
+// the processor. Intel's tone mapping keeps them on the GPU whatever else
+// the conversion needs.
 func (v *VideoEncoding) pipeline() pipeline {
 	hw := v.Hardware
 	switch {
-	case hw == nil || v.DecodeOnCPU || v.Burn != nil:
+	case hw == nil:
+		return throughMemory
+	case v.toneMapsOnGPU() && hw.Method == "vaapi":
+		return throughVAAPI
+	case v.DecodeOnCPU || v.Burn != nil:
 		return throughMemory
 	case v.toneMapsOnGPU():
 		if hw.VulkanDecoding && !v.Deinterlace {
@@ -448,6 +521,14 @@ func (v *VideoEncoding) inputs() []string {
 		return append(hw.residentDevices(), "-hwaccel", hw.Method, "-hwaccel_device", name, "-hwaccel_output_format", hw.Method)
 	case throughVulkan:
 		return append(slices.Clone(toneMappingDevices), "-hwaccel", "vulkan", "-hwaccel_device", "vk", "-hwaccel_output_format", "vulkan")
+	case throughVAAPI:
+		switch {
+		case v.DecodeOnCPU:
+			return hw.devices()
+		case v.vaapiFramesOnGPU():
+			return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi")
+		}
+		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
 	}
 	var devices []string
 	switch {
@@ -468,6 +549,39 @@ func (v *VideoEncoding) inputs() []string {
 		return append(devices, "-hwaccel", "cuda", "-hwaccel_device", "cu")
 	}
 	return []string{"-hwaccel", "cuda"}
+}
+
+// vaapiToneMapping is the filter chain of HDR tone mapped by an Intel GPU's
+// video processing, as Jellyfin's: frames VAAPI decoded go through hwupload
+// as they are, as would those FFmpeg's own decoder takes over for a codec
+// the GPU does not decode, while frames decoded on the processor, or
+// deinterlaced there when FFmpeg has no deinterlace_vaapi, are uploaded in
+// 10 bits. They are then deinterlaced, scaled to the size asked in 10
+// bits, and tone mapped to 8-bit BT.709 there, for the encoder to take as
+// they are. tonemap_vaapi reads the HDR10 mastering display the frames
+// carry, and fails without it.
+func (v *VideoEncoding) vaapiToneMapping() string {
+	var filters []string
+	if v.vaapiFramesOnGPU() {
+		filters = append(filters, "hwupload")
+		if v.Deinterlace {
+			filters = append(filters, v.gpuDeinterlacer())
+		}
+	} else {
+		if v.Deinterlace {
+			filters = append(filters, v.deinterlacer())
+		}
+		filters = append(filters, "format=p010le", "hwupload")
+	}
+	return strings.Join(append(filters, "scale_vaapi=w="+strconv.Itoa(v.Width)+":h="+strconv.Itoa(v.Height)+":format=p010",
+		"tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709"), ",")
+}
+
+// vaapiFramesOnGPU reports whether the frames Intel's GPU tone maps come
+// from its decoder in its memory: not when the processor decodes, nor
+// when it deinterlaces for want of deinterlace_vaapi.
+func (v *VideoEncoding) vaapiFramesOnGPU() bool {
+	return !v.DecodeOnCPU && (!v.Deinterlace || v.gpuDeinterlacer() != "")
 }
 
 // gpuFilters is the filter chain of video kept in the GPU's memory: frames
@@ -515,7 +629,7 @@ func (v *VideoEncoding) gpuDeinterlacer() string {
 
 // toneMapsOnGPU reports whether the conversion tone maps HDR on its GPU.
 func (v *VideoEncoding) toneMapsOnGPU() bool {
-	return v.ToneMap && v.Hardware != nil && v.Hardware.ToneMapping
+	return v.ToneMap && !v.ToneMapOnCPU && v.Hardware != nil && v.Hardware.ToneMapping
 }
 
 // output ends a filter chain in memory: frames as the encoder takes them,
