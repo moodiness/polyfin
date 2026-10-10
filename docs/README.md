@@ -36,7 +36,8 @@ These pages explain how to run Polyfin and what it does for the people who use i
 |---|---|
 | [Users](users.md) | Watch state, moving from Jellyfin, parental control, per-user limits, quality groups, and the security settings |
 | [Administration](administration.md) | The admin app (home, search, system pages, settings) and API keys |
-| [Notifications](notifications.md) | Webhook, Discord, ntfy, email, Telegram, Gotify and Pushover targets for new episodes, recordings and Health problems, and the webhook event's JSON |
+| [Statistics](statistics.md) | The playback history, the Statistics page, each user's own figures, the CSV export and their API |
+| [Notifications](notifications.md) | Webhook, Discord, ntfy, email, Telegram, Gotify and Pushover targets for new episodes, recordings, Health problems and playbacks, and the webhook event's JSON |
 | [Web client](web-client.md) | The built-in jellyfin-web, single sign-on to the admin app, and custom CSS and JavaScript |
 | [Jellyfin compatibility](jellyfin-compatibility.md) | Compatible apps, what apps get, and the Jellyfin features Polyfin does without |
 

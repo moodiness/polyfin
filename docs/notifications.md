@@ -71,6 +71,10 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Health problem found | `health_problem` | The server's targets, and administrators' own. |
 | Health problem solved | `health_solved` | The same. |
 | User joined | `user_joined` | The server's targets, and administrators' own. |
+| Playback started | `playback_started` | The targets of the user who plays, and the server's. |
+| Playback paused | `playback_paused` | The same. |
+| Playback resumed | `playback_resumed` | The same. |
+| Playback stopped | `playback_stopped` | The same. |
 
 ### New episodes
 
@@ -87,6 +91,12 @@ Every five minutes, Polyfin looks at the problems **System › Health** shows un
 ### Users who joined
 
 A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+### Playbacks
+
+A video (a movie, an episode, a channel, a recording or a Replay programme) or a song or an audiobook that starts playing in a Jellyfin app, pauses, resumes or stops is told once per change, whatever the number of reports the app sends: positions as it plays are never told. A playback whose app stops reporting is told stopped five minutes after its last report (see [Statistics](statistics.md#playbacks)). Each message names the user, the title (a movie, an episode with its series, a channel, a song with its artist), the app and the device, the position, and how it plays: direct play, remux or conversion, such as "sam is watching Example Series S01E02" and "Pilot · Jellyfin Web on Chrome · 12:34 · Direct play".
+
+Targets saved before these events existed do not receive them until they are chosen, and a new target in the admin app leaves them unchosen: each user plays many times a day.
 
 Messages are written in the server language (**Settings › General**).
 
@@ -146,7 +156,7 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. |
@@ -156,14 +166,67 @@ A user who joined through an invite link:
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
 | `invite` | object | For `user_joined`: the invite link's `id`, and `createdBy`, the administrator who created it (`id`, `name`), null once deleted. |
+| `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
+
+The playback events were added within version 1: their `playback` object is new, and no other field changed.
+
+```json
+{
+  "version": 1,
+  "id": "0c2b9e5d7a1f4e3c9b8a6d5e4f3c2b1a",
+  "type": "playback_paused",
+  "at": "2026-10-10T20:15:00Z",
+  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": null },
+  "title": "sam paused Example Series S01E02",
+  "message": "Pilot · Jellyfin Web on Chrome · 12:34 · Conversion",
+  "url": null,
+  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
+  "playback": {
+    "itemId": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+    "kind": "episode",
+    "name": "Pilot",
+    "seriesId": "99887766554433221100ffeeddccbbaa",
+    "seriesName": "Example Series",
+    "season": 1,
+    "number": 2,
+    "channelId": null,
+    "channelName": null,
+    "artist": null,
+    "app": "Jellyfin Web",
+    "device": "Chrome",
+    "position": 754,
+    "paused": true,
+    "method": "conversion",
+    "converted": true,
+    "startedAt": "2026-10-10T20:02:00Z",
+    "played": 754
+  }
+}
+```
+
+| `playback` field | Type | Meaning |
+|---|---|---|
+| `itemId` | string | The item played, as Jellyfin apps know it. |
+| `kind` | string | `movie`, `episode`, `channel`, `recording`, `replay` (a Replay programme), `song` or `audiobook`. |
+| `name` | string | The item's name. |
+| `seriesId`, `seriesName`, `season`, `number` | string, number or null | For an episode: its series, season and number. |
+| `channelId`, `channelName` | string or null | For a channel, a Replay programme or a recording: its channel. |
+| `artist` | string or null | For a song or an audiobook: its first artist. |
+| `app`, `device` | string | The app and the device, as they signed in. |
+| `position` | number | Where the playback is, in seconds. |
+| `paused` | boolean | Whether it is paused. |
+| `method` | string or null | `direct_play`, `direct_stream` (remuxed, nothing converted) or `conversion`; null when not known yet. A playback converted for a while stays `conversion`. |
+| `converted` | boolean | Whether `method` is `conversion`. |
+| `startedAt` | string | When the playback started, RFC 3339 in UTC. |
+| `played` | number | How long it played since, in seconds, pauses left out. |
 
 ## Messages for each kind
 
 Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
 
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
+A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
 
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
+An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
 
 An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
 

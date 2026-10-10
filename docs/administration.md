@@ -1,6 +1,6 @@
 # Administration
 
-This page covers Polyfin's admin app: its Home, its System pages (Health, Schedule, Logs and API keys) and Settings, API keys for other tools, and the administration features Jellyfin apps can use.
+This page covers Polyfin's admin app: its Home, its System pages (Health, Statistics, Schedule, Logs and API keys) and Settings, API keys for other tools, and the administration features Jellyfin apps can use.
 
 ## The admin app
 
@@ -11,12 +11,12 @@ A bar at the top holds the sections, for administrators:
 - **Home** (`/admin/`): what plays now and what needs a look;
 - **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`) and **Live TV** (`/admin/live-tv`);
 - **Users** (`/admin/users`);
-- **System**: **Health**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
+- **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
 The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
 
-**My account** has four sections: **Tracking** (see [Tracking services](tracking.md)), **Notifications** (see [Notifications](notifications.md)), **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
+**My account** has five sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Notifications** (see [Notifications](notifications.md)), **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
 
 **Search** (⌘K on a Mac, Ctrl K elsewhere, or `/`) finds pages, settings, users and sources by name, with or without accents. Use the arrows and Enter to open one, Escape to close it.
 
@@ -38,6 +38,10 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 ### Stopping a playback or sending a message
 
 An administrator can stop a playback (**Stop**, which asks first), or show a message on its app (**Send a message**), when the app accepts remote control. This works as Jellyfin's remote control does. An administrator whose **Can control other users' apps** permission was taken away is refused. See [users](users.md) for permissions.
+
+## Statistics
+
+**System › Statistics** shows how the server is used, for **7 days**, **30 days**, a **Year** or **All** the history, for everyone or one user: hours watched per user and per day, the most played movies, series and channels, the apps and devices, how videos play (direct play, remux or conversion) and the busiest hours of the week, then the recent playbacks, which **Export CSV** downloads. **Settings › Playback** turns the history off or sets how long it is kept. See [Statistics](statistics.md) for how playbacks are counted, the settings and the API.
 
 ## Schedule
 
