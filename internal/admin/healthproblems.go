@@ -42,6 +42,7 @@ const (
 	problemBackupStale       = "backup_stale"
 	problemIPTV              = "iptv"
 	problemFolder            = "folder"
+	problemFolderUnwatched   = "folder_unwatched"
 	problemGuide             = "guide"
 	problemTask              = "task"
 )
@@ -51,7 +52,8 @@ const (
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
 // guide, with Failure, the failure's code, for an addon or a local folder,
-// and Share, the kind of network share a folder is ("smb", "webdav"); Host
+// or why a local folder is not watched, and Share, the kind of network
+// share a folder is ("smb", "webdav"); Host
 // for paused thumbnails; Task, in the language asked, for a task; Secrets
 // for those the key cannot decrypt. To is the admin app's page that
 // describes it, with its anchor. Transient ones come and go with the load:
@@ -159,6 +161,10 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					sources = append(sources, healthProblemJSON{Key: "folder:" + addon.ID.String(), Code: problemFolder,
 						Tone: notifications.SeverityError, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
 						Failure: folder.Error, Share: folder.Share})
+				} else if folder.Unwatched != "" {
+					sources = append(sources, healthProblemJSON{Key: "folder_unwatched:" + addon.ID.String(), Code: problemFolderUnwatched,
+						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Failure: folder.Unwatched})
 				}
 				continue
 			}
@@ -353,6 +359,21 @@ func (p healthProblemJSON) text(language string) string {
 		}
 		return say("%s: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.",
 			"%s : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", name)
+	case problemFolderUnwatched:
+		switch p.Failure {
+		case "watch_limit":
+			return say("%s: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. "+
+				"It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.",
+				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. "+
+					"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte.", name)
+		case "instance_limit":
+			return say("%s: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. "+
+				"It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files.",
+				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite d’observateurs ou de fichiers ouverts du système est atteinte. "+
+					"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_instances sur l’hôte, ou la limite de fichiers ouverts du conteneur.", name)
+		}
+		return say("%s: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.",
+			"%s : Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.", name)
 	case problemGuide:
 		return say("%s: the last programme guide fetch failed.", "%s : la dernière récupération du guide a échoué.", name)
 	case problemSecretsUnreadable:
