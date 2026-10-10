@@ -100,7 +100,7 @@ const settings: typeof en = {
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     maxConversionHeight: 'Qualité max des vidéos converties',
     maxConversionHeightHelp:
-      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p.',
+      'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et à 720p quand il convertit du HDR en SDR.',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
     conversion: {
@@ -135,6 +135,7 @@ const settings: typeof en = {
       gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD ou Intel (VAAPI)' },
       encoders: 'Encodeurs de la carte',
       gpuToneMapping: 'HDR vers SDR sur la carte',
+      processorToneMappingHint: 'Le HDR est alors converti par le processeur, en 720p au plus.',
       qualityFactor: 'Accepte un niveau de qualité',
       processor: 'Encodeurs du processeur',
       processorToneMapping: 'HDR vers SDR sur le processeur',

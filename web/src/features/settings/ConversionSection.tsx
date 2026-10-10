@@ -137,7 +137,14 @@ export default function ConversionSection({
                 <Detail term={c.encoders}>
                   <Codes names={gpu.encoders} />
                 </Detail>
-                <Detail term={c.gpuToneMapping}>
+                <Detail
+                  term={c.gpuToneMapping}
+                  hint={
+                    !gpu.toneMapping && hardware.toneMapping
+                      ? c.processorToneMappingHint
+                      : undefined
+                  }
+                >
                   <YesNo value={gpu.toneMapping} />
                 </Detail>
                 {gpu.method === 'vaapi' && (
@@ -454,11 +461,14 @@ export default function ConversionSection({
   )
 }
 
-/** One line of what was detected. */
-function Detail({ term, children }: { term: string; children: ReactNode }) {
+/** One line of what was detected, with a hint under its term when it has one. */
+function Detail({ term, hint, children }: { term: string; hint?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 px-4 py-3 not-first:border-t not-first:border-line sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <dt className="text-ink-2">{term}</dt>
+      <dt className="text-ink-2">
+        {term}
+        {hint && <span className="mt-0.5 block text-micro text-ink-3">{hint}</span>}
+      </dt>
       <dd className="flex flex-wrap items-center gap-1.5 sm:justify-end">{children}</dd>
     </div>
   )
