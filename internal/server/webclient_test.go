@@ -455,10 +455,12 @@ for (const name of scenarios) {
     }
     now = until
   }
+  // The observer of the body's children; the one of its whole subtree
+  // follows the menus.
   let observer = null
   class MutationObserver {
     constructor(callback) { this.callback = callback }
-    observe(target, options) { if (target !== body || options.subtree) throw new Error('not the body children'); observer = this }
+    observe(target, options) { if (target !== body) throw new Error('not the body'); if (!options.subtree) observer = this }
     disconnect() {}
   }
   // A dialog as jellyfin-web's dialog helper adds it: a container after
@@ -1678,6 +1680,346 @@ async function run(scenario) {
 		inputs[name] = input{s.user, views, s.deferred, s.stored, s.storage, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "key": savedKey, "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
+		}
+	}
+}
+
+// A member, a user signed in who is not an administrator, gets a "Polyfin"
+// entry where jellyfin-web 12.2 shows administrators Dashboard: the default
+// layout's user menu, between dividers before Quick Connect; the settings
+// page, before its user section; the legacy layouts' side menu, first in
+// its user section.
+// It is a plain link to the admin app, never jellyfin-web's emby-linkbutton,
+// named "Polyfin". An administrator, or no user, gets none. It comes back
+// as jellyfin-web draws its menus anew, and goes when the user signs out or
+// another signs in. The last member is kept in the browser's storage, so
+// that the entry shows before jellyfin-web's client answers. It runs in
+// Node.js, in a context that stands for the browser, with a small document
+// whose menus the harness draws as jellyfin-web does.
+func TestMembersGetAPolyfinEntry(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	// savedKey is where the script keeps the last member.
+	const savedKey = "polyfinMember"
+	type scenario struct {
+		// user is signed in as the script loads; empty for none.
+		user string
+		// administrators are the users jellyfin-web's client says are.
+		administrators []string
+		// apps draws the user menu as an app with client settings does.
+		apps bool
+		// deferred holds the client's answer about a user until an
+		// "answer <user>" step gives it.
+		deferred bool
+		// stored is what storage holds under savedKey as the script loads.
+		stored string
+		// steps: "draw" draws the three menus as jellyfin-web does for the
+		// user signed in, none without one; "signin <user>" and "signout"
+		// change the user, then move to the home route as jellyfin-web
+		// does; "show" logs each menu ("drawer", "settings", "menu") with
+		// its items, "Polyfin" standing for an entry that opens the admin
+		// app, "|" for a divider; "storage" logs what storage holds.
+		steps []string
+		want  []string
+	}
+	const (
+		memberDrawer   = "drawer libraries user: settings signout"
+		adminDrawer    = "drawer libraries admin user: settings signout"
+		memberSettings = "settings preferences user"
+		adminSettings  = "settings preferences admin user"
+		memberMenu     = "menu profile settings | quickconnect signout"
+		adminMenu      = "menu profile settings | dashboard metadata | quickconnect signout"
+	)
+	withEntry := []string{"drawer libraries user: Polyfin settings signout", "settings preferences Polyfin user", "menu profile settings | Polyfin | quickconnect signout"}
+	without := []string{memberDrawer, memberSettings, memberMenu}
+	scenarios := map[string]scenario{
+		"a member gets the entry in each menu": {user: "alice",
+			steps: []string{"draw", "show"}, want: withEntry},
+		"an administrator keeps Dashboard": {user: "root", administrators: []string{"root"},
+			steps: []string{"draw", "show"}, want: []string{adminDrawer, adminSettings, adminMenu}},
+		"no user gets none": {steps: []string{"draw", "signin alice", "show"},
+			want: []string{"drawer", "settings", "menu"}},
+		"an app's user menu has the entry before Quick Connect": {user: "alice", apps: true,
+			steps: []string{"draw", "show"},
+			want:  []string{withEntry[0], withEntry[1], "menu profile settings | clientsettings | Polyfin | quickconnect signout"}},
+		"menus drawn anew keep the entry": {user: "alice",
+			steps: []string{"draw", "draw", "show"}, want: withEntry},
+		"signing out takes it away": {user: "alice",
+			steps: []string{"draw", "signout", "show"}, want: without},
+		"an administrator signing in takes it away": {user: "alice", administrators: []string{"root"},
+			steps: []string{"draw", "signin root", "show", "draw", "show", "storage"},
+			want:  slices.Concat(without, []string{adminDrawer, adminSettings, adminMenu, "saved nothing"})},
+		"a member signing in after an administrator gets it": {user: "root", administrators: []string{"root"},
+			steps: []string{"draw", "signin alice", "draw", "show", "storage"},
+			want:  slices.Concat(withEntry, []string{"saved alice"})},
+		"the member kept shows it before the client answers": {user: "alice", deferred: true, stored: `{"user":"alice"}`,
+			steps: []string{"draw", "show", "answer alice", "show"}, want: slices.Concat(withEntry, withEntry)},
+		"a member waits for the client's answer": {user: "alice", deferred: true,
+			steps: []string{"draw", "show", "answer alice", "show", "storage"},
+			want:  slices.Concat(without, withEntry, []string{"saved alice"})},
+		"the member kept for another user shows nothing": {user: "bob", deferred: true, stored: `{"user":"alice"}`, administrators: []string{"bob"},
+			steps: []string{"draw", "show", "answer bob", "show", "storage"},
+			want:  []string{adminDrawer, adminSettings, adminMenu, adminDrawer, adminSettings, adminMenu, "saved nothing"}},
+		"the member kept who became an administrator keeps Dashboard": {user: "alice", deferred: true, stored: `{"user":"alice"}`, administrators: []string{"alice"},
+			steps: []string{"draw", "show"}, want: []string{adminDrawer, adminSettings, adminMenu}},
+		"an answer for the user before is dropped": {user: "alice", deferred: true, administrators: []string{"root"},
+			steps: []string{"signin root", "answer alice", "draw", "show"}, want: []string{adminDrawer, adminSettings, adminMenu}},
+	}
+
+	const harness = `
+const vm = require('node:vm')
+const { script, key, dashboardIcon, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+async function run(scenario) {
+  const log = []
+  let user = scenario.user
+  // Observers hear the changes within what they observe once the code that
+  // made them is done.
+  const observers = new Set()
+  let queued = false
+  const changed = () => {
+    if (queued || !observers.size) return
+    queued = true
+    queueMicrotask(() => { queued = false; for (const observer of observers) observer.callback([]) })
+  }
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe(target, options) { if (!options.subtree) return; observers.add(this) }
+    disconnect() { observers.delete(this) }
+  }
+  // A small document: elements with attributes, classes, children and
+  // text, found by tag, identifier, classes, attributes and descendants.
+  class Element {
+    constructor(tag) { this.tagName = tag.toUpperCase(); this.attributes = {}; this.children = []; this.parentNode = null; this.text = '' }
+    getAttribute(name) { return name in this.attributes ? this.attributes[name] : null }
+    hasAttribute(name) { return name in this.attributes }
+    setAttribute(name, value) { this.attributes[name] = String(value); changed() }
+    removeAttribute(name) { delete this.attributes[name]; changed() }
+    get className() { return this.getAttribute('class') || '' }
+    set className(value) { this.setAttribute('class', value) }
+    get id() { return this.getAttribute('id') || '' }
+    get classList() {
+      const names = () => this.className.split(' ').filter(Boolean)
+      return {
+        contains: (name) => names().includes(name),
+        add: (...add) => { this.className = [...new Set(names().concat(add))].join(' ') },
+        remove: (...remove) => { this.className = names().filter((n) => !remove.includes(n)).join(' ') },
+      }
+    }
+    get textContent() { return this.text + this.children.map((child) => child.textContent).join('') }
+    set textContent(value) { this.children = []; this.text = value; changed() }
+    get previousElementSibling() { const siblings = this.parentNode ? this.parentNode.children : []; return siblings[siblings.indexOf(this) - 1] || null }
+    get nextSibling() { const siblings = this.parentNode ? this.parentNode.children : []; return siblings[siblings.indexOf(this) + 1] || null }
+    get nextElementSibling() { return this.nextSibling }
+    insertBefore(child, before) {
+      if (child.parentNode) child.remove()
+      child.parentNode = this
+      this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, child)
+      changed()
+      return child
+    }
+    appendChild(child) { return this.insertBefore(child, null) }
+    remove() { const parent = this.parentNode; if (!parent) return; parent.children.splice(parent.children.indexOf(this), 1); this.parentNode = null; changed() }
+    cloneNode(deep) {
+      const copy = new Element(this.tagName)
+      copy.attributes = { ...this.attributes }
+      copy.text = this.text
+      copy.name = this.name
+      if (deep) for (const child of this.children) { const c = child.cloneNode(true); c.parentNode = copy; copy.children.push(c) }
+      return copy
+    }
+    fits(compound) {
+      const m = /^([a-z][a-z0-9]*)?((?:[.#][\w-]+|\[[\w-]+="[^"]*"\])*)$/i.exec(compound)
+      if (!m) throw new Error('selector not understood: ' + compound)
+      if (m[1] && m[1].toUpperCase() !== this.tagName) return false
+      return (m[2].match(/[.#][\w-]+|\[[\w-]+="[^"]*"\]/g) || []).every((part) => {
+        if (part[0] === '.') return this.classList.contains(part.slice(1))
+        if (part[0] === '#') return this.id === part.slice(1)
+        const [, name, value] = /^\[([\w-]+)="([^"]*)"\]$/.exec(part)
+        return this.getAttribute(name) === value
+      })
+    }
+    matches(selector) {
+      const parts = selector.trim().split(/\s+/)
+      if (!this.fits(parts[parts.length - 1])) return false
+      let at = this.parentNode
+      for (let k = parts.length - 2; k >= 0; k--) {
+        while (at && !(at.fits && at.fits(parts[k]))) at = at.parentNode
+        if (!at) return false
+        at = at.parentNode
+      }
+      return true
+    }
+    querySelectorAll(selector) {
+      const found = []
+      const walk = (element) => element.children.forEach((child) => { if (child.matches(selector)) found.push(child); walk(child) })
+      walk(this)
+      return found
+    }
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null }
+    closest(selector) { for (let e = this; e && e.matches; e = e.parentNode) if (e.matches(selector)) return e; return null }
+  }
+  const element = (tag, className, attributes, children, name) => {
+    const e = new Element(tag)
+    e.attributes = { ...(attributes || {}) }
+    if (className) e.attributes.class = className
+    for (const child of children || []) { child.parentNode = e; e.children.push(child) }
+    e.name = name
+    return e
+  }
+  const root = element('html', '')
+  const head = element('head', '')
+  const body = element('body', '')
+  root.appendChild(head)
+  root.appendChild(body)
+  const document = { head, body, createElement: (tag) => new Element(tag), querySelectorAll: (s) => root.querySelectorAll(s), querySelector: (s) => root.querySelector(s) }
+  // The three menus jellyfin-web 12.2 draws, as for user.
+  const link = (href, name) => element('a', 'navMenuOption lnkMediaFolder emby-button', { is: 'emby-linkbutton', href }, [], name)
+  const muiItem = (href, name, icon, text) => element(href ? 'a' : 'li', 'MuiButtonBase-root MuiMenuItem-root', href ? { href, tabindex: '-1', role: 'menuitem' } : { role: 'menuitem' }, [
+    element('div', 'MuiListItemIcon-root', {}, [element('svg', 'MuiSvgIcon-root', { 'data-testid': icon }, [element('path', '', { d: icon + ' path' })])]),
+    element('div', 'MuiListItemText-root', {}, [Object.assign(element('span', 'MuiTypography-root MuiListItemText-primary'), { text })]),
+    element('span', 'MuiTouchRipple-root', {}, [element('span', 'ripple')]),
+  ], name)
+  const divider = () => element('hr', 'MuiDivider-root', {}, [], '|')
+  function draw() {
+    for (const old of body.children.slice()) old.remove()
+    if (!user) return
+    const admin = scenario.administrators.includes(user)
+    body.appendChild(element('div', 'mainDrawer', {}, [element('div', 'scrollContainer', {}, [
+      element('div', 'libraryMenuOptions', {}, [], 'libraries'),
+      ...(admin ? [element('div', 'adminMenuOptions', {}, [element('h3', 'sidebarHeader'), link('#/dashboard'), link('#/metadata')], 'admin')] : []),
+      element('div', 'userMenuOptions', {}, [element('h3', 'sidebarHeader'), link('#', 'settings'), link('#', 'signout')], 'user'),
+    ])], 'drawer'))
+    body.appendChild(element('div', 'page libraryPage', {}, [element('div', 'readOnlyContent', {}, [
+      element('div', 'verticalSection', {}, [], 'preferences'),
+      ...(admin ? [element('div', 'adminSection verticalSection', {}, [element('h2', 'sectionTitle'), element('a', 'emby-button listItem-border', { is: 'emby-linkbutton', href: '#/dashboard' })], 'admin')] : []),
+      element('div', 'userSection verticalSection', {}, [], 'user'),
+    ], 'settings')]))
+    const items = [
+      muiItem('#/userprofile?userId=' + user, 'profile', 'AccountCircleIcon', 'Profile'),
+      muiItem('#/mypreferencesmenu', 'settings', 'SettingsIcon', 'Settings'),
+      ...(scenario.apps ? [divider(), muiItem('', 'clientsettings', 'DevicesIcon', 'Client settings')] : []),
+      ...(admin ? [divider(), muiItem('#/dashboard', 'dashboard', 'DashboardIcon', 'Dashboard'), muiItem('#/metadata', 'metadata', 'EditIcon', 'Metadata')] : []),
+      divider(),
+      muiItem('#/quickconnect', 'quickconnect', 'PhonelinkLockIcon', 'Quick Connect'),
+      muiItem('', 'signout', 'LogoutIcon', 'Sign out'),
+    ]
+    body.appendChild(element('div', 'MuiPopover-root MuiMenu-root', { id: 'app-user-menu' }, [element('div', 'MuiPaper-root', {}, [element('ul', 'MuiList-root MuiMenu-list', {}, items)])]))
+  }
+  // describe names an item, an entry as "Polyfin" when it is a plain link
+  // to the admin app named so, in the style of the menu's own items.
+  function describe(item) {
+    if (!item.classList.contains('polyfinEntry')) return item.name
+    if (item.classList.contains('MuiDivider-root')) return '|'
+    const a = item.tagName === 'A' ? item : item.querySelector('a')
+    const problems = []
+    if (!a || a.getAttribute('href') !== 'http://polyfin.test/admin/' || a.hasAttribute('is')) problems.push('link')
+    if (item.textContent !== 'Polyfin') problems.push('text ' + item.textContent)
+    if (item.querySelector('h2') || item.querySelector('h3')) problems.push('heading')
+    if (item.parentNode.tagName === 'UL') {
+      const path = item.querySelector('svg path')
+      if (!item.classList.contains('MuiMenuItem-root') || !path || path.getAttribute('d') !== dashboardIcon || item.querySelector('[data-testid="SettingsIcon"]')) problems.push('item')
+    } else if (!a || !a.querySelector('.material-icons.dashboard') || !a.classList.contains(item.closest('.mainDrawer') ? 'navMenuOption' : 'listItem-border')) problems.push('item')
+    return problems.length ? 'Polyfin(' + problems.join(', ') + ')' : 'Polyfin'
+  }
+  function show() {
+    for (const [name, selector] of [['drawer', '.mainDrawer .scrollContainer'], ['settings', '.readOnlyContent'], ['menu', '#app-user-menu ul']]) {
+      const container = root.querySelector(selector)
+      // The side menu's user section is listed after its name, heading left out.
+      const list = (item) => (item.name === 'user' && item.parentNode.classList.contains('scrollContainer') ? ['user:', ...item.children.slice(1).map(describe)] : [describe(item)])
+      log.push([name, ...(container ? container.children.flatMap(list) : [])].join(' '))
+    }
+  }
+  const store = {}
+  if (scenario.stored) store[key] = scenario.stored
+  const localStorage = {
+    getItem: (name) => (name in store ? store[name] : null),
+    setItem: (name, value) => { store[name] = String(value) },
+    removeItem: (name) => { delete store[name] },
+  }
+  const answers = {}
+  const ApiClient = {
+    getUrl: (path) => 'http://polyfin.test/' + path,
+    getCurrentUserId: () => user || undefined,
+    getJSON: () => Promise.reject(new Error('down')),
+    // Asked as the user signed in then.
+    getCurrentUser: () => {
+      const asked = user
+      if (!asked) return Promise.reject(new Error('no user'))
+      const answer = () => ({ Id: asked, Policy: { IsAdministrator: scenario.administrators.includes(asked) } })
+      if (!scenario.deferred) return Promise.resolve(answer())
+      return new Promise((resolve) => (answers[asked] ||= []).push(() => resolve(answer())))
+    },
+  }
+  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  vm.runInNewContext(script, {
+    location, history, URL, document, MutationObserver, window: { ApiClient, localStorage },
+    Date, setTimeout: () => 0, clearTimeout: () => {},
+    addEventListener: () => {},
+  })
+  await flush()
+  for (const step of scenario.steps) {
+    if (step === 'show') show()
+    else if (step === 'draw') draw()
+    else if (step === 'storage') log.push(key in store ? 'saved ' + JSON.parse(store[key]).user : 'saved nothing')
+    else if (step.startsWith('answer ')) {
+      const give = (answers[step.slice(7)] || []).shift()
+      if (give) give()
+      else log.push('no answer')
+    } else {
+      user = step === 'signout' ? '' : step.slice(7)
+      history.pushState(null, '', '#/home')
+    }
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    try {
+      results[name] = await run(scenario)
+    } catch (error) {
+      results[name] = ['harness: ' + error.stack]
+    }
+  }
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		User           string   `json:"user"`
+		Administrators []string `json:"administrators"`
+		Apps           bool     `json:"apps"`
+		Deferred       bool     `json:"deferred"`
+		Stored         string   `json:"stored,omitempty"`
+		Steps          []string `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		inputs[name] = input{s.user, append([]string{}, s.administrators...), s.apps, s.deferred, s.stored, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{
+		"script": string(webScriptBody), "key": savedKey, "scenarios": inputs,
+		// MUI's Dashboard icon, which jellyfin-web 12.2 draws in the user menu.
+		"dashboardIcon": "M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z",
+	})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
 	command.Stdin = strings.NewReader(string(data))
 	output, err := command.Output()
