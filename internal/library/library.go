@@ -59,6 +59,10 @@ type Service struct {
 	searchPages *cache.Cache[pageKey, fetched[[]stremio.Meta]]
 	metas       *cache.Cache[metaKey, fetched[stremio.Meta]]
 	flight      singleflight.Group
+	// joined, when tests set it, is called with the key of each call to
+	// shared once it waits on the key's fetch: the one it started, or the
+	// one under way it shares.
+	joined func(key string)
 	// libraryImages are the libraries' automatic images, by catalog (see
 	// automaticImage).
 	libraryImages *cache.Cache[pageKey, fetched[string]]

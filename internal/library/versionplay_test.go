@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,14 +148,36 @@ func TestARenewalOfAFileGoneFails(t *testing.T) {
 // the addon once more.
 func TestARenewalJoinsTheRequestUnderWay(t *testing.T) {
 	e := newStaleEnv(t, 20*time.Millisecond)
+	// Once the list expired, the calls waiting on the title's streams are
+	// told.
+	var flight atomic.Pointer[string]
+	waiting := make(chan struct{}, 10)
+	e.service.joined = func(key string) {
+		if watched := flight.Load(); watched != nil && key == *watched {
+			waiting <- struct{}{}
+		}
+	}
 	e.expired()
+	// The next follow-up waits until hurried: the requests counted before
+	// it are the reopening's.
+	e.service.followUpDelays = []time.Duration{time.Hour}
 	versions, err := e.service.KnownVersions(t.Context(), e.member, e.movie)
 	if err != nil || len(versions) != 3 {
 		t.Fatalf("versions: %q %v", versionNames(versions), err)
 	}
+	origin := versions[2].Origin
+	flight.Store(new(streamsFlight(streamKey{origin.Addon, origin.Type, origin.ID})))
 	e.reopened()
 	done := e.renewed(versions[2])
-	time.Sleep(50 * time.Millisecond)
+	// The addon answers once the renewal waits on the request the reopening
+	// started, which it holds.
+	for range 2 {
+		select {
+		case <-waiting:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the renewal never waited on the request under way")
+		}
+	}
 	e.numbers <- []int{1, 2, 3}
 	if err := <-done; err != nil {
 		t.Fatalf("renewal: %v", err)
@@ -162,6 +185,7 @@ func TestARenewalJoinsTheRequestUnderWay(t *testing.T) {
 	if got := e.asked("stream"); got != 3 {
 		t.Errorf("addon asked %d times, want 3", got)
 	}
+	e.hurry()
 	e.eventually("the follow-up", func() bool { return e.asked("stream") == 4 })
 	e.numbers <- []int{1, 2, 3}
 	e.settles("stream", 4)

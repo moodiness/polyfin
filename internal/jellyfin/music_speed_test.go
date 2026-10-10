@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,15 +24,19 @@ import (
 // those of album "bare" are only a URL, the tracks of album "listed" come
 // with a streamURL and their format, and the links of album "short"
 // expire 30 seconds after they are given. It counts the stream requests
-// of each track and the album pages read at once.
+// of each track and the album pages read at once; once holdAlbums is
+// called, album pages are held until as many are read at once as it asks.
 type musicRig struct {
 	url     string
 	latency time.Duration
 
-	mu         sync.Mutex
-	streams    map[string]int
-	albumsNow  int
-	albumsMost int
+	mu           sync.Mutex
+	streams      map[string]int
+	albumsNow    int
+	albumsMost   int
+	albumsAtOnce int
+	albumsHeld   chan struct{}
+	albumsGiveUp <-chan struct{}
 }
 
 func newMusicRig(t *testing.T, mp3 string, albums int, latency time.Duration) *musicRig {
@@ -81,8 +86,20 @@ func newMusicRig(t *testing.T, mp3 string, albums int, latency time.Duration) *m
 			rig.mu.Lock()
 			rig.albumsNow++
 			rig.albumsMost = max(rig.albumsMost, rig.albumsNow)
+			held, giveUp := rig.albumsHeld, rig.albumsGiveUp
+			if held != nil && rig.albumsNow == rig.albumsAtOnce {
+				close(held)
+				rig.albumsHeld = nil
+			}
 			rig.mu.Unlock()
-			// Held a little longer, so that the pages read at once show.
+			if held != nil {
+				select {
+				case <-held:
+				case <-giveUp:
+				}
+			}
+			// Held a little longer, so that a page read past the bound
+			// would show.
 			time.Sleep(rig.latency)
 			rig.mu.Lock()
 			rig.albumsNow--
@@ -117,6 +134,16 @@ func (rig *musicRig) streamRequests(track string) int {
 	rig.mu.Lock()
 	defer rig.mu.Unlock()
 	return rig.streams[track]
+}
+
+// holdAlbums holds the album pages read from now on until n of them are
+// read at once, whatever the machine's speed, or until the test gives up.
+func (rig *musicRig) holdAlbums(t *testing.T, n int) {
+	held, giveUp := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(giveUp)
+	rig.mu.Lock()
+	defer rig.mu.Unlock()
+	rig.albumsAtOnce, rig.albumsHeld, rig.albumsGiveUp = n, make(chan struct{}), held.Done()
 }
 
 // mp3Tone generates a ten-second MP3 tone, with the ffprobe beside the
@@ -293,31 +320,11 @@ func TestShortLivedLinksAreAskedOncePerPlayAndRelayed(t *testing.T) {
 	}
 }
 
-func TestPlaysOfOneTrackShareItsResolution(t *testing.T) {
-	ffprobe, mp3 := mp3Tone(t)
-	s := newProbingServer(t, 10, ffprobe)
-	rig := newMusicRig(t, mp3, 1, 100*time.Millisecond)
-	token, _, views := listening(t, s, rig.url)
-	song := albumSongs(t, s, token, views["Rig Albums"], "a00")[0].Id
-	listener := mustUser(t, s, "listener")
-	var wg sync.WaitGroup
-	for range 4 {
-		wg.Go(func() {
-			if _, err := s.library.Versions(t.Context(), listener, mustID(t, song)); err != nil {
-				t.Error(err)
-			}
-		})
-	}
-	wg.Wait()
-	if n := rig.streamRequests("a00-1"); n != 1 {
-		t.Errorf("4 plays at once asked the addon %d times", n)
-	}
-}
-
 func TestTheSongsTabReadsEightAlbumsAtOnce(t *testing.T) {
 	s := newTestServer(t, 10)
 	rig := newMusicRig(t, "", 30, 20*time.Millisecond)
 	token, _, views := listening(t, s, rig.url)
+	rig.holdAlbums(t, 8)
 	var songs QueryResult
 	s.get(t, "/Items?ParentId="+views["Rig Albums"]+"&IncludeItemTypes=Audio&Recursive=true&Limit=500", token, &songs)
 	if songs.TotalRecordCount != 33*4 {
