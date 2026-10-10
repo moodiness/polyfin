@@ -6,8 +6,8 @@ import SoundControl from './SoundControl.vue'
 import { icons } from './icons'
 import { heard, level } from './sound'
 
-/** The teaser's poster is its frame at 6 s, the diagram of sources, Polyfin and apps: it starts there. */
-const POSTER_TIME = 6
+/** The film's poster is its frame at 1 s, its opening line: the preview starts there. */
+const POSTER_TIME = 1
 
 const teaser = ref<HTMLVideoElement>()
 const tour = ref<HTMLVideoElement>()
@@ -72,13 +72,13 @@ function onDialogClick(event: MouseEvent) {
     <video
       ref="teaser"
       class="teaser"
-      :src="withBase('/videos/polyfin-intro.mp4')"
-      :poster="withBase('/videos/polyfin-intro.jpg')"
+      :src="withBase('/videos/polyfin-ad.mp4')"
+      :poster="withBase('/videos/polyfin-ad.jpg')"
       muted
       loop
       playsinline
       preload="metadata"
-      aria-label="Preview of the Polyfin tour"
+      aria-label="Polyfin in 30 seconds"
       @play="previewing = true"
       @pause="previewing = false"
     ></video>
@@ -90,7 +90,7 @@ function onDialogClick(event: MouseEvent) {
       >
         <span class="play"><Icon :svg="icons.play" :size="12" /></span>
         Watch the tour
-        <span class="duration">1:18</span>
+        <span class="duration">1:23</span>
       </a>
       <div class="buttons">
         <SoundControl owner="intro" />

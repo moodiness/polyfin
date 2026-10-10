@@ -7,7 +7,9 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes 
 
 Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
 
-See it on the [website](https://moodiness.github.io/polyfin/): a short tour, a video for each feature, and the documentation.
+<p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-ad.mp4"><img src="assets/polyfin-ad.jpg" alt="Watch Polyfin in 30 seconds"></a></p>
+
+See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a short tour, a video for each feature, and the documentation.
 
 > [!NOTE]
 > Polyfin is in early development. Expect changes between releases, and report problems in the [issues](https://github.com/moodiness/polyfin/issues).
