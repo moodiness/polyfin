@@ -6,8 +6,8 @@ import SoundControl from './SoundControl.vue'
 import { icons } from './icons'
 import { heard, level } from './sound'
 
-/** The ad's poster is its frame at 3.7 s, Polyfin reaching every source and app: it starts there. */
-const POSTER_TIME = 3.7
+/** The film's poster is its frame at 1 s, its opening line: the preview starts there. */
+const POSTER_TIME = 1
 
 const teaser = ref<HTMLVideoElement>()
 const tour = ref<HTMLVideoElement>()
