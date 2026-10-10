@@ -50,6 +50,14 @@ const common: typeof en = {
     unknown_code: 'Aucun appareil n’attend avec ce code. Il a peut-être expiré ou été mal saisi.',
     quick_connect_disabled: 'Quick Connect est désactivé sur ce serveur.',
     name_taken: 'Ce nom est déjà utilisé par un autre utilisateur.',
+    invalid_invite_uses:
+      'Les comptes qu’un lien d’invitation peut créer doivent être un nombre entier de 1 à 100.',
+    invalid_invite_expiry: 'Choisissez l’expiration du lien d’invitation dans la liste.',
+    invalid_invite_model: 'Cet utilisateur n’existe plus. Choisissez-en un autre.',
+    invite_unknown: 'Ce lien d’invitation ne fonctionne pas.',
+    invite_used_up: 'Ce lien d’invitation est épuisé.',
+    invite_expired: 'Ce lien d’invitation a expiré.',
+    invite_revoked: 'Ce lien d’invitation a été révoqué.',
     last_administrator:
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',

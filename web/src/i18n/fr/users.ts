@@ -287,6 +287,53 @@ const users: typeof en = {
       more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
     },
   },
+  invites: {
+    title: 'Liens d’invitation',
+    create: 'Créer un lien d’invitation',
+    empty: 'Aucun lien d’invitation pour le moment.',
+    emptyHelp:
+      'Un lien d’invitation permet aux personnes à qui vous l’envoyez de créer leur propre compte, avec les paramètres que vous choisissez.',
+    maxUses: 'Comptes qu’il peut créer',
+    maxUsesHelp: 'De 1 à 100. 1 par défaut.',
+    expires: 'Expiration',
+    after: (days: number) => (days === 1 ? 'Après 1 jour' : `Après ${days} jours`),
+    never: 'Jamais',
+    model: 'Paramètres de',
+    modelHelp:
+      'Les nouveaux comptes reprennent les autorisations, les bibliothèques visibles, les genres bloqués, les heures autorisées, le contrôle parental, les limites de lecture et d’accès et le groupe de qualité de cet utilisateur. Ils ne sont jamais administrateurs.',
+    newUser: 'Un nouvel utilisateur, comme avec Créer un utilisateur',
+    submit: 'Créer le lien',
+    creating: 'Création…',
+    createdTitle: 'Lien d’invitation créé',
+    createdNotice: 'Copiez ce lien maintenant : il n’est affiché que cette fois.',
+    copy: 'Copier le lien',
+    copied: 'Lien copié.',
+    copyFailed: 'Le lien n’a pas pu être copié. Sélectionnez-le et copiez-le à la main.',
+    done: 'Terminé',
+    uses: (uses: number, maxUses: number) =>
+      maxUses === 1
+        ? `${uses} compte créé sur 1`
+        : `${uses} ${uses <= 1 ? 'compte créé' : 'comptes créés'} sur ${maxUses}`,
+    settingsOf: (name: string) => `Paramètres de ${name}`,
+    newUserSettings: 'Paramètres d’un nouvel utilisateur',
+    expiresLabel: 'Expire',
+    expiredLabel: 'Expiré',
+    neverExpires: 'N’expire jamais',
+    createdBy: (name: string) => `Créé par ${name}`,
+    createdByDeleted: 'Créé par un utilisateur supprimé',
+    states: {
+      active: 'Actif',
+      used_up: 'Épuisé',
+      expired: 'Expiré',
+      revoked: 'Révoqué',
+    },
+    revoke: 'Révoquer',
+    revokeTitle: 'Révoquer ce lien d’invitation ?',
+    revokeConfirm:
+      'Le lien cesse aussitôt de fonctionner. Les comptes déjà créés grâce à lui sont conservés.',
+    revoking: 'Révocation…',
+    revoked: 'Le lien d’invitation est révoqué.',
+  },
 }
 
 export default users

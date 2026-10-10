@@ -51,6 +51,13 @@ const common = {
     unknown_code: 'No device is waiting with this code. It may have expired or been mistyped.',
     quick_connect_disabled: 'Quick Connect is turned off on this server.',
     name_taken: 'This name is already used by another user.',
+    invalid_invite_uses: 'Accounts an invite link may create must be a whole number from 1 to 100.',
+    invalid_invite_expiry: 'Choose when the invite link expires from the list.',
+    invalid_invite_model: 'This user no longer exists. Choose another one.',
+    invite_unknown: 'This invite link does not work.',
+    invite_used_up: 'This invite link is used up.',
+    invite_expired: 'This invite link has expired.',
+    invite_revoked: 'This invite link was revoked.',
     last_administrator:
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',

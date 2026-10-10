@@ -93,6 +93,7 @@ const notifications: typeof en = {
       recording_failed: 'Échec d’un enregistrement',
       health_problem: 'Problème détecté',
       health_solved: 'Problème résolu',
+      user_joined: 'Nouvel utilisateur',
     },
     eventHelp: {
       new_episode:
@@ -102,6 +103,7 @@ const notifications: typeof en = {
       recording_failed: 'Un enregistrement de TV en direct n’a rien enregistré.',
       health_problem: 'Système › Santé a détecté un problème, lors de deux vérifications de suite.',
       health_solved: 'Un problème détecté par Système › Santé a disparu.',
+      user_joined: 'Quelqu’un a créé son compte grâce à un lien d’invitation.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

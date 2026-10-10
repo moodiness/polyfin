@@ -89,6 +89,7 @@ const notifications = {
       recording_failed: 'Recording failed',
       health_problem: 'Health problem found',
       health_solved: 'Health problem solved',
+      user_joined: 'User joined',
     },
     eventHelp: {
       new_episode:
@@ -97,6 +98,7 @@ const notifications = {
       recording_failed: 'A Live TV recording recorded nothing.',
       health_problem: 'System › Health found a problem, in two checks in a row.',
       health_solved: 'A problem System › Health found is gone.',
+      user_joined: 'Someone created their account through an invite link.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',
