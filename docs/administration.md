@@ -66,7 +66,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Polyfin**: memory, goroutines, uptime and version;
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
 
-Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord or ntfy: see [Notifications](notifications.md).
+Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
 ## Logs
 

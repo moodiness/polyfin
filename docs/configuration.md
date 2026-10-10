@@ -40,7 +40,7 @@ The Compose file reads `POSTGRES_PASSWORD` and `POLYFIN_SECRET_KEY` from `.env`.
 
 ## Stored keys and tokens
 
-Polyfin stores a few secrets in its database: the server's PublicMetaDB key, TheIntroDB key, Trakt client secret and Last.fm shared secret, and each user's tracking tokens and API keys (Trakt, Simkl, MDBList, PublicMetaDB, Last.fm, ListenBrainz). With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out:
+Polyfin stores a few secrets in its database: the server's PublicMetaDB key, TheIntroDB key, Trakt client secret, Last.fm shared secret and SMTP password, each user's tracking tokens and API keys (Trakt, Simkl, MDBList, PublicMetaDB, Last.fm, ListenBrainz), and the addresses, tokens and keys of notification targets (see [Notifications](notifications.md#targets)). With `POLYFIN_SECRET_KEY` set, they are encrypted with AES-256-GCM, so that a copy of the database alone does not hand them out:
 
 - At startup, the secrets still stored unencrypted are encrypted in place, in one go. Running again changes nothing.
 - New values are written encrypted, and read back decrypted.
