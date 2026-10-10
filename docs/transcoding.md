@@ -13,6 +13,21 @@ Polyfin picks the lightest way an app can play a file:
 
 Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
 
+## Size of converted video
+
+Converted video is never larger than its source. It is smaller when one of these limits is below the source's size, the lowest one winning:
+
+- **GPU:** up to 4K.
+- **Processor:** up to 1080p.
+- **HDR converted by the processor:** up to 720p, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+- **Quality group:** the user's, set on their page under **Users**.
+- **Maximum quality of converted video:** under **Settings › Conversion**.
+- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower.
+
+When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
+
+On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
+
 ## Turning conversion and downloads on or off
 
 The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app. Image subtitles the app cannot show are left out.
