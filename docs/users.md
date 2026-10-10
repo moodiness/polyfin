@@ -139,6 +139,7 @@ The flow is Jellyfin's: **Server address**, then **Connect with** an API key or 
 - **API key**: create one in Emby's settings, under API Keys. It reads every user's watch data.
 - A user's own key or access token is refused (`emby_user_key`): Emby has no way to tell whose a key is, and it answers a user's key with that user's own data whatever user is asked. Connect with a user account instead: the user who signs in is known.
 - Emby keeps listing Polyfin among its devices after Polyfin signs out, without a session.
+- Polyfin first reads what the server says of itself, which Jellyfin and Emby tell anyone, and sends the key or password only to a server of the kind chosen: Jellyfin names itself, Emby does not. **Emby** chosen for a Jellyfin server, or **Jellyfin** for an Emby server, stops there with `not_jellyfin`: a server answered, but not of that kind.
 
 What comes over is what comes over from Jellyfin: played movies and episodes with their dates and play counts, resume points, and favorites.
 

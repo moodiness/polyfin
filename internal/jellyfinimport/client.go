@@ -293,11 +293,21 @@ type User struct {
 }
 
 // serverInfoJSON is what Jellyfin and Emby tell of themselves without a
-// key.
+// key. Jellyfin names itself in ProductName, "Jellyfin Server"; Emby leaves
+// it out.
 type serverInfoJSON struct {
-	ID         string `json:"Id"`
-	ServerName string
-	Version    string
+	ID          string `json:"Id"`
+	ServerName  string
+	Version     string
+	ProductName string
+}
+
+// is tells whether the server that answered info is of kind, Jellyfin or
+// Emby. Each answers much of the other's API, but not the same way: Emby
+// has no /Users/Me, which tells whose a key is on Jellyfin, and reads keys
+// from its own header.
+func (info serverInfoJSON) is(kind Kind) bool {
+	return strings.HasPrefix(info.ProductName, "Jellyfin") == (kind == Jellyfin)
 }
 
 type userJSON struct {
@@ -363,11 +373,12 @@ func (c *client) open(ctx context.Context, credentials Credentials) (Server, err
 	return server, nil
 }
 
-// locate reads, without a key, which server the address leads to. Emby
-// serves its API under /emby, and at its root too when reached directly:
-// an Emby address without that path tries it first, so that a proxy
-// passing only that path on works too. c reads at the address that
-// answered from then on.
+// locate reads, without a key, which server the address leads to, and
+// fails with ErrNotJellyfin when it is not of c's kind: a key or password
+// goes only to a server of the kind asked. Emby serves its API under /emby,
+// and at its root too when reached directly: an Emby address without that
+// path tries it first, so that a proxy passing only that path on works too.
+// c reads at the address that answered from then on.
 func (c *client) locate(ctx context.Context) (serverInfoJSON, error) {
 	addresses := []string{c.address}
 	if c.kind == Emby && !strings.HasSuffix(c.address, embyPath) {
@@ -378,8 +389,9 @@ func (c *client) locate(ctx context.Context) (serverInfoJSON, error) {
 		c.address = address
 		var info serverInfoJSON
 		err = c.get(ctx, "/System/Info/Public", nil, &info)
-		if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) || err == nil && info.ID == "" {
-			// Jellyfin and Emby answer it to anyone.
+		if errors.Is(err, ErrKeyRefused) || errors.Is(err, ErrForbidden) || err == nil && (info.ID == "" || !info.is(c.kind)) {
+			// Jellyfin and Emby answer it to anyone, and tell which they
+			// are.
 			err = ErrNotJellyfin
 		}
 		if !errors.Is(err, ErrNotJellyfin) {
