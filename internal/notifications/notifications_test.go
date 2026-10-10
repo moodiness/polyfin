@@ -793,6 +793,36 @@ func TestUsersJoiningAreToldToAdministrators(t *testing.T) {
 	}
 }
 
+// A new version of Polyfin is told to the server's targets and to
+// administrators' own, with its release notes; members cannot choose it.
+func TestNewVersionsAreToldToAdministrators(t *testing.T) {
+	h := newHarness(t)
+	h.add(t, nil, h.webhook("/server", NewVersion))
+	h.add(t, &h.admin, h.webhook("/admin", NewVersion))
+	h.add(t, &h.admin, h.webhook("/joined", UserJoined))
+	if _, err := h.Create(t.Context(), &h.member, h.webhook("/member", NewVersion)); err != ErrInvalidEvents {
+		t.Errorf("a member choosing new versions: %v", err)
+	}
+
+	h.NewVersion("1.3.0", "https://github.com/moodiness/polyfin/releases/tag/v1.3.0")
+	h.targets.wait(t, "/server", 1)
+	h.targets.wait(t, "/admin", 1)
+	h.idle(t)
+	body := h.targets.at("/server")[0].body
+	release, _ := body["release"].(map[string]any)
+	if body["type"] != NewVersion || body["title"] != "New version: Polyfin 1.3.0" || body["user"] != nil ||
+		body["url"] != "https://github.com/moodiness/polyfin/releases/tag/v1.3.0" ||
+		body["message"] != "Polyfin 1.3.0 is available. This server runs version 1.2.3." {
+		t.Errorf("message: %v", body)
+	}
+	if release["version"] != "1.3.0" || release["current"] != "1.2.3" || release["url"] != body["url"] {
+		t.Errorf("release: %v", release)
+	}
+	if got := len(h.targets.at("/joined")); got != 0 {
+		t.Errorf("%d messages reached a target without the event", got)
+	}
+}
+
 // problems2 reads the problems the harness's test sets, for another
 // service on the same database.
 func (h harness) problems2() func(context.Context) ([]Problem, error) {
