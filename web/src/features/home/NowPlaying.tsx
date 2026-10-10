@@ -388,6 +388,27 @@ function streamText(stream: StreamInfo | null, language: string, unknown: string
   return parts.length > 0 ? parts.join(' · ') : unknown
 }
 
+/** Why the sent video is smaller than the source, null when it is not or when that is not known. */
+function sizeLimitText(
+  session: LiveSession,
+  language: string,
+  limits: Messages['dashboard']['live']['sizeLimits'],
+): string | null {
+  const { video, source, sent } = session
+  if (video === null || source === null || sent === null) return null
+  if (video.limitedBy === '' || video.limitedBy === 'source') return null
+  if (sent.width >= source.width && sent.height >= source.height) return null
+  const height = video.maxHeight === 2160 ? '4K' : `${video.maxHeight}p`
+  switch (video.limitedBy) {
+    case 'bitrate': {
+      const rate = formatBitrate(video.bitrateLimit, language)
+      return video.bitrateLimitOf === 'user' ? limits.userBitrate(rate) : limits.appBitrate(rate)
+    }
+    default:
+      return limits[video.limitedBy](height)
+  }
+}
+
 /** Everything about how the file reaches the app: source, what is sent, encoder, reasons. */
 function HowItPlays({ session }: { session: LiveSession }) {
   const { language, t } = useI18n()
@@ -401,11 +422,13 @@ function HowItPlays({ session }: { session: LiveSession }) {
       : `${video.hardware ? live.gpu(video.hardware) : live.cpu} · ${video.encoder}${
           video.toneMap ? ` · ${live.toneMapped}` : ''
         }${video.burnSubtitles ? ` · ${live.burned}` : ''}`
+  const sizeLimit = sizeLimitText(session, language, live.sizeLimits)
   const rows = [
     { label: live.source, value: streamText(session.source, language, live.unknown) },
     ...(session.delivery === 'directPlay'
       ? []
       : [{ label: live.sent, value: streamText(session.sent, language, live.unknown) }]),
+    ...(sizeLimit === null ? [] : [{ label: live.sizeLimit, value: sizeLimit }]),
     ...(encoder === null ? [] : [{ label: live.encoder, value: encoder }]),
     {
       label: live.qualityGroup,
