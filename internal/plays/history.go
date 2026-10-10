@@ -92,23 +92,28 @@ func (h *History) Sweep(ctx context.Context) (int64, error) {
 }
 
 // Filter selects playbacks: those of User, unless nil, that started at
-// Since or later, unless zero.
+// Since or later, unless zero, and before Until, unless zero.
 type Filter struct {
 	User  *accounts.ID
 	Since time.Time
+	Until time.Time
 }
 
-// args are the filter's arguments, $1 and $2 of filterWhere.
+// args are the filter's arguments, $1 to $3 of filterWhere.
 func (f Filter) args() []any {
-	var since *time.Time
+	var since, until *time.Time
 	if !f.Since.IsZero() {
 		since = &f.Since
 	}
-	return []any{since, f.User}
+	if !f.Until.IsZero() {
+		until = &f.Until
+	}
+	return []any{since, f.User, until}
 }
 
 // filterWhere selects the playbacks of the filter's args.
-const filterWhere = "($1::timestamptz IS NULL OR h.started_at >= $1) AND ($2::uuid IS NULL OR h.user_id = $2)"
+const filterWhere = "($1::timestamptz IS NULL OR h.started_at >= $1) AND ($2::uuid IS NULL OR h.user_id = $2) AND " +
+	"($3::timestamptz IS NULL OR h.started_at < $3)"
 
 // Entry is a playback kept in the history, with its user's name.
 type Entry struct {
@@ -147,7 +152,7 @@ func (h *History) Entries(ctx context.Context, f Filter, offset, limit int) ([]E
 		return nil, 0, err
 	}
 	rows, err := h.db.Query(ctx, "SELECT "+entryColumns+" FROM playback_history h JOIN users u ON u.id = h.user_id WHERE "+filterWhere+
-		" ORDER BY h.started_at DESC, h.id DESC OFFSET $3 LIMIT $4", append(f.args(), offset, limit)...)
+		" ORDER BY h.started_at DESC, h.id DESC OFFSET $4 LIMIT $5", append(f.args(), offset, limit)...)
 	if err != nil {
 		return nil, 0, err
 	}
