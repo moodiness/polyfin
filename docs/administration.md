@@ -31,6 +31,7 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 **Home** greets you by name and shows:
 
 - **Now playing**, updated every 3 seconds. For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes. When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video).
+- a notice when a new version of Polyfin is out, with **Release notes** (see [New versions](#new-versions));
 - **To look at**: the problems Health found, with a link to it.
 - **Server state**: version, database, cache and graphics card.
 - **Recent activity**, the activity log, which you can filter by kind and search. Its list scrolls in its own box and loads older events as you reach its end.
@@ -56,7 +57,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 
 ## Health
 
-**System › Health** puts problems first, under **Needs attention**. It then shows:
+**System › Health** puts problems first, under **Needs attention**, followed there by a new version of Polyfin when one is out (see [New versions](#new-versions)). It then shows:
 
 - **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses.
 - **IPTV sources** and **Programme guides**.
@@ -71,6 +72,30 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
 
 Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
+
+## New versions
+
+While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub for its latest release a minute after it starts, then once a day. This is the one request Polyfin makes to GitHub for itself:
+
+- it asks `https://api.github.com/repos/moodiness/polyfin/releases/latest`, which leaves out pre-releases and drafts;
+- it sends nothing but Polyfin's version, in its `User-Agent: Polyfin/<version>` header;
+- it goes through the proxy the environment sets (`HTTPS_PROXY`), and gives up after 10 seconds.
+
+A failed request, or GitHub asking to wait (403 or 429), changes nothing, and is tried again an hour later. A release whose tag is a pre-release is left out too.
+
+When the release is newer than the running version, in semantic version order:
+
+- **Home** shows a notice, and **System › Health** an item under **Needs attention**, with the new version and **Release notes**, which opens them on GitHub;
+- Jellyfin apps see `HasUpdateAvailable` true in `/System/Info`;
+- the **New version** notification is sent once per version, to the server's targets and administrators' own (see [Notifications](notifications.md#new-versions)).
+
+The version found and the version told are kept in the database: after a restart, the notice shows at once, and the notification is not sent again. Once Polyfin runs that version, the notice goes.
+
+A development build, whose version is `dev`, asks nothing and never shows a new version. Turned off, Polyfin never contacts GitHub, the notice and the item go, and `HasUpdateAvailable` is false.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Check for new versions** | **Settings › General** | On | Asks GitHub once a day, and a minute after Polyfin starts, for Polyfin's latest release, and tells administrators about a newer one. Off, GitHub is never asked. |
 
 ## Logs
 
