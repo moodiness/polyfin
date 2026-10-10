@@ -1,14 +1,14 @@
 // Package notifications tells users and administrators when something they
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
-// solved, a user who joined through an invite. Messages go to targets:
-// generic webhooks, which receive a versioned JSON event (see Event);
-// Discord webhooks, ntfy topics, Telegram chats, Gotify servers and
-// Pushover users, which receive messages formatted for them; and email
-// addresses, through the SMTP server of the settings. Administrators add
-// the server's targets, which receive the events of every user; each user
-// adds their own, which receive their own events, and the health and
-// joining events for administrators.
+// solved, a user who joined through an invite, a playback that started,
+// paused, resumed or stopped. Messages go to targets: generic webhooks,
+// which receive a versioned JSON event (see Event); Discord webhooks, ntfy
+// topics, Telegram chats, Gotify servers and Pushover users, which receive
+// messages formatted for them; and email addresses, through the SMTP server
+// of the settings. Administrators add the server's targets, which receive
+// the events of every user; each user adds their own, which receive their
+// own events, and the health and joining events for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -65,13 +65,20 @@ const (
 	HealthProblem     = "health_problem"
 	HealthSolved      = "health_solved"
 	UserJoined        = "user_joined"
+	// The playbacks of videos and audio: their start, pause, resumption
+	// and stop, one event each.
+	PlaybackStarted = "playback_started"
+	PlaybackPaused  = "playback_paused"
+	PlaybackResumed = "playback_resumed"
+	PlaybackStopped = "playback_stopped"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
 
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
-var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined}
+var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, PlaybackStarted,
+	PlaybackPaused, PlaybackResumed, PlaybackStopped}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, or a

@@ -45,6 +45,7 @@ type Event struct {
 	Recording *RecordingJSON `json:"recording,omitempty"`
 	Problem   *ProblemJSON   `json:"problem,omitempty"`
 	Invite    *InviteJSON    `json:"invite,omitempty"`
+	Playback  *PlaybackJSON  `json:"playback,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -101,6 +102,38 @@ type ProblemJSON struct {
 type InviteJSON struct {
 	ID        string    `json:"id"`
 	CreatedBy *UserJSON `json:"createdBy"`
+}
+
+// PlaybackJSON is a playback that started, paused, resumed or stopped.
+// What plays is an item as Jellyfin apps know it, of a Kind among
+// "movie", "episode", "channel", "recording", "replay" (a Replay
+// programme), "song" and "audiobook", with its series, season and number
+// for an episode, its channel for a channel, a Replay programme or a
+// recording, and its artist for a song or an audiobook; null otherwise.
+// App and Device name what it plays on, as they signed in. Position is
+// where it is, in seconds; Played how long it played since StartedAt,
+// pauses left out. Method tells how it reaches the app: "direct_play",
+// "direct_stream" (remuxed, nothing converted) or "conversion", null when
+// not known yet; Converted is true for "conversion".
+type PlaybackJSON struct {
+	ItemID      string    `json:"itemId"`
+	Kind        string    `json:"kind"`
+	Name        string    `json:"name"`
+	SeriesID    *string   `json:"seriesId"`
+	SeriesName  *string   `json:"seriesName"`
+	Season      *int      `json:"season"`
+	Number      *int      `json:"number"`
+	ChannelID   *string   `json:"channelId"`
+	ChannelName *string   `json:"channelName"`
+	Artist      *string   `json:"artist"`
+	App         string    `json:"app"`
+	Device      string    `json:"device"`
+	Position    int64     `json:"position"`
+	Paused      bool      `json:"paused"`
+	Method      *string   `json:"method"`
+	Converted   bool      `json:"converted"`
+	StartedAt   time.Time `json:"startedAt"`
+	Played      int64     `json:"played"`
 }
 
 // newEvent starts an event of type kind, now.
