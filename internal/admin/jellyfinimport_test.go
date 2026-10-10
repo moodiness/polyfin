@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,13 +25,38 @@ const (
 )
 
 // fakeJellyfin answers as a Jellyfin server with three users, Alice having
-// played one movie, to the server's API key jellyfinKey and to Alice's own
-// key, which /Users/Me answers with her.
+// played one movie and Bob another, to the server's API key jellyfinKey, to
+// Alice's own key, which /Users/Me answers with her, and to Alice and Bob
+// signed in with their passwords. A session reads its own user's items
+// whatever user is asked, as some servers answer.
 func fakeJellyfin(t *testing.T) string {
 	t.Helper()
+	var mu sync.Mutex
+	sessions := map[string]string{}
+	passwords := map[string]string{"Alice": "alice's password", "Bob": "bob's password"}
+	played := map[string]string{"jf-alice": `{"Id":"m1","Name":"One","Type":"Movie","ProviderIds":{"Imdb":"tt0000001"},
+		"UserData":{"Played":true,"PlayCount":1,"LastPlayedDate":"2026-09-01T20:00:00.0000000Z"}}`,
+		"jf-bob": `{"Id":"m2","Name":"Two","Type":"Movie","ProviderIds":{"Imdb":"tt0000002"},"UserData":{"Played":true,"PlayCount":1}}`}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method != http.MethodGet {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName" {
+			var body struct{ Username, Pw string }
+			if json.NewDecoder(r.Body).Decode(&body) != nil || !strings.Contains(r.Header.Get("Authorization"), `DeviceId="`) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if password, ok := passwords[body.Username]; !ok || password != body.Pw {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			token := "session-" + strconv.Itoa(len(sessions)+1)
+			sessions[token] = "jf-" + strings.ToLower(body.Username)
+			_, _ = io.WriteString(w, `{"User":{"Id":"`+sessions[token]+`"},"AccessToken":"`+token+`"}`)
+			return
+		}
+		if r.Method != http.MethodGet && r.URL.Path != "/Sessions/Logout" {
 			t.Errorf("Jellyfin was sent %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.Path == "/System/Info/Public" {
@@ -37,23 +64,33 @@ func fakeJellyfin(t *testing.T) string {
 			return
 		}
 		auth := r.Header.Get("Authorization")
+		token := strings.TrimSuffix(strings.TrimPrefix(auth, `MediaBrowser Token="`), `"`)
+		session, signedIn := sessions[token]
 		alicesKey := auth == `MediaBrowser Token="`+aliceJellyfinKey+`"`
-		if auth != `MediaBrowser Token="`+jellyfinKey+`"` && !alicesKey {
+		if auth != `MediaBrowser Token="`+jellyfinKey+`"` && !alicesKey && !signedIn {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		user := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/Users/"), "/Items")
+		if signedIn {
+			user = session
+		}
 		switch {
+		case r.URL.Path == "/Sessions/Logout":
+			delete(sessions, token)
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/Users":
 			_, _ = io.WriteString(w, `[{"Id":"jf-alice","Name":"Alice","Policy":{"IsAdministrator":true}},
 				{"Id":"jf-bob","Name":"Bob","Policy":{"IsHidden":true}},{"Id":"jf-carol","Name":"CAROL","Policy":{}}]`)
+		case r.URL.Path == "/Users/Me" && signedIn:
+			_, _ = io.WriteString(w, `{"Id":"`+session+`"}`)
 		case r.URL.Path == "/Users/Me" && alicesKey:
 			_, _ = io.WriteString(w, `{"Id":"jf-alice","Name":"Alice"}`)
 		case r.URL.Path == "/Users/Me":
 			// The server's key is no user's.
 			w.WriteHeader(http.StatusBadRequest)
-		case r.URL.Path == "/Users/jf-alice/Items" && r.URL.Query().Get("Filters") == "IsPlayed":
-			_, _ = io.WriteString(w, `{"Items":[{"Id":"m1","Name":"One","Type":"Movie","ProviderIds":{"Imdb":"tt0000001"},
-				"UserData":{"Played":true,"PlayCount":1,"LastPlayedDate":"2026-09-01T20:00:00.0000000Z"}}],"TotalRecordCount":1}`)
+		case strings.HasSuffix(r.URL.Path, "/Items") && r.URL.Query().Get("Filters") == "IsPlayed" && played[user] != "":
+			_, _ = io.WriteString(w, `{"Items":[`+played[user]+`],"TotalRecordCount":1}`)
 		case strings.HasSuffix(r.URL.Path, "/Items"):
 			_, _ = io.WriteString(w, `{"Items":[],"TotalRecordCount":0}`)
 		default:
@@ -148,29 +185,46 @@ func TestJellyfinImportCreatesTheChosenUsersAndImportsTheirWatchData(t *testing.
 		t.Errorf("Bob signs in: %d", status)
 	}
 
+	jellyfinImportDone(t, admin)
+	aliceID, _ := accounts.ParseID(created[0].(map[string]any)["id"].(string))
+	if !playedMovie(t, lib, data, aliceID, "tt0000001") {
+		t.Error("Alice's movie is not played")
+	}
+}
+
+// jellyfinImportDone waits for the import running to end, and fails unless
+// it is done.
+func jellyfinImportDone(t *testing.T, admin browser) {
+	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		_, body, _ = admin.call(http.MethodGet, "/jellyfin-import", nil)
+		_, body, _ := admin.call(http.MethodGet, "/jellyfin-import", nil)
 		if current, _ := body["import"].(map[string]any); current != nil && current["state"] != "running" {
 			if current["state"] != "done" {
 				t.Fatalf("import: %v", current)
 			}
-			break
+			return
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("the import never ended: %v", body)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	aliceID, _ := accounts.ParseID(created[0].(map[string]any)["id"].(string))
-	found, err := lib.Resolve(t.Context(), []library.TitleRef{{IMDb: "tt0000001"}})
+}
+
+// playedMovie tells whether user marked played the movie of IMDb identifier
+// imdb.
+func playedMovie(t *testing.T, lib *library.Service, data *userdata.Store, user accounts.ID, imdb string) bool {
+	t.Helper()
+	found, err := lib.Resolve(t.Context(), []library.TitleRef{{IMDb: imdb}})
+	if err != nil || len(found[0]) == 0 {
+		t.Fatalf("%s: %v %v", imdb, found, err)
+	}
+	got, err := data.Get(t.Context(), user, []accounts.ID{found[0][0].ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := data.Get(t.Context(), aliceID, []accounts.ID{found[0][0].ID})
-	if d := got[found[0][0].ID]; err != nil || !d.Played {
-		t.Errorf("Alice's movie: %+v %v", d, err)
-	}
+	return got[found[0][0].ID].Played
 }
 
 // A user's own key reads that user's watch data only: the admin API names
@@ -204,5 +258,62 @@ func TestJellyfinImportWithAUserKeyImportsOnlyItsOwner(t *testing.T) {
 	imported, _ := body["import"].(map[string]any)
 	if status != http.StatusOK || len(created) != 2 || imported == nil || len(imported["users"].([]any)) != 1 {
 		t.Errorf("Alice's watch data and Bob's account: %d %v", status, body)
+	}
+}
+
+// Signed in as a user, an import reads another user's watch data signed in
+// as them, with their password. A wrong one is refused before anyone is
+// created.
+func TestJellyfinImportSignsInAsEachUser(t *testing.T) {
+	jellyfin := fakeJellyfin(t)
+	api, lib, data := jellyfinImportAPI(t)
+	admin := api.signedIn("root", true)
+	asAlice := map[string]any{"name": "Alice", "password": "alice's password"}
+	if status, body, _ := admin.call(http.MethodPost, "/jellyfin-import/users",
+		map[string]any{"address": jellyfin, "account": map[string]any{"name": "Alice", "password": "wrong"}}); status != http.StatusBadRequest ||
+		body["error"] != "jellyfin_sign_in_refused" {
+		t.Errorf("a wrong password: %d %v", status, body)
+	}
+	if status, body, _ := admin.call(http.MethodPost, "/jellyfin-import/users", map[string]any{"address": jellyfin, "account": asAlice}); status != http.StatusOK ||
+		body["keyOwner"] != "jf-alice" {
+		t.Fatalf("users as Alice: %d %v", status, body)
+	}
+
+	// Bob keeps his password in Polyfin.
+	newUser := func(name, password string) map[string]any {
+		return map[string]any{"name": name, "password": password}
+	}
+	start := map[string]any{"address": jellyfin, "account": asAlice, "users": []map[string]any{
+		{"jellyfinId": "jf-alice", "create": newUser("Alice", "correct horse"), "watchData": true},
+		{"jellyfinId": "jf-bob", "create": newUser("Bob", "bob's password"), "watchData": true, "jellyfinPassword": "wrong"},
+	}}
+	if status, body, _ := admin.call(http.MethodPost, "/jellyfin-import", start); status != http.StatusBadRequest ||
+		body["error"] != "jellyfin_password_refused" || body["jellyfinId"] != "jf-bob" {
+		t.Errorf("Bob's wrong password: %d %v", status, body)
+	}
+	if all, err := api.store.Users(t.Context()); err != nil || len(all) != 1 {
+		t.Errorf("users created by a refused import: %v %v", all, err)
+	}
+
+	start["users"].([]map[string]any)[1]["jellyfinPassword"] = "bob's password"
+	status, body, _ := admin.call(http.MethodPost, "/jellyfin-import", start)
+	created, _ := body["created"].([]any)
+	if status != http.StatusOK || len(created) != 2 {
+		t.Fatalf("start: %d %v", status, body)
+	}
+	raw, _ := json.Marshal(body)
+	for _, password := range []string{"alice's password", "bob's password"} {
+		if strings.Contains(string(raw), password) {
+			t.Errorf("the answer holds %q", password)
+		}
+	}
+	jellyfinImportDone(t, admin)
+	aliceID, _ := accounts.ParseID(created[0].(map[string]any)["id"].(string))
+	bobID, _ := accounts.ParseID(created[1].(map[string]any)["id"].(string))
+	if !playedMovie(t, lib, data, aliceID, "tt0000001") || playedMovie(t, lib, data, aliceID, "tt0000002") {
+		t.Error("Alice's movies")
+	}
+	if !playedMovie(t, lib, data, bobID, "tt0000002") || playedMovie(t, lib, data, bobID, "tt0000001") {
+		t.Error("Bob's movies")
 	}
 }
