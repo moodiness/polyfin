@@ -349,7 +349,24 @@ func (c *client) connect(ctx context.Context, credentials Credentials) (Server, 
 			return Server{}, nil, err
 		}
 	}
-	return server, users, nil
+	return server, ownOnly(users, server.KeyOwner), nil
+}
+
+// ownOnly is users as a connection may import them: a user who is not an
+// administrator of the server, connected with their account or their own
+// key, imports only themselves, even from a server that lists every user
+// to anyone. An administrator's account, or a server's key, which has no
+// owner, lists them all.
+func ownOnly(users []User, owner string) []User {
+	if owner == "" {
+		return users
+	}
+	for _, u := range users {
+		if u.ID == owner && !u.Administrator {
+			return []User{u}
+		}
+	}
+	return users
 }
 
 // open reads which Jellyfin or Emby server the address leads to, then

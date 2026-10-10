@@ -701,14 +701,15 @@ func TestAUserTheKeyMayNotReadFailsAlone(t *testing.T) {
 	}
 }
 
-// Signed in with a name and password, an import reads as that user, and
-// reads each other user signed in as them, with their password: even a
-// server that answers a session with its own user's data whatever user is
-// asked gives each user theirs. Every session ends.
+// Signed in with an administrator's name and password, an import reads as
+// that user, and reads each other user signed in as them, with their
+// password: even a server that answers a session with its own user's data
+// whatever user is asked gives each user theirs. Every session ends.
 func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 	h := newHarness(t)
 	alice, bob, carol := h.user(t, "alice"), h.user(t, "bob"), h.user(t, "carol")
-	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}, {"Id": "jf-carol", "Name": "Carol"}}
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"},
+		{"Id": "jf-carol", "Name": "Carol"}}
 	// Carol's account has no password.
 	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password", "Carol": ""}
 	movies := map[string]string{"jf-alice": "tt0000001", "jf-bob": "tt0000002", "jf-carol": "tt0000003"}
@@ -720,9 +721,12 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 	h.f.noMe = true
 	asAlice := Credentials{Name: "Alice", Password: "alice's password"}
 
-	server, _, err := h.Users(t.Context(), to(h.f.url, asAlice))
+	server, users, err := h.Users(t.Context(), to(h.f.url, asAlice))
 	if err != nil || server.KeyOwner != "jf-alice" {
 		t.Fatalf("signed in as Alice: %+v %v", server, err)
+	}
+	if len(users) != 3 {
+		t.Errorf("an administrator's account lists every user: %+v", users)
 	}
 	if open := h.f.open(); open != 0 {
 		t.Errorf("sessions left after listing the users: %d", open)
@@ -772,8 +776,8 @@ func TestSigningInReadsEachUserAsThemselves(t *testing.T) {
 // the sessions opened meanwhile end.
 func TestASignInThatFailsStartsNothing(t *testing.T) {
 	h := newHarness(t)
-	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice"}, {"Id": "jf-bob", "Name": "Bob"}, {"Id": "jf-carol", "Name": "Carol"},
-		{"Id": "jf-dan", "Name": "Dan"}}
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"},
+		{"Id": "jf-carol", "Name": "Carol"}, {"Id": "jf-dan", "Name": "Dan"}}
 	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password", "Carol": "carol's password", "Dan": "dan's password"}
 	// Bob's account is disabled; signing Dan in opens Alice's session.
 	h.f.barred["Bob"] = true
@@ -811,6 +815,57 @@ func TestASignInThatFailsStartsNothing(t *testing.T) {
 	}
 	if current := h.Current(); current != nil {
 		t.Errorf("an import started: %+v", current)
+	}
+}
+
+// Connected as a user who is not an administrator of the server, with their
+// account or their own key, Polyfin lists and imports only that user, even
+// from a server that lists every user to anyone: another user can neither
+// be signed in nor imported.
+func TestANonAdministratorConnectionListsOnlyItself(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}, {"Id": "jf-bob", "Name": "Bob"}}
+	h.f.passwords = map[string]string{"Alice": "alice's password", "Bob": "bob's password"}
+	h.f.items["jf-bob"] = map[string][]map[string]any{"IsPlayed": {movie("m2", "Bob's", map[string]string{"Imdb": "tt0000002"},
+		map[string]any{"Played": true})}}
+	h.f.userKeys["bobs-own-key"] = "jf-bob"
+	asBob := Credentials{Name: "Bob", Password: "bob's password"}
+
+	for name, credentials := range map[string]Credentials{"Bob's account": asBob, "Bob's key": {Key: "bobs-own-key"}} {
+		server, users, err := h.Users(t.Context(), to(h.f.url, credentials))
+		if err != nil || server.KeyOwner != "jf-bob" || len(users) != 1 || users[0].ID != "jf-bob" {
+			t.Errorf("%s: %+v %+v %v", name, server, users, err)
+		}
+	}
+
+	// Alice, signed in with her password, or as a target: refused.
+	var signedIn error
+	_, err := h.Start(t.Context(), to(h.f.url, asBob), accounts.User{}, func(_ Server, users []User, signIn SignIn) ([]Target, error) {
+		if len(users) != 1 {
+			t.Errorf("Start offered %+v", users)
+		}
+		signedIn = signIn("jf-alice", "alice's password")
+		return []Target{{JellyfinID: "jf-alice", User: alice.ID, UserName: "alice"}}, nil
+	})
+	if signedIn == nil || !errors.Is(err, ErrNotKeyOwner) {
+		if err == nil {
+			h.ended(t)
+		}
+		t.Errorf("Alice with Bob's account: sign-in %v, start %v", signedIn, err)
+	}
+	if open := h.f.open(); open != 0 {
+		t.Errorf("sessions left: %d", open)
+	}
+
+	// Bob's own watch data comes over.
+	if _, err := h.Start(t.Context(), to(h.f.url, asBob), accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: "jf-bob", User: bob.ID, UserName: "bob"}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if status := h.ended(t); status.State != StateDone || status.Users[0].Played != 1 {
+		t.Errorf("Bob's import: %+v", status)
 	}
 }
 
