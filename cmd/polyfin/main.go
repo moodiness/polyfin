@@ -37,6 +37,7 @@ import (
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
+	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
@@ -291,6 +292,14 @@ func serve(ctx context.Context) error {
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
 		Logger: logger})
 	defer fromJellyfin.Close()
+	// The playbacks apps report are followed: the history keeps the videos
+	// that stop, and the notifications, made below, tell every change.
+	history := plays.NewHistory(pool, store.Settings, logger)
+	registerPlaybackHistoryTask(registry, history, logger)
+	playbacks := plays.NewTracker(func(c plays.Change) {
+		history.Record(context.Background(), c)
+		notifier.Playback(c)
+	})
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -316,6 +325,7 @@ func serve(ctx context.Context) error {
 		FontsDir:      cfg.FontsDir,
 		Recordings:    recorder,
 		Trackers:      tracking,
+		Plays:         playbacks,
 	})
 	adminOptions := admin.Options{
 		Version:       version,
@@ -355,6 +365,7 @@ func serve(ctx context.Context) error {
 		Trackers:       tracking,
 		Backups:        backups,
 		JellyfinImport: fromJellyfin,
+		Plays:          history,
 	}
 	// Notifications tell of new episodes, ended recordings and the
 	// problems System › Health finds.
@@ -362,6 +373,9 @@ func serve(ctx context.Context) error {
 		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), Logger: logger})
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
+	// Playbacks under way when Polyfin stops are kept in the history, as
+	// ended at their last report.
+	defer playbacks.Close()
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database:      pool,
@@ -385,6 +399,7 @@ func serve(ctx context.Context) error {
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
 	go notifier.Run(ctx)
+	go playbacks.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
@@ -552,6 +567,28 @@ func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 		},
 		Daily: backups.Hour,
 		Run:   backups.Run,
+	})
+}
+
+// registerPlaybackHistoryTask registers the daily cleanup of the playback
+// history: it deletes the playbacks older than the days the settings keep.
+func registerPlaybackHistoryTask(registry *tasks.Registry, history *plays.History, logger *slog.Logger) {
+	registry.Register(tasks.Task{
+		Key:      "CleanPlaybackHistory",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Clean the playback history", Description: "Deletes the playbacks older than the days to keep set under Settings › Playback."},
+			"fr": {Name: "Nettoyer l’historique de lecture", Description: "Supprime les lectures plus anciennes que le nombre de jours à conserver choisi dans Paramètres › Lecture."},
+		},
+		Interval: plays.SweepInterval,
+		AtStart:  true,
+		Run: func(ctx context.Context) error {
+			deleted, err := history.Sweep(ctx)
+			if deleted > 0 {
+				logger.Info("Deleted old playbacks from the history", "playbacks", deleted)
+			}
+			return err
+		},
 	})
 }
 

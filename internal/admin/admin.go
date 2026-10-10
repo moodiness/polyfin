@@ -26,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/notifications"
+	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -116,6 +117,9 @@ type Options struct {
 	// Notifications keeps the server's and users' notification targets;
 	// nil offers none.
 	Notifications *notifications.Service
+	// Plays keeps the history of the videos played, which the statistics
+	// sum; nil offers none.
+	Plays *plays.History
 }
 
 type handler struct {
@@ -161,6 +165,10 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/account/notifications/targets/{id}", h.signedIn(own.update))
 	mux.Handle("DELETE /admin/api/account/notifications/targets/{id}", h.signedIn(own.remove))
 	mux.Handle("POST /admin/api/account/notifications/targets/{id}/test", h.signedIn(own.test))
+	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
+	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
+	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
+	mux.Handle("GET /admin/api/account/history/export", h.signedIn(ownPlays.export))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
@@ -209,6 +217,10 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/notifications/targets/{id}", h.administrator(server.update))
 	mux.Handle("DELETE /admin/api/notifications/targets/{id}", h.administrator(server.remove))
 	mux.Handle("POST /admin/api/notifications/targets/{id}/test", h.administrator(server.test))
+	allPlays := statisticsRoutes{h: h, scope: func(*http.Request) *accounts.ID { return nil }}
+	mux.Handle("GET /admin/api/statistics", h.administrator(allPlays.statistics))
+	mux.Handle("GET /admin/api/history", h.administrator(allPlays.history))
+	mux.Handle("GET /admin/api/history/export", h.administrator(allPlays.export))
 
 	mux.Handle("GET /admin/api/scopes/{scope}/addons", h.signedIn(h.listAddons))
 	mux.Handle("POST /admin/api/scopes/{scope}/addons", h.signedIn(h.installAddon))
@@ -385,6 +397,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidThumbnailStorage, http.StatusBadRequest, "invalid_thumbnail_storage_gb"},
 		{accounts.ErrInvalidRecordingPadding, http.StatusBadRequest, "invalid_recording_padding"},
 		{accounts.ErrInvalidRecordingRetentionDays, http.StatusBadRequest, "invalid_recording_retention_days"},
+		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
