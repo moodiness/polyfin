@@ -923,7 +923,7 @@ export const signIn = async (body: { name: string; password: string }) =>
 
 /**
  * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
- * sign-in on this server is tried first: it opens a session for an administrator.
+ * sign-in on this server is tried first: it opens a session for its user, administrator or member.
  */
 export async function fetchSession(signal?: AbortSignal): Promise<SessionUser | null> {
   try {

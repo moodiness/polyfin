@@ -7,9 +7,9 @@ const credentialsKey = 'jellyfin_credentials'
 let taken = false
 
 /**
- * The access token the web client keeps for this server, so that its Dashboard, which leads to the
- * admin app, needs no second sign-in. Given once per page load, so that signing out stays signed
- * out; null when there is none.
+ * The access token the web client keeps for this server, so that its Dashboard, and the Polyfin
+ * entry members get instead, which lead to the admin app, need no second sign-in. Given once per
+ * page load, so that signing out stays signed out; null when there is none.
  */
 export function takeWebClientToken(serverId: string | undefined): string | null {
   if (taken || !serverId) return null
