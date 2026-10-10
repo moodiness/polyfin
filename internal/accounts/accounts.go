@@ -622,7 +622,8 @@ func (s *Store) changePassword(ctx context.Context, id ID, current, next string,
 	return err
 }
 
-// DeleteUser removes an account with its devices and sessions.
+// DeleteUser removes an account with its devices and sessions, and revokes
+// the invites whose new accounts copy it.
 func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 	var signedOut []ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -641,6 +642,11 @@ func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 		// The devices would go with the account; they are listed first, to
 		// be told signed out.
 		if signedOut, err = deletedDevices(tx.Query(ctx, "DELETE FROM devices WHERE user_id = $1 RETURNING id", id)); err != nil {
+			return err
+		}
+		// Before the account goes, so that an invite being accepted either
+		// copies it or is found revoked.
+		if _, err := tx.Exec(ctx, "UPDATE invites SET revoked_at = now() WHERE model_user_id = $1 AND revoked_at IS NULL", id); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
