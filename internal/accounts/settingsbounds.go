@@ -3,11 +3,12 @@ package accounts
 import "slices"
 
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
-// script on a new server: they load the LumaaGlaass theme from jsDelivr at a
-// pinned commit of its repository, with its settings page for each user.
-// Moving to another commit takes both, and a migration replacing the column
-// defaults and the values still equal to these.
-const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@f1afec5e4b924ef26553056e88688bdeba3fafca/assets/lumaaglaass.css');`
+// script on a new server: they load the LumaaGlaass theme from jsDelivr at
+// the main branch of its repository, so servers follow the theme without a
+// Polyfin release, with its settings page for each user. Changing them takes
+// both, and a migration replacing the column defaults and the values still
+// equal to these.
+const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.css');`
 
 const DefaultCustomJs = `(() => {
     window.LumaaGlaassOptions = {
@@ -21,7 +22,7 @@ const DefaultCustomJs = `(() => {
 
     const script = document.createElement('script');
     script.id = id;
-    script.src = 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@f1afec5e4b924ef26553056e88688bdeba3fafca/assets/lumaaglaass.js';
+    script.src = 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.js';
     script.onerror = () => {
         script.remove();
         console.error('LumaaGlaass could not be loaded.');
