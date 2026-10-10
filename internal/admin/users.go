@@ -353,6 +353,8 @@ type settingsJSON struct {
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 	// LocalScanHours keeps its current value when a PUT leaves it out.
 	LocalScanHours *int `json:"localScanHours"`
+	// WatchLocalFolders keeps its current value when a PUT leaves it out.
+	WatchLocalFolders *bool `json:"watchLocalFolders"`
 	// CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web, keep their
 	// current values when a PUT leaves them out; empty clears them.
 	CustomCss       *string `json:"customCss"`
@@ -512,6 +514,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingRetentionDays: &settings.RecordingRetentionDays,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 		LocalScanHours:         &settings.LocalScanHours,
+		WatchLocalFolders:      &settings.WatchLocalFolders,
 
 		CustomCss:       &settings.CustomCss,
 		CustomJs:        &settings.CustomJs,
@@ -1020,6 +1023,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
+		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),
 
 		CustomCss:       valueOr(body.CustomCss, current.CustomCss),
 		CustomJs:        valueOr(body.CustomJs, current.CustomJs),

@@ -93,6 +93,7 @@ func DefaultSettings() Settings {
 		RecordingRetentionDays: DefaultRecordingRetentionDays,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
 		LocalScanHours:         DefaultLocalScanHours,
+		WatchLocalFolders:      true,
 
 		CustomCss: DefaultCustomCss,
 		CustomJs:  DefaultCustomJs,
@@ -229,6 +230,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingRetentionDays": between(0, MaxRecordingRetentionDays, d.RecordingRetentionDays),
 		"liveTvRefreshHours":     between(MinLiveTvRefreshHours, MaxLiveTvRefreshHours, d.LiveTvRefreshHours),
 		"localScanHours":         between(0, MaxLocalScanHours, d.LocalScanHours),
+		"watchLocalFolders":      is(d.WatchLocalFolders),
 
 		"customCss":         text(MaxCustomCodeBytes, d.CustomCss),
 		"customJs":          text(MaxCustomCodeBytes, d.CustomJs),

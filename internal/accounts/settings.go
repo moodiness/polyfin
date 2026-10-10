@@ -777,8 +777,13 @@ type Settings struct {
 	LiveTvRefreshHours int
 	// LocalScanHours is how many hours after its last scan a local folder
 	// is scanned again, 0 for never on a schedule: folders are still
-	// scanned at startup and when an administrator asks.
+	// scanned at startup, when an administrator asks and, when watched,
+	// when they change.
 	LocalScanHours int
+	// WatchLocalFolders watches the local folders mounted in the container
+	// for changes, and scans a folder again a few seconds after its files
+	// stop changing; network shares are never watched.
+	WatchLocalFolders bool
 	// CustomCss and LoginDisclaimer are Jellyfin's branding: the CSS
 	// jellyfin-web applies to every page, unless a user turns it off in
 	// their display settings, and the text, Markdown or HTML it shows
@@ -914,7 +919,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
-	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, " +
+	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
@@ -946,6 +951,7 @@ func (settings *Settings) fields() []any {
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
+		&settings.WatchLocalFolders,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
