@@ -1,8 +1,8 @@
 # Local folders
 
-Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it.
+Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it.
 
-Network shares (SMB, WebDAV) are not read by Polyfin itself: mount them on the host, or as Docker volumes, and declare the folder they appear in.
+Folders on a NAS or another computer can be mounted on the host and declared as local folders, or read by Polyfin over SMB or WebDAV, with no mount: see [network shares](#network-shares).
 
 ## Mounting folders
 
@@ -22,7 +22,7 @@ With compose, add the volumes to the `polyfin` service:
       - /srv/media/shows:/media/shows:ro
 ```
 
-Then, in the admin app, open **Sources**, choose **Add a source › Local folder**, and give its name (the library's name in apps), its path in the container (`/media/movies`, not the host's path), and whether it holds movies or shows. What a folder holds cannot be changed afterwards: remove it and add it again.
+Then, in the admin app, open **Sources**, choose **Add a source › Folder**, keep **Local folder**, and give its name (the library's name in apps), its path in the container (`/media/movies`, not the host's path), and whether it holds movies or shows. What a folder holds cannot be changed afterwards: remove it and add it again.
 
 ### Permissions
 
@@ -35,6 +35,42 @@ A folder Polyfin cannot read is reported on its page in the admin app and under 
 - the path is a file (`not_folder`).
 
 The files found before stay in the library while the folder cannot be read, so a share that is unmounted for a while empties no library.
+
+## Network shares
+
+Polyfin reads folders shared over the network itself, without mounting them: SMB shares (Windows file sharing, which most NAS offer) and WebDAV folders. Open **Sources**, choose **Add a source › Folder**, choose **SMB share** or **WebDAV folder**, and give its name, its address, a user and a password, and whether it holds movies or shows. Everything else works as for a local folder: naming, matching, unmatched files, links, scans and versions.
+
+### Addresses
+
+- An SMB share is `smb://` then the server, the share, and the folder in the share if the videos are not at its root: `smb://nas.local/media/movies`. A server listening on another port than 445 takes it after its name: `smb://nas.local:4450/media`. Polyfin speaks SMB 2 and 3, and signs in with NTLM; SMB 1 is not supported.
+- A WebDAV folder is its address: `https://nas.local/dav/movies`. Polyfin signs in with HTTP Basic authentication: prefer `https://`, since `http://` sends the password unencrypted.
+
+The address holds no user or password: they have fields of their own, and an address with them is refused.
+
+### Credentials
+
+- **User** and **Password** are those of an account that may read the folder on the server. Leave both empty for a share open to guests. For an SMB domain account, write the user as `DOMAIN\user`.
+- The password is stored encrypted with `POLYFIN_SECRET_KEY` like the other stored secrets (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)), never shown again, and never written to the log. A password the key cannot decrypt counts as wrong, and **System › Health** lists it under **Stored keys**.
+- To change it, edit the folder and choose **Replace** beside the password; left alone, the stored one stays. A new user or password scans the share again at once, and keeps the files found. A new address forgets the files found at the former one, links included.
+
+### Performance
+
+- Files are read from the share at each request, with byte ranges, and never copied. Direct play, remuxing, conversions, analysis and thumbnails read them through Polyfin as they read a local file; seeking asks the share for the part needed only.
+- Connections are kept between requests: one SMB session per share, signed in again when it ends, such as when the server restarts; HTTP keep-alive for WebDAV.
+- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**: raise it for a large share on a slow link, or set it to 0 and choose **Scan now** when files change.
+- A video plays only as fast as the network carries it: a high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
+
+### Health
+
+A share Polyfin cannot read is reported on its page and under **System › Health**, with why:
+
+- the server does not answer: it is off, or the address's server or port is wrong (`unreachable`);
+- the server refuses the user or password (`refused`);
+- the share, or the folder in it, does not exist (`missing`);
+- the user may not list the folder (`unreadable`);
+- the address is a file (`not_folder`).
+
+As with a local folder, the files found before stay in the library while the share cannot be read, so a NAS that is off for a while empties no library.
 
 ## Naming files
 
@@ -84,7 +120,7 @@ Symbolic links to files of the folder are followed; links leading out of the fol
 
 ## Versions
 
-A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks. The folder's library lists its titles, the latest found first.
+A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks. The folder's library lists its titles, the latest found first.
 
 ## Compared with Jellyfin
 
@@ -95,15 +131,17 @@ A matched file is one more version of its title, or of each of its episodes, nam
 
 ## For app developers
 
-A local folder is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path, kind, last scan, error, counts and links. The administrator routes are:
+A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind, last scan, error, counts and links. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
 
 | Route | What it does |
 |---|---|
-| `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}` |
-| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name` or `path`; a new path forgets the files found |
+| `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address |
+| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
 | `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason"}]}` |
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file or a show's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
-Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name.
+An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
+
+Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A share's files are served the same way.
