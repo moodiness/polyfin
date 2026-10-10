@@ -12,6 +12,7 @@ const nav: typeof en = {
     libraries: 'Bibliothèques',
     liveTv: 'TV en direct',
     health: 'Santé',
+    statistics: 'Statistiques',
     schedule: 'Planning',
     logs: 'Journal',
     apiKeys: 'Clés d’API',

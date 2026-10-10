@@ -297,7 +297,11 @@ function TargetModal({
   // Tokens and keys: undefined keeps the saved one.
   const [token, setToken] = useState<string | undefined>(undefined)
   const [userKey, setUserKey] = useState<string | undefined>(undefined)
-  const [chosen, setChosen] = useState<NotificationEvent[]>(target?.events ?? events)
+  // A new target hears of everything but playbacks, a message each time anyone plays: those
+  // are chosen on purpose.
+  const [chosen, setChosen] = useState<NotificationEvent[]>(
+    target?.events ?? events.filter((event) => !event.startsWith('playback_')),
+  )
   const [enabled, setEnabled] = useState(target?.enabled ?? true)
 
   const mutation = useMutation({

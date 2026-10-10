@@ -93,89 +93,114 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
   const { t } = useI18n()
   const s = t.settings
   return (
-    <SettingsGroup>
-      <SwitchRow
-        anchor="prepare-ahead"
-        label={s.prepareAhead}
-        help={s.prepareAheadHelp}
-        checked={form.prepareAhead}
-        onChange={(prepareAhead) => update({ prepareAhead })}
-      />
-      <SwitchRow
-        anchor="prefer-direct-play"
-        label={s.preferDirectPlay}
-        help={s.preferDirectPlayHelp}
-        checked={form.preferDirectPlay}
-        onChange={(preferDirectPlay) => update({ preferDirectPlay })}
-      />
-      <FieldRow
-        anchor="analysis-timeout"
-        label={s.analysisTimeout}
-        help={s.analysisTimeoutHelp(range('analysisTimeout'))}
-        error={error('analysis-timeout')}
-      >
-        <NumberInput
-          {...limits('analysisTimeout')}
-          step={1}
-          {...number('analysis-timeout', form.analysisTimeout, (value) =>
-            update({ analysisTimeout: Math.trunc(value) }),
-          )}
+    <>
+      <SettingsGroup>
+        <SwitchRow
+          anchor="prepare-ahead"
+          label={s.prepareAhead}
+          help={s.prepareAheadHelp}
+          checked={form.prepareAhead}
+          onChange={(prepareAhead) => update({ prepareAhead })}
         />
-      </FieldRow>
-      <FieldRow
-        anchor="version-attempts"
-        label={s.versionAttempts}
-        help={s.versionAttemptsHelp(range('versionAttempts'))}
-        error={error('version-attempts')}
-      >
-        <NumberInput
-          {...limits('versionAttempts')}
-          step={1}
-          {...number('version-attempts', form.versionAttempts, (value) =>
-            update({ versionAttempts: Math.trunc(value) }),
-          )}
+        <SwitchRow
+          anchor="prefer-direct-play"
+          label={s.preferDirectPlay}
+          help={s.preferDirectPlayHelp}
+          checked={form.preferDirectPlay}
+          onChange={(preferDirectPlay) => update({ preferDirectPlay })}
         />
-      </FieldRow>
-      <FieldRow
-        anchor="cache-size"
-        label={s.cacheSize}
-        help={s.cacheSizeHelp(range('cacheSizeGb'))}
-        error={error('cache-size')}
-      >
-        <NumberInput
-          {...limits('cacheSizeGb')}
-          step={1}
-          {...number('cache-size', form.cacheSizeGb, (value) =>
-            update({ cacheSizeGb: Math.trunc(value) }),
-          )}
+        <FieldRow
+          anchor="analysis-timeout"
+          label={s.analysisTimeout}
+          help={s.analysisTimeoutHelp(range('analysisTimeout'))}
+          error={error('analysis-timeout')}
+        >
+          <NumberInput
+            {...limits('analysisTimeout')}
+            step={1}
+            {...number('analysis-timeout', form.analysisTimeout, (value) =>
+              update({ analysisTimeout: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="version-attempts"
+          label={s.versionAttempts}
+          help={s.versionAttemptsHelp(range('versionAttempts'))}
+          error={error('version-attempts')}
+        >
+          <NumberInput
+            {...limits('versionAttempts')}
+            step={1}
+            {...number('version-attempts', form.versionAttempts, (value) =>
+              update({ versionAttempts: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="cache-size"
+          label={s.cacheSize}
+          help={s.cacheSizeHelp(range('cacheSizeGb'))}
+          error={error('cache-size')}
+        >
+          <NumberInput
+            {...limits('cacheSizeGb')}
+            step={1}
+            {...number('cache-size', form.cacheSizeGb, (value) =>
+              update({ cacheSizeGb: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+        <SwitchRow
+          anchor="remuxdb"
+          label={s.remuxDb}
+          help={s.remuxDbHelp}
+          checked={form.remuxDb}
+          onChange={(remuxDb) => update({ remuxDb })}
         />
-      </FieldRow>
-      <SwitchRow
-        anchor="remuxdb"
-        label={s.remuxDb}
-        help={s.remuxDbHelp}
-        checked={form.remuxDb}
-        onChange={(remuxDb) => update({ remuxDb })}
-      />
-      <FieldRow
-        anchor="remuxdb-url"
-        label={s.remuxDbUrl}
-        help={s.remuxDbUrlHelp}
-        error={error('remuxdb-url')}
-      >
-        <TextInput
-          inputMode="url"
-          value={form.remuxDbUrl}
-          onValue={(remuxDbUrl) => update({ remuxDbUrl })}
-          disabled={!form.remuxDb}
-          maxLength={limits('remuxDbUrl').max}
-          autoComplete="off"
-          spellCheck={false}
-          mono
-          className="max-w-md"
+        <FieldRow
+          anchor="remuxdb-url"
+          label={s.remuxDbUrl}
+          help={s.remuxDbUrlHelp}
+          error={error('remuxdb-url')}
+        >
+          <TextInput
+            inputMode="url"
+            value={form.remuxDbUrl}
+            onValue={(remuxDbUrl) => update({ remuxDbUrl })}
+            disabled={!form.remuxDb}
+            maxLength={limits('remuxDbUrl').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-md"
+          />
+        </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title={s.playbackHistoryGroup}>
+        <SwitchRow
+          anchor="playback-history"
+          label={s.playbackHistory}
+          help={s.playbackHistoryHelp}
+          checked={form.playbackHistory}
+          onChange={(playbackHistory) => update({ playbackHistory })}
         />
-      </FieldRow>
-    </SettingsGroup>
+        <FieldRow
+          anchor="playback-history-days"
+          label={s.playbackHistoryDays}
+          help={s.playbackHistoryDaysHelp(range('playbackHistoryDays'))}
+          error={error('playback-history-days')}
+        >
+          <NumberInput
+            {...limits('playbackHistoryDays')}
+            step={1}
+            {...number('playback-history-days', form.playbackHistoryDays, (value) =>
+              update({ playbackHistoryDays: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+      </SettingsGroup>
+    </>
   )
 }
 

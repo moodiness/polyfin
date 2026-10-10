@@ -12,7 +12,7 @@ const notifications: typeof en = {
     },
     serverTargets: 'Cibles du serveur',
     serverTargetsHelp:
-      'Elles reçoivent les événements de tous les utilisateurs : un message par nouvel épisode, quel que soit qui suit la série, et chaque enregistrement. Chaque utilisateur peut ajouter ses propres cibles dans Mon compte › Notifications.',
+      'Elles reçoivent les événements de tous les utilisateurs : un message par nouvel épisode, quel que soit qui suit la série, chaque enregistrement et chaque lecture. Chaque utilisateur peut ajouter ses propres cibles dans Mon compte › Notifications.',
     add: 'Ajouter une cible',
     addTitle: 'Ajouter une cible',
     editTitle: (name: string) => `Modifier ${name}`,
@@ -94,6 +94,10 @@ const notifications: typeof en = {
       health_problem: 'Problème détecté',
       health_solved: 'Problème résolu',
       user_joined: 'Nouvel utilisateur',
+      playback_started: 'Lecture commencée',
+      playback_paused: 'Lecture en pause',
+      playback_resumed: 'Lecture reprise',
+      playback_stopped: 'Lecture arrêtée',
     },
     eventHelp: {
       new_episode:
@@ -104,6 +108,13 @@ const notifications: typeof en = {
       health_problem: 'Système › Santé a détecté un problème, lors de deux vérifications de suite.',
       health_solved: 'Un problème détecté par Système › Santé a disparu.',
       user_joined: 'Quelqu’un a créé son compte grâce à un lien d’invitation.',
+      playback_started:
+        'Une vidéo ou un morceau commence dans une appli Jellyfin, avec qui le lit, sur quel appareil, et s’il est converti.',
+      playback_paused:
+        'Une lecture est mise en pause. La position en cours de lecture n’est jamais envoyée.',
+      playback_resumed: 'Une lecture en pause reprend.',
+      playback_stopped:
+        'Une lecture s’arrête, ou son appli a cessé de la signaler depuis cinq minutes.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

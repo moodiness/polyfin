@@ -1,6 +1,7 @@
 import {
   ArrowSquareInIcon,
   BellIcon,
+  ChartBarIcon,
   DevicesIcon,
   ListChecksIcon,
   PasswordIcon,
@@ -12,21 +13,29 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
+import StatisticsView from '@/features/statistics/StatisticsView'
 import { useI18n } from '@/i18n'
 import { SectionNav } from '@/ui'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
 
-const sectionIds = ['tracking', 'import', 'notifications', 'devices', 'password'] as const
+const sectionIds = [
+  'statistics',
+  'tracking',
+  'import',
+  'notifications',
+  'devices',
+  'password',
+] as const
 type SectionId = (typeof sectionIds)[number]
 
 /** How often the user's own import is read while it runs. */
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: tracking services, importing from another server (unless the server turns it
- * off), notifications, devices and password, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, importing from another server (unless the server
+ * turns it off), notifications, devices and password, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -58,6 +67,12 @@ export default function AccountRoute() {
           current={current}
           items={[
             {
+              id: 'statistics',
+              label: text.sections.statistics,
+              icon: ChartBarIcon,
+              to: '#statistics',
+            },
+            {
               id: 'tracking',
               label: text.sections.tracking,
               icon: ListChecksIcon,
@@ -85,6 +100,11 @@ export default function AccountRoute() {
         />
       }
     >
+      <AccountSection id="statistics" title={text.sections.statistics} help={text.statisticsHelp}>
+        <div className="space-y-10">
+          <StatisticsView scope="own" />
+        </div>
+      </AccountSection>
       <AccountSection id="tracking" title={text.sections.tracking} help={text.tracking.description}>
         <TrackingServices />
       </AccountSection>
@@ -151,11 +171,11 @@ function AccountSection({
  * third of the window, or the last one once the page is scrolled to its end.
  */
 function useCurrentSection(): SectionId {
-  const [current, setCurrent] = useState<SectionId>('tracking')
+  const [current, setCurrent] = useState<SectionId>(sectionIds[0])
   useEffect(() => {
     function update() {
       const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
-      let found: SectionId = 'tracking'
+      let found: SectionId = sectionIds[0]
       for (const id of sectionIds) {
         const element = document.getElementById(id)
         if (element && element.getBoundingClientRect().top <= window.innerHeight / 3) found = id

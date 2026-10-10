@@ -6,6 +6,7 @@ const account: typeof en = {
     signedInAs: 'Connecté en tant que ',
     sectionsLabel: 'Sections du compte',
     sections: {
+      statistics: 'Statistiques',
       tracking: 'Suivi',
       import: 'Importer depuis un autre serveur',
       notifications: 'Notifications',
@@ -29,8 +30,10 @@ const account: typeof en = {
       lastTitle: 'Votre dernière importation',
       from: (server: string) => `Depuis ${server}`,
     },
+    statisticsHelp:
+      'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',
     notificationsHelp:
-      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, ou quand vos enregistrements se terminent.',
+      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, quand vos enregistrements se terminent, ou quand vos lectures commencent et s’arrêtent.',
     devicesHelp:
       'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',

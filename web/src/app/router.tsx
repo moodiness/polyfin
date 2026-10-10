@@ -17,6 +17,7 @@ import SettingsRoute from '@/features/settings/SettingsRoute'
 import MySourcesRoute from '@/features/sources/MySourcesRoute'
 import SourceRoute from '@/features/sources/SourceRoute'
 import SourcesRoute from '@/features/sources/SourcesRoute'
+import StatisticsRoute from '@/features/statistics/StatisticsRoute'
 import ApiKeysRoute from '@/features/system/ApiKeysRoute'
 import HealthRoute from '@/features/system/HealthRoute'
 import LogsRoute from '@/features/system/LogsRoute'
@@ -145,6 +146,7 @@ export const router = createBrowserRouter(
               children: [
                 { index: true, element: <Navigate to="/system/health" replace /> },
                 { path: 'health', element: <HealthRoute /> },
+                { path: 'statistics', element: <StatisticsRoute /> },
                 { path: 'schedule', element: <ScheduleRoute /> },
                 { path: 'logs', element: <LogsRoute /> },
                 { path: 'api-keys', element: <ApiKeysRoute /> },
