@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,8 +12,9 @@ import (
 // Capabilities returns what the installed FFmpeg converts with, tuned as
 // the settings say.
 func (s *Service) Capabilities() Capabilities {
+	settings := s.settings()
 	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: s.segments.Hardware(),
-		Tuning: TuningOf(s.settings())}
+		ToneMappedHeight: cmp.Or(settings.ProcessorToneMappingHeight, s.segments.ToneMappedHeight()), Tuning: TuningOf(settings)}
 }
 
 // DecodingHardware is the GPU that decodes video of codec in bitDepth
@@ -31,6 +33,10 @@ type Capabilities struct {
 	// ToneMapping is set when FFmpeg has the filters converting HDR to SDR:
 	// zscale and tonemap.
 	ToneMapping bool
+	// ToneMappedHeight caps video the processor tone maps: the settings'
+	// ProcessorToneMappingHeight, or with Automatic the height a timing at
+	// startup chose (see hls.Manager.ToneMappedHeight). 0 is 720p.
+	ToneMappedHeight int
 	// Hardware is the GPU video is converted on, nil for none.
 	Hardware *hls.Hardware
 	// Tuning is how the settings tune conversions.
@@ -114,6 +120,9 @@ type VideoConversion struct {
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
+	// ToneMapOnCPU tone maps HDR on the processor though Hardware could
+	// (see toneMapsOnGPU).
+	ToneMapOnCPU bool
 	// Hardware is the GPU Encoder belongs to, nil for software.
 	Hardware *hls.Hardware
 	// Size is what set Width and Height.
@@ -143,7 +152,8 @@ const (
 	SizeGPU = "gpu"
 	// SizeProcessor: the processor converts up to 1080p.
 	SizeProcessor = "processor"
-	// SizeToneMapping: the processor converts HDR to SDR up to 720p.
+	// SizeToneMapping: the processor converts HDR to SDR up to
+	// Capabilities.ToneMappedHeight.
 	SizeToneMapping = "toneMapping"
 	// SizeQualityGroup: the user's quality group.
 	SizeQualityGroup = "qualityGroup"
@@ -212,10 +222,21 @@ func sizeClass(video MediaStream) int {
 	return class
 }
 
-// toneMappedHeight caps video converted from HDR to SDR on the processor:
-// the conversion costs about four times the encoding at 1080p, and keeps up
-// with playback at 720p. A GPU that tone maps has no such cap.
-const toneMappedHeight = 720
+// toneMapsOnGPU reports whether gpu, the GPU encoding the video, tone maps
+// it as the tuning allows. NVIDIA's tone maps any HDR, Dolby Vision with
+// no base layer other players read (profile 5) included. Intel's, through
+// VAAPI, takes only PQ (HDR10) frames carrying their mastering display,
+// without which FFmpeg's tonemap_vaapi fails: HLG, Dolby Vision profile 5
+// and a video whose mastering display is not known go to the processor.
+func toneMapsOnGPU(gpu *hls.Hardware, video MediaStream, t Tuning) bool {
+	switch {
+	case gpu == nil || !gpu.ToneMapping || t.CPUToneMapping:
+		return false
+	case gpu.Method == "cuda":
+		return true
+	}
+	return video.ColorTransfer == "smpte2084" && video.VideoRangeType != "DOVI" && video.MasteringDisplay != nil && *video.MasteringDisplay
+}
 
 // fits reports whether the 16:9 frame of a height holds the whole source,
 // which a cap of that height then leaves as it is: never when its size is
@@ -233,12 +254,12 @@ func fits(video MediaStream, height int) bool {
 // GPU and 1080p on the processor, never larger than the source nor, when
 // they are positive, than the user's quality group and the settings' cap,
 // the bitrate being that height's, converted to SDR and deinterlaced as
-// needed. HDR is tone mapped on that GPU when it
-// can, Dolby Vision with no base layer other players read (profile 5)
-// included, else on the processor, unless the tuning turns tone mapping
-// off. It is nil when the profile takes neither codec, and for HDR that
-// cannot be converted: on the processor, without FFmpeg's filters, or
-// Dolby Vision with no base layer other players read, which without tone
+// needed. HDR is tone mapped on that GPU when it can (see toneMapsOnGPU),
+// else on the processor, up to the capabilities' ToneMappedHeight, unless
+// the tuning turns tone mapping off. It is nil when the profile takes
+// neither codec, and for HDR that cannot be converted: on the processor,
+// without FFmpeg's filters, or Dolby Vision with no base layer other
+// players read, which only NVIDIA's GPUs tone map and which without tone
 // mapping would show wrong colors.
 func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilities) *VideoConversion {
 	candidates := videoEncoders
@@ -283,11 +304,16 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 			return nil
 		}
 	default:
-		if gpu := conversion.Hardware; gpu == nil || !gpu.ToneMapping {
+		if !toneMapsOnGPU(conversion.Hardware, video, can.Tuning) {
 			if video.VideoRangeType == "DOVI" || !can.ToneMapping {
 				return nil
 			}
-			size = ConversionSize{Reason: SizeToneMapping, MaxHeight: toneMappedHeight}
+			// The processor's cap counts where it is the lowest so far: the
+			// software encoder stops at softwareHeight anyway.
+			if height := cmp.Or(can.ToneMappedHeight, hls.LowToneMappedHeight); height < size.MaxHeight {
+				size = ConversionSize{Reason: SizeToneMapping, MaxHeight: height}
+			}
+			conversion.ToneMapOnCPU = conversion.Hardware != nil && conversion.Hardware.ToneMapping
 		}
 		conversion.ToneMap = true
 	}

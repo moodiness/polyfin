@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/media"
 )
@@ -218,5 +219,34 @@ func TestTunedConversionPlays(t *testing.T) {
 	// It decodes from start to end without an error.
 	if out, err := exec.Command(ffmpeg, "-v", "error", "-i", path, "-f", "null", "-").CombinedOutput(); err != nil || len(out) > 0 {
 		t.Errorf("decoding: %v: %s", err, out)
+	}
+}
+
+// "Tone map HDR on the graphics card" turned off reaches the encoding: the
+// tuning tone maps on the processor, and so does the encoding of a
+// conversion planned with it, on NVIDIA's GPU as on Intel's.
+func TestGPUToneMappingTurnedOffReachesTheEncoding(t *testing.T) {
+	settings := accounts.DefaultSettings()
+	if TuningOf(settings).CPUToneMapping {
+		t.Error("the processor tone maps by default")
+	}
+	settings.GPUToneMapping = false
+	tuning := TuningOf(settings)
+	if !tuning.CPUToneMapping {
+		t.Fatal("turned off, the GPU still tone maps")
+	}
+	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", ColorTransfer: "smpte2084", Width: new(3840), Height: new(2160),
+		MasteringDisplay: new(true)}
+	for _, gpu := range []*hls.Hardware{
+		{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true},
+		{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true},
+	} {
+		can := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true, Hardware: gpu, Tuning: tuning}
+		remux := Remux{ConvertVideo: ConvertVideo("h264", Limits{}, hdr, can)}
+		r := hls.Remux{Audio: -1}
+		remux.convert(&r, media.Stream{Codec: "hevc", BitDepth: 10, AverageRate: 24}, tuning)
+		if e := r.Encode; e == nil || !e.ToneMap || !e.ToneMapOnCPU || e.Hardware != gpu || e.Height != 720 {
+			t.Errorf("%s: %+v", gpu.Method, e)
+		}
 	}
 }

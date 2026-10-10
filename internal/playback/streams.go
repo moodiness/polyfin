@@ -223,6 +223,7 @@ func videoStream(s media.Stream, index int, remote bool) MediaStream {
 		stream.Hdr10PlusPresentFlag = new(true)
 	}
 	stream.VideoRange, stream.VideoRangeType = videoRange(s)
+	stream.MasteringDisplay = s.MasteringDisplay
 	if s.Codec == "h264" {
 		stream.IsAVC = new(s.IsAVC)
 	}

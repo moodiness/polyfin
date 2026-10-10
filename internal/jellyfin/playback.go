@@ -635,6 +635,11 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
 		}
 	}
+	// HDR left to the processor for want of its mastering display, on an
+	// Intel GPU, has it learned once, and the version is decided again.
+	if learned, ok := h.Playback.LearnMasteringDisplay(r.Context(), version, analysis, decision.Video); ok {
+		return h.decide(r, p, index, version, id, learned, request, allowed, named)
+	}
 	if decision.HLS && !permitted(allowed, decision) {
 		return decided{}, false
 	}
