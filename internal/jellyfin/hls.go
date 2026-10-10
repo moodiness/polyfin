@@ -204,9 +204,21 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	// settings allow, the lower winning, as the encoding starts: settings
 	// Jellyfin does not have.
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
-		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
-		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
-			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), h.conversionLimits(r, user), streams[i], h.Playback.Capabilities())
+		convert := func() {
+			streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
+			if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
+				remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), h.conversionLimits(r, user), streams[i], h.Playback.Capabilities())
+			}
+		}
+		convert()
+		// HDR left to the processor for want of its mastering display, on
+		// an Intel GPU, has it learned once. Live channels are not read
+		// twice.
+		if !live {
+			if learned, ok := h.Playback.LearnMasteringDisplay(r.Context(), version, analysis, remux.ConvertVideo); ok {
+				analysis = learned
+				convert()
+			}
 		}
 	}
 	// A subtitle burned in is an image track inside the file, counted after

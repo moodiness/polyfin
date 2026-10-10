@@ -482,7 +482,7 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 			rate *= 2
 		}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-			FrameRate: rate, ToneMap: c.ToneMap, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware,
+			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware,
 			Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat,
 			Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 	}

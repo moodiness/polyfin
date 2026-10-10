@@ -73,4 +73,7 @@ type MediaStream struct {
 	PixelFormat            string   `json:",omitempty"`
 	Level                  *float64 `json:",omitempty"`
 	IsAnamorphic           *bool    `json:",omitempty"`
+	// MasteringDisplay is the analysis's media.Stream.MasteringDisplay,
+	// which Intel's tone mapping needs: Polyfin's own, never sent.
+	MasteringDisplay *bool `json:"-"`
 }

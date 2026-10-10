@@ -26,6 +26,9 @@ type Tuning struct {
 	CPUDecoded []string
 	// NoToneMapping converts HDR video to SDR without tone mapping it.
 	NoToneMapping bool
+	// CPUToneMapping tone maps HDR on the processor even on a GPU that
+	// could.
+	CPUToneMapping bool
 	// ToneMapCurve is the tone mapping curve, empty for Polyfin's;
 	// ToneMapPeak, in nits, overrides the video's peak, 0 keeping it;
 	// ToneMapDesat desaturates highlights.
@@ -59,6 +62,7 @@ func TuningOf(settings accounts.Settings) Tuning {
 		HEVCQuality:      settings.HevcQuality,
 		PreferHEVC:       settings.AllowHevcEncoding,
 		NoToneMapping:    !settings.ToneMapping,
+		CPUToneMapping:   !settings.GPUToneMapping,
 		ToneMapCurve:     settings.ToneMappingAlgorithm,
 		ToneMapPeak:      settings.ToneMappingPeak,
 		ToneMapDesat:     settings.ToneMappingDesat,

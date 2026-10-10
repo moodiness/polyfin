@@ -76,8 +76,11 @@ type Service struct {
 	flight   singleflight.Group
 	analyses *cache.Cache[accounts.ID, media.Analysis]
 	failures *cache.Cache[accounts.ID, error]
-	live     *cache.Cache[accounts.ID, struct{}]
-	hosts    *cache.Cache[string, bool]
+	// unmastered are the versions whose first HDR frame could not be read
+	// (see LearnMasteringDisplay).
+	unmastered *cache.Cache[accounts.ID, error]
+	live       *cache.Cache[accounts.ID, struct{}]
+	hosts      *cache.Cache[string, bool]
 	// indexes are keyframe times, unindexed the versions whose index
 	// cannot be read, and offsets where the keyframes start in the file.
 	indexes   *cache.Cache[accounts.ID, []time.Duration]
@@ -143,6 +146,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		logger:      logger,
 		analyses:    cache.New[accounts.ID, media.Analysis](2000, time.Hour),
 		failures:    cache.New[accounts.ID, error](2000, failureTTL),
+		unmastered:  cache.New[accounts.ID, error](2000, failureTTL),
 		live:        cache.New[accounts.ID, struct{}](2000, liveTTL),
 		hosts:       cache.New[string, bool](500, 5*time.Minute),
 		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour),
