@@ -50,6 +50,9 @@ const home = {
         'Polyfin checks its disks, sources, guides, backups and tasks. Anything that needs you shows up here.',
       problemError: 'Problem',
       problemWarning: 'To check',
+      update: (version: string, running: string) =>
+        `Polyfin ${version} is available. This server runs version ${running}.`,
+      releaseNotes: 'Release notes',
       open: 'Open',
       openHealth: 'Open Health',
       serverTitle: 'Server state',

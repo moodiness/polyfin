@@ -62,6 +62,13 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => `${s(t).legacyAuthorizationHelp} ${s(t).legacyWarning}`,
     keywords: ['X-Emby', 'api_key'],
   },
+  {
+    section: 'general',
+    anchor: 'update-check',
+    label: (t) => s(t).updateCheck,
+    help: (t) => s(t).updateCheckHelp,
+    keywords: ['GitHub', 'update', 'release', 'mise à jour'],
+  },
   // Playback
   {
     section: 'playback',

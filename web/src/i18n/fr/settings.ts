@@ -42,6 +42,9 @@ const settings: typeof en = {
     legacyAuthorization: 'Autoriser l’authentification héritée',
     legacyAuthorizationHelp:
       'Accepte les anciens en-têtes X-Emby-*, le paramètre api_key et le schéma Emby pour les applications qui en ont encore besoin. Désactivé par défaut, comme dans Jellyfin 12.2.',
+    updateCheck: 'Rechercher les nouvelles versions',
+    updateCheckHelp:
+      'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications « Nouvelle version ». Désactivé, Polyfin ne contacte jamais GitHub.',
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
@@ -415,7 +418,8 @@ const settings: typeof en = {
     noMatchHelp: 'Essayez un autre mot, comme le nom d’une variable ou d’un service.',
     variableHint: 'Variable d’environnement',
     ledes: {
-      general: 'Le nom du serveur, sa langue et la connexion des applications.',
+      general:
+        'Le nom du serveur, sa langue, la connexion des applications et la recherche de nouvelles versions.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',

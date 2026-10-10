@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  ArrowCircleUpIcon,
+  ArrowSquareOutIcon,
   ArrowsClockwiseIcon,
   CalendarDotsIcon,
   PuzzlePieceIcon,
@@ -24,6 +26,7 @@ import {
   Block,
   Button,
   EmptyState,
+  ExternalButtonLink,
   IconTile,
   InlineError,
   Notice,
@@ -134,13 +137,14 @@ function Problems({ health }: { health: Health }) {
   const text = t.system.health
   const query = useHealthProblems()
   const problems = query.data ?? []
+  const items = problems.length + (health.update ? 1 : 0)
   const checked = text.checkedAt(
     new Intl.DateTimeFormat(language, { timeStyle: 'medium' }).format(new Date(health.checkedAt)),
   )
   return (
     <Block
       title={text.problemsTitle}
-      count={problems.length > 0 ? problems.length : undefined}
+      count={items > 0 ? items : undefined}
       aside={<span className="tabular-nums">{checked}</span>}
     >
       {query.isPending ? (
@@ -149,7 +153,7 @@ function Problems({ health }: { health: Health }) {
         <InlineError onRetry={() => void query.refetch()} retrying={query.isFetching}>
           {errorMessage(t, query.error)}
         </InlineError>
-      ) : problems.length === 0 ? (
+      ) : problems.length === 0 && !health.update ? (
         <Notice tone="ok">{text.allGood}</Notice>
       ) : (
         <RowList aria-label={text.problemsTitle}>
@@ -174,6 +178,24 @@ function Problems({ health }: { health: Health }) {
               className="[&_.truncate]:whitespace-normal"
             />
           ))}
+          {health.update && (
+            <Row
+              leading={ArrowCircleUpIcon}
+              title={text.update(health.update.version)}
+              meta={text.updateRunning(health.process.version)}
+              trailing={
+                <ExternalButtonLink
+                  href={health.update.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="sm"
+                  iconEnd={ArrowSquareOutIcon}
+                >
+                  {text.releaseNotes}
+                </ExternalButtonLink>
+              }
+            />
+          )}
         </RowList>
       )}
     </Block>

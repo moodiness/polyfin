@@ -90,6 +90,7 @@ const notifications = {
       health_problem: 'Health problem found',
       health_solved: 'Health problem solved',
       user_joined: 'User joined',
+      new_version: 'New version',
       playback_started: 'Playback started',
       playback_paused: 'Playback paused',
       playback_resumed: 'Playback resumed',
@@ -103,6 +104,8 @@ const notifications = {
       health_problem: 'System › Health found a problem, in two checks in a row.',
       health_solved: 'A problem System › Health found is gone.',
       user_joined: 'Someone created their account through an invite link.',
+      new_version:
+        'A new version of Polyfin is out, as the daily check found it: once per version, with its release notes.',
       playback_started:
         'A video or a song starts playing in a Jellyfin app, with who plays it, on which device, and whether it is converted.',
       playback_paused: 'A playback is paused. Positions as it plays are never sent.',
