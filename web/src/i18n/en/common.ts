@@ -205,6 +205,9 @@ const common = {
     invalid_folder_name: 'Folder names must be 1 to 64 characters long.',
     invalid_folder_path:
       'Enter the folder’s full path in Polyfin’s container, starting with /, other than / itself.',
+    invalid_share_address:
+      'Enter an address such as smb://server/share/folder or https://server/folder, without a user or password in it: they have fields of their own.',
+    invalid_share_user: 'Users are at most 256 characters long, passwords at most 1,024.',
     invalid_folder_kind: 'Choose whether the folder holds movies or shows.',
     invalid_imdb_id: 'An IMDb identifier is tt followed by digits, such as tt0063350.',
     invalid_channel_list:

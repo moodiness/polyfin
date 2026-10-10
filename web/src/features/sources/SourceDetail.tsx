@@ -159,7 +159,9 @@ export function SourceDetail({
   }
 
   const kindLine = [
-    text.kindName[addon.kind],
+    folder !== null && folder.share !== ''
+      ? t.localFolders.locations[folder.share]
+      : text.kindName[addon.kind],
     !iptv && folder === null && addon.version !== '' ? `v${addon.version}` : '',
     folder !== null ? t.localFolders.kinds[folder.kind] : '',
   ]
@@ -374,10 +376,23 @@ export function SourceDetail({
             </Fact>
           )}
           <Fact
-            label={folder !== null ? t.localFolders.path : iptv ? text.address : text.manifestUrl}
+            label={
+              folder !== null
+                ? folder.share === ''
+                  ? t.localFolders.path
+                  : t.localFolders.address
+                : iptv
+                  ? text.address
+                  : text.manifestUrl
+            }
           >
             <span className="font-mono text-small break-all text-ink-2">{addon.manifestUrl}</span>
           </Fact>
+          {folder !== null && folder.share !== '' && folder.user !== '' && (
+            <Fact label={t.localFolders.user}>
+              <span className="break-all text-ink-2">{folder.user}</span>
+            </Fact>
+          )}
           {!iptv && folder === null && addon.version !== '' && (
             <Fact label={text.version}>
               <span className="figures">{addon.version}</span>

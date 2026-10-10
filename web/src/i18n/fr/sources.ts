@@ -111,7 +111,7 @@ const sources: typeof en = {
       stremio: 'Addon Stremio',
       music: 'Addon Eclipse',
       iptv: 'Source IPTV',
-      local: 'Dossier local',
+      local: 'Dossier',
     },
     stremioHelp:
       'Un addon Stremio apporte des catalogues, des métadonnées et des flux. Collez son lien d’installation.',
@@ -157,6 +157,30 @@ const sources: typeof en = {
   },
   localFolders: {
     help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
+    location: 'Emplacement',
+    locations: { local: 'Dossier local', smb: 'Partage SMB', webdav: 'Dossier WebDAV' },
+    shareHelp: {
+      smb: 'Un dossier partagé en SMB (partage de fichiers Windows) par un NAS ou un autre ordinateur, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons.',
+      webdav:
+        'Un dossier qu’un serveur partage en WebDAV, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons.',
+    },
+    address: 'Adresse',
+    addressHint: {
+      smb: 'smb:// puis le serveur, le partage, et le dossier qu’il contient s’il y a lieu. Ajoutez :port après le serveur pour un autre port que 445.',
+      webdav:
+        'L’adresse WebDAV du dossier. Préférez https://, car http:// envoie le mot de passe sans chiffrement.',
+    },
+    addressPlaceholder: {
+      smb: 'smb://nas.local/media/films',
+      webdav: 'https://nas.local/dav/films',
+    },
+    user: 'Utilisateur',
+    userHint: {
+      smb: 'Vide pour un partage ouvert aux invités. DOMAINE\\utilisateur pour un compte de domaine.',
+      webdav: 'Vide pour un dossier ouvert à tous.',
+    },
+    password: 'Mot de passe',
+    passwordHint: 'Polyfin ne l’affiche plus jamais.',
     name: 'Nom',
     nameHint: 'Le nom de sa bibliothèque dans les applications Jellyfin.',
     path: 'Chemin dans le conteneur',
@@ -181,6 +205,8 @@ const sources: typeof en = {
     saved: 'Dossier enregistré.',
     movedHint:
       'Un nouveau chemin oublie les fichiers trouvés dans l’ancien, associations manuelles comprises.',
+    movedShareHint:
+      'Une nouvelle adresse oublie les fichiers trouvés dans l’ancienne, associations manuelles comprises.',
     scan: 'Analyser maintenant',
     scanLabel: (name: string) => `Analyser ${name} maintenant`,
     scanStarted: (name: string) => `${name} : l’analyse a commencé.`,
@@ -195,12 +221,23 @@ const sources: typeof en = {
     lastAttempt: 'Dernière tentative',
     never: 'Pas encore',
     errorTitle: 'Polyfin ne peut pas lire ce dossier',
+    errorTitleShare: 'Polyfin ne peut pas lire ce partage',
     errors: {
       missing:
         'Ce chemin n’existe pas dans le conteneur : vérifiez que le dossier, ou le partage où il se trouve, y est bien monté.',
       unreadable:
         'Le dossier existe mais Polyfin ne peut pas le lister : donnez à l’utilisateur 65532 le droit de le lire et d’ouvrir ses dossiers.',
       not_folder: 'Ce chemin est un fichier, pas un dossier.',
+    } as Record<string, string>,
+    shareErrors: {
+      missing: 'Le partage, ou le dossier qu’il contient, n’existe pas : vérifiez l’adresse.',
+      unreadable:
+        'L’utilisateur du partage ne peut pas lister ce dossier : vérifiez ses droits sur le serveur.',
+      not_folder: 'Cette adresse est un fichier, pas un dossier.',
+      unreachable:
+        'Polyfin ne peut pas joindre le partage : vérifiez que le serveur est allumé, ainsi que le serveur et le port de l’adresse.',
+      refused:
+        'Le partage refuse l’utilisateur ou le mot de passe : vérifiez-les, et saisissez-les à nouveau.',
     } as Record<string, string>,
     keptNote:
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',

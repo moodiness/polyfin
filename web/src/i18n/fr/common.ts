@@ -219,6 +219,10 @@ const common: typeof en = {
     invalid_folder_name: 'Le nom d’un dossier doit faire de 1 à 64 caractères.',
     invalid_folder_path:
       'Saisissez le chemin complet du dossier dans le conteneur de Polyfin, commençant par /, autre que / lui-même.',
+    invalid_share_address:
+      'Saisissez une adresse comme smb://serveur/partage/dossier ou https://serveur/dossier, sans utilisateur ni mot de passe : ils ont leurs propres champs.',
+    invalid_share_user:
+      'Un utilisateur fait au plus 256 caractères, un mot de passe au plus 1 024.',
     invalid_folder_kind: 'Choisissez si le dossier contient des films ou des séries.',
     invalid_imdb_id: 'Un identifiant IMDb est tt suivi de chiffres, comme tt0063350.',
     invalid_channel_list:

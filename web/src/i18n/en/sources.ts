@@ -108,7 +108,7 @@ const sources = {
       stremio: 'Stremio addon',
       music: 'Eclipse addon',
       iptv: 'IPTV source',
-      local: 'Local folder',
+      local: 'Folder',
     },
     stremioHelp: 'A Stremio addon brings catalogs, metadata and streams. Paste its install link.',
     musicHelp:
@@ -153,6 +153,30 @@ const sources = {
   },
   localFolders: {
     help: 'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams. Polyfin runs as user 65532, which must be able to read it.',
+    location: 'Where',
+    locations: { local: 'Local folder', smb: 'SMB share', webdav: 'WebDAV folder' },
+    shareHelp: {
+      smb: 'A folder shared over SMB (Windows file sharing) by a NAS or another computer, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams.',
+      webdav:
+        'A folder a server shares over WebDAV, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams.',
+    },
+    address: 'Address',
+    addressHint: {
+      smb: 'smb:// then the server, the share, and the folder in it if any. Add :port after the server for a port other than 445.',
+      webdav:
+        'The folder’s WebDAV address. Prefer https://, since http:// sends the password unencrypted.',
+    },
+    addressPlaceholder: {
+      smb: 'smb://nas.local/media/movies',
+      webdav: 'https://nas.local/dav/movies',
+    },
+    user: 'User',
+    userHint: {
+      smb: 'Empty for a share open to guests. DOMAIN\\user for a domain account.',
+      webdav: 'Empty for a folder open to everyone.',
+    },
+    password: 'Password',
+    passwordHint: 'Polyfin never shows it again.',
     name: 'Name',
     nameHint: 'The name of its library in Jellyfin apps.',
     path: 'Path in the container',
@@ -173,6 +197,7 @@ const sources = {
     cancel: 'Cancel',
     saved: 'Folder saved.',
     movedHint: 'A new path forgets the files found in the former one, links included.',
+    movedShareHint: 'A new address forgets the files found in the former one, links included.',
     scan: 'Scan now',
     scanLabel: (name: string) => `Scan ${name} now`,
     scanStarted: (name: string) => `${name}: the scan has started.`,
@@ -187,12 +212,21 @@ const sources = {
     lastAttempt: 'Last attempt',
     never: 'Not yet',
     errorTitle: 'Polyfin cannot read this folder',
+    errorTitleShare: 'Polyfin cannot read this share',
     errors: {
       missing:
         'The path does not exist in the container: check that the folder, or the share it is on, is mounted there.',
       unreadable:
         'The folder exists but Polyfin cannot list it: give user 65532 the right to read it and to open its folders.',
       not_folder: 'This path is a file, not a folder.',
+    } as Record<string, string>,
+    shareErrors: {
+      missing: 'The share, or the folder in it, does not exist: check the address.',
+      unreadable: 'The share’s user may not list this folder: check its permissions on the server.',
+      not_folder: 'This address is a file, not a folder.',
+      unreachable:
+        'Polyfin cannot reach the share: check that the server is on, and the server and port of the address.',
+      refused: 'The share refuses the user or password: check them, and enter them again.',
     } as Record<string, string>,
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',
