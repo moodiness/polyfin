@@ -68,6 +68,38 @@ func (t throttled) Write(p []byte) (int, error) {
 	return written, nil
 }
 
+// gated writes a block at a time, each once allow gives a turn, or at once
+// once allow is closed.
+type gated struct {
+	http.ResponseWriter
+	ctx   context.Context
+	allow <-chan struct{}
+	left  int
+}
+
+func (g *gated) Write(p []byte) (int, error) {
+	written := 0
+	for len(p) > 0 {
+		if g.left == 0 {
+			select {
+			case <-g.allow:
+				g.left = blockSize
+			case <-g.ctx.Done():
+				return written, g.ctx.Err()
+			}
+		}
+		n, err := g.ResponseWriter.Write(p[:min(len(p), g.left)])
+		written += n
+		g.left -= n
+		if err != nil {
+			return written, err
+		}
+		g.ResponseWriter.(http.Flusher).Flush()
+		p = p[n:]
+	}
+	return written, nil
+}
+
 func randomData(size int) []byte {
 	data := make([]byte, size)
 	_, _ = rand.Read(data)
@@ -148,15 +180,20 @@ func TestHostsRefusingConnectionsAreReadOverOne(t *testing.T) {
 // The newest reader is served first: a request FFmpeg is leaving, still
 // waiting for the head of the file, does not pull the connection back
 // while the new one reads; it is served once the new one's window is. The
-// host is slower than the reads, so that the new reader always waits for
-// its next block, as a playback does.
+// host sends the new reader's stretch a block at a time, each once the
+// reader asks for it: the new reader always waits for its next block, as
+// a playback does, however slow the machine.
 func TestTheNewestReaderIsServedFirst(t *testing.T) {
 	o, server := newOrigin(t, 64*blockSize)
+	turn := make(chan struct{}, 1)
 	o.mu.Lock()
-	o.rate = 16 << 20
+	o.gated, o.gate = "bytes="+strconv.Itoa(40*blockSize)+"-", turn
 	o.mu.Unlock()
 	cache := newCache(t, 1<<30)
 	cache.connections, cache.readahead, cache.aheadBudget = 1, 2, func() int64 { return 2 }
+	// However long the new reader takes, the old reader's block does not
+	// wait long enough to be served first.
+	cache.starveAfter = time.Hour
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	old := s.NewReader()
@@ -166,6 +203,7 @@ func TestTheNewestReaderIsServedFirst(t *testing.T) {
 	}
 	newer := s.NewReader()
 	defer newer.Close()
+	turn <- struct{}{}
 	if _, err := newer.ReadAt(t.Context(), make([]byte, 10), 40*blockSize); err != nil {
 		t.Fatal(err)
 	}
@@ -176,11 +214,21 @@ func TestTheNewestReaderIsServedFirst(t *testing.T) {
 		stale <- err
 	}()
 	for block := int64(40); block < 48; block++ {
+		// The turn before was taken when its block came, unless the
+		// connection left the stretch: then none is added.
+		if block > 40 {
+			select {
+			case turn <- struct{}{}:
+			default:
+			}
+		}
 		got := make([]byte, blockSize)
 		if _, err := newer.ReadAt(t.Context(), got, block*blockSize); err != nil || !bytes.Equal(got, o.data[block*blockSize:(block+1)*blockSize]) {
 			t.Fatalf("block %d: %v", block, err)
 		}
 	}
+	// The new reader stops: its window comes at once.
+	close(turn)
 	if err := <-stale; err != nil {
 		t.Fatal(err)
 	}
@@ -289,9 +337,13 @@ func TestConnectionsLingerWhileAReaderIsAttached(t *testing.T) {
 	if _, err := alone.ReadAt(t.Context(), make([]byte, 10), 0); err != nil {
 		t.Fatal(err)
 	}
+	// Long enough for a connection idle 50 ms to close, were the attached
+	// one's linger that short. The one read alone is waited for: on a busy
+	// machine, its timer may run late.
 	time.Sleep(400 * time.Millisecond)
-	if connections(attached) != 1 || connections(alone) != 0 {
-		t.Errorf("connections: %d attached, %d alone", connections(attached), connections(alone))
+	waitFor(t, "the connection read alone to close", func() bool { return connections(alone) == 0 })
+	if got := connections(attached); got != 1 {
+		t.Errorf("%d connections attached", got)
 	}
 }
 

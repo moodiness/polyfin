@@ -145,9 +145,9 @@ func TestBackgroundReadsGiveWayToPlaybacks(t *testing.T) {
 	// A third waits for a slot.
 	waiting := time.Now()
 	more := warmAll(t, 8, c)
-	time.Sleep(300 * time.Millisecond)
-	if host.peak.Load() > 2 || !c.HeldBack(waiting) {
-		t.Fatalf("%d connections at once; the third held back: %v", host.peak.Load(), c.HeldBack(waiting))
+	waitFor(t, "the third warm to wait for a slot", func() bool { return c.HeldBack(waiting) })
+	if peak := host.peak.Load(); peak > 2 {
+		t.Fatalf("%d connections at once", peak)
 	}
 	// A playback's seek is served at once: a block takes 250 ms.
 	done := played.Urge()

@@ -178,13 +178,14 @@ type Cache struct {
 	// headerTimeout bounds the wait for a source's headers, stallTimeout
 	// the time a connection read may go without a byte, recoveryTimeout
 	// the wait for the headers of the connection replacing a stalled one,
-	// and linger and attachedLinger how long an idle connection stays open
-	// for more, longer while a reader is attached; connections bounds the
-	// connections to a file, and hostConnections those to a host (see
-	// slots.go).
-	headerTimeout, stallTimeout, recoveryTimeout time.Duration
-	linger, attachedLinger                       time.Duration
-	connections, hostConnections                 int
+	// starveAfter the wait of an older reader's block behind the newest
+	// reader's window, and linger and attachedLinger how long an idle
+	// connection stays open for more, longer while a reader is attached;
+	// connections bounds the connections to a file, and hostConnections
+	// those to a host (see slots.go).
+	headerTimeout, stallTimeout, recoveryTimeout, starveAfter time.Duration
+	linger, attachedLinger                                    time.Duration
+	connections, hostConnections                              int
 
 	mu      sync.Mutex
 	sources map[accounts.ID]*Source
@@ -235,7 +236,7 @@ func New(dir string, limit func() int64, opener Opener, logger *slog.Logger) (*C
 	}
 	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32,
 		aheadBudget: func() int64 { return aheadBudget(limit()) }, now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
-		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout,
+		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout, starveAfter: starveAfter,
 		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections, hostConnections: hostConnections,
 		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{},
 		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, slots: map[string]*hostSlots{}}, nil

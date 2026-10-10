@@ -41,8 +41,9 @@ type origin struct {
 	// some hosts refuse requests; whole makes the next ones answer the whole
 	// file with 200, as some hosts serving ranges do once in a while;
 	// rangeless ignores ranges and hides the size; rate paces the bytes
-	// served, so many a second, none when zero. ranges holds the ranges
-	// asked, and times when.
+	// served, so many a second, none when zero; the range gated is served
+	// a block at a time, each once gate gives a turn. ranges holds the
+	// ranges asked, and times when.
 	mu         sync.Mutex
 	expired    map[string]bool
 	busy       int
@@ -52,6 +53,8 @@ type origin struct {
 	retryAfter string
 	rangeless  bool
 	rate       int
+	gated      string
+	gate       chan struct{}
 	ranges     []string
 	times      []time.Time
 }
@@ -64,6 +67,10 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		o.requests.Add(1)
 		o.mu.Lock()
 		expired, busy, failing, rangeless, retryAfter, rate := o.expired[r.URL.Path], o.busy > 0, o.failing > 0, o.rangeless, o.retryAfter, o.rate
+		gate := o.gate
+		if r.Header.Get("Range") != o.gated {
+			gate = nil
+		}
 		refusing := !busy && !failing && o.refusing > 0
 		whole := !busy && !failing && !refusing && o.whole > 0
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
@@ -99,6 +106,8 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 				_, _ = w.Write(chunk)
 				w.(http.Flusher).Flush()
 			}
+		case gate != nil:
+			http.ServeContent(&gated{ResponseWriter: w, ctx: r.Context(), allow: gate}, r, "", time.Time{}, bytes.NewReader(o.data))
 		case rate > 0:
 			http.ServeContent(throttled{w, rate}, r, "", time.Time{}, bytes.NewReader(o.data))
 		default:
@@ -441,16 +450,39 @@ func TestIdleSourcesLeaveWithTheirLastChunk(t *testing.T) {
 	first := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/first"}, nil)
 	readAll(t, first)
 	first.Release()
+	// Counted before the clock moves, the first source's blocks are read
+	// long ago when the second one's are stored.
+	waitCounted(t, cache, accounts.ID{1}, 2*blockSize)
 	clock.advance(time.Hour)
 	second := cache.Open(accounts.ID{2}, Location{URL: server.URL + "/second"}, nil)
 	defer second.Release()
 	readAll(t, second)
+	// The cache evicts for a block as it counts it.
+	waitCounted(t, cache, accounts.ID{2}, 2*blockSize)
 	cache.mu.Lock()
 	_, kept := cache.sources[accounts.ID{1}]
 	cache.mu.Unlock()
 	if _, err := os.Stat(filepath.Join(cache.dir, accounts.ID{1}.String()+".blocks")); kept || !os.IsNotExist(err) {
 		t.Errorf("the idle source is still cached: %v %v", kept, err)
 	}
+}
+
+// waitCounted waits for the cache to count size bytes of the source id. A
+// read is answered as soon as its block is stored: the cache counts the
+// block, and evicts for it, just after.
+func waitCounted(t *testing.T, cache *Cache, id accounts.ID, size int64) {
+	t.Helper()
+	waitFor(t, fmt.Sprintf("%d bytes of source %v to be counted", size, id), func() bool {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		var counted int64
+		for key, use := range cache.chunks {
+			if key.source == id {
+				counted += use.size
+			}
+		}
+		return counted == size
+	})
 }
 
 func TestSourcesAreServedWithRanges(t *testing.T) {

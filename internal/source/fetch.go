@@ -319,7 +319,7 @@ func (s *Source) pick(c *conn, fresh bool) (target, end int64, split *conn, ok b
 	now := time.Now()
 	var starving []int64
 	for block, w := range s.wanted {
-		if now.Sub(w.since) >= starveAfter {
+		if now.Sub(w.since) >= s.cache.starveAfter {
 			starving = append(starving, block)
 		}
 	}
