@@ -11,7 +11,7 @@ const notifications = {
     },
     serverTargets: 'Server targets',
     serverTargetsHelp:
-      'They receive the events of every user: one message per new episode, whoever follows its series, and every recording. Each user can add their own targets under My account › Notifications.',
+      'They receive the events of every user: one message per new episode, whoever follows its series, every recording and every playback. Each user can add their own targets under My account › Notifications.',
     add: 'Add a target',
     addTitle: 'Add a target',
     editTitle: (name: string) => `Edit ${name}`,
@@ -90,6 +90,10 @@ const notifications = {
       health_problem: 'Health problem found',
       health_solved: 'Health problem solved',
       user_joined: 'User joined',
+      playback_started: 'Playback started',
+      playback_paused: 'Playback paused',
+      playback_resumed: 'Playback resumed',
+      playback_stopped: 'Playback stopped',
     },
     eventHelp: {
       new_episode:
@@ -99,6 +103,11 @@ const notifications = {
       health_problem: 'System › Health found a problem, in two checks in a row.',
       health_solved: 'A problem System › Health found is gone.',
       user_joined: 'Someone created their account through an invite link.',
+      playback_started:
+        'A video or a song starts playing in a Jellyfin app, with who plays it, on which device, and whether it is converted.',
+      playback_paused: 'A playback is paused. Positions as it plays are never sent.',
+      playback_resumed: 'A paused playback plays again.',
+      playback_stopped: 'A playback stops, or its app stopped reporting it for five minutes.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

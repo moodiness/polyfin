@@ -324,6 +324,9 @@ export type Settings = {
   /** Address and name email notifications come from; empty name, the server name. */
   smtpFrom: string
   smtpFromName: string
+  /** Whether the videos played are kept, for the statistics, and for how many days. */
+  playbackHistory: boolean
+  playbackHistoryDays: number
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1098,6 +1101,10 @@ export type NotificationEvent =
   | 'health_problem'
   | 'health_solved'
   | 'user_joined'
+  | 'playback_started'
+  | 'playback_paused'
+  | 'playback_resumed'
+  | 'playback_stopped'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -2057,6 +2064,112 @@ export const fetchLogLines = (after: number, limit: number, signal?: AbortSignal
 
 export const logDownloadUrl = `${apiBase}/logs/download`
 
+/** Whose playbacks the statistics cover: everyone's (administrators) or the signed-in user's. */
+export type StatisticsScope = 'server' | 'own'
+
+/** The periods of the statistics: the last 7 or 30 days, the last year, or the whole history. */
+export const statisticsPeriods = ['7d', '30d', 'year', 'all'] as const
+export type StatisticsPeriod = (typeof statisticsPeriods)[number]
+
+/** How a playback reached its app; empty when no report told. */
+export type PlayMethod = 'direct_play' | 'direct_stream' | 'conversion' | ''
+
+/** A movie, a series or a channel of the statistics, by its latest name. Times are in seconds. */
+export type RankedTitle = { id: string; name: string; plays: number; users: number; played: number }
+
+/**
+ * The playbacks of a period, summed. Times are played times in seconds, pauses left out. Buckets
+ * are days, or months for the whole history (`unit`), starting YYYY-MM-DD; `hours` are the 168
+ * hours of the week from Monday 0:00, in the time zone asked.
+ */
+export type Statistics = {
+  period: StatisticsPeriod
+  since: string | null
+  unit: 'day' | 'month'
+  plays: number
+  played: number
+  users: { id: string; name: string; plays: number; played: number }[]
+  buckets: { start: string; played: number; users: { id: string; played: number }[] }[]
+  movies: RankedTitle[]
+  series: RankedTitle[]
+  channels: RankedTitle[]
+  apps: { name: string; plays: number; played: number }[]
+  devices: { name: string; app: string; plays: number; played: number }[]
+  methods: { method: PlayMethod; plays: number; played: number }[]
+  hours: number[]
+  /** Whether the history is kept, and for how many days. */
+  historyEnabled: boolean
+  historyDays: number
+}
+
+/** A playback of the history, as its title was called then. Times are in seconds. */
+export type HistoryEntry = {
+  id: number
+  user: { id: string; name: string }
+  item: {
+    id: string
+    kind: 'movie' | 'episode' | 'channel' | 'recording' | 'replay'
+    name: string
+    seriesName: string | null
+    season: number | null
+    episode: number | null
+    channelName: string | null
+  }
+  app: string
+  device: string
+  startedAt: string
+  endedAt: string
+  played: number
+  position: number
+  method: PlayMethod
+}
+
+export type HistoryPage = { items: HistoryEntry[]; total: number }
+
+/** Which playbacks to read: a period, and, for administrators, one user. */
+export type PlaybacksQuery = { period: StatisticsPeriod; user?: string }
+
+const playbacksBase = (scope: StatisticsScope) => (scope === 'own' ? '/account' : '')
+
+function playbacksParams(query: PlaybacksQuery) {
+  const params = new URLSearchParams({ period: query.period })
+  if (query.user) params.set('user', query.user)
+  return params
+}
+
+/** The statistics of a period, by the browser's time zone. */
+export function fetchStatistics(
+  scope: StatisticsScope,
+  query: PlaybacksQuery,
+  signal?: AbortSignal,
+) {
+  const params = playbacksParams(query)
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (timeZone) params.set('timeZone', timeZone)
+  return request<Statistics>(
+    'GET',
+    `${playbacksBase(scope)}/statistics?${params}`,
+    undefined,
+    signal,
+  )
+}
+
+/** The playbacks of a period, the latest first: `limit` (1 to 100) from `start`. */
+export function fetchHistory(
+  scope: StatisticsScope,
+  query: PlaybacksQuery & { limit: number; start?: number },
+  signal?: AbortSignal,
+) {
+  const params = playbacksParams(query)
+  params.set('limit', String(query.limit))
+  if (query.start) params.set('start', String(query.start))
+  return request<HistoryPage>('GET', `${playbacksBase(scope)}/history?${params}`, undefined, signal)
+}
+
+/** The address of the CSV of the playbacks of a period. */
+export const historyExportUrl = (scope: StatisticsScope, query: PlaybacksQuery) =>
+  `${apiBase}${playbacksBase(scope)}/history/export?${playbacksParams(query)}`
+
 /** A POLYFIN_ environment variable; `value` is empty when `hidden`, and the default when not `set`. */
 export type Variable = {
   name: string
@@ -2108,6 +2221,10 @@ export const queryKeys = {
   unmatched: (id: string) => ['unmatched', id] as const,
   variables: ['variables'] as const,
   notifications: (scope: NotificationScope) => ['notifications', scope] as const,
+  statistics: (scope: StatisticsScope, query: PlaybacksQuery) =>
+    ['statistics', scope, query] as const,
+  history: (scope: StatisticsScope, query: PlaybacksQuery & { start: number }) =>
+    ['history', scope, query] as const,
 }
 
 /** Any 401 means the session is gone: drop back to the sign-in page. */

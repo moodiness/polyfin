@@ -11,6 +11,7 @@ const nav = {
     libraries: 'Libraries',
     liveTv: 'Live TV',
     health: 'Health',
+    statistics: 'Statistics',
     schedule: 'Schedule',
     logs: 'Logs',
     apiKeys: 'API keys',

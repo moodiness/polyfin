@@ -110,6 +110,20 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).remuxDbUrlHelp,
     codes: ['invalid_remuxdb_url'],
   },
+  {
+    section: 'playback',
+    anchor: 'playback-history',
+    label: (t) => s(t).playbackHistory,
+    help: (t) => s(t).playbackHistoryHelp,
+    keywords: ['statistics', 'statistiques'],
+  },
+  {
+    section: 'playback',
+    anchor: 'playback-history-days',
+    label: (t) => s(t).playbackHistoryDays,
+    help: (t, r) => s(t).playbackHistoryDaysHelp(r('playbackHistoryDays')),
+    codes: ['invalid_playback_history_days'],
+  },
   // Conversion
   {
     section: 'conversion',

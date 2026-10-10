@@ -10,6 +10,7 @@ import enLivetv from './en/livetv'
 import enNav from './en/nav'
 import enSettings from './en/settings'
 import enSources from './en/sources'
+import enStatistics from './en/statistics'
 import enSystem from './en/system'
 import enUsers from './en/users'
 import frAccount from './fr/account'
@@ -23,6 +24,7 @@ import frLivetv from './fr/livetv'
 import frNav from './fr/nav'
 import frSettings from './fr/settings'
 import frSources from './fr/sources'
+import frStatistics from './fr/statistics'
 import frSystem from './fr/system'
 import frUsers from './fr/users'
 
@@ -50,6 +52,7 @@ const en = {
   ...enSettings,
   ...enAccount,
   ...enNotifications,
+  ...enStatistics,
 }
 
 /** Every message of the interface, in one language. */
@@ -69,6 +72,7 @@ const fr: Messages = {
   ...frSettings,
   ...frAccount,
   ...frNotifications,
+  ...frStatistics,
 }
 
 // Two areas defining the same top-level key would silently hide one of them.
@@ -88,6 +92,7 @@ if (import.meta.env.DEV) {
     enSettings,
     enAccount,
     enNotifications,
+    enStatistics,
   ]) {
     for (const key of Object.keys(area)) {
       if (seen.has(key)) throw new Error(`i18n: the key "${key}" is defined by two areas`)

@@ -62,6 +62,13 @@ const settings = {
       'Shows the audio, subtitle and video tracks of a version before it is first played, as RemuxDB found them in the same file. When a title’s details open, Polyfin asks RemuxDB, a community database, by the title’s IMDb identifier, and finds the versions by their file names. Playback still analyzes each version.',
     remuxDbUrl: 'RemuxDB address',
     remuxDbUrlHelp: 'The RemuxDB server Polyfin asks.',
+    playbackHistoryGroup: 'Playback history',
+    playbackHistory: 'Keep a playback history',
+    playbackHistoryHelp:
+      'Keeps each video played, with who played it, on which app and how, for System › Statistics and each user’s statistics under My account. Turned off, nothing more is kept; what is kept stays until it is too old.',
+    playbackHistoryDays: 'Days to keep playback history',
+    playbackHistoryDaysHelp: (r: RangeText) =>
+      `Older playbacks are deleted. This is checked every day. From ${r.min} to ${r.max}, ${r.default} by default.`,
     publicAddress: 'Public address',
     publicAddressHelp:
       'The address people open Polyfin at, such as https://media.example.org. Links in notifications start with it; empty, messages carry no link.',

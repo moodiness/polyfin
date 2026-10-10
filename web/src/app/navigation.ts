@@ -4,6 +4,7 @@ import {
   BooksIcon,
   BrowserIcon,
   CalendarDotsIcon,
+  ChartBarIcon,
   CpuIcon,
   FilmSlateIcon,
   FilmStripIcon,
@@ -53,6 +54,12 @@ export const contentPages: readonly NavPage[] = [
 
 export const systemPages: readonly NavPage[] = [
   { id: 'health', to: '/system/health', label: (t) => t.nav.health, icon: HeartbeatIcon },
+  {
+    id: 'statistics',
+    to: '/system/statistics',
+    label: (t) => t.nav.statistics,
+    icon: ChartBarIcon,
+  },
   { id: 'schedule', to: '/system/schedule', label: (t) => t.nav.schedule, icon: CalendarDotsIcon },
   { id: 'logs', to: '/system/logs', label: (t) => t.nav.logs, icon: ScrollIcon },
   { id: 'api-keys', to: '/system/api-keys', label: (t) => t.nav.apiKeys, icon: KeyIcon },

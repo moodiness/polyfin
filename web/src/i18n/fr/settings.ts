@@ -65,6 +65,13 @@ const settings: typeof en = {
       'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
     remuxDbUrl: 'Adresse de RemuxDB',
     remuxDbUrlHelp: 'Le serveur RemuxDB que Polyfin interroge.',
+    playbackHistoryGroup: 'Historique de lecture',
+    playbackHistory: 'Garder un historique de lecture',
+    playbackHistoryHelp:
+      'Garde chaque vidéo lue, avec qui l’a lue, sur quelle appli et comment, pour Système › Statistiques et les statistiques de chacun dans Mon compte. Désactivé, plus rien n’est gardé ; ce qui l’est reste jusqu’à être trop ancien.',
+    playbackHistoryDays: 'Jours de conservation de l’historique de lecture',
+    playbackHistoryDaysHelp: (r: RangeText) =>
+      `Les lectures plus anciennes sont supprimées. La vérification a lieu chaque jour. De ${r.min} à ${r.max}, ${r.default} par défaut.`,
     publicAddress: 'Adresse publique',
     publicAddressHelp:
       'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien.',
