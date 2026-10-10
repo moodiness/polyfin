@@ -11,7 +11,7 @@ import (
 // art, whereas Probe takes videos only. Audio needs much less read than
 // video to find its one track.
 func (p Prober) ProbeAudio(ctx context.Context, url string) (Analysis, error) {
-	data, err := p.run(ctx, url, true, "-probesize", "2M", "-analyzeduration", "5M")
+	data, err := p.run(ctx, url, true, append(slices.Clone(analysisSections), "-probesize", "2M", "-analyzeduration", "5M")...)
 	if err != nil {
 		return Analysis{}, err
 	}
