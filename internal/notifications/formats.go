@@ -21,6 +21,10 @@ var discordColors = map[string]int{
 	HealthSolved:      0x22c55e,
 	UserJoined:        0x14b8a6,
 	Test:              0x8b5cf6,
+	PlaybackStarted:   0x14b8a6,
+	PlaybackPaused:    0x94a3b8,
+	PlaybackResumed:   0x14b8a6,
+	PlaybackStopped:   0x64748b,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -89,6 +93,10 @@ var ntfyTags = map[string][]string{
 	HealthSolved:      {"white_check_mark"},
 	UserJoined:        {"wave"},
 	Test:              {"bell"},
+	PlaybackStarted:   {"arrow_forward"},
+	PlaybackPaused:    {"pause_button"},
+	PlaybackResumed:   {"arrow_forward"},
+	PlaybackStopped:   {"stop_button"},
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its
