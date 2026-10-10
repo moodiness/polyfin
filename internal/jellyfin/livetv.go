@@ -247,13 +247,14 @@ func (h *Handler) channelListing(w http.ResponseWriter, r *http.Request, user ac
 
 // searchLiveTv finds, for a search, the user's channels whose name holds
 // term, and the programmes of their guides not ended yet whose name holds
-// it, those of the categories asked, when keep keeps channels and
-// programmes: Live TV comes from no addon search. Case and accents do not
-// count. It finds at most limit channels, and limit programmes, the first
-// to air.
+// it, those of the categories asked, when keep keeps channels and when the
+// search asks for programmes (see asksPrograms): Live TV comes from no
+// addon search. Case and accents do not count. It finds at most limit
+// channels, and limit programmes, the first to air.
 func (h *Handler) searchLiveTv(r *http.Request, user accounts.User, term string, keep func(library.Item) bool, categories programQuery,
 	limit int) ([]library.Item, error) {
-	channels, programs := keep(library.Item{Kind: library.KindChannel}), keep(library.Item{Kind: library.KindProgram})
+	channels := keep(library.Item{Kind: library.KindChannel})
+	programs := keep(library.Item{Kind: library.KindProgram}) && asksPrograms(r, categories)
 	if !channels && !programs || limit == 0 {
 		return nil, nil
 	}
@@ -284,6 +285,22 @@ func (h *Handler) searchLiveTv(r *http.Request, user accounts.User, term string,
 		found = append(found, guide...)
 	}
 	return found, nil
+}
+
+// asksPrograms tells whether a search asks for guide programmes: by naming
+// their type among the types it includes, or, naming none, by a programme
+// category (isMovie, isSeries, isNews, isKids or isSports). Jellyfin lists
+// programmes only where a request names their type. A search for every
+// video, as jellyfin-web 12.2's general search makes for its "Videos" row
+// (mediaTypes=Video, Movie, Episode and TvChannel excluded), would
+// otherwise list there each programme its "Programs" row lists.
+func asksPrograms(r *http.Request, categories programQuery) bool {
+	include := listQuery(r, "includeItemTypes")
+	if len(include) == 0 {
+		return categories.IsMovie != nil || categories.IsSeries != nil || categories.IsNews != nil || categories.IsKids != nil ||
+			categories.IsSports != nil
+	}
+	return slices.ContainsFunc(include, func(name string) bool { return namesType(name, library.KindProgram) })
 }
 
 // liveChannels lists the user's channels, with the programme each airs

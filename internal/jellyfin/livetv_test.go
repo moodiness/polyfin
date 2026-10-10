@@ -220,24 +220,44 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 // name, whatever the case and accents, under every name apps ask them by:
 // jellyfin-web searches TvChannel among other types, and LiveTvProgram
 // with the categories of its rows; Jellyfin's Android TV app searches
-// LiveTvChannel and LiveTvProgram.
+// LiveTvChannel and LiveTvProgram. Programmes are found only by a search
+// that asks for them, by their type or a programme category.
 func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
 	addon := newTVAddon(t, true, "")
-	s, token, _ := tuned(t, addon)
+	s, token, user := tuned(t, addon)
 	search := func(query string) QueryResult {
 		t.Helper()
 		var found QueryResult
 		s.get(t, "/Items?recursive=true&"+query, token, &found)
 		return found
 	}
+	// jellyfin-web 12.2's general search, opened from the home page, asks
+	// for every video but movies, episodes and channels for its "Videos"
+	// row, for programmes for its "Programs" row, and for channels among
+	// other types, listing those under "Channels".
+	fields := "&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=MediaSourceCount"
+	videos := "userId=" + user.ID.String() + "&limit=100&searchTerm=n" + fields +
+		"&excludeItemTypes=Movie&excludeItemTypes=Episode&excludeItemTypes=TvChannel&mediaTypes=Video&imageTypeLimit=1&enableTotalRecordCount=false"
+	programs := "userId=" + user.ID.String() + "&limit=100&searchTerm=n" + fields +
+		"&includeItemTypes=LiveTvProgram&imageTypeLimit=1&enableTotalRecordCount=false"
+	combined := "userId=" + user.ID.String() + "&isMissing=false&limit=800&searchTerm=one" + fields +
+		"&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode&includeItemTypes=Playlist&includeItemTypes=MusicAlbum" +
+		"&includeItemTypes=Audio&includeItemTypes=TvChannel&includeItemTypes=PhotoAlbum&includeItemTypes=Photo&includeItemTypes=AudioBook" +
+		"&includeItemTypes=Book&includeItemTypes=BoxSet&imageTypeLimit=1&enableTotalRecordCount=false"
 	for query, want := range map[string][]string{
 		"searchTerm=one&includeItemTypes=Movie,Series,Episode,Playlist,MusicAlbum,Audio,TvChannel,PhotoAlbum,Photo,AudioBook,Book,BoxSet": {
 			"TvChannel One"},
+		combined: {"TvChannel One"},
+		videos:   {},
+		programs: {"Program Now", "Program Next"},
 		"searchTerm=%C3%B3NE&includeItemTypes=LiveTvChannel":       {"TvChannel One"},
 		"searchTerm=n&includeItemTypes=LiveTvProgram":              {"Program Now", "Program Next"},
 		"searchTerm=n&includeItemTypes=LiveTvProgram&isMovie=true": {"Program Next"},
 		"searchTerm=n&includeItemTypes=LiveTvProgram&isNews=true":  {"Program Now"},
-		"searchTerm=one&includeItemTypes=Movie,Series":             {},
+		"searchTerm=n&includeItemTypes=TvProgram,TvChannel":        {"TvChannel One", "Program Now", "Program Next"},
+		"searchTerm=n":                                 {"TvChannel One"},
+		"searchTerm=n&isMovie=true":                    {"TvChannel One", "Program Next"},
+		"searchTerm=one&includeItemTypes=Movie,Series": {},
 	} {
 		var got []string
 		for _, item := range search(query).Items {
@@ -251,6 +271,11 @@ func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
 	if found := search("searchTerm=one&includeItemTypes=TvChannel"); len(found.Items) != 1 || found.Items[0].CurrentProgram == nil ||
 		found.Items[0].CurrentProgram.Name != "Now" {
 		t.Errorf("channel found: %+v", found.Items)
+	}
+	// A user without Live TV finds no channel from the general search.
+	s.limit(t, user, func(c *accounts.UserChanges) { c.LiveTv = new(false) })
+	if found := search(combined); len(found.Items) != 0 {
+		t.Errorf("channels found by a user without Live TV: %+v", found.Items)
 	}
 }
 
