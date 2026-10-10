@@ -52,7 +52,7 @@ The page shows the import running, or the last one, whoever started it: an admin
 - **Server address**: the address Jellyfin opens at in a browser, such as `http://192.168.1.10:8096`, with the path it is served under if any. A host and port alone mean `http://`. Local network addresses work.
 - **Connect with** chooses how Polyfin reads the server:
   - **An API key**: create one in Jellyfin's dashboard, under API Keys. It reads every user's watch data at once.
-  - **A user account**: a **User name** and its **Password** on the server, empty if the account has none. Polyfin signs in as Jellyfin's apps do, which every server that speaks Jellyfin's API allows, even one without API keys, and signs out once done. An administrator's account lists every user.
+  - **A user account**: a **User name** and its **Password** on the server, empty if the account has none. Polyfin signs in as Jellyfin's apps do, which every server that speaks Jellyfin's API allows, even one without API keys, and signs out once done. An administrator's account lists every user. Any other account lists only itself, even on a server that shows every user to anyone: only that account can be imported.
 
 Polyfin uses the key and passwords for this import only, and never saves them: each import asks for them again.
 
@@ -62,8 +62,9 @@ Polyfin uses the key and passwords for this import only, and never saves them: e
 
 - A key from the server's dashboard belongs to no user: it reads every user's watch data.
 - A user's own key, the access token of a user's session, or a user account belongs to that user, and reads only their watch data. Polyfin asks the server whose key it is, and names its owner on the page.
+- When that user is not an administrator of the server, Polyfin lists and imports only them, and the page says so. To list the server's other users, connect with an administrator's account or an API key. Emby, whose users' own keys are refused, follows the same rule when connected with a user account.
 
-Jellyfin refuses a user's key the other users' data. Some servers that speak Jellyfin's API answer it with that user's data whatever user is asked, which would put one user's history into another's account. So, connected as one user, Polyfin reads each other user's watch data signed in as them: with **Import watch data** ticked, their row asks for their **Password on …** the server, left empty if their account has none. Polyfin signs in as them when the import starts, reads their watch data, then signs out. Without their password, untick **Import watch data**: their account can still be created.
+Jellyfin refuses a user's key the other users' data. Some servers that speak Jellyfin's API answer it with that user's data whatever user is asked, which would put one user's history into another's account. So, connected with an administrator's account or own key, Polyfin reads each other user's watch data signed in as them: with **Import watch data** ticked, their row asks for their **Password on …** the server, left empty if their account has none. Polyfin signs in as them when the import starts, reads their watch data, then signs out. Without their password, untick **Import watch data**: their account can still be created.
 
 For a new account, **Keep this password in Polyfin** gives it that same password, so the user signs in to Polyfin as before. Polyfin passwords have at least 8 characters: a shorter one is refused, and the row asks for another.
 
