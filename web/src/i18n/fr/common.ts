@@ -187,13 +187,28 @@ const common: typeof en = {
       'L’adresse de RemuxDB doit être une adresse web commençant par http:// ou https://.',
     invalid_public_address:
       'L’adresse publique doit être une adresse web commençant par http:// ou https://, sans paramètres.',
-    invalid_target_kind: 'Choisissez un webhook, Discord ou ntfy.',
+    invalid_smtp_host:
+      'Saisissez le nom d’hôte du serveur SMTP, comme smtp.example.org, sans espaces.',
+    invalid_smtp_port: 'Le port SMTP doit être un nombre entier de 1 à 65535.',
+    invalid_smtp_security: 'Choisissez dans la liste le chiffrement de la connexion SMTP.',
+    invalid_smtp_account:
+      'L’utilisateur et le mot de passe SMTP font au plus 256 caractères, sur une ligne.',
+    invalid_smtp_sender:
+      'Saisissez l’adresse de l’expéditeur seule, comme polyfin@example.org, et un nom de 128 caractères au plus.',
+    invalid_target_kind: 'Choisissez un type de cible dans la liste.',
     invalid_target_name: 'Le nom d’une cible doit faire de 1 à 64 caractères.',
     invalid_target_address: 'Saisissez une adresse web commençant par https:// ou http://.',
     private_target_address:
       'Cette adresse est sur un réseau local : seules les cibles d’un administrateur peuvent y accéder.',
+    invalid_email_address: 'Saisissez une adresse e-mail, comme sam@example.org.',
+    email_unavailable:
+      'L’e-mail demande un serveur SMTP : un administrateur le règle dans Paramètres › Notifications.',
     invalid_topic: 'Un sujet ntfy fait de 1 à 64 lettres, chiffres, tirets et tirets bas.',
-    invalid_token: 'Un jeton d’accès fait au plus 256 caractères, sans espaces.',
+    invalid_chat:
+      'Saisissez le numéro de la discussion, comme -1001234567890, ou le nom d’une chaîne publique, comme @news_example.',
+    invalid_token:
+      'Saisissez le jeton : 256 caractères au plus, sans espaces. Celui d’un bot Telegram ressemble à 123456:ABC-DEF.',
+    invalid_user_key: 'Une clé d’utilisateur Pushover ne contient que des lettres et des chiffres.',
     invalid_events: 'Un des événements choisis n’est pas disponible pour cette cible.',
     too_many_targets: 'Il y a déjà 20 cibles. Supprimez-en une pour en ajouter une autre.',
     target_unreadable:

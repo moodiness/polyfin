@@ -308,6 +308,20 @@ export type Settings = {
   remuxDbUrl: string
   /** Address people open Polyfin at, which links in notifications start with; empty for no link. */
   publicAddress: string
+  /** Host of the SMTP server email notifications go through; empty, email targets cannot be added. */
+  smtpHost: string
+  smtpPort: number
+  /** How the SMTP connection is encrypted: STARTTLS, TLS from the start, or not at all. */
+  smtpSecurity: 'starttls' | 'tls' | 'none'
+  /** User the SMTP server is signed in with; empty, it is not. */
+  smtpUser: string
+  /** Whether the SMTP password is saved. */
+  smtpPasswordSet: boolean
+  /** Sent only to change the SMTP password: a new one, or "" to remove it. */
+  smtpPassword?: string
+  /** Address and name email notifications come from; empty name, the server name. */
+  smtpFrom: string
+  smtpFromName: string
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1046,15 +1060,17 @@ export const revealTrackingKey = async (service: TrackingKeyServiceName) =>
   (await request<{ value: string }>('POST', `/account/tracking/${seg(service)}/key/reveal`)).value
 
 /** The kinds of notification targets. */
-export type NotificationKind = 'webhook' | 'discord' | 'ntfy'
+export type NotificationKind =
+  'webhook' | 'discord' | 'ntfy' | 'email' | 'telegram' | 'gotify' | 'pushover'
 
 /** The events targets choose from. */
 export type NotificationEvent =
   'new_episode' | 'recording_finished' | 'recording_failed' | 'health_problem' | 'health_solved'
 
 /**
- * Where notifications go. Its secret address and token are never sent back: `address` is only the
- * scheme and host of a webhook's or Discord target's address, and an ntfy target's server.
+ * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
+ * only the scheme and host of a webhook's or Discord target's address, an ntfy or Gotify target's
+ * server, an email target's recipient, and empty for Telegram and Pushover targets.
  */
 export type NotificationTarget = {
   id: string
@@ -1063,7 +1079,9 @@ export type NotificationTarget = {
   address: string
   /** An ntfy target's topic, empty for the others. */
   topic: string
-  /** Whether an ntfy target has an access token. */
+  /** A Telegram target's chat, empty for the others. */
+  chat: string
+  /** Whether an ntfy, Telegram, Gotify or Pushover target has a token. */
   tokenSet: boolean
   events: NotificationEvent[]
   enabled: boolean
@@ -1076,7 +1094,7 @@ export type NotificationTarget = {
    * decrypted with POLYFIN_SECRET_KEY.
    */
   problem: 'refused' | 'rejected' | 'unreachable' | 'unreadable' | null
-  /** The HTTP status the target answered with its problem, when it answered. */
+  /** The HTTP status, or an email target's SMTP code, answered with its problem, when it answered. */
   problemStatus: number | null
   problemAt: string | null
 }
@@ -1087,17 +1105,29 @@ export type Notifications = {
   /** The events these targets may receive: health events only for the server and administrators. */
   events: NotificationEvent[]
   kinds: NotificationKind[]
+  /** Whether email targets can be added: the server has an SMTP server. */
+  emailAvailable: boolean
 }
 
 /** A target to add, or the changes to one: fields left out keep their values. */
 export type NotificationDraft = {
   kind?: NotificationKind
   name?: string
-  /** A webhook's or Discord target's address, or an ntfy target's server (empty: the public one). */
+  /**
+   * A webhook's or Discord target's address, an ntfy target's server (empty: the public one), a
+   * Gotify target's server, or an email target's recipient.
+   */
   address?: string
   topic?: string
-  /** An ntfy target's access token; empty removes it. */
+  /** A Telegram target's chat. */
+  chat?: string
+  /**
+   * An ntfy target's access token, empty removes it; a Telegram bot's token; a Gotify or Pushover
+   * application's token.
+   */
   token?: string
+  /** A Pushover target's user key. */
+  userKey?: string
   events?: NotificationEvent[]
   enabled?: boolean
 }
@@ -1818,11 +1848,12 @@ export type Health = {
 }
 
 /**
- * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting, a user's connection, or a
- * notification target, by its name, of a user or of the server (`user` null).
+ * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting (the SMTP password is one,
+ * though it is never read again), a user's connection, or a notification target, by its name, of a
+ * user or of the server (`user` null).
  */
 export type UnreadableSecret = {
-  setting: ServerSecretName | null
+  setting: ServerSecretName | 'smtpPassword' | null
   service: TrackingServiceName | null
   target: string | null
   user: string | null

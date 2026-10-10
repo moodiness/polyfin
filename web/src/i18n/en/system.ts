@@ -213,6 +213,7 @@ const system = {
         theIntroDbKey: 'TheIntroDB key',
         traktClientSecret: 'Trakt client secret',
         lastFmSecret: 'Last.fm shared secret',
+        smtpPassword: 'SMTP password',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
       targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
