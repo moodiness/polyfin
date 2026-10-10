@@ -105,10 +105,12 @@ func TestTasksTellWhenTheirScheduleRunsThemNext(t *testing.T) {
 // without running now.
 func TestADailyTaskRunsAtItsHour(t *testing.T) {
 	zone := time.FixedZone("Server", 2*60*60)
-	// The registry's clock is 50 ms before 04:00 when the test starts.
-	start, fake := time.Now(), time.Date(2026, 10, 5, 3, 59, 59, 950_000_000, zone)
+	// The registry's clock stands 50 ms before 04:00 until the test moves
+	// it.
+	var clock atomic.Pointer[time.Time]
+	clock.Store(new(time.Date(2026, 10, 5, 3, 59, 59, 950_000_000, zone)))
 	registry := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	registry.now = func() time.Time { return fake.Add(time.Since(start)) }
+	registry.now = func() time.Time { return *clock.Load() }
 	registry.dailyCheck = 10 * time.Millisecond
 	var hour atomic.Int32
 	hour.Store(4)
@@ -128,6 +130,7 @@ func TestADailyTaskRunsAtItsHour(t *testing.T) {
 	if runs.Load() != 0 {
 		t.Fatal("the task ran before its hour")
 	}
+	clock.Store(new(time.Date(2026, 10, 5, 4, 0, 0, 0, zone)))
 	waitFor(t, func() bool { return runs.Load() == 1 })
 	if at := ranAt.Load().(time.Time); at.Hour() != 4 || at.Minute() != 0 {
 		t.Errorf("ran at %v", at)
