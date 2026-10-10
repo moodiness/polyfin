@@ -139,6 +139,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
 	mux.HandleFunc("POST /admin/api/session/jellyfin", h.signInWithJellyfin)
+	mux.HandleFunc("GET /admin/api/invite/{token}", h.publicInvite)
+	mux.HandleFunc("POST /admin/api/invite/{token}", h.acceptInvite)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
@@ -166,6 +168,9 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/users/{id}", h.administrator(h.deleteUser))
 	mux.Handle("GET /admin/api/users/{id}/devices", h.administrator(h.userDevices))
 	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
+	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
+	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
+	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
