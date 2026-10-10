@@ -1797,6 +1797,14 @@ export type StreamInfo = {
 /** How a playback reaches its app; `stream` is HLS whose encoding is idle, so details are unknown. */
 export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
 
+/**
+ * What set the size of converted video: nothing below the source's, the GPU's 4K, the
+ * processor's 1080p, HDR converted by the processor, the user's quality group, the settings'
+ * maximum quality of converted video, or the bitrate limit.
+ */
+export type SizeLimit =
+  'source' | 'gpu' | 'processor' | 'toneMapping' | 'qualityGroup' | 'serverMax' | 'bitrate'
+
 /** A device playing, as the dashboard shows it. */
 export type LiveSession = {
   id: string
@@ -1835,6 +1843,13 @@ export type LiveSession = {
     bitrate: number
     toneMap: boolean
     burnSubtitles: boolean
+    /** What set the size; empty when not known. */
+    limitedBy: SizeLimit | ''
+    /** The height that capped the size, 0 for `source`. */
+    maxHeight: number
+    /** For `bitrate`: the limit in bits per second, and whose it is. */
+    bitrateLimit: number
+    bitrateLimitOf: 'app' | 'user' | ''
   } | null
   audio: { codec: string; channels: number; bitrate: number } | null
 }
