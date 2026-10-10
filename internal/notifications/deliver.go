@@ -181,9 +181,11 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	if err != nil {
 		return result{outcome: unreadable}
 	}
-	request, err := s.request(t, secret, ev)
-	if err != nil {
-		return result{outcome: rejected, err: "malformed request"}
+	var request *http.Request
+	if t.kind != Email {
+		if request, err = s.request(t, secret, ev); err != nil {
+			return result{outcome: rejected, err: "malformed request"}
+		}
 	}
 	client := s.trusted
 	if confined {
@@ -197,13 +199,16 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	defer func() { <-s.sending }()
 	ctx, cancel := context.WithTimeout(s.ctx, s.timing.request)
 	defer cancel()
+	if t.kind == Email {
+		return s.sendEmail(ctx, t, ev)
+	}
 	response, err := client.Do(request.WithContext(ctx))
 	if err != nil {
 		return result{outcome: retry, err: describeError(err)}
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, maxReply))
 	_ = response.Body.Close()
-	return classify(response.StatusCode, response.Header, body)
+	return classify(t.kind, response.StatusCode, response.Header, body)
 }
 
 // describeError says why a request failed in a few words, never with the
@@ -223,8 +228,8 @@ func describeError(err error) string {
 	return "could not connect"
 }
 
-// classify reads the status of a target's answer.
-func classify(status int, header http.Header, body []byte) result {
+// classify reads the status of the answer of a target of kind.
+func classify(kind string, status int, header http.Header, body []byte) result {
 	res := result{status: status}
 	switch {
 	case status >= 200 && status < 300:
@@ -232,7 +237,8 @@ func classify(status int, header http.Header, body []byte) result {
 	case status == http.StatusTooManyRequests:
 		res.outcome = retry
 		res.after = retryAfter(header, body)
-	case status == http.StatusUnauthorized, status == http.StatusForbidden, status == http.StatusNotFound, status == http.StatusGone:
+	case status == http.StatusUnauthorized, status == http.StatusForbidden, status == http.StatusNotFound, status == http.StatusGone,
+		status == http.StatusBadRequest && refusedRequest(kind, body):
 		res.outcome = refused
 	case status >= 500 || status == http.StatusRequestTimeout:
 		res.outcome = retry
@@ -243,9 +249,31 @@ func classify(status int, header http.Header, body []byte) result {
 	return res
 }
 
+// refusedRequest reports whether a 400 answer from a target of kind
+// refuses Polyfin rather than the message: Telegram tells a chat it does
+// not know, Pushover a user key or application token it does not.
+func refusedRequest(kind string, body []byte) bool {
+	var answer struct {
+		Description string `json:"description"`
+		User        string `json:"user"`
+		Token       string `json:"token"`
+	}
+	if json.Unmarshal(body, &answer) != nil {
+		return false
+	}
+	switch kind {
+	case Telegram:
+		return strings.Contains(strings.ToLower(answer.Description), "chat not found")
+	case Pushover:
+		return answer.User == "invalid" || answer.Token == "invalid"
+	}
+	return false
+}
+
 // retryAfter reads how long a target asked to wait: its Retry-After
 // header, in seconds, possibly with a fraction, or as a date, else the
-// retry_after field of a JSON body, in seconds, as Discord sends it.
+// retry_after field of a JSON body, in seconds, as Discord sends it, or of
+// its parameters, as Telegram does.
 func retryAfter(header http.Header, body []byte) time.Duration {
 	value := strings.TrimSpace(header.Get("Retry-After"))
 	if seconds, err := strconv.ParseFloat(value, 64); err == nil && seconds >= 0 && !math.IsInf(seconds, 0) {
@@ -256,9 +284,15 @@ func retryAfter(header http.Header, body []byte) time.Duration {
 	}
 	var answer struct {
 		RetryAfter float64 `json:"retry_after"`
+		Parameters struct {
+			RetryAfter float64 `json:"retry_after"`
+		} `json:"parameters"`
 	}
-	if json.Unmarshal(body, &answer) == nil && answer.RetryAfter > 0 {
-		return time.Duration(math.Ceil(min(answer.RetryAfter, 24*3600) * float64(time.Second)))
+	if json.Unmarshal(body, &answer) != nil {
+		return 0
+	}
+	if seconds := max(answer.RetryAfter, answer.Parameters.RetryAfter); seconds > 0 {
+		return time.Duration(math.Ceil(min(seconds, 24*3600) * float64(time.Second)))
 	}
 	return 0
 }
@@ -357,6 +391,14 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 		if secret != "" {
 			header.Set("Authorization", "Bearer "+secret)
 		}
+	case Telegram:
+		address, payload = s.telegramAPI+"/bot"+secret+"/sendMessage", telegramMessage(t.topic, ev, s.phrase("Open", "Ouvrir"))
+	case Gotify:
+		address, payload = t.address+"/message", gotifyMessage(ev)
+		header.Set("X-Gotify-Key", secret)
+	case Pushover:
+		user, token, _ := strings.Cut(secret, "\n")
+		address, payload = s.pushoverAPI, pushoverMessage(user, token, ev)
 	default:
 		return nil, ErrInvalidKind
 	}

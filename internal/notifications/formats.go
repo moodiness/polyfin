@@ -1,6 +1,9 @@
 package notifications
 
-import "time"
+import (
+	"html"
+	"time"
+)
 
 // Discord bounds an embed's title to 256 characters and its description to
 // 4,096, and a footer to 2,048.
@@ -87,18 +90,108 @@ var ntfyTags = map[string][]string{
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its
-// type, a high priority for failures and errors, and its link as the
-// address a click on it opens.
+// type, a high priority for urgent events, and its link as the address a
+// click on it opens.
 func ntfyMessage(topic string, ev Event) ntfyPublish {
 	message := ntfyPublish{Topic: topic, Title: ev.Title, Message: ev.Message, Tags: append([]string{}, ntfyTags[ev.Type]...)}
 	if ev.Recording != nil && ev.Recording.Partial && ev.Type == RecordingFinished {
 		message.Tags = append(message.Tags, "warning")
 	}
-	if ev.Type == RecordingFailed || ev.Type == HealthProblem && ev.Problem != nil && ev.Problem.Severity == SeverityError {
+	if urgent(ev) {
 		message.Priority = 4
 	}
 	if ev.URL != nil {
 		message.Click = *ev.URL
+	}
+	return message
+}
+
+// urgent reports whether ev tells of a failure: a failed recording, or a
+// health problem that is an error.
+func urgent(ev Event) bool {
+	return ev.Type == RecordingFailed || ev.Type == HealthProblem && ev.Problem != nil && ev.Problem.Severity == SeverityError
+}
+
+// Telegram bounds a message's text to 4,096 characters once its markup is
+// read: the event's message is clipped well under it.
+const telegramText = 3500
+
+// telegramSend is what the Bot API's sendMessage takes.
+type telegramSend struct {
+	ChatID             string              `json:"chat_id"`
+	Text               string              `json:"text"`
+	ParseMode          string              `json:"parse_mode"`
+	LinkPreviewOptions telegramLinkPreview `json:"link_preview_options"`
+}
+
+type telegramLinkPreview struct {
+	IsDisabled bool `json:"is_disabled"`
+}
+
+// telegramMessage formats ev for chat: its title in bold, its message, and
+// its link, named open, in HTML, without a preview of the page it opens.
+func telegramMessage(chat string, ev Event, open string) telegramSend {
+	text := "<b>" + html.EscapeString(clip(ev.Title, 256)) + "</b>\n" + html.EscapeString(clip(ev.Message, telegramText))
+	if ev.URL != nil {
+		text += "\n\n<a href=\"" + html.EscapeString(*ev.URL) + "\">" + html.EscapeString(open) + "</a>"
+	}
+	return telegramSend{ChatID: chat, Text: text, ParseMode: "HTML", LinkPreviewOptions: telegramLinkPreview{IsDisabled: true}}
+}
+
+// gotifyPost is a message posted to a Gotify server's /message: the
+// address a click on it opens is in its extras.
+type gotifyPost struct {
+	Title    string         `json:"title"`
+	Message  string         `json:"message"`
+	Priority int            `json:"priority"`
+	Extras   map[string]any `json:"extras,omitempty"`
+}
+
+// gotifyMessage formats ev for Gotify: its title, its message, a high
+// priority (8) for urgent events, a normal one (5) for the others, and its
+// link as the address a click on it opens.
+func gotifyMessage(ev Event) gotifyPost {
+	message := gotifyPost{Title: ev.Title, Message: ev.Message, Priority: 5}
+	if urgent(ev) {
+		message.Priority = 8
+	}
+	if ev.URL != nil {
+		message.Extras = map[string]any{"client::notification": map[string]any{"click": map[string]string{"url": *ev.URL}}}
+	}
+	return message
+}
+
+// Pushover bounds a title to 250 characters, a message to 1,024 and an
+// address to 512.
+const (
+	pushoverTitle   = 250
+	pushoverText    = 1024
+	pushoverAddress = 512
+)
+
+// pushoverPost is a message posted to Pushover's messages.json.
+type pushoverPost struct {
+	Token     string `json:"token"`
+	User      string `json:"user"`
+	Title     string `json:"title"`
+	Message   string `json:"message"`
+	URL       string `json:"url,omitempty"`
+	Priority  int    `json:"priority"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// pushoverMessage formats ev for the Pushover user, through the
+// application token: its title, its message, its link, unless too long,
+// a high priority (1) for urgent events, a normal one (0) for the others,
+// and when it happened.
+func pushoverMessage(user, token string, ev Event) pushoverPost {
+	message := pushoverPost{Token: token, User: user, Title: clip(ev.Title, pushoverTitle), Message: clip(ev.Message, pushoverText),
+		Timestamp: ev.At.Unix()}
+	if urgent(ev) {
+		message.Priority = 1
+	}
+	if ev.URL != nil && len(*ev.URL) <= pushoverAddress {
+		message.URL = *ev.URL
 	}
 	return message
 }

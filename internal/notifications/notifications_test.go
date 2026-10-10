@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -74,6 +75,15 @@ func status(code int, header ...string) func(w http.ResponseWriter) {
 			w.Header().Set(header[i], header[i+1])
 		}
 		w.WriteHeader(code)
+	}
+}
+
+// reply answers with code and a JSON body.
+func reply(code int, body string) func(w http.ResponseWriter) {
+	return func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_, _ = io.WriteString(w, body)
 	}
 }
 
@@ -372,6 +382,180 @@ func TestTargetsReceiveTheirFormat(t *testing.T) {
 	failed := h.targets.wait(t, "/ntfy/", 2)[1]
 	if _, ok := failed.body["click"]; ok || failed.body["priority"] != 4.0 {
 		t.Errorf("failed recording without an address: %v", failed.body)
+	}
+}
+
+// The paths at which the fake targets stand for Telegram's Bot API, with
+// the token chatServices gives, and for Pushover.
+const (
+	telegramPath = "/telegram/bot123456:telegram-very-secret-token/sendMessage"
+	pushoverPath = "/pushover/1/messages.json"
+)
+
+// chatServices points Telegram and Pushover to the fake targets, and adds a
+// Telegram, a Gotify and a Pushover target to the server, for events.
+func (h harness) chatServices(t *testing.T, events ...string) (telegram, gotify, pushover Target) {
+	t.Helper()
+	h.Service.telegramAPI, h.Service.pushoverAPI = h.targets.url+"/telegram", h.targets.url+pushoverPath
+	telegram = h.add(t, nil, Draft{Kind: Telegram, Name: new("Chat"), Chat: new("-1001234567890"), Token: new("123456:telegram-very-secret-token"),
+		Events: events})
+	gotify = h.add(t, nil, Draft{Kind: Gotify, Name: new("Gotify"), Address: new(h.targets.url + "/gotify/"), Token: new("gotify-very-secret-token"),
+		Events: events})
+	pushover = h.add(t, nil, Draft{Kind: Pushover, Name: new("Phone"), UserKey: new("uPushoverUser0"), Token: new("aPushoverApp0"), Events: events})
+	return telegram, gotify, pushover
+}
+
+// Telegram, Gotify and Pushover receive each message formatted for them:
+// Telegram in HTML, with the link, Gotify and Pushover with a priority by
+// event and the address a click opens. A new Pushover token keeps the
+// user key.
+func TestChatServicesReceiveTheirFormat(t *testing.T) {
+	h := newHarness(t)
+	settings := h.store.Settings()
+	settings.PublicAddress = "https://media.example.org"
+	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	_, _, pushover := h.chatServices(t, RecordingFinished, RecordingFailed)
+
+	recording := accounts.ID{0x42}
+	h.RecordingEnded(t.Context(), recordings.Ended{Recording: recording, User: &h.member.ID, Channel: accounts.ID{9}, Name: "Late <Show> & Co"})
+	link := "https://media.example.org/web/#/details?id=" + recording.String() + "&serverId=fedcba9876543210fedcba9876543210"
+	telegram := h.targets.wait(t, telegramPath, 1)[0].body
+	preview, _ := telegram["link_preview_options"].(map[string]any)
+	if want := "<b>Recording finished: Late &lt;Show&gt; &amp; Co</b>\nRecorded on Channel Nine, for member.\n\n<a href=\"" +
+		html.EscapeString(link) + "\">Open</a>"; telegram["chat_id"] != "-1001234567890" || telegram["parse_mode"] != "HTML" ||
+		preview["is_disabled"] != true || telegram["text"] != want {
+		t.Errorf("Telegram message: %v\nwant text %q", telegram, want)
+	}
+	gotify := h.targets.wait(t, "/gotify/message", 1)[0]
+	extras, _ := gotify.body["extras"].(map[string]any)
+	notification, _ := extras["client::notification"].(map[string]any)
+	click, _ := notification["click"].(map[string]any)
+	if gotify.header.Get("X-Gotify-Key") != "gotify-very-secret-token" || gotify.body["title"] != "Recording finished: Late <Show> & Co" ||
+		gotify.body["message"] != "Recorded on Channel Nine, for member." || gotify.body["priority"] != 5.0 || click["url"] != link {
+		t.Errorf("Gotify message: %v %v", gotify.header, gotify.body)
+	}
+	posted := h.targets.wait(t, pushoverPath, 1)[0].body
+	if posted["token"] != "aPushoverApp0" || posted["user"] != "uPushoverUser0" || posted["title"] != "Recording finished: Late <Show> & Co" ||
+		posted["message"] != "Recorded on Channel Nine, for member." || posted["url"] != link || posted["priority"] != 0.0 {
+		t.Errorf("Pushover message: %v", posted)
+	}
+
+	// A failure is urgent, and links nowhere.
+	h.RecordingEnded(t.Context(), recordings.Ended{Recording: recording, User: &h.member.ID, Name: "Empty Show", Failed: true})
+	if failed := h.targets.wait(t, "/gotify/message", 2)[1].body; failed["priority"] != 8.0 || failed["extras"] != nil {
+		t.Errorf("a failure to Gotify: %v", failed)
+	}
+	if failed := h.targets.wait(t, pushoverPath, 2)[1].body; failed["priority"] != 1.0 || failed["url"] != nil {
+		t.Errorf("a failure to Pushover: %v", failed)
+	}
+	if failed := h.targets.wait(t, telegramPath, 2)[1].body; strings.Contains(failed["text"].(string), "<a ") {
+		t.Errorf("a failure to Telegram: %v", failed)
+	}
+	h.idle(t)
+
+	if _, err := h.Update(t.Context(), nil, pushover.ID, Draft{Token: new("aPushoverApp1")}); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := h.Test(t.Context(), nil, pushover.ID); err != nil || !result.Delivered {
+		t.Fatalf("a test: %+v, %v", result, err)
+	}
+	if test := h.targets.at(pushoverPath)[2].body; test["token"] != "aPushoverApp1" || test["user"] != "uPushoverUser0" {
+		t.Errorf("after a new token: %v", test)
+	}
+}
+
+// Telegram, Gotify and Pushover refusing Polyfin's token, key or chat show
+// the target as Refused; refusing the message itself shows Message
+// refused. A message they ask to wait for is sent again once the wait is
+// over, as long as Telegram asks in its answer.
+func TestChatServicesRefusingAndRateLimiting(t *testing.T) {
+	h := newHarness(t)
+	// Long enough for Telegram's wait below, short enough to wait for.
+	h.timing.giveUp = 3 * time.Second
+	telegram, gotify, pushover := h.chatServices(t, RecordingFinished)
+	for _, refusal := range []struct {
+		target  Target
+		path    string
+		status  int
+		body    string
+		problem string
+	}{
+		{telegram, telegramPath, 401, `{"ok":false,"error_code":401,"description":"Unauthorized"}`, ProblemRefused},
+		{telegram, telegramPath, 400, `{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}`, ProblemRefused},
+		{telegram, telegramPath, 400, `{"ok":false,"error_code":400,"description":"Bad Request: message is too long"}`, ProblemRejected},
+		{gotify, "/gotify/message", 401, `{"error":"Unauthorized","errorCode":401,"errorDescription":"provide a valid access token"}`, ProblemRefused},
+		{pushover, pushoverPath, 400, `{"user":"invalid","errors":["user identifier is invalid"],"status":0}`, ProblemRefused},
+		{pushover, pushoverPath, 400, `{"token":"invalid","errors":["application token is invalid"],"status":0}`, ProblemRefused},
+	} {
+		h.targets.then(refusal.path, reply(refusal.status, refusal.body))
+		result, err := h.Test(t.Context(), nil, refusal.target.ID)
+		if err != nil || result.Delivered || result.Status != refusal.status || result.Target.Problem != refusal.problem {
+			t.Errorf("%s answering %s: %+v, %v", refusal.target.Kind, refusal.body, result, err)
+		}
+	}
+
+	sent, posted := len(h.targets.at(telegramPath)), len(h.targets.at(pushoverPath))
+	h.targets.then(telegramPath, reply(http.StatusTooManyRequests,
+		`{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 1","parameters":{"retry_after":1}}`))
+	h.targets.then(pushoverPath, reply(http.StatusTooManyRequests, `{"status":0,"errors":["too many messages"]}`))
+	h.RecordingEnded(t.Context(), recordings.Ended{Recording: accounts.ID{1}, User: &h.member.ID, Name: "Show"})
+	got := h.targets.wait(t, telegramPath, sent+2)
+	h.targets.wait(t, pushoverPath, posted+2)
+	h.idle(t)
+	if wait := got[sent+1].at.Sub(got[sent].at); wait < 900*time.Millisecond {
+		t.Errorf("Telegram asked to wait 1 second: tried again after %v", wait)
+	}
+	targets, _ := h.Targets(t.Context(), nil)
+	for _, target := range targets {
+		if target.Problem != "" || target.LastSentAt == nil {
+			t.Errorf("%s after waiting: %+v", target.Kind, target)
+		}
+	}
+}
+
+// The tokens and keys of Telegram, Gotify and Pushover targets are sealed
+// in the database, never shown, and never logged, even when Telegram's
+// address, which holds the bot's token, cannot be reached.
+func TestChatServiceTokensAreSealedNeverShownNorLogged(t *testing.T) {
+	h := newHarness(t)
+	h.chatServices(t, RecordingFinished)
+	h.Service.telegramAPI = "http://127.0.0.1:1"
+	h.targets.always("/gotify/message", status(http.StatusUnauthorized))
+	h.RecordingEnded(t.Context(), recordings.Ended{Recording: accounts.ID{1}, User: &h.member.ID, Name: "Show"})
+	h.targets.wait(t, "/gotify/message", 1)
+	h.targets.wait(t, pushoverPath, 1)
+	h.idle(t)
+
+	rows, err := h.db.Query(t.Context(), "SELECT secret FROM notification_targets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var stored string
+		if err := rows.Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		if !secrets.Sealed(stored) || strings.Contains(stored, "very-secret") || strings.Contains(stored, "Pushover") {
+			t.Errorf("stored as %q", stored)
+		}
+	}
+	targets, err := h.Targets(t.Context(), nil)
+	if err != nil || len(targets) != 3 {
+		t.Fatalf("targets: %v, %v", targets, err)
+	}
+	if shown, _ := json.Marshal(targets); strings.Contains(string(shown), "very-secret") || strings.Contains(string(shown), "Pushover") {
+		t.Errorf("shown: %s", shown)
+	}
+	for _, target := range targets {
+		if !target.TokenSet {
+			t.Errorf("%s shows no token", target.Kind)
+		}
+	}
+	if log := h.log.String(); strings.Contains(log, "very-secret") || strings.Contains(log, "Pushover") ||
+		!strings.Contains(log, "could not be delivered in time") || !strings.Contains(log, "refused a message") {
+		t.Errorf("log: %s", log)
 	}
 }
 

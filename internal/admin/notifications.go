@@ -9,26 +9,32 @@ import (
 	"github.com/moodiness/polyfin/internal/notifications"
 )
 
-// notificationsJSON is what a notifications page shows: the targets, and
-// the events and kinds of targets they may choose from.
+// notificationsJSON is what a notifications page shows: the targets, the
+// events and kinds of targets they may choose from, and whether email
+// targets can be added: an SMTP server is set.
 type notificationsJSON struct {
-	Targets []notificationTargetJSON `json:"targets"`
-	Events  []string                 `json:"events"`
-	Kinds   []string                 `json:"kinds"`
+	Targets        []notificationTargetJSON `json:"targets"`
+	Events         []string                 `json:"events"`
+	Kinds          []string                 `json:"kinds"`
+	EmailAvailable bool                     `json:"emailAvailable"`
 }
 
-// notificationTargetJSON is a target. Its secret address and access token
+// notificationTargetJSON is a target. Its secret address, tokens and keys
 // are never answered: Address is only the scheme and host of a webhook's
-// or Discord target's address, and an ntfy target's server; TokenSet
-// tells whether an ntfy target has an access token. Problem is null,
-// "refused", "rejected", "unreachable" or "unreadable", ProblemStatus the
-// HTTP status the target answered, when it answered.
+// or Discord target's address, an ntfy or Gotify target's server, an
+// email target's recipient, and empty for Telegram and Pushover targets;
+// Topic is an ntfy target's topic, Chat a Telegram target's chat; TokenSet
+// tells whether an ntfy, Telegram, Gotify or Pushover target has a token.
+// Problem is null, "refused", "rejected", "unreachable" or "unreadable",
+// ProblemStatus the HTTP status the target answered, or the code the SMTP
+// server answered for an email target, when it answered.
 type notificationTargetJSON struct {
 	ID            string     `json:"id"`
 	Kind          string     `json:"kind"`
 	Name          string     `json:"name"`
 	Address       string     `json:"address"`
 	Topic         string     `json:"topic"`
+	Chat          string     `json:"chat"`
 	TokenSet      bool       `json:"tokenSet"`
 	Events        []string   `json:"events"`
 	Enabled       bool       `json:"enabled"`
@@ -40,7 +46,7 @@ type notificationTargetJSON struct {
 }
 
 func newNotificationTargetJSON(t notifications.Target) notificationTargetJSON {
-	result := notificationTargetJSON{ID: t.ID.String(), Kind: t.Kind, Name: t.Name, Address: t.Address, Topic: t.Topic, TokenSet: t.TokenSet,
+	result := notificationTargetJSON{ID: t.ID.String(), Kind: t.Kind, Name: t.Name, Address: t.Address, Topic: t.Topic, Chat: t.Chat, TokenSet: t.TokenSet,
 		Events: t.Events, Enabled: t.Enabled, CreatedAt: t.CreatedAt.UTC().Truncate(time.Second), LastSentAt: utcSeconds(t.LastSentAt),
 		ProblemStatus: t.ProblemStatus, ProblemAt: utcSeconds(t.ProblemAt)}
 	if t.Problem != "" {
@@ -51,21 +57,27 @@ func newNotificationTargetJSON(t notifications.Target) notificationTargetJSON {
 
 // notificationDraftJSON adds a target, or changes one: on a change, the
 // fields left out keep their values, and kind is ignored. address is a
-// webhook's or Discord target's address, or an ntfy target's server, null
-// or empty for the default one; token an ntfy target's access token, empty
-// for none.
+// webhook's or Discord target's address, an ntfy target's server, null or
+// empty for the default one, a Gotify target's server, or an email
+// target's recipient; topic an ntfy target's topic; chat a Telegram
+// target's chat; token an ntfy target's access token, empty for none, a
+// Telegram bot's token, or a Gotify or Pushover application's token;
+// userKey a Pushover target's user key.
 type notificationDraftJSON struct {
 	Kind    string    `json:"kind"`
 	Name    *string   `json:"name"`
 	Address *string   `json:"address"`
 	Topic   *string   `json:"topic"`
+	Chat    *string   `json:"chat"`
 	Token   *string   `json:"token"`
+	UserKey *string   `json:"userKey"`
 	Events  *[]string `json:"events"`
 	Enabled *bool     `json:"enabled"`
 }
 
 func (d notificationDraftJSON) draft() notifications.Draft {
-	result := notifications.Draft{Kind: d.Kind, Name: d.Name, Address: d.Address, Topic: d.Topic, Token: d.Token, Enabled: d.Enabled}
+	result := notifications.Draft{Kind: d.Kind, Name: d.Name, Address: d.Address, Topic: d.Topic, Chat: d.Chat, Token: d.Token, UserKey: d.UserKey,
+		Enabled: d.Enabled}
 	if d.Events != nil {
 		result.Events = *d.Events
 		if result.Events == nil {
@@ -108,8 +120,12 @@ func notificationError(w http.ResponseWriter, err error) bool {
 		{notifications.ErrInvalidName, http.StatusBadRequest, "invalid_target_name"},
 		{notifications.ErrInvalidAddress, http.StatusBadRequest, "invalid_target_address"},
 		{notifications.ErrPrivateAddress, http.StatusBadRequest, "private_target_address"},
+		{notifications.ErrInvalidEmail, http.StatusBadRequest, "invalid_email_address"},
+		{notifications.ErrEmailUnavailable, http.StatusConflict, "email_unavailable"},
 		{notifications.ErrInvalidTopic, http.StatusBadRequest, "invalid_topic"},
+		{notifications.ErrInvalidChat, http.StatusBadRequest, "invalid_chat"},
 		{notifications.ErrInvalidToken, http.StatusBadRequest, "invalid_token"},
+		{notifications.ErrInvalidUserKey, http.StatusBadRequest, "invalid_user_key"},
 		{notifications.ErrInvalidEvents, http.StatusBadRequest, "invalid_events"},
 		{notifications.ErrTooManyTargets, http.StatusConflict, "too_many_targets"},
 		{notifications.ErrUnreadable, http.StatusConflict, "target_unreadable"},
@@ -141,7 +157,8 @@ func (n notificationRoutes) list(w http.ResponseWriter, r *http.Request) {
 		n.h.internalError(w, r, err)
 		return
 	}
-	result := notificationsJSON{Targets: []notificationTargetJSON{}, Events: notifications.EventsFor(owner), Kinds: notifications.Kinds}
+	result := notificationsJSON{Targets: []notificationTargetJSON{}, Events: notifications.EventsFor(owner), Kinds: notifications.Kinds,
+		EmailAvailable: n.h.Accounts.Settings().SMTPAvailable()}
 	for _, t := range targets {
 		result.Targets = append(result.Targets, newNotificationTargetJSON(t))
 	}

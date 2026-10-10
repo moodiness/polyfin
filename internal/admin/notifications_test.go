@@ -118,3 +118,55 @@ func TestPublicAddressSetting(t *testing.T) {
 		t.Errorf("a public address: %d %v", status, body["publicAddress"])
 	}
 }
+
+// Email targets need the SMTP server of the settings: without it, none can
+// be added, and the notifications pages say so. Its password is saved but
+// never answered, and kept when a save leaves it out.
+func TestEmailTargetsNeedTheSMTPServer(t *testing.T) {
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		o.Notifications = notifications.New(notifications.Options{DB: deps.pool, Accounts: o.Accounts, Version: "1.2.3",
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		t.Cleanup(o.Notifications.Close)
+	})
+	administrator := api.signedIn("admin", true)
+	member := api.signedIn("member", false)
+	email := map[string]any{"kind": "email", "name": "Inbox", "address": "member@example.org", "events": []string{"new_episode"}}
+	if status, body, _ := member.call(http.MethodPost, "/account/notifications/targets", email); status != http.StatusConflict ||
+		body["error"] != "email_unavailable" {
+		t.Errorf("an email target without an SMTP server: %d %v", status, body)
+	}
+	if _, own, _ := member.call(http.MethodGet, "/account/notifications", nil); own["emailAvailable"] != false {
+		t.Errorf("without an SMTP server: %v", own["emailAvailable"])
+	}
+
+	smtp := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en",
+		"smtpHost": "smtp.example.org", "smtpPort": 465, "smtpSecurity": "tls", "smtpUser": "polyfin", "smtpPassword": "smtp-secret-value",
+		"smtpFrom": "polyfin@example.org", "smtpFromName": "Home"}
+	status, saved, _ := administrator.call(http.MethodPut, "/settings", smtp)
+	if encoded, _ := json.Marshal(saved); status != http.StatusOK || saved["smtpPasswordSet"] != true || strings.Contains(string(encoded), "smtp-secret-value") {
+		t.Fatalf("saving the SMTP server: %d %s", status, encoded)
+	}
+	delete(smtp, "smtpPassword")
+	smtp["smtpFromName"] = "Home server"
+	if status, _, _ := administrator.call(http.MethodPut, "/settings", smtp); status != http.StatusOK || api.store.Settings().SMTPPassword != "smtp-secret-value" {
+		t.Errorf("a save leaving the password out: %d, password kept: %v", status, api.store.Settings().SMTPPassword == "smtp-secret-value")
+	}
+	smtp["smtpFrom"] = "Polyfin <polyfin@example.org>"
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", smtp); status != http.StatusBadRequest || body["error"] != "invalid_smtp_sender" {
+		t.Errorf("a sender with a name: %d %v", status, body)
+	}
+
+	if _, own, _ := member.call(http.MethodGet, "/account/notifications", nil); own["emailAvailable"] != true {
+		t.Errorf("with an SMTP server: %v", own["emailAvailable"])
+	}
+	email["address"] = "member at example.org"
+	if status, body, _ := member.call(http.MethodPost, "/account/notifications/targets", email); status != http.StatusBadRequest ||
+		body["error"] != "invalid_email_address" {
+		t.Errorf("a malformed email address: %d %v", status, body)
+	}
+	email["address"] = " member@example.org "
+	if status, created, _ := member.call(http.MethodPost, "/account/notifications/targets", email); status != http.StatusCreated ||
+		created["address"] != "member@example.org" || created["kind"] != "email" {
+		t.Errorf("an email target: %d %v", status, created)
+	}
+}
