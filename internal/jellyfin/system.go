@@ -28,10 +28,12 @@ func (h *Handler) publicSystemInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
+	_, update := h.Updates.Available()
 	writeJSON(w, http.StatusOK, SystemInfo{
 		WebSocketPortNumber:      h.WebSocketPort,
 		CompletedInstallations:   []struct{}{},
 		CastReceiverApplications: castReceivers,
+		HasUpdateAvailable:       update,
 		EncoderLocation:          "System",
 		SystemArchitecture:       architecture(runtime.GOARCH),
 		PublicSystemInfo:         h.publicInfo(r),
