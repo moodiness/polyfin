@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -65,30 +66,76 @@ func TestJellyfinSignInOpensTheAdminAppForAdministrators(t *testing.T) {
 	}
 }
 
+// A member's token opens a member's session, logged as a sign-in: their own
+// pages answer, the administrators' stay forbidden.
+func TestJellyfinSignInOpensTheAdminAppForMembers(t *testing.T) {
+	api := newTestAPI(t, 100)
+	admin := api.signedIn("root", true)
+	b := api.browser()
+	status, body := b.exchange(api.jellyfinToken(api.createUser("alice", false)))
+	if user, _ := body["user"].(map[string]any); status != http.StatusOK || user["name"] != "alice" || user["isAdministrator"] != false {
+		t.Fatalf("member's token: %d %v", status, body)
+	}
+	if status, body, _ := b.call(http.MethodGet, "/session", nil); status != http.StatusOK || body["user"].(map[string]any)["name"] != "alice" {
+		t.Errorf("session after the exchange: %d %v", status, body)
+	}
+	if status, body, _ := b.call(http.MethodGet, "/account/devices", nil); status != http.StatusOK {
+		t.Errorf("own devices: %d %v", status, body)
+	}
+	for _, path := range []string{"/users", "/activity"} {
+		if status, body, _ := b.call(http.MethodGet, path, nil); status != http.StatusForbidden || body["error"] != "forbidden" {
+			t.Errorf("%s: %d %v", path, status, body)
+		}
+	}
+	var page struct {
+		Items []activityEntryJSON `json:"items"`
+	}
+	admin.raw(http.MethodGet, "/activity?limit=10", "", &page)
+	if !slices.ContainsFunc(page.Items, func(entry activityEntryJSON) bool {
+		return entry.Type == "AuthenticationSucceeded" && entry.Name == "alice signed in"
+	}) {
+		t.Errorf("activity: %+v", page.Items)
+	}
+}
+
+// nightToken returns the token of a new user allowed on weekdays from 9 to
+// 17 only.
+func (api testAPI) nightToken(name string, administrator bool) string {
+	api.t.Helper()
+	user := api.createUser(name, administrator)
+	token := api.jellyfinToken(user)
+	weekdays := &[]accounts.AccessSchedule{{Day: "Weekday", StartHour: 9, EndHour: 17}}
+	if _, err := api.store.UpdateUser(api.t.Context(), user.ID, accounts.UserChanges{AccessSchedules: weekdays}, nil); err != nil {
+		api.t.Fatal(err)
+	}
+	return token
+}
+
+// disabledToken returns the token a new user had before being disabled.
+func (api testAPI) disabledToken(name string, administrator bool) string {
+	api.t.Helper()
+	user := api.createUser(name, administrator)
+	token := api.jellyfinToken(user)
+	yes := true
+	if _, err := api.store.UpdateUser(api.t.Context(), user.ID, accounts.UserChanges{IsDisabled: &yes}, nil); err != nil {
+		api.t.Fatal(err)
+	}
+	return token
+}
+
 func TestJellyfinSignInRefusesWhoMayNotHaveASession(t *testing.T) {
 	api := newTestAPI(t, 100)
 	root := api.createUser("root", true)
-	member := api.createUser("alice", false)
 	revoked := api.jellyfinToken(api.createUser("former", true))
 	if err := api.store.SignOutDevice(t.Context(), revoked); err != nil {
-		t.Fatal(err)
-	}
-	disabledUser := api.createUser("disabled", true)
-	disabled := api.jellyfinToken(disabledUser)
-	yes := true
-	if _, err := api.store.UpdateUser(t.Context(), disabledUser.ID, accounts.UserChanges{IsDisabled: &yes}, nil); err != nil {
 		t.Fatal(err)
 	}
 	_, key, err := api.store.CreateAPIKey(t.Context(), "Requests")
 	if err != nil {
 		t.Fatal(err)
 	}
-	nightUser := api.createUser("night", true)
-	night := api.jellyfinToken(nightUser)
-	weekdays := &[]accounts.AccessSchedule{{Day: "Weekday", StartHour: 9, EndHour: 17}}
-	if _, err := api.store.UpdateUser(t.Context(), nightUser.ID, accounts.UserChanges{AccessSchedules: weekdays}, nil); err != nil {
-		t.Fatal(err)
-	}
+	disabled, disabledMember := api.disabledToken("disabled", true), api.disabledToken("gone", false)
+	night, nightMember := api.nightToken("night", true), api.nightToken("owl", false)
 	saturday := time.Date(2026, time.October, 10, 12, 0, 0, 0, time.Local)
 	api.clock.Store(&saturday)
 	for _, tc := range []struct {
@@ -96,11 +143,12 @@ func TestJellyfinSignInRefusesWhoMayNotHaveASession(t *testing.T) {
 		status      int
 		code        string
 	}{
-		{"member", api.jellyfinToken(member), http.StatusUnauthorized, "invalid_credentials"},
 		{"API key", key, http.StatusUnauthorized, "invalid_credentials"},
 		{"signed-out device", revoked, http.StatusUnauthorized, "invalid_credentials"},
 		{"disabled administrator", disabled, http.StatusUnauthorized, "invalid_credentials"},
-		{"outside allowed hours", night, http.StatusForbidden, "outside_allowed_hours"},
+		{"disabled member", disabledMember, http.StatusUnauthorized, "invalid_credentials"},
+		{"administrator outside allowed hours", night, http.StatusForbidden, "outside_allowed_hours"},
+		{"member outside allowed hours", nightMember, http.StatusForbidden, "outside_allowed_hours"},
 		{"no token", "", http.StatusUnauthorized, "invalid_credentials"},
 	} {
 		b := api.browser()
@@ -129,17 +177,19 @@ func TestJellyfinSignInRefusesWhoMayNotHaveASession(t *testing.T) {
 }
 
 // Like a wrong password, an unknown token counts toward the client's failed
-// attempts; a valid token that may not open a session counts toward
+// attempts; a valid token that may not open a session now counts toward
 // nothing.
 func TestJellyfinSignInCountsUnknownTokensAsFailures(t *testing.T) {
 	api := newTestAPI(t, 3)
 	root := api.createUser("root", true)
-	member := api.jellyfinToken(api.createUser("alice", false))
+	night := api.nightToken("owl", false)
+	saturday := time.Date(2026, time.October, 10, 12, 0, 0, 0, time.Local)
+	api.clock.Store(&saturday)
 	for range 5 {
-		api.browser().exchange(member)
+		api.browser().exchange(night)
 	}
 	if status, body := api.browser().exchange(api.jellyfinToken(root)); status != http.StatusOK {
-		t.Fatalf("after members' tokens: %d %v", status, body)
+		t.Fatalf("after tokens outside allowed hours: %d %v", status, body)
 	}
 	for range 3 {
 		api.browser().exchange("0123456789abcdef0123456789abcdef")
@@ -149,21 +199,23 @@ func TestJellyfinSignInCountsUnknownTokensAsFailures(t *testing.T) {
 	}
 }
 
-// An administrator blocked after wrong passwords gets no session from a
-// token either, until the block ends.
+// A user blocked after wrong passwords gets no session from a token either,
+// until the block ends.
 func TestJellyfinSignInRespectsTheLockout(t *testing.T) {
 	api := newTestAPI(t, 100)
 	admin := api.signedIn("admin", true)
 	if status := admin.raw(http.MethodPut, "/settings", `{"serverName":"Polyfin","quickConnectEnabled":true,"legacyAuthorization":false,"language":"en","loginAttempts":3}`, nil); status != http.StatusOK {
 		t.Fatalf("settings: %d", status)
 	}
-	root := api.createUser("root", true)
-	token := api.jellyfinToken(root)
-	for range 3 {
-		api.browser().call(http.MethodPost, "/session", map[string]string{"name": "root", "password": "wrong password"})
-	}
-	b := api.browser()
-	if status, body := b.exchange(token); status != http.StatusUnauthorized || body["error"] != "invalid_credentials" || b.hasSession() {
-		t.Errorf("blocked administrator: %d %v", status, body)
+	for _, administrator := range []bool{true, false} {
+		name := map[bool]string{true: "root", false: "alice"}[administrator]
+		token := api.jellyfinToken(api.createUser(name, administrator))
+		for range 3 {
+			api.browser().call(http.MethodPost, "/session", map[string]string{"name": name, "password": "wrong password"})
+		}
+		b := api.browser()
+		if status, body := b.exchange(token); status != http.StatusUnauthorized || body["error"] != "invalid_credentials" || b.hasSession() {
+			t.Errorf("blocked %s: %d %v", name, status, body)
+		}
 	}
 }

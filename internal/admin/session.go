@@ -207,19 +207,21 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	h.startSession(w, r, http.StatusOK, user)
 }
 
-// signInWithJellyfin opens an admin session for the administrator a Jellyfin
-// app is signed in as, so that jellyfin-web's Dashboard, which leads to the
-// admin app, needs no second sign-in. The access token comes only in the
-// Authorization header, as Jellyfin apps send it (MediaBrowser
-// Token="…"), never in a cookie or the URL. Only a signed-in device's token
-// counts: API keys have no user. The administrator must be allowed to sign in
-// now, as with a password: not disabled (their devices are then signed
-// out), not blocked after wrong passwords, within their allowed hours.
+// signInWithJellyfin opens an admin session for the user a Jellyfin app is
+// signed in as, so that jellyfin-web's Dashboard, which leads administrators
+// to the admin app, and the Polyfin entry that leads members there need no
+// second sign-in. A member's session opens their own pages only, as with a
+// password. The access token comes only in the Authorization header, as
+// Jellyfin apps send it (MediaBrowser Token="…"), never in a cookie or the
+// URL. Only a signed-in device's token counts: API keys have no user. The
+// user must be allowed to sign in now, as with a password: not disabled
+// (their devices are then signed out), not blocked after wrong passwords,
+// within their allowed hours.
 //
 // A token that is no device's counts as a wrong password does toward the
 // client's failed attempts; the token of someone who may not have a session
-// is no wrong guess and counts toward nothing. Neither is written to the
-// activity log, as the admin app tries the token of whoever opens it.
+// now is no wrong guess and counts toward nothing. Neither is written to
+// the activity log, as the admin app tries the token of whoever opens it.
 func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	key := throttle.ClientKey(r)
 	if h.throttled(w, key) {
@@ -242,7 +244,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := h.now()
 	switch {
-	case !user.IsAdministrator || h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now):
+	case h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	case !user.AllowedAt(now):
