@@ -297,6 +297,7 @@ type settingsJSON struct {
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
+	ServerImports      *bool `json:"serverImports"`
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
@@ -458,6 +459,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		VersionListMinutes:    &settings.VersionListMinutes,
 		CatalogRefreshMinutes: &settings.CatalogRefreshMinutes,
 		PersonalAddons:        &settings.PersonalAddons,
+		ServerImports:         &settings.ServerImports,
 		LoginAttempts:         &settings.LoginAttempts,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
 		DetailedLog:           &settings.DetailedLog,
@@ -952,6 +954,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		VersionListMinutes:    valueOr(body.VersionListMinutes, current.VersionListMinutes),
 		CatalogRefreshMinutes: valueOr(body.CatalogRefreshMinutes, current.CatalogRefreshMinutes),
 		PersonalAddons:        valueOr(body.PersonalAddons, current.PersonalAddons),
+		ServerImports:         valueOr(body.ServerImports, current.ServerImports),
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
 		DetailedLog:           valueOr(body.DetailedLog, current.DetailedLog),

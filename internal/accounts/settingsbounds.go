@@ -55,6 +55,7 @@ func DefaultSettings() Settings {
 		CatalogRefreshMinutes: DefaultCatalogRefreshMinutes,
 
 		PersonalAddons:     true,
+		ServerImports:      true,
 		LoginAttempts:      DefaultLoginAttempts,
 		InactiveDeviceDays: DefaultInactiveDeviceDays,
 		DetailedLog:        false,
@@ -178,6 +179,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"catalogRefreshMinutes": between(MinCatalogRefreshMinutes, MaxCatalogRefreshMinutes, d.CatalogRefreshMinutes),
 
 		"personalAddons":     is(d.PersonalAddons),
+		"serverImports":      is(d.ServerImports),
 		"loginAttempts":      orZero(MinLoginAttempts, MaxLoginAttempts, d.LoginAttempts),
 		"inactiveDeviceDays": between(0, MaxInactiveDeviceDays, d.InactiveDeviceDays),
 		"detailedLog":        is(d.DetailedLog),
