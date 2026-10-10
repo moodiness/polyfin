@@ -45,13 +45,18 @@ How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#s
 
 ### Searching
 
-An app's search finds the user's channels by name, those of TV catalogs and IPTV sources alike, as their apps list them. It also finds the programmes of their guides that have not ended, airing now or in the guide's days ahead. Case and accents do not count: "tele" finds "Télé Orbe".
+An app's search finds the user's channels by name, those of TV catalogs and IPTV sources alike, as their apps list them. A search that asks for programmes also finds the programmes of their guides that have not ended, airing now or in the guide's days ahead. Case and accents do not count: "tele" finds "Télé Orbe".
 
-- jellyfin-web lists the channels found under "Channels". Searched from the Live TV page, it also lists the programmes under "Movies", "Episodes", "Sports", "Kids", "News" and "Programs", by their guide categories.
+- Searched from the home page, jellyfin-web 12.2 lists the channels found under "Channels" and the programmes under "Programs". It asks for the channels in the same request as movies, shows, music and the other types, then lists each type found under its own heading. A user without the **Live TV** permission finds no channel or programme.
+- Searched from the Live TV page, it lists the programmes under "Movies", "Episodes", "Sports", "Kids", "News" and "Programs", by their guide categories, and the channels under "Channels".
+- Selecting a channel found plays it, from either search.
 - Polyfin searches the channels it lists, not the addons' own searches: a channel no TV catalog lists, or one turned off in an IPTV line-up, is not found.
+
+Polyfin adds nothing to the web client for this: jellyfin-web already asks for channels from the home page, and labels them itself. Its search also asks for every video but movies, episodes and channels, which it lists under "Videos". Polyfin leaves programmes out of that answer, so that each programme shows once, under "Programs".
 
 **For app developers:**
 - `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.
+- A search that names no type finds channels, and programmes only when it sets one of those five filters. A search that names types finds programmes only when one of them is a programme type.
 - Search hints leave channels and programmes out.
 
 ## Programme guide
