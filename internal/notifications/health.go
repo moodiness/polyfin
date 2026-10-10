@@ -82,6 +82,11 @@ func (s *Service) CheckHealth(ctx context.Context) {
 		if !st.announced && st.seen >= s.timing.healthConfirm {
 			st.announced = true
 			s.dispatchAdministrators(s.healthEventOf(st.problem, st.since, false))
+			// Kept for the weekly summary.
+			if _, err := s.db.Exec(ctx, "INSERT INTO notification_health_found (key, severity, text, page, found_at) VALUES ($1, $2, $3, $4, $5)",
+				st.problem.Key, st.problem.Severity, st.problem.Text, st.problem.Page, now); err != nil && ctx.Err() == nil {
+				s.logger.Debug("A health problem could not be kept for the weekly summary", "error", err)
+			}
 		}
 		s.saveHealth(ctx, st)
 	}

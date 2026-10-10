@@ -199,7 +199,7 @@ var emailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 
 // emailMessage writes ev as an email to the target t, in the server
 // language: its title as the subject, its message and link in plain text
-// and in HTML.
+// and in HTML, or a weekly summary whole (see summaryEmail).
 func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) ([]byte, error) {
 	from := mail.Address{Name: settings.SMTPFromName, Address: settings.SMTPFrom}
 	if from.Name == "" {
@@ -230,12 +230,17 @@ func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) (
 	if url != "" {
 		text += "\n" + url + "\n"
 	}
-	text += "\n-- \n" + footer + "\n"
 	var page bytes.Buffer
-	if err := emailHTML.Execute(&page, map[string]string{"Language": settings.Language, "Title": ev.Title, "Message": ev.Message,
+	if ev.Summary != nil {
+		var err error
+		if text, err = s.summaryEmail(&page, settings.Language, ev, footer); err != nil {
+			return nil, err
+		}
+	} else if err := emailHTML.Execute(&page, map[string]string{"Language": settings.Language, "Title": ev.Title, "Message": ev.Message,
 		"URL": url, "Open": open, "Footer": footer}); err != nil {
 		return nil, err
 	}
+	text += "\n-- \n" + footer + "\n"
 	for _, part := range []struct{ kind, content string }{{"text/plain", text}, {"text/html", page.String()}} {
 		writer, err := body.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {part.kind + "; charset=utf-8"},

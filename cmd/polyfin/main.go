@@ -376,12 +376,14 @@ func serve(ctx context.Context) error {
 		JellyfinImport: fromJellyfin,
 		Plays:          history,
 	}
-	// Notifications tell of new episodes, ended recordings and the
-	// problems System › Health finds.
+	// Notifications tell of new episodes, ended recordings, the problems
+	// System › Health finds, and once a week what happened that week.
 	notifier = notifications.New(notifications.Options{DB: pool, Accounts: store, Library: lib, UserData: userData, Secrets: box,
-		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), Logger: logger})
+		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), History: history,
+		LocalFiles: folders, Logger: logger})
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
+	registerWeeklySummaryTask(registry, notifier)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -599,6 +601,21 @@ func registerPlaybackHistoryTask(registry *tasks.Registry, history *plays.Histor
 			}
 			return err
 		},
+	})
+}
+
+// registerWeeklySummaryTask registers the weekly summary, by hand only:
+// its schedule is the day and hour of Settings › Notifications, which the
+// notifications follow themselves (see notifications.Service.CheckSummary).
+func registerWeeklySummaryTask(registry *tasks.Registry, notifier *notifications.Service) {
+	registry.Register(tasks.Task{
+		Key:      "SendWeeklySummary",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Send the weekly summary", Description: "Sends the summary of the last 7 days now to every notification target that chose it. Every week, it is sent on its own at the day and hour set under Settings › Notifications."},
+			"fr": {Name: "Envoyer le résumé de la semaine", Description: "Envoie tout de suite le résumé des 7 derniers jours à toutes les cibles de notification qui l’ont choisi. Chaque semaine, il est envoyé de lui-même au jour et à l’heure choisis dans Paramètres › Notifications."},
+		},
+		Run: notifier.SendSummary,
 	})
 }
 

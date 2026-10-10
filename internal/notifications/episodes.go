@@ -31,12 +31,14 @@ const (
 // an episode of or marked favorite, as the Upcoming row does, for episodes
 // that became available since the last look, and tells them: to the
 // user's targets, and once to the server's, whoever follows the series.
-// Only the users who have a target for new episodes, or all of them when
-// the server has one, are looked at. A series seen for the first time has
-// the episodes it already has recorded without a message; episodes
-// released more than a week ago, or without a release date, are never
-// told of. The descriptions of the series are those the library keeps,
-// which it refreshes in the background when they are old.
+// Each is kept for the weekly summary too. Only the users who have a
+// target for new episodes or the weekly summary, or all of them when the
+// server has one or an administrator one for the weekly summary, are
+// looked at. A series seen for the first time has the episodes it already
+// has recorded without a message; episodes released more than a week ago,
+// or without a release date, are never told of. The descriptions of the
+// series are those the library keeps, which it refreshes in the background
+// when they are old.
 func (s *Service) CheckEpisodes(ctx context.Context) {
 	s.episodesMu.Lock()
 	defer s.episodesMu.Unlock()
@@ -46,20 +48,28 @@ func (s *Service) CheckEpisodes(ctx context.Context) {
 		}
 		return
 	}
-	server := false
-	personal := map[accounts.ID]bool{}
+	// server: the server's targets are told of new episodes; everyone:
+	// every user is looked at, for the server's targets or the server's
+	// weekly summary; personal: the users looked at for their own targets,
+	// and told: those whose targets are told of new episodes.
+	server, everyone := false, false
+	personal, told := map[accounts.ID]bool{}, map[accounts.ID]bool{}
 	s.mu.Lock()
 	for _, t := range s.targets {
+		episodes, summary := t.wants(NewEpisode), t.wants(WeeklySummary)
 		switch {
-		case !t.wants(NewEpisode):
+		case !episodes && !summary:
 		case t.owner == nil:
-			server = true
+			server = server || episodes
+			everyone = true
 		default:
 			personal[*t.owner] = true
+			told[*t.owner] = told[*t.owner] || episodes
+			everyone = everyone || summary && s.admins[*t.owner]
 		}
 	}
 	s.mu.Unlock()
-	if !server && len(personal) == 0 {
+	if !everyone && len(personal) == 0 {
 		return
 	}
 	users, err := s.accounts.Users(ctx)
@@ -70,10 +80,10 @@ func (s *Service) CheckEpisodes(ctx context.Context) {
 		return
 	}
 	for _, user := range users {
-		if user.IsDisabled || !server && !personal[user.ID] {
+		if user.IsDisabled || !everyone && !personal[user.ID] {
 			continue
 		}
-		if err := s.checkUser(ctx, user, personal[user.ID], server); err != nil && ctx.Err() == nil {
+		if err := s.checkUser(ctx, user, told[user.ID], server); err != nil && ctx.Err() == nil {
 			s.logger.Warn("A user's series could not be looked at for new episodes", "user_id", user.ID.String(), "error", err)
 		}
 		if ctx.Err() != nil {
@@ -187,6 +197,11 @@ func (s *Service) checkUser(ctx context.Context, user accounts.User, toUser, toS
 			if first || tag.RowsAffected() == 0 {
 				// Available when the series was first seen, or told already.
 				continue
+			}
+			if _, err := s.db.Exec(ctx, `INSERT INTO notification_found_episodes (user_id, episode_id, series_id, series_name, name, season,
+					number, found_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+				user.ID, episode.ID, episode.SeriesID, episode.SeriesName, episode.Name, episode.ParentIndexNumber, episode.IndexNumber, now); err != nil {
+				return err
 			}
 			if toUser {
 				s.dispatch(s.episodeEvent(&user, episode), func(t target) bool { return t.owner != nil && *t.owner == user.ID })
