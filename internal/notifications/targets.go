@@ -30,8 +30,16 @@ const (
 	DefaultNtfyServer = "https://ntfy.sh"
 )
 
-// ntfyTopic is what ntfy accepts as a topic name.
-var ntfyTopic = regexp.MustCompile(`^[-_A-Za-z0-9]{1,64}$`)
+// ntfyTopic is what ntfy accepts as a topic name; telegramChat a chat's
+// number, negative for groups and channels, or a public channel's @name;
+// telegramToken a bot's token, its number and its secret; pushoverKey a
+// Pushover user or group key.
+var (
+	ntfyTopic     = regexp.MustCompile(`^[-_A-Za-z0-9]{1,64}$`)
+	telegramChat  = regexp.MustCompile(`^(-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{3,31})$`)
+	telegramToken = regexp.MustCompile(`^[0-9]{1,20}:[-_A-Za-z0-9]{1,200}$`)
+	pushoverKey   = regexp.MustCompile(`^[A-Za-z0-9]{1,64}$`)
+)
 
 // target is a target as the database holds it, its secret sealed or not.
 type target struct {
@@ -39,12 +47,17 @@ type target struct {
 	owner *accounts.ID
 	kind  string
 	name  string
-	// address is an ntfy target's server, and a webhook's or Discord
-	// target's scheme and host, shown in place of its secret address.
+	// address is an ntfy or Gotify target's server, an email target's
+	// recipient, and a webhook's or Discord target's scheme and host,
+	// shown in place of its secret address; empty for Telegram and
+	// Pushover targets.
 	address string
-	topic   string
+	// topic is an ntfy target's topic, a Telegram target's chat.
+	topic string
 	// secret is a webhook's or Discord target's address, an ntfy target's
-	// access token, as stored.
+	// access token, a Telegram bot's token, a Gotify application's token,
+	// a Pushover target's user key and application token on two lines, as
+	// stored.
 	secret        string
 	events        []string
 	enabled       bool
@@ -69,18 +82,21 @@ func (t target) wants(event string) bool {
 	return t.enabled && slices.Contains(t.events, event)
 }
 
-// Target is a target as the admin API shows it: its secret address and
-// token are never part of it.
+// Target is a target as the admin API shows it: its secret address,
+// tokens and keys are never part of it.
 type Target struct {
 	ID   accounts.ID
 	Kind string
 	Name string
-	// Address is an ntfy target's server, and only the scheme and host of
-	// a webhook's or Discord target's address, which is secret.
+	// Address is an ntfy or Gotify target's server, an email target's
+	// recipient, and only the scheme and host of a webhook's or Discord
+	// target's address, which is secret.
 	Address string
-	// Topic is an ntfy target's topic; TokenSet tells whether it has an
-	// access token.
+	// Topic is an ntfy target's topic, Chat a Telegram target's chat;
+	// TokenSet tells whether an ntfy, Telegram, Gotify or Pushover target
+	// has a token.
 	Topic    string
+	Chat     string
 	TokenSet bool
 	Events   []string
 	Enabled  bool
@@ -97,26 +113,39 @@ type Target struct {
 }
 
 func (s *Service) describe(t target) Target {
-	result := Target{ID: t.id, Kind: t.kind, Name: t.name, Address: t.address, Topic: t.topic, TokenSet: t.kind == Ntfy && t.secret != "",
+	result := Target{ID: t.id, Kind: t.kind, Name: t.name, Address: t.address, Topic: t.topic, TokenSet: hasToken(t.kind) && t.secret != "",
 		Events: slices.Clone(t.events), Enabled: t.enabled, CreatedAt: t.createdAt, LastSentAt: t.lastSent,
 		Problem: t.problem, ProblemStatus: t.problemStatus, ProblemAt: t.problemAt}
+	if t.kind == Telegram {
+		result.Topic, result.Chat = "", t.topic
+	}
 	if _, err := s.box.Open(t.secret); err != nil {
 		result.Problem, result.ProblemStatus, result.ProblemAt = ProblemUnreadable, nil, nil
 	}
 	return result
 }
 
+// hasToken reports whether targets of kind take a token.
+func hasToken(kind string) bool {
+	return kind == Ntfy || kind == Telegram || kind == Gotify || kind == Pushover
+}
+
 // Draft is what an owner gives to add a target or change one. On a
 // change, nil fields keep their values; Kind is only read when adding.
-// Address is a webhook's or Discord target's address, or an ntfy
-// target's server, empty for DefaultNtfyServer; Token is an ntfy target's
-// access token, empty for none.
+// Address is a webhook's or Discord target's address, an ntfy target's
+// server, empty for DefaultNtfyServer, a Gotify target's server, or an
+// email target's recipient. Token is an ntfy target's access token, empty
+// for none, a Telegram bot's token, or a Gotify or Pushover application's
+// token. Chat is a Telegram target's chat, UserKey a Pushover target's
+// user key.
 type Draft struct {
 	Kind    string
 	Name    *string
 	Address *string
 	Topic   *string
+	Chat    *string
 	Token   *string
+	UserKey *string
 	Events  []string
 	Enabled *bool
 }
@@ -163,16 +192,50 @@ func (s *Service) Create(ctx context.Context, owner *accounts.User, d Draft) (Ta
 		return Target{}, ErrInvalidKind
 	}
 	t := target{kind: d.Kind, owner: ownerID(owner), enabled: true, events: []string{}}
-	switch {
-	case d.Name == nil:
+	if d.Name == nil {
 		return Target{}, ErrInvalidName
-	case d.Kind == Ntfy && d.Topic == nil:
-		return Target{}, ErrInvalidTopic
-	case d.Kind != Ntfy && d.Address == nil:
-		return Target{}, ErrInvalidAddress
 	}
-	if d.Kind == Ntfy && d.Address == nil {
-		d.Address = new(string)
+	// What each kind needs; an ntfy target's server may be left out.
+	switch d.Kind {
+	case Ntfy:
+		if d.Topic == nil {
+			return Target{}, ErrInvalidTopic
+		}
+		if d.Address == nil {
+			d.Address = new(string)
+		}
+	case Email:
+		if !s.accounts.Settings().SMTPAvailable() {
+			return Target{}, ErrEmailUnavailable
+		}
+		if d.Address == nil {
+			return Target{}, ErrInvalidEmail
+		}
+	case Telegram:
+		if d.Chat == nil {
+			return Target{}, ErrInvalidChat
+		}
+		if d.Token == nil {
+			return Target{}, ErrInvalidToken
+		}
+	case Pushover:
+		if d.UserKey == nil {
+			return Target{}, ErrInvalidUserKey
+		}
+		if d.Token == nil {
+			return Target{}, ErrInvalidToken
+		}
+	case Gotify:
+		if d.Address == nil {
+			return Target{}, ErrInvalidAddress
+		}
+		if d.Token == nil {
+			return Target{}, ErrInvalidToken
+		}
+	default:
+		if d.Address == nil {
+			return Target{}, ErrInvalidAddress
+		}
 	}
 	if err := s.apply(ctx, owner, &t, d); err != nil {
 		return Target{}, err
@@ -278,27 +341,8 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 	}
 	confined := owner != nil && !owner.IsAdministrator
 	if d.Address != nil {
-		address := strings.TrimSpace(*d.Address)
-		if t.kind == Ntfy {
-			address = strings.TrimRight(address, "/")
-			if address == "" {
-				address = DefaultNtfyServer
-			}
-		}
-		parsed, err := s.checkAddress(ctx, address, confined)
-		if err != nil {
+		if err := s.applyAddress(ctx, t, strings.TrimSpace(*d.Address), confined); err != nil {
 			return err
-		}
-		if t.kind == Ntfy {
-			// The server is not secret; a query or fragment has no place
-			// in it.
-			if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-				return ErrInvalidAddress
-			}
-			t.address = address
-		} else {
-			t.address = parsed.Scheme + "://" + parsed.Host
-			t.secret = s.box.Seal(address)
 		}
 	}
 	if d.Topic != nil {
@@ -311,11 +355,17 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 		}
 		t.topic = topic
 	}
-	if d.Token != nil {
-		if t.kind != Ntfy || !validToken(*d.Token) {
-			return ErrInvalidToken
+	if d.Chat != nil {
+		chat := strings.TrimSpace(*d.Chat)
+		if t.kind != Telegram || !telegramChat.MatchString(chat) {
+			return ErrInvalidChat
 		}
-		t.secret = s.box.Seal(*d.Token)
+		t.topic = chat
+	}
+	if d.Token != nil || d.UserKey != nil {
+		if err := s.applyCredentials(t, d.Token, d.UserKey); err != nil {
+			return err
+		}
 	}
 	if d.Events != nil {
 		allowed := EventsFor(owner)
@@ -334,6 +384,92 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 	}
 	if d.Enabled != nil {
 		t.enabled = *d.Enabled
+	}
+	return nil
+}
+
+// applyAddress checks address, the address of a target of t's kind, and
+// writes it into t: a webhook's or Discord target's sealed, with its
+// scheme and host shown; an ntfy or Gotify target's server, or an email
+// target's recipient, as it is.
+func (s *Service) applyAddress(ctx context.Context, t *target, address string, confined bool) error {
+	switch t.kind {
+	case Telegram, Pushover:
+		return ErrInvalidAddress
+	case Email:
+		if !accounts.ValidEmail(address) {
+			return ErrInvalidEmail
+		}
+		t.address = address
+		return nil
+	case Ntfy, Gotify:
+		address = strings.TrimRight(address, "/")
+		if address == "" && t.kind == Ntfy {
+			address = DefaultNtfyServer
+		}
+	}
+	parsed, err := s.checkAddress(ctx, address, confined)
+	if err != nil {
+		return err
+	}
+	if t.kind == Ntfy || t.kind == Gotify {
+		// The server is not secret; a query or fragment has no place in
+		// it.
+		if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+			return ErrInvalidAddress
+		}
+		t.address = address
+		return nil
+	}
+	t.address = parsed.Scheme + "://" + parsed.Host
+	t.secret = s.box.Seal(address)
+	return nil
+}
+
+// applyCredentials checks a new token or user key, nil to keep the saved
+// one, and seals them into t: an ntfy target's access token, which may be
+// empty, a Telegram bot's token, a Gotify application's token, a Pushover
+// target's user key and application token.
+func (s *Service) applyCredentials(t *target, token, userKey *string) error {
+	if userKey != nil && t.kind != Pushover {
+		return ErrInvalidUserKey
+	}
+	switch t.kind {
+	case Ntfy:
+		if !validToken(*token) {
+			return ErrInvalidToken
+		}
+		t.secret = s.box.Seal(*token)
+	case Telegram, Gotify:
+		if *token == "" || !validToken(*token) || t.kind == Telegram && !telegramToken.MatchString(*token) {
+			return ErrInvalidToken
+		}
+		t.secret = s.box.Seal(*token)
+	case Pushover:
+		// Both are sealed together: the one not given is the saved one.
+		var user, app string
+		if t.secret != "" {
+			saved, err := s.box.Open(t.secret)
+			if err != nil && (token == nil || userKey == nil) {
+				return ErrUnreadable
+			}
+			user, app, _ = strings.Cut(saved, "\n")
+		}
+		if userKey != nil {
+			user = *userKey
+		}
+		if token != nil {
+			app = *token
+		}
+		if !pushoverKey.MatchString(user) {
+			return ErrInvalidUserKey
+		}
+		if app == "" || !validToken(app) {
+			return ErrInvalidToken
+		}
+		t.secret = s.box.Seal(user + "\n" + app)
+	default:
+		return ErrInvalidToken
 	}
 	return nil
 }

@@ -2,11 +2,12 @@
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
 // solved. Messages go to targets: generic webhooks, which receive a
-// versioned JSON event (see Event), Discord webhooks and ntfy topics, which
-// receive messages formatted for them. Administrators add the server's
-// targets, which receive the events of every user; each user adds their
-// own, which receive their own events, and health events for
-// administrators.
+// versioned JSON event (see Event); Discord webhooks, ntfy topics, Telegram
+// chats, Gotify servers and Pushover users, which receive messages
+// formatted for them; and email addresses, through the SMTP server of the
+// settings. Administrators add the server's targets, which receive the
+// events of every user; each user adds their own, which receive their own
+// events, and health events for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -16,6 +17,7 @@ package notifications
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -40,10 +42,19 @@ const (
 	// Ntfy is a topic of an ntfy server, which receives a title, a message,
 	// tags and a link.
 	Ntfy = "ntfy"
+	// Email is an email address, which receives a message in plain text
+	// and HTML through the SMTP server of the settings.
+	Email = "email"
+	// Telegram is a chat a Telegram bot posts to, through the Bot API.
+	Telegram = "telegram"
+	// Gotify is an application of a Gotify server.
+	Gotify = "gotify"
+	// Pushover is a Pushover user, through an application of theirs.
+	Pushover = "pushover"
 )
 
 // Kinds lists the kinds of targets in the order the admin app shows them.
-var Kinds = []string{Webhook, Discord, Ntfy}
+var Kinds = []string{Webhook, Discord, Ntfy, Email, Telegram, Gotify, Pushover}
 
 // The events, by the names targets choose them by and Event.Type gives.
 const (
@@ -104,17 +115,31 @@ var (
 	// ErrInvalidName reports an empty name, or one longer than MaxName.
 	ErrInvalidName = errors.New("invalid notification target name")
 	// ErrInvalidAddress reports an address that is not an http or https
-	// URL with a host, or longer than maxAddress.
+	// URL with a host, or longer than maxAddress, or an address given to a
+	// Telegram or Pushover target, which have none.
 	ErrInvalidAddress = errors.New("invalid notification target address")
 	// ErrPrivateAddress reports an address on a local network, for a
 	// target of a user who is not an administrator.
 	ErrPrivateAddress = errors.New("notification target on a local network")
+	// ErrInvalidEmail reports an email target's address that is not an
+	// email address (see accounts.ValidEmail).
+	ErrInvalidEmail = errors.New("invalid email address")
+	// ErrEmailUnavailable reports an email target added while no SMTP
+	// server is set (see accounts.Settings.SMTPAvailable).
+	ErrEmailUnavailable = errors.New("no SMTP server for email notifications")
 	// ErrInvalidTopic reports an ntfy topic that is not 1 to 64 letters,
 	// digits, dashes and underscores.
 	ErrInvalidTopic = errors.New("invalid ntfy topic")
+	// ErrInvalidChat reports a Telegram chat that is neither a chat's
+	// number nor a public channel's @name.
+	ErrInvalidChat = errors.New("invalid Telegram chat")
 	// ErrInvalidToken reports an access token that is not printable ASCII
-	// without spaces, of at most maxToken bytes.
+	// without spaces, of at most maxToken bytes, or empty for a kind that
+	// needs one.
 	ErrInvalidToken = errors.New("invalid access token")
+	// ErrInvalidUserKey reports a Pushover user key that is empty or not
+	// letters and digits, of at most maxToken bytes.
+	ErrInvalidUserKey = errors.New("invalid Pushover user key")
 	// ErrInvalidEvents reports an event that is not one of those the
 	// owner's targets may receive (see EventsFor).
 	ErrInvalidEvents = errors.New("invalid notification events")
@@ -226,6 +251,12 @@ const (
 	maxReply = 64 << 10
 )
 
+// The addresses of Telegram's Bot API and of Pushover's messages.
+const (
+	defaultTelegramAPI = "https://api.telegram.org"
+	defaultPushoverAPI = "https://api.pushover.net/1/messages.json"
+)
+
 // Service keeps the targets, follows the events and delivers them.
 type Service struct {
 	db        *pgxpool.Pool
@@ -249,6 +280,12 @@ type Service struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	wg                sync.WaitGroup
+
+	// telegramAPI and pushoverAPI are the addresses of Telegram's Bot API
+	// and Pushover's messages, which only tests change; smtpRoots are the
+	// certificates SMTP servers are checked against, nil for the system's.
+	telegramAPI, pushoverAPI string
+	smtpRoots                *x509.CertPool
 
 	mu     sync.Mutex
 	closed bool
@@ -286,6 +323,8 @@ func New(options Options) *Service {
 		trusted:     stremio.HTTPClient(false),
 		confined:    stremio.HTTPClient(true),
 		checkPublic: stremio.CheckPublic,
+		telegramAPI: defaultTelegramAPI,
+		pushoverAPI: defaultPushoverAPI,
 		sending:     make(chan struct{}, maxSending),
 		ctx:         ctx,
 		cancel:      cancel,
