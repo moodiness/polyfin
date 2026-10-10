@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/polyfin-social.png" alt="Polyfin"></p>
+<p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-ad.mp4"><img src="assets/polyfin-social.png" alt="Polyfin"></a></p>
 
 Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes from:
 - **Stremio addons:** catalogs, metadata, streams and subtitles;
@@ -6,8 +6,6 @@ Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes 
 - **IPTV sources:** M3U playlists and Xtream Codes accounts, with XMLTV guides.
 
 Any Jellyfin app connects to it like a regular Jellyfin server, with real user accounts and transcoding, and without Jellyfin installed.
-
-<p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-ad.mp4"><img src="assets/polyfin-ad.jpg" alt="Watch Polyfin in 30 seconds"></a></p>
 
 See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a short tour, a video for each feature, and the documentation.
 
