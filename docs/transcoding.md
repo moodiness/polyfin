@@ -19,7 +19,7 @@ Converted video is never larger than its source. It is smaller when one of these
 
 - **GPU:** up to 4K.
 - **Processor:** up to 1080p.
-- **HDR converted by the processor:** up to 720p, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+- **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion**.
 - **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower.
@@ -60,10 +60,11 @@ A GPU's decoded frames can stay in its memory until it encodes them, or come bac
 
 - **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel), and deinterlaced there when FFmpeg has the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`).
 - **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
+- **HDR video on Intel:** always kept on the GPU, which deinterlaces it with `deinterlace_vaapi`, scales it in 10 bits with `scale_vaapi` and tone maps it with `tonemap_vaapi`, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. This is not measured: there is no other way on the GPU.
 
-Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory.
+Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The processor's tone mapping is measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 
-Frames always go through memory for burned-in subtitles, for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
+Frames always go through memory for burned-in subtitles (except on Intel when it tone maps), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
 
 ### Giving the container an NVIDIA GPU
 
@@ -83,10 +84,15 @@ The container runs as user 65532. When the render nodes in `/dev/dri` are not op
 
 When HDR video is converted to SDR, Polyfin tone maps it:
 
-- **On an NVIDIA GPU:** up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when that is faster (see [Frames on the GPU](#frames-on-the-gpu)).
-- **Elsewhere:** on the processor, up to 720p, without Dolby Vision profile 5.
+- **On an NVIDIA GPU:** with libplacebo, up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when that is faster (see [Frames on the GPU](#frames-on-the-gpu)).
+- **On an Intel GPU, through VAAPI:** with `tonemap_vaapi`, up to 4K, without Dolby Vision profile 5. It takes only HDR10 videos whose frames carry their mastering display information (SMPTE ST 2086), which `tonemap_vaapi` needs: HLG, and HDR10 files without that information, go to the processor.
+- **Elsewhere:** on the processor, up to **Maximum quality of HDR converted by the processor**, without Dolby Vision profile 5. With **Automatic**, Polyfin measures the processor at startup, in the background: it converts 2 seconds of generated 4K HDR10 to 1080p the way conversions run on the server, decoded and encoded on the GPU when there is one. 1080p when that runs at 1.5 times real time or faster, else 720p, which also applies until the measurement ends or when it fails. The log shows the speed and the height chosen (`Timed the processor's HDR tone mapping`).
 
-You can turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
+AMD GPUs never tone map. Their Linux driver failed each way Polyfin tried to do it on the GPU with FFmpeg: frames handed to libplacebo from memory crashed the driver, VAAPI frames cannot be passed to Vulkan, and Vulkan's HEVC decoding froze the card's video decoder until the kernel reset it. Their HDR is tone mapped on the processor.
+
+An Intel GPU tone maps only once a short HDR10 sample converted on it at startup; the check needs FFmpeg's x265 encoder to make that sample. Whether an HDR10 file carries its mastering display information comes from its container when Polyfin analyzes it. Otherwise, the first time an Intel GPU would tone map the file, Polyfin reads its first frame once and keeps the answer. Other GPUs and the processor never need it.
+
+If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on NVIDIA and Intel alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
 
 ## HLS segments
 
@@ -106,7 +112,7 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 
 **Settings › Conversion** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
 
-Every default but **Seconds prepared ahead** keeps Polyfin's conversions as they were before these settings existed. A change applies to the next playback, without a restart.
+Every default but **Seconds prepared ahead**, **Tone map HDR on the graphics card** (Intel GPUs did not tone map before) and **Maximum quality of HDR converted by the processor** (720p before) keeps Polyfin's conversions as they were before these settings existed. A change applies to the next playback, without a restart.
 
 ### Graphics card
 
@@ -114,7 +120,7 @@ Every default but **Seconds prepared ahead** keeps Polyfin's conversions as they
 |---|---|---|---|
 | **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic**, **NVIDIA (NVENC)**, **AMD or Intel (VAAPI)** or **None**, applied once saved. |
 | **Graphics card for VAAPI** | **Settings › Conversion** | **Each in turn** | With **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
-| **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping. |
+| **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping, with the height it tone maps up to. |
 | **Read these formats on the graphics card** | **Settings › Conversion** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
 
 - The chosen card is detected when you save, once per choice. Playbacks already converting go on as they started.
@@ -135,9 +141,11 @@ Every default but **Seconds prepared ahead** keeps Polyfin's conversions as they
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's 720p cap, and Dolby Vision without an HDR10 layer is not converted. |
-| **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on the card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on the card only: the processor's filter has none and uses Hable. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; libplacebo on the card does not take it, so it shows only when the card does not tone map. |
+| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
+| **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards use their own curve and ignore the method. |
+| **Tone map HDR on the graphics card** | **Settings › Conversion** | On | NVIDIA cards, and Intel cards through VAAPI, tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
+| **Maximum quality of HDR converted by the processor** | **Settings › Conversion** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
 | **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only, shown as the peak is. |
 
 ### Audio

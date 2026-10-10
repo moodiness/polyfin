@@ -52,7 +52,7 @@ export const features: Feature[] = [
     slug: 'transcoding',
     name: 'Transcoding',
     pitch: 'The right stream for every screen.',
-    text: 'Direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapping.',
+    text: 'Direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapped on NVIDIA and Intel GPUs, else on the processor.',
     docs: { title: 'Transcoding', link: '/docs/transcoding' },
     icon: icons.arrowsLeftRight,
     accent: '#6a6bf8',
