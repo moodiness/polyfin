@@ -302,13 +302,15 @@ func TestEmailTargetsReceiveMessagesInPlainTextAndHTML(t *testing.T) {
 		!strings.Contains(page, `href="`+strings.ReplaceAll(link, "&", "&amp;")+`"`) || strings.Contains(page, "<Show>") {
 		t.Errorf("HTML: %q", page)
 	}
+	// The sink keeps the message as soon as it has it, before Polyfin records
+	// the delivery.
+	h.idle(t)
 	targets, _ := h.Targets(t.Context(), nil)
 	if targets[0].Problem != "" || targets[0].LastSentAt == nil || targets[0].Address != "sam@example.org" {
 		t.Errorf("after delivering: %+v", targets[0])
 	}
 
 	// TLS from the start, signing in by LOGIN, the only mechanism offered.
-	h.idle(t)
 	login := newSMTPSink(t, true, "LOGIN")
 	h.useSMTP(t, login, login.password)
 	if result, err := h.Test(t.Context(), nil, target.ID); err != nil || !result.Delivered {
