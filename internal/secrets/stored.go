@@ -12,9 +12,10 @@ import (
 
 // The secrets Polyfin stores are the server's keys and passwords in the
 // settings, named below as the admin API names them, the tokens and API
-// keys of the users' tracking connections, and the addresses, tokens and
-// keys of the notification targets. Nothing else is sealed: addon
-// addresses, IPTV passwords and guide addresses are stored as they are.
+// keys of the users' tracking connections, the addresses, tokens and keys
+// of the notification targets, and the passwords of the network shares.
+// Nothing else is sealed: addon addresses, IPTV passwords and guide
+// addresses are stored as they are.
 var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
@@ -25,18 +26,21 @@ var settingSecrets = []struct{ column, name string }{
 
 // Unreadable is a stored secret the key cannot open: a setting, by the
 // admin API's name of it, the tracking connection of a user to a service,
-// or a notification target, by its name, of a user or of the server (User
-// empty).
+// a notification target, by its name, of a user or of the server (User
+// empty), or the password of a network share, by its folder's name.
 type Unreadable struct {
 	Setting       string
 	Service, User string
 	Target        string
+	Folder        string
 }
 
 func (u Unreadable) String() string {
 	switch {
 	case u.Setting != "":
 		return "setting " + u.Setting
+	case u.Folder != "":
+		return fmt.Sprintf("password of the share %s", u.Folder)
 	case u.Target != "" && u.User == "":
 		return fmt.Sprintf("server notification target %s", u.Target)
 	case u.Target != "":
@@ -139,7 +143,10 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 				return err
 			}
 		}
-		return sealTargets(ctx, b, tx, &sealed)
+		if err := sealTargets(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
+		return sealShares(ctx, b, tx, &sealed)
 	})
 	return sealed, err
 }
@@ -214,7 +221,23 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 		}
 		check(secret, Unreadable{Target: name, User: user})
 	}
-	return report, targets.Err()
+	if err := targets.Err(); err != nil {
+		return Report{}, err
+	}
+	shares, err := db.Query(ctx, `SELECT a.manifest->>'name', f.share_password
+		FROM local_folders f JOIN addons a ON a.id = f.addon_id ORDER BY a.manifest->>'name'`)
+	if err != nil {
+		return Report{}, err
+	}
+	defer shares.Close()
+	for shares.Next() {
+		var name, password string
+		if err := shares.Scan(&name, &password); err != nil {
+			return Report{}, err
+		}
+		check(password, Unreadable{Folder: name})
+	}
+	return report, shares.Err()
 }
 
 // sealTargets seals the addresses, access tokens and keys of the
@@ -237,6 +260,34 @@ func sealTargets(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	}
 	for _, t := range plain {
 		if _, err := tx.Exec(ctx, "UPDATE notification_targets SET secret = $2 WHERE id = $1", t.id, b.Seal(t.secret)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	return nil
+}
+
+// sealShares seals the passwords of the network shares stored as
+// plaintext, counting them into sealed.
+func sealShares(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	rows, err := tx.Query(ctx, "SELECT addon_id, share_password FROM local_folders WHERE share_password <> '' AND share_password NOT LIKE $1 FOR UPDATE",
+		prefix+"%")
+	if err != nil {
+		return err
+	}
+	type row struct {
+		id       [16]byte
+		password string
+	}
+	plain, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var f row
+		return f, r.Scan(&f.id, &f.password)
+	})
+	if err != nil {
+		return err
+	}
+	for _, f := range plain {
+		if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_password = $2 WHERE addon_id = $1", f.id, b.Seal(f.password)); err != nil {
 			return err
 		}
 		*sealed++

@@ -23,7 +23,7 @@ func TestLocalFilesAreVersions(t *testing.T) {
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
-			o.Accounts.Settings)
+			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
 		folders.UseFiles(o.Playback.LocalFiles(folders.Open))

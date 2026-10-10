@@ -211,7 +211,7 @@ func serve(ctx context.Context) error {
 	channels.OnChange(lib.LineupChanged)
 	// Local folders match their files through the library's searches of
 	// the metadata addons.
-	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings)
+	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
 	defer folders.Close()
 	lib.UseLocal(folders)
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {

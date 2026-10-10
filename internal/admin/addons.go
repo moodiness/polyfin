@@ -434,6 +434,8 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
 		{localfiles.ErrInvalidName, http.StatusBadRequest, "invalid_folder_name"},
 		{localfiles.ErrInvalidPath, http.StatusBadRequest, "invalid_folder_path"},
+		{localfiles.ErrInvalidAddress, http.StatusBadRequest, "invalid_share_address"},
+		{localfiles.ErrInvalidUser, http.StatusBadRequest, "invalid_share_user"},
 		{localfiles.ErrInvalidKind, http.StatusBadRequest, "invalid_folder_kind"},
 		{localfiles.ErrInvalidIMDb, http.StatusBadRequest, "invalid_imdb_id"},
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},

@@ -1,10 +1,11 @@
-// Package localfiles serves the files of folders mounted in Polyfin's
-// container as versions of the titles they are. An administrator declares
-// a folder of movies or of shows; it is an addon of its own kind (see
-// addons.KindLocal), as IPTV sources are, which answers as an addon: one
-// catalog, a library apps see, of the titles its files were matched to, and
-// the streams of those titles, its files, which play beside the other
-// addons' streams.
+// Package localfiles serves the files of folders as versions of the titles
+// they are: folders mounted in Polyfin's container, and network shares
+// Polyfin reads itself, SMB shares and WebDAV folders. An administrator
+// declares a folder of movies or of shows; it is an addon of its own kind
+// (see addons.KindLocal), as IPTV sources are, which answers as an addon:
+// one catalog, a library apps see, of the titles its files were matched
+// to, and the streams of those titles, its files, which play beside the
+// other addons' streams.
 //
 // Folders are scanned at startup, every Settings.LocalScanHours and when an
 // administrator asks, never watched. A scan reads only what changed since
@@ -13,6 +14,9 @@
 // and year through the metadata addons' searches, kept only when they find
 // one title. An administrator links the files left unmatched to an IMDb
 // identifier by hand.
+//
+// A share's files are read from the share at each request, with byte
+// ranges, and never copied; its connections are kept between requests.
 package localfiles
 
 import (
@@ -32,6 +36,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -65,7 +70,9 @@ type Service struct {
 	titles   Titles
 	logger   *slog.Logger
 	settings func() accounts.Settings
-	now      func() time.Time
+	// box seals the shares' passwords.
+	box *secrets.Box
+	now func() time.Time
 	// files is the address the loopback interface serves the folders'
 	// files at, a file's key appended (see UseFiles); empty, folders list
 	// no stream.
@@ -83,6 +90,11 @@ type Service struct {
 	// ends; scanned the folders scanned since the service started.
 	running map[accounts.ID]chan struct{}
 	scanned map[accounts.ID]bool
+
+	// shares are the readers of the folders that are network shares, by
+	// folder, kept between requests.
+	sharesMu sync.Mutex
+	shares   map[accounts.ID]*pooledRemote
 }
 
 // matchWorkers bounds the units a scan matches at once, each asking the
@@ -90,11 +102,13 @@ type Service struct {
 const matchWorkers = 4
 
 // New returns the service. settings gives LocalScanHours, read whenever
-// folders due are looked for.
-func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logger, settings func() accounts.Settings) *Service {
+// folders due are looked for; box seals the shares' passwords.
+func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logger, settings func() accounts.Settings,
+	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, now: time.Now, workers: matchWorkers,
-		ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{}, scanned: map[accounts.ID]bool{}}
+	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
+		workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{}, scanned: map[accounts.ID]bool{},
+		shares: map[accounts.ID]*pooledRemote{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -102,36 +116,47 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 // service is used.
 func (s *Service) UseFiles(base string) { s.files = base }
 
-// Close stops the scans under way and waits for them.
+// Close stops the scans under way, waits for them, and closes the
+// shares' connections.
 func (s *Service) Close() {
 	s.cancel()
 	s.wg.Wait()
+	s.forgetRemotes(func(accounts.ID) bool { return false })
 }
 
-// NewFolder is a folder to add: its name, its path in the container and
-// what it holds, KindMovies or KindShows.
+// NewFolder is a folder to add: its name, its path in the container or a
+// share's address, what it holds, KindMovies or KindShows, and a share's
+// user and password.
 type NewFolder struct {
-	Name string
-	Path string
-	Kind string
+	Name     string
+	Path     string
+	Kind     string
+	User     string
+	Password string
 }
 
-// Folder describes a local folder: its addon, what it holds, how its last
-// scan went (CheckedAt is the last attempt, ScannedAt the last scan that
-// could read the folder, Error the code of the last failure: "missing",
-// "unreadable" or "not_folder"), whether a scan is under way, its files,
-// those matched to a title and the others, and the links made by hand.
+// Folder describes a local folder: its addon, what it holds, the kind of
+// share it is (ShareSMB, ShareWebDAV, empty for a path in the container)
+// with its user and whether a password is stored, how its last scan went
+// (CheckedAt is the last attempt, ScannedAt the last scan that could read
+// the folder, Error the code of the last failure: "missing",
+// "unreadable", "not_folder", or for a share "unreachable" or "refused"),
+// whether a scan is under way, its files, those matched to a title and the
+// others, and the links made by hand.
 type Folder struct {
-	Addon     addons.Addon
-	Kind      string
-	CheckedAt *time.Time
-	ScannedAt *time.Time
-	Error     string
-	Scanning  bool
-	Files     int
-	Matched   int
-	Unmatched int
-	Links     []Link
+	Addon       addons.Addon
+	Kind        string
+	Share       string
+	User        string
+	PasswordSet bool
+	CheckedAt   *time.Time
+	ScannedAt   *time.Time
+	Error       string
+	Scanning    bool
+	Files       int
+	Matched     int
+	Unmatched   int
+	Links       []Link
 }
 
 // Link is a unit of a folder linked by hand to an IMDb identifier: a
@@ -150,18 +175,33 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	path, err := validPath(folder.Path)
+	location, err := validLocation(folder.Path)
 	if err != nil {
 		return addons.Addon{}, err
 	}
 	if folder.Kind != KindMovies && folder.Kind != KindShows {
 		return addons.Addon{}, ErrInvalidKind
 	}
-	addon, err := s.addons.Create(ctx, addons.Shared(), addons.KindLocal, path,
-		func(id accounts.ID) stremio.Manifest { return manifest(id, name, folder.Kind) },
+	share := shareKind(location)
+	user, password := "", ""
+	if share != "" {
+		if user, err = validCredentials(folder.User, folder.Password); err != nil {
+			return addons.Addon{}, err
+		}
+		password = folder.Password
+	}
+	addon, err := s.addons.Create(ctx, addons.Shared(), addons.KindLocal, location,
+		func(id accounts.ID) stremio.Manifest { return manifest(id, name, folder.Kind, share) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			_, err := tx.Exec(ctx, "INSERT INTO local_folders (addon_id, kind, checked_at, error) VALUES ($1, $2, $3, $4)",
-				addon.ID, folder.Kind, s.now(), readable(path))
+			// A share is first read by the scan that starts now.
+			var checked *time.Time
+			failure := ""
+			if share == "" {
+				at := s.now()
+				checked, failure = &at, readable(location)
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO local_folders (addon_id, kind, checked_at, error, share_user, share_password)
+				VALUES ($1, $2, $3, $4, $5, $6)`, addon.ID, folder.Kind, checked, failure, user, s.box.Seal(password))
 			return err
 		})
 	if err != nil {
@@ -171,32 +211,64 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	return addon, nil
 }
 
-// Changes are what Update changes of a folder: its name, its path.
+// Changes are what Update changes of a folder: its name, its path or
+// address, a share's user, and its password, removed when empty.
 type Changes struct {
-	Name *string
-	Path *string
+	Name     *string
+	Path     *string
+	User     *string
+	Password *string
 }
 
-// Update changes a folder's name or path. A new path forgets the files
-// found in the former one, their links included, and is scanned at once.
+// Update changes a folder's name, path or address, or a share's user or
+// password. A new path or address forgets the files found in the former
+// one, their links included, and is scanned at once, as a share whose
+// user or password changed is. A path in the container keeps no user nor
+// password.
 func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (addons.Addon, error) {
 	current, err := s.Folder(ctx, id)
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	name, path := current.Addon.Manifest.Name, current.Addon.ManifestURL
+	name, location := current.Addon.Manifest.Name, current.Addon.ManifestURL
 	if changes.Name != nil {
 		if name, err = validName(*changes.Name); err != nil {
 			return addons.Addon{}, err
 		}
 	}
 	if changes.Path != nil {
-		if path, err = validPath(*changes.Path); err != nil {
+		if location, err = validLocation(*changes.Path); err != nil {
 			return addons.Addon{}, err
 		}
 	}
-	moved := path != current.Addon.ManifestURL
-	addon, err := s.addons.Update(ctx, addons.Shared(), id, addons.KindLocal, path, manifest(id, name, current.Kind), func(tx pgx.Tx) error {
+	share := shareKind(location)
+	user := current.User
+	if changes.User != nil {
+		user = *changes.User
+	}
+	password := ""
+	if changes.Password != nil {
+		password = *changes.Password
+	}
+	if user, err = validCredentials(user, password); err != nil {
+		return addons.Addon{}, err
+	}
+	if share == "" {
+		user, changes.Password = "", new("")
+	}
+	moved := location != current.Addon.ManifestURL
+	credentials := user != current.User || changes.Password != nil
+	addon, err := s.addons.Update(ctx, addons.Shared(), id, addons.KindLocal, location, manifest(id, name, current.Kind, share), func(tx pgx.Tx) error {
+		if credentials {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_user = $2 WHERE addon_id = $1", id, user); err != nil {
+				return err
+			}
+			if changes.Password != nil {
+				if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_password = $2 WHERE addon_id = $1", id, s.box.Seal(*changes.Password)); err != nil {
+					return err
+				}
+			}
+		}
 		if !moved {
 			return nil
 		}
@@ -206,13 +278,19 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_links WHERE addon_id = $1", id); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = NULL, error = $3 WHERE addon_id = $1", id, s.now(), readable(path))
+		var checked *time.Time
+		failure := ""
+		if share == "" {
+			at := s.now()
+			checked, failure = &at, readable(location)
+		}
+		_, err := tx.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = NULL, error = $3 WHERE addon_id = $1", id, checked, failure)
 		return err
 	})
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	if moved {
+	if moved || share != "" && credentials {
 		s.StartScan(id)
 	}
 	return addon, nil
@@ -227,11 +305,13 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	if !addon.Local() {
 		return Folder{}, addons.ErrNotFound
 	}
-	f := Folder{Addon: addon}
-	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error,
+	f := Folder{Addon: addon, Share: shareKind(addon.ManifestURL)}
+	var password string
+	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password,
 			(SELECT count(*) FROM local_files WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL)
-		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.Files, &f.Matched)
+		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password, &f.Files, &f.Matched)
+	f.PasswordSet = password != ""
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Folder{}, addons.ErrNotFound
 	}
@@ -271,11 +351,18 @@ var idPrefixes = []string{"tt", "tmdb:"}
 
 // manifest describes a folder as an addon: one catalog of its titles,
 // searchable, and the descriptions and streams of their identifiers.
-func manifest(id accounts.ID, name, kind string) stremio.Manifest {
+func manifest(id accounts.ID, name, kind, share string) stremio.Manifest {
 	typ := metaType(kind)
 	types := []string{typ}
+	description := "Local folder"
+	switch share {
+	case ShareSMB:
+		description = "SMB share"
+	case ShareWebDAV:
+		description = "WebDAV folder"
+	}
 	return stremio.Manifest{
-		ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: "Local folder", Types: types,
+		ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: description, Types: types,
 		Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: types, IDPrefixes: idPrefixes},
 			{Name: "stream", Types: types, IDPrefixes: idPrefixes}},
 		Catalogs: []stremio.Catalog{{Type: typ, ID: catalogID, Name: name, Extra: []stremio.Extra{{Name: "search"}, {Name: "skip"}}}},

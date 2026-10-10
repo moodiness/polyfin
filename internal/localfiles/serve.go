@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -172,37 +175,53 @@ func formatSize(size int64) string {
 var ErrGone = errors.New("the file is no longer in its folder")
 
 // Open opens the file key names, its identifier and extension as Streams
-// gives them, for reading: within its folder, through no symbolic link
-// leading out of it.
-func (s *Service) Open(ctx context.Context, key string) (*os.File, error) {
+// gives them, for reading, with its modification time: within its folder,
+// through no symbolic link leading out of it, or from its share. A share
+// that cannot be read fails with why (see shareFailure).
+func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, _, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
 	if err != nil {
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
-	var root, rel string
-	err = s.db.QueryRow(ctx, "SELECT a.manifest_url, f.path FROM local_files f JOIN addons a ON a.id = f.addon_id WHERE f.id = $1", id).Scan(&root, &rel)
+	var folder accounts.ID
+	var root, rel, user, sealed string
+	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, l.share_user, l.share_password
+		FROM local_files f JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.id = $1`, id).
+		Scan(&folder, &root, &rel, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
+	}
+	if shareKind(root) != "" {
+		r, err := s.folderRemote(folder, root, user, sealed)
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		file, modified, err := r.open(ctx, rel)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, time.Time{}, ErrGone
+		}
+		return file, modified, err
 	}
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
 	target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
 	if err != nil || !within(real, target) {
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
 	file, err := os.Open(target)
 	if err != nil {
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
-	if info, err := file.Stat(); err != nil || !info.Mode().IsRegular() {
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
 		file.Close()
-		return nil, ErrGone
+		return nil, time.Time{}, ErrGone
 	}
-	return file, nil
+	return file, info.ModTime(), nil
 }
