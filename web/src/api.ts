@@ -1175,13 +1175,16 @@ export type JellyfinUser = {
 
 /**
  * One Jellyfin user to import, with exactly one of `userId` (an existing Polyfin user) or
- * `create` (a new one). An existing user without `watchData` gets nothing.
+ * `create` (a new one). An existing user without `watchData` gets nothing. `jellyfinPassword`,
+ * the user's password on the server, has the import sign in as them to read their watch data,
+ * which a user's key or account cannot read of another user.
  */
 export type JellyfinImportEntry = {
   jellyfinId: string
   userId?: string
   create?: NewUser
   watchData: boolean
+  jellyfinPassword?: string
 }
 
 /**
@@ -1241,7 +1244,8 @@ export type JellyfinImportStatus = {
 
 /**
  * What connecting to a Jellyfin server reads: the server, its users, and the user the key belongs
- * to, null for an API key of the server's dashboard: a user's key imports only its owner's watch data.
+ * to or who signed in, null for an API key of the server's dashboard: another user's watch data is
+ * then read signed in as them.
  */
 export type JellyfinConnection = {
   server: JellyfinServer
@@ -1249,19 +1253,21 @@ export type JellyfinConnection = {
   keyOwner: string | null
 }
 
-/** Reads a Jellyfin server's users with its API key, which the server never keeps. */
-export const connectJellyfin = (body: { address: string; apiKey: string }) =>
+/** What connects to a Jellyfin server: an API key, or a user's name and password. */
+export type JellyfinCredentials =
+  { apiKey: string } | { account: { name: string; password: string } }
+
+/** Reads a Jellyfin server's users with credentials, which the server never keeps. */
+export const connectJellyfin = (body: { address: string } & JellyfinCredentials) =>
   request<JellyfinConnection>('POST', '/jellyfin-import/users', body)
 
 /**
  * Creates the new users (all or none), then starts importing the watch data in the background;
  * `import` is null when no entry asked for watch data.
  */
-export const startJellyfinImport = (body: {
-  address: string
-  apiKey: string
-  users: JellyfinImportEntry[]
-}) =>
+export const startJellyfinImport = (
+  body: { address: string; users: JellyfinImportEntry[] } & JellyfinCredentials,
+) =>
   request<{ created: User[]; import: JellyfinImportStatus | null }>(
     'POST',
     '/jellyfin-import',

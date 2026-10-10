@@ -247,9 +247,16 @@ const common: typeof en = {
     jellyfin_key_refused:
       'Jellyfin a refusé cette clé d’API. Créez-en une dans son tableau de bord, sous Clés API, puis collez-la à nouveau.',
     jellyfin_key_limited:
-      'Cette clé ne peut pas lister les utilisateurs du serveur. Créez une clé d’API dans son tableau de bord, sous Clés API, puis collez-la.',
+      'Cette clé ou ce compte ne peut pas lister les utilisateurs du serveur. Utilisez une clé d’API de son tableau de bord, ou le compte d’un administrateur.',
     jellyfin_key_owner_only:
-      'Cette clé ne lit que les données de visionnage de son propriétaire. Décochez « Importer les données de visionnage » pour les autres utilisateurs, ou connectez-vous avec une clé d’API du tableau de bord du serveur.',
+      'Cette clé ne lit que les données de visionnage de son propriétaire. Saisissez le mot de passe des autres utilisateurs sur le serveur, ou décochez « Importer les données de visionnage » pour eux.',
+    jellyfin_sign_in_refused: 'Jellyfin a refusé ce nom ou ce mot de passe.',
+    jellyfin_sign_in_forbidden:
+      'Jellyfin ne laisse pas ce compte se connecter : il est peut-être désactivé, ou hors de ses horaires autorisés.',
+    jellyfin_password_refused:
+      'Jellyfin a refusé ce mot de passe. Laissez vide si le compte n’en a pas.',
+    jellyfin_other_user:
+      'Ce mot de passe a ouvert le compte d’un autre utilisateur sur le serveur. Connectez-vous plutôt avec une clé d’API de son tableau de bord.',
     jellyfin_unreachable:
       'Rien n’a répondu à cette adresse. Vérifiez-la, et que Jellyfin est bien lancé.',
     not_jellyfin:

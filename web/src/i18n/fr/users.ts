@@ -180,15 +180,24 @@ const users: typeof en = {
       open: 'Importer depuis Jellyfin',
       title: 'Importer depuis Jellyfin',
       description:
-        'Reprenez les comptes d’un serveur Jellyfin et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans Jellyfin. Les mots de passe ne peuvent pas être importés : vous en choisissez un pour chaque nouveau compte.',
+        'Reprenez les comptes d’un serveur Jellyfin et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans Jellyfin. Jellyfin ne donne pas les mots de passe : vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
       connectTitle: 'Se connecter à Jellyfin',
       connectHelp:
-        'L’adresse et la clé d’API servent seulement à cette importation : Polyfin ne les enregistre pas.',
+        'L’adresse, la clé et les mots de passe servent seulement à cette importation : Polyfin ne les enregistre pas.',
       address: 'Adresse du serveur',
       addressHelp:
         'L’adresse à laquelle Jellyfin s’ouvre dans un navigateur. Une adresse du réseau local fonctionne.',
+      connectWith: 'Se connecter avec',
+      withApiKey: 'Une clé d’API',
+      withAccount: 'Un compte utilisateur',
       apiKey: 'Clé d’API',
-      apiKeyHelp: 'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API.',
+      apiKeyHelp:
+        'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API : elle lit les données de visionnage de tous les utilisateurs.',
+      accountName: 'Nom d’utilisateur',
+      accountNameHelp:
+        'Le compte d’un administrateur liste tous les utilisateurs. Polyfin se connecte comme les applis de Jellyfin, puis se déconnecte.',
+      accountPassword: 'Mot de passe',
+      accountPasswordHelp: 'Laissez vide si le compte n’en a pas.',
       connect: 'Se connecter',
       connecting: 'Connexion…',
       chooseTitle: 'Choisir qui importer',
@@ -203,10 +212,14 @@ const users: typeof en = {
       watchData: 'Importer les données de visionnage',
       watchDataHelp: 'Titres vus avec leurs dates, points de reprise et favoris.',
       watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
-      watchDataOwnerOnly: (owner: string | null) =>
-        `Avec cette clé, seules les données de visionnage ${owner === null ? 'de son propriétaire' : `du compte ${owner}`} peuvent être importées.`,
-      userKey: (owner: string | null) =>
-        `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage. Pour importer celles des autres utilisateurs, connectez-vous avec une clé d’API du tableau de bord du serveur, ou avec la clé de chacun. Leurs comptes peuvent quand même être créés ici.`,
+      ownerNotice: (owner: string | null, signedIn: boolean) =>
+        `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
+      serverPassword: (server: string) => `Mot de passe sur ${server}`,
+      serverPasswordHelp: (user: string) =>
+        `Polyfin se connecte avec le compte ${user} pour lire ses données de visionnage, puis se déconnecte. Laissez vide si le compte n’en a pas.`,
+      keepPassword: 'Garder ce mot de passe dans Polyfin',
+      keepPasswordHelp:
+        'Le nouveau compte se connecte à Polyfin avec le même mot de passe, s’il a au moins 8 caractères.',
       nothingToImport:
         'Choisissez un utilisateur à créer, ou des données de visionnage à importer.',
       start: 'Lancer l’importation',

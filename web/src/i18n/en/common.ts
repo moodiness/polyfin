@@ -232,9 +232,16 @@ const common = {
     jellyfin_key_refused:
       'Jellyfin refused this API key. Create one in its dashboard, under API Keys, and paste it again.',
     jellyfin_key_limited:
-      'This key cannot list the server’s users. Create an API key in its dashboard, under API Keys, and paste it.',
+      'This key or account may not list the server’s users. Use an API key from its dashboard, or an administrator’s account.',
     jellyfin_key_owner_only:
-      'This key reads only its owner’s watch data. Untick “Import watch data” for the other users, or connect with an API key from the server’s dashboard.',
+      'This key reads only its owner’s watch data. Type the other users’ passwords on the server, or untick “Import watch data” for them.',
+    jellyfin_sign_in_refused: 'Jellyfin refused this name or password.',
+    jellyfin_sign_in_forbidden:
+      'Jellyfin does not let this account sign in: it may be disabled, or outside its allowed hours.',
+    jellyfin_password_refused:
+      'Jellyfin refused this password. Leave it empty if the account has none.',
+    jellyfin_other_user:
+      'This password opened another user’s account on the server. Connect with an API key from its dashboard instead.',
     jellyfin_unreachable:
       'Nothing answered at this address. Check it, and that Jellyfin is running.',
     not_jellyfin: 'A server answered at this address, but it is not Jellyfin. Check the address.',

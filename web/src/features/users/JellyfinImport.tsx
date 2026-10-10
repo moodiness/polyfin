@@ -11,6 +11,7 @@ import {
   startJellyfinImport,
   stopJellyfinImport,
   type JellyfinConnection,
+  type JellyfinCredentials,
   type JellyfinImportEntry,
   type JellyfinImportStatus,
   type JellyfinUser,
@@ -33,6 +34,7 @@ import {
   RelativeTime,
   Row,
   RowList,
+  Segmented,
   Select,
   SkeletonRows,
   StatusPill,
@@ -46,12 +48,23 @@ import {
 /** How often the import is read while it runs. */
 const importPollMs = 2000
 
-/** Connection codes about the address or the key, shown under that field rather than above. */
+/** Connection codes about the address, the key or the account, shown under that field. */
 const addressCodes = ['invalid_jellyfin_address', 'jellyfin_unreachable', 'not_jellyfin']
 const keyCodes = ['jellyfin_key_refused', 'jellyfin_key_limited']
-/** Codes about a new user's name or password, shown under that field of its row. */
+const accountCodes = [
+  'jellyfin_sign_in_refused',
+  'jellyfin_sign_in_forbidden',
+  'jellyfin_key_limited',
+]
+/** Codes about a row's name, password, or password on the server, shown under that field. */
 const nameCodes = ['invalid_name', 'name_taken']
 const passwordCodes = ['invalid_password']
+const signInCodes = [
+  'jellyfin_password_refused',
+  'jellyfin_sign_in_forbidden',
+  'jellyfin_other_user',
+  'jellyfin_key_owner_only',
+]
 
 const importTones: Record<JellyfinImportStatus['state'], StatusTone> = {
   running: 'live',
@@ -78,18 +91,33 @@ type Choice = {
   password: string
   isAdministrator: boolean
   watchData: boolean
+  /** The user's password on the server, to read their watch data signed in as them. */
+  jellyfinPassword: string
+  /** Whether a new user keeps that password in Polyfin. */
+  keepPassword: boolean
+}
+
+/** How the page connects to the server: with an API key, or as a user, by name and password. */
+type Login = { method: 'key' | 'account'; apiKey: string; name: string; password: string }
+
+/** What a login sends: the key, or the account. */
+function credentialsOf(login: Login): JellyfinCredentials {
+  return login.method === 'key'
+    ? { apiKey: login.apiKey.trim() }
+    : { account: { name: login.name.trim(), password: login.password } }
 }
 
 /**
  * `/users/jellyfin-import`: imports accounts and their watch data from a Jellyfin server. The
  * running or last import shows first; under it, connecting to a server, then choosing what each of
- * its users becomes. The API key only lives in this page's state: the server never keeps it.
+ * its users becomes. The key and passwords only live in this page's state: the server never keeps
+ * them.
  */
 export default function JellyfinImportRoute() {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const [address, setAddress] = useState('')
-  const [apiKey, setApiKey] = useState('')
+  const [login, setLogin] = useState<Login>({ method: 'key', apiKey: '', name: '', password: '' })
   const [connection, setConnection] = useState<JellyfinConnection | null>(null)
   const status = useQuery({
     queryKey: queryKeys.jellyfinImport,
@@ -117,19 +145,19 @@ export default function JellyfinImportRoute() {
       {status.data?.state === 'running' ? null : connection === null ? (
         <ConnectForm
           address={address}
-          apiKey={apiKey}
+          login={login}
           onAddress={setAddress}
-          onApiKey={setApiKey}
+          onLogin={(patch) => setLogin((current) => ({ ...current, ...patch }))}
           onConnected={setConnection}
         />
       ) : (
         <ChooseUsers
           connection={connection}
-          apiKey={apiKey}
+          credentials={credentialsOf(login)}
           onBack={() => setConnection(null)}
           onStarted={() => {
             setConnection(null)
-            setApiKey('')
+            setLogin((current) => ({ ...current, apiKey: '', password: '' }))
           }}
         />
       )}
@@ -306,33 +334,40 @@ function UnmatchedList({ user }: { user: JellyfinUserImport }) {
   )
 }
 
-/** Step 1: the server's address and an API key, which read its users. */
+/** Step 1: the server's address, and an API key or a user's account, which read its users. */
 function ConnectForm({
   address,
-  apiKey,
+  login,
   onAddress,
-  onApiKey,
+  onLogin,
   onConnected,
 }: {
   address: string
-  apiKey: string
+  login: Login
   onAddress: (address: string) => void
-  onApiKey: (apiKey: string) => void
+  onLogin: (patch: Partial<Login>) => void
   onConnected: (connection: JellyfinConnection) => void
 }) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const mutation = useMutation({ mutationFn: connectJellyfin, onSuccess: onConnected })
+  const byKey = login.method === 'key'
 
   const code = mutation.error instanceof ApiError ? mutation.error.code : null
   const message = mutation.isError ? errorMessage(t, mutation.error) : undefined
   const addressError = code !== null && addressCodes.includes(code) ? message : undefined
-  const keyError = code !== null && keyCodes.includes(code) ? message : undefined
-  const otherError = mutation.isError && !addressError && !keyError ? message : undefined
+  const loginError =
+    code !== null && (byKey ? keyCodes : accountCodes).includes(code) ? message : undefined
+  const otherError = mutation.isError && !addressError && !loginError ? message : undefined
+
+  function change(patch: Partial<Login>) {
+    mutation.reset()
+    onLogin(patch)
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    mutation.mutate({ address: address.trim(), apiKey: apiKey.trim() })
+    mutation.mutate({ address: address.trim(), ...credentialsOf(login) })
   }
 
   return (
@@ -355,20 +390,59 @@ function ConnectForm({
               required
             />
           </Field>
-          <Field label={text.apiKey} help={text.apiKeyHelp} error={keyError}>
-            <TextInput
-              type="password"
-              revealable
-              value={apiKey}
-              onValue={(value) => {
-                mutation.reset()
-                onApiKey(value)
-              }}
-              autoComplete="off"
-              spellCheck={false}
-              required
+          <div className="flex flex-col gap-2">
+            <span aria-hidden className="text-control font-medium text-ink">
+              {text.connectWith}
+            </span>
+            <Segmented
+              label={text.connectWith}
+              value={login.method}
+              options={[
+                { value: 'key', label: text.withApiKey },
+                { value: 'account', label: text.withAccount },
+              ]}
+              onChange={(method) => change({ method })}
+              className="self-start"
             />
-          </Field>
+          </div>
+          {byKey ? (
+            <Field label={text.apiKey} help={text.apiKeyHelp} error={loginError}>
+              <TextInput
+                type="password"
+                revealable
+                value={login.apiKey}
+                onValue={(apiKey) => change({ apiKey })}
+                autoComplete="off"
+                spellCheck={false}
+                required
+              />
+            </Field>
+          ) : (
+            <>
+              <Field label={text.accountName} help={text.accountNameHelp}>
+                <TextInput
+                  value={login.name}
+                  onValue={(name) => change({ name })}
+                  autoComplete="off"
+                  spellCheck={false}
+                  required
+                />
+              </Field>
+              <Field
+                label={text.accountPassword}
+                help={text.accountPasswordHelp}
+                error={loginError}
+              >
+                <TextInput
+                  type="password"
+                  revealable
+                  value={login.password}
+                  onValue={(password) => change({ password })}
+                  autoComplete="off"
+                />
+              </Field>
+            </>
+          )}
           {otherError && (
             <Notice tone="danger" live>
               {otherError}
@@ -381,7 +455,7 @@ function ConnectForm({
             variant="primary"
             icon={PlugsConnectedIcon}
             loading={mutation.isPending}
-            disabled={address.trim() === '' || apiKey.trim() === ''}
+            disabled={address.trim() === '' || (byKey ? login.apiKey : login.name).trim() === ''}
           >
             {mutation.isPending ? text.connecting : text.connect}
           </Button>
@@ -397,12 +471,12 @@ function ConnectForm({
  */
 function ChooseUsers({
   connection,
-  apiKey,
+  credentials,
   onBack,
   onStarted,
 }: {
   connection: JellyfinConnection
-  apiKey: string
+  credentials: JellyfinCredentials
   onBack: () => void
   onStarted: () => void
 }) {
@@ -411,10 +485,12 @@ function ChooseUsers({
   const toast = useToast()
   const formId = useId()
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
-  // A user's key reads its owner's watch data only: the others' accounts can still be created.
+  // A user's key or account reads its owner's watch data only: another user's is read signed in
+  // as them, with their password on the server.
   const owner = connection.keyOwner
   const ownerName =
     owner === null ? null : (connection.users.find((user) => user.id === owner)?.name ?? null)
+  const signsIn = (user: JellyfinUser) => owner !== null && user.id !== owner
   const [choices, setChoices] = useState<Record<string, Choice>>(() =>
     Object.fromEntries(
       connection.users.map((user): [string, Choice] => [
@@ -424,7 +500,9 @@ function ChooseUsers({
           name: user.name,
           password: '',
           isAdministrator: user.isAdministrator,
-          watchData: owner === null || user.id === owner,
+          watchData: true,
+          jellyfinPassword: '',
+          keepPassword: true,
         },
       ]),
     ),
@@ -449,15 +527,17 @@ function ChooseUsers({
 
   const failed = start.error instanceof ApiError ? start.error : null
   const message = start.isError ? errorMessage(t, start.error) : undefined
-  // A new user's name or password the server refused shows under that field of its row.
-  const field =
+  // A field of a row the server refused shows the error under it.
+  const field: RowError['field'] | null =
     failed === null || failed.jellyfinId === null
       ? null
       : nameCodes.includes(failed.code)
         ? 'name'
         : passwordCodes.includes(failed.code)
           ? 'password'
-          : null
+          : signInCodes.includes(failed.code)
+            ? 'jellyfinPassword'
+            : null
   const otherError = field === null ? message : undefined
 
   const options: SelectOption<Target>[] = [
@@ -469,18 +549,21 @@ function ChooseUsers({
   // Users are created all or none; an existing user without watch data has nothing to import.
   const entries = connection.users.flatMap((user): JellyfinImportEntry[] => {
     const choice = choices[user.id]
-    if (choice.target === 'skip') return []
-    if (choice.target === 'new') {
-      const create = {
-        name: choice.name.trim(),
-        password: choice.password,
-        isAdministrator: choice.isAdministrator,
-        isHidden: user.isHidden,
-      }
-      return [{ jellyfinId: user.id, create, watchData: choice.watchData }]
+    if (choice.target === 'skip' || (choice.target !== 'new' && !choice.watchData)) return []
+    const signIn = signsIn(user) && choice.watchData
+    const entry: JellyfinImportEntry = {
+      jellyfinId: user.id,
+      watchData: choice.watchData,
+      ...(signIn && { jellyfinPassword: choice.jellyfinPassword }),
     }
-    if (!choice.watchData) return []
-    return [{ jellyfinId: user.id, userId: choice.target.slice('user:'.length), watchData: true }]
+    if (choice.target !== 'new') return [{ ...entry, userId: choice.target.slice('user:'.length) }]
+    const create = {
+      name: choice.name.trim(),
+      password: signIn && choice.keepPassword ? choice.jellyfinPassword : choice.password,
+      isAdministrator: choice.isAdministrator,
+      isHidden: user.isHidden,
+    }
+    return [{ ...entry, create }]
   })
 
   function update(id: string, patch: Partial<Choice>) {
@@ -490,7 +573,7 @@ function ChooseUsers({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    start.mutate({ address: connection.server.address, apiKey, users: entries })
+    start.mutate({ address: connection.server.address, ...credentials, users: entries })
   }
 
   return (
@@ -528,21 +611,22 @@ function ChooseUsers({
           <p className="text-small text-ink-3">{text.noUsers}</p>
         ) : (
           <>
-            {owner !== null && <Notice>{text.userKey(ownerName)}</Notice>}
+            {owner !== null && (
+              <Notice>{text.ownerNotice(ownerName, 'account' in credentials)}</Notice>
+            )}
             <RowList variant="plain" aria-label={text.chooseTitle}>
               {connection.users.map((user) => (
                 <ChoiceRow
                   key={user.id}
                   user={user}
+                  server={connection.server.name}
                   choice={choices[user.id]}
                   options={options}
-                  ownerOnly={owner !== null && user.id !== owner}
-                  ownerName={ownerName}
-                  nameError={
-                    field === 'name' && failed?.jellyfinId === user.id ? message : undefined
-                  }
-                  passwordError={
-                    field === 'password' && failed?.jellyfinId === user.id ? message : undefined
+                  signsIn={signsIn(user)}
+                  error={
+                    field !== null && message !== undefined && failed?.jellyfinId === user.id
+                      ? { field, message }
+                      : undefined
                   }
                   onChange={(patch) => update(user.id, patch)}
                 />
@@ -560,31 +644,36 @@ function ChooseUsers({
   )
 }
 
+/** An error the server answered about a field of a row. */
+type RowError = { field: 'name' | 'password' | 'jellyfinPassword'; message: string }
+
 /** One Jellyfin user: who it is, what it becomes in Polyfin, and whether its data comes along. */
 function ChoiceRow({
   user,
+  server,
   choice,
   options,
-  ownerOnly,
-  ownerName,
-  nameError,
-  passwordError,
+  signsIn,
+  error,
   onChange,
 }: {
   user: JellyfinUser
+  /** The Jellyfin server's name. */
+  server: string
   choice: Choice
   options: SelectOption<Target>[]
-  /** The key is another user's: this user's watch data cannot be read with it. */
-  ownerOnly: boolean
-  ownerName: string | null
-  nameError: string | undefined
-  passwordError: string | undefined
+  /** The connection is another user's: this user's watch data is read signed in as them. */
+  signsIn: boolean
+  error: RowError | undefined
   onChange: (patch: Partial<Choice>) => void
 }) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   // An existing user gets nothing without its watch data.
   const existing = choice.target !== 'skip' && choice.target !== 'new'
+  const signIn = signsIn && choice.watchData
+  // A new user keeping their password on the server has no other.
+  const keeps = signIn && choice.target === 'new' && choice.keepPassword
   const lastActivity =
     user.lastActivityAt === null ? t.common.never : <RelativeTime iso={user.lastActivityAt} />
   return (
@@ -615,7 +704,11 @@ function ChoiceRow({
         {choice.target === 'new' && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t.users.name} help={t.common.nameRule} error={nameError}>
+              <Field
+                label={t.users.name}
+                help={t.common.nameRule}
+                error={error?.field === 'name' ? error.message : undefined}
+              >
                 <TextInput
                   value={choice.name}
                   onValue={(name) => onChange({ name })}
@@ -624,16 +717,22 @@ function ChoiceRow({
                   required
                 />
               </Field>
-              <Field label={t.users.password} help={t.common.passwordRule} error={passwordError}>
-                <TextInput
-                  type="password"
-                  revealable
-                  value={choice.password}
-                  onValue={(password) => onChange({ password })}
-                  autoComplete="new-password"
-                  required
-                />
-              </Field>
+              {!keeps && (
+                <Field
+                  label={t.users.password}
+                  help={t.common.passwordRule}
+                  error={error?.field === 'password' ? error.message : undefined}
+                >
+                  <TextInput
+                    type="password"
+                    revealable
+                    value={choice.password}
+                    onValue={(password) => onChange({ password })}
+                    autoComplete="new-password"
+                    required
+                  />
+                </Field>
+              )}
             </div>
             <Checkbox
               label={t.users.isAdministrator}
@@ -646,17 +745,40 @@ function ChoiceRow({
         {choice.target !== 'skip' && (
           <Checkbox
             label={text.watchData}
-            help={
-              ownerOnly
-                ? text.watchDataOwnerOnly(ownerName)
-                : existing && !choice.watchData
-                  ? text.watchDataNeeded
-                  : text.watchDataHelp
-            }
-            checked={!ownerOnly && choice.watchData}
-            disabled={ownerOnly}
+            help={existing && !choice.watchData ? text.watchDataNeeded : text.watchDataHelp}
+            checked={choice.watchData}
             onChange={(watchData) => onChange({ watchData })}
           />
+        )}
+        {choice.target !== 'skip' && signIn && (
+          <>
+            <Field
+              label={text.serverPassword(server)}
+              help={text.serverPasswordHelp(user.name)}
+              error={
+                error?.field === 'jellyfinPassword' || (keeps && error?.field === 'password')
+                  ? error.message
+                  : undefined
+              }
+              className="max-w-sm"
+            >
+              <TextInput
+                type="password"
+                revealable
+                value={choice.jellyfinPassword}
+                onValue={(jellyfinPassword) => onChange({ jellyfinPassword })}
+                autoComplete="off"
+              />
+            </Field>
+            {choice.target === 'new' && (
+              <Checkbox
+                label={text.keepPassword}
+                help={text.keepPasswordHelp}
+                checked={choice.keepPassword}
+                onChange={(keepPassword) => onChange({ keepPassword })}
+              />
+            )}
+          </>
         )}
       </div>
     </Row>
