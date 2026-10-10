@@ -1,13 +1,13 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved. Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link. Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
 
 ## Targets
 
 There are two kinds of owners:
 
-- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, and the health events.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings. An administrator's own targets may receive the health events too.
+- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events and the users who joined.
+- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings. An administrator's own targets may receive the health events and the users who joined too.
 
 **Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
 
@@ -70,6 +70,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Recording failed | `recording_failed` | The same. |
 | Health problem found | `health_problem` | The server's targets, and administrators' own. |
 | Health problem solved | `health_solved` | The same. |
+| User joined | `user_joined` | The server's targets, and administrators' own. |
 
 ### New episodes
 
@@ -82,6 +83,10 @@ A recording that ends is finished, or partial when part of its programme is miss
 ### Health problems
 
 Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**: the database, disk space, addons, IPTV sources, programme guides, failed tasks, backups and stored keys. Conversions at their limit and thumbnails paused for a host come and go with the load: they are not told. A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved.
+
+### Users who joined
+
+A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
 Messages are written in the server language (**Settings › General**).
 
@@ -117,27 +122,48 @@ A webhook receives each event as JSON in a `POST`, with the headers `Content-Typ
 }
 ```
 
+A user who joined through an invite link:
+
+```json
+{
+  "version": 1,
+  "id": "0f9e8d7c6b5a49382716051f2e3d4c5b",
+  "type": "user_joined",
+  "at": "2026-10-09T18:05:00Z",
+  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
+  "title": "New user: sam",
+  "message": "sam joined through alex's invite.",
+  "url": "https://media.example.org/admin/users/11223344556677889900aabbccddeeff",
+  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
+  "invite": {
+    "id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "createdBy": { "id": "ffeeddccbbaa00998877665544332211", "name": "alex" }
+  }
+}
+```
+
 | Field | Type | Meaning |
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. |
 | `url` | string or null | Opens what the event is about; null without a public address. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`); null for health events, and for new episodes sent to the server's targets. |
+| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user. Null for health events, and for new episodes sent to the server's targets. |
 | `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
+| `invite` | object | For `user_joined`: the invite link's `id`, and `createdBy`, the administrator who created it (`id`, `name`), null once deleted. |
 
 ## Messages for each kind
 
 Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
 
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
+A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
 
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
+An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
 
 An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
 
@@ -175,7 +201,7 @@ The admin API serves the targets: the server's to administrators at `/admin/api/
 
 Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination, and whose events are Jellyfin's own (item added, playback, users, tasks). Polyfin builds the messages itself, and:
 
-- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, and Health problems;
+- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, and users who joined through an invite link;
 - each user chooses their own targets and events under **My account**, besides the server's;
 - the webhook format is one documented, versioned JSON event rather than templates; Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them;
 - addresses, tokens, keys and the SMTP password are stored encrypted, and failing targets are shown.

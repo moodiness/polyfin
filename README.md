@@ -20,7 +20,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): a short tour, a v
 - **Music, audiobooks and podcasts:** Eclipse music addons install like Stremio addons and become music and books libraries. Tracks play as they are, or are converted when the app needs it.
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU when there is one, with HDR tone mapping.
 - **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
-- **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits.
+- **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits. Invite links let people create their own account.
 - **Skip buttons:** intros, recaps, credits and previews to skip, from three community databases.
 - **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there.
 - **Built in:** Jellyfin's own web client at `/web/`, and an admin app at `/admin/`.
