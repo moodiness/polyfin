@@ -8,7 +8,7 @@ Polyfin has separate accounts for each user, with Jellyfin authentication and Qu
 
 An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin server, an administrator can bring its accounts and what each user watched over with **Import from Jellyfin**; see [Moving from Jellyfin](#moving-from-jellyfin). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
+Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
 ## Watch state
 
@@ -43,7 +43,9 @@ Two settings under **Settings › Content** decide when a title counts as played
 
 ## Moving from Jellyfin
 
-**Import from Jellyfin**, at the top of **Users** next to **Create a user**, brings a Jellyfin server's accounts over, and what each of their users watched. It sits under **Users** because it creates accounts and fills each account's watch state. Only administrators see it.
+**Import from another server**, at the top of **Users** next to **Create a user**, brings a Jellyfin server's accounts over, and what each of their users watched. It sits under **Users** because it creates accounts and fills each account's watch state. Only administrators see it. **Server** chooses the kind of server: **Jellyfin**, for Jellyfin and the servers that speak its API, as described here, or **Emby** and **Plex** (see [Moving from Emby and Plex](#moving-from-emby-and-plex)).
+
+The page shows the import running, or the last one, whoever started it: an administrator here, or a user importing their own watch history (see [Importing your own watch history](#importing-your-own-watch-history)).
 
 ### Connecting to the server
 
@@ -118,12 +120,70 @@ Nothing is written to the Jellyfin server: the import only reads it. Signing in 
 **For app developers:**
 
 - The admin API serves the import to administrators:
-  - `POST /admin/api/jellyfin-import/users` lists a server's users, given `apiKey`, or `account` with `name` and `password`. It answers `keyOwner`, the Jellyfin user the key belongs to or who signed in, `null` for a server's key. An account the server refuses is `jellyfin_sign_in_refused`, and one it does not let sign in `jellyfin_sign_in_forbidden`.
+  - `POST /admin/api/jellyfin-import/users` lists a server's users, given `kind` (`jellyfin`, the default, `emby` or `plex`), `address`, and `apiKey`, or `account` with `name` and `password`. It answers `server` with its `kind`, and `keyOwner`, the user the key belongs to or who signed in, `null` for a server's key. An account the server refuses is `jellyfin_sign_in_refused`, and one it does not let sign in `jellyfin_sign_in_forbidden`.
   - `POST /admin/api/jellyfin-import` takes the same, creates the accounts and starts the import. An entry's `jellyfinPassword`, given with `watchData`, has the import sign in as that user. Connected as a user, another user's watch data needs it: without it, the answer is `jellyfin_key_owner_only`. A password the server refuses is `jellyfin_password_refused`, an account it does not let sign in `jellyfin_sign_in_forbidden`, and a sign-in that opens another user's session `jellyfin_other_user`. Each names the `jellyfinId`, and comes before anyone is created.
-  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it.
+  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it. The import names its `server.kind`, `startedBy` (`id` and `name`), and `own`, set for a user's import of their own watch history.
+  - While any import runs, starting another is `jellyfin_import_running` (409).
   - The key and passwords are never answered back.
 - Polyfin reads Jellyfin with `GET` requests, sending the key or session token as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
 - It signs in with `POST /Users/AuthenticateByName`, naming itself and a device of its own in the `Authorization` header as Jellyfin's apps do, and signs out with `POST /Sessions/Logout`.
+
+## Moving from Emby and Plex
+
+Under **Import from another server**, **Server** also offers **Emby** and **Plex**. Accounts are chosen, created and filled as for Jellyfin (see [Choosing who to import](#choosing-who-to-import)), titles are matched the same way (see [How titles are matched](#how-titles-are-matched)), and the data merges the same way. The result shows, user by user, what was added and the titles not found.
+
+### Emby
+
+The flow is Jellyfin's: **Server address**, then **Connect with** an API key or a user account, then each user's **Password on …** the server when connected as one user.
+
+- **API key**: create one in Emby's settings, under API Keys. It reads every user's watch data.
+- A user's own key or access token is refused (`emby_user_key`): Emby has no way to tell whose a key is, and it answers a user's key with that user's own data whatever user is asked. Connect with a user account instead: the user who signs in is known.
+- Emby keeps listing Polyfin among its devices after Polyfin signs out, without a session.
+
+What comes over is what comes over from Jellyfin: played movies and episodes with their dates and play counts, resume points, and favorites.
+
+### Plex
+
+- **Server address**: the address of Plex Media Server itself, such as `http://192.168.1.10:32400`.
+- **Plex token**: the server owner's token. To find it, open Plex in a browser, signed in as the owner, open the menu of any movie, choose Get Info, then View XML: the address of the page that opens ends with `X-Plex-Token=` followed by the token.
+
+The users listed are the accounts the server knows, the owner first, marked as an administrator.
+
+| From Plex | Into Polyfin |
+|---|---|
+| The owner's played movies and episodes, with their play counts and the date last played | Played marks. |
+| The owner's resume points | Resume points, for titles not played. |
+| Another account's playback history: each movie and episode played, with the number of plays and the date of the last one | Played marks. |
+
+Plex does not let the owner's token read the resume points of other accounts: they stay on Plex. Plex has no favorites to import, and its watchlist is not imported. Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; an episode by its show's identifiers and its season and episode numbers. A title that left the libraries since it was played has no identifiers left, and is listed as not found.
+
+Plex is only read, with `GET` requests: it is never written to.
+
+**For app developers:**
+
+- The import's API is Jellyfin's, with `kind` set to `emby` or `plex`. Plex takes its owner's token as `apiKey`, and no `account` nor `jellyfinPassword`.
+- Emby is read under `/emby` when the address does not end with it, else at the address given, with the key in `X-Emby-Token`. The requests are Jellyfin's, but for `/Users/Me`, which Emby does not have: a key is taken only when `GET /Auth/Keys` lists it among the server's API keys. Lists ask for `Fields=ProviderIds,UserDataPlayCount,UserDataLastPlayedDate`, without which Emby leaves the play count and date out. Signing in sends the app and device in `X-Emby-Authorization`.
+- Plex is read in JSON (`Accept: application/json`), with the token in `X-Plex-Token` and Polyfin's device in `X-Plex-Client-Identifier`: `/identity`, `/`, `/accounts` (account 1 is the owner, account 0 nobody), `/library/sections`, each movie and show section's `/library/sections/{key}/all` with `type=1` or `type=2` and `includeGuids=1`, the show sections' episodes with `type=4` for the owner, and `/status/sessions/history/all?accountID=…` for the other accounts, a page at a time with `X-Plex-Container-Start` and `X-Plex-Container-Size`.
+
+## Importing your own watch history
+
+Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin or Emby server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know.
+
+- **Server**: **Jellyfin** or **Emby**.
+- **Server address**, then **Your user name there** and **Your password there**, empty if the account has none.
+
+**Import my watch history** signs in to that server as the user, as its apps do, and imports that user's played movies and episodes, resume points and favorites into their own Polyfin account only. Titles are matched and merged as an administrator's import does. The section then shows the import, and its result: what was added, and the titles not found. Polyfin never lists the server's users, which a user's session may not, and reads only the user signed in: even a server that answers every user with the session's data gives them their own. It signs out once done. The password is used for that import only, and never kept.
+
+- One import runs at a time on the whole server. While another runs, the user's or an administrator's, the import is refused (`server_import_running`): try again a few minutes later.
+- A user sees only their own imports. The administrator's **Import from another server** page shows the import running or the last one, saying who started it.
+- **Users may import their watch history from another server**, under **Settings › Security**, on by default, turns the section off: it is hidden, and the API refuses (`server_imports_disabled`).
+- Plex has no sign-in for its users: only its owner can import from it, under **Users**.
+
+**For app developers:**
+
+- `GET /admin/api/account/server-import` answers `enabled`, and `import`, the user's own import running or their last one, `null` when none.
+- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import.
+- Polyfin sends the sign-in, the items requests and the sign-out of the administrator's import, never `/Users`.
 
 ## Invite links
 
@@ -363,11 +423,12 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ## Security settings
 
-**Settings › Security** gathers three settings, and **Settings › Diagnostics** a fourth. They apply at once, without a restart.
+**Settings › Security** gathers four settings, and **Settings › Diagnostics** a fifth. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
+| **Users may import their watch history from another server** | **Settings › Security** | On | Shows the import from a Jellyfin or Emby server under **My account** (see [Importing your own watch history](#importing-your-own-watch-history)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
