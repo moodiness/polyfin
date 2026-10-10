@@ -24,7 +24,7 @@ export interface Feature {
   docs: { title: string; link: string }
   /** SVG markup, from icons.ts. */
   icon: string
-  /** The feature's color in its video. */
+  /** The feature's color: its icon here, and on its card in the tour. */
   accent: string
 }
 

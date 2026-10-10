@@ -90,7 +90,7 @@ function onDialogClick(event: MouseEvent) {
       >
         <span class="play"><Icon :svg="icons.play" :size="12" /></span>
         Watch the tour
-        <span class="duration">1:18</span>
+        <span class="duration">1:23</span>
       </a>
       <div class="buttons">
         <SoundControl owner="intro" />

@@ -7,8 +7,8 @@ import { features } from './home'
 import { icons } from './icons'
 import { heard, level } from './sound'
 
-/** From 13.4 s, each video ends on Polyfin's logo: the viewer moves to the next feature just before. */
-const END = 13.2
+/** From 12 s, each video ends on Polyfin's logo: the viewer moves to the next feature there. */
+const END = 12
 
 const current = ref(0)
 const video = ref<HTMLVideoElement>()
