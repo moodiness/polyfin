@@ -582,9 +582,14 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		noMenu     bool
 		video      bool
 		// answers are Polyfin's, in order; then it fails, unless forever
-		// keeps the last.
+		// keeps the last. With off, they and the pushes say that Polyfin
+		// adds no version to an open page.
 		answers []answer
 		forever bool
+		off     bool
+		// With held, jellyfin-web fills the menu of a reloaded page only at
+		// the step "render", as when its details come late.
+		held bool
 		// steps: a route the router moves to; "tick" runs the next timer,
 		// logging "idle" when there is none; "focus" and "blur" move focus
 		// to and from the version menu; "pick <id>" picks a version as a
@@ -613,6 +618,9 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 	}
 	sized := versions(100, 200, 300)
 	grown := append(versions(100, 250, 300), source{"v3", "Version 3", 0})
+	// A version comes first: it takes the title's identifier, and the
+	// former first version one of its own.
+	ahead := []source{{id, "Version 9", 0}, {"v0", "Version 0", 0}, {"v1", "Version 1", 0}}
 	scenarios := map[string]scenario{
 		// From the one version a hidden menu lists, the menu shows them all.
 		"versions come as addons answer": {listed: 1, answers: []answer{{2, 1, nil}, {1, 2, nil}, {0, 4, nil}},
@@ -686,6 +694,51 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"a push after the last answer": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
 			steps: []string{title, "tick", "tick", "tick", "push 0 3", "menu"},
 			want:  []string{ask, ask, ask, "idle", details, "menu *t v1 v2 shown"}},
+		// A version listed first takes the title's identifier, and the
+		// former first one an identifier of its own: the version picked by
+		// jellyfin-web stays picked, under that identifier.
+		"the version picked stays picked when another comes first": {listed: 2, answers: []answer{{0, 3, ahead}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, ask, "idle", "menu t *v0 v1 shown"})},
+		"a version picked while first stays picked": {listed: 2, answers: []answer{{1, 2, nil}, {0, 3, ahead}}, forever: true,
+			steps: []string{title, "pick v1", "pick t", "tick", "tick", "tick", "menu"},
+			want: slices.Concat([]string{ask, "tracks v1", "tracks t", ask, details}, reloads,
+				[]string{ask, "idle", "menu t *v0 v1 shown"})},
+		"a version picked after the first stays as it is": {listed: 2, picked: "v1", answers: []answer{{0, 3, ahead}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  []string{ask, details, ask, ask, "idle", "menu t v0 *v1 shown"}},
+		// Of the versions with the name of the one picked, the one with its
+		// size, once the script listed it.
+		"the size tells the version picked among the same names": {options: []source{{id, "Same", 100}, {"v1", "Other", 0}},
+			answers: []answer{
+				{1, 3, []source{{id, "Same", 100}, {"v1", "Other", 0}, {"v2", "Other", 5}}},
+				{0, 5, []source{{id, "New", 0}, {"v3", "Same", 50}, {"v0", "Same", 100}, {"v1", "Other", 0}, {"v2", "Other", 5}}},
+			}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details, ask, details}, reloads, []string{ask, "idle", "menu t v3 *v0 v1 v2 shown"})},
+		// A version added under the title's identifier is picked; before
+		// jellyfin-web lists it, another comes first: the pick is made
+		// under the version's new identifier.
+		"a version added and picked stays picked when another comes first": {listed: 2, picked: "v1", held: true,
+			answers: []answer{
+				{1, 3, []source{{id, "Version 5", 0}, {"v0", "Version 0", 0}, {"v1", "Version 1", 0}}},
+				{0, 4, []source{{id, "Version 6", 0}, {"v5", "Version 5", 0}, {"v0", "Version 0", 0}, {"v1", "Version 1", 0}}},
+			}, forever: true,
+			steps: []string{title, "menu", "pick t", "tick", "render", "menu", "tick", "tick"},
+			want: slices.Concat([]string{ask, details, "menu t v0 *v1 shown"}, reloads, []string{ask, details}, reloads,
+				[]string{"tracks v5", "menu t *v5 v0 v1 shown", ask, "idle"})},
+		// Adding no version to an open page, Polyfin still has the
+		// placeholder give way, once; a page that lists versions keeps them.
+		"off, the placeholder still gives way": {off: true, options: []source{{id, "Movie", 0}},
+			answers: []answer{{1, 1, []source{{id, "Movie", 0}}}, {1, 3, nil}, {1, 4, nil}, {0, 5, nil}},
+			steps:   steps(5, "menu"),
+			want:    slices.Concat([]string{ask, ask, details}, reloads, []string{ask, ask, "idle", "menu *t v1 v2 shown"})},
+		"off, a version stays alone": {off: true, listed: 1, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}},
+			steps: steps(4, "menu"),
+			want:  []string{ask, ask, details, ask, "idle", "menu *t hidden"}},
+		"off, versions stay as listed": {off: true, listed: 2, answers: []answer{{1, 2, nil}, {1, 3, nil}, {0, 4, nil}},
+			steps: slices.Concat(steps(4), []string{"push 0 5", "menu"}),
+			want:  []string{ask, ask, ask, "idle", "menu *t v1 shown"}},
 	}
 	ninety := slices.Repeat([]string{ask}, 90)
 	scenarios["90 seconds at most"] = scenario{listed: 1, answers: []answer{{1, 1, nil}}, forever: true,
@@ -776,8 +829,9 @@ async function run(scenario) {
     querySelector: (selector) => (selector === '.selectSource' && !scenario.noMenu ? menu : null),
     dispatchEvent: (event) => {
       log.push(event.type + (event.detail && 'isRestored' in event.detail ? ' ' + event.detail.isRestored : ''))
-      // Reloaded, the page lists what the details give now.
-      if (event.type === 'viewshow') fill(menu.value)
+      // Reloaded, the page lists what the details give now, or at the
+      // step "render" with held.
+      if (event.type === 'viewshow' && !scenario.held) fill(menu.value)
     },
   }
   const document = {
@@ -800,11 +854,11 @@ async function run(scenario) {
       const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
       sources = answer.Sources || versions(answer.Count)
-      return Promise.resolve({ Pending: answer.Pending, Count: answer.Count })
+      return Promise.resolve({ Pending: answer.Pending, Count: answer.Count, AddVersions: !scenario.off })
     },
     getItem: (user, id) => {
       log.push('details ' + short(id) + (user === 'user' ? '' : ' for ' + user))
-      return Promise.resolve({ Id: id, MediaSources: sources.map((source) => ({ ...source })) })
+      return Promise.resolve({ Id: id, Name: 'Movie', MediaSources: sources.map((source) => ({ ...source })) })
     },
   }
   vm.runInNewContext(script, {
@@ -827,10 +881,11 @@ async function run(scenario) {
       const options = menu.children.map((option) => (option.selected ? '*' : '') + short(option.value))
       log.push(['menu', ...options, container.hidden ? 'hidden' : 'shown'].join(' '))
     } else if (step === 'clock') log.push('clock ' + now / 1000)
+    else if (step === 'render') fill(menu.value)
     else if (step.startsWith('push ')) {
       // As jellyfin-web's events trigger ApiClient's message event.
       const [, pending, count] = step.split(' ')
-      const data = pending === 'other' ? { ItemId: 'f'.repeat(32), Pending: 0, Count: 5 } : { ItemId: TITLE.toUpperCase(), Pending: +pending, Count: +count }
+      const data = pending === 'other' ? { ItemId: 'f'.repeat(32), Pending: 0, Count: 5 } : { ItemId: TITLE.toUpperCase(), Pending: +pending, Count: +count, AddVersions: !scenario.off }
       if (pending !== 'other') sources = versions(+count)
       const message = { MessageType: 'PolyfinVersions', MessageId: 'm', Data: data }
       for (const callback of ((ApiClient._callbacks || {}).message || []).slice()) callback.apply(ApiClient, [{ type: 'message' }, message])
@@ -865,11 +920,13 @@ async function run(scenario) {
 		Video      bool     `json:"video"`
 		Answers    []answer `json:"answers"`
 		Forever    bool     `json:"forever"`
+		Off        bool     `json:"off"`
+		Held       bool     `json:"held"`
 		Steps      []string `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.steps}
+		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.off, s.held, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
