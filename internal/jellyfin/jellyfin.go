@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/trackers"
+	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -76,6 +77,9 @@ type Options struct {
 	// Tasks are the server's periodic jobs, shown as Jellyfin's scheduled
 	// tasks; nil shows none.
 	Tasks *tasks.Registry
+	// Updates tells whether a new version of Polyfin is out, as
+	// HasUpdateAvailable; nil tells none.
+	Updates *updates.Checker
 	// Logs keeps the recent log lines administrators read; nil keeps none.
 	Logs *logs.Ring
 	// CacheDir is where sources and their remuxes are kept: with the

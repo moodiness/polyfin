@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/updates"
 )
 
 func randomID() accounts.ID {
@@ -396,6 +398,53 @@ func TestHealthDescribesTheServerFromWhatItRecords(t *testing.T) {
 	}
 	if status := admin.raw(http.MethodPost, "/health/addons/"+randomID().String()+"/check", "", nil); status != http.StatusNotFound {
 		t.Errorf("unknown addon: %d", status)
+	}
+}
+
+// Health tells the new version of Polyfin the daily check found, with its
+// release notes, while Check for new versions is on, which it is by
+// default.
+func TestHealthTellsANewVersion(t *testing.T) {
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"tag_name":"v1.3.0","html_url":"https://github.com/moodiness/polyfin/releases/tag/v1.3.0"}`)
+	}))
+	t.Cleanup(github.Close)
+	var checker *updates.Checker
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		store := o.Accounts
+		checker = updates.New(updates.Options{DB: deps.pool, Version: o.Version, API: github.URL, Logger: slog.New(slog.DiscardHandler),
+			Enabled: func() bool { return store.Settings().UpdateCheck }})
+		o.Health = HealthSources{Updates: checker}
+	})
+	admin := api.signedIn("root", true)
+	update := func() *updateJSON {
+		t.Helper()
+		var health healthJSON
+		if status := admin.raw(http.MethodGet, "/health", "", &health); status != http.StatusOK {
+			t.Fatalf("health: %d", status)
+		}
+		return health.Update
+	}
+	if got := update(); got != nil {
+		t.Errorf("before any check: %+v", got)
+	}
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := update(); got == nil || got.Version != "1.3.0" || got.URL != "https://github.com/moodiness/polyfin/releases/tag/v1.3.0" {
+		t.Errorf("1.3.0 found while running 1.2.3: %+v", got)
+	}
+
+	if _, body, _ := admin.call(http.MethodGet, "/settings", nil); body["updateCheck"] != true {
+		t.Errorf("default settings: %v", body)
+	}
+	off := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en",
+		"updateCheck": false}
+	if status, saved, _ := admin.call(http.MethodPut, "/settings", off); status != http.StatusOK || saved["updateCheck"] != false {
+		t.Fatalf("turning the check off: %d %v", status, saved)
+	}
+	if got := update(); got != nil {
+		t.Errorf("with the check off: %+v", got)
 	}
 }
 

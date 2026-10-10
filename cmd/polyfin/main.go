@@ -50,6 +50,7 @@ import (
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/trackers"
+	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
 	webui "github.com/moodiness/polyfin/web"
 )
@@ -300,6 +301,11 @@ func serve(ctx context.Context) error {
 		history.Record(context.Background(), c)
 		notifier.Playback(c)
 	})
+	// The daily check for a new version tells administrators through the
+	// notifications, made below.
+	updateCheck := updates.New(updates.Options{DB: pool, Version: version, Logger: logger,
+		Enabled: func() bool { return store.Settings().UpdateCheck },
+		Notify:  func(release updates.Release) { notifier.NewVersion(release.Version, release.URL) }})
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:      serverID,
 		Accounts:      store,
@@ -320,6 +326,7 @@ func serve(ctx context.Context) error {
 		Logger:        logger,
 		Activity:      activityLog,
 		Tasks:         registry,
+		Updates:       updateCheck,
 		Logs:          recent,
 		CacheDir:      cfg.CacheDir,
 		FontsDir:      cfg.FontsDir,
@@ -360,6 +367,7 @@ func serve(ctx context.Context) error {
 			Started:      started,
 			SecretKey:    box.Enabled(),
 			Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
+			Updates:      updateCheck,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,
@@ -399,6 +407,7 @@ func serve(ctx context.Context) error {
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
 	go notifier.Run(ctx)
+	go updateCheck.Run(ctx)
 	go playbacks.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()

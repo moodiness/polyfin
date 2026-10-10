@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/updates"
 )
 
 // HealthSources are what the health page reads, each optional: nothing
@@ -39,6 +40,9 @@ type HealthSources struct {
 	// how the stored secrets stand with it.
 	SecretKey bool
 	Secrets   func(context.Context) (secrets.Report, error)
+	// Updates tells the new version of Polyfin its daily check found; nil
+	// tells none.
+	Updates *updates.Checker
 }
 
 type healthJSON struct {
@@ -54,6 +58,16 @@ type healthJSON struct {
 	Secrets *secretsHealthJSON `json:"secrets"`
 	// Backup is how the database backups go, null when they are off.
 	Backup *backupJSON `json:"backup"`
+	// Update is the new version of Polyfin out, null when there is none,
+	// or while Check for new versions is off.
+	Update *updateJSON `json:"update"`
+}
+
+// updateJSON is a new version of Polyfin, and the address of its release
+// notes.
+type updateJSON struct {
+	Version string `json:"version"`
+	URL     string `json:"url"`
 }
 
 type processJSON struct {
@@ -252,6 +266,9 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	result.Secrets = h.secretsHealth(r.Context())
+	if release, ok := h.Health.Updates.Available(); ok {
+		result.Update = &updateJSON{Version: release.Version, URL: release.URL}
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 

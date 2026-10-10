@@ -36,6 +36,7 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -364,6 +365,45 @@ func TestLegacyAuthorizationFollowsTheSetting(t *testing.T) {
 	s.setting(t, func(settings *accounts.Settings) { settings.LegacyAuthorization = true })
 	if status, _ := s.call(http.MethodGet, "/Users/Me?api_key="+token, "", nil); status != http.StatusOK {
 		t.Errorf("api_key with legacy authorization on: got %d, want 200", status)
+	}
+}
+
+// HasUpdateAvailable tells the new version of Polyfin the daily check
+// found, while Check for new versions is on.
+func TestSystemInfoTellsANewVersion(t *testing.T) {
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"tag_name":"v99.0.0","html_url":"https://github.com/moodiness/polyfin/releases/tag/v99.0.0"}`)
+	}))
+	t.Cleanup(github.Close)
+	var checker *updates.Checker
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
+		store := o.Accounts
+		checker = updates.New(updates.Options{DB: pool, Version: "1.2.3", API: github.URL, Logger: slog.New(slog.DiscardHandler),
+			Enabled: func() bool { return store.Settings().UpdateCheck }})
+		o.Updates = checker
+	})
+	s.user("alice", nil)
+	token := app("tv", s.signIn("alice", "tv"))
+	updateAvailable := func() bool {
+		t.Helper()
+		var info SystemInfo
+		if _, body := s.call(http.MethodGet, "/System/Info", token, nil); json.Unmarshal(body, &info) != nil {
+			t.Fatalf("system info: %s", body)
+		}
+		return info.HasUpdateAvailable
+	}
+	if updateAvailable() {
+		t.Error("an update before any check")
+	}
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !updateAvailable() {
+		t.Error("no update once 99.0.0 is found")
+	}
+	s.setting(t, func(settings *accounts.Settings) { settings.UpdateCheck = false })
+	if updateAvailable() {
+		t.Error("an update with the check off")
 	}
 }
 
