@@ -269,10 +269,14 @@ const common = {
     jellyfin_unreachable:
       'Nothing answered at this address. Check it, and that Jellyfin is running.',
     not_jellyfin: 'A server answered at this address, but it is not Jellyfin. Check the address.',
-    jellyfin_import_running:
-      'An import from Jellyfin is already running. Wait for it to end, or stop it.',
+    jellyfin_import_running: 'An import is already running. Wait for it to end, or stop it.',
     unknown_jellyfin_user:
       'A Jellyfin user is no longer on that server. Connect again to read its users.',
+    emby_user_key:
+      'This key is a user’s own, and Emby does not tell whose it is. Create an API key in Emby’s settings, or connect with a user account.',
+    server_import_running: 'Another import is running on this server. Try again in a few minutes.',
+    server_imports_disabled:
+      'Importing your watch history from another server is turned off on this server.',
   },
   status: {
     title: 'Server status',

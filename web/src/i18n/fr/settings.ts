@@ -288,6 +288,9 @@ const settings: typeof en = {
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
+    serverImports: 'Les utilisateurs peuvent importer leur historique depuis un autre serveur',
+    serverImportsHelp:
+      'Sous Mon compte, chaque utilisateur peut importer ses films et épisodes vus, ses points de reprise et ses favoris depuis un serveur Jellyfin ou Emby, en s’y connectant avec son propre nom et son mot de passe. Sinon, cette section est masquée.',
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
     loginAttemptsHelp: (r: RangeText) =>
       `Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
@@ -395,7 +398,7 @@ const settings: typeof en = {
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
-      security: 'Addons des utilisateurs, comptes bloqués et appareils inutilisés.',
+      security: 'Addons et importations des utilisateurs, comptes bloqués et appareils inutilisés.',
       liveTv:
         'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',

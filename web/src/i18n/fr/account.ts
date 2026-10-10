@@ -7,9 +7,27 @@ const account: typeof en = {
     sectionsLabel: 'Sections du compte',
     sections: {
       tracking: 'Suivi',
+      import: 'Importer depuis un autre serveur',
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
+    },
+    serverImport: {
+      description:
+        'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin ou Emby que vous utilisiez. Ils vont dans votre compte seulement, reconnus par IMDb, TMDB ou TVDB, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
+      serverKind: 'Serveur',
+      address: 'Adresse du serveur',
+      addressHelp:
+        'L’adresse à laquelle le serveur s’ouvre dans un navigateur, par exemple http://192.168.1.10:8096.',
+      name: 'Votre nom d’utilisateur sur ce serveur',
+      password: 'Votre mot de passe sur ce serveur',
+      passwordHelp:
+        'Il sert seulement à cette importation, et n’est jamais gardé. Polyfin se connecte avec votre compte, comme les applis du serveur, puis se déconnecte. Laissez vide si votre compte n’en a pas.',
+      start: 'Importer mon historique',
+      starting: 'Lancement…',
+      started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
+      lastTitle: 'Votre dernière importation',
+      from: (server: string) => `Depuis ${server}`,
     },
     notificationsHelp:
       'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, ou quand vos enregistrements se terminent.',

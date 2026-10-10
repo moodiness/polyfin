@@ -471,6 +471,13 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
         checked={form.personalAddons}
         onChange={(personalAddons) => update({ personalAddons })}
       />
+      <SwitchRow
+        anchor="server-imports"
+        label={s.serverImports}
+        help={s.serverImportsHelp}
+        checked={form.serverImports}
+        onChange={(serverImports) => update({ serverImports })}
+      />
       <FieldRow
         anchor="login-attempts"
         label={s.loginAttempts}

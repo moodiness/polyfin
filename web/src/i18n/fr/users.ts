@@ -177,41 +177,65 @@ const users: typeof en = {
     noServerLibrariesHelp:
       'Ajoutez une bibliothèque dans Contenu › Bibliothèques, puis choisissez ici celles que cet utilisateur voit.',
     jellyfinImport: {
-      open: 'Importer depuis Jellyfin',
-      title: 'Importer depuis Jellyfin',
+      open: 'Importer depuis un autre serveur',
+      title: 'Importer depuis un autre serveur',
       description:
-        'Reprenez les comptes d’un serveur Jellyfin et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans Jellyfin. Jellyfin ne donne pas les mots de passe : vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
-      connectTitle: 'Se connecter à Jellyfin',
+        'Reprenez les comptes d’un serveur Jellyfin, Emby ou Plex et ce qu’ils ont regardé : noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB. Les données de Polyfin sont seulement complétées, et rien n’est écrit sur l’autre serveur. Les serveurs ne donnent pas les mots de passe : vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
+      serverKind: 'Serveur',
+      servers: {
+        jellyfin: 'Jellyfin',
+        emby: 'Emby',
+        plex: 'Plex',
+      },
+      serverKindHelp: {
+        jellyfin: 'Jellyfin, ou un serveur qui parle son API.',
+        emby: 'Emby, avec ses propres clés d’API et utilisateurs.',
+        plex: 'Plex Media Server, lu avec le jeton de son propriétaire.',
+      },
+      connectTitle: (server: string) => `Se connecter à ${server}`,
       connectHelp:
         'L’adresse, la clé et les mots de passe servent seulement à cette importation : Polyfin ne les enregistre pas.',
       address: 'Adresse du serveur',
-      addressHelp:
-        'L’adresse à laquelle Jellyfin s’ouvre dans un navigateur. Une adresse du réseau local fonctionne.',
+      addressHelp: (server: string) =>
+        `L’adresse à laquelle ${server} s’ouvre dans un navigateur. Une adresse du réseau local fonctionne.`,
+      plexAddressHelp:
+        'L’adresse de Plex Media Server lui-même, en général sur le port 32400. Une adresse du réseau local fonctionne.',
       connectWith: 'Se connecter avec',
       withApiKey: 'Une clé d’API',
       withAccount: 'Un compte utilisateur',
       apiKey: 'Clé d’API',
       apiKeyHelp:
         'Créez-en une dans le tableau de bord de Jellyfin, sous Clés API : elle lit les données de visionnage de tous les utilisateurs.',
+      embyApiKeyHelp:
+        'Créez-en une dans les paramètres d’Emby, sous Clés API : elle lit les données de visionnage de tous les utilisateurs. La clé d’un utilisateur n’est pas acceptée : Emby ne dit pas à qui elle appartient.',
+      plexToken: 'Jeton Plex',
+      plexTokenHelp:
+        'Le jeton du propriétaire du serveur, avec lequel Polyfin ne fait que lire le serveur. Pour le trouver, ouvrez Plex dans un navigateur, connecté avec le compte du propriétaire. Ouvrez le menu d’un film, choisissez Obtenir des infos, puis Afficher le XML : l’adresse de la page qui s’ouvre se termine par X-Plex-Token= suivi du jeton. Copiez ce qui suit.',
       accountName: 'Nom d’utilisateur',
-      accountNameHelp:
-        'Le compte d’un administrateur liste tous les utilisateurs. Polyfin se connecte comme les applis de Jellyfin, puis se déconnecte.',
+      accountNameHelp: (server: string) =>
+        `Le compte d’un administrateur liste tous les utilisateurs. Polyfin se connecte comme les applis de ${server}, puis se déconnecte.`,
       accountPassword: 'Mot de passe',
       accountPasswordHelp: 'Laissez vide si le compte n’en a pas.',
       connect: 'Se connecter',
       connecting: 'Connexion…',
       chooseTitle: 'Choisir qui importer',
-      chooseHelp: (server: string, version: string) =>
-        `${server}, Jellyfin ${version}. Pour chaque utilisateur, choisissez le compte Polyfin dans lequel importer, ou créez-en un.`,
+      chooseHelp: (server: string, product: string, version: string) =>
+        `${server}, ${product} ${version}. Pour chaque utilisateur, choisissez le compte Polyfin dans lequel importer, ou créez-en un.`,
       changeServer: 'Changer de serveur',
-      noUsers: 'Ce serveur Jellyfin n’a aucun utilisateur.',
+      noUsers: (product: string) => `Ce serveur ${product} n’a aucun utilisateur.`,
       lastActivityLabel: 'Dernière activité :',
       importAs: 'Importer dans',
       skip: 'Ne pas importer',
       newUser: 'Nouvel utilisateur',
       watchData: 'Importer les données de visionnage',
       watchDataHelp: 'Titres vus avec leurs dates, points de reprise et favoris.',
+      plexOwnerWatchDataHelp:
+        'Titres vus avec leurs dates et leur nombre de lectures, et points de reprise.',
+      plexWatchDataHelp:
+        'Titres vus avec leurs dates et leur nombre de lectures. Plex ne laisse pas Polyfin lire les points de reprise de ce compte.',
       watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
+      plexNotice:
+        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus et les points de reprise du propriétaire, mais seulement les titres vus des autres comptes, d’après leur historique de lecture : leurs points de reprise restent sur Plex. Plex n’a pas de favoris à importer.',
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
       serverPassword: (server: string) => `Mot de passe sur ${server}`,
@@ -232,6 +256,8 @@ const users: typeof en = {
       lastTitle: 'Dernière importation',
       startedLabel: 'Commencée',
       endedLabel: 'Terminée',
+      startedBy: (name: string, own: boolean) =>
+        own ? `Historique de ${name}, depuis Mon compte` : `Lancée par ${name}`,
       runningHelp:
         'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, l’importation s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien en double.',
       stop: 'Arrêter l’importation',
@@ -243,16 +269,45 @@ const users: typeof en = {
         failed: 'Échouée',
       },
       problems: {
-        jellyfin_unreachable:
-          'Jellyfin est devenu injoignable pendant l’importation. Ce qui a été importé est gardé.',
-        jellyfin_key_refused:
-          'Jellyfin a refusé la clé d’API pendant l’importation : elle a peut-être été révoquée. Ce qui a été importé est gardé.',
-        not_jellyfin:
-          'Le serveur a cessé de répondre comme Jellyfin pendant l’importation. Ce qui a été importé est gardé.',
-        internal:
+        jellyfin_unreachable: (server: string) =>
+          `${server} est devenu injoignable pendant l’importation. Ce qui a été importé est gardé.`,
+        jellyfin_key_refused: (server: string) =>
+          `${server} a refusé la clé d’API pendant l’importation : elle a peut-être été révoquée. Ce qui a été importé est gardé.`,
+        not_jellyfin: (server: string) =>
+          `Le serveur a cessé de répondre comme ${server} pendant l’importation. Ce qui a été importé est gardé.`,
+        internal: () =>
           'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur donne le détail. Ce qui a été importé est gardé.',
-        jellyfin_user_forbidden:
+        jellyfin_user_forbidden: () =>
           'Le serveur ne laisse pas cette clé lire les données de cet utilisateur. Importez-les avec une clé d’API du tableau de bord du serveur, ou avec sa propre clé.',
+      },
+      errors: {
+        emby: {
+          invalid_jellyfin_address:
+            'Saisissez l’adresse du serveur Emby, par exemple http://192.168.1.10:8096.',
+          jellyfin_key_refused:
+            'Emby a refusé cette clé d’API. Créez-en une dans ses paramètres, sous Clés API, puis collez-la à nouveau.',
+          jellyfin_sign_in_refused: 'Emby a refusé ce nom ou ce mot de passe.',
+          jellyfin_sign_in_forbidden:
+            'Emby ne laisse pas ce compte se connecter : il est peut-être désactivé, ou hors de ses horaires autorisés.',
+          jellyfin_password_refused:
+            'Emby a refusé ce mot de passe. Laissez vide si le compte n’en a pas.',
+          jellyfin_unreachable:
+            'Rien n’a répondu à cette adresse. Vérifiez-la, et qu’Emby est bien lancé.',
+          not_jellyfin:
+            'Un serveur a répondu à cette adresse, mais ce n’est pas Emby. Vérifiez l’adresse.',
+        },
+        plex: {
+          invalid_jellyfin_address:
+            'Saisissez l’adresse de Plex Media Server, par exemple http://192.168.1.10:32400.',
+          jellyfin_key_refused:
+            'Plex a refusé ce jeton. Copiez à nouveau le jeton du propriétaire.',
+          jellyfin_key_limited:
+            'Ce jeton ne peut pas lister les comptes du serveur : ce n’est pas celui du propriétaire. Utilisez le jeton du propriétaire.',
+          jellyfin_unreachable:
+            'Rien n’a répondu à cette adresse. Vérifiez-la, et que Plex Media Server est bien lancé.',
+          not_jellyfin:
+            'Un serveur a répondu à cette adresse, mais ce n’est pas Plex Media Server. Vérifiez l’adresse.',
+        },
       },
       userStates: {
         waiting: 'En attente',
