@@ -36,9 +36,9 @@ type Event struct {
 	// URL opens what the event is about, when the server's public address
 	// is set; null otherwise.
 	URL *string `json:"url"`
-	// User is the user the event is about, null for health events and new
-	// versions, and for new episodes sent to the server's targets, which
-	// are told once whoever follows the series.
+	// User is the user the event is about, null for health events, new
+	// versions, new episodes sent to the server's targets, which are told
+	// once whoever follows the series, and the server's weekly summary.
 	User *UserJSON `json:"user"`
 	// One of these is set, by Type.
 	Episode   *EpisodeJSON   `json:"episode,omitempty"`
@@ -47,6 +47,7 @@ type Event struct {
 	Invite    *InviteJSON    `json:"invite,omitempty"`
 	Playback  *PlaybackJSON  `json:"playback,omitempty"`
 	Release   *ReleaseJSON   `json:"release,omitempty"`
+	Summary   *SummaryJSON   `json:"summary,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -318,10 +319,14 @@ func (s *Service) NewVersion(version, link string) {
 }
 
 // UserJoined tells the server's targets and administrators' own that user
-// created their account through invite. It returns at once: who the
-// administrators are is read again, and the message sent, in the
-// background.
-func (s *Service) UserJoined(_ context.Context, user accounts.User, invite accounts.Invite) {
+// created their account through invite, and keeps it for the weekly
+// summary. It returns once it is kept: who the administrators are is read
+// again, and the message sent, in the background.
+func (s *Service) UserJoined(ctx context.Context, user accounts.User, invite accounts.Invite) {
+	if _, err := s.db.Exec(context.WithoutCancel(ctx), `INSERT INTO notification_joins (user_id, invite_id, joined_at) VALUES ($1, $2, $3)
+		ON CONFLICT DO NOTHING`, user.ID, invite.ID, s.now()); err != nil {
+		s.logger.Warn("A user who joined could not be kept for the weekly summary", "user_id", user.ID.String(), "error", err)
+	}
 	ev := s.userJoinedEvent(user, invite)
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -26,6 +26,7 @@ var discordColors = map[string]int{
 	PlaybackPaused:    0x94a3b8,
 	PlaybackResumed:   0x14b8a6,
 	PlaybackStopped:   0x64748b,
+	WeeklySummary:     0x6366f1,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -95,6 +96,7 @@ var ntfyTags = map[string][]string{
 	UserJoined:        {"wave"},
 	NewVersion:        {"package"},
 	Test:              {"bell"},
+	WeeklySummary:     {"bar_chart"},
 	PlaybackStarted:   {"arrow_forward"},
 	PlaybackPaused:    {"pause_button"},
 	PlaybackResumed:   {"arrow_forward"},

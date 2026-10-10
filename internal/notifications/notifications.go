@@ -2,13 +2,15 @@
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
 // solved, a user who joined through an invite, a new version of Polyfin, a
-// playback that started, paused, resumed or stopped. Messages go to targets: generic webhooks,
-// which receive a versioned JSON event (see Event); Discord webhooks, ntfy
+// playback that started, paused, resumed or stopped, and once a week a
+// summary of the week. Messages go to targets: generic webhooks, which
+// receive a versioned JSON event (see Event); Discord webhooks, ntfy
 // topics, Telegram chats, Gotify servers and Pushover users, which receive
 // messages formatted for them; and email addresses, through the SMTP server
 // of the settings. Administrators add the server's targets, which receive
 // the events of every user; each user adds their own, which receive their
-// own events, and the health, joining and new version events for
+// own events, and the health, joining and new version events and the
+// server's weekly summary for
 // administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
@@ -30,6 +32,8 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -73,6 +77,9 @@ const (
 	PlaybackPaused  = "playback_paused"
 	PlaybackResumed = "playback_resumed"
 	PlaybackStopped = "playback_stopped"
+	// WeeklySummary tells the server's week to the server's targets and
+	// administrators' own, and each user's week to theirs (see summary.go).
+	WeeklySummary = "weekly_summary"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -80,7 +87,7 @@ const (
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
-	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped}
+	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user
@@ -182,6 +189,18 @@ type UserData interface {
 	Favorites(ctx context.Context, user accounts.ID) ([]userdata.Entry, error)
 }
 
+// History sums the playbacks of a week for the weekly summary;
+// plays.History is one.
+type History interface {
+	Summary(ctx context.Context, f plays.Filter, top int) (plays.Summary, error)
+}
+
+// LocalFiles lists the titles files were added for to the local folders,
+// for the weekly summary; localfiles.Service is one.
+type LocalFiles interface {
+	Added(ctx context.Context, since, until time.Time, limit int) ([]localfiles.Added, int, error)
+}
+
 // Problem is something System › Health shows as needing attention. Key
 // names it the same way from one check to the next; Text describes it in
 // the server language; Page is the page of the admin app that shows it,
@@ -218,7 +237,14 @@ type Options struct {
 	// Problems finds what System › Health shows as needing attention; nil
 	// sends no health event.
 	Problems func(context.Context) ([]Problem, error)
-	Logger   *slog.Logger
+	// History and LocalFiles tell the weekly summary what was played and
+	// what was added to the local folders; nil tells nothing of it.
+	History    History
+	LocalFiles LocalFiles
+	// Zone is the server's time zone, which the weekly summary's day and
+	// hour are in; nil for the local one.
+	Zone   *time.Location
+	Logger *slog.Logger
 }
 
 // timing is how long the service waits for what. Tests shorten it.
@@ -239,6 +265,9 @@ type timing struct {
 	// solved once as many no longer did.
 	healthEvery   time.Duration
 	healthConfirm int
+	// summaryFirst is how long after start the weekly summary is first
+	// looked at, due or not, and summaryEvery how often after that.
+	summaryFirst, summaryEvery time.Duration
 }
 
 var defaultTiming = timing{
@@ -251,6 +280,8 @@ var defaultTiming = timing{
 	episodesEvery:    2 * time.Hour,
 	healthEvery:      5 * time.Minute,
 	healthConfirm:    2,
+	summaryFirst:     time.Minute,
+	summaryEvery:     time.Minute,
 }
 
 const (
@@ -280,6 +311,9 @@ type Service struct {
 	serverID  string
 	webClient bool
 	problems  func(context.Context) ([]Problem, error)
+	history   History
+	files     LocalFiles
+	zone      *time.Location
 	logger    *slog.Logger
 	now       func() time.Time
 	timing    timing
@@ -311,14 +345,21 @@ type Service struct {
 	// health are the problems found, by key (see health.go).
 	health map[string]*healthState
 	// episodesMu and healthMu serialize the looks at the series, and at
-	// the problems.
-	episodesMu, healthMu sync.Mutex
+	// the problems; summaryMu the weekly summaries, and guards
+	// summarySent, the end of the last week sent as last read, zero
+	// before.
+	episodesMu, healthMu, summaryMu sync.Mutex
+	summarySent                     time.Time
 }
 
 // New returns a service keeping targets in the database of options. Run
 // starts following the series and the health problems.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
+	zone := options.Zone
+	if zone == nil {
+		zone = time.Local
+	}
 	return &Service{
 		db:          options.DB,
 		accounts:    options.Accounts,
@@ -329,6 +370,9 @@ func New(options Options) *Service {
 		serverID:    options.ServerID,
 		webClient:   options.WebClient,
 		problems:    options.Problems,
+		history:     options.History,
+		files:       options.LocalFiles,
+		zone:        zone,
 		logger:      options.Logger,
 		now:         time.Now,
 		timing:      defaultTiming,
@@ -346,9 +390,10 @@ func New(options Options) *Service {
 	}
 }
 
-// Run reads the targets, then looks at the series users follow and at the
-// health problems when due, each on its own schedule, until ctx ends; it
-// then stops sending and waits for the sends under way.
+// Run reads the targets, then looks at the series users follow, at the
+// health problems and at whether the weekly summary is due, each on its
+// own schedule, until ctx ends; it then stops sending and waits for the
+// sends under way.
 func (s *Service) Run(ctx context.Context) {
 	if err := s.reload(ctx); err != nil && ctx.Err() == nil {
 		s.logger.Warn("The notification targets could not be read", "error", err)
@@ -356,6 +401,7 @@ func (s *Service) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { every(ctx, s.timing.episodesFirst, s.timing.episodesEvery, s.CheckEpisodes) })
 	wg.Go(func() { every(ctx, s.timing.healthEvery, s.timing.healthEvery, s.CheckHealth) })
+	wg.Go(func() { every(ctx, s.timing.summaryFirst, s.timing.summaryEvery, s.CheckSummary) })
 	wg.Wait()
 	s.Close()
 }
