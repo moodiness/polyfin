@@ -335,6 +335,12 @@ export type Settings = {
   /** Whether the videos played are kept, for the statistics, and for how many days. */
   playbackHistory: boolean
   playbackHistoryDays: number
+  /**
+   * When the weekly summary is sent, in the server's time zone: the day of the week, 0 for Sunday
+   * to 6 for Saturday, and the hour, 0 to 23.
+   */
+  weeklySummaryDay: number
+  weeklySummaryHour: number
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1116,6 +1122,7 @@ export type NotificationEvent =
   | 'playback_paused'
   | 'playback_resumed'
   | 'playback_stopped'
+  | 'weekly_summary'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is

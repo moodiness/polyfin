@@ -33,7 +33,7 @@ const account: typeof en = {
     statisticsHelp:
       'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',
     notificationsHelp:
-      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, quand vos enregistrements se terminent, ou quand vos lectures commencent et s’arrêtent.',
+      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, quand vos enregistrements se terminent, ou quand vos lectures commencent et s’arrêtent, et vous envoie le résumé de votre semaine.',
     devicesHelp:
       'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',

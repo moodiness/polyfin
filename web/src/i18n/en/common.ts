@@ -190,6 +190,8 @@ const common = {
     invalid_smtp_account: 'The SMTP user and password are up to 256 characters, on one line.',
     invalid_smtp_sender:
       'Enter the sender’s address alone, such as polyfin@example.org, and a name of up to 128 characters.',
+    invalid_weekly_summary_day: 'Choose the day of the weekly summary from the list.',
+    invalid_weekly_summary_hour: 'Choose the hour of the weekly summary from the list.',
     invalid_target_kind: 'Choose a kind of target from the list.',
     invalid_target_name: 'Target names must be 1 to 64 characters long.',
     invalid_target_address: 'Enter a web address starting with https:// or http://.',

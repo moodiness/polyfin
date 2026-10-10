@@ -99,6 +99,7 @@ const notifications: typeof en = {
       playback_paused: 'Lecture en pause',
       playback_resumed: 'Lecture reprise',
       playback_stopped: 'Lecture arrêtée',
+      weekly_summary: 'Résumé de la semaine',
     },
     eventHelp: {
       new_episode:
@@ -118,6 +119,8 @@ const notifications: typeof en = {
       playback_resumed: 'Une lecture en pause reprend.',
       playback_stopped:
         'Une lecture s’arrête, ou son appli a cessé de la signaler depuis cinq minutes.',
+      weekly_summary:
+        'Une fois par semaine, au jour et à l’heure choisis pour le serveur : les heures regardées, les titres et les nouveaux épisodes de la semaine. Les cibles du serveur et des administrateurs reçoivent la semaine du serveur, avec les utilisateurs arrivés, les fichiers ajoutés aux dossiers locaux et les problèmes détectés ; les autres reçoivent la leur. Rien n’est envoyé pour une semaine sans rien à dire.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

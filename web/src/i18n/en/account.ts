@@ -32,7 +32,7 @@ const account = {
     statisticsHelp:
       'What you watched on this server: hours, titles, apps and devices, and your recent playbacks.',
     notificationsHelp:
-      'Where Polyfin tells you when a new episode of a series you follow is out, when your recordings end, or when your playbacks start and stop.',
+      'Where Polyfin tells you when a new episode of a series you follow is out, when your recordings end, or when your playbacks start and stop, and sends you the summary of your week.',
     devicesHelp:
       'The apps signed in with your account. A device you sign out asks for your password the next time it opens.',
     passwordHelp: 'Changing your password signs out all your Jellyfin devices.',
