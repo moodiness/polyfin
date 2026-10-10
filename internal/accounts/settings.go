@@ -808,6 +808,12 @@ type Settings struct {
 	CustomCss       string
 	CustomJs        string
 	LoginDisclaimer string
+	// AddVersionsToOpenPage has the web player add the versions the
+	// addons find to a title's page while it is open (see
+	// /Polyfin/Items/{id}/Versions). When off, it only replaces the
+	// placeholder with the versions, and the later ones show when the page
+	// is opened again.
+	AddVersionsToOpenPage bool
 	// TraktClientID and TraktClientSecret identify the app an
 	// administrator registered with Trakt, and SimklClientID the one
 	// registered with Simkl, through which users connect their accounts
@@ -939,7 +945,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
-	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
+	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
@@ -971,7 +977,8 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,
-		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
+		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
+		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,

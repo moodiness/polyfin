@@ -47,6 +47,9 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	if got := entry("customCss"); got["max"] != float64(accounts.MaxCustomCodeBytes) {
 		t.Errorf("customCss: %v", got)
 	}
+	if got := entry("addVersionsToOpenPage"); !reflect.DeepEqual(got, map[string]any{"default": true}) {
+		t.Errorf("addVersionsToOpenPage: %v", got)
+	}
 	// Every setting a PUT saves has bounds, and every bounds a setting;
 	// the secrets are never answered, but have bounds.
 	readOnly := map[string]bool{"bounds": true, "conversionHardware": true, "recordingsFolderDefault": true, "backupFolderDefault": true,

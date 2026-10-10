@@ -58,3 +58,25 @@ func TestSettingsWebPlayerCode(t *testing.T) {
 		t.Errorf("clearing: %d %v", status, body["error"])
 	}
 }
+
+// The web player's switch to add versions to an open title's page: on by
+// default, saved, and kept when a PUT leaves it out.
+func TestSettingsAddVersionsToOpenPage(t *testing.T) {
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["addVersionsToOpenPage"] != true {
+		t.Errorf("default: %v", body["addVersionsToOpenPage"])
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
+	off := maps.Clone(base)
+	off["addVersionsToOpenPage"] = false
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", off); status != http.StatusOK || body["addVersionsToOpenPage"] != false {
+		t.Fatalf("turning it off: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || body["addVersionsToOpenPage"] != false {
+		t.Errorf("left out: %d %v", status, body)
+	}
+	if api.store.Settings().AddVersionsToOpenPage {
+		t.Error("stored on after a save without it")
+	}
+}
