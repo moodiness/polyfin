@@ -49,6 +49,8 @@ The "Clean the playback history" task, under **System › Schedule**, deletes th
 
 **Export CSV** downloads the playbacks of the period, for everyone or the user chosen.
 
+The same history feeds the [weekly summary](notifications.md#weekly-summary) notification: once a week, the server's hours watched and its five most played movies and series, and each user's own week.
+
 ## My account
 
 Each user, members too, sees the same figures for their own playbacks under **My account › Statistics**, with their recent playbacks and **Export CSV** for their own history.
