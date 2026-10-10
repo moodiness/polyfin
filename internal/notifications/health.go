@@ -81,7 +81,7 @@ func (s *Service) CheckHealth(ctx context.Context) {
 		}
 		if !st.announced && st.seen >= s.timing.healthConfirm {
 			st.announced = true
-			s.dispatchHealth(s.healthEventOf(st.problem, st.since, false))
+			s.dispatchAdministrators(s.healthEventOf(st.problem, st.since, false))
 		}
 		s.saveHealth(ctx, st)
 	}
@@ -95,7 +95,7 @@ func (s *Service) CheckHealth(ctx context.Context) {
 			continue
 		}
 		if st.announced {
-			s.dispatchHealth(s.healthEventOf(st.problem, st.since, true))
+			s.dispatchAdministrators(s.healthEventOf(st.problem, st.since, true))
 		}
 		delete(s.health, key)
 		if _, err := s.db.Exec(ctx, "DELETE FROM notification_health WHERE key = $1", key); err != nil && ctx.Err() == nil {
@@ -114,10 +114,4 @@ func (s *Service) saveHealth(ctx context.Context, st *healthState) {
 	if err != nil && ctx.Err() == nil {
 		s.logger.Debug("A health problem could not be kept", "error", err)
 	}
-}
-
-// dispatchHealth sends ev to the server's targets and administrators' own.
-// It reads s.admins while dispatch holds s.mu.
-func (s *Service) dispatchHealth(ev Event) {
-	s.dispatch(ev, func(t target) bool { return t.owner == nil || s.admins[*t.owner] })
 }

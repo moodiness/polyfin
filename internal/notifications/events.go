@@ -44,6 +44,7 @@ type Event struct {
 	Episode   *EpisodeJSON   `json:"episode,omitempty"`
 	Recording *RecordingJSON `json:"recording,omitempty"`
 	Problem   *ProblemJSON   `json:"problem,omitempty"`
+	Invite    *InviteJSON    `json:"invite,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -95,6 +96,13 @@ type ProblemJSON struct {
 	Since    time.Time `json:"since"`
 }
 
+// InviteJSON is the invite a user joined through: its ID, and the
+// administrator who created it, null once deleted.
+type InviteJSON struct {
+	ID        string    `json:"id"`
+	CreatedBy *UserJSON `json:"createdBy"`
+}
+
 // newEvent starts an event of type kind, now.
 func (s *Service) newEvent(kind string) Event {
 	var id [16]byte
@@ -132,12 +140,18 @@ func (s *Service) webLink(item accounts.ID) *string {
 // healthLink is the address of the admin app's page that shows a problem,
 // System › Health when it names none; nil without a public address.
 func (s *Service) healthLink(page string) *string {
+	if page == "" {
+		page = "/system/health"
+	}
+	return s.adminLink(page)
+}
+
+// adminLink is the address of a page of the admin app, nil without a
+// public address.
+func (s *Service) adminLink(page string) *string {
 	base := s.accounts.Settings().PublicAddress
 	if base == "" {
 		return nil
-	}
-	if page == "" {
-		page = "/system/health"
 	}
 	link := base + "/admin" + page
 	return &link
@@ -215,6 +229,39 @@ func (s *Service) healthEventOf(problem Problem, since time.Time, solved bool) E
 	ev.Problem = &ProblemJSON{Key: problem.Key, Severity: problem.Severity, Text: problem.Text, Since: since.UTC()}
 	ev.Title, ev.Message, ev.URL = title, problem.Text, s.healthLink(problem.Page)
 	return ev
+}
+
+// userJoinedEvent tells that user created their account through invite.
+func (s *Service) userJoinedEvent(user accounts.User, invite accounts.Invite) Event {
+	ev := s.newEvent(UserJoined)
+	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
+	ev.Invite = &InviteJSON{ID: invite.ID.String()}
+	ev.Title = s.phrase("New user: %s", "Nouvel utilisateur : %s", user.Name)
+	if creator := invite.CreatedBy; creator != nil {
+		ev.Invite.CreatedBy = &UserJSON{ID: creator.ID.String(), Name: creator.Name}
+		ev.Message = s.phrase("%s joined through %s's invite.", "%s a rejoint le serveur grâce à l’invitation de %s.", user.Name, creator.Name)
+	} else {
+		ev.Message = s.phrase("%s joined through an invite.", "%s a rejoint le serveur grâce à une invitation.", user.Name)
+	}
+	ev.URL = s.adminLink("/users/" + user.ID.String())
+	return ev
+}
+
+// UserJoined tells the server's targets and administrators' own that user
+// created their account through invite. It returns at once: who the
+// administrators are is read again, and the message sent, in the
+// background.
+func (s *Service) UserJoined(_ context.Context, user accounts.User, invite accounts.Invite) {
+	ev := s.userJoinedEvent(user, invite)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.spawn(func() {
+		// The targets read last stay in use when the database does not answer.
+		if err := s.reload(s.ctx); err != nil && s.ctx.Err() == nil {
+			s.logger.Debug("The notification targets could not be read again", "error", err)
+		}
+		s.dispatchAdministrators(ev)
+	})
 }
 
 // RecordingEnded tells the targets of the user who made a recording, and

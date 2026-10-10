@@ -19,6 +19,7 @@ var discordColors = map[string]int{
 	RecordingFinished: 0x22c55e,
 	RecordingFailed:   0xef4444,
 	HealthSolved:      0x22c55e,
+	UserJoined:        0x14b8a6,
 	Test:              0x8b5cf6,
 }
 
@@ -86,6 +87,7 @@ var ntfyTags = map[string][]string{
 	RecordingFailed:   {"x"},
 	HealthProblem:     {"warning"},
 	HealthSolved:      {"white_check_mark"},
+	UserJoined:        {"wave"},
 	Test:              {"bell"},
 }
 

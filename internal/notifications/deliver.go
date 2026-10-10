@@ -45,6 +45,12 @@ func (s *Service) dispatch(ev Event, recipient func(target) bool) {
 	}
 }
 
+// dispatchAdministrators sends ev to the server's targets and
+// administrators' own. It reads s.admins while dispatch holds s.mu.
+func (s *Service) dispatchAdministrators(ev Event) {
+	s.dispatch(ev, func(t target) bool { return t.owner == nil || s.admins[*t.owner] })
+}
+
 // push queues ev for the target id, and starts its lane. It is called with
 // s.mu held.
 func (s *Service) push(id accounts.ID, ev Event) {

@@ -750,6 +750,49 @@ func TestHealthProblemsFoundAndSolved(t *testing.T) {
 	}
 }
 
+// A user who joined through an invite is told to the server's targets and
+// to administrators' own, naming who created the invite; a member may not
+// choose the event, and a user no longer an administrator stops hearing it.
+func TestUsersJoiningAreToldToAdministrators(t *testing.T) {
+	h := newHarness(t)
+	h.add(t, nil, h.webhook("/server", UserJoined))
+	h.add(t, &h.admin, h.webhook("/admin", UserJoined))
+	h.add(t, &h.admin, h.webhook("/episodes", NewEpisode))
+	if _, err := h.Create(t.Context(), &h.member, h.webhook("/member", UserJoined)); err != ErrInvalidEvents {
+		t.Errorf("a member choosing users joining: %v", err)
+	}
+	demoted, err := h.store.CreateUser(t.Context(), accounts.NewUser{Name: "demoted", Password: "correct horse", IsAdministrator: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.add(t, &demoted, h.webhook("/demoted", UserJoined))
+	if _, err := h.store.UpdateUser(t.Context(), demoted.ID, accounts.UserChanges{IsAdministrator: new(false)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	_, token, err := h.store.CreateInvite(t.Context(), accounts.NewInvite{MaxUses: 1, CreatedBy: h.admin.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, invite, err := h.store.AcceptInvite(t.Context(), token, "guest", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h.UserJoined(t.Context(), guest, invite)
+	h.targets.wait(t, "/server", 1)
+	h.targets.wait(t, "/admin", 1)
+	h.idle(t)
+	body := h.targets.at("/server")[0].body
+	who, _ := body["user"].(map[string]any)
+	by, _ := body["invite"].(map[string]any)["createdBy"].(map[string]any)
+	if body["type"] != UserJoined || who["name"] != "guest" || by["name"] != "admin" || body["message"] != "guest joined through admin's invite." {
+		t.Errorf("message: %v", body)
+	}
+	if got := len(h.targets.at("/demoted")) + len(h.targets.at("/episodes")); got != 0 {
+		t.Errorf("%d messages reached a former administrator or a target without the event", got)
+	}
+}
+
 // problems2 reads the problems the harness's test sets, for another
 // service on the same database.
 func (h harness) problems2() func(context.Context) ([]Problem, error) {

@@ -220,6 +220,17 @@ func (s *Store) UserCreated(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase("User %s was created", "Utilisateur %s créé", user.Name), Type: "UserCreated", UserID: &user.ID})
 }
 
+// UserJoined records an account a guest created from address through
+// invite, naming the administrator who created the invite, if they still
+// exist.
+func (s *Store) UserJoined(ctx context.Context, user accounts.User, invite accounts.Invite, address string) {
+	name := s.phrase("%s joined through an invite", "%s a rejoint le serveur grâce à une invitation", user.Name)
+	if creator := invite.CreatedBy; creator != nil {
+		name = s.phrase("%s joined through %s's invite", "%s a rejoint le serveur grâce à l’invitation de %s", user.Name, creator.Name)
+	}
+	s.record(ctx, Entry{Name: name, Type: "UserCreated", UserID: &user.ID, ShortOverview: s.address(address)})
+}
+
 // UserDeleted records a deleted account. Like Jellyfin's, the entry is
 // about no user: the user no longer exists.
 func (s *Store) UserDeleted(ctx context.Context, name string) {
