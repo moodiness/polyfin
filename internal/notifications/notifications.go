@@ -1,13 +1,14 @@
 // Package notifications tells users and administrators when something they
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
-// solved. Messages go to targets: generic webhooks, which receive a
-// versioned JSON event (see Event); Discord webhooks, ntfy topics, Telegram
-// chats, Gotify servers and Pushover users, which receive messages
-// formatted for them; and email addresses, through the SMTP server of the
-// settings. Administrators add the server's targets, which receive the
-// events of every user; each user adds their own, which receive their own
-// events, and health events for administrators.
+// solved, a user who joined through an invite. Messages go to targets:
+// generic webhooks, which receive a versioned JSON event (see Event);
+// Discord webhooks, ntfy topics, Telegram chats, Gotify servers and
+// Pushover users, which receive messages formatted for them; and email
+// addresses, through the SMTP server of the settings. Administrators add
+// the server's targets, which receive the events of every user; each user
+// adds their own, which receive their own events, and the health and
+// joining events for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -63,27 +64,29 @@ const (
 	RecordingFailed   = "recording_failed"
 	HealthProblem     = "health_problem"
 	HealthSolved      = "health_solved"
+	UserJoined        = "user_joined"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
 
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
-var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved}
+var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined}
 
-// healthEvent reports whether event is about System › Health, which only
-// the server's targets and administrators' own receive.
-func healthEvent(event string) bool {
-	return event == HealthProblem || event == HealthSolved
+// administratorsEvent reports whether event is one only the server's
+// targets and administrators' own receive: about System › Health, or a
+// user who joined through an invite.
+func administratorsEvent(event string) bool {
+	return event == HealthProblem || event == HealthSolved || event == UserJoined
 }
 
 // EventsFor lists the events the targets of owner may receive: every event
 // for the server's targets (owner nil) and administrators', all but the
-// health events for other users.
+// administrators' events for other users.
 func EventsFor(owner *accounts.User) []string {
 	var events []string
 	for _, event := range Events {
-		if !healthEvent(event) || owner == nil || owner.IsAdministrator {
+		if !administratorsEvent(event) || owner == nil || owner.IsAdministrator {
 			events = append(events, event)
 		}
 	}
