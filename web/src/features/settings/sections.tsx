@@ -420,6 +420,13 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
           )}
         />
       </FieldRow>
+      <SwitchRow
+        anchor="watch-local-folders"
+        label={s.watchLocalFolders}
+        help={s.watchLocalFoldersHelp}
+        checked={form.watchLocalFolders}
+        onChange={(watchLocalFolders) => update({ watchLocalFolders })}
+      />
     </SettingsGroup>
   )
 }

@@ -109,6 +109,12 @@ const system = {
         shareUnreachable: (name: string) => `${name}: Polyfin cannot reach this network share.`,
         shareRefused: (name: string) =>
           `${name}: the network share refuses Polyfin’s user or password.`,
+        folderWatchLimit: (name: string) =>
+          `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.`,
+        folderInstanceLimit: (name: string) =>
+          `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files.`,
+        folderUnwatched: (name: string) =>
+          `${name}: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         task: (name: string) => `The task “${name}” failed.`,

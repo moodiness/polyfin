@@ -401,6 +401,13 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['folder', 'scan'],
     codes: ['invalid_local_scan_hours'],
   },
+  {
+    section: 'catalogs',
+    anchor: 'watch-local-folders',
+    label: (t) => s(t).watchLocalFolders,
+    help: (t) => s(t).watchLocalFoldersHelp,
+    keywords: ['folder', 'scan', 'inotify'],
+  },
   // Thumbnails
   {
     section: 'thumbnails',

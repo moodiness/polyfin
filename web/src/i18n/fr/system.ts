@@ -115,6 +115,12 @@ const system: typeof en = {
           `${name} : Polyfin ne peut pas joindre ce partage réseau.`,
         shareRefused: (name: string) =>
           `${name} : le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.`,
+        folderWatchLimit: (name: string) =>
+          `${name} : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte.`,
+        folderInstanceLimit: (name: string) =>
+          `${name} : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite d’observateurs ou de fichiers ouverts du système est atteinte. Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_instances sur l’hôte, ou la limite de fichiers ouverts du conteneur.`,
+        folderUnwatched: (name: string) =>
+          `${name} : Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.`,
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,

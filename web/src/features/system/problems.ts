@@ -97,6 +97,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       if (problem.failure === 'unreachable') return text.shareUnreachable(problem.name)
       if (problem.failure === 'refused') return text.shareRefused(problem.name)
       return problem.share !== undefined ? text.share(problem.name) : text.folder(problem.name)
+    case 'folder_unwatched':
+      if (problem.failure === 'watch_limit') return text.folderWatchLimit(problem.name)
+      if (problem.failure === 'instance_limit') return text.folderInstanceLimit(problem.name)
+      return text.folderUnwatched(problem.name)
     case 'task':
       return text.task(problem.task)
   }
