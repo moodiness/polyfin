@@ -120,6 +120,9 @@ func DefaultSettings() Settings {
 		SMTPPassword: "",
 		SMTPFrom:     "",
 		SMTPFromName: "",
+
+		PlaybackHistory:     true,
+		PlaybackHistoryDays: DefaultPlaybackHistoryDays,
 	}
 }
 
@@ -253,6 +256,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"smtpPassword": text(MaxSMTPPasswordBytes, d.SMTPPassword),
 		"smtpFrom":     text(MaxEmailBytes, d.SMTPFrom),
 		"smtpFromName": text(MaxSMTPFromNameBytes, d.SMTPFromName),
+
+		"playbackHistory":     is(d.PlaybackHistory),
+		"playbackHistoryDays": between(1, MaxPlaybackHistoryDays, d.PlaybackHistoryDays),
 	}
 }
 

@@ -254,6 +254,17 @@ const (
 	DefaultRecordingRetentionDays = 0
 )
 
+// ErrInvalidPlaybackHistoryDays reports a PlaybackHistoryDays outside [1,
+// MaxPlaybackHistoryDays].
+var ErrInvalidPlaybackHistoryDays = errors.New("invalid playback history days")
+
+// The bounds and default of Settings.PlaybackHistoryDays: a year by
+// default, ten at most.
+const (
+	MaxPlaybackHistoryDays     = 3650
+	DefaultPlaybackHistoryDays = 365
+)
+
 // ErrInvalidLiveTvRefreshHours reports a LiveTvRefreshHours outside
 // [MinLiveTvRefreshHours, MaxLiveTvRefreshHours].
 var ErrInvalidLiveTvRefreshHours = errors.New("invalid Live TV refresh hours")
@@ -826,6 +837,11 @@ type Settings struct {
 	SMTPPassword string
 	SMTPFrom     string
 	SMTPFromName string
+	// PlaybackHistory tells whether Polyfin keeps a history of the videos
+	// played, for the statistics; PlaybackHistoryDays is how many days a
+	// playback stays in it.
+	PlaybackHistory     bool
+	PlaybackHistoryDays int
 }
 
 // SMTPAvailable reports whether email notifications can be sent: an SMTP
@@ -886,7 +902,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"custom_css, custom_js, login_disclaimer, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
-	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name"
+	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
+	"playback_history, playback_history_days"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -916,7 +933,8 @@ func (settings *Settings) fields() []any {
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.PublicAddress,
-		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName}
+		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
+		&settings.PlaybackHistory, &settings.PlaybackHistoryDays}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1232,6 +1250,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, ErrInvalidSMTPAccount
 	case settings.SMTPFrom != "" && !ValidEmail(settings.SMTPFrom), !validLine(settings.SMTPFromName, MaxSMTPFromNameBytes):
 		return Settings{}, ErrInvalidSMTPSender
+	}
+	if settings.PlaybackHistoryDays < 1 || settings.PlaybackHistoryDays > MaxPlaybackHistoryDays {
+		return Settings{}, ErrInvalidPlaybackHistoryDays
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
