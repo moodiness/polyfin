@@ -429,7 +429,9 @@ const (
 // as Jellyfin does: a start counts a play, positions move the resume point
 // or mark the title played, and a stop without a position plays it
 // through. playing is what the device was known to play before the report.
-func (h *Handler) track(ctx context.Context, user accounts.User, device string, deviceID accounts.ID, event playbackEvent, state playback.PlayState, positionKnown bool, playing playback.NowPlaying) {
+// Every report, channels' too, goes to the playbacks Polyfin follows.
+func (h *Handler) track(ctx context.Context, user accounts.User, device accounts.Device, event playbackEvent, state playback.PlayState, positionKnown bool, playing playback.NowPlaying) {
+	deviceID := device.ID
 	id, mediaSource := state.Item, state.MediaSourceID
 	if id == (accounts.ID{}) {
 		id = playing.Item
@@ -440,14 +442,19 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device string, 
 	if id == (accounts.ID{}) {
 		return
 	}
-	item, err := h.title(ctx, user, id)
+	item, err := h.played(ctx, user, id)
 	if err != nil {
 		if !errors.Is(err, library.ErrNotFound) {
 			h.Logger.Warn("A playback report could not be recorded", "error", err)
 		}
 		return
 	}
-	h.recordPlayback(ctx, user, device, event, item)
+	h.followPlayback(user, device, event, state, positionKnown, playing, item)
+	// Channels have no user data, nor a place in the activity log.
+	if item.Kind == library.KindChannel {
+		return
+	}
+	h.recordPlayback(ctx, user, device.DeviceName, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
 	// Videos prepare the next episode near the end and make thumbnails;
 	// tracks prepare the next track as they start, as it comes soon.
