@@ -65,15 +65,11 @@ func (user User) FitsGroup(height int) bool {
 	return user.QualityGroup == 0 || height <= user.QualityGroup
 }
 
-// ConversionHeight is the height video converted for user is scaled down
-// to at most: the lower of their quality group and the settings'
-// MaxConversionHeight, 0 when neither limits it.
-func (s *Store) ConversionHeight(user User) int {
-	most := s.Settings().MaxConversionHeight
-	if group := user.QualityGroup; group > 0 && (most == 0 || group < most) {
-		return group
-	}
-	return most
+// ConversionCaps are the heights video converted for user is scaled down
+// to at most, 0 when it does not limit it: their quality group, and the
+// settings' MaxConversionHeight.
+func (s *Store) ConversionCaps(user User) (group, server int) {
+	return user.QualityGroup, s.Settings().MaxConversionHeight
 }
 
 // checkAccess checks the playback and access limits changes set.

@@ -206,12 +206,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
 		streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
 		if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
-			limit, _ := strconv.ParseInt(query(r, "videoBitrate"), 10, 64)
-			// Never above the user's bitrate limit, whatever the URL says.
-			if most := int64(user.MaxBitrate); most > 0 && (limit <= 0 || limit > most) {
-				limit = most
-			}
-			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limit, h.Accounts.ConversionHeight(user), streams[i], h.Playback.Capabilities())
+			remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), h.conversionLimits(r, user), streams[i], h.Playback.Capabilities())
 		}
 	}
 	// A subtitle burned in is an image track inside the file, counted after
@@ -244,6 +239,30 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		return remuxRequest{}, false
 	}
 	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files, live: live}, true
+}
+
+// conversionLimits are what video converted for an HLS request is scaled
+// down within: the bitrate its URL gives the video, which with the audio's
+// is the limit PlaybackInfo played under, never above the user's limit
+// whatever the URL says, and the heights the user's group and the settings
+// cap it at. The limit is the user's when the app's was not lower.
+func (h *Handler) conversionLimits(r *http.Request, user accounts.User) playback.Limits {
+	var limits playback.Limits
+	limits.Group, limits.Server = h.Accounts.ConversionCaps(user)
+	limits.Video, _ = strconv.ParseInt(query(r, "videoBitrate"), 10, 64)
+	if limits.Video > 0 {
+		audio, _ := strconv.ParseInt(query(r, "audioBitrate"), 10, 64)
+		limits.Bitrate = limits.Video + max(audio, 0)
+	}
+	if most := int64(user.MaxBitrate); most > 0 {
+		if limits.Video <= 0 || limits.Video > most {
+			limits.Video = most
+		}
+		if limits.Video == most || limits.Bitrate >= most {
+			limits.Bitrate, limits.ByUser = most, true
+		}
+	}
+	return limits
 }
 
 // audioTrack converts a Jellyfin audio stream index, counted after the
@@ -282,6 +301,9 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 	}
 	if reasons := query(r, "transcodeReasons"); reasons != "" {
 		h.reasons.Put(req.remux.Session, strings.Split(reasons, ","))
+	}
+	if video := req.remux.ConvertVideo; video != nil {
+		h.sizes.Put(req.remux.Session, video.Size)
 	}
 	if req.live {
 		h.livePlaylist(w, r, req.remux, name)

@@ -773,6 +773,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	source.Path = h.streamURL(r, channel.ID, id, version, container, relay)
 	options := playback.Options{
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
+		UserBitrate:         request.userLimit,
 		SubtitleStreamIndex: new(-1),
 		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,

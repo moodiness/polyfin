@@ -116,6 +116,58 @@ type VideoConversion struct {
 	ToneMap, Deinterlace bool
 	// Hardware is the GPU Encoder belongs to, nil for software.
 	Hardware *hls.Hardware
+	// Size is what set Width and Height.
+	Size ConversionSize
+}
+
+// Limits are what converted video is scaled down within, beside what the
+// server converts at most.
+type Limits struct {
+	// Bitrate is the bits per second the playback is limited to, 0 for no
+	// limit, and Video what it leaves the video (see VideoLimit). ByUser
+	// tells that Bitrate is the user's MaxBitrate rather than the app's
+	// MaxStreamingBitrate.
+	Bitrate, Video int64
+	ByUser         bool
+	// Group is the user's quality group and Server the settings'
+	// MaxConversionHeight, 0 when it does not limit.
+	Group, Server int
+}
+
+// What sets the size of converted video, as ConversionSize.Reason tells
+// it.
+const (
+	// SizeSource: no cap is below the source's size.
+	SizeSource = "source"
+	// SizeGPU: a GPU converts up to 4K.
+	SizeGPU = "gpu"
+	// SizeProcessor: the processor converts up to 1080p.
+	SizeProcessor = "processor"
+	// SizeToneMapping: the processor converts HDR to SDR up to 720p.
+	SizeToneMapping = "toneMapping"
+	// SizeQualityGroup: the user's quality group.
+	SizeQualityGroup = "qualityGroup"
+	// SizeServerMax: the settings' MaxConversionHeight.
+	SizeServerMax = "serverMax"
+	// SizeBitrate: the bitrate limit allows no taller rung.
+	SizeBitrate = "bitrate"
+)
+
+// ConversionSize is what set the size of converted video: the lowest of
+// the caps that made it smaller than the source. On a tie, the user's
+// quality group comes first, then the settings' MaxConversionHeight, then
+// the server's own caps: the settings would hold on a stronger server. The
+// bitrate is the reason only when it allows less than all of them.
+type ConversionSize struct {
+	// Reason is one of the Size constants; MaxHeight, the height it caps
+	// video at, 0 for SizeSource.
+	Reason    string
+	MaxHeight int
+	// Bitrate is, for SizeBitrate, the limit in bits per second, and
+	// ByUser tells it is the user's MaxBitrate rather than the app's
+	// MaxStreamingBitrate.
+	Bitrate int64
+	ByUser  bool
 }
 
 // videoEncoders are the software encoders Polyfin converts video with, by
@@ -165,13 +217,21 @@ func sizeClass(video MediaStream) int {
 // with playback at 720p. A GPU that tone maps has no such cap.
 const toneMappedHeight = 720
 
+// fits reports whether the 16:9 frame of a height holds the whole source,
+// which a cap of that height then leaves as it is: never when its size is
+// unknown.
+func fits(video MediaStream, height int) bool {
+	return video.Width != nil && video.Height != nil && *video.Width > 0 && *video.Height > 0 &&
+		*video.Width <= (height*16+8)/9 && *video.Height <= height
+}
+
 // ConvertVideo is the conversion of video for a transcoding profile taking
-// codecs, as a comma-separated list, within limit bits per second when it
-// is positive: the first of H.264 and HEVC the profile takes and FFmpeg
-// encodes, H.264 first unless the tuning prefers HEVC, which then follows
-// the profile's order, on the GPU when it encodes that codec, at the
-// height the limit allows, up to 4K on a GPU and 1080p on the processor,
-// never larger than the source nor, when it is positive, than maxHeight,
+// codecs, as a comma-separated list, within limits: the first of H.264 and
+// HEVC the profile takes and FFmpeg encodes, H.264 first unless the tuning
+// prefers HEVC, which then follows the profile's order, on the GPU when it
+// encodes that codec, at the height the bitrate limit allows, up to 4K on a
+// GPU and 1080p on the processor, never larger than the source nor, when
+// they are positive, than the user's quality group and the settings' cap,
 // the bitrate being that height's, converted to SDR and deinterlaced as
 // needed. HDR is tone mapped on that GPU when it
 // can, Dolby Vision with no base layer other players read (profile 5)
@@ -180,7 +240,7 @@ const toneMappedHeight = 720
 // cannot be converted: on the processor, without FFmpeg's filters, or
 // Dolby Vision with no base layer other players read, which without tone
 // mapping would show wrong colors.
-func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, can Capabilities) *VideoConversion {
+func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilities) *VideoConversion {
 	candidates := videoEncoders
 	if can.Tuning.PreferHEVC {
 		// Jellyfin's AllowHevcEncoding keeps the profile's order, and
@@ -209,11 +269,12 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 	if conversion.Codec == "" {
 		return nil
 	}
-	tallest := softwareHeight
+	// size is the lowest cap so far, the tallest the video may be.
+	size := ConversionSize{Reason: SizeProcessor, MaxHeight: softwareHeight}
 	if conversion.Hardware != nil {
 		// A GPU converts up to 4K, at the rung of the source's own size: a
 		// source no larger than 1080p converts as on the processor.
-		tallest = max(softwareHeight, sizeClass(video))
+		size = ConversionSize{Reason: SizeGPU, MaxHeight: max(softwareHeight, sizeClass(video))}
 	}
 	switch {
 	case video.VideoRange != "HDR":
@@ -226,22 +287,33 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 			if video.VideoRangeType == "DOVI" || !can.ToneMapping {
 				return nil
 			}
-			tallest = toneMappedHeight
+			size = ConversionSize{Reason: SizeToneMapping, MaxHeight: toneMappedHeight}
 		}
 		conversion.ToneMap = true
 	}
-	// A source no taller than maxHeight converts as without it.
-	if maxHeight > 0 && (video.Height == nil || *video.Height > maxHeight) {
-		tallest = min(tallest, maxHeight)
+	// A source no taller than a cap converts as without it. The group comes
+	// last, so that it wins a tie with the settings' cap, and both win a
+	// tie with the server's own caps.
+	for _, setting := range []ConversionSize{{Reason: SizeServerMax, MaxHeight: limits.Server}, {Reason: SizeQualityGroup, MaxHeight: limits.Group}} {
+		if setting.MaxHeight > 0 && setting.MaxHeight <= size.MaxHeight && (video.Height == nil || *video.Height > setting.MaxHeight) {
+			size = setting
+		}
 	}
 	conversion.Deinterlace = video.IsInterlaced
 	rung := rungs[len(rungs)-1]
 	for _, r := range rungs {
-		if r.height <= tallest && (limit <= 0 || limit >= r.least) {
+		if r.height <= size.MaxHeight && (limits.Video <= 0 || limits.Video >= r.least) {
 			rung = r
 			break
 		}
 	}
+	if rung.height < size.MaxHeight {
+		size = ConversionSize{Reason: SizeBitrate, MaxHeight: rung.height, Bitrate: limits.Bitrate, ByUser: limits.ByUser}
+	}
+	if fits(video, size.MaxHeight) {
+		size = ConversionSize{Reason: SizeSource}
+	}
+	conversion.Size = size
 	// The rung's frame is 16:9, as 1080p's 1920×1080, its width rounded up
 	// so that a 16:9 source fills it. A wider source fits its width, as in
 	// Jellyfin: a 2.40:1 picture becomes 1920×800 rather than 2586×1080,
@@ -260,8 +332,8 @@ func ConvertVideo(codecs string, limit int64, maxHeight int, video MediaStream, 
 	// Encoders take even sizes.
 	conversion.Width, conversion.Height = width/2*2, height/2*2
 	conversion.Bitrate = rung.ceiling
-	if limit > 0 {
-		conversion.Bitrate = min(conversion.Bitrate, limit)
+	if limits.Video > 0 {
+		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
 	}
 	if video.BitRate != nil && *video.BitRate > 0 {
 		conversion.Bitrate = min(conversion.Bitrate, *video.BitRate)
