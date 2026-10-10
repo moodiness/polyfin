@@ -223,7 +223,7 @@ func (h *Handler) channelListing(w http.ResponseWriter, r *http.Request, user ac
 		return true
 	}
 	include := listQuery(r, "includeItemTypes")
-	if hasParent || !slices.ContainsFunc(include, func(t string) bool { return strings.EqualFold(t, "TvChannel") }) {
+	if hasParent || !slices.ContainsFunc(include, func(t string) bool { return namesType(t, library.KindChannel) }) {
 		return false
 	}
 	channels, err := h.Library.Channels(r.Context(), user)
