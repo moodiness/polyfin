@@ -28,7 +28,8 @@ func TestSettingsConversion(t *testing.T) {
 	})
 	administrator := api.signedIn("administrator", true)
 	keys := []string{"encoderPreset", "h264Quality", "hevcQuality", "allowHevcEncoding", "hardwareAcceleration", "hardwareDecodingCodecs",
-		"toneMapping", "toneMappingAlgorithm", "toneMappingPeak", "toneMappingDesat", "deinterlaceMethod", "deinterlaceDoubleRate",
+		"toneMapping", "toneMappingAlgorithm", "toneMappingPeak", "toneMappingDesat", "gpuToneMapping", "processorToneMappingHeight",
+		"deinterlaceMethod", "deinterlaceDoubleRate",
 		"downmixAlgorithm", "downmixBoost", "maxAudioChannels", "audioBitratePerChannel", "encodingThreads", "aheadSeconds"}
 	tuning := func(body map[string]any) map[string]any {
 		got := map[string]any{}
@@ -39,7 +40,8 @@ func TestSettingsConversion(t *testing.T) {
 	}
 	defaults := map[string]any{"encoderPreset": "auto", "h264Quality": 0.0, "hevcQuality": 0.0, "allowHevcEncoding": false, "hardwareAcceleration": "auto",
 		"hardwareDecodingCodecs": []any{"h264", "hevc", "hevc_10bit", "vp9", "av1", "mpeg2video", "vc1"}, "toneMapping": true, "toneMappingAlgorithm": "auto",
-		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
+		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "gpuToneMapping": true, "processorToneMappingHeight": 0.0,
+		"deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
 		"downmixBoost": 1.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSeconds": 120.0}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	if got := tuning(body); !reflect.DeepEqual(got, defaults) {
@@ -54,11 +56,21 @@ func TestSettingsConversion(t *testing.T) {
 	if want := slices.Contains(encoder.Encoders(), "libx264"); slices.Contains(detected["encoders"].([]any), any("libx264")) != want {
 		t.Errorf("software encoders: %v, libx264 %v", detected["encoders"], want)
 	}
+	// The height Automatic gives HDR tone mapped on the processor: 720p
+	// until a timing chooses, none here, and nothing without the filters.
+	wantHeight := 0.0
+	if encoder.HasFilters("zscale", "tonemap") {
+		wantHeight = 720
+	}
+	if detected["toneMappingHeight"] != wantHeight {
+		t.Errorf("tone mapped height: %v, want %v", detected["toneMappingHeight"], wantHeight)
+	}
 
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	changed := map[string]any{"encoderPreset": "slow", "h264Quality": 21.0, "hevcQuality": 26.0, "allowHevcEncoding": true, "hardwareAcceleration": "none",
 		"hardwareDecodingCodecs": []any{"h264", "av1"}, "toneMapping": false, "toneMappingAlgorithm": "reinhard", "toneMappingPeak": 1000.0,
-		"toneMappingDesat": 0.5, "deinterlaceMethod": "bwdif", "deinterlaceDoubleRate": true, "downmixAlgorithm": "Rfc7845", "downmixBoost": 2.5,
+		"toneMappingDesat": 0.5, "gpuToneMapping": false, "processorToneMappingHeight": 1440.0,
+		"deinterlaceMethod": "bwdif", "deinterlaceDoubleRate": true, "downmixAlgorithm": "Rfc7845", "downmixBoost": 2.5,
 		"maxAudioChannels": 2.0, "audioBitratePerChannel": 96.0, "encodingThreads": 8.0, "aheadSeconds": 300.0}
 	put := maps.Clone(base)
 	maps.Copy(put, changed)
@@ -86,6 +98,8 @@ func TestSettingsConversion(t *testing.T) {
 		{"toneMappingAlgorithm", "gamma", "invalid_tone_mapping_algorithm"},
 		{"toneMappingPeak", 50, "invalid_tone_mapping_peak"},
 		{"toneMappingDesat", 11, "invalid_tone_mapping_desat"},
+		{"processorToneMappingHeight", 480, "invalid_processor_tone_mapping_height"},
+		{"processorToneMappingHeight", 4320, "invalid_processor_tone_mapping_height"},
 		{"deinterlaceMethod", "w3fdif", "invalid_deinterlace_method"},
 		{"downmixAlgorithm", "Stereo", "invalid_downmix_algorithm"},
 		{"downmixBoost", 4, "invalid_downmix_boost"},
