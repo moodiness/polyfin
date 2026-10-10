@@ -36,9 +36,9 @@ type Event struct {
 	// URL opens what the event is about, when the server's public address
 	// is set; null otherwise.
 	URL *string `json:"url"`
-	// User is the user the event is about, null for health events, and
-	// for new episodes sent to the server's targets, which are told once
-	// whoever follows the series.
+	// User is the user the event is about, null for health events and new
+	// versions, and for new episodes sent to the server's targets, which
+	// are told once whoever follows the series.
 	User *UserJSON `json:"user"`
 	// One of these is set, by Type.
 	Episode   *EpisodeJSON   `json:"episode,omitempty"`
@@ -46,6 +46,7 @@ type Event struct {
 	Problem   *ProblemJSON   `json:"problem,omitempty"`
 	Invite    *InviteJSON    `json:"invite,omitempty"`
 	Playback  *PlaybackJSON  `json:"playback,omitempty"`
+	Release   *ReleaseJSON   `json:"release,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -102,6 +103,14 @@ type ProblemJSON struct {
 type InviteJSON struct {
 	ID        string    `json:"id"`
 	CreatedBy *UserJSON `json:"createdBy"`
+}
+
+// ReleaseJSON is a new version of Polyfin: its version, the address of its
+// release notes, and the version the server runs.
+type ReleaseJSON struct {
+	Version string `json:"version"`
+	URL     string `json:"url"`
+	Current string `json:"current"`
 }
 
 // PlaybackJSON is a playback that started, paused, resumed or stopped.
@@ -278,6 +287,34 @@ func (s *Service) userJoinedEvent(user accounts.User, invite accounts.Invite) Ev
 	}
 	ev.URL = s.adminLink("/users/" + user.ID.String())
 	return ev
+}
+
+// newVersionEvent tells that Polyfin version is out, with its release
+// notes at link.
+func (s *Service) newVersionEvent(version, link string) Event {
+	ev := s.newEvent(NewVersion)
+	ev.Release = &ReleaseJSON{Version: version, URL: link, Current: s.version}
+	ev.Title = s.phrase("New version: Polyfin %s", "Nouvelle version : Polyfin %s", version)
+	ev.Message = s.phrase("Polyfin %s is available. This server runs version %s.", "Polyfin %s est disponible. Ce serveur est en version %s.",
+		version, s.version)
+	ev.URL = &link
+	return ev
+}
+
+// NewVersion tells the server's targets and administrators' own that
+// Polyfin version is out, with its release notes at link. It returns at
+// once, as UserJoined does.
+func (s *Service) NewVersion(version, link string) {
+	ev := s.newVersionEvent(version, link)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.spawn(func() {
+		// The targets read last stay in use when the database does not answer.
+		if err := s.reload(s.ctx); err != nil && s.ctx.Err() == nil {
+			s.logger.Debug("The notification targets could not be read again", "error", err)
+		}
+		s.dispatchAdministrators(ev)
+	})
 }
 
 // UserJoined tells the server's targets and administrators' own that user
