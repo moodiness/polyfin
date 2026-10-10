@@ -335,9 +335,14 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
   const text = t.localFolders
   const toast = useToast()
   const unmatched = useQuery({
-    // The scan's progress changes the list: the figures key it.
+    // The scan's progress changes the list: the figures key it. The list shown stays until the
+    // next one comes, so that its rows, and an identifier being typed in one, stay as the scan
+    // goes; never another folder's, as the page can move to another source without being drawn
+    // anew.
     queryKey: [...queryKeys.unmatched(addon.id), folder.files, folder.unmatched, folder.scanning],
     queryFn: ({ signal }) => fetchUnmatchedFiles(addon.id, signal),
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === addon.id ? previous : undefined,
   })
   const unlink = useMutation({
     mutationFn: (unit: string) => unlinkLocalFile(addon.id, unit),
