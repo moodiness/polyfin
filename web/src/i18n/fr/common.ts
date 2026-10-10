@@ -289,9 +289,15 @@ const common: typeof en = {
     not_jellyfin:
       'Un serveur a répondu à cette adresse, mais ce n’est pas Jellyfin. Vérifiez l’adresse.',
     jellyfin_import_running:
-      'Une importation depuis Jellyfin est déjà en cours. Attendez qu’elle se termine, ou arrêtez-la.',
+      'Une importation est déjà en cours. Attendez qu’elle se termine, ou arrêtez-la.',
     unknown_jellyfin_user:
       'Un utilisateur Jellyfin n’est plus sur ce serveur. Reconnectez-vous pour relire ses utilisateurs.',
+    emby_user_key:
+      'Cette clé est celle d’un utilisateur, et Emby ne dit pas à qui elle appartient. Créez une clé d’API dans les paramètres d’Emby, ou connectez-vous avec un compte utilisateur.',
+    server_import_running:
+      'Une autre importation est en cours sur ce serveur. Réessayez dans quelques minutes.',
+    server_imports_disabled:
+      'L’importation de votre historique depuis un autre serveur est désactivée sur ce serveur.',
   },
   status: {
     title: 'État du serveur',

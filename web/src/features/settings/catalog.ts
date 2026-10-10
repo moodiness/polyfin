@@ -409,6 +409,12 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'security',
+    anchor: 'server-imports',
+    label: (t) => s(t).serverImports,
+    help: (t) => s(t).serverImportsHelp,
+  },
+  {
+    section: 'security',
     anchor: 'login-attempts',
     label: (t) => s(t).loginAttempts,
     help: (t, r) => s(t).loginAttemptsHelp(r('loginAttempts')),

@@ -281,6 +281,9 @@ const settings = {
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
+    serverImports: 'Users may import their watch history from another server',
+    serverImportsHelp:
+      'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin or Emby server, signing in there with their own name and password. When off, that section is hidden.',
     loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
     loginAttemptsHelp: (r: RangeText) =>
       `After this many wrong passwords in a row, the account cannot sign in for 15 minutes, even with the right password. An administrator can unblock it sooner on the Users page. 0, or from ${r.min} to ${r.max}.`,
@@ -387,7 +390,7 @@ const settings = {
       playback: 'How Polyfin picks and prepares the versions it plays.',
       content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
-      security: 'Users’ own addons, blocked accounts and unused devices.',
+      security: 'Users’ own addons and imports, blocked accounts and unused devices.',
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
       notifications:

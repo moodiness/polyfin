@@ -1,6 +1,13 @@
-import { BellIcon, DevicesIcon, ListChecksIcon, PasswordIcon } from '@phosphor-icons/react'
+import {
+  ArrowSquareInIcon,
+  BellIcon,
+  DevicesIcon,
+  ListChecksIcon,
+  PasswordIcon,
+} from '@phosphor-icons/react'
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { fetchMyDevices, queryKeys, signOutMyDevice } from '@/api'
+import { fetchMyDevices, fetchOwnImport, queryKeys, signOutMyDevice } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
@@ -8,17 +15,33 @@ import NotificationTargets from '@/features/notifications/NotificationTargets'
 import { useI18n } from '@/i18n'
 import { SectionNav } from '@/ui'
 import PasswordForm from './PasswordForm'
+import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
 
-const sectionIds = ['tracking', 'notifications', 'devices', 'password'] as const
+const sectionIds = ['tracking', 'import', 'notifications', 'devices', 'password'] as const
 type SectionId = (typeof sectionIds)[number]
 
-/** `/me/account`: tracking services, notifications, devices and password, with a list of sections beside them. */
+/** How often the user's own import is read while it runs. */
+const ownImportPollMs = 2000
+
+/**
+ * `/me/account`: tracking services, importing from another server (unless the server turns it
+ * off), notifications, devices and password, with a list of sections beside them.
+ */
 export default function AccountRoute() {
   const { t } = useI18n()
   const text = t.account
   const user = useSessionUser()
   const current = useCurrentSection()
+  const ownImport = useQuery({
+    queryKey: queryKeys.ownImport,
+    queryFn: ({ signal }) => fetchOwnImport(signal),
+    // React Query pauses this while the page is hidden, and stops it when the page is left.
+    refetchInterval: (query) =>
+      query.state.data?.import?.state === 'running' ? ownImportPollMs : false,
+  })
+  // Shown once the server says the setting allows it.
+  const importing = ownImport.data?.enabled === true
 
   return (
     <PageLayout
@@ -40,6 +63,16 @@ export default function AccountRoute() {
               icon: ListChecksIcon,
               to: '#tracking',
             },
+            ...(importing
+              ? [
+                  {
+                    id: 'import' as const,
+                    label: text.sections.import,
+                    icon: ArrowSquareInIcon,
+                    to: '#import',
+                  },
+                ]
+              : []),
             {
               id: 'notifications',
               label: text.sections.notifications,
@@ -55,6 +88,15 @@ export default function AccountRoute() {
       <AccountSection id="tracking" title={text.sections.tracking} help={text.tracking.description}>
         <TrackingServices />
       </AccountSection>
+      {importing && (
+        <AccountSection
+          id="import"
+          title={text.sections.import}
+          help={text.serverImport.description}
+        >
+          <ServerImport current={ownImport.data?.import ?? null} />
+        </AccountSection>
+      )}
       <AccountSection
         id="notifications"
         title={text.sections.notifications}

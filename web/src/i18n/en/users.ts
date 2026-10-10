@@ -168,40 +168,64 @@ const users = {
     noServerLibrariesHelp:
       'Add a library in Content › Libraries, then choose here which ones this user sees.',
     jellyfinImport: {
-      open: 'Import from Jellyfin',
-      title: 'Import from Jellyfin',
+      open: 'Import from another server',
+      title: 'Import from another server',
       description:
-        'Bring accounts and their watch data over from a Jellyfin server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to Jellyfin. Jellyfin does not give out passwords: you set one for each new account, or keep the one a user signs in with.',
-      connectTitle: 'Connect to Jellyfin',
+        'Bring accounts and their watch data over from a Jellyfin, Emby or Plex server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to the other server. Servers do not give out passwords: you set one for each new account, or keep the one a user signs in with.',
+      serverKind: 'Server',
+      servers: {
+        jellyfin: 'Jellyfin',
+        emby: 'Emby',
+        plex: 'Plex',
+      },
+      serverKindHelp: {
+        jellyfin: 'Jellyfin, or a server that speaks its API.',
+        emby: 'Emby, with its own API keys and users.',
+        plex: 'Plex Media Server, read with its owner’s token.',
+      },
+      connectTitle: (server: string) => `Connect to ${server}`,
       connectHelp:
         'The address, key and passwords are only used for this import: Polyfin does not save them.',
       address: 'Server address',
-      addressHelp: 'The address Jellyfin opens at in a browser. A local network address works.',
+      addressHelp: (server: string) =>
+        `The address ${server} opens at in a browser. A local network address works.`,
+      plexAddressHelp:
+        'The address of Plex Media Server itself, usually on port 32400. A local network address works.',
       connectWith: 'Connect with',
       withApiKey: 'An API key',
       withAccount: 'A user account',
       apiKey: 'API key',
       apiKeyHelp:
         'Create one in Jellyfin’s dashboard, under API Keys: it reads every user’s watch data.',
+      embyApiKeyHelp:
+        'Create one in Emby’s settings, under API Keys: it reads every user’s watch data. A user’s own key is not taken: Emby does not tell whose it is.',
+      plexToken: 'Plex token',
+      plexTokenHelp:
+        'The server owner’s token, which Polyfin only reads the server with. To find it, open Plex in a browser, signed in as the owner. Open the menu of any movie, choose Get Info, then View XML: the address of the page that opens ends with X-Plex-Token= followed by the token. Copy what follows it.',
       accountName: 'User name',
-      accountNameHelp:
-        'An administrator’s account lists every user. Polyfin signs in as Jellyfin’s apps do, then signs out.',
+      accountNameHelp: (server: string) =>
+        `An administrator’s account lists every user. Polyfin signs in as ${server}’s apps do, then signs out.`,
       accountPassword: 'Password',
       accountPasswordHelp: 'Leave it empty if the account has none.',
       connect: 'Connect',
       connecting: 'Connecting…',
       chooseTitle: 'Choose who to import',
-      chooseHelp: (server: string, version: string) =>
-        `${server}, Jellyfin ${version}. For each user, choose the Polyfin account to import into, or create one.`,
+      chooseHelp: (server: string, product: string, version: string) =>
+        `${server}, ${product} ${version}. For each user, choose the Polyfin account to import into, or create one.`,
       changeServer: 'Change server',
-      noUsers: 'This Jellyfin server has no user.',
+      noUsers: (product: string) => `This ${product} server has no user.`,
       lastActivityLabel: 'Last activity:',
       importAs: 'Import into',
       skip: 'Do not import',
       newUser: 'New user',
       watchData: 'Import watch data',
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
+      plexOwnerWatchDataHelp: 'Played titles with their dates and play counts, and resume points.',
+      plexWatchDataHelp:
+        'Played titles with their dates and play counts. Plex does not let Polyfin read this account’s resume points.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
+      plexNotice:
+        'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points, but only the played titles of the other accounts, from their playback history: their resume points stay on Plex. Plex has no favorites to import.',
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
       serverPassword: (server: string) => `Password on ${server}`,
@@ -221,6 +245,8 @@ const users = {
       lastTitle: 'Last import',
       startedLabel: 'Started',
       endedLabel: 'Ended',
+      startedBy: (name: string, own: boolean) =>
+        own ? `${name}’s own watch history, from My account` : `Started by ${name}`,
       runningHelp:
         'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
       stop: 'Stop import',
@@ -232,17 +258,45 @@ const users = {
         failed: 'Failed',
       },
       problems: {
-        jellyfin_unreachable:
-          'Jellyfin could not be reached during the import. What was imported is kept.',
-        jellyfin_key_refused:
-          'Jellyfin refused the API key during the import: it may have been revoked. What was imported is kept.',
-        not_jellyfin:
-          'The server stopped answering like Jellyfin during the import. What was imported is kept.',
-        internal:
+        jellyfin_unreachable: (server: string) =>
+          `${server} could not be reached during the import. What was imported is kept.`,
+        jellyfin_key_refused: (server: string) =>
+          `${server} refused the API key during the import: it may have been revoked. What was imported is kept.`,
+        not_jellyfin: (server: string) =>
+          `The server stopped answering like ${server} during the import. What was imported is kept.`,
+        internal: () =>
           'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
-        jellyfin_user_forbidden:
+        jellyfin_user_forbidden: () =>
           'The server does not let this key read this user’s data. Import it with an API key from the server’s dashboard, or with the user’s own key.',
       },
+      /** The errors of connecting that name the server, in Emby's and Plex's words. */
+      errors: {
+        emby: {
+          invalid_jellyfin_address:
+            'Enter the address of the Emby server, such as http://192.168.1.10:8096.',
+          jellyfin_key_refused:
+            'Emby refused this API key. Create one in its settings, under API Keys, and paste it again.',
+          jellyfin_sign_in_refused: 'Emby refused this name or password.',
+          jellyfin_sign_in_forbidden:
+            'Emby does not let this account sign in: it may be disabled, or outside its allowed hours.',
+          jellyfin_password_refused:
+            'Emby refused this password. Leave it empty if the account has none.',
+          jellyfin_unreachable:
+            'Nothing answered at this address. Check it, and that Emby is running.',
+          not_jellyfin: 'A server answered at this address, but it is not Emby. Check the address.',
+        },
+        plex: {
+          invalid_jellyfin_address:
+            'Enter the address of Plex Media Server, such as http://192.168.1.10:32400.',
+          jellyfin_key_refused: 'Plex refused this token. Copy the owner’s token again.',
+          jellyfin_key_limited:
+            'This token may not list the server’s accounts: it is not the server owner’s. Use the owner’s token.',
+          jellyfin_unreachable:
+            'Nothing answered at this address. Check it, and that Plex Media Server is running.',
+          not_jellyfin:
+            'A server answered at this address, but it is not Plex Media Server. Check the address.',
+        },
+      } as Record<'emby' | 'plex', Partial<Record<string, string>>>,
       userStates: {
         waiting: 'Waiting',
         reading: 'Reading',

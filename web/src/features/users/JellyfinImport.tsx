@@ -16,10 +16,11 @@ import {
   type JellyfinImportStatus,
   type JellyfinUser,
   type JellyfinUserImport,
+  type ServerKind,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { errorMessage, formatEpisode } from '@/format'
-import { useI18n } from '@/i18n'
+import { useI18n, type Messages } from '@/i18n'
 import {
   Avatar,
   Badge,
@@ -49,9 +50,9 @@ import {
 const importPollMs = 2000
 
 /** Connection codes about the address, the key or the account, shown under that field. */
-const addressCodes = ['invalid_jellyfin_address', 'jellyfin_unreachable', 'not_jellyfin']
-const keyCodes = ['jellyfin_key_refused', 'jellyfin_key_limited']
-const accountCodes = [
+export const addressCodes = ['invalid_jellyfin_address', 'jellyfin_unreachable', 'not_jellyfin']
+const keyCodes = ['jellyfin_key_refused', 'jellyfin_key_limited', 'emby_user_key']
+export const accountCodes = [
   'jellyfin_sign_in_refused',
   'jellyfin_sign_in_forbidden',
   'jellyfin_key_limited',
@@ -81,6 +82,22 @@ const userTones: Record<JellyfinUserImport['state'], StatusTone> = {
   failed: 'danger',
 }
 
+/** Where each kind of server usually answers, as the address field suggests. */
+const addressPlaceholders: Record<ServerKind, string> = {
+  jellyfin: 'http://192.168.1.10:8096',
+  emby: 'http://192.168.1.10:8096',
+  plex: 'http://192.168.1.10:32400',
+}
+
+/** The text of a failed request about a server of `kind`, in the words of that server. */
+export function serverError(t: Messages, kind: ServerKind, error: unknown): string {
+  if (kind !== 'jellyfin' && error instanceof ApiError) {
+    const own = t.users.jellyfinImport.errors[kind][error.code]
+    if (own !== undefined) return own
+  }
+  return errorMessage(t, error)
+}
+
 /** What a Jellyfin user becomes: nothing, a new Polyfin user, or an existing one (`user:<id>`). */
 type Target = 'skip' | 'new' | `user:${string}`
 
@@ -97,27 +114,42 @@ type Choice = {
   keepPassword: boolean
 }
 
-/** How the page connects to the server: with an API key, or as a user, by name and password. */
-type Login = { method: 'key' | 'account'; apiKey: string; name: string; password: string }
+/**
+ * How the page connects to the server: its kind, then an API key, or a user's name and password.
+ * Plex takes its owner's token, sent as the key.
+ */
+type Login = {
+  kind: ServerKind
+  method: 'key' | 'account'
+  apiKey: string
+  name: string
+  password: string
+}
 
 /** What a login sends: the key, or the account. */
 function credentialsOf(login: Login): JellyfinCredentials {
-  return login.method === 'key'
+  return login.method === 'key' || login.kind === 'plex'
     ? { apiKey: login.apiKey.trim() }
     : { account: { name: login.name.trim(), password: login.password } }
 }
 
 /**
- * `/users/jellyfin-import`: imports accounts and their watch data from a Jellyfin server. The
- * running or last import shows first; under it, connecting to a server, then choosing what each of
- * its users becomes. The key and passwords only live in this page's state: the server never keeps
- * them.
+ * `/users/jellyfin-import`: imports accounts and their watch data from a Jellyfin, Emby or Plex
+ * server. The running or last import shows first, whoever started it; under it, connecting to a
+ * server of the kind chosen, then choosing what each of its users becomes. The key and passwords
+ * only live in this page's state: the server never keeps them.
  */
 export default function JellyfinImportRoute() {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const [address, setAddress] = useState('')
-  const [login, setLogin] = useState<Login>({ method: 'key', apiKey: '', name: '', password: '' })
+  const [login, setLogin] = useState<Login>({
+    kind: 'jellyfin',
+    method: 'key',
+    apiKey: '',
+    name: '',
+    password: '',
+  })
   const [connection, setConnection] = useState<JellyfinConnection | null>(null)
   const status = useQuery({
     queryKey: queryKeys.jellyfinImport,
@@ -165,12 +197,27 @@ export default function JellyfinImportRoute() {
   )
 }
 
-/** The import running, or the last one: its state, then each user's. */
-function ImportProgress({ current }: { current: JellyfinImportStatus }) {
+/**
+ * An import running, or the last one: its state, then each user's. The administrator's page names
+ * who started it, and can stop it; `own` is a user's own import, under My account.
+ */
+export function ImportProgress({
+  current,
+  own = false,
+}: {
+  current: JellyfinImportStatus
+  own?: boolean
+}) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const [shownId, setShownId] = useState<string | null>(null)
   const running = current.state === 'running'
+  const product = text.servers[current.server.kind]
+  const title = running
+    ? text.currentTitle
+    : own
+      ? t.account.serverImport.lastTitle
+      : text.lastTitle
   const stop = useMutation({
     mutationFn: stopJellyfinImport,
     onSuccess: (stopped) => {
@@ -182,23 +229,26 @@ function ImportProgress({ current }: { current: JellyfinImportStatus }) {
 
   return (
     <Panel
-      title={running ? text.currentTitle : text.lastTitle}
+      title={title}
+      titleAs={own ? 'h3' : 'h2'}
       titleAside={
         <StatusPill tone={importTones[current.state]}>{text.states[current.state]}</StatusPill>
       }
       description={
         <>
-          {current.server.name} · {text.startedLabel} <RelativeTime iso={current.startedAt} />
+          {current.server.name} ({product}) · {text.startedLabel}{' '}
+          <RelativeTime iso={current.startedAt} />
           {current.endedAt !== null && (
             <>
               {' '}
               · {text.endedLabel} <RelativeTime iso={current.endedAt} />
             </>
           )}
+          {!own && <> · {text.startedBy(current.startedBy.name, current.own)}</>}
         </>
       }
       actions={
-        running ? (
+        running && !own ? (
           <Button icon={StopCircleIcon} loading={stop.isPending} onClick={() => stop.mutate()}>
             {stop.isPending ? text.stopping : text.stop}
           </Button>
@@ -208,18 +258,19 @@ function ImportProgress({ current }: { current: JellyfinImportStatus }) {
       <div className="flex flex-col gap-4">
         {running && <p className="text-small text-ink-3">{text.runningHelp}</p>}
         {current.problem !== null && (
-          <Notice tone="danger">{text.problems[current.problem]}</Notice>
+          <Notice tone="danger">{text.problems[current.problem](product)}</Notice>
         )}
         {stop.isError && (
           <Notice tone="danger" live>
             {errorMessage(t, stop.error)}
           </Notice>
         )}
-        <RowList variant="plain" aria-label={running ? text.currentTitle : text.lastTitle}>
+        <RowList variant="plain" aria-label={title}>
           {current.users.map((user) => (
             <ImportedUserRow
               key={user.jellyfinId}
               user={user}
+              product={product}
               finished={!running}
               onShowUnmatched={() => setShownId(user.jellyfinId)}
             />
@@ -240,15 +291,18 @@ function ImportProgress({ current }: { current: JellyfinImportStatus }) {
 }
 
 /**
- * One Jellyfin user of an import: the Polyfin user it went into, its state, what it read while it
- * reads, then what it added. A finished import's users still waiting were never reached.
+ * One user of an import: the Polyfin user it went into, its state, what it read while it reads,
+ * then what it added. A finished import's users still waiting were never reached.
  */
 function ImportedUserRow({
   user,
+  product,
   finished,
   onShowUnmatched,
 }: {
   user: JellyfinUserImport
+  /** The kind of server's name, such as Emby. */
+  product: string
   finished: boolean
   onShowUnmatched: () => void
 }) {
@@ -280,7 +334,7 @@ function ImportedUserRow({
       }
     >
       {user.problem !== null ? (
-        <Notice tone="danger">{text.problems[user.problem]}</Notice>
+        <Notice tone="danger">{text.problems[user.problem](product)}</Notice>
       ) : undefined}
     </Row>
   )
@@ -334,7 +388,10 @@ function UnmatchedList({ user }: { user: JellyfinUserImport }) {
   )
 }
 
-/** Step 1: the server's address, and an API key or a user's account, which read its users. */
+/**
+ * Step 1: the kind of server, its address, and an API key or a user's account, which read its
+ * users; Plex takes its owner's token.
+ */
 function ConnectForm({
   address,
   login,
@@ -351,10 +408,12 @@ function ConnectForm({
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const mutation = useMutation({ mutationFn: connectJellyfin, onSuccess: onConnected })
-  const byKey = login.method === 'key'
+  const plex = login.kind === 'plex'
+  const byKey = login.method === 'key' || plex
+  const product = text.servers[login.kind]
 
   const code = mutation.error instanceof ApiError ? mutation.error.code : null
-  const message = mutation.isError ? errorMessage(t, mutation.error) : undefined
+  const message = mutation.isError ? serverError(t, login.kind, mutation.error) : undefined
   const addressError = code !== null && addressCodes.includes(code) ? message : undefined
   const loginError =
     code !== null && (byKey ? keyCodes : accountCodes).includes(code) ? message : undefined
@@ -367,14 +426,34 @@ function ConnectForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    mutation.mutate({ address: address.trim(), ...credentialsOf(login) })
+    mutation.mutate({ kind: login.kind, address: address.trim(), ...credentialsOf(login) })
   }
 
   return (
-    <Panel title={text.connectTitle} description={text.connectHelp} flush>
+    <Panel title={text.connectTitle(product)} description={text.connectHelp} flush>
       <form onSubmit={submit} noValidate>
         <div className="flex max-w-lg flex-col gap-5 px-6 pb-6 max-sm:px-4">
-          <Field label={text.address} help={text.addressHelp} error={addressError}>
+          <div className="flex flex-col gap-2">
+            <span aria-hidden className="text-control font-medium text-ink">
+              {text.serverKind}
+            </span>
+            <Segmented
+              label={text.serverKind}
+              value={login.kind}
+              options={(['jellyfin', 'emby', 'plex'] as const).map((kind) => ({
+                value: kind,
+                label: text.servers[kind],
+              }))}
+              onChange={(kind) => change({ kind })}
+              className="self-start"
+            />
+            <span className="text-small text-ink-3">{text.serverKindHelp[login.kind]}</span>
+          </div>
+          <Field
+            label={text.address}
+            help={plex ? text.plexAddressHelp : text.addressHelp(product)}
+            error={addressError}
+          >
             <TextInput
               type="url"
               inputMode="url"
@@ -383,30 +462,42 @@ function ConnectForm({
                 mutation.reset()
                 onAddress(value)
               }}
-              placeholder="http://192.168.1.10:8096"
+              placeholder={addressPlaceholders[login.kind]}
               autoComplete="off"
               spellCheck={false}
               mono
               required
             />
           </Field>
-          <div className="flex flex-col gap-2">
-            <span aria-hidden className="text-control font-medium text-ink">
-              {text.connectWith}
-            </span>
-            <Segmented
-              label={text.connectWith}
-              value={login.method}
-              options={[
-                { value: 'key', label: text.withApiKey },
-                { value: 'account', label: text.withAccount },
-              ]}
-              onChange={(method) => change({ method })}
-              className="self-start"
-            />
-          </div>
+          {!plex && (
+            <div className="flex flex-col gap-2">
+              <span aria-hidden className="text-control font-medium text-ink">
+                {text.connectWith}
+              </span>
+              <Segmented
+                label={text.connectWith}
+                value={login.method}
+                options={[
+                  { value: 'key', label: text.withApiKey },
+                  { value: 'account', label: text.withAccount },
+                ]}
+                onChange={(method) => change({ method })}
+                className="self-start"
+              />
+            </div>
+          )}
           {byKey ? (
-            <Field label={text.apiKey} help={text.apiKeyHelp} error={loginError}>
+            <Field
+              label={plex ? text.plexToken : text.apiKey}
+              help={
+                plex
+                  ? text.plexTokenHelp
+                  : login.kind === 'emby'
+                    ? text.embyApiKeyHelp
+                    : text.apiKeyHelp
+              }
+              error={loginError}
+            >
               <TextInput
                 type="password"
                 revealable
@@ -419,7 +510,7 @@ function ConnectForm({
             </Field>
           ) : (
             <>
-              <Field label={text.accountName} help={text.accountNameHelp}>
+              <Field label={text.accountName} help={text.accountNameHelp(product)}>
                 <TextInput
                   value={login.name}
                   onValue={(name) => change({ name })}
@@ -466,8 +557,8 @@ function ConnectForm({
 }
 
 /**
- * Step 2: what each Jellyfin user becomes. A user with the same name as a Polyfin user goes into
- * it, another becomes a new user, and a disabled one is left out, until changed here.
+ * Step 2: what each user of the server becomes. A user with the same name as a Polyfin user goes
+ * into it, another becomes a new user, and a disabled one is left out, until changed here.
  */
 function ChooseUsers({
   connection,
@@ -482,6 +573,8 @@ function ChooseUsers({
 }) {
   const { t } = useI18n()
   const text = t.users.jellyfinImport
+  const kind = connection.server.kind
+  const product = text.servers[kind]
   const toast = useToast()
   const formId = useId()
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
@@ -526,7 +619,7 @@ function ChooseUsers({
   })
 
   const failed = start.error instanceof ApiError ? start.error : null
-  const message = start.isError ? errorMessage(t, start.error) : undefined
+  const message = start.isError ? serverError(t, kind, start.error) : undefined
   // A field of a row the server refused shows the error under it.
   const field: RowError['field'] | null =
     failed === null || failed.jellyfinId === null
@@ -573,13 +666,13 @@ function ChooseUsers({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    start.mutate({ address: connection.server.address, ...credentials, users: entries })
+    start.mutate({ kind, address: connection.server.address, ...credentials, users: entries })
   }
 
   return (
     <Panel
       title={text.chooseTitle}
-      description={text.chooseHelp(connection.server.name, connection.server.version)}
+      description={text.chooseHelp(connection.server.name, product, connection.server.version)}
       actions={
         <Button variant="ghost" onClick={onBack}>
           {text.changeServer}
@@ -608,18 +701,28 @@ function ChooseUsers({
             {errorMessage(t, users.error)}
           </InlineError>
         ) : connection.users.length === 0 ? (
-          <p className="text-small text-ink-3">{text.noUsers}</p>
+          <p className="text-small text-ink-3">{text.noUsers(product)}</p>
         ) : (
           <>
             {owner !== null && (
               <Notice>{text.ownerNotice(ownerName, 'account' in credentials)}</Notice>
             )}
+            {/* Plex's owner's token reads the other accounts' played history, not their resume points. */}
+            {kind === 'plex' && <Notice>{text.plexNotice}</Notice>}
             <RowList variant="plain" aria-label={text.chooseTitle}>
               {connection.users.map((user) => (
                 <ChoiceRow
                   key={user.id}
                   user={user}
                   server={connection.server.name}
+                  activity={kind !== 'plex'}
+                  dataHelp={
+                    kind !== 'plex'
+                      ? text.watchDataHelp
+                      : user.isAdministrator
+                        ? text.plexOwnerWatchDataHelp
+                        : text.plexWatchDataHelp
+                  }
                   choice={choices[user.id]}
                   options={options}
                   signsIn={signsIn(user)}
@@ -647,10 +750,12 @@ function ChooseUsers({
 /** An error the server answered about a field of a row. */
 type RowError = { field: 'name' | 'password' | 'jellyfinPassword'; message: string }
 
-/** One Jellyfin user: who it is, what it becomes in Polyfin, and whether its data comes along. */
+/** One user of the server: who it is, what it becomes in Polyfin, and whether its data comes along. */
 function ChoiceRow({
   user,
   server,
+  dataHelp,
+  activity,
   choice,
   options,
   signsIn,
@@ -658,8 +763,12 @@ function ChoiceRow({
   onChange,
 }: {
   user: JellyfinUser
-  /** The Jellyfin server's name. */
+  /** The server's name. */
   server: string
+  /** What importing this user's watch data brings. */
+  dataHelp: string
+  /** Whether the server tells when its users last used it: Plex does not. */
+  activity: boolean
   choice: Choice
   options: SelectOption<Target>[]
   /** The connection is another user's: this user's watch data is read signed in as them. */
@@ -688,9 +797,11 @@ function ChoiceRow({
         </>
       }
       meta={
-        <span className="truncate">
-          {text.lastActivityLabel} {lastActivity}
-        </span>
+        activity ? (
+          <span className="truncate">
+            {text.lastActivityLabel} {lastActivity}
+          </span>
+        ) : undefined
       }
     >
       <div className="flex flex-col gap-4">
@@ -745,7 +856,7 @@ function ChoiceRow({
         {choice.target !== 'skip' && (
           <Checkbox
             label={text.watchData}
-            help={existing && !choice.watchData ? text.watchDataNeeded : text.watchDataHelp}
+            help={existing && !choice.watchData ? text.watchDataNeeded : dataHelp}
             checked={choice.watchData}
             onChange={(watchData) => onChange({ watchData })}
           />

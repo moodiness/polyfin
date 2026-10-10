@@ -190,6 +190,8 @@ export type Settings = {
   catalogRefreshMinutes: number
   /** Whether users may add and use their own addons. */
   personalAddons: boolean
+  /** Whether users may import their own watch history from another server, under My account. */
+  serverImports: boolean
   /** Wrong passwords in a row that block an account for 15 minutes; 0 never blocks. */
   loginAttempts: number
   /** Days unused after which a Jellyfin app is signed out; 0 never signs it out. */
@@ -1266,8 +1268,11 @@ export const fetchPublicInvite = (token: string, signal?: AbortSignal) =>
 export const acceptInvite = (token: string, body: { name: string; password: string }) =>
   request<{ user: SessionUser; webClient: boolean }>('POST', `/invite/${seg(token)}`, body)
 
-/** A Jellyfin server as the import reads it; `address` is the normalized one to send back. */
-export type JellyfinServer = { name: string; version: string; address: string }
+/** The kind of server an import reads: Jellyfin (or a server that speaks its API), Emby or Plex. */
+export type ServerKind = 'jellyfin' | 'emby' | 'plex'
+
+/** A server as the import reads it; `address` is the normalized one to send back. */
+export type JellyfinServer = { kind: ServerKind; name: string; version: string; address: string }
 
 /** A user of the Jellyfin server, with the Polyfin user of the same name as a suggestion. */
 export type JellyfinUser = {
@@ -1339,10 +1344,16 @@ export type JellyfinUserImport = {
   problem: JellyfinImportProblem | null
 }
 
-/** The running import, else the last one since Polyfin started: a restart forgets it. */
+/**
+ * The running import, else the last one since Polyfin started: a restart forgets it. `startedBy`
+ * is the Polyfin user who started it; `own` tells an import of their own watch data, made under My
+ * account.
+ */
 export type JellyfinImportStatus = {
   id: string
-  server: { name: string; address: string }
+  server: { kind: ServerKind; name: string; address: string }
+  startedBy: { id: string; name: string }
+  own: boolean
   state: 'running' | 'done' | 'stopped' | 'failed'
   problem: JellyfinImportProblem | null
   startedAt: string
@@ -1351,9 +1362,9 @@ export type JellyfinImportStatus = {
 }
 
 /**
- * What connecting to a Jellyfin server reads: the server, its users, and the user the key belongs
- * to or who signed in, null for an API key of the server's dashboard: another user's watch data is
- * then read signed in as them.
+ * What connecting to a server reads: the server, its users, and the user the key belongs to or
+ * who signed in, null for an API key of the server's dashboard or Plex's owner's token: another
+ * user's watch data is then read signed in as them.
  */
 export type JellyfinConnection = {
   server: JellyfinServer
@@ -1361,20 +1372,24 @@ export type JellyfinConnection = {
   keyOwner: string | null
 }
 
-/** What connects to a Jellyfin server: an API key, or a user's name and password. */
+/**
+ * What connects to a server: an API key (Plex's owner's token for Plex), or a user's name and
+ * password, which Plex does not take.
+ */
 export type JellyfinCredentials =
   { apiKey: string } | { account: { name: string; password: string } }
 
-/** Reads a Jellyfin server's users with credentials, which the server never keeps. */
-export const connectJellyfin = (body: { address: string } & JellyfinCredentials) =>
-  request<JellyfinConnection>('POST', '/jellyfin-import/users', body)
+/** Reads a server's users with credentials, which the server never keeps. */
+export const connectJellyfin = (
+  body: { kind: ServerKind; address: string } & JellyfinCredentials,
+) => request<JellyfinConnection>('POST', '/jellyfin-import/users', body)
 
 /**
  * Creates the new users (all or none), then starts importing the watch data in the background;
  * `import` is null when no entry asked for watch data.
  */
 export const startJellyfinImport = (
-  body: { address: string; users: JellyfinImportEntry[] } & JellyfinCredentials,
+  body: { kind: ServerKind; address: string; users: JellyfinImportEntry[] } & JellyfinCredentials,
 ) =>
   request<{ created: User[]; import: JellyfinImportStatus | null }>(
     'POST',
@@ -1392,6 +1407,27 @@ export const fetchJellyfinImport = async (signal?: AbortSignal) =>
 /** Stops the running import; what it imported stays. */
 export const stopJellyfinImport = async () =>
   (await request<JellyfinImportAnswer>('POST', '/jellyfin-import/stop')).import
+
+/**
+ * Whether the signed-in user may import their own watch history from another server, and their
+ * own import running, else their last one, else null.
+ */
+export type OwnImport = { enabled: boolean; import: JellyfinImportStatus | null }
+
+export const fetchOwnImport = (signal?: AbortSignal) =>
+  request<OwnImport>('GET', '/account/server-import', undefined, signal)
+
+/**
+ * Signs in to a Jellyfin or Emby server as `name`, and imports that user's watch data into the
+ * signed-in user's account, in the background. The password is used for this import only.
+ */
+export const startOwnImport = async (body: {
+  kind: Exclude<ServerKind, 'plex'>
+  address: string
+  name: string
+  password: string
+}) =>
+  (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
 
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
@@ -2040,6 +2076,7 @@ export const queryKeys = {
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   jellyfinImport: ['jellyfin-import'] as const,
+  ownImport: ['account', 'server-import'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   parentalRatings: ['parental-ratings'] as const,
