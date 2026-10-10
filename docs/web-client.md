@@ -31,7 +31,7 @@ The entry is named "Polyfin" in every language. Administrators never see it, and
 
 Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. On a movie's or an episode's page, the same script:
 
-- adds the title's versions to the page's version menu as the addons answer, without reloading the page;
+- adds the title's versions to the page's version menu as the addons answer, without reloading the page. The version selected, the first by default or the one the user picked, stays selected, even when a version that comes is listed before it;
 - keeps the Play, Resume and Play from the start buttons disabled, with a spinner and the tooltip "Looking for sources…", until a version is known, then gives them back in place;
 - when every addon has answered without a version, says "No source is available for this title." under the buttons, with a **Try again** button that has Polyfin ask the addons again;
 - ends a long version, audio or subtitle name with "…" before its menu's arrow, which stream addons' detailed version names used to run under. The open menu shows whole names.
@@ -71,13 +71,14 @@ A user signed in to the web client, administrator or member, arrives in the admi
 
 ## Customizing the web client
 
-**Settings › Web player** in the admin app holds three texts for the web client: **Custom CSS**, **Sign-in message** and **Custom JavaScript**. By default, **Custom CSS** and **Custom JavaScript** load the LumaaGlaass theme (see [Default theme](#default-theme)), and **Sign-in message** is empty. **Open the web player** shows the result.
+**Settings › Web player** in the admin app holds three texts for the web client: **Custom CSS**, **Sign-in message** and **Custom JavaScript**, and one switch, **Add versions to an open title's page**. By default, **Custom CSS** and **Custom JavaScript** load the LumaaGlaass theme (see [Default theme](#default-theme)), and **Sign-in message** is empty. **Open the web player** shows the result.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Custom CSS** | **Settings › Web player** | The theme's stylesheet | CSS applied to every page of the web client. Up to 2 MB. |
 | **Sign-in message** | **Settings › Web player** | Empty | Text shown under the sign-in form. Plain text, Markdown or HTML. Up to 8 KB. |
 | **Custom JavaScript** | **Settings › Web player** | The theme's script | Script run on every page of the web client. Up to 2 MB. |
+| **Add versions to an open title's page** | **Settings › Web player** | On | Adds the versions the addons find to a title's page while it is open. Off, a page opened before any version was found still lists the first ones, and the play buttons still wait for a version; the others show when the page is opened again. See [Title pages](playback.md#title-pages). |
 
 ### Default theme
 
