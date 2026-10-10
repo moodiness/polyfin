@@ -602,6 +602,22 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'notifications',
+    anchor: 'weekly-summary-day',
+    label: (t) => s(t).weeklySummaryDay,
+    help: (t) => s(t).weeklySummaryHelp,
+    keywords: ['weekly', 'summary', 'email'],
+    codes: ['invalid_weekly_summary_day'],
+  },
+  {
+    section: 'notifications',
+    anchor: 'weekly-summary-hour',
+    label: (t) => s(t).weeklySummaryHour,
+    help: (t, r) => s(t).weeklySummaryHourHelp(r('weeklySummaryHour').default),
+    keywords: ['weekly', 'summary', 'email'],
+    codes: ['invalid_weekly_summary_hour'],
+  },
+  {
+    section: 'notifications',
     anchor: 'smtp-host',
     label: (t) => s(t).smtpHost,
     help: (t) => s(t).smtpHostHelp,

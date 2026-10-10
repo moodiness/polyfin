@@ -98,6 +98,14 @@ const settings: typeof en = {
     smtpFromHelp: 'L’adresse d’où viennent les messages, comme polyfin@example.org.',
     smtpFromName: 'Nom de l’expéditeur',
     smtpFromNameHelp: 'Affiché avec l’adresse. Vide, c’est le nom du serveur.',
+    weeklySummary: 'Résumé de la semaine',
+    weeklySummaryHelp:
+      'Les cibles qui ont choisi « Résumé de la semaine » dans leurs Événements le reçoivent une fois par semaine : les cibles du serveur et des administrateurs la semaine du serveur, les autres leur propre semaine. Rien n’est envoyé pour une semaine sans rien à dire. Système › Planning l’envoie tout de suite.',
+    weeklySummaryDay: 'Envoyer le résumé de la semaine le',
+    weeklySummaryDayHelp: (day: string) => `${day} par défaut.`,
+    weeklySummaryHour: 'Envoyer le résumé de la semaine à',
+    weeklySummaryHourHelp: (hour: string) =>
+      `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
@@ -431,7 +439,7 @@ const settings: typeof en = {
         'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',
       notifications:
-        'Où Polyfin signale les nouveaux épisodes, les enregistrements, les problèmes de santé et les nouveaux utilisateurs, pour tous les utilisateurs.',
+        'Où Polyfin signale les nouveaux épisodes, les enregistrements, les problèmes de santé et les nouveaux utilisateurs, pour tous les utilisateurs, et envoie le résumé de la semaine.',
     },
     groups: {
       skip: 'Passer l’intro et le générique',

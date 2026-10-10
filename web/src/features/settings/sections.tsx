@@ -901,9 +901,14 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
 }
 
 function Notifications({ form, update, error, number, limits }: SectionFormApi) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const s = t.settings
   const text = t.notifications
+  // Sunday 7 January 2024 is day 0, as the server counts days; the week starts on Monday.
+  const weekday = (day: number) =>
+    new Intl.DateTimeFormat(language, { weekday: 'long', timeZone: 'UTC' }).format(
+      Date.UTC(2024, 0, 7 + day),
+    )
   return (
     <>
       <SettingsGroup>
@@ -922,6 +927,42 @@ function Notifications({ form, update, error, number, limits }: SectionFormApi) 
             spellCheck={false}
             mono
             className="max-w-md"
+          />
+        </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title={s.weeklySummary}>
+        <TextRow anchor="weekly-summary">
+          <p className="max-w-[60ch]">{s.weeklySummaryHelp}</p>
+        </TextRow>
+        <FieldRow
+          anchor="weekly-summary-day"
+          label={s.weeklySummaryDay}
+          help={s.weeklySummaryDayHelp(weekday(Number(form.bounds.weeklySummaryDay?.default)))}
+          error={error('weekly-summary-day')}
+        >
+          <Select
+            value={form.weeklySummaryDay}
+            options={[1, 2, 3, 4, 5, 6, 0].map((day) => ({ value: day, label: weekday(day) }))}
+            onValue={(weeklySummaryDay) => update({ weeklySummaryDay })}
+            className="max-w-[12rem]"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="weekly-summary-hour"
+          label={s.weeklySummaryHour}
+          help={s.weeklySummaryHourHelp(
+            formatHour(Number(form.bounds.weeklySummaryHour?.default), language),
+          )}
+          error={error('weekly-summary-hour')}
+        >
+          <Select
+            value={form.weeklySummaryHour}
+            options={Array.from({ length: 24 }, (_, hour) => ({
+              value: hour,
+              label: formatHour(hour, language),
+            }))}
+            onValue={(weeklySummaryHour) => update({ weeklySummaryHour })}
+            className="max-w-[10rem]"
           />
         </FieldRow>
       </SettingsGroup>

@@ -94,6 +94,13 @@ const settings = {
     smtpFromHelp: 'The address messages come from, such as polyfin@example.org.',
     smtpFromName: 'Sender name',
     smtpFromNameHelp: 'Shown with the address. Empty, the server name is.',
+    weeklySummary: 'Weekly summary',
+    weeklySummaryHelp:
+      'Targets that chose "Weekly summary" in their Events receive it once a week: the server’s and administrators’ targets the server’s week, the others their own week. Nothing is sent for a week with nothing to tell. System › Schedule sends it now.',
+    weeklySummaryDay: 'Send the weekly summary on',
+    weeklySummaryDayHelp: (day: string) => `${day} by default.`,
+    weeklySummaryHour: 'Send the weekly summary at',
+    weeklySummaryHourHelp: (hour: string) => `In the server’s time zone. ${hour} by default.`,
     maxConversions: 'Video conversions at once (0 = no limit)',
     maxConversionsHelp: (r: RangeText) =>
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,
@@ -421,7 +428,7 @@ const settings = {
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
       notifications:
-        'Where Polyfin tells of new episodes, recordings, Health problems and new users, for every user.',
+        'Where Polyfin tells of new episodes, recordings, Health problems and new users, for every user, and sends the weekly summary.',
     },
     groups: {
       skip: 'Skip intro and credits',

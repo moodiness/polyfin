@@ -95,6 +95,7 @@ const notifications = {
       playback_paused: 'Playback paused',
       playback_resumed: 'Playback resumed',
       playback_stopped: 'Playback stopped',
+      weekly_summary: 'Weekly summary',
     },
     eventHelp: {
       new_episode:
@@ -111,6 +112,8 @@ const notifications = {
       playback_paused: 'A playback is paused. Positions as it plays are never sent.',
       playback_resumed: 'A paused playback plays again.',
       playback_stopped: 'A playback stops, or its app stopped reporting it for five minutes.',
+      weekly_summary:
+        'Once a week, at the day and hour the server sets: the hours watched, the titles and the new episodes of the week. The server’s and administrators’ targets get the server’s week, with the users who joined, the files added to local folders and the problems found; others get their own. Nothing is sent for a week with nothing to tell.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',
