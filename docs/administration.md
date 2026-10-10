@@ -4,7 +4,7 @@ This page covers Polyfin's admin app: its Home, its System pages (Health, Schedu
 
 ## The admin app
 
-The admin app is at `/admin/`. From the [web client](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings.
+The admin app is at `/admin/`. From the [web client](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings. Members open it from the **Polyfin** entry the web client shows them instead of **Dashboard**. Either way, a user signed in to the web client arrives signed in (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 A bar at the top holds the sections, for administrators:
 
@@ -14,7 +14,7 @@ A bar at the top holds the sections, for administrators:
 - **System**: **Health**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
-The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
+The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
 
 **My account** has four sections: **Tracking** (see [Tracking services](tracking.md)), **Notifications** (see [Notifications](notifications.md)), **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
 

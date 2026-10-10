@@ -19,6 +19,16 @@ The Docker image includes jellyfin-web 12.2. Polyfin serves it at `/web/`, as Je
 
 In the web client, the **Dashboard** (from the menu or the user menu), every dashboard page, the metadata manager, plugin pages and the startup wizard open Polyfin's [admin app](administration.md) at `/admin/` instead.
 
+Members, who don't have **Dashboard**, get a **Polyfin** entry in its place. It opens the admin app in the same tab, on their own pages: **Home**, **My sources**, **My account** and **Quick Connect**. It shows:
+
+- in the user menu, above **Quick Connect** and **Sign out**;
+- on the **Settings** page, before the "User" section;
+- with a legacy layout ("Desktop (Legacy)", "Mobile (Legacy)" or "TV"), in the side menu, at the top of the "User" section. Right after the libraries, without the "Administration" heading, it would read as one of them.
+
+The side menu of the default layout, in a narrow window, has no **Dashboard**, so no **Polyfin** entry either.
+
+The entry is named "Polyfin" in every language. Administrators never see it, and it goes when you sign out. After a member's first load in a browser, it shows as soon as jellyfin-web draws its menus.
+
 Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. On a movie's or an episode's page, the same script:
 
 - adds the title's versions to the page's version menu as the addons answer, without reloading the page;
@@ -36,13 +46,13 @@ When the server refuses to play a title, jellyfin-web 12.2 shows the reason, suc
 
 ### Signing in to the admin app
 
-An administrator signed in to the web client arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
+A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
 
-- This opens an admin session, logged as a sign-in.
-- It works only for the signed-in device of an administrator who may sign in now. It does not work for an API key, which has no user, for a disabled or blocked account, or outside the account's allowed hours.
+- This opens a session in the admin app, logged as a sign-in. A member's session opens their own pages only, as when they sign in with their password.
+- It works only for the signed-in device of a user who may sign in now. It does not work for an API key, which has no user, for a disabled or blocked account, or outside the account's allowed hours.
 - An unknown token counts as a wrong password toward the client's failed attempts.
 - It is tried once each time the admin app is opened, so signing out of the admin app holds until then.
-- Other users get the sign-in page.
+- Without a token it may use, the admin app shows its sign-in page.
 
 **For app developers:**
 
