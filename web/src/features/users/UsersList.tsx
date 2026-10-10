@@ -2,6 +2,7 @@ import {
   ArrowSquareInIcon,
   CaretRightIcon,
   DownloadSimpleIcon,
+  LinkIcon,
   PlusIcon,
   UsersIcon,
 } from '@phosphor-icons/react'
@@ -36,16 +37,19 @@ import {
   useToast,
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
+import { CreateInviteModal, InviteLinks } from './InviteLinks'
 import { clockTime, useRestrictions } from './shared'
 
 /**
  * `/users`: every account, each opening its page, the button to create one, the one importing
- * accounts from a Jellyfin server, and the one turning downloads off for everyone.
+ * accounts from a Jellyfin server, the one turning downloads off for everyone, and the invite
+ * links, with the button to create one.
  */
 export default function UsersList() {
   const { t } = useI18n()
   const toast = useToast()
   const [creating, setCreating] = useState(false)
+  const [inviting, setInviting] = useState(false)
   const [stoppingDownloads, setStoppingDownloads] = useState(false)
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
   const downloadsOff = useMutation({
@@ -76,6 +80,9 @@ export default function UsersList() {
       <ButtonLink to="/users/jellyfin-import" icon={ArrowSquareInIcon}>
         {t.users.jellyfinImport.open}
       </ButtonLink>
+      <Button icon={LinkIcon} onClick={() => setInviting(true)}>
+        {t.invites.create}
+      </Button>
       {create}
     </span>
   )
@@ -102,9 +109,15 @@ export default function UsersList() {
             </RowList>
           )}
         </Block>
+        <InviteLinks onCreate={() => setInviting(true)} />
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the panel down. */}
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
+      <CreateInviteModal
+        open={inviting}
+        onClose={() => setInviting(false)}
+        users={users.data ?? []}
+      />
       <ConfirmDialog
         open={stoppingDownloads}
         onClose={() => setStoppingDownloads(false)}

@@ -6,6 +6,7 @@ import {
   type RouteObject,
 } from 'react-router'
 import AccountRoute from '@/features/account/AccountRoute'
+import InviteRoute from '@/features/auth/InviteRoute'
 import NotFoundRoute from '@/features/home/NotFoundRoute'
 import HomeRoute from '@/features/home/HomeRoute'
 import QuickConnectRoute from '@/features/home/QuickConnectRoute'
@@ -25,6 +26,7 @@ import UsersRoute from '@/features/users/UsersRoute'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
 import { AdminOnly, SessionGate } from './SessionGate'
+import { PublicShell } from './Shell'
 
 /** Sends an address of the app before « Nuit » to its new place, keeping its query and anchor. */
 function Moved({ to }: { to: string }) {
@@ -85,10 +87,19 @@ const development: RouteObject[] = import.meta.env.DEV
 
 /**
  * Every page of the admin app, under `/admin`. Each route renders a component of
- * `src/features/<area>/`; the session gate wraps them all, AdminOnly the administrators' ones.
+ * `src/features/<area>/`; the session gate wraps them all but the page an invite link opens, which
+ * needs no session, and AdminOnly the administrators' ones.
  */
 export const router = createBrowserRouter(
   [
+    {
+      path: 'invite/:token',
+      element: (
+        <PublicShell>
+          <InviteRoute />
+        </PublicShell>
+      ),
+    },
     {
       element: <SessionGate />,
       children: [

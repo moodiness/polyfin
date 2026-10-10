@@ -400,7 +400,7 @@ const settings: typeof en = {
         'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',
       notifications:
-        'Où Polyfin signale les nouveaux épisodes, les enregistrements et les problèmes de santé, pour tous les utilisateurs.',
+        'Où Polyfin signale les nouveaux épisodes, les enregistrements, les problèmes de santé et les nouveaux utilisateurs, pour tous les utilisateurs.',
     },
     groups: {
       skip: 'Passer l’intro et le générique',

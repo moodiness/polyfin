@@ -1090,7 +1090,12 @@ export type NotificationKind =
 
 /** The events targets choose from. */
 export type NotificationEvent =
-  'new_episode' | 'recording_finished' | 'recording_failed' | 'health_problem' | 'health_solved'
+  | 'new_episode'
+  | 'recording_finished'
+  | 'recording_failed'
+  | 'health_problem'
+  | 'health_solved'
+  | 'user_joined'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -1212,6 +1217,54 @@ export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(i
 
 /** Takes the permission to download away from every user; answers with those who had it. */
 export const turnOffDownloads = () => request<User[]>('POST', '/users/downloads/off')
+
+export type InviteState = 'active' | 'used_up' | 'expired' | 'revoked'
+
+/**
+ * An invite link: how many accounts it may create and has created, when it expires (null for
+ * never), the user whose settings new accounts copy (null for a new user's), and who created it
+ * (null once deleted).
+ */
+export type Invite = {
+  id: string
+  maxUses: number
+  uses: number
+  expiresAt: string | null
+  createdAt: string
+  revokedAt: string | null
+  model: { id: string; name: string } | null
+  createdBy: { id: string; name: string } | null
+  state: InviteState
+}
+
+/**
+ * An invite just created, with the token of its link, given this once, and its address when the
+ * server's public address is set.
+ */
+export type NewInvite = Invite & { token: string; url: string | null }
+
+export const fetchInvites = (signal?: AbortSignal) =>
+  request<Invite[]>('GET', '/invites', undefined, signal)
+
+/** `expiresInDays` null never expires. */
+export const createInvite = (body: {
+  maxUses: number
+  expiresInDays: number | null
+  modelUserId: string | null
+}) => request<NewInvite>('POST', '/invites', body)
+
+export const revokeInvite = (id: string) => request<Invite>('POST', `/invites/${seg(id)}/revoke`)
+
+/** Whether an invite's link may still create an account, with the server's name; no session. */
+export const fetchPublicInvite = (token: string, signal?: AbortSignal) =>
+  request<{ serverName: string }>('GET', `/invite/${seg(token)}`, undefined, signal)
+
+/**
+ * Creates the guest's account through an invite's link. With the web client (`webClient`), the
+ * guest still has to sign in to it; without it, they are signed in to the admin app.
+ */
+export const acceptInvite = (token: string, body: { name: string; password: string }) =>
+  request<{ user: SessionUser; webClient: boolean }>('POST', `/invite/${seg(token)}`, body)
 
 /** A Jellyfin server as the import reads it; `address` is the normalized one to send back. */
 export type JellyfinServer = { name: string; version: string; address: string }
@@ -1999,6 +2052,7 @@ export const queryKeys = {
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,
+  invites: ['invites'] as const,
   activity: (query: ActivityQuery) => ['activity', query] as const,
   /** Everything a source's line-up shows: invalidated after any change to it. */
   lineup: (scope: Scope, id: string) => ['lineup', scope, id] as const,
