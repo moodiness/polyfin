@@ -16,7 +16,8 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 		t.Helper()
 		if got.EncoderPreset != "auto" || got.H264Quality != 0 || got.HevcQuality != 0 || got.AllowHevcEncoding || got.HardwareAcceleration != "auto" ||
 			!slices.Equal(got.HardwareDecodingCodecs, HardwareDecodingCodecs) || !got.ToneMapping || got.ToneMappingAlgorithm != "auto" ||
-			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
+			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || !got.GPUToneMapping || got.ProcessorToneMappingHeight != 0 ||
+			got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
 			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds {
 			t.Errorf("%s: %+v", when, got)
@@ -53,6 +54,8 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		{"a peak above 10000 nits", func(s *Settings) { s.ToneMappingPeak = MaxToneMappingPeak + 1 }, ErrInvalidToneMappingPeak},
 		{"a negative desaturation", func(s *Settings) { s.ToneMappingDesat = -0.1 }, ErrInvalidToneMappingDesat},
 		{"too much desaturation", func(s *Settings) { s.ToneMappingDesat = MaxToneMappingDesat + 0.1 }, ErrInvalidToneMappingDesat},
+		{"a tone mapped height that is not offered", func(s *Settings) { s.ProcessorToneMappingHeight = 480 }, ErrInvalidToneMappingHeight},
+		{"a tone mapped height above 2160", func(s *Settings) { s.ProcessorToneMappingHeight = 4320 }, ErrInvalidToneMappingHeight},
 		{"an unknown deinterlacer", func(s *Settings) { s.DeinterlaceMethod = "w3fdif" }, ErrInvalidDeinterlaceMethod},
 		{"an unknown downmix", func(s *Settings) { s.DownmixAlgorithm = "dave750" }, ErrInvalidDownmixAlgorithm},
 		{"a boost below 0.5", func(s *Settings) { s.DownmixBoost = MinDownmixBoost - 0.1 }, ErrInvalidDownmixBoost},
@@ -82,6 +85,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			s.EncoderPreset, s.H264Quality, s.HevcQuality, s.AllowHevcEncoding, s.HardwareAcceleration = "veryslow", MinVideoQuality, MaxVideoQuality, true, "vaapi"
 			s.HardwareDecodingCodecs = []string{"vc1", "h264"}
 			s.ToneMapping, s.ToneMappingAlgorithm, s.ToneMappingPeak, s.ToneMappingDesat = false, "mobius", MinToneMappingPeak, 0.5
+			s.GPUToneMapping, s.ProcessorToneMappingHeight = false, 720
 			s.DeinterlaceMethod, s.DeinterlaceDoubleRate = "bwdif", true
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Dave750", MinDownmixBoost, 2, MinAudioBitratePerChannel
 			s.EncodingThreads, s.AheadSeconds = MaxEncodingThreads, MinAheadSeconds
@@ -89,6 +93,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		func(s *Settings) {
 			s.EncoderPreset, s.HardwareAcceleration, s.HardwareDecodingCodecs = "ultrafast", "none", []string{}
 			s.ToneMappingAlgorithm, s.ToneMappingPeak, s.ToneMappingDesat = "bt2390", MaxToneMappingPeak, MaxToneMappingDesat
+			s.ProcessorToneMappingHeight = 2160
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Ac4", MaxDownmixBoost, 6, MaxAudioBitratePerChannel
 			s.EncodingThreads, s.AheadSeconds = 0, MaxAheadSeconds
 		},
@@ -113,6 +118,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 	// The database refuses what the store refuses, whoever writes it.
 	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'qsv'", "hardware_acceleration = ''",
 		"hardware_decoding_codecs = '{vp8}'", "tone_mapping_algorithm = 'gamma'", "tone_mapping_peak = 99", "tone_mapping_desat = 11",
+		"processor_tone_mapping_height = 480", "processor_tone_mapping_height = -1",
 		"deinterlace_method = 'w3fdif'", "downmix_algorithm = 'dave750'", "downmix_boost = 0.4", "max_audio_channels = 8",
 		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_seconds = 29", "ahead_seconds = 601"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {

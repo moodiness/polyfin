@@ -385,6 +385,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidToneMappingAlgorithm, http.StatusBadRequest, "invalid_tone_mapping_algorithm"},
 		{accounts.ErrInvalidToneMappingPeak, http.StatusBadRequest, "invalid_tone_mapping_peak"},
 		{accounts.ErrInvalidToneMappingDesat, http.StatusBadRequest, "invalid_tone_mapping_desat"},
+		{accounts.ErrInvalidToneMappingHeight, http.StatusBadRequest, "invalid_processor_tone_mapping_height"},
 		{accounts.ErrInvalidDeinterlaceMethod, http.StatusBadRequest, "invalid_deinterlace_method"},
 		{accounts.ErrInvalidDownmixAlgorithm, http.StatusBadRequest, "invalid_downmix_algorithm"},
 		{accounts.ErrInvalidDownmixBoost, http.StatusBadRequest, "invalid_downmix_boost"},

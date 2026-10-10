@@ -142,6 +142,7 @@ var (
 	ErrInvalidToneMappingAlgorithm   = errors.New("invalid tone mapping algorithm")
 	ErrInvalidToneMappingPeak        = errors.New("invalid tone mapping peak")
 	ErrInvalidToneMappingDesat       = errors.New("invalid tone mapping desaturation")
+	ErrInvalidToneMappingHeight      = errors.New("invalid height of HDR tone mapped on the processor")
 	ErrInvalidDeinterlaceMethod      = errors.New("invalid deinterlace method")
 	ErrInvalidDownmixAlgorithm       = errors.New("invalid downmix algorithm")
 	ErrInvalidDownmixBoost           = errors.New("invalid downmix boost")
@@ -176,6 +177,10 @@ var (
 	// AudioChannelLimits are the values of Settings.MaxAudioChannels: 0
 	// leaves the app's limit alone.
 	AudioChannelLimits = []int{0, 1, 2, 6}
+	// ToneMappingHeights are the values of
+	// Settings.ProcessorToneMappingHeight: 0, Automatic, is what a timing
+	// at startup chose, then heights of usual video.
+	ToneMappingHeights = []int{0, 720, 1080, 1440, 2160}
 )
 
 // The bounds and defaults of the numbers tuning conversions. The defaults
@@ -716,6 +721,13 @@ type Settings struct {
 	ToneMappingAlgorithm string
 	ToneMappingPeak      int
 	ToneMappingDesat     float64
+	// GPUToneMapping tone maps HDR on a GPU that can, NVIDIA's or Intel's;
+	// off, the processor tone maps, a way out when a GPU's colors look
+	// wrong. ProcessorToneMappingHeight caps video the processor tone maps,
+	// one of ToneMappingHeights; 0, Automatic, is the height a timing at
+	// startup chose.
+	GPUToneMapping             bool
+	ProcessorToneMappingHeight int
 	// DeinterlaceMethod is one of DeinterlaceMethods; DeinterlaceDoubleRate
 	// makes a frame of each field, doubling the frame rate up to 30.
 	DeinterlaceMethod     string
@@ -895,7 +907,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"personal_addons, server_imports, login_attempts, inactive_device_days, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
-	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, deinterlace_method, deinterlace_double_rate, " +
+	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, " +
@@ -924,7 +936,8 @@ func (settings *Settings) fields() []any {
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
-		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
+		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
+		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
@@ -1313,6 +1326,8 @@ func validConversion(settings Settings) ([]string, error) {
 		return nil, ErrInvalidToneMappingPeak
 	case !(settings.ToneMappingDesat >= 0 && settings.ToneMappingDesat <= MaxToneMappingDesat):
 		return nil, ErrInvalidToneMappingDesat
+	case !slices.Contains(ToneMappingHeights, settings.ProcessorToneMappingHeight):
+		return nil, ErrInvalidToneMappingHeight
 	case !slices.Contains(DeinterlaceMethods, settings.DeinterlaceMethod):
 		return nil, ErrInvalidDeinterlaceMethod
 	case !slices.Contains(DownmixAlgorithms, settings.DownmixAlgorithm):

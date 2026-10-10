@@ -312,25 +312,29 @@ type settingsJSON struct {
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
-	EncoderPreset          *string                `json:"encoderPreset"`
-	H264Quality            *int                   `json:"h264Quality"`
-	HevcQuality            *int                   `json:"hevcQuality"`
-	AllowHevcEncoding      *bool                  `json:"allowHevcEncoding"`
-	HardwareAcceleration   *string                `json:"hardwareAcceleration"`
-	HardwareDecodingCodecs *[]string              `json:"hardwareDecodingCodecs"`
-	ToneMapping            *bool                  `json:"toneMapping"`
-	ToneMappingAlgorithm   *string                `json:"toneMappingAlgorithm"`
-	ToneMappingPeak        *int                   `json:"toneMappingPeak"`
-	ToneMappingDesat       *float64               `json:"toneMappingDesat"`
-	DeinterlaceMethod      *string                `json:"deinterlaceMethod"`
-	DeinterlaceDoubleRate  *bool                  `json:"deinterlaceDoubleRate"`
-	DownmixAlgorithm       *string                `json:"downmixAlgorithm"`
-	DownmixBoost           *float64               `json:"downmixBoost"`
-	MaxAudioChannels       *int                   `json:"maxAudioChannels"`
-	AudioBitratePerChannel *int                   `json:"audioBitratePerChannel"`
-	EncodingThreads        *int                   `json:"encodingThreads"`
-	AheadSeconds           *int                   `json:"aheadSeconds"`
-	ConversionHardware     conversionHardwareJSON `json:"conversionHardware"`
+	EncoderPreset          *string   `json:"encoderPreset"`
+	H264Quality            *int      `json:"h264Quality"`
+	HevcQuality            *int      `json:"hevcQuality"`
+	AllowHevcEncoding      *bool     `json:"allowHevcEncoding"`
+	HardwareAcceleration   *string   `json:"hardwareAcceleration"`
+	HardwareDecodingCodecs *[]string `json:"hardwareDecodingCodecs"`
+	ToneMapping            *bool     `json:"toneMapping"`
+	ToneMappingAlgorithm   *string   `json:"toneMappingAlgorithm"`
+	ToneMappingPeak        *int      `json:"toneMappingPeak"`
+	ToneMappingDesat       *float64  `json:"toneMappingDesat"`
+	GPUToneMapping         *bool     `json:"gpuToneMapping"`
+	// ProcessorToneMappingHeight is 0 for Automatic: ConversionHardware
+	// tells the height a timing at startup chose.
+	ProcessorToneMappingHeight *int                   `json:"processorToneMappingHeight"`
+	DeinterlaceMethod          *string                `json:"deinterlaceMethod"`
+	DeinterlaceDoubleRate      *bool                  `json:"deinterlaceDoubleRate"`
+	DownmixAlgorithm           *string                `json:"downmixAlgorithm"`
+	DownmixBoost               *float64               `json:"downmixBoost"`
+	MaxAudioChannels           *int                   `json:"maxAudioChannels"`
+	AudioBitratePerChannel     *int                   `json:"audioBitratePerChannel"`
+	EncodingThreads            *int                   `json:"encodingThreads"`
+	AheadSeconds               *int                   `json:"aheadSeconds"`
+	ConversionHardware         conversionHardwareJSON `json:"conversionHardware"`
 	// The thumbnail settings keep their current values when a PUT leaves
 	// them out.
 	Trickplay          *bool `json:"trickplay"`
@@ -474,24 +478,26 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
 
-		EncoderPreset:          &settings.EncoderPreset,
-		H264Quality:            &settings.H264Quality,
-		HevcQuality:            &settings.HevcQuality,
-		AllowHevcEncoding:      &settings.AllowHevcEncoding,
-		HardwareAcceleration:   &settings.HardwareAcceleration,
-		HardwareDecodingCodecs: &settings.HardwareDecodingCodecs,
-		ToneMapping:            &settings.ToneMapping,
-		ToneMappingAlgorithm:   &settings.ToneMappingAlgorithm,
-		ToneMappingPeak:        &settings.ToneMappingPeak,
-		ToneMappingDesat:       &settings.ToneMappingDesat,
-		DeinterlaceMethod:      &settings.DeinterlaceMethod,
-		DeinterlaceDoubleRate:  &settings.DeinterlaceDoubleRate,
-		DownmixAlgorithm:       &settings.DownmixAlgorithm,
-		DownmixBoost:           &settings.DownmixBoost,
-		MaxAudioChannels:       &settings.MaxAudioChannels,
-		AudioBitratePerChannel: &settings.AudioBitratePerChannel,
-		EncodingThreads:        &settings.EncodingThreads,
-		AheadSeconds:           &settings.AheadSeconds,
+		EncoderPreset:              &settings.EncoderPreset,
+		H264Quality:                &settings.H264Quality,
+		HevcQuality:                &settings.HevcQuality,
+		AllowHevcEncoding:          &settings.AllowHevcEncoding,
+		HardwareAcceleration:       &settings.HardwareAcceleration,
+		HardwareDecodingCodecs:     &settings.HardwareDecodingCodecs,
+		ToneMapping:                &settings.ToneMapping,
+		ToneMappingAlgorithm:       &settings.ToneMappingAlgorithm,
+		ToneMappingPeak:            &settings.ToneMappingPeak,
+		ToneMappingDesat:           &settings.ToneMappingDesat,
+		GPUToneMapping:             &settings.GPUToneMapping,
+		ProcessorToneMappingHeight: &settings.ProcessorToneMappingHeight,
+		DeinterlaceMethod:          &settings.DeinterlaceMethod,
+		DeinterlaceDoubleRate:      &settings.DeinterlaceDoubleRate,
+		DownmixAlgorithm:           &settings.DownmixAlgorithm,
+		DownmixBoost:               &settings.DownmixBoost,
+		MaxAudioChannels:           &settings.MaxAudioChannels,
+		AudioBitratePerChannel:     &settings.AudioBitratePerChannel,
+		EncodingThreads:            &settings.EncodingThreads,
+		AheadSeconds:               &settings.AheadSeconds,
 
 		Trickplay:          &settings.Trickplay,
 		TrickplayInterval:  &settings.TrickplayInterval,
@@ -903,7 +909,10 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 				body.ConversionHardware.Encoders = append(body.ConversionHardware.Encoders, name)
 			}
 		}
-		body.ConversionHardware.ToneMapping = encoder.HasFilters("zscale", "tonemap")
+		if encoder.HasFilters("zscale", "tonemap") {
+			body.ConversionHardware.ToneMapping = true
+			body.ConversionHardware.ToneMappingHeight = encoder.ToneMappedHeight()
+		}
 		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
 	}
 	return body
@@ -911,12 +920,16 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 
 // conversionHardwareJSON is what conversions run on: the GPU chosen, null
 // for none, and, in software, the video encoders, the filters tone mapping
-// HDR and the bwdif deinterlacer.
+// HDR and the bwdif deinterlacer. ToneMappingHeight is the height
+// Automatic caps HDR tone mapped on the processor at, as a timing at
+// startup chose it (720 until it ends), 0 when the processor cannot tone
+// map.
 type conversionHardwareJSON struct {
-	GPU         *hardwareJSON `json:"gpu"`
-	Encoders    []string      `json:"encoders"`
-	ToneMapping bool          `json:"toneMapping"`
-	Bwdif       bool          `json:"bwdif"`
+	GPU               *hardwareJSON `json:"gpu"`
+	Encoders          []string      `json:"encoders"`
+	ToneMapping       bool          `json:"toneMapping"`
+	ToneMappingHeight int           `json:"toneMappingHeight"`
+	Bwdif             bool          `json:"bwdif"`
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -972,24 +985,26 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
 
-		EncoderPreset:          valueOr(body.EncoderPreset, current.EncoderPreset),
-		H264Quality:            valueOr(body.H264Quality, current.H264Quality),
-		HevcQuality:            valueOr(body.HevcQuality, current.HevcQuality),
-		AllowHevcEncoding:      valueOr(body.AllowHevcEncoding, current.AllowHevcEncoding),
-		HardwareAcceleration:   valueOr(body.HardwareAcceleration, current.HardwareAcceleration),
-		HardwareDecodingCodecs: valueOr(body.HardwareDecodingCodecs, current.HardwareDecodingCodecs),
-		ToneMapping:            valueOr(body.ToneMapping, current.ToneMapping),
-		ToneMappingAlgorithm:   valueOr(body.ToneMappingAlgorithm, current.ToneMappingAlgorithm),
-		ToneMappingPeak:        valueOr(body.ToneMappingPeak, current.ToneMappingPeak),
-		ToneMappingDesat:       valueOr(body.ToneMappingDesat, current.ToneMappingDesat),
-		DeinterlaceMethod:      valueOr(body.DeinterlaceMethod, current.DeinterlaceMethod),
-		DeinterlaceDoubleRate:  valueOr(body.DeinterlaceDoubleRate, current.DeinterlaceDoubleRate),
-		DownmixAlgorithm:       valueOr(body.DownmixAlgorithm, current.DownmixAlgorithm),
-		DownmixBoost:           valueOr(body.DownmixBoost, current.DownmixBoost),
-		MaxAudioChannels:       valueOr(body.MaxAudioChannels, current.MaxAudioChannels),
-		AudioBitratePerChannel: valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
-		EncodingThreads:        valueOr(body.EncodingThreads, current.EncodingThreads),
-		AheadSeconds:           valueOr(body.AheadSeconds, current.AheadSeconds),
+		EncoderPreset:              valueOr(body.EncoderPreset, current.EncoderPreset),
+		H264Quality:                valueOr(body.H264Quality, current.H264Quality),
+		HevcQuality:                valueOr(body.HevcQuality, current.HevcQuality),
+		AllowHevcEncoding:          valueOr(body.AllowHevcEncoding, current.AllowHevcEncoding),
+		HardwareAcceleration:       valueOr(body.HardwareAcceleration, current.HardwareAcceleration),
+		HardwareDecodingCodecs:     valueOr(body.HardwareDecodingCodecs, current.HardwareDecodingCodecs),
+		ToneMapping:                valueOr(body.ToneMapping, current.ToneMapping),
+		ToneMappingAlgorithm:       valueOr(body.ToneMappingAlgorithm, current.ToneMappingAlgorithm),
+		ToneMappingPeak:            valueOr(body.ToneMappingPeak, current.ToneMappingPeak),
+		ToneMappingDesat:           valueOr(body.ToneMappingDesat, current.ToneMappingDesat),
+		GPUToneMapping:             valueOr(body.GPUToneMapping, current.GPUToneMapping),
+		ProcessorToneMappingHeight: valueOr(body.ProcessorToneMappingHeight, current.ProcessorToneMappingHeight),
+		DeinterlaceMethod:          valueOr(body.DeinterlaceMethod, current.DeinterlaceMethod),
+		DeinterlaceDoubleRate:      valueOr(body.DeinterlaceDoubleRate, current.DeinterlaceDoubleRate),
+		DownmixAlgorithm:           valueOr(body.DownmixAlgorithm, current.DownmixAlgorithm),
+		DownmixBoost:               valueOr(body.DownmixBoost, current.DownmixBoost),
+		MaxAudioChannels:           valueOr(body.MaxAudioChannels, current.MaxAudioChannels),
+		AudioBitratePerChannel:     valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
+		EncodingThreads:            valueOr(body.EncodingThreads, current.EncodingThreads),
+		AheadSeconds:               valueOr(body.AheadSeconds, current.AheadSeconds),
 
 		Trickplay:          valueOr(body.Trickplay, current.Trickplay),
 		TrickplayInterval:  valueOr(body.TrickplayInterval, current.TrickplayInterval),
