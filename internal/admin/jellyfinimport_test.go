@@ -61,7 +61,7 @@ func fakeJellyfin(t *testing.T) string {
 			t.Errorf("Jellyfin was sent %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.Path == "/System/Info/Public" {
-			_, _ = io.WriteString(w, `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7"}`)
+			_, _ = io.WriteString(w, `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"}`)
 			return
 		}
 		auth := r.Header.Get("Authorization")

@@ -141,7 +141,12 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 		path = trimmed
 	}
 	if path == "/System/Info/Public" {
-		_, _ = io.WriteString(w, `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"}`)
+		info := `{"Id":"f1e2d3","ServerName":"Home","Version":"10.10.7","ProductName":"Jellyfin Server"}`
+		if f.emby {
+			// As Emby 4.10 answers it, without ProductName.
+			info = `{"LocalAddresses":[],"RemoteAddresses":[],"ServerName":"Home","Version":"4.10.1.0","Id":"f1e2d3"}`
+		}
+		_, _ = io.WriteString(w, info)
 		return
 	}
 	query := r.URL.Query()
@@ -951,6 +956,39 @@ func TestEmbyIsReadWithItsHeaderAndUnderItsPath(t *testing.T) {
 	for _, r := range h.f.sent() {
 		if strings.Contains(r.URL.String(), goodKey) || strings.Contains(r.Header.Get("Authorization"), "Token") {
 			t.Errorf("%s %s sent the key elsewhere than in X-Emby-Token", r.Method, r.URL.Path)
+		}
+	}
+}
+
+// A key or password goes only to a server of the kind asked: a Jellyfin
+// server asked as Emby, or an Emby server asked as Jellyfin, is told apart
+// from what it answers anyone, and is sent neither.
+func TestAServerOfAnotherKindIsSentNoKeyOrPassword(t *testing.T) {
+	h := newHarness(t)
+	emby := newFakeJellyfin(t)
+	emby.emby = true
+	for _, f := range []*fakeJellyfin{h.f, emby} {
+		f.users = []map[string]any{{"Id": "jf-alice", "Name": "Alice", "Policy": map[string]any{"IsAdministrator": true}}}
+		f.passwords = map[string]string{"Alice": "alice's password"}
+	}
+	for _, credentials := range []Credentials{{Key: goodKey}, {Name: "Alice", Password: "alice's password"}} {
+		for _, wrong := range []struct {
+			f          *fakeJellyfin
+			connection Connection
+		}{
+			{h.f, Connection{Kind: Emby, Address: h.f.url, Credentials: credentials}},
+			{emby, Connection{Kind: Jellyfin, Address: emby.url + "/emby", Credentials: credentials}},
+		} {
+			before := len(wrong.f.sent())
+			if _, _, err := h.Users(t.Context(), wrong.connection); !errors.Is(err, ErrNotJellyfin) {
+				t.Errorf("%s asked of the other kind, signed in as %q: %v", wrong.connection.Kind, credentials.Name, err)
+			}
+			for _, r := range wrong.f.sent()[before:] {
+				if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/System/Info/Public") ||
+					r.Header.Get("X-Emby-Token") != "" || strings.Contains(r.Header.Get("Authorization"), "Token") {
+					t.Errorf("%s asked of the other kind sent %s %s", wrong.connection.Kind, r.Method, r.URL.Path)
+				}
+			}
 		}
 	}
 }
