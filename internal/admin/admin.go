@@ -415,6 +415,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidSMTPSecurity, http.StatusBadRequest, "invalid_smtp_security"},
 		{accounts.ErrInvalidSMTPAccount, http.StatusBadRequest, "invalid_smtp_account"},
 		{accounts.ErrInvalidSMTPSender, http.StatusBadRequest, "invalid_smtp_sender"},
+		{accounts.ErrInvalidWeeklySummaryDay, http.StatusBadRequest, "invalid_weekly_summary_day"},
+		{accounts.ErrInvalidWeeklySummaryHour, http.StatusBadRequest, "invalid_weekly_summary_hour"},
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},

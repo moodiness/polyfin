@@ -127,6 +127,9 @@ func DefaultSettings() Settings {
 
 		PlaybackHistory:     true,
 		PlaybackHistoryDays: DefaultPlaybackHistoryDays,
+
+		WeeklySummaryDay:  DefaultWeeklySummaryDay,
+		WeeklySummaryHour: DefaultWeeklySummaryHour,
 	}
 }
 
@@ -267,6 +270,9 @@ func SettingsBounds() map[string]SettingBounds {
 
 		"playbackHistory":     is(d.PlaybackHistory),
 		"playbackHistoryDays": between(1, MaxPlaybackHistoryDays, d.PlaybackHistoryDays),
+
+		"weeklySummaryDay":  between(0, 6, d.WeeklySummaryDay),
+		"weeklySummaryHour": between(0, 23, d.WeeklySummaryHour),
 	}
 }
 

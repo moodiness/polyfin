@@ -418,6 +418,12 @@ type settingsJSON struct {
 	// values when a PUT leaves them out.
 	PlaybackHistory     *bool `json:"playbackHistory"`
 	PlaybackHistoryDays *int  `json:"playbackHistoryDays"`
+	// WeeklySummaryDay, 0 for Sunday to 6 for Saturday, and
+	// WeeklySummaryHour, 0 to 23, when the weekly summary is sent in the
+	// server's time zone, keep their current values when a PUT leaves them
+	// out.
+	WeeklySummaryDay  *int `json:"weeklySummaryDay"`
+	WeeklySummaryHour *int `json:"weeklySummaryHour"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -552,6 +558,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		PlaybackHistory:     &settings.PlaybackHistory,
 		PlaybackHistoryDays: &settings.PlaybackHistoryDays,
+
+		WeeklySummaryDay:  &settings.WeeklySummaryDay,
+		WeeklySummaryHour: &settings.WeeklySummaryHour,
 	}
 }
 
@@ -1061,6 +1070,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 		PlaybackHistory:     valueOr(body.PlaybackHistory, current.PlaybackHistory),
 		PlaybackHistoryDays: valueOr(body.PlaybackHistoryDays, current.PlaybackHistoryDays),
+
+		WeeklySummaryDay:  valueOr(body.WeeklySummaryDay, current.WeeklySummaryDay),
+		WeeklySummaryHour: valueOr(body.WeeklySummaryHour, current.WeeklySummaryHour),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
