@@ -78,8 +78,10 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 		if times, err := s.inputKeyframes(ctx, version); err == nil {
 			plan = hls.NewPlan(times, analysis.Duration)
 		}
-		// FFmpeg reads a Blu-ray disc as an MPEG-TS stream.
-		if transportStream(analysis) {
+		// FFmpeg reads a Blu-ray disc as an MPEG-TS stream, and a DVD on a
+		// share as an MPEG program stream: it seeks in both by searching
+		// their timestamps.
+		if transportStream(analysis) || slices.Contains(strings.Split(analysis.Format, ","), "mpeg") {
 			plan = plan.Searched()
 		}
 		return plan, nil

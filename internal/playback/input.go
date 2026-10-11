@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -141,6 +142,21 @@ func (s *Service) analyzeInput(ctx context.Context, version library.Version) (me
 			s.failures.Put(version.ID, err)
 			return nil, err
 		}
+		// A disc read as one file tells its tracks' languages and its
+		// length through its own tables.
+		for i, stream := range analysis.Streams {
+			if code := in.Languages[stream.ID]; stream.Language == "" && code != "" {
+				analysis.Streams[i].Language = addonLanguage(code)
+			}
+		}
+		if in.Duration > 0 {
+			analysis.Duration = in.Duration
+		}
+		// A DVD's navigation packets, which FFmpeg's dvdvideo demuxer reads
+		// itself, are no track.
+		analysis.Streams = slices.DeleteFunc(analysis.Streams, func(stream media.Stream) bool {
+			return stream.Type == "data" && stream.Codec == "dvd_nav_packet"
+		})
 		// ffprobe tells neither the size nor the bitrate of a disc: those of
 		// the files its version plays stand for them.
 		if analysis.Size == 0 {

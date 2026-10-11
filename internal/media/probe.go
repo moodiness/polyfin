@@ -47,6 +47,9 @@ type Chapter struct {
 // Stream is a track of a source.
 type Stream struct {
 	Index int `json:"index"`
+	// ID is the stream's identifier in its container, as FFmpeg writes it,
+	// such as "0x80" for a DVD's first AC-3 track; empty when it has none.
+	ID string `json:"id,omitempty"`
 	// Type is "video", "audio", "subtitle", "attachment" or "data".
 	Type     string `json:"type"`
 	Codec    string `json:"codec,omitempty"`
@@ -152,6 +155,13 @@ type Input struct {
 	// Path is what FFmpeg opens: a folder, an image file, or a protocol's
 	// address.
 	Path string
+	// Languages are the languages of its tracks, ISO 639-1 codes by their
+	// stream's identifier (see Stream.ID), as a disc's own tables tell them
+	// where its demuxer does not.
+	Languages map[string]string
+	// Duration is how long it plays, as a disc's own tables tell it where
+	// its demuxer cannot; 0 when the demuxer tells it.
+	Duration time.Duration
 }
 
 // Args are FFmpeg's options for reading the input, which go before its -i.
@@ -302,6 +312,7 @@ func parse(data []byte) (Analysis, error) {
 	for _, s := range raw.Streams {
 		stream := Stream{
 			Index:           s.Index,
+			ID:              s.ID,
 			Type:            s.CodecType,
 			Codec:           s.CodecName,
 			CodecTag:        s.CodecTagString,
@@ -388,6 +399,7 @@ type probeOutput struct {
 	} `json:"format"`
 	Streams []struct {
 		Index              int               `json:"index"`
+		ID                 string            `json:"id"`
 		CodecName          string            `json:"codec_name"`
 		CodecType          string            `json:"codec_type"`
 		CodecTagString     string            `json:"codec_tag_string"`
