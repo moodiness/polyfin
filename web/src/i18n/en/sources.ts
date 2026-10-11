@@ -231,7 +231,7 @@ const sources = {
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',
     unmatchedHelp:
-      'No title was found for these files. Rename them with the title and year, then scan, or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show.',
+      'No title was found for these files. Rename them with the title and year, then scan, or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc, the whole disc.',
     noUnmatched: 'Every file is matched to a title.',
     shownOf: (shown: string, total: string) => `${shown} shown of ${total}.`,
     reasons: {
@@ -243,6 +243,7 @@ const sources = {
     } as Record<string, string>,
     read: (title: string) => `Read as “${title}”`,
     showFolder: (unit: string) => `Show folder: ${unit}`,
+    disc: (unit: string) => `Blu-ray disc: ${unit}`,
     imdbId: 'IMDb identifier',
     imdbPlaceholder: 'tt0000000',
     link: 'Link',

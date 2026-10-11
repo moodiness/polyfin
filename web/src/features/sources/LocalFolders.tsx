@@ -348,7 +348,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
     mutationFn: (unit: string) => unlinkLocalFile(addon.id, unit),
     onSuccess: (updated, unit) => {
       replaceCachedAddon('shared', updated)
-      toast(text.unlinked(unit))
+      toast(text.unlinked(unitName(unit, folder)))
     },
     onSettled: () => {
       invalidateScope('shared')
@@ -371,7 +371,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           <>
             <ul className="flex flex-col divide-y divide-line">
               {unmatched.data.files.map((file) => (
-                <UnmatchedRow key={file.path} addon={addon} file={file} />
+                <UnmatchedRow key={file.path} addon={addon} folder={folder} file={file} />
               ))}
             </ul>
             {unmatched.data.total > unmatched.data.files.length && (
@@ -392,12 +392,12 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
               <li key={link.unit} className="flex items-center justify-between gap-4 py-2">
                 <span className="min-w-0">
                   <span className="block font-mono text-small break-all text-ink-2">
-                    {link.unit}
+                    {unitName(link.unit, folder)}
                   </span>
                   <Badge tone="accent">{link.imdbId}</Badge>
                 </span>
                 <IconButton
-                  label={text.unlinkLabel(link.unit)}
+                  label={text.unlinkLabel(unitName(link.unit, folder))}
                   icon={LinkBreakIcon}
                   size="sm"
                   disabled={unlink.isPending}
@@ -414,7 +414,15 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
 }
 
 /** One unmatched file: its path, what its name was read as and why it is unmatched, and its link form. */
-function UnmatchedRow({ addon, file }: { addon: Addon; file: UnmatchedFile }) {
+function UnmatchedRow({
+  addon,
+  folder,
+  file,
+}: {
+  addon: Addon
+  folder: LocalFolder
+  file: UnmatchedFile
+}) {
   const { language, t } = useI18n()
   const text = t.localFolders
   const toast = useToast()
@@ -423,7 +431,7 @@ function UnmatchedRow({ addon, file }: { addon: Addon; file: UnmatchedFile }) {
     mutationFn: () => linkLocalFile(addon.id, file.path, imdbId.trim()),
     onSuccess: (updated) => {
       replaceCachedAddon('shared', updated)
-      toast(text.linked(file.unit, imdbId.trim().toLowerCase()))
+      toast(text.linked(unitName(file.unit, folder), imdbId.trim().toLowerCase()))
     },
     onSettled: () => {
       invalidateScope('shared')
@@ -445,7 +453,11 @@ function UnmatchedRow({ addon, file }: { addon: Addon; file: UnmatchedFile }) {
           {[
             text.reasons[file.reason] ?? file.reason,
             title !== '' ? text.read(title) : '',
-            file.unit !== file.path ? text.showFolder(file.unit) : '',
+            file.disc
+              ? text.disc(unitName(file.unit, folder))
+              : file.unit !== file.path
+                ? text.showFolder(file.unit)
+                : '',
             formatBytes(file.size, language),
           ]
             .filter(Boolean)
@@ -475,4 +487,23 @@ function UnmatchedRow({ addon, file }: { addon: Addon; file: UnmatchedFile }) {
       </form>
     </li>
   )
+}
+
+/**
+ * A unit as the admin app names it. "." is a Blu-ray disc at the folder's root: it bears the
+ * folder's own name, the last element of its path or share address, as the scan reads its title.
+ */
+function unitName(unit: string, folder: LocalFolder): string {
+  if (unit !== '.') return unit
+  const last =
+    folder.path
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() ?? ''
+  if (shareOf(folder.path) === '') return last || unit
+  try {
+    return decodeURIComponent(last) || unit
+  } catch {
+    return last || unit
+  }
 }
