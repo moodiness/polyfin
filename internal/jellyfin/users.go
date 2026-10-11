@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/library"
-	"github.com/moodiness/polyfin/internal/throttle"
 )
 
 // maxBody bounds JSON request bodies.
@@ -59,7 +59,7 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if allowed, wait := h.SignIns.Allowed(key); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		processingError(w, http.StatusTooManyRequests)
@@ -72,11 +72,11 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	// account instead, answers 403 to its right password.
 	case errors.Is(err, accounts.ErrInvalidCredentials):
 		h.SignIns.Fail(key)
-		h.Activity.SignInFailed(r.Context(), body.Username, remoteAddress(r))
+		h.Activity.SignInFailed(r.Context(), body.Username, forwarded.Client(r))
 		processingError(w, http.StatusUnauthorized)
 		return
 	case errors.Is(err, accounts.ErrDisabled):
-		h.Activity.SignInFailed(r.Context(), body.Username, remoteAddress(r))
+		h.Activity.SignInFailed(r.Context(), body.Username, forwarded.Client(r))
 		processingError(w, http.StatusForbidden)
 		return
 	case err != nil:
@@ -102,7 +102,7 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 		DeviceName:    c.Device,
 		Client:        c.Client,
 		ClientVersion: c.Version,
-		RemoteAddress: remoteAddress(r),
+		RemoteAddress: forwarded.Client(r),
 	})
 	if err != nil {
 		h.internalError(w, r, err)
@@ -118,7 +118,7 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 		h.internalError(w, r, err)
 		return
 	}
-	h.Activity.SignedIn(r.Context(), user, remoteAddress(r))
+	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	writeJSON(w, http.StatusOK, AuthenticationResult{
 		User:        dto,
 		SessionInfo: newSessionInfo(device, user, h.ServerID, h.controllable(device)),

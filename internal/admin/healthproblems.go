@@ -45,6 +45,7 @@ const (
 	problemFolderUnwatched   = "folder_unwatched"
 	problemGuide             = "guide"
 	problemTask              = "task"
+	problemUnknownProxy      = "unknown_proxy"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -53,11 +54,12 @@ const (
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
 // guide, with Failure, the failure's code, for an addon or a local folder,
 // or why a local folder is not watched, and Share, the kind of network
-// share a folder is ("smb", "webdav"); Host
-// for paused thumbnails; Task, in the language asked, for a task; Secrets
-// for those the key cannot decrypt. To is the admin app's page that
-// describes it, with its anchor. Transient ones come and go with the load:
-// notifications leave them out.
+// share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
+// for an address that sends forwarded headers without being a known
+// proxy; Task, in the language asked, for a task; Secrets for those the
+// key cannot decrypt. To is the admin app's page that describes it, with
+// its anchor. Transient ones come and go with the load: notifications
+// leave them out.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -71,6 +73,7 @@ type healthProblemJSON struct {
 	Failure   string           `json:"failure,omitempty"`
 	Share     string           `json:"share,omitempty"`
 	Host      string           `json:"host,omitempty"`
+	Address   string           `json:"address,omitempty"`
 	Task      string           `json:"task,omitempty"`
 	Secrets   []unreadableJSON `json:"secrets,omitempty"`
 }
@@ -209,6 +212,13 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		for _, paused := range h.Health.Thumbnails.Status().Paused {
 			p := warning("thumbnails:"+paused.Host, problemThumbnailsPaused, "thumbnails")
 			p.Host, p.Transient = paused.Host, true
+			add(p)
+		}
+	}
+	if h.Health.Proxies != nil {
+		for _, address := range h.Health.Proxies.Unknown() {
+			p := healthProblemJSON{Key: "unknown_proxy:" + address.String(), Code: problemUnknownProxy, Tone: notifications.SeverityWarning,
+				To: "/settings/security#known-proxies", Address: address.String()}
 			add(p)
 		}
 	}
@@ -392,6 +402,11 @@ func (p healthProblemJSON) text(language string) string {
 		return say("The last database backup is more than two days old.", "La dernière sauvegarde de la base de données date de plus de deux jours.")
 	case problemTask:
 		return say("The task “%s” failed.", "La tâche « %s » a échoué.", p.Task)
+	case problemUnknownProxy:
+		return say("%s forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as %s. "+
+			"If it is your reverse proxy, add it to Known proxies under Settings › Security.",
+			"%s transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme %s. "+
+				"Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.", p.Address, p.Address)
 	}
 	return ""
 }

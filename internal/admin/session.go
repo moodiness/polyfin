@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 type sessionUser struct {
@@ -142,7 +142,7 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if h.throttled(w, key) {
 		return
 	}
@@ -179,7 +179,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if h.throttled(w, key) {
 		return
 	}
@@ -188,7 +188,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		h.SignIns.Fail(key)
 	}
 	if errors.Is(err, accounts.ErrInvalidCredentials) || errors.Is(err, accounts.ErrDisabled) {
-		h.Activity.SignInFailed(r.Context(), body.Name, clientAddress(r))
+		h.Activity.SignInFailed(r.Context(), body.Name, forwarded.Client(r))
 	}
 	if accountError(w, err) {
 		return
@@ -203,7 +203,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.SignIns.Succeed(key)
-	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
+	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	h.startSession(w, r, http.StatusOK, user)
 }
 
@@ -223,7 +223,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // now is no wrong guess and counts toward nothing. Neither is written to
 // the activity log, as the admin app tries the token of whoever opens it.
 func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if h.throttled(w, key) {
 		return
 	}
@@ -232,7 +232,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	}
-	_, user, err := h.Accounts.DeviceByToken(r.Context(), token, clientAddress(r))
+	_, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r))
 	if errors.Is(err, accounts.ErrNotFound) {
 		h.SignIns.Fail(key)
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
@@ -252,7 +252,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.SignIns.Succeed(key)
-	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
+	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	h.startSession(w, r, http.StatusOK, user)
 }
 

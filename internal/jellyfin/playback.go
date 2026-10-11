@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -827,7 +828,7 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 	}
 	credentials := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	if credentials.Token != "" {
-		if _, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, remoteAddress(r)); err == nil && !h.outsideHours(user) {
+		if _, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, forwarded.Client(r)); err == nil && !h.outsideHours(user) {
 			return user, playback.Grant{}, true
 		}
 	}

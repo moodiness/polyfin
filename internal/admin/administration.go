@@ -2,7 +2,6 @@ package admin
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,15 +10,6 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 )
-
-// clientAddress is the address a request came from, for the activity log.
-func clientAddress(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
 
 // apiKeyJSON is an API key, without the key itself, which Polyfin does not
 // keep: Key is set only in the answer that creates it.

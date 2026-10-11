@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 // invitePath is where the admin app opens an invite's link, followed by
@@ -172,7 +172,7 @@ func inviteError(w http.ResponseWriter, err error) bool {
 // session. A token that is no invite's counts as a wrong password does
 // toward the client's failed attempts.
 func (h *handler) publicInvite(w http.ResponseWriter, r *http.Request) {
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if h.throttled(w, key) {
 		return
 	}
@@ -203,7 +203,7 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if h.throttled(w, key) {
 		return
 	}
@@ -219,7 +219,7 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.SignIns.Succeed(key)
-	h.Activity.UserJoined(r.Context(), user, invite, clientAddress(r))
+	h.Activity.UserJoined(r.Context(), user, invite, forwarded.Client(r))
 	if h.Notifications != nil {
 		h.Notifications.UserJoined(r.Context(), user, invite)
 	}
@@ -232,7 +232,7 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.Activity.SignedIn(r.Context(), user, clientAddress(r))
+	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	setCookie(w, r, token, expires)
 	writeJSON(w, http.StatusCreated, map[string]any{"user": newSessionUser(user), "webClient": false})
 }

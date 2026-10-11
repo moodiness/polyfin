@@ -4,12 +4,12 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 // credentials are what a request carries in its Authorization header (or
@@ -141,7 +141,7 @@ func (h *Handler) signedInCaller(r *http.Request) (c caller, ok bool, err error)
 	if credentials.Token == "" {
 		return caller{}, false, nil
 	}
-	device, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, remoteAddress(r))
+	device, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, forwarded.Client(r))
 	if errors.Is(err, accounts.ErrNotFound) {
 		return h.keyCaller(r, credentials)
 	}
@@ -168,7 +168,7 @@ func (h *Handler) keyCaller(r *http.Request, c credentials) (caller, bool, error
 			DeviceName:    cmp.Or(c.Device, h.Accounts.Settings().ServerName),
 			Client:        key.App,
 			ClientVersion: cmp.Or(c.Version, Version),
-			RemoteAddress: remoteAddress(r),
+			RemoteAddress: forwarded.Client(r),
 		},
 		Capabilities: accounts.DefaultCapabilities(),
 	}
@@ -210,12 +210,4 @@ func (h *Handler) authorized(next http.HandlerFunc, hours bool) http.Handler {
 // (see authenticateByName).
 func (h *Handler) outsideHours(user accounts.User) bool {
 	return !user.IsAdministrator && !user.AllowedAt(h.now())
-}
-
-func remoteAddress(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

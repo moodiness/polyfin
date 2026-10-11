@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 // The answers Jellyfin gives, as JSON strings, when a password change is
@@ -88,7 +88,7 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	// Unlike Jellyfin, an administrator changing their own password must
 	// also give the current one, so that a token left on a shared device
 	// cannot take the account over.
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if allowed, wait := h.SignIns.Allowed(key); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		processingError(w, http.StatusTooManyRequests)

@@ -25,6 +25,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
@@ -179,6 +180,9 @@ func serve(ctx context.Context) error {
 	}
 	quickConnect := quickconnect.New()
 	signIns := throttle.New(signInFailures, signInWindow)
+	// The client of a request is read behind the known proxies, for every
+	// route; System › Health names the proxies missing from them.
+	proxies := forwarded.New(store.KnownProxies)
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
 	// Addons and libraries are answered from memory while their changes
@@ -369,6 +373,7 @@ func serve(ctx context.Context) error {
 			SecretKey:    box.Enabled(),
 			Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
 			Updates:      updateCheck,
+			Proxies:      proxies,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,
@@ -396,6 +401,7 @@ func serve(ctx context.Context) error {
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().CustomJs },
+			Proxies:       proxies,
 			Logger:        logger,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

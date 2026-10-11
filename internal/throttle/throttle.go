@@ -2,8 +2,6 @@
 package throttle
 
 import (
-	"net"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -70,16 +68,4 @@ func (f *Failures) prune(key string) []time.Time {
 	}
 	f.failures[key] = recent
 	return recent
-}
-
-// ClientKey identifies the client of a request by the address of the
-// connection. Forwarded headers are ignored: they are set by the client
-// unless a trusted proxy rewrites them, so behind a reverse proxy every
-// client shares the proxy's budget.
-func ClientKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

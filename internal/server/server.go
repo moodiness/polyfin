@@ -9,6 +9,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 const (
@@ -43,11 +45,16 @@ type Options struct {
 	// CustomJs returns the administrator's script for the web client,
 	// empty for none; nil is none.
 	CustomJs func() string
-	Logger   *slog.Logger
+	// Proxies tells every route the client of requests that come through
+	// a known proxy (see forwarded.Client); nil reads the connection's
+	// address alone.
+	Proxies *forwarded.Proxies
+	Logger  *slog.Logger
 }
 
 // New returns the handler serving every Polyfin route. Answers that gain
 // from it go gzip-compressed to clients that accept it (see compress).
+// Every route sees the client Proxies resolves.
 func New(options Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -89,7 +96,11 @@ func New(options Options) http.Handler {
 	}
 	mux.Handle("/", options.Jellyfin)
 
-	return securityHeaders(compress(mux))
+	handler := securityHeaders(compress(mux))
+	if options.Proxies != nil {
+		handler = options.Proxies.Handler(handler)
+	}
+	return handler
 }
 
 func databaseReady(ctx context.Context, db Pinger) bool {

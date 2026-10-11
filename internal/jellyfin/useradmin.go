@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/throttle"
+	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
 // Users managed from Jellyfin apps.
@@ -266,7 +266,7 @@ func (h *Handler) updateUser(w http.ResponseWriter, r *http.Request) {
 // (local) or its local network (inNetwork, local included): loopback,
 // private and link-local addresses, as Jellyfin counts them by default.
 func inLocalNetwork(r *http.Request) (local, inNetwork bool) {
-	address, err := netip.ParseAddr(remoteAddress(r))
+	address, err := netip.ParseAddr(forwarded.Client(r))
 	if err != nil {
 		return false, false
 	}
@@ -319,7 +319,7 @@ func (h *Handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	result := ForgotPasswordResult{Action: "PinCode", PinFile: h.pinPlace(), PinExpirationDate: Time(h.now().Add(accounts.PasswordResetLifetime))}
 	if _, inNetwork := inLocalNetwork(r); !inNetwork {
-		h.Logger.Warn("A password reset was asked from outside the local network: no PIN was made", "address", remoteAddress(r))
+		h.Logger.Warn("A password reset was asked from outside the local network: no PIN was made", "address", forwarded.Client(r))
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
@@ -359,7 +359,7 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, errs)
 		return
 	}
-	key := throttle.ClientKey(r)
+	key := forwarded.Client(r)
 	if allowed, wait := h.SignIns.Allowed(key); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		processingError(w, http.StatusTooManyRequests)

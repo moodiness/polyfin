@@ -12,6 +12,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
@@ -43,6 +44,9 @@ type HealthSources struct {
 	// Updates tells the new version of Polyfin its daily check found; nil
 	// tells none.
 	Updates *updates.Checker
+	// Proxies names the addresses that send forwarded headers without
+	// being known proxies; nil names none.
+	Proxies *forwarded.Proxies
 }
 
 type healthJSON struct {
