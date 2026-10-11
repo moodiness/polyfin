@@ -151,6 +151,12 @@ When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matr
 
 API keys, devices, user management, server configuration, the activity log, logs and scheduled tasks are covered in [administration](administration.md#api-keys-and-integrations).
 
+### Client addresses behind a reverse proxy
+
+Like Jellyfin's own Known proxies setting, **Known proxies**, under **Settings › Security**, lists the reverse proxies whose forwarded headers name the client of a request. See [Known proxies](reverse-proxy.md#known-proxies).
+
+**For app developers:** a session's `RemoteEndPoint`, and `IsLocal` and `IsInNetwork` of `/System/Endpoint`, follow the client's address: the one the proxy names for a request from a known proxy, the connection's otherwise.
+
 ## Jellyfin features Polyfin does without
 
 These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind is configured:

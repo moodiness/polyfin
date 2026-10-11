@@ -74,7 +74,7 @@ docker compose up -d
 
 The full documentation is in [`docs/`](docs/README.md), and on the [website](https://moodiness.github.io/polyfin/docs/):
 
-- **Set up:** [Installation](docs/installation.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Backups](docs/backups.md)
+- **Set up:** [Installation](docs/installation.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Reverse proxy](docs/reverse-proxy.md), [Backups](docs/backups.md)
 - **Content:** [Addons and libraries](docs/addons-and-libraries.md), [Live TV](docs/live-tv.md), [IPTV](docs/iptv.md)
 - **Watching:** [Playback](docs/playback.md), [Transcoding](docs/transcoding.md), [Subtitles](docs/subtitles.md), [Skip segments](docs/skip-segments.md), [Tracking](docs/tracking.md)
 - **Users and administration:** [Users](docs/users.md), [Administration](docs/administration.md), [Web client](docs/web-client.md), [Jellyfin compatibility](docs/jellyfin-compatibility.md)

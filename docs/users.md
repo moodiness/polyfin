@@ -425,7 +425,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ## Security settings
 
-**Settings › Security** gathers four settings, and **Settings › Diagnostics** a fifth. They apply at once, without a restart.
+**Settings › Security** gathers five settings, and **Settings › Diagnostics** a sixth. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -433,6 +433,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 | **Users may import their watch history from another server** | **Settings › Security** | On | Shows the import from a Jellyfin or Emby server under **My account** (see [Importing your own watch history](#importing-your-own-watch-history)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
+| **Known proxies** | **Settings › Security** | None (up to 64 addresses or networks) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
 
 ### Users' own addons
@@ -471,6 +472,10 @@ The count starts again after any of these:
 ### Signing out unused devices
 
 Polyfin signs out the Jellyfin apps not used for that many days, at startup and every hour. It closes their connections and takes them out of SyncPlay groups, as any sign-out does. Admin interface sessions are not concerned.
+
+### Known proxies
+
+Behind a reverse proxy, every request reaches Polyfin from the proxy's address. Listing the proxy's address, or its network, has Polyfin take each request to come from the client the proxy names, for failed sign-ins, the addresses devices show and the local network. See [Known proxies](reverse-proxy.md#known-proxies).
 
 ### Detailed log
 

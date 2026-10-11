@@ -9,6 +9,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Installation](installation.md) | Docker Compose, Unraid, and giving the container a GPU |
 | [Getting started](getting-started.md) | The first run, the administrator, users, Quick Connect, and the language of generated names |
 | [Configuration](configuration.md) | Environment variables and the Compose `.env` file |
+| [Reverse proxy](reverse-proxy.md) | Serving Polyfin over HTTPS behind a proxy: the headers to pass, WebSockets, known proxies, and an example with Traefik |
 | [Backups](backups.md) | Daily database backups, how many are kept, and restoring one |
 
 ## Content
