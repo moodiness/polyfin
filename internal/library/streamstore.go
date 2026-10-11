@@ -27,9 +27,37 @@ const (
 	sweepEvery = time.Hour
 )
 
-// savedList is how a stream list is saved.
+// savedList is how a stream list is saved. Identities are the identities
+// the streams carry from earlier answers (see carryIdentities), in order,
+// "" for a stream without; none when no stream carries one.
 type savedList struct {
-	Streams []stremio.Stream `json:"streams"`
+	Streams    []stremio.Stream `json:"streams"`
+	Identities []string         `json:"identities,omitempty"`
+}
+
+// newSavedList is how streams are saved.
+func newSavedList(streams []stremio.Stream) savedList {
+	saved := savedList{Streams: streams}
+	for i, stream := range streams {
+		if stream.Identity == "" {
+			continue
+		}
+		if saved.Identities == nil {
+			saved.Identities = make([]string, len(streams))
+		}
+		saved.Identities[i] = stream.Identity
+	}
+	return saved
+}
+
+// streams returns the streams saved, with their identities.
+func (saved savedList) streams() []stremio.Stream {
+	if len(saved.Identities) == len(saved.Streams) {
+		for i, identity := range saved.Identities {
+			saved.Streams[i].Identity = identity
+		}
+	}
+	return saved.Streams
 }
 
 // savedStreams reads back the stream list saved for key, still kept. A key
@@ -62,7 +90,8 @@ func (s *Service) savedStreams(ctx context.Context, key streamKey) (list[stremio
 	if err := json.Unmarshal(data, &saved); err != nil {
 		return list[stremio.Stream]{}, false
 	}
-	l := list[stremio.Stream]{items: saved.Streams, answer: min(max(answer, 0), len(saved.Streams)), at: at, restored: true}
+	streams := saved.streams()
+	l := list[stremio.Stream]{items: streams, answer: min(max(answer, 0), len(streams)), at: at, restored: true}
 	if _, kept := l.state(s.now(), s.listLife()); !kept {
 		return list[stremio.Stream]{}, false
 	}
@@ -95,7 +124,7 @@ func (s *Service) writeStreams(key streamKey) bool {
 	if !ok || l.restored {
 		return false
 	}
-	data, err := json.Marshal(savedList{Streams: l.items})
+	data, err := json.Marshal(newSavedList(l.items))
 	if err != nil {
 		return false
 	}

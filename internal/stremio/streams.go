@@ -24,6 +24,10 @@ type Stream struct {
 	InfoHash      string         `json:"infoHash,omitempty"`
 	Subtitles     []Subtitle     `json:"subtitles,omitempty"`
 	BehaviorHints StreamBehavior `json:"behaviorHints,omitzero"`
+	// Identity is Polyfin's, never an addon's: the file an earlier answer
+	// of the addon listed the stream as, when the stream's link or hints
+	// changed since, empty otherwise.
+	Identity string `json:"-"`
 }
 
 // StreamBehavior holds hints about how a stream is played.

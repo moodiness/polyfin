@@ -329,3 +329,135 @@ func TestSubtitleListsAreFollowedUp(t *testing.T) {
 		t.Errorf("%d subtitles after the follow-ups, want 3", got)
 	}
 }
+
+// An addon asked again gives its streams new links, tells a file's name
+// and size only now, and lists a new version first: each version keeps its
+// identifier, in the list saved too, and a version whose link changed is
+// renewed with the link the addon gives next.
+func TestVersionsKeepTheirIdentifiersAcrossAnAddonsAnswers(t *testing.T) {
+	answers := make(chan []stremio.Stream, 3)
+	e := repliedEnv(t, func(w http.ResponseWriter, r *http.Request, resource string) {
+		if resource != "stream" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"subtitles": []stremio.Subtitle{}})
+			return
+		}
+		select {
+		case streams := <-answers:
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case <-r.Context().Done():
+		}
+	}, time.Hour)
+	ctx := t.Context()
+	token := func(file string, n int) string { return fmt.Sprintf("https://cdn.example/%s?token=%d", file, n) }
+	// A token in the query, a token in the path, a link whose file is named
+	// only later, and one whose name changes with its token as its file's
+	// name and size come.
+	query := stremio.Stream{Name: "Gathered", Description: "1080p", URL: token("a.mkv", 1)}
+	path := stremio.Stream{Name: "Gathered", Description: "720p", URL: "https://cdn.example/1/b.mkv"}
+	named := stremio.Stream{Name: "Gathered", Description: "2160p", URL: "https://cdn.example/c.mkv"}
+	renamed := stremio.Stream{Name: "Gathered", Description: "480p", URL: token("e.mkv", 1)}
+	answers <- []stremio.Stream{query, path, named, renamed}
+	first, err := e.service.Versions(ctx, e.member, e.movie)
+	if err != nil || len(first) != 4 {
+		t.Fatalf("first answer: %q %v", versionNames(first), err)
+	}
+	query.URL, path.URL = token("a.mkv", 2), "https://cdn.example/2/b.mkv"
+	named.BehaviorHints = stremio.StreamBehavior{Filename: "c.mkv", VideoSize: 7_000}
+	renamed.Description, renamed.URL = "480p 1 KB", token("e.mkv", 2)
+	renamed.BehaviorHints = stremio.StreamBehavior{Filename: "e.mkv", VideoSize: 1_000}
+	better := stremio.Stream{Name: "Gathered", Description: "2160p HDR", URL: token("d.mkv", 2),
+		BehaviorHints: stremio.StreamBehavior{Filename: "d.mkv", VideoSize: 9_000}}
+	answers <- []stremio.Stream{better, query, path, named, renamed}
+	e.schedule()
+	e.hurry()
+	var versions []Version
+	e.eventually("the follow-up's versions", func() bool {
+		versions, err = e.service.KnownVersions(ctx, e.member, e.movie)
+		return err == nil && len(versions) == 5
+	})
+	for i, version := range versions[1:] {
+		if version.ID != first[i].ID {
+			t.Errorf("version %d: %s %q, was %s %q", i+1, version.ID, version.Name, first[i].ID, first[i].Name)
+		}
+	}
+	if versions[1].URL != query.URL || versions[3].Size != 7_000 || versions[4].Name != "Gathered · 480p 1 KB" || versions[0].ID == first[0].ID {
+		t.Errorf("after the follow-up: %+v", versions)
+	}
+	e.settles("stream", 2)
+
+	// Read back as after a restart, the list saved keeps the identifiers.
+	origin := first[0].Origin
+	e.service.streamLists.Delete(streamKey{origin.Addon, origin.Type, origin.ID})
+	restored, err := e.service.KnownVersions(ctx, e.member, e.movie)
+	if err != nil || len(restored) != 5 {
+		t.Fatalf("restored: %q %v", versionNames(restored), err)
+	}
+	for i, version := range restored {
+		if version.ID != versions[i].ID {
+			t.Errorf("restored version %d is %s, listed as %s", i, version.ID, versions[i].ID)
+		}
+	}
+
+	// The version whose token expired is renewed under its identifier.
+	query.URL = token("a.mkv", 3)
+	answers <- []stremio.Stream{better, query, path, named, renamed}
+	renewed, err := e.service.Renew(ctx, first[0])
+	if err != nil || renewed.ID != first[0].ID || renewed.URL != query.URL {
+		t.Errorf("renewed: %+v %v", renewed, err)
+	}
+}
+
+// A stream whose identity changed takes the one of the stream it was only
+// when each is the other's one match, and never an identity the answer
+// lists.
+func TestCarriedIdentitiesAreNeverShared(t *testing.T) {
+	stream := func(name, link, filename string, size int) stremio.Stream {
+		return stremio.Stream{Name: name, URL: link, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}
+	}
+	a1 := stream("A", "https://cdn.example/a.mkv?token=1", "", 0)
+	a2 := stream("A", "https://cdn.example/a.mkv?token=2", "", 0)
+	for _, tc := range []struct {
+		name           string
+		before, answer []stremio.Stream
+		// want is, for each stream of answer, the stream of before whose
+		// identity it takes, -1 for its own.
+		want []int
+	}{
+		{"a token in the query", []stremio.Stream{a1}, []stremio.Stream{a2}, []int{0}},
+		{"a token in the path", []stremio.Stream{stream("A", "https://cdn.example/1/a.mkv", "", 0)},
+			[]stremio.Stream{stream("A", "https://cdn.example/2/a.mkv", "", 0)}, []int{0}},
+		{"a name and size told later", []stremio.Stream{a1}, []stremio.Stream{stream("A 2 GB", a1.URL, "a.mkv", 2000)}, []int{0}},
+		{"a size told later", []stremio.Stream{stream("A", a1.URL, "a.mkv", 0)}, []stremio.Stream{stream("A 2 GB", a2.URL, "a.mkv", 2000)}, []int{0}},
+		{"a size forgotten", []stremio.Stream{stream("A", a1.URL, "a.mkv", 2000)}, []stremio.Stream{stream("A", a2.URL, "a.mkv", 0)}, []int{0}},
+		{"renamed with a new token", []stremio.Stream{a1}, []stremio.Stream{stream("B", a2.URL, "", 0)}, []int{-1}},
+		{"renamed with a new token in a link naming the file", []stremio.Stream{a1}, []stremio.Stream{stream("A 2 GB", a2.URL, "a.mkv", 2000)}, []int{0}},
+		{"another file name", []stremio.Stream{stream("A", a1.URL, "a.mkv", 0)}, []stremio.Stream{stream("A", a1.URL, "b.mkv", 0)}, []int{-1}},
+		{"another size", []stremio.Stream{stream("A", a1.URL, "a.mkv", 1000)}, []stremio.Stream{stream("A", a2.URL, "a.mkv", 2000)}, []int{-1}},
+		{"two streams may be it", []stremio.Stream{a1}, []stremio.Stream{a2, stream("A", "https://cdn.example/a.mkv?token=3", "", 0)}, []int{-1, -1}},
+		{"it may be two streams", []stremio.Stream{a1, stream("A", "https://cdn.example/a.mkv?token=0", "", 0)}, []stremio.Stream{a2}, []int{-1}},
+		{"its identity still listed", []stremio.Stream{a1}, []stremio.Stream{a1, a2}, []int{-1, -1}},
+		{"a stream that never changed", []stremio.Stream{a1, stream("B", "https://cdn.example/b.mkv", "", 0)},
+			[]stremio.Stream{stream("B", "https://cdn.example/b.mkv", "", 0), a2}, []int{-1, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			carried := carryIdentities(tc.answer, tc.before)
+			seen := map[string]bool{}
+			for i, stream := range carried {
+				want := fileIdentity(stream.URL, stream.BehaviorHints.Filename, int64(stream.BehaviorHints.VideoSize))
+				if tc.want[i] >= 0 {
+					want = streamIdentity(tc.before[tc.want[i]])
+				}
+				if got := streamIdentity(stream); got != want {
+					t.Errorf("stream %d is %q, want %q", i, got, want)
+				}
+				if seen[streamIdentity(stream)] {
+					t.Errorf("stream %d shares its identity", i)
+				}
+				seen[streamIdentity(stream)] = true
+				if tc.answer[i].Identity != "" {
+					t.Errorf("the answer itself changed")
+				}
+			}
+		})
+	}
+}

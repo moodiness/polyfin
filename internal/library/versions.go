@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -452,7 +454,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}
-	version.ID = versionID(t.item, version)
+	version.ID = versionID(t.item, streamIdentity(stream))
 	// A local file's subtitle files are its own. Those addons list with a
 	// stream are not read yet.
 	if entry.addon.Local() {
@@ -578,24 +580,128 @@ func (s *Service) fetchStreams(ctx context.Context, entry installed, contentType
 	return s.iptv.Streams(ctx, entry.addon.ID, id)
 }
 
-// versionID identifies a stream of an item by its file (see fileIdentity).
-func versionID(item accounts.ID, version Version) accounts.ID {
-	return itemID("version|" + item.String() + "|" + fileIdentity(version.URL, version.Filename, version.Size))
+// versionID identifies a stream of an item by the file it is (see
+// streamIdentity).
+func versionID(item accounts.ID, identity string) accounts.ID {
+	return itemID("version|" + item.String() + "|" + identity)
 }
 
 // streamIdentity is the file a stream is, the same in every answer of its
-// addon however its link changes (see fileIdentity).
+// addon however its link changes: the identity an earlier answer gave it,
+// when its link or hints changed since (see carryIdentities), else its own
+// (see fileIdentity).
 func streamIdentity(stream stremio.Stream) string {
+	if stream.Identity != "" {
+		return stream.Identity
+	}
 	return fileIdentity(stream.URL, stream.BehaviorHints.Filename, int64(stream.BehaviorHints.VideoSize))
 }
 
 // fileIdentity tells a file by its name and size when the addon names it,
-// and by its URL otherwise.
-func fileIdentity(url, filename string, size int64) string {
+// and by its link otherwise.
+func fileIdentity(link, filename string, size int64) string {
 	if filename != "" && size > 0 {
 		return filename + "|" + strconv.FormatInt(size, 10)
 	}
-	return url
+	return link
+}
+
+// carryIdentities returns answer, an addon's answer for a title, where
+// each stream whose identity is not in before, the list the answer
+// replaces, takes the identity of the stream of before it is (see
+// sameFile), when answer lacks that identity. Otherwise a link given with
+// a new token, or a file whose name or size the addon tells only now,
+// would be a new version: a title's page open would lose it as the version
+// picked, and Polyfin what it learned of the file. Only a match that is
+// one stream on each side counts, so that two streams of an answer never
+// share an identity. answer itself is left as it is.
+func carryIdentities(answer, before []stremio.Stream) []stremio.Stream {
+	listed := make(map[string]bool, len(answer))
+	for _, stream := range answer {
+		listed[streamIdentity(stream)] = true
+	}
+	known := make(map[string]bool, len(before))
+	var gone []stremio.Stream
+	for _, stream := range before {
+		identity := streamIdentity(stream)
+		if !known[identity] && !listed[identity] && stream.Playable() {
+			gone = append(gone, stream)
+		}
+		known[identity] = true
+	}
+	if len(gone) == 0 {
+		return answer
+	}
+	// match is, for each stream of answer, the one stream of gone it may
+	// be, -1 for none or several; claims counts, for each stream of gone,
+	// the streams of answer that may be it.
+	match := make([]int, len(answer))
+	claims := make([]int, len(gone))
+	for i, stream := range answer {
+		match[i] = -1
+		if !stream.Playable() || known[streamIdentity(stream)] {
+			continue
+		}
+		several := false
+		for j, old := range gone {
+			if !sameFile(old, stream) {
+				continue
+			}
+			claims[j]++
+			several = several || match[i] >= 0
+			match[i] = j
+		}
+		if several {
+			match[i] = -1
+		}
+	}
+	var carried []stremio.Stream
+	for i, j := range match {
+		if j < 0 || claims[j] != 1 {
+			continue
+		}
+		if carried == nil {
+			carried = slices.Clone(answer)
+		}
+		carried[i].Identity = streamIdentity(gone[j])
+	}
+	if carried == nil {
+		return answer
+	}
+	return carried
+}
+
+// sameFile tells whether b, in an addon's answer, is the file a was in the
+// list the answer replaces, under another identity. The file's names and
+// sizes must agree where both streams tell them; then either the link is
+// the same, the addon telling the name or size only now, or so is the
+// file's name, or the link differs by a token only: it keeps its host and
+// the last part of its path, and either that part is the file's name, as
+// one of the streams tells it, or the stream keeps its name and
+// description.
+func sameFile(a, b stremio.Stream) bool {
+	ha, hb := a.BehaviorHints, b.BehaviorHints
+	if ha.Filename != "" && hb.Filename != "" && ha.Filename != hb.Filename || ha.VideoSize > 0 && hb.VideoSize > 0 && ha.VideoSize != hb.VideoSize {
+		return false
+	}
+	if a.URL == b.URL || ha.Filename != "" && ha.Filename == hb.Filename {
+		return true
+	}
+	host, file := linkFile(a.URL)
+	if otherHost, otherFile := linkFile(b.URL); file == "" || host != otherHost || file != otherFile {
+		return false
+	}
+	return file == ha.Filename || file == hb.Filename || versionName(a) == versionName(b)
+}
+
+// linkFile is a link's host and the last part of its path, which is empty
+// when the path ends with "/".
+func linkFile(link string) (host, file string) {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return "", ""
+	}
+	return parsed.Host, parsed.Path[strings.LastIndexByte(parsed.Path, '/')+1:]
 }
 
 // versionName joins the stream's name and description lines into one line,

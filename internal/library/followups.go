@@ -56,17 +56,29 @@ func (l list[T]) state(now time.Time, life time.Duration) (fresh, kept bool) {
 
 // listKind names the lists of T, and tells how to merge them: usable picks
 // the items that count, playable streams or subtitles that can be
-// downloaded, and identity tells the same item in two answers.
+// downloaded, and identity tells the same item in two answers. carry,
+// unless nil, returns an answer with what its items keep of the items of
+// the list it replaces (see carryIdentities).
 type listKind[T any] struct {
 	name     string
 	usable   func(T) bool
 	identity func(T) string
+	carry    func(answer, before []T) []T
 }
 
 var (
-	streamKind   = listKind[stremio.Stream]{listStreams, stremio.Stream.Playable, streamIdentity}
-	subtitleKind = listKind[stremio.Subtitle]{listSubtitles, stremio.Subtitle.Valid, subtitleIdentity}
+	streamKind   = listKind[stremio.Stream]{listStreams, stremio.Stream.Playable, streamIdentity, carryIdentities}
+	subtitleKind = listKind[stremio.Subtitle]{listSubtitles, stremio.Subtitle.Valid, subtitleIdentity, nil}
 )
+
+// carried returns answer with what it keeps of before, the list it
+// replaces.
+func (k listKind[T]) carried(answer, before []T) []T {
+	if k.carry == nil || len(before) == 0 {
+		return answer
+	}
+	return k.carry(answer, before)
+}
 
 // count is how many of items count.
 func (k listKind[T]) count(items []T) int {
@@ -122,21 +134,27 @@ func listOf[T any](s *Service, lists *cache.Cache[streamKey, list[T]], key strea
 // now on (followed), they are every item of the list replaced, still kept,
 // fresh as when a renewal asks again (see Renew), or stale; otherwise the
 // items a fresh list kept that way, its follow-ups still running. The
-// follow-ups' end drops them (see endFollowUp).
+// follow-ups' end drops them (see endFollowUp). The answer's items keep
+// what they carry of the list replaced, still kept (see listKind).
 func keepAnswer[T any](s *Service, lists *cache.Cache[streamKey, list[T]], kind listKind[T], key streamKey, answer []T, followed bool) []T {
 	now, life := s.now(), s.listLife()
 	var stored list[T]
 	lists.Update(key, func(kept list[T], ok bool) (list[T], bool) {
+		listed := answer
 		var extras []T
 		if ok {
-			switch fresh, stillKept := kept.state(now, life); {
+			fresh, stillKept := kept.state(now, life)
+			if stillKept {
+				listed = kind.carried(answer, kept.items)
+			}
+			switch {
 			case stillKept && followed:
 				extras = kept.items
 			case fresh:
 				extras = kept.items[kept.answer:]
 			}
 		}
-		stored = kind.merge(answer, extras, now)
+		stored = kind.merge(listed, extras, now)
 		return stored, true
 	})
 	return stored.items
@@ -200,8 +218,9 @@ func (s *Service) followSubtitles(ctx context.Context, entry installed, key stre
 // key in lists (see keepAnswer), and returns the items listed. It then asks
 // the addon again after each of the service's followUpDelays in turn,
 // detached from ctx's end, as shared does. An answer that counts more than
-// the previous answer replaces it, followed by the items still kept from
-// the list the first answer replaced; the schedule stops at the first
+// the previous answer replaces it, its items keeping what they carry of
+// the list they replace (see listKind), followed by the items still kept
+// from the list the first answer replaced; the schedule stops at the first
 // answer that does not, at an error, after the last delay, or once the
 // list is no longer fresh: a refresh or its expiry forgot it, and a late
 // answer never brings it back. The list just stored is a new first answer:
@@ -268,7 +287,7 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 				if after <= before {
 					return kept, false
 				}
-				return kind.merge(answer, kept.items[kept.answer:], now), true
+				return kind.merge(kind.carried(answer, kept.items), kept.items[kept.answer:], now), true
 			})
 			s.followUps.mu.Unlock()
 			if !grew {
