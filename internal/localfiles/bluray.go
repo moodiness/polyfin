@@ -83,10 +83,12 @@ type playlist struct {
 	length time.Duration
 }
 
-// clipPart is a part of a clip a playlist plays.
+// clipPart is a part of a clip a playlist plays: from in to out, in units
+// of 45 kHz of the clip's timestamps.
 type clipPart struct {
-	clip   string
-	length time.Duration
+	clip    string
+	in, out uint32
+	length  time.Duration
 }
 
 // errNotPlaylist reports a file that is not a Blu-ray playlist.
@@ -127,7 +129,7 @@ func readPlaylist(r io.Reader) (playlist, error) {
 		if out < in {
 			return playlist{}, fmt.Errorf("%w: clip %s ends before it starts", errNotPlaylist, clip)
 		}
-		part := clipPart{clip: clip, length: time.Duration(out-in) * time.Second / 45000}
+		part := clipPart{clip: clip, in: in, out: out, length: time.Duration(out-in) * time.Second / 45000}
 		p.clips = append(p.clips, part)
 		p.length += part.length
 		at += 2 + size

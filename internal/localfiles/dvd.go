@@ -143,9 +143,39 @@ func dvdEntry(root string, parts map[string]found) (rel string, f found, ok bool
 // read from the image the same ways. Only the discs of a movies folder in
 // the container have one.
 func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
+	d, err := s.disc(ctx, key)
+	if err != nil {
+		return media.Input{}, err
+	}
+	if d.kind == DiscDVD {
+		in := media.Input{Format: "dvdvideo", Path: d.path}
+		if d.title > 0 {
+			in.Options = []string{"-title", strconv.Itoa(d.title)}
+		}
+		return in, nil
+	}
+	return media.Input{Options: []string{"-playlist", strconv.Itoa(d.title)}, Path: "bluray:" + d.path}, nil
+}
+
+// discInput is the disc a version that is not one file plays: a Blu-ray
+// disc's or a DVD's, in its folder or in an image.
+type discInput struct {
+	// kind is DiscBluRay or DiscDVD.
+	kind string
+	// path is the disc's folder, a DVD's VIDEO_TS folder, or the image
+	// file, through no symbolic link.
+	path  string
+	image bool
+	// title is a Blu-ray disc's playlist, -1 for libbluray's choice, or a
+	// DVD's title, 0 for FFmpeg's choice.
+	title int
+}
+
+// disc finds the disc the version key names plays (see Input).
+func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 	id, err := accounts.ParseID(key)
 	if err != nil {
-		return media.Input{}, ErrGone
+		return discInput{}, ErrGone
 	}
 	var root, rel, kind, image string
 	var title int
@@ -154,17 +184,17 @@ func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path WHERE f.id = $1`, id).
 		Scan(&root, &rel, &kind, &image, &title)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return media.Input{}, ErrGone
+		return discInput{}, ErrGone
 	}
 	if err != nil {
-		return media.Input{}, err
+		return discInput{}, err
 	}
 	if kind != KindMovies || shareKind(root) != "" {
-		return media.Input{}, ErrGone
+		return discInput{}, ErrGone
 	}
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return media.Input{}, ErrGone
+		return discInput{}, ErrGone
 	}
 	folder := func(rel string) (string, error) {
 		dir, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
@@ -174,42 +204,36 @@ func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 		return dir, nil
 	}
 	switch image {
-	case imageDVD:
+	case imageDVD, imageBluRay:
 		file, err := folder(rel)
 		if err != nil {
-			return media.Input{}, err
+			return discInput{}, err
 		}
-		in := media.Input{Format: "dvdvideo", Path: file}
-		if title > 0 {
-			in.Options = []string{"-title", strconv.Itoa(title)}
+		kind := DiscBluRay
+		if image == imageDVD {
+			kind = DiscDVD
 		}
-		return in, nil
-	case imageBluRay:
-		file, err := folder(rel)
-		if err != nil {
-			return media.Input{}, err
-		}
-		return media.Input{Options: []string{"-playlist", strconv.Itoa(title)}, Path: "bluray:" + file}, nil
+		return discInput{kind: kind, path: file, image: true, title: title}, nil
 	}
 	if disc, number, ok := discPlaylist(rel); ok {
 		dir, err := folder(disc)
 		if err != nil {
-			return media.Input{}, err
+			return discInput{}, err
 		}
-		return media.Input{Options: []string{"-playlist", strconv.Itoa(number)}, Path: "bluray:" + dir}, nil
+		return discInput{kind: DiscBluRay, path: dir, title: number}, nil
 	}
 	if _, ok := dvdOf(rel); !ok || dvdSet(rel) == 0 {
-		return media.Input{}, ErrGone
+		return discInput{}, ErrGone
 	}
 	dir, err := folder(path.Dir(rel))
 	if err != nil {
-		return media.Input{}, err
+		return discInput{}, err
 	}
 	title, _, err = dvdMain(dir)
 	if err != nil {
-		return media.Input{}, err
+		return discInput{}, err
 	}
-	return media.Input{Format: "dvdvideo", Options: []string{"-title", strconv.Itoa(title)}, Path: dir}, nil
+	return discInput{kind: DiscDVD, path: dir, title: title}, nil
 }
 
 // errNotDVD reports IFO files that do not describe a DVD's titles.

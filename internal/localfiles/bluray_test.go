@@ -94,8 +94,8 @@ func TestReadPlaylist(t *testing.T) {
 	unpackBluRay(t, dir)
 	for name, want := range map[string]playlist{
 		// tsMuxeR splits the main title on keyframes.
-		"00000.mpls": {clips: []clipPart{{"00000", 96 * time.Second}, {"00001", 94 * time.Second}}, length: 190 * time.Second},
-		"00001.mpls": {clips: []clipPart{{"00005", 30 * time.Second}}, length: 30 * time.Second},
+		"00000.mpls": {clips: []clipPart{{clip: "00000", length: 96 * time.Second}, {clip: "00001", length: 94 * time.Second}}, length: 190 * time.Second},
+		"00001.mpls": {clips: []clipPart{{clip: "00005", length: 30 * time.Second}}, length: 30 * time.Second},
 	} {
 		file, err := os.Open(filepath.Join(dir, "BDMV", "PLAYLIST", name))
 		if err != nil {
@@ -118,7 +118,7 @@ func TestReadPlaylist(t *testing.T) {
 	file, _ := os.Open(filepath.Join(dir, "written.mpls"))
 	got, err := readPlaylist(file)
 	file.Close()
-	if err != nil || got.length != 6*time.Minute || len(got.clips) != 2 || got.clips[1] != (clipPart{"00008", time.Minute}) {
+	if err != nil || got.length != 6*time.Minute || len(got.clips) != 2 || got.clips[1] != (clipPart{clip: "00008", in: 600 * 45000, out: 660 * 45000, length: time.Minute}) {
 		t.Errorf("written: %+v %v", got, err)
 	}
 	for _, bad := range []string{"", "MPLS0200", "INDX0200" + strings.Repeat("\x00", 40)} {
@@ -147,7 +147,7 @@ func TestDiscTitles(t *testing.T) {
 		}
 		return p
 	}
-	minutes := func(clip string, n int) clipPart { return clipPart{clip, time.Duration(n) * time.Minute} }
+	minutes := func(clip string, n int) clipPart { return clipPart{clip: clip, length: time.Duration(n) * time.Minute} }
 	numbers := func(titles []playlist) []int {
 		var got []int
 		for _, title := range titles {
