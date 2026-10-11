@@ -1535,6 +1535,35 @@ export const fetchUnmatchedFiles = (id: string, signal?: AbortSignal) =>
     signal,
   )
 
+/**
+ * A title the metadata addons found for a local folder's unit, that a link can name: `posterId` is
+ * the item whose Primary image is its poster, null without one.
+ */
+export type FolderTitle = {
+  imdbId: string
+  name: string
+  year: number | null
+  kind: 'movie' | 'show'
+  posterId: string | null
+}
+
+/**
+ * Searches the metadata addons for titles of a local folder's kind, those of `year` first, at most
+ * 10; only titles with an IMDb identifier are answered.
+ */
+export const searchFolderTitles = (
+  id: string,
+  query: string,
+  year: number | null,
+  signal?: AbortSignal,
+) =>
+  request<{ titles: FolderTitle[] }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/titles?query=${encodeURIComponent(query)}${year === null ? '' : `&year=${year}`}`,
+    undefined,
+    signal,
+  )
+
 /** Links a file, or a show's folder, to an IMDb identifier; the link survives rescans. */
 export const linkLocalFile = (id: string, path: string, imdbId: string) =>
   request<Addon>('PUT', `${scopePath('shared')}/folders/${seg(id)}/links`, { path, imdbId })
@@ -2280,6 +2309,9 @@ export const queryKeys = {
   sources: ['sources'] as const,
   /** The unmatched files of a local folder. */
   unmatched: (id: string) => ['unmatched', id] as const,
+  /** A title search for a local folder's unit. */
+  folderTitles: (id: string, query: string, year: number | null) =>
+    ['folder-titles', id, query, year] as const,
   variables: ['variables'] as const,
   notifications: (scope: NotificationScope) => ['notifications', scope] as const,
   statistics: (scope: StatisticsScope, query: PlaybacksQuery) =>

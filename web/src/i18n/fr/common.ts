@@ -239,6 +239,8 @@ const common: typeof en = {
       'Un utilisateur fait au plus 256 caractères, un mot de passe au plus 1 024.',
     invalid_folder_kind: 'Choisissez si le dossier contient des films ou des séries.',
     invalid_imdb_id: 'Un identifiant IMDb est tt suivi de chiffres, comme tt0063350.',
+    title_search_failed:
+      'La recherche dans les addons de métadonnées a échoué. Réessayez dans un instant.',
     invalid_channel_list:
       'Cette adresse n’a pas renvoyé de liste de chaînes. Vérifiez-la, et que le compte est toujours valable.',
     channel_list_too_large:

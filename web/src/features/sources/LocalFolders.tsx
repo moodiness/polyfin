@@ -4,9 +4,10 @@ import {
   GlobeIcon,
   HardDrivesIcon,
   LinkBreakIcon,
+  MagnifyingGlassIcon,
   TelevisionSimpleIcon,
 } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addLocalFolder,
@@ -43,6 +44,7 @@ import {
   useToast,
 } from '@/ui'
 import { invalidateScope, replaceCachedAddon } from './model'
+import TitleSearch from './TitleSearch'
 
 /** The ways files are matched, in the order a folder's figures tell them. */
 const matchMethods: MatchMethod[] = ['name', 'nfo', 'search', 'link']
@@ -423,7 +425,10 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
   )
 }
 
-/** One unmatched file: its path, what its name was read as and why it is unmatched, and its link form. */
+/**
+ * One unmatched file: its path, what its name was read as and why it is unmatched, its link form,
+ * and the search of its title.
+ */
 function UnmatchedRow({
   addon,
   folder,
@@ -437,11 +442,13 @@ function UnmatchedRow({
   const text = t.localFolders
   const toast = useToast()
   const [imdbId, setImdbId] = useState('')
+  const [searching, setSearching] = useState(false)
+  const searchId = useId()
   const link = useMutation({
-    mutationFn: () => linkLocalFile(addon.id, file.path, imdbId.trim()),
-    onSuccess: (updated) => {
+    mutationFn: (id: string) => linkLocalFile(addon.id, file.path, id),
+    onSuccess: (updated, id) => {
       replaceCachedAddon('shared', updated)
-      toast(text.linked(unitName(file.unit, folder, text.discTitle), imdbId.trim().toLowerCase()))
+      toast(text.linked(unitName(file.unit, folder, text.discTitle), id.toLowerCase()))
     },
     onSettled: () => {
       invalidateScope('shared')
@@ -452,7 +459,7 @@ function UnmatchedRow({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    link.mutate()
+    link.mutate(imdbId.trim())
   }
 
   return (
@@ -494,7 +501,32 @@ function UnmatchedRow({
         <Button type="submit" size="sm" loading={link.isPending} disabled={imdbId.trim() === ''}>
           {text.link}
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={MagnifyingGlassIcon}
+          aria-expanded={searching}
+          aria-controls={searching ? searchId : undefined}
+          onClick={() => setSearching(!searching)}
+        >
+          {text.findTitle}
+        </Button>
       </form>
+      {searching && (
+        <div id={searchId} className="basis-full">
+          <TitleSearch
+            folderId={addon.id}
+            path={file.path}
+            title={file.title}
+            year={file.year}
+            linking={link.isPending}
+            onPick={(id) => {
+              link.reset()
+              link.mutate(id)
+            }}
+          />
+        </div>
+      )}
     </li>
   )
 }
