@@ -1,15 +1,25 @@
 # Subtitles
 
-This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles, text tracks inside files, ASS styles and fonts, and image subtitles.
+This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles, subtitle files beside local files, text tracks inside files, ASS styles and fonts, and image subtitles.
 
 ## Where subtitles come from
 
-Apps get two kinds of subtitles:
+Apps get three kinds of subtitles:
 
 - subtitles from the addons;
+- the subtitle files beside a local file, for that file's version;
 - the text tracks inside a version's file.
 
-Both reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)).
+All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)).
+
+## Subtitle files beside local files
+
+A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and WebVTT files beside it, named after it, such as `Movie (2001).fr.srt` or `Movie (2001).en.sdh.ass`. [Naming files](local-folders.md#subtitle-files) tells how their names give their language and flags.
+
+- They are subtitles of that file's version only, listed after the addons' subtitles, with their language, title, and whether they are forced, for the hearing impaired or shown by default.
+- Each app gets them in the format it asks for, as it gets the addons' subtitles: WebVTT, SubRip, ASS or JSON. An ASS file asked as ASS keeps its styles and positions.
+- Files in UTF-8 (with or without a byte order mark) and UTF-16 are read as they are. A file that is not valid UTF-8 is read as Windows-1252, the usual encoding of older subtitles, so that accents survive.
+- Polyfin reads them from the folder or the network share when an app asks for them, and keeps their text for a while. A file that changes is read again after the next scan.
 
 ## Text tracks inside files
 

@@ -115,6 +115,29 @@ Folders organized by Jellyfin or a media manager often hold NFO files, which giv
 
 In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots, ratings and artwork still come from the metadata addons, and episodes' NFO files are not read.
 
+### Subtitle files
+
+Subtitle files beside a video are offered as subtitles of its version, as Jellyfin reads them: SubRip (`.srt`), ASS (`.ass`), SSA (`.ssa`) and WebVTT (`.vtt`) files in the video's folder whose name begins with the video's, followed by a dot.
+
+```
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.srt
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.fr.srt
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.en.forced.srt
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.en.sdh.ass
+/media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E02.fre.srt
+```
+
+The words after the video's name, separated by dots, are read in any order and letter case:
+
+- a language, as an ISO 639-1 code (`fr`), an ISO 639-2 code (`fre` or `fra`), with a region (`pt-BR`), or a name in English or French (`French`, `Français`);
+- `forced` or `foreign`: forced subtitles, which translate only what is not in the audio's language;
+- `sdh`, `hi` or `cc`: subtitles for the deaf and hard of hearing;
+- `default`: the subtitles shown by default;
+- any other word is the subtitles' title, such as `Movie (2001).en.Commentary.srt`.
+
+When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. Picture subtitle files (`.sup`, `.idx` and `.sub`) are not read. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps.
+
 ## Blu-ray discs
 
 A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, and whose `PLAYLIST` folder holds its playlists, `.mpls` files, beside `index.bdmv`, `CLIPINF` and often a `CERTIFICATE` folder. A movie is a playlist, which plays one or more streams in order; the other playlists are extras, menus and other cuts.
@@ -215,7 +238,7 @@ Folders mounted in the container are also watched for changes, with inotify on L
 - Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, NFO files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, NFO files, subtitle files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan.
 
 Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
 
@@ -226,20 +249,21 @@ sudo sysctl --system
 
 When Health says the limit of watchers or of open files is reached, raise `fs.inotify.max_user_instances` the same way, or the container's limit of open files (`--ulimit nofile=…` with Docker).
 
-A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO files are listed with the folders, and only those new or changed are read.
+A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Subtitle files added, changed or removed are offered as they are now from the next scan on. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO and subtitle files are listed with the folders, and only the NFO files new or changed are read.
 
 Symbolic links to files of the folder are followed; links leading out of the folder, and links to folders, are not.
 
 ## Versions
 
-A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks. A Blu-ray disc's playlist and a DVD play converted only (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)). The folder's library lists its titles, the latest found first.
+A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist and a DVD play converted only (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)). The folder's library lists its titles, the latest found first.
 
 ## Compared with Jellyfin
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
 - Jellyfin's "Identify" matches an item by hand; Polyfin links an unmatched file to an IMDb identifier.
-- Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork. Local artwork and side-car subtitle files are not read.
+- Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
+- Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read.
 
 ## For app developers
 
