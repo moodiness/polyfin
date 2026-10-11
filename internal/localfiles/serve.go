@@ -109,14 +109,15 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 
 // Streams answers the streams of a folder for a title or an episode: its
 // files, named after the folder, with their resolution and size, which
-// the loopback interface serves (see UseFiles).
+// the loopback interface serves (see UseFiles). A disc's stream bears its
+// disc's name as its file name (see discLabel).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
 	}
-	var kind, folderName string
-	err := s.db.QueryRow(ctx, "SELECT f.kind, a.manifest->>'name' FROM local_folders f JOIN addons a ON a.id = f.addon_id WHERE f.addon_id = $1",
-		source).Scan(&kind, &folderName)
+	var kind, folderName, location string
+	err := s.db.QueryRow(ctx, `SELECT f.kind, a.manifest->>'name', a.manifest_url FROM local_folders f JOIN addons a ON a.id = f.addon_id
+		WHERE f.addon_id = $1`, source).Scan(&kind, &folderName, &location)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -153,9 +154,13 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		if height != nil {
 			details = append([]string{strconv.Itoa(*height) + "p"}, details...)
 		}
+		filename := path.Base(rel)
+		if disc, ok := discStream(rel); ok && kind == KindMovies {
+			filename = discLabel(disc, locationName(location)) + path.Ext(rel)
+		}
 		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "),
 			URL:           s.files + file.String() + strings.ToLower(path.Ext(rel)),
-			BehaviorHints: stremio.StreamBehavior{Filename: path.Base(rel), VideoSize: stremio.Number(size)}}, nil
+			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil
 	})
 }
 

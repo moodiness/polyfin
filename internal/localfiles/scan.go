@@ -285,6 +285,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
 	}
+	collapseDiscs(folder.Kind, files)
 	known, err := s.storedFiles(ctx, id)
 	if err != nil {
 		return err
@@ -300,13 +301,16 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 			return err
 		}
 	}
-	// The units to match, with their files to store.
+	// The units to match, with their files to store. A file read as
+	// another unit than before, as each stream of a disc was, is read
+	// again.
+	rootName := locationName(root)
 	units := map[string][]entry{}
 	for rel, f := range files {
 		old, ok := known[rel]
-		e := readEntry(folder.Kind, rel, f)
+		e := readEntry(folder.Kind, rootName, rel, f)
 		switch {
-		case !ok || old.size != f.size || !old.modified.Equal(f.modified):
+		case !ok || old.size != f.size || !old.modified.Equal(f.modified) || old.unit != e.unit:
 		case old.matched || old.reason == reasonUnreadableName:
 			continue
 		}
@@ -315,6 +319,11 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	links, err := s.links(ctx, id)
 	if err != nil {
 		return err
+	}
+	if folder.Kind == KindMovies {
+		if links, err = s.moveStreamLinks(ctx, id, files, links); err != nil {
+			return err
+		}
 	}
 	matched, err := s.matchedUnits(ctx, id)
 	if err != nil {
@@ -391,13 +400,75 @@ type entry struct {
 	episode name
 }
 
-// readEntry reads what a file's path tells in a folder of kind.
-func readEntry(kind, rel string, f found) entry {
+// readEntry reads what a file's path tells in a folder of kind, root being
+// the folder's name (see locationName): a disc's stream is read as its
+// disc, matched by its folder's name.
+func readEntry(kind, root, rel string, f found) entry {
 	if kind == KindShows {
 		show, episode, unit := episodeName(rel)
 		return entry{path: rel, file: f, unit: unit, title: show, episode: episode}
 	}
+	if disc, ok := discStream(rel); ok {
+		return entry{path: rel, file: f, unit: discUnit(disc), title: discName(disc, root)}
+	}
 	return entry{path: rel, file: f, unit: rel, title: movieName(rel)}
+}
+
+// moveStreamLinks moves to their disc the links made on a disc's streams
+// when scans read each stream as a movie of its own: a stream is no unit
+// any more. A disc without a link takes its stream's, the one of the
+// stream kept when several are linked, else the first by path; the
+// stream's links are removed. The links of a disc not found now stay.
+func (s *Service) moveStreamLinks(ctx context.Context, id accounts.ID, files map[string]found, links map[string]string) (map[string]string, error) {
+	kept := map[string]string{}
+	for rel := range files {
+		if disc, ok := discStream(rel); ok {
+			kept[discUnit(disc)] = rel
+		}
+	}
+	var stale []string
+	taken := map[string]string{}
+	for unit := range links {
+		disc, ok := discStream(unit)
+		if !ok {
+			continue
+		}
+		target := discUnit(disc)
+		stream, found := kept[target]
+		if !found {
+			continue
+		}
+		stale = append(stale, unit)
+		if links[target] != "" {
+			continue
+		}
+		if best, ok := taken[target]; !ok || unit == stream || best != stream && unit < best {
+			taken[target] = unit
+		}
+	}
+	if len(stale) == 0 {
+		return links, nil
+	}
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		for target, unit := range taken {
+			if _, err := tx.Exec(ctx, "INSERT INTO local_links (addon_id, unit, imdb_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+				id, target, links[unit]); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx, "DELETE FROM local_links WHERE addon_id = $1 AND unit = ANY($2)", id, stale)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	for target, unit := range taken {
+		links[target] = links[unit]
+	}
+	for _, unit := range stale {
+		delete(links, unit)
+	}
+	return links, nil
 }
 
 // store saves a unit's files with the title they were matched to, or why

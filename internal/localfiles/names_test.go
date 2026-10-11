@@ -33,6 +33,55 @@ func TestMovieNamesAreRead(t *testing.T) {
 	}
 }
 
+// A disc is read by its folder's name, the folder above's when it only
+// numbers the disc, the folder's own at the root; its version is named
+// alike.
+func TestDiscNamesAreRead(t *testing.T) {
+	for _, tc := range []struct {
+		path, root   string
+		unit, title  string
+		year, height int
+		label        string
+	}{
+		{"Movie (2001)/BDMV/STREAM/00001.m2ts", "movies", "Movie (2001)", "Movie", 2001, 0, "Movie (2001)"},
+		{"Movie.2001.1080p.BluRay/BDMV/STREAM/00001.m2ts", "movies", "Movie.2001.1080p.BluRay", "Movie", 2001, 1080, "Movie.2001.1080p.BluRay"},
+		{"Other (1999)/Disc 1/BDMV/STREAM/00001.m2ts", "movies", "Other (1999)/Disc 1", "Other", 1999, 0, "Other (1999) - Disc 1"},
+		{"Other (1999)/DISC01/BDMV/STREAM/00001.m2ts", "movies", "Other (1999)/DISC01", "Other", 1999, 0, "Other (1999) - DISC01"},
+		{"Other/disk_2/bdmv/stream/00001.M2TS", "movies", "Other/disk_2", "Other", 0, 0, "Other - disk_2"},
+		{"Other/CD1/BDMV/STREAM/00001.m2ts", "movies", "Other/CD1", "Other", 0, 0, "Other - CD1"},
+		{"Other (1999)/BD 1/BDMV/STREAM/00001.m2ts", "movies", "Other (1999)/BD 1", "Other", 1999, 0, "Other (1999) - BD 1"},
+		{"Other (1999)/Part.2/BDMV/STREAM/00001.m2ts", "movies", "Other (1999)/Part.2", "Other", 1999, 0, "Other (1999) - Part.2"},
+		// The folder above gives the year the disc's name lacks.
+		{"Nosferatu (1922)/Nosferatu/BDMV/STREAM/00001.m2ts", "movies", "Nosferatu (1922)/Nosferatu", "Nosferatu", 1922, 0, "Nosferatu"},
+		{"Box/DISC01_xyz/BDMV/STREAM/00010.m2ts", "movies", "Box/DISC01_xyz", "DISC01 xyz", 0, 0, "DISC01_xyz"},
+		{"Disc 2/BDMV/STREAM/00001.m2ts", "Other (1999)", "Disc 2", "Other", 1999, 0, "Other (1999) - Disc 2"},
+		{"BDMV/STREAM/00001.m2ts", "The General (1926)", ".", "The General", 1926, 0, "The General (1926)"},
+	} {
+		disc, ok := discStream(tc.path)
+		e := readEntry(KindMovies, tc.root, tc.path, found{})
+		if !ok || e.unit != tc.unit || e.title.title != tc.title || e.title.year != tc.year || e.title.height != tc.height ||
+			discLabel(disc, tc.root) != tc.label {
+			t.Errorf("%s: %v %s %+v %s", tc.path, ok, e.unit, e.title, discLabel(disc, tc.root))
+		}
+	}
+	for _, rel := range []string{"Movie/BDMV/00001.m2ts", "Movie/BDMV/STREAM/sub/00001.m2ts", "Movie/BDMV/STREAM/00001.mkv", "Movie/STREAM/00001.m2ts"} {
+		if _, ok := discStream(rel); ok {
+			t.Errorf("%s is read as a disc's stream", rel)
+		}
+	}
+	for location, name := range map[string]string{
+		"/media/movies":                          "movies",
+		"/media/The General (1926)":              "The General (1926)",
+		"smb://nas/share":                        "share",
+		"https://nas/dav/The%20General%20(1926)": "The General (1926)",
+		"https://nas":                            "",
+	} {
+		if got := locationName(location); got != name {
+			t.Errorf("%s: %q", location, got)
+		}
+	}
+}
+
 // Episodes are read from their file's name, the show from its folder, and
 // a file holding several episodes covers them all.
 func TestEpisodeNamesAreRead(t *testing.T) {

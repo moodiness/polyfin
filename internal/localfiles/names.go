@@ -203,11 +203,15 @@ func fold(title string) string {
 }
 
 // movieName is what a movie file's path, in its folder, tells: its own
-// name, completed by its folder's (a folder per movie), whose identifiers
-// and year count when the file's name has none.
+// name, completed by its folder's (see completedName).
 func movieName(rel string) name {
-	file := parseName(stem(rel))
-	dir := path.Dir(rel)
+	return completedName(parseName(stem(rel)), path.Dir(rel))
+}
+
+// completedName completes what a movie's own name tells by its folder's,
+// dir (a folder per movie), whose identifiers and year count when the
+// movie's name has none; dir is "." for no folder.
+func completedName(file name, dir string) name {
 	if dir == "." {
 		return file
 	}

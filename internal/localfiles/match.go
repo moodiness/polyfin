@@ -261,8 +261,8 @@ func (s *Service) matchedUnits(ctx context.Context, id accounts.ID) (map[string]
 
 // unitFiles reads the files of one of a folder's units, as a scan read
 // them.
-func (s *Service) unitFiles(ctx context.Context, id accounts.ID, kind, unit string) ([]entry, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path", id, unit)
+func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]entry, error) {
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path", folder.Addon.ID, unit)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (s *Service) unitFiles(ctx context.Context, id accounts.ID, kind, unit stri
 		if err := row.Scan(&rel, &f.size, &f.modified); err != nil {
 			return entry{}, err
 		}
-		return readEntry(kind, rel, f), nil
+		return readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f), nil
 	})
 }
 
@@ -328,7 +328,7 @@ func (s *Service) unit(ctx context.Context, id accounts.ID, path string) (Folder
 
 // rematch matches a unit's files again, to link when given.
 func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string) error {
-	entries, err := s.unitFiles(ctx, folder.Addon.ID, folder.Kind, unit)
+	entries, err := s.unitFiles(ctx, folder, unit)
 	if err != nil || len(entries) == 0 {
 		return err
 	}
@@ -340,7 +340,8 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 }
 
 // Unmatched is a file of a folder no title was matched to: its path, the
-// unit a link would link (see Link), what its name tells, and why.
+// unit a link would link (see Link), what its name tells, and why. Disc
+// tells a disc's stream kept for its disc, its unit the disc's folder.
 type Unmatched struct {
 	Path   string
 	Unit   string
@@ -348,6 +349,7 @@ type Unmatched struct {
 	Year   int
 	Size   int64
 	Reason string
+	Disc   bool
 }
 
 // maxUnmatched bounds the unmatched files listed at once.
@@ -356,7 +358,8 @@ const maxUnmatched = 1000
 // Unmatched lists the files of a folder no title was matched to, by path,
 // at most maxUnmatched, with how many there are.
 func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, int, error) {
-	if _, err := s.Folder(ctx, id); err != nil {
+	folder, err := s.Folder(ctx, id)
+	if err != nil {
 		return nil, 0, err
 	}
 	var total int
@@ -371,6 +374,9 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
 		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason)
+		if disc, ok := discStream(u.Path); ok && folder.Kind == KindMovies {
+			u.Disc = u.Unit == discUnit(disc)
+		}
 		return u, err
 	})
 	return list, total, err

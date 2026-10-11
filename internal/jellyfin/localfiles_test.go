@@ -90,3 +90,62 @@ func TestLocalFilesAreVersions(t *testing.T) {
 		}
 	}
 }
+
+// A Blu-ray disc of a local folder is one version, its largest stream,
+// named after the disc's folder rather than its stream: apps show and
+// download it under that name.
+func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
+			o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open))
+	})
+	p := playingOn(t, s)
+	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	stream := filepath.Join(dir, "Movie (2008)", "BDMV", "STREAM")
+	if err := os.MkdirAll(stream, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stream, "00001.m2ts"), file, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stream, "00000.m2ts"), file[:1000], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Link(t.Context(), addon.ID, "Movie (2008)", "tt1000"); err != nil {
+		t.Fatal(err)
+	}
+
+	userItem := "/Users/" + p.user.ID.String() + "/Items/"
+	var movie BaseItemDto
+	p.get(t, userItem+p.movie, p.token, &movie)
+	if movie.MediaSources == nil || len(*movie.MediaSources) != 3 {
+		t.Fatalf("media sources: %+v", movie.MediaSources)
+	}
+	local := (*movie.MediaSources)[2]
+	if local.Name != "Shelf · 52 KB" || *local.Size != int64(len(file)) {
+		t.Errorf("local version: %+v", local)
+	}
+	var version BaseItemDto
+	if p.get(t, userItem+local.Id, p.token, &version); version.Path != "Movie (2008).m2ts" {
+		t.Errorf("the disc's name: %q", version.Path)
+	}
+	response, body := fetchURL(t, p.url+"/Items/"+local.Id+"/Download?ApiKey="+p.token, http.Header{"Range": {"bytes=100-199"}})
+	if response.StatusCode != http.StatusPartialContent || body != string(file[100:200]) {
+		t.Errorf("a range of the largest stream: %d %v", response.StatusCode, response.Header)
+	}
+}

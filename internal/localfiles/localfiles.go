@@ -15,8 +15,10 @@
 // the last one, by path, size and modification time; each new file is
 // matched to a title by the identifiers its name gives, else by its name
 // and year through the metadata addons' searches, kept only when they find
-// one title. An administrator links the files left unmatched to an IMDb
-// identifier by hand.
+// one title. A Blu-ray disc copied as it is, a folder holding BDMV, is one
+// movie of a movies folder, its largest stream, and is left out of a shows
+// folder (see collapseDiscs). An administrator links the files left
+// unmatched to an IMDb identifier by hand.
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.
