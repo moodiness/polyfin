@@ -96,7 +96,7 @@ Shows, a folder per show, the season and episode in each file's name:
 
 An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
 
-Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out, as are the streams of a Blu-ray disc other than the one it plays, and the files of a DVD.
+Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out, as are a Blu-ray disc's streams and playlists, which its titles play, and the files of a DVD.
 
 ### NFO files
 
@@ -117,32 +117,45 @@ In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tm
 
 ## Blu-ray discs
 
-A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, beside `index.bdmv`, `PLAYLIST`, `CLIPINF` and often a `CERTIFICATE` folder. The movie is one of the streams; the others are menus, extras and pieces of it.
+A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, and whose `PLAYLIST` folder holds its playlists, `.mpls` files, beside `index.bdmv`, `CLIPINF` and often a `CERTIFICATE` folder. A movie is a playlist, which plays one or more streams in order; the other playlists are extras, menus and other cuts.
 
 ```
-/media/movies/Night of the Living Dead (1968)/BDMV/STREAM/00000.m2ts
+/media/movies/Night of the Living Dead (1968)/BDMV/PLAYLIST/00800.mpls
 /media/movies/Night of the Living Dead (1968)/BDMV/STREAM/00001.m2ts
-/media/movies/Nosferatu (1922)/Disc 1/BDMV/STREAM/00003.m2ts
+/media/movies/Box/DISC02/BDMV/PLAYLIST/00002.mpls
 ```
 
-In a movies folder, any folder holding a `BDMV` folder (any case) is a disc, and is one movie:
+In a movies folder, any folder holding a `BDMV` folder (any case) is a disc. Its main title is its longest playlist:
 
-- its largest stream, of the `.m2ts` files directly in `BDMV/STREAM`, is the version that plays; the other streams are neither counted nor listed;
+- it plays whole, every stream in order, with its audio tracks, through FFmpeg's Blu-ray reader;
+- its size is that of the streams it plays;
 - its title is read from the disc folder's name, as a movie file's name is, the year coming from the folder above when the disc folder's name has none;
 - a disc folder named only after the disc's number, such as `Disc 1`, `DISC01`, `Disk 2`, `CD1`, `BD 1` or `Part 2`, takes its title from the folder above;
 - a disc at the root of a folder takes the folder's own name;
-- a link covers the disc folder, whatever stream is the largest; the unmatched files list it as `Blu-ray disc: …`;
-- through the Jellyfin API, its version is named after the disc folder, not its stream.
+- a link covers the disc folder; the unmatched files list it as `Blu-ray disc: …`;
+- through the Jellyfin API, its version is named after the disc folder.
+
+A disc holding several movies, as a box set's discs do, lists each other movie as a title of its own:
+
+- a title is a playlist of at least 20 minutes that plays mostly streams the longer titles do not: another cut, angle or language of a movie counts once;
+- a disc that would have more than 6 titles keeps its main title only, as some discs hide their movie among hundreds of playlists;
+- a title other than the main one is not matched by the disc folder's name: link it by hand, beside its playlist in the unmatched files, listed as `Blu-ray disc: Box/DISC02 · title 2` for playlist `00002.mpls`;
+- through the Jellyfin API, its version is named after the disc folder and its number, such as `Box - DISC02 - title 2`.
+
+A disc plays its playlists from its folder rather than as one file, so it always plays converted, as a DVD does (see [DVD folders](#dvd-folders)): its video is converted over HLS, and its audio is copied when the app takes it.
 
 Files beside `BDMV` in a disc folder are read as any other file, and folders a scan leaves out, such as `Extras`, still are.
 
 Limits:
 
-- A movie split over several streams plays its largest stream only.
-- A disc holding several movies is one entry: link it by hand to the one it should play, or extract each movie to a file of its own.
+- On a network share, a disc plays its largest stream, as one file, played as it is when the app takes it: FFmpeg reads a disc's playlists from a path. A movie split over several streams then plays its largest stream only. Mount the share on the host and declare it as a local folder to play the whole playlist.
+- A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream the same way.
+- There is no direct play and no download of a playlist, and no thumbnails or chapter images are made for it.
+- The video is always converted, even when the app takes its codec: Polyfin does not read the keyframes of a disc's streams, which copying the video needs.
+- The disc must not be encrypted: Polyfin reads discs copied without their copy protection.
 - In a shows folder, discs are left out: a disc of episodes is not read as one episode. Extract its episodes to files of their own.
 
-Folders scanned before Polyfin read discs held one file per stream; their next scan leaves one per disc, read as above, and a link made on one of a disc's streams moves to the disc.
+Folders scanned before Polyfin read discs held one file per stream; their next scan leaves one per disc, read as above, and a link made on one of a disc's streams moves to the disc. Folders scanned by Polyfin 0.30 held a disc's largest stream; their next scan reads the disc's playlists, and the disc keeps its link.
 
 ## DVD folders
 
@@ -188,7 +201,7 @@ A folder's figures tell how its matched files were matched: by an identifier in 
 
 ## Unmatched files
 
-A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, or the search failed. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
+A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, the search failed, or the file is another movie of a Blu-ray disc, which only a link matches. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder, or one title of a disc holding several movies. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
 
 ## Scanning
 
@@ -202,7 +215,7 @@ Folders mounted in the container are also watched for changes, with inotify on L
 - Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, NFO files and a DVD's `.IFO` and `.VOB` files do not start a scan.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, NFO files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan.
 
 Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
 
@@ -219,7 +232,7 @@ Symbolic links to files of the folder are followed; links leading out of the fol
 
 ## Versions
 
-A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks. A DVD plays converted only (see [DVD folders](#dvd-folders)). The folder's library lists its titles, the latest found first.
+A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks. A Blu-ray disc's playlist and a DVD play converted only (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)). The folder's library lists its titles, the latest found first.
 
 ## Compared with Jellyfin
 
@@ -237,10 +250,10 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address |
 | `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
-| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's stream and `"dvd"` for a DVD, its `unit` the disc folder, and `null` for other files |
+| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's number (`Box/DISC02#00002`), and `null` for other files |
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
 An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder in the container that cannot be watched is a problem of its own (`code` `folder_unwatched`), its `failure` being `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
-Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A share's files are served the same way.
+Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A share's files are served the same way.
