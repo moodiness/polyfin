@@ -76,7 +76,7 @@ As with a local folder, the files found before stay in the library while the sha
 
 ## Naming files
 
-Movies, one file per movie, alone or in a folder of its own:
+Movies, one file per movie, alone or in a folder of its own, or a Blu-ray disc copied as it is (see [Blu-ray discs](#blu-ray-discs)):
 
 ```
 /media/movies/Night of the Living Dead (1968).mkv
@@ -96,11 +96,40 @@ Shows, a folder per show, the season and episode in each file's name:
 
 An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
 
-Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out.
+Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out, as are the streams of a Blu-ray disc other than the one it plays.
+
+## Blu-ray discs
+
+A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, beside `index.bdmv`, `PLAYLIST`, `CLIPINF` and often a `CERTIFICATE` folder. The movie is one of the streams; the others are menus, extras and pieces of it.
+
+```
+/media/movies/Night of the Living Dead (1968)/BDMV/STREAM/00000.m2ts
+/media/movies/Night of the Living Dead (1968)/BDMV/STREAM/00001.m2ts
+/media/movies/Nosferatu (1922)/Disc 1/BDMV/STREAM/00003.m2ts
+```
+
+In a movies folder, any folder holding a `BDMV` folder (any case) is a disc, and is one movie:
+
+- its largest stream, of the `.m2ts` files directly in `BDMV/STREAM`, is the version that plays; the other streams are neither counted nor listed;
+- its title is read from the disc folder's name, as a movie file's name is, the year coming from the folder above when the disc folder's name has none;
+- a disc folder named only after the disc's number, such as `Disc 1`, `DISC01`, `Disk 2`, `CD1`, `BD 1` or `Part 2`, takes its title from the folder above;
+- a disc at the root of a folder takes the folder's own name;
+- a link covers the disc folder, whatever stream is the largest; the unmatched files list it as `Blu-ray disc: …`;
+- through the Jellyfin API, its version is named after the disc folder, not its stream.
+
+Files beside `BDMV` in a disc folder are read as any other file, and folders a scan leaves out, such as `Extras`, still are.
+
+Limits:
+
+- A movie split over several streams plays its largest stream only.
+- A disc holding several movies is one entry: link it by hand to the one it should play, or extract each movie to a file of its own.
+- In a shows folder, discs are left out: a disc of episodes is not read as one episode. Extract its episodes to files of their own.
+
+Folders scanned before Polyfin read discs held one file per stream; their next scan leaves one per disc, read as above, and a link made on one of a disc's streams moves to the disc.
 
 ## Matching
 
-Each file, or each show's folder, is matched to a title:
+Each file, each disc, or each show's folder, is matched to a title:
 
 1. a link made by hand (see below);
 2. else an identifier written in its name: an IMDb identifier as it is; a TMDB identifier through the metadata addons, which give its IMDb identifier;
@@ -110,7 +139,7 @@ The title is kept under its IMDb identifier, which the addons answer streams for
 
 ## Unmatched files
 
-A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, or the search failed. Rename the file and scan again, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
+A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, or the search failed. Rename the file and scan again, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc, the whole disc folder. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
 
 ## Scanning
 
@@ -159,10 +188,10 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address |
 | `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
-| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason"}]}` |
-| `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file or a show's folder |
+| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is true for a Blu-ray disc's stream, its `unit` the disc folder |
+| `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a Blu-ray disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
 An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder in the container that cannot be watched is a problem of its own (`code` `folder_unwatched`), its `failure` being `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
-Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A share's files are served the same way.
+Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number. A share's files are served the same way.
