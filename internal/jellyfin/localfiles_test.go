@@ -925,7 +925,8 @@ func localImage(t *testing.T, ffprobe, name string) (playbackSetup, MediaSourceI
 // A disc image plays its main title from the image itself, over HLS only:
 // a DVD image through the dvdvideo demuxer, its video converted, a
 // Blu-ray image through the bluray protocol, its video copied on the
-// keyframes read through its ISO 9660 file system, each whole.
+// keyframes read through its file system, ISO 9660 or, for an image
+// without one, UDF 2.50, each whole.
 func TestLocalDiscImagesPlay(t *testing.T) {
 	t.Run("dvd", func(t *testing.T) {
 		ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
@@ -946,6 +947,11 @@ func TestLocalDiscImagesPlay(t *testing.T) {
 	t.Run("bluray", func(t *testing.T) {
 		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 		p, local := localImage(t, ffprobe, "bluray")
+		playsCopied(t, p, local, ffmpeg, ffprobe)
+	})
+	t.Run("bluray-udf", func(t *testing.T) {
+		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
+		p, local := localImage(t, ffprobe, "bluray-udf")
 		playsCopied(t, p, local, ffmpeg, ffprobe)
 	})
 }
