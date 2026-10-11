@@ -111,3 +111,10 @@ func (s *Service) probeInput(ctx context.Context, version library.Version) (in m
 		src.Release()
 	}, nil
 }
+
+// ProbesInput reports whether ffprobe reads a video from in, an input of
+// FFmpeg's own, such as a disc image read with the bluray protocol.
+func (s *Service) ProbesInput(ctx context.Context, in media.Input) bool {
+	_, err := s.ffprobe().ProbeInput(ctx, in)
+	return err == nil
+}
