@@ -25,6 +25,15 @@ func videoFile(name string) bool {
 	return stem != "sample" && !strings.HasSuffix(stem, "-sample") && !strings.HasSuffix(stem, ".sample")
 }
 
+// sideExtensions are the files a scan lists beside the videos, by their
+// extension: NFO files, which may tell a title's identifiers.
+var sideExtensions = map[string]bool{".nfo": true}
+
+// sideFile reports whether name is a side file a scan lists.
+func sideFile(name string) bool {
+	return sideExtensions[strings.ToLower(path.Ext(name))]
+}
+
 // skippedFolder reports whether a scan leaves a folder out: hidden ones,
 // those of system files, and the extras of a title, which are not one of
 // its versions.

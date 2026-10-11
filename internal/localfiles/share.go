@@ -204,12 +204,15 @@ func (s *Service) folderRemote(id accounts.ID, address, user, sealed string) (re
 	return s.remote(id, address, user, password)
 }
 
-// walkShare lists the video files under a share's folder, by their path in
-// it, one folder after the other. skipped are the folders it could not
-// list, missing or refused: what was found in them before is not gone. A
-// share that stops answering fails the walk.
-func walkShare(ctx context.Context, r remote, root []remoteEntry) (files map[string]found, skipped []string, err error) {
-	files = map[string]found{}
+// walkShare lists the video and side files under a share's folder, one
+// folder after the other, from the listings alone. The folders it could
+// not list, missing or refused, are skipped. A share that stops answering
+// fails the walk.
+func walkShare(ctx context.Context, r remote, root []remoteEntry) (listing, error) {
+	list := listing{files: map[string]found{}, sides: map[string]found{}, open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
+		file, _, err := r.open(ctx, rel)
+		return file, err
+	}}
 	type pending struct {
 		rel     string
 		listed  bool
@@ -218,21 +221,22 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry) (files map[str
 	queue := []pending{{rel: "", listed: true, entries: root}}
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
-			return nil, nil, ctx.Err()
+			return listing{}, ctx.Err()
 		}
 		next := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
 		entries := next.entries
 		if !next.listed {
 			listCtx, cancel := context.WithTimeout(ctx, listTimeout)
+			var err error
 			entries, err = r.list(listCtx, next.rel)
 			cancel()
 			if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) || errors.Is(err, errIsFile) {
-				skipped = append(skipped, next.rel)
+				list.skipped = append(list.skipped, next.rel)
 				continue
 			}
 			if err != nil {
-				return nil, nil, err
+				return listing{}, err
 			}
 		}
 		for _, e := range entries {
@@ -246,32 +250,34 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry) (files map[str
 				// at most are held at once.
 				queue = append(queue, pending{rel: rel})
 			case !e.folder && videoFile(e.name):
-				files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
+				list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
+			case !e.folder && sideFile(e.name):
+				list.sides[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
 			}
 		}
 	}
-	return files, skipped, nil
+	return list, nil
 }
 
-// shareFiles lists a share's video files, or tells why it cannot.
-func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user, sealed string) (files map[string]found, skipped []string,
-	failure string, err error) {
+// shareFiles lists a share's video and side files, or tells why it
+// cannot.
+func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user, sealed string) (list listing, failure string, err error) {
 	r, err := s.folderRemote(id, address, user, sealed)
 	if err != nil {
-		return nil, nil, shareFailure(err), nil
+		return listing{}, shareFailure(err), nil
 	}
 	listCtx, cancel := context.WithTimeout(ctx, listTimeout)
 	root, err := r.list(listCtx, "")
 	cancel()
 	if err == nil {
-		files, skipped, err = walkShare(ctx, r, root)
+		list, err = walkShare(ctx, r, root)
 	}
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, nil, "", ctx.Err()
+			return listing{}, "", ctx.Err()
 		}
 		s.logger.Warn("A network share cannot be read", "address", address, "error", err)
-		return nil, nil, shareFailure(err), nil
+		return listing{}, shareFailure(err), nil
 	}
-	return files, skipped, "", nil
+	return list, "", nil
 }

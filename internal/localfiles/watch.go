@@ -102,9 +102,9 @@ type watching struct {
 
 // watcher watches the folders folders lists, each folder of their trees
 // but those a scan leaves out, and scans a folder quiet after its video
-// files or folders stop changing. It looks for the folders to watch every
-// check, and when kicked; a folder it could not watch is tried again after
-// retry, and keeps its schedule meanwhile.
+// files, side files or folders stop changing. It looks for the folders to
+// watch every check, and when kicked; a folder it could not watch is tried
+// again after retry, and keeps its schedule meanwhile.
 type watcher struct {
 	// ctx ends the watch.
 	ctx     context.Context
@@ -389,8 +389,8 @@ func (w *watcher) close() {
 }
 
 // event handles a change: a folder added is watched, a folder watched gone
-// is no longer, and a change of a folder or of a video file schedules the
-// scan of its folder.
+// is no longer, and a change of a folder, of a video file or of a side
+// file schedules the scan of its folder.
 func (w *watcher) event(event fsnotify.Event) {
 	name := filepath.Clean(event.Name)
 	if id, ok := w.dirs[name]; ok {
@@ -417,7 +417,7 @@ func (w *watcher) event(event fsnotify.Event) {
 			return
 		}
 	}
-	if videoFile(base) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+	if (videoFile(base) || sideFile(base)) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.change(id)
 	}
 }

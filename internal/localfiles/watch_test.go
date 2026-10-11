@@ -165,6 +165,28 @@ func TestWatchIgnoresOtherFiles(t *testing.T) {
 	wt.still()
 }
 
+// An NFO file added, changed or removed beside a video starts a scan, its
+// identifiers matching the video's title.
+func TestWatchScansAfterNFOChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	id := testID(1)
+	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt.start()
+	nfo := filepath.Join(root, "Nosferatu (1922)", "movie.nfo")
+	write(t, nfo, 10)
+	wt.scanned(id)
+	wt.still()
+	write(t, nfo, 20)
+	wt.scanned(id)
+	wt.still()
+	if err := os.Remove(nfo); err != nil {
+		t.Fatal(err)
+	}
+	wt.scanned(id)
+	wt.still()
+}
+
 func TestWatchFolderBack(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "movies")

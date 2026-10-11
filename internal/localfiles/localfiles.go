@@ -13,12 +13,13 @@
 // few seconds after its files stop changing; network shares are not
 // watched. A scan reads only what changed since
 // the last one, by path, size and modification time; each new file is
-// matched to a title by the identifiers its name gives, else by its name
-// and year through the metadata addons' searches, kept only when they find
-// one title. A Blu-ray disc copied as it is, a folder holding BDMV, is one
-// movie of a movies folder, its largest stream, and is left out of a shows
-// folder (see collapseDiscs). An administrator links the files left
-// unmatched to an IMDb identifier by hand.
+// matched to a title by the identifiers its name gives, else by those its
+// NFO file gives (see readNFO), else by its name and year through the
+// metadata addons' searches, kept only when they find one title. A
+// Blu-ray disc copied as it is, a folder holding BDMV, is one movie of a
+// movies folder, its largest stream, and is left out of a shows folder
+// (see collapseDiscs). An administrator links the files left unmatched to
+// an IMDb identifier by hand.
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.
@@ -179,12 +180,12 @@ type NewFolder struct {
 // (CheckedAt is the last attempt, ScannedAt the last scan that could read
 // the folder, Error the code of the last failure: "missing",
 // "unreadable", "not_folder", or for a share "unreachable" or "refused"),
-// whether a scan is under way, its files, those matched to a title and the
-// others, and the links made by hand. Unwatched tells why a folder in the
-// container Polyfin should watch is not: "watch_limit" when the system's
-// limit of watches is reached, "instance_limit" when its limit of watchers
-// or of open files is, "failed" otherwise; empty when it is watched or
-// need not be.
+// whether a scan is under way, its files, those matched to a title, how,
+// and the others, and the links made by hand. Unwatched tells why a
+// folder in the container Polyfin should watch is not: "watch_limit" when
+// the system's limit of watches is reached, "instance_limit" when its
+// limit of watchers or of open files is, "failed" otherwise; empty when it
+// is watched or need not be.
 type Folder struct {
 	Addon       addons.Addon
 	Kind        string
@@ -198,8 +199,16 @@ type Folder struct {
 	Files       int
 	Matched     int
 	Unmatched   int
+	MatchedBy   Matches
 	Links       []Link
 	Unwatched   string
+}
+
+// Matches counts a folder's matched files by how they were matched: by an
+// identifier in their name, by their NFO file, by a search, or by a link
+// made by hand.
+type Matches struct {
+	Name, NFO, Search, Link int
 }
 
 // Link is a unit of a folder linked by hand to an IMDb identifier: a
@@ -322,6 +331,9 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_links WHERE addon_id = $1", id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
+			return err
+		}
 		var checked *time.Time
 		failure := ""
 		if share == "" {
@@ -366,7 +378,29 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 		return Folder{}, err
 	}
 	f.Unmatched = f.Files - f.Matched
-	rows, err := s.db.Query(ctx, "SELECT unit, imdb_id FROM local_links WHERE addon_id = $1 ORDER BY unit", id)
+	rows, err := s.db.Query(ctx, "SELECT matched_by, count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL GROUP BY matched_by", id)
+	if err != nil {
+		return Folder{}, err
+	}
+	var by string
+	var count int
+	_, err = pgx.ForEachRow(rows, []any{&by, &count}, func() error {
+		switch by {
+		case byName:
+			f.MatchedBy.Name = count
+		case byNFO:
+			f.MatchedBy.NFO = count
+		case bySearch:
+			f.MatchedBy.Search = count
+		case byLink:
+			f.MatchedBy.Link = count
+		}
+		return nil
+	})
+	if err != nil {
+		return Folder{}, err
+	}
+	rows, err = s.db.Query(ctx, "SELECT unit, imdb_id FROM local_links WHERE addon_id = $1 ORDER BY unit", id)
 	if err != nil {
 		return Folder{}, err
 	}

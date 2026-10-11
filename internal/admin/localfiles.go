@@ -14,22 +14,32 @@ import (
 // address, the kind of share it is ("smb", "webdav", empty for a path in
 // the container) with its user and whether a password is stored, never
 // the password itself, how its last scan went and whether one is under
-// way, its files, those matched to a title and the others, and the links
-// made by hand.
+// way, its files, those matched to a title, how, and the others, and the
+// links made by hand.
 type folderJSON struct {
-	Kind        string     `json:"kind"`
-	Path        string     `json:"path"`
-	Share       string     `json:"share"`
-	User        string     `json:"user"`
-	PasswordSet bool       `json:"passwordSet"`
-	CheckedAt   *time.Time `json:"checkedAt"`
-	ScannedAt   *time.Time `json:"scannedAt"`
-	Error       string     `json:"error"`
-	Scanning    bool       `json:"scanning"`
-	Files       int        `json:"files"`
-	Matched     int        `json:"matched"`
-	Unmatched   int        `json:"unmatched"`
-	Links       []linkJSON `json:"links"`
+	Kind        string        `json:"kind"`
+	Path        string        `json:"path"`
+	Share       string        `json:"share"`
+	User        string        `json:"user"`
+	PasswordSet bool          `json:"passwordSet"`
+	CheckedAt   *time.Time    `json:"checkedAt"`
+	ScannedAt   *time.Time    `json:"scannedAt"`
+	Error       string        `json:"error"`
+	Scanning    bool          `json:"scanning"`
+	Files       int           `json:"files"`
+	Matched     int           `json:"matched"`
+	MatchedBy   matchedByJSON `json:"matchedBy"`
+	Unmatched   int           `json:"unmatched"`
+	Links       []linkJSON    `json:"links"`
+}
+
+// matchedByJSON counts the matched files by how they were matched: by an
+// identifier in their name, by their NFO file, by a search, or by a link.
+type matchedByJSON struct {
+	Name   int `json:"name"`
+	NFO    int `json:"nfo"`
+	Search int `json:"search"`
+	Link   int `json:"link"`
 }
 
 type linkJSON struct {
@@ -44,6 +54,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	}
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
+		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
 		Unmatched: f.Unmatched, Links: links}
 }
 

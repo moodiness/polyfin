@@ -35,6 +35,7 @@ const (
 // How a file was matched, its matched_by.
 const (
 	byName   = "name"
+	byNFO    = "nfo"
 	bySearch = "search"
 	byLink   = "link"
 )
@@ -104,7 +105,8 @@ func titleKind(kind string) library.Kind {
 
 // unitMatch finds the title of a unit, e being one of its files: the IMDb
 // identifier it is linked to, else the identifier its name gives, else the
-// one title the metadata addons find of its name (and year, when given).
+// one its NFO file gives, else the one title the metadata addons find of
+// its name (and year, when given).
 func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link string, cache *searches) (match, error) {
 	n := e.title
 	if link != "" {
@@ -114,7 +116,14 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 		return s.described(ctx, kind, n.imdb, n, byName), nil
 	}
 	if n.tmdb != "" {
-		return s.tmdbMatch(ctx, kind, n, cache)
+		return s.tmdbMatch(ctx, kind, n, cache, byName)
+	}
+	if tmdb, ok := strings.CutPrefix(e.nfo, "tmdb:"); ok {
+		n.tmdb = tmdb
+		return s.tmdbMatch(ctx, kind, n, cache, byNFO)
+	}
+	if e.nfo != "" {
+		return s.described(ctx, kind, e.nfo, n, byNFO), nil
 	}
 	if n.title == "" {
 		return match{reason: reasonUnreadableName}, nil
@@ -173,10 +182,10 @@ func stremioID(item library.Item) string {
 	return item.StremioID
 }
 
-// tmdbMatch finds the title of a TMDB identifier: the title of its name
-// the metadata addons know under it, else the one they describe under
-// "tmdb:…", by its IMDb identifier when they give one.
-func (s *Service) tmdbMatch(ctx context.Context, kind string, n name, cache *searches) (match, error) {
+// tmdbMatch finds the title of a TMDB identifier, found as by tells: the
+// title of its name the metadata addons know under it, else the one they
+// describe under "tmdb:…", by its IMDb identifier when they give one.
+func (s *Service) tmdbMatch(ctx context.Context, kind string, n name, cache *searches, by string) (match, error) {
 	if n.title != "" {
 		results, err := cache.find(ctx, s.titles, titleKind(kind), n.title)
 		if err != nil && ctx.Err() != nil {
@@ -185,11 +194,11 @@ func (s *Service) tmdbMatch(ctx context.Context, kind string, n name, cache *sea
 		for _, r := range results {
 			if item := r.Item; item.Kind == titleKind(kind) && item.ProviderIDs["Tmdb"] == n.tmdb {
 				return match{stremioID: stremioID(item), imdb: item.ProviderIDs["Imdb"], tmdb: n.tmdb, name: item.Name,
-					poster: item.Images.Primary, year: item.ProductionYear, by: byName}, nil
+					poster: item.Images.Primary, year: item.ProductionYear, by: by}, nil
 			}
 		}
 	}
-	m := s.described(ctx, kind, "tmdb:"+n.tmdb, n, byName)
+	m := s.described(ctx, kind, "tmdb:"+n.tmdb, n, by)
 	m.tmdb = n.tmdb
 	if imdbPattern.MatchString(m.imdb) {
 		m.stremioID = m.imdb
@@ -260,19 +269,22 @@ func (s *Service) matchedUnits(ctx context.Context, id accounts.ID) (map[string]
 }
 
 // unitFiles reads the files of one of a folder's units, as a scan read
-// them.
+// them, with the identifier their NFO file gave.
 func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]entry, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path", folder.Addon.ID, unit)
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, nfo_id FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path",
+		folder.Addon.ID, unit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (entry, error) {
-		var rel string
+		var rel, nfo string
 		var f found
-		if err := row.Scan(&rel, &f.size, &f.modified); err != nil {
+		if err := row.Scan(&rel, &f.size, &f.modified, &nfo); err != nil {
 			return entry{}, err
 		}
-		return readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f), nil
+		e := readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f)
+		e.nfo = nfo
+		return e, nil
 	})
 }
 
@@ -296,7 +308,7 @@ func (s *Service) Link(ctx context.Context, id accounts.ID, path, imdb string) e
 }
 
 // Unlink removes the link of a unit of a folder (see Link): its files are
-// matched again by their name.
+// matched again by their name or their NFO file.
 func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error {
 	folder, unit, err := s.unit(ctx, id, path)
 	if err != nil {

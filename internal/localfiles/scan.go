@@ -52,22 +52,40 @@ func readable(path string) string {
 	return ""
 }
 
-// found is a video file a scan found: its size and modification time.
+// found is a file a scan found: its size and modification time.
 type found struct {
 	size     int64
 	modified time.Time
 }
 
-// walk lists the video files under root, by their path in it, with
-// slashes. It follows no symbolic link to a folder, and none to a file out
-// of root. skipped are the folders it could not read: what was found in
-// them before is not gone.
-func walk(ctx context.Context, root string) (files map[string]found, skipped []string, err error) {
+// listing is what a walk found under a folder, by path in it, with
+// slashes: its video files, and the side files beside them (see sideFile).
+// skipped are the folders it could not read: what was found in them
+// before is not gone. open opens one of the files found for reading.
+type listing struct {
+	files   map[string]found
+	sides   map[string]found
+	skipped []string
+	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
+}
+
+// walk lists the video and side files under root. It follows no symbolic
+// link to a folder, and none to a file out of root.
+func walk(ctx context.Context, root string) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return nil, nil, err
+		return listing{}, err
 	}
-	files = map[string]found{}
+	list := listing{files: map[string]found{}, sides: map[string]found{}, open: func(_ context.Context, rel string) (io.ReadCloser, error) {
+		target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, err
+		}
+		if !within(real, target) {
+			return nil, fs.ErrNotExist
+		}
+		return os.Open(target)
+	}}
 	err = filepath.WalkDir(real, func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -82,12 +100,13 @@ func walk(ctx context.Context, root string) (files map[string]found, skipped []s
 				return err
 			}
 			// A folder it cannot list keeps what was found in it.
-			skipped = append(skipped, rel)
+			list.skipped = append(list.skipped, rel)
 			if d != nil && d.IsDir() {
 				return fs.SkipDir
 			}
 			return nil
 		}
+		var info fs.FileInfo
 		switch {
 		case path == real:
 			return nil
@@ -96,29 +115,33 @@ func walk(ctx context.Context, root string) (files map[string]found, skipped []s
 				return fs.SkipDir
 			}
 			return nil
-		case !videoFile(d.Name()):
+		case !videoFile(d.Name()) && !sideFile(d.Name()):
 			return nil
 		case d.Type()&fs.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
 			if err != nil || !within(real, target) {
 				return nil
 			}
-			info, err := os.Stat(target)
-			if err != nil || !info.Mode().IsRegular() {
+			if info, err = os.Stat(target); err != nil || !info.Mode().IsRegular() {
 				return nil
 			}
-			files[rel] = found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
 		case d.Type().IsRegular():
-			info, err := d.Info()
-			if err != nil {
-				skipped = append(skipped, rel)
+			if info, err = d.Info(); err != nil {
+				list.skipped = append(list.skipped, rel)
 				return nil
 			}
-			files[rel] = found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
+		default:
+			return nil
+		}
+		f := found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
+		if videoFile(d.Name()) {
+			list.files[rel] = f
+		} else {
+			list.sides[rel] = f
 		}
 		return nil
 	})
-	return files, skipped, err
+	return list, err
 }
 
 // within reports whether path is root or under it, both clean.
@@ -241,18 +264,21 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	return nil
 }
 
-// stored is a file a scan found before.
+// stored is a file a scan found before, and the identifier its unit's NFO
+// file gave (see nfoID).
 type stored struct {
 	size     int64
 	modified time.Time
 	unit     string
 	matched  bool
 	reason   string
+	nfo      string
 }
 
 // scan reads a folder: files gone are forgotten, new and changed ones read
 // and matched, and those left unmatched matched again, unless their name
-// could not be read; a unit with files already matched keeps their title.
+// could not be read; a unit with files already matched keeps their title,
+// unless the identifier its NFO file gives changed.
 func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -260,20 +286,19 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	root := folder.Addon.ManifestURL
 	at := s.now()
-	var files map[string]found
-	var skipped []string
+	var list listing
 	failure := ""
 	if folder.Share != "" {
 		var sealed string
 		if err := s.db.QueryRow(ctx, "SELECT share_password FROM local_folders WHERE addon_id = $1", id).Scan(&sealed); err != nil {
 			return err
 		}
-		if files, skipped, failure, err = s.shareFiles(ctx, id, root, folder.User, sealed); err != nil {
+		if list, failure, err = s.shareFiles(ctx, id, root, folder.User, sealed); err != nil {
 			return err
 		}
 	} else if failure = readable(root); failure != "" {
 		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "reason", failure)
-	} else if files, skipped, err = walk(ctx, root); err != nil {
+	} else if list, err = walk(ctx, root); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -285,6 +310,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
 	}
+	files := list.files
 	collapseDiscs(folder.Kind, files)
 	known, err := s.storedFiles(ctx, id)
 	if err != nil {
@@ -292,7 +318,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	var gone []string
 	for rel := range known {
-		if _, ok := files[rel]; !ok && !under(rel, skipped) {
+		if _, ok := files[rel]; !ok && !under(rel, list.skipped) {
 			gone = append(gone, rel)
 		}
 	}
@@ -301,16 +327,29 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 			return err
 		}
 	}
+	rootName := locationName(root)
+	entries := make(map[string]entry, len(files))
+	for rel, f := range files {
+		entries[rel] = readEntry(folder.Kind, rootName, rel, f)
+	}
+	places := unitNFOs(folder.Kind, entries, list.sides)
+	ids, err := s.readNFOs(ctx, id, list, places)
+	if err != nil {
+		return err
+	}
 	// The units to match, with their files to store. A file read as
 	// another unit than before, as each stream of a disc was, is read
-	// again.
-	rootName := locationName(root)
+	// again, as are the files of a unit whose NFO file gives another
+	// identifier, or none any more.
 	units := map[string][]entry{}
-	for rel, f := range files {
+	renewed := map[string]bool{}
+	for rel, e := range entries {
+		e.nfo = ids[places[e.unit]]
 		old, ok := known[rel]
-		e := readEntry(folder.Kind, rootName, rel, f)
 		switch {
-		case !ok || old.size != f.size || !old.modified.Equal(f.modified) || old.unit != e.unit:
+		case ok && old.nfo != e.nfo:
+			renewed[e.unit] = true
+		case !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit:
 		case old.matched || old.reason == reasonUnreadableName:
 			continue
 		}
@@ -335,9 +374,10 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	for unit, entries := range units {
 		group.Go(func() error {
 			// A unit matched already, a show gaining an episode or a file
-			// that changed, keeps its title: its name is the same.
+			// that changed, keeps its title: its name is the same. One
+			// whose NFO file changed is matched again.
 			m, ok := matched[unit]
-			if !ok {
+			if !ok || renewed[unit] {
 				var err error
 				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches); err != nil {
 					return err
@@ -355,7 +395,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 
 // storedFiles reads the files a folder's scans found, by path.
 func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]stored, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason FROM local_files WHERE addon_id = $1", id)
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id FROM local_files WHERE addon_id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +403,7 @@ func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]s
 	for rows.Next() {
 		var rel string
 		var f stored
-		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason); err != nil {
+		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -390,7 +430,8 @@ func (s *Service) links(ctx context.Context, id accounts.ID) (map[string]string,
 	return links, rows.Err()
 }
 
-// entry is a file to store, with what its path tells.
+// entry is a file to store, with what its path tells, and the identifier
+// its unit's NFO file gives (see nfoID).
 type entry struct {
 	path  string
 	file  found
@@ -398,6 +439,7 @@ type entry struct {
 	title name
 	// episode is what an episode's name tells, its season and numbers.
 	episode name
+	nfo     string
 }
 
 // readEntry reads what a file's path tells in a folder of kind, root being
@@ -505,13 +547,13 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			heightValue = &height
 		}
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
-				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
-				matched_by = $18, reason = $19`,
+				matched_by = $18, reason = $19, nfo_id = $20`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
-			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason)
+			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo)
 	}
 	return s.db.SendBatch(ctx, batch).Close()
 }
