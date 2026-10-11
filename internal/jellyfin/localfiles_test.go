@@ -162,9 +162,9 @@ func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
 }
 
 // localDisc is a test server, its ffprobe at ffprobe, with a local folder
-// holding the disc populate puts in the disc folder "Movie (2008)", linked
+// holding the disc populate puts in it, at "Movie (2008)", which is linked
 // to the movie, and the disc's media source in the movie's details.
-func localDisc(t *testing.T, ffprobe string, populate func(dir string)) (playbackSetup, MediaSourceInfo) {
+func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
@@ -184,7 +184,12 @@ func localDisc(t *testing.T, ffprobe string, populate func(dir string)) (playbac
 	if err := folders.Scan(t.Context(), addon.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := folders.Link(t.Context(), addon.ID, "Movie (2008)", "tt1000"); err != nil {
+	unit := "Movie (2008)"
+	if entries, err := os.ReadDir(dir); err == nil && len(entries) == 1 && !entries[0].IsDir() {
+		// A disc image is its own unit.
+		unit = entries[0].Name()
+	}
+	if err := folders.Link(t.Context(), addon.ID, unit, "tt1000"); err != nil {
 		t.Fatal(err)
 	}
 	var movie BaseItemDto
@@ -560,4 +565,62 @@ func TestLocalSubtitleFilesAreTracks(t *testing.T) {
 	if got := subtitle("1", "vtt"); !strings.Contains(got, "Signs") {
 		t.Errorf("the forced file: %q", got)
 	}
+}
+
+// localImage is localDisc with the test image name of package localfiles,
+// dvd or bluray, as the file "Movie (2008).iso".
+func localImage(t *testing.T, ffprobe, name string) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDisc(t, ffprobe, func(at string) {
+		archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", name+".iso.gz"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer archive.Close()
+		unzipped, err := gzip.NewReader(archive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(unzipped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(at+".iso", data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// A disc image plays its main title from the image itself, over HLS only:
+// a DVD image through the dvdvideo demuxer, a Blu-ray image through the
+// bluray protocol, each whole.
+func TestLocalDiscImagesPlay(t *testing.T) {
+	t.Run("dvd", func(t *testing.T) {
+		ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
+		p, local := localImage(t, ffprobe, "dvd")
+		var version BaseItemDto
+		if p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+local.Id, p.token, &version); version.Path != "Movie (2008).iso" || local.SupportsDirectPlay {
+			t.Errorf("the image's version: %q %+v", version.Path, local)
+		}
+		source := playDisc(t, p, local, 8*time.Second)
+		if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video mpeg2video ", "Audio ac3 eng", "Audio ac3 fra", "Subtitle DVDSUB eng"}) {
+			t.Errorf("tracks: %q", got)
+		}
+		frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
+		if seconds := float64(frames) * 1001 / 30000; seconds < 7.5 || seconds > 8.5 || start != 10 {
+			t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+		}
+	})
+	t.Run("bluray", func(t *testing.T) {
+		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
+		p, local := localImage(t, ffprobe, "bluray")
+		source := playDisc(t, p, local, 190*time.Second)
+		if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
+			t.Errorf("tracks: %q", got)
+		}
+		frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
+		if seconds := float64(frames) / 24; seconds < 189 || seconds > 191 || start != 10 {
+			t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+		}
+	})
 }

@@ -176,7 +176,8 @@ type unmatchedJSON struct {
 	Reason string `json:"reason"`
 	// Disc is the kind of the disc the file is read as, "bluray" or "dvd",
 	// unit being the disc's folder, or a Blu-ray disc's title other than
-	// its main one, "<folder>#<playlist>"; null for another file.
+	// its main one, "<folder>#<playlist>", or "bluray_image" or
+	// "dvd_image" for a disc image, its own unit; null for another file.
 	Disc *string `json:"disc"`
 }
 

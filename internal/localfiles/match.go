@@ -402,8 +402,9 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 // Unmatched is a file of a folder no title was matched to: its path, the
 // unit a link would link (see Link), what its name tells, and why. Disc
 // is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
-// its unit the disc's folder, or one of its titles' (see titleUnit);
-// empty for any other file.
+// its unit the disc's folder, or one of its titles' (see titleUnit), or
+// of the disc image it is (DiscDVDImage, DiscBluRayImage); empty for any
+// other file.
 type Unmatched struct {
 	Path   string
 	Unit   string
@@ -428,14 +429,17 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NULL", id).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.db.Query(ctx, `SELECT path, unit, title, coalesce(year, 0), size, reason FROM local_files
-		WHERE addon_id = $1 AND stremio_id IS NULL ORDER BY path LIMIT $2`, id, maxUnmatched)
+	rows, err := s.db.Query(ctx, `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, coalesce(i.kind, '') FROM local_files f
+		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path
+		WHERE f.addon_id = $1 AND f.stremio_id IS NULL ORDER BY f.path LIMIT $2`, id, maxUnmatched)
 	if err != nil {
 		return nil, 0, err
 	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
-		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason)
+		var image string
+		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &image)
+		u.Disc = imageKind(image)
 		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies {
 			if _, number, playlist := discPlaylist(u.Path); u.Unit == discUnit(disc) || playlist && u.Unit == titleUnit(disc, number) {
 				u.Disc = kind

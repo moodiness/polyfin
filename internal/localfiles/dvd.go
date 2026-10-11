@@ -138,18 +138,21 @@ func dvdEntry(root string, parts map[string]found) (rel string, f found, ok bool
 // Input finds what FFmpeg reads the version key names from, its
 // identifier as Streams gives it, through no symbolic link leading out of
 // its folder: a Blu-ray disc's title, its playlist played from the disc's
-// folder with the bluray protocol, or a DVD's main title, read from its
-// VIDEO_TS folder with the dvdvideo demuxer. Only the discs of a movies
-// folder in the container have one.
+// folder with the bluray protocol, a DVD's main title, read from its
+// VIDEO_TS folder with the dvdvideo demuxer, or a disc image's main title,
+// read from the image the same ways. Only the discs of a movies folder in
+// the container have one.
 func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 	id, err := accounts.ParseID(key)
 	if err != nil {
 		return media.Input{}, ErrGone
 	}
-	var root, rel, kind string
-	err = s.db.QueryRow(ctx, `SELECT a.manifest_url, f.path, l.kind
-		FROM local_files f JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.id = $1`, id).
-		Scan(&root, &rel, &kind)
+	var root, rel, kind, image string
+	var title int
+	err = s.db.QueryRow(ctx, `SELECT a.manifest_url, f.path, l.kind, coalesce(i.kind, ''), coalesce(i.title, 0)
+		FROM local_files f JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id
+		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path WHERE f.id = $1`, id).
+		Scan(&root, &rel, &kind, &image, &title)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return media.Input{}, ErrGone
 	}
@@ -170,6 +173,24 @@ func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 		}
 		return dir, nil
 	}
+	switch image {
+	case imageDVD:
+		file, err := folder(rel)
+		if err != nil {
+			return media.Input{}, err
+		}
+		in := media.Input{Format: "dvdvideo", Path: file}
+		if title > 0 {
+			in.Options = []string{"-title", strconv.Itoa(title)}
+		}
+		return in, nil
+	case imageBluRay:
+		file, err := folder(rel)
+		if err != nil {
+			return media.Input{}, err
+		}
+		return media.Input{Options: []string{"-playlist", strconv.Itoa(title)}, Path: "bluray:" + file}, nil
+	}
 	if disc, number, ok := discPlaylist(rel); ok {
 		dir, err := folder(disc)
 		if err != nil {
@@ -184,7 +205,7 @@ func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 	if err != nil {
 		return media.Input{}, err
 	}
-	title, _, err := dvdMain(dir)
+	title, _, err = dvdMain(dir)
 	if err != nil {
 		return media.Input{}, err
 	}
@@ -214,28 +235,37 @@ func dvdMain(dir string) (title, set int, err error) {
 	for _, e := range entries {
 		names[strings.ToUpper(e.Name())] = e.Name()
 	}
-	open := func(name string) (*os.File, error) {
+	var opened []*os.File
+	defer func() {
+		for _, f := range opened {
+			f.Close()
+		}
+	}()
+	return dvdMainOf(func(name string) (io.ReaderAt, error) {
 		real, ok := names[name]
 		if !ok {
 			return nil, fmt.Errorf("%w: no %s", errNotDVD, name)
 		}
-		return os.Open(filepath.Join(dir, real))
-	}
+		f, err := os.Open(filepath.Join(dir, real))
+		if err == nil {
+			opened = append(opened, f)
+		}
+		return f, err
+	})
+}
+
+// dvdMainOf is dvdMain, the DVD's IFO files opened by their name in upper
+// case.
+func dvdMainOf(open func(name string) (io.ReaderAt, error)) (title, set int, err error) {
 	vmg, err := open("VIDEO_TS.IFO")
 	if err != nil {
 		return 0, 0, err
 	}
-	defer vmg.Close()
 	titles, err := readTitles(vmg)
 	if err != nil {
 		return 0, 0, err
 	}
-	sets := map[int]*os.File{}
-	defer func() {
-		for _, f := range sets {
-			f.Close()
-		}
-	}()
+	sets := map[int]io.ReaderAt{}
 	var longest time.Duration
 	for i, t := range titles {
 		vts, ok := sets[t.set]

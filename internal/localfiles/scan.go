@@ -62,10 +62,11 @@ type found struct {
 }
 
 // listing is what a walk found under a folder, by path in it, with
-// slashes: its video files, the files of DVDs (see dvdFile) and Blu-ray
-// discs' playlists (see playlistFile), and the side files beside them (see
-// sideFile). skipped are the folders it could not read: what was found in
-// them before is not gone. open opens one of the files found for reading.
+// slashes: its video files, disc images (see imageFile), the files of DVDs
+// (see dvdFile) and Blu-ray discs' playlists (see playlistFile), and the
+// side files beside them (see sideFile). skipped are the folders it could
+// not read: what was found in them before is not gone. open opens one of
+// the files found for reading.
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
@@ -73,8 +74,8 @@ type listing struct {
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
 }
 
-// walk lists the video files, the files of DVDs, Blu-ray discs' playlists
-// and the side files under root. It follows no symbolic link to a folder,
+// walk lists the video files, disc images, the files of DVDs, Blu-ray
+// discs' playlists and the side files under root. It follows no symbolic link to a folder,
 // and none to a file out of root.
 func walk(ctx context.Context, root string) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
@@ -120,7 +121,7 @@ func walk(ctx context.Context, root string) (listing, error) {
 				return fs.SkipDir
 			}
 			return nil
-		case !videoFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) && !playlistFile(rel):
+		case !videoFile(d.Name()) && !imageFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) && !playlistFile(rel):
 			return nil
 		case d.Type()&fs.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
@@ -320,6 +321,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	collapseDiscs(folder.Kind, root, files)
 	if folder.Share == "" {
 		collapseDVDs(folder.Kind, root, files)
+	}
+	if err := s.collapseImages(ctx, id, folder, root, list); err != nil {
+		return err
 	}
 	known, err := s.storedFiles(ctx, id)
 	if err != nil {

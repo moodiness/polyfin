@@ -112,9 +112,9 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 // subtitle files beside them, which the loopback interface serves (see
 // UseFiles). A disc's entry bears its disc's name as its file name (see
 // discLabel), a title other than the disc's main one its playlist's number
-// too, as in "Box - DISC02 - title 2.m2ts"; a Blu-ray disc's playlist and
-// a DVD have the address of their input as their URL, FFmpeg reading them
-// itself (see Input).
+// too, as in "Box - DISC02 - title 2.m2ts"; a Blu-ray disc's playlist, a
+// DVD and a disc image have the address of their input as their URL,
+// FFmpeg reading them itself (see Input).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -174,6 +174,9 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 			} else if disc == DiscDVD {
 				address = s.inputs + file.String()
 			}
+		}
+		if imageFile(rel) && kind == KindMovies {
+			address = s.inputs + file.String()
 		}
 		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: address,
 			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil

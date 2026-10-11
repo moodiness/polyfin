@@ -45,6 +45,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -90,6 +91,9 @@ type Service struct {
 	// that are not one file have, their key appended (see UseFiles);
 	// empty, folders list no stream.
 	files, inputs string
+	// probe tells whether FFmpeg reads an input (see UseProbe), nil until
+	// set.
+	probe func(ctx context.Context, in media.Input) bool
 	// workers bounds the units matched at once in a scan.
 	workers int
 

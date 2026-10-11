@@ -76,3 +76,15 @@ printf 'MUXOPT --blu-ray --vbr --mplsOffset=1 --m2tsOffset=5\nV_MPEG4/ISO/AVC, "
 tsMuxeR main.meta bluray && tsMuxeR extra.meta bluray
 tar -C bluray -czf bluray.tar.gz BDMV
 ```
+
+`dvd.iso.gz` and `bluray.iso.gz` are images of the two discs above, `dvd`
+with an empty `AUDIO_TS` folder beside `VIDEO_TS`, and the unpacked
+`bluray.tar.gz`, packed: DVD images carry ISO 9660 and UDF file systems,
+as `-dvd-video` writes them, and this Blu-ray image too, as `-udf` does.
+Made with the genisoimage package of Debian trixie:
+
+```sh
+genisoimage -quiet -dvd-video -V MOVIE_DVD -o dvd.iso dvdroot
+genisoimage -quiet -udf -iso-level 3 -V MOVIE_BD -o bluray.iso bdroot
+gzip -9 -n dvd.iso bluray.iso
+```

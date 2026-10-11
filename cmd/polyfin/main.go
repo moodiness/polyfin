@@ -233,8 +233,12 @@ func serve(ctx context.Context) error {
 	}
 	defer player.Close()
 	// The files of local folders are read through the loopback interface,
-	// as the addons' files are; FFmpeg reads their DVDs itself.
+	// as the addons' files are; FFmpeg reads their discs and disc images
+	// itself.
 	folders.UseFiles(player.LocalFiles(folders.Open), player.LocalInputs(folders.Input))
+	// A disc image with a UDF file system only is read through FFmpeg to
+	// tell a Blu-ray disc's.
+	folders.UseProbe(player.ProbesInput)
 	registerLocalFoldersTask(registry, folders)
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
