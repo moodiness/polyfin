@@ -184,7 +184,7 @@ Folders scanned before Polyfin read discs held one file per stream; their next s
 
 ## DVD folders
 
-A DVD copied as it is is a disc folder holding a `VIDEO_TS` folder. `VIDEO_TS.IFO` lists the disc's titles; each title is in a title set, whose video is in `VTS_01_1.VOB`, `VTS_01_2.VOB` and so on for set 1. The movie is the disc's main title; the other titles are extras, trailers and menus' clips.
+A DVD copied as it is is a disc folder holding a `VIDEO_TS` folder. `VIDEO_TS.IFO` lists the disc's titles; each title is in a title set, whose video is in `VTS_01_1.VOB`, `VTS_01_2.VOB` and so on for set 1. The movie is the disc's main title; the other titles are extras, trailers and menus' clips, or the other movies of a disc holding several.
 
 ```
 /media/movies/Night of the Living Dead (1968)/VIDEO_TS/VIDEO_TS.IFO
@@ -192,13 +192,21 @@ A DVD copied as it is is a disc folder holding a `VIDEO_TS` folder. `VIDEO_TS.IF
 /media/movies/Nosferatu (1922)/Disc 1/VIDEO_TS/VTS_02_1.VOB
 ```
 
-In a movies folder, any folder holding a `VIDEO_TS` folder (any case) is a DVD, and is one movie:
+In a movies folder, any folder holding a `VIDEO_TS` folder (any case) is a DVD, and its main title is one movie:
 
 - it plays its main title, the longest the IFO files list, whole, with its audio tracks and chapters, through FFmpeg's DVD reader;
 - its title, its year, a `Disc 1` folder and a DVD at the root of a folder are read as for [Blu-ray discs](#blu-ray-discs);
 - its size is that of the main title's set, its `.VOB` files;
 - a link covers the disc folder; the unmatched files list it as `DVD: …`;
 - through the Jellyfin API, its version is named after the disc folder.
+
+A DVD holding several movies lists each other movie as a title of its own, with the rules of [Blu-ray discs](#blu-ray-discs):
+
+- a title is one the IFO files list that plays at least 20 minutes, and mostly cells the longer titles do not: another cut of a movie, playing the same scenes, counts once;
+- a DVD that would have more than 6 titles keeps its main title only;
+- a title other than the main one is not matched by the disc folder's name: link it by hand, listed in the unmatched files as `DVD: Box/DISC02 · title 2` for title 2, beside the first `.VOB` of its set with its number, such as `VTS_02_1.VOB#2`;
+- its size is that of its set's `.VOB` files;
+- through the Jellyfin API, its version is named after the disc folder and its number, such as `Box - DISC02 - title 2`.
 
 The DVD is read from its folder rather than as one file, so it always plays converted: its video is converted over HLS, cut every few seconds as an MPEG-TS file's is, and its audio is copied when the app takes it. A user who may not have video converted is not offered it.
 
@@ -209,12 +217,12 @@ Limits:
 - A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video.
 - No thumbnails or chapter images are made for a DVD.
 - A DVD's MPEG-2 video is converted even for an app that takes it: the IFO files' time maps tell where each second starts, not where each keyframe does, and FFmpeg's DVD reader starts a seek's timestamps at the time asked rather than at the keyframe it lands on, so copied segments would not join.
-- A DVD holding several movies plays its longest title only, and in a shows folder, DVDs are left out, as discs are.
+- In a shows folder, DVDs are left out, as discs are.
 - The DVD must not be encrypted: Polyfin reads DVDs copied without their copy protection.
 
 ## Disc images
 
-A disc kept as an image is an `.iso` file. In a movies folder, an image of a DVD or of a Blu-ray disc is one movie:
+A disc kept as an image is an `.iso` file. In a movies folder, an image of a DVD or of a Blu-ray disc is one movie, its main title:
 
 ```
 /media/movies/Night of the Living Dead (1968).iso
@@ -226,22 +234,25 @@ A disc kept as an image is an `.iso` file. In a movies folder, an image of a DVD
 - it plays its main title from the image itself: a DVD image its longest title, as a DVD folder does, and a Blu-ray image its longest playlist;
 - through the Jellyfin API, its version is named after the image's file.
 
-A scan reads what each new or changed image is, and keeps the answer while the image's size and modification time stay the same:
+An image holding several movies, as a box set's often does, lists each other movie as a title of its own, chosen as a DVD folder's or a Blu-ray disc folder's are: link it by hand, listed in the unmatched files as `Blu-ray image: Box.iso · title 2` beside the image's path with its number, `Box.iso#2`. Through the Jellyfin API, its version is named after the image and its number, such as `Box - title 2.iso`.
 
-- an image whose ISO 9660 file system holds a `VIDEO_TS` folder is a DVD's, as DVD images are;
-- one whose ISO 9660 file system holds a `BDMV` folder is a Blu-ray disc's;
-- one with a UDF file system only, as many Blu-ray images are, is a Blu-ray disc's when FFmpeg's Blu-ray reader opens it, which it tries once per new or changed image; its main title is then the playlist FFmpeg's reader takes for the longest;
+A scan reads what each new or changed image is, and its titles, and keeps the answer while the image's size and modification time stay the same. It reads the image's ISO 9660 file system, or its UDF one when the image has no ISO 9660 one holding the disc, as many Blu-ray images do (UDF 1.02 to 2.60, a UDF 2.50 metadata partition included):
+
+- an image holding a `VIDEO_TS` folder is a DVD's, as DVD images are;
+- one holding a `BDMV` folder is a Blu-ray disc's; when its playlists cannot be read, its main title is the playlist FFmpeg's reader takes for the longest;
+- one whose UDF file system Polyfin does not read, as images of rewritable and write-once media have (a sparable or virtual partition, blocks other than 2,048 bytes), is a Blu-ray disc's when FFmpeg's Blu-ray reader opens it, which it tries once per new or changed image: as before Polyfin read UDF, it is one movie, the playlist FFmpeg's reader takes for the longest, and it plays converted;
 - any other image, such as a data disc's, is left out.
 
-An image plays as the disc it holds does (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)): a Blu-ray image's video is copied when the app takes its codec, its keyframes read through the image's ISO 9660 file system, and a DVD image's video is converted.
+An image plays as the disc it holds does (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)): a Blu-ray image's video is copied when the app takes its codec, its keyframes read through the image's file system, and a DVD image's video is converted.
+
+Images a scan read before Polyfin listed their other movies, and UDF-only images, are read again at the next scan; their main titles keep their links.
 
 Limits:
 
 - Images on network shares are left out, as FFmpeg reads an image from a path, and so are images in a shows folder.
 - There is no direct play and no download, and no thumbnails or chapter images are made for an image.
-- A Blu-ray image is one movie, its main title: the other movies of a box set's image are not listed, as they are for a disc folder. Extract the image to a folder to list them.
 - A Blu-ray image's main title must last at least 3 minutes, as FFmpeg's Blu-ray reader requires.
-- A Blu-ray image with a UDF file system only always plays converted: Polyfin reads its clips' information through ISO 9660 only.
+- An image whose UDF file system Polyfin does not read (see above) lists its main title only, and plays it converted.
 - The image's disc must not be encrypted, and a DVD image's subtitles are pictures, as a DVD folder's are.
 
 ## Matching
@@ -384,11 +395,11 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address |
 | `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
-| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, and `null` for other files |
+| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path |
 | `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. A failed search answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
 An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder that cannot be watched is a problem of its own (`code` `folder_unwatched`): in the container, its `failure` is `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`; for a share, which carries `share`, it is `unreachable`, `refused` or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
-Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, and its media source plays as a DVD's does. A share's files are served the same way.
+Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A share's files are served the same way.
