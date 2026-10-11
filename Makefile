@@ -15,7 +15,9 @@ build: web
 dev: web
 	$(GO) run ./cmd/polyfin serve
 
-# Database tests run only when POLYFIN_TEST_DATABASE_URL is set.
+# Database tests run only when POLYFIN_TEST_DATABASE_URL is set. Under the
+# race detector, the jellyfin package's tests, which play media through
+# FFmpeg, take most of go test's default 10 minutes: they get 20.
 check: web
 	$(NPM) --prefix web run format:check
 	@unformatted="$$(gofmt -l cmd internal web/*.go)"; \
@@ -23,7 +25,7 @@ check: web
 		echo "gofmt needed:"; printf '%s\n' "$$unformatted"; exit 1; \
 	fi
 	$(GO) vet ./...
-	$(GO) test -race ./...
+	$(GO) test -race -timeout 20m ./...
 
 # An empty env file keeps a developer's private .env out of the validation.
 compose-check:
