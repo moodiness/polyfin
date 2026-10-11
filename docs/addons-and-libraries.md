@@ -151,7 +151,7 @@ An addon installed without catalog rows of its own gets "My music" enabled as it
 
 ### Lyrics
 
-Addons give no lyrics. With **Song lyrics from LRCLIB** on, Polyfin finds them on [LRCLIB](https://lrclib.net), a free and open lyrics database, and apps show them:
+Addons give no lyrics. With **Song lyrics from LRCLIB** on, Polyfin finds them on [LRCLIB](https://lrclib.net), a free and open lyrics database, and apps show them. A song of a [local music folder](local-folders.md#lyrics) with a `.lrc` file or a lyrics tag has those instead, whatever this setting:
 
 - synced line by line when LRCLIB has them, so that apps follow the song;
 - else as plain text.
@@ -174,7 +174,7 @@ Apps show their lyrics button once a song's lyrics are known. The web player tak
 
 **Compared with Jellyfin:**
 
-- Jellyfin reads lyrics from the `.lrc` and `.txt` files next to the songs, or downloads them with a lyrics plugin. Polyfin asks LRCLIB itself, without a plugin.
+- Jellyfin reads lyrics from the `.lrc` and `.txt` files next to the songs, or downloads them with a lyrics plugin. Polyfin reads the `.lrc` files and lyrics tags of local music folders, and asks LRCLIB itself, without a plugin.
 - The lyrics search, in the web player's lyrics editor, finds nothing, as on a Jellyfin server without a lyrics plugin.
 - Lines are synced, not words: the word timing of enhanced LRC is left out.
 

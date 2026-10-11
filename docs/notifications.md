@@ -323,7 +323,7 @@ The weekly summary was added within version 1: its `summary` object is new, and 
 | `episodes` | array | The first 20 of them, by series, season and number: the episode's `id` and `name`, its series' `seriesId` and `seriesName`, its `season` and `number`. |
 | `users` | array | For the server: the users who joined through an invite link, with `id`, `name`, `joinedAt`, and `invitedBy`, the administrator who created the invite (`id`, `name`), null once deleted. Empty for a user. |
 | `addedFiles` | number | For the server: how many files the scans of local folders first found that week. 0 for a user. |
-| `added` | array | For the server: the titles of these files, those with the most files first, ten at most: the `name` of the title they were matched to, or else the name the files tell, their folder's `kind`, `movie` or `show`, and their number of `files`. Empty for a user. |
+| `added` | array | For the server: the titles of these files, those with the most files first, ten at most: the `name` of the title they were matched to, or else the name the files tell, or for a music folder's tracks the title of their album; their `kind`, `movie`, `show` or `album`; and their number of `files` (an album's tracks). Empty for a user. |
 | `problems` | array | For the server: the problems **System › Health** found that week, as they were told: `key`, `severity`, `text`, and `foundAt`. Empty for a user. |
 
 ## Messages for each kind

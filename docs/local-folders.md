@@ -271,7 +271,7 @@ Folders mounted in the container are also watched for changes, with inotify on L
 - Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, disc images, NFO files, subtitle files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, disc images, NFO files, subtitle files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan. In a music folder, its subfolders named `Extras` or `Other` are watched, as its scans read them, and its audio files, artwork, lyrics files and playlists start a scan.
 
 Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
 
@@ -302,9 +302,9 @@ A folder or share added as holding **Music** is a music library of its own. Its 
 
 ### Files and tags
 
-A scan lists the files ending in `.mp3`, `.flac`, `.m4a`, `.m4b`, `.alac`, `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.aif`, `.aiff`, `.wma`, `.ape`, `.wv` and `.dsf`. Hidden folders are left out; a music folder's subfolders named `Extras` or `Other` are read, as an album may bear such a name.
+A scan lists the files ending in `.mp3`, `.flac`, `.m4a`, `.m4b`, `.alac`, `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.aif`, `.aiff`, `.wma`, `.ape`, `.wv` and `.dsf`, and beside them the artwork images, the lyrics files (`.lrc`) and the playlists (`.m3u` and `.m3u8`). Hidden folders are left out; a music folder's subfolders named `Extras` or `Other` are read, as an album may bear such a name.
 
-Each new or changed file is read with ffprobe: its title, artist, album, album artist, track and disc numbers, year (from its date), genres (several separated by `;`), whether it is part of a compilation, its length, its audio and whether it embeds a cover. Tags of MP3 (ID3), FLAC, Ogg and Opus (Vorbis comments), MP4 and M4A, WMA and WAV are read as ffprobe reads them.
+Each new or changed file is read with ffprobe: its title, artist, artists, album, album artist, track and disc numbers, year (from its date), genres (several separated by `;`), whether it is part of a compilation, its lyrics, its length, its audio and whether it embeds a cover. Tags of MP3 (ID3), FLAC, Ogg and Opus (Vorbis comments), MP4 and M4A, WMA and WAV are read as ffprobe reads them.
 
 A file without some tags takes them from its path, as in `Artist/Album/01 Title.flac`:
 
@@ -318,13 +318,23 @@ On a share, ffprobe and FFmpeg read each new or changed file through Polyfin, at
 
 ### Albums and artists
 
-- Tracks of the same album name and album artist, in any letter case, are one album. A track's album artist is its album artist tag, else "Various Artists" for a compilation (the compilation tag set to 1), else its artist.
+- Tracks of the same album name and album artist, in any letter case, are one album. A track's album artist is its album artist tag, else "Various Artists" for a compilation (the compilation tag set to 1), else its artist tag as written.
+- A track's artists are the names of its artists tag (a tag given several times, as Vorbis comments allow), else of its artist tag, separated by `;`: `Ann; Ben` gives Ann and Ben, each with their page, the song listed under each. Its artist tag is kept as written, for search. An album's artists are its album artist tag's, split the same way.
 - An album's tracks are in disc, then track order, then by path. Its title and artist are those of its first track; its year, the latest of its tracks'; its genres, all of theirs.
 - Albums group into artists by album artist. An artist's page lists their albums and their songs, including those on other artists' albums, at most 100.
-- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg` or `.png`, any letter case) beside its first track. An artist's artwork is that of their first album.
+- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg` or `.png`, any letter case) beside its first track.
+- An artist's picture is `artist`, `folder` or `photo` (`.jpg`, `.jpeg` or `.png`, any letter case) in their folder: the folder holding the folders of their albums, and of no album of another artist. Without one, it is the artwork of their first album. The artists views show it.
 - Search finds songs by title, artist and album, albums by title and artist, and artists by name; every word must be found, in any letter case.
 
-The folder's figures count its tracks, albums and artists, and the tracks left out.
+The folder's figures count its tracks, albums and album artists, and the tracks left out.
+
+### Playlists
+
+The `.m3u` and `.m3u8` files of the folder are the playlists of its library: its Playlists view lists them with the user's own playlists, by name. A playlist's title is its `#PLAYLIST:` line, else its file's name. Its lines name tracks by paths relative to the playlist's folder, or absolute within the folder's path in the container (as paths or `file:` addresses), with slashes or backslashes, in any letter case; its songs are those, in order. A line that names no track of the folder, or leads out of it, is left out; a playlist naming none is not listed. Search finds playlists by title.
+
+### Lyrics
+
+A song's lyrics are those of the `.lrc` file of the same name beside it, else those of its lyrics tag, synced line by line when timed, plain otherwise. They come before LRCLIB's: Polyfin never asks LRCLIB about a song with lyrics of its own, and serves them with **Song lyrics from LRCLIB** off too. Other songs have LRCLIB's (see [Lyrics](addons-and-libraries.md#lyrics)).
 
 ### Playback
 
@@ -332,15 +342,17 @@ Songs play from the folder or the share through Polyfin, as other local files do
 
 ### Rescans
 
-A rescan reads again the files new or changed by size and modification time, forgets the files gone, and chooses again the artwork of the albums whose first track or image changed. Watching notices audio files and artwork images, as it notices videos.
+A rescan reads again the files new or changed by size and modification time, forgets the files gone, and chooses again the artwork of the albums and artists whose first track or image changed. Lyrics files and playlists are read again when they change. Watching notices audio files, artwork, lyrics files and playlists, as it notices videos.
+
+The tracks a scan first finds count among the files added of the [weekly summary](notifications.md#weekly-summary), which names them by album.
 
 ### Limits
 
-- A folder lists no playlists: its library has albums, artists and songs. Apps that open a playlist of a music folder find none.
-- A track's artist tag is read as one name, as written: `A feat. B` is an artist of that name.
-- Lyrics come from LRCLIB, as for an addon's songs (see [Lyrics](addons-and-libraries.md#lyrics)); lyrics files beside the tracks and lyrics tags are not read.
-- A music folder's tracks are not counted in the weekly summary of files added.
-- One image is read per album, and none per artist: artist pictures in the folder are not read.
+- A folder's playlists are read only: apps cannot add songs to them, reorder or delete them. On a share, a playlist's absolute paths name nothing; relative paths do.
+- Artist names split at `;` only: `A feat. B`, `A & B` or `A/B` is one artist unless an artists tag names them. Without an album artist tag, an album's artist is the artist tag as written, one name.
+- Apps list a song's artists one by one, as Jellyfin does, rather than its artist tag as written.
+- The artists views list album artists; an artist credited only on songs is reached from those songs and from search.
+- Lyrics are read from `.lrc` files and tags, not from `.txt` files.
 
 ## Compared with Jellyfin
 
@@ -349,7 +361,7 @@ A rescan reads again the files new or changed by size and modification time, for
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
 - Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read for movies and shows.
-- Both read music folders with their tags. Polyfin groups albums by album artist and name rather than by folder, and offers no playlists from the folder.
+- Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
 
 ## For app developers
 
