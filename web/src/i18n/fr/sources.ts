@@ -250,7 +250,7 @@ const sources: typeof en = {
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',
     unmatchedTitle: 'Fichiers non associés',
     unmatchedHelp:
-      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray, tout le disque.',
+      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque.',
     noUnmatched: 'Chaque fichier est associé à un titre.',
     shownOf: (shown: string, total: string) => `${shown} affichés sur ${total}.`,
     reasons: {
@@ -262,7 +262,10 @@ const sources: typeof en = {
     } as Record<string, string>,
     read: (title: string) => `Lu comme « ${title} »`,
     showFolder: (unit: string) => `Dossier de la série : ${unit}`,
-    disc: (unit: string) => `Disque Blu-ray : ${unit}`,
+    disc: {
+      bluray: (unit: string) => `Disque Blu-ray : ${unit}`,
+      dvd: (unit: string) => `DVD : ${unit}`,
+    },
     imdbId: 'Identifiant IMDb',
     imdbPlaceholder: 'tt0000000',
     link: 'Associer',

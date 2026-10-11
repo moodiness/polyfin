@@ -464,7 +464,7 @@ function UnmatchedRow({
             text.reasons[file.reason] ?? file.reason,
             title !== '' ? text.read(title) : '',
             file.disc
-              ? text.disc(unitName(file.unit, folder))
+              ? text.disc[file.disc](unitName(file.unit, folder))
               : file.unit !== file.path
                 ? text.showFolder(file.unit)
                 : '',
@@ -500,7 +500,7 @@ function UnmatchedRow({
 }
 
 /**
- * A unit as the admin app names it. "." is a Blu-ray disc at the folder's root: it bears the
+ * A unit as the admin app names it. "." is a disc at the folder's root: it bears the
  * folder's own name, the last element of its path or share address, as the scan reads its title.
  */
 function unitName(unit: string, folder: LocalFolder): string {

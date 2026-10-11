@@ -501,14 +501,14 @@ export type LocalFolder = {
 /** A file of a local folder no title was matched to, with why. */
 export type UnmatchedFile = {
   path: string
-  /** What a link would link: the file, its show's folder, or its Blu-ray disc's folder. */
+  /** What a link would link: the file, its show's folder, or its disc's folder (Blu-ray disc or DVD). */
   unit: string
   title: string
   year: number | null
   size: number
   reason: 'unreadable_name' | 'not_found' | 'ambiguous' | 'other_year' | 'search_failed'
-  /** Whether the file is the stream a Blu-ray disc is read as, its unit the disc's folder. */
-  disc: boolean
+  /** The kind of disc the file is read as, its unit the disc's folder; null for another file. */
+  disc: 'bluray' | 'dvd' | null
 }
 
 export type NewLocalFolder = {
