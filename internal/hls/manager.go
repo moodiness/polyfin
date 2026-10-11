@@ -136,8 +136,11 @@ type VideoEncoding struct {
 	// maps.
 	ToneMapOnCPU bool
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
-	// video, nil for none.
-	Burn *int
+	// video, nil for none; BurnFile, the address of an image subtitle file
+	// burned in instead, a PGS file or a VobSub pair's .idx file, read
+	// beside the source (see burnGraph).
+	Burn     *int
+	BurnFile string
 	// Hardware is the GPU decoding and encoding the video, nil for none.
 	Hardware *Hardware
 	// Preset trades the encoder's speed for quality: one of x264's preset
@@ -238,25 +241,47 @@ func (v *VideoEncoding) cpuCurve() string {
 	return v.ToneMapCurve
 }
 
-// burnGraph is the filter graph burning subtitle stream burn into video
-// stream video, as output [video]. The subtitle's canvas, the size of the
-// video it was made for, is scaled to the width of the converted video
-// keeping its shape, and laid at the bottom: a video cropped since keeps
-// the subtitles near its bottom edge. It is laid after the conversion to
-// SDR, which would dim its colors, and in memory, before a GPU encoder
-// takes the frames: Intel's tone mapped frames come down to memory for it.
+// Burns reports whether subtitles are burned into the video.
+func (v *VideoEncoding) Burns() bool {
+	return v.Burn != nil || v.BurnFile != ""
+}
+
+// burnLead is how long before a job's start the pictures of a subtitle
+// file burned in are kept, so that one still shown at its start is.
+const burnLead = 10 * time.Second
+
+// burnGraph is the filter graph burning the subtitles into video stream
+// video, as output [video], for a job starting at from. The subtitle's
+// canvas, the size of the video it was made for, is scaled to the width
+// of the converted video keeping its shape, and laid at the bottom: a
+// video cropped since keeps the subtitles near its bottom edge. It is laid
+// after the conversion to SDR, which would dim its colors, and in memory,
+// before a GPU encoder takes the frames: Intel's tone mapped frames come
+// down to memory for it.
 //
-// FFmpeg repeats the canvas for every packet read from the source, which
-// is over a thousand a second with TrueHD audio: the canvas is first
-// brought to the video's frame rate, or scaling the repeats makes the
-// conversion several times slower.
-func (v *VideoEncoding) burnGraph(video, burn int) string {
+// FFmpeg repeats the canvas of a stream of the source for every packet
+// read from the source, which is over a thousand a second with TrueHD
+// audio: the canvas is first brought to the video's frame rate, or scaling
+// the repeats makes the conversion several times slower. A subtitle file,
+// the second input, repeats none, but is read from its start, as FFmpeg
+// does not seek in PGS files reliably: the pictures shown before the job's
+// start but those of its last burnLead are left out before scaling.
+func (v *VideoEncoding) burnGraph(video int, from time.Duration) string {
 	converted := v.convert() + ",format=yuv420p"
 	if v.pipeline() == throughVAAPI {
 		converted = v.vaapiToneMapping() + ",hwdownload,format=nv12"
 	}
+	var subtitle string
+	switch {
+	case v.BurnFile == "":
+		subtitle = "[0:" + strconv.Itoa(*v.Burn) + "]fps=" + strconv.FormatFloat(v.FrameRate, 'f', -1, 64) + ","
+	case from > 0:
+		subtitle = "[1:0]select=gte(t\\," + strconv.FormatFloat((from-burnLead).Seconds(), 'f', 3, 64) + "),"
+	default:
+		subtitle = "[1:0]"
+	}
 	return "[0:" + strconv.Itoa(video) + "]" + converted + "[converted];" +
-		"[0:" + strconv.Itoa(burn) + "]fps=" + strconv.FormatFloat(v.FrameRate, 'f', -1, 64) + ",scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
+		subtitle + "scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
 		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + "[video]"
 }
 
@@ -306,7 +331,7 @@ func (v *VideoEncoding) encoderArgs(keyframes string) []string {
 	}
 	args = append(args, "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
 		"-force_key_frames", keyframes)
-	if v.Burn == nil {
+	if !v.Burns() {
 		args = append(args, "-vf", v.filters())
 	}
 	profile := "main"
@@ -1165,13 +1190,16 @@ func writeFile(path string, data []byte) error {
 // keep the source's timestamps, shifted by timestampOffset, so that those
 // of different jobs follow each other. Extracted subtitles keep the
 // source's own. FFmpeg reports its progress on the pipe after the
-// subtitles'.
+// subtitles'. A subtitle file burned in is the second input, read whole
+// (see burnGraph).
 func (r Remux) args(n int) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:" + strconv.Itoa(3+len(r.Subtitles))}
+	var from time.Duration
 	if n > 0 {
+		from = r.Plan.seekTime(n)
 		// Converted audio starts where the demuxer does, on the keyframe,
 		// as copied streams do, instead of at the time asked.
-		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(r.Plan.seekTime(n).Seconds(), 'f', 6, 64))
+		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 6, 64))
 		// The version was analyzed already: FFmpeg probes the head of the
 		// file again before it seeks, and 2 MB of it, which the analysis
 		// left in the source cache, describe the streams it copies or
@@ -1188,8 +1216,11 @@ func (r Remux) args(n int) []string {
 	args = append(args, r.InputOptions...)
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)
-	if r.Encode != nil && r.Encode.Burn != nil {
-		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, *r.Encode.Burn))
+	if r.Encode != nil && r.Encode.Burns() {
+		if r.Encode.BurnFile != "" {
+			args = append(args, "-i", r.Encode.BurnFile)
+		}
+		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from))
 		video = "[video]"
 	}
 	args = append(args, "-map", video)

@@ -23,7 +23,8 @@ type ExternalSubtitle struct {
 	Language string
 	// Title is optional.
 	Title string
-	// Codec is "subrip", "webvtt", "ass" or "ssa".
+	// Codec is "subrip", "webvtt", "ass" or "ssa", or for a picture file
+	// beside a local file "PGSSUB" or "DVDSUB".
 	Codec string
 	// Forced and HearingImpaired are the flags a user gave a file they
 	// added, or a local file's name gives, with Default.
@@ -174,7 +175,7 @@ func appendExternals(streams []MediaStream, externals []ExternalSubtitle, w *wor
 			IsForced:               external.Forced,
 			IsDefault:              external.Default,
 			IsHearingImpaired:      external.HearingImpaired,
-			IsTextSubtitleStream:   true,
+			IsTextSubtitleStream:   !imageSubtitle(external.Codec),
 			SupportsExternalStream: true,
 		}
 		finishSubtitle(&stream, w)

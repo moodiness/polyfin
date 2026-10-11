@@ -5,6 +5,8 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -101,6 +103,26 @@ func TestDefaultSettingsKeepTheArguments(t *testing.T) {
 	for _, c := range cases {
 		if got := c.args(); !reflect.DeepEqual(got, want[c.name]) {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, want[c.name])
+		}
+	}
+}
+
+// A subtitle file burned in is a second input, read from its start: past
+// the first segment, only the main input seeks, and the pictures shown
+// before burnLead ahead of the seek are left out before scaling.
+func TestSubtitleFileIsASecondInput(t *testing.T) {
+	plan := NewPlan([]time.Duration{0, 6 * time.Second, 12 * time.Second}, 18*time.Second)
+	encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24,
+		BurnFile: "http://127.0.0.1:1/local/key/1.sup"}
+	from := strconv.FormatFloat((plan.seekTime(2) - burnLead).Seconds(), 'f', 3, 64)
+	for n, want := range map[int]string{0: "[1:0]scale=1280:-2[subtitle]", 2: `[1:0]select=gte(t\,` + from + `),scale=1280:-2[subtitle]`} {
+		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: TS, Plan: plan, Encode: encoding}.args(n)
+		main := slices.Index(args, "http://127.0.0.1:1/a.mkv")
+		if main < 0 || !slices.Equal(args[main+1:main+3], []string{"-i", encoding.BurnFile}) || slices.Contains(args[main+1:], "-ss") {
+			t.Errorf("segment %d: inputs %q", n, args)
+		}
+		if graph := args[slices.Index(args, "-filter_complex")+1]; !strings.Contains(graph, ";"+want+";") || strings.Contains(graph, "fps=") {
+			t.Errorf("segment %d: graph %q", n, graph)
 		}
 	}
 }

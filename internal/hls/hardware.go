@@ -496,7 +496,7 @@ func (v *VideoEncoding) pipeline() pipeline {
 		return throughMemory
 	case v.toneMapsOnGPU() && hw.Method == "vaapi":
 		return throughVAAPI
-	case v.DecodeOnCPU || v.Burn != nil:
+	case v.DecodeOnCPU || v.Burns():
 		return throughMemory
 	case v.toneMapsOnGPU():
 		if hw.VulkanDecoding && !v.Deinterlace {

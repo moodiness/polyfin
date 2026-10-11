@@ -192,7 +192,7 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		if running.Video != nil {
 			v := running.Video
 			result.Video = &videoConversionJSON{Encoder: v.Encoder, Width: v.Width, Height: v.Height, Bitrate: v.Bitrate,
-				ToneMap: v.ToneMap, Burn: v.Burn != nil}
+				ToneMap: v.ToneMap, Burn: v.Burns()}
 			if v.Hardware != nil {
 				result.Video.Hardware = v.Hardware.Method
 			}

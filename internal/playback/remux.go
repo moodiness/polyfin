@@ -42,8 +42,10 @@ type Remux struct {
 	ConvertVideo *VideoConversion
 	ConvertAudio *AudioConversion
 	// Burn is the FFmpeg index of the image subtitle burned into converted
-	// video, nil for none.
-	Burn *int
+	// video, nil for none; BurnFile, the address of an image subtitle file
+	// burned in instead, which FFmpeg reads beside the version.
+	Burn     *int
+	BurnFile string
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -504,9 +506,9 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 			rate *= 2
 		}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
-			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, Hardware: c.Hardware,
-			Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat,
-			Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile,
+			Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
+			ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
 		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter

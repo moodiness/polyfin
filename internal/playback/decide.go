@@ -566,6 +566,10 @@ func singleContainer(source string, matched *DirectPlayProfile, profiles []Direc
 //   - as a file or in the HLS playlist (HLS only when transcoding), in its
 //     own format, then converted to another text format;
 //   - otherwise burned into the video.
+//
+// A VobSub file is a pair, an .idx and a .sub file, which no app takes as
+// one file: Jellyfin 12.2 gives VobSub as a file only extracted as
+// Matroska (.mks), and burns such a pair in.
 func subtitleDelivery(profiles []SubtitleProfile, stream *MediaStream, transcode bool, container, protocol string) SubtitleDelivery {
 	language := stream.Language
 	if language == "" {
@@ -590,7 +594,7 @@ func subtitleDelivery(profiles []SubtitleProfile, stream *MediaStream, transcode
 		for i := range profiles {
 			p := &profiles[i]
 			switch {
-			case p.Method == "External" && stream.IsTextSubtitleStream == textSubtitle(p.Format):
+			case p.Method == "External" && stream.IsTextSubtitleStream == textSubtitle(p.Format) && !(stream.IsExternal && strings.EqualFold(stream.Codec, "DVDSUB")):
 			case p.Method == "Hls" && transcode && stream.IsTextSubtitleStream:
 			default:
 				continue
