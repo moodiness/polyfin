@@ -302,6 +302,8 @@ type settingsJSON struct {
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
+	// KnownProxies lists addresses and networks, such as 172.18.0.0/16.
+	KnownProxies *[]string `json:"knownProxies"`
 	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, MaxConversions
 	// and MaxConversionHeight keep their current values when a PUT leaves
 	// them out.
@@ -484,6 +486,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ServerImports:         &settings.ServerImports,
 		LoginAttempts:         &settings.LoginAttempts,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
+		KnownProxies:          new(accounts.FormatKnownProxies(settings.KnownProxies)),
 		DetailedLog:           &settings.DetailedLog,
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
@@ -971,6 +974,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if len(body.SegmentOrder) > 0 {
 		segmentOrder = body.SegmentOrder
 	}
+	knownProxies := current.KnownProxies
+	if body.KnownProxies != nil {
+		parsed, err := accounts.ParseKnownProxies(*body.KnownProxies)
+		if accountError(w, err) {
+			return
+		}
+		knownProxies = parsed
+	}
 	next := accounts.Settings{
 		ServerName:          body.ServerName,
 		QuickConnectEnabled: body.QuickConnectEnabled,
@@ -997,6 +1008,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ServerImports:         valueOr(body.ServerImports, current.ServerImports),
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
+		KnownProxies:          knownProxies,
 		DetailedLog:           valueOr(body.DetailedLog, current.DetailedLog),
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),

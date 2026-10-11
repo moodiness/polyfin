@@ -1,6 +1,9 @@
 package accounts
 
-import "slices"
+import (
+	"net/netip"
+	"slices"
+)
 
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
 // script on a new server: they load the LumaaGlaass theme from jsDelivr at
@@ -60,6 +63,7 @@ func DefaultSettings() Settings {
 		ServerImports:      true,
 		LoginAttempts:      DefaultLoginAttempts,
 		InactiveDeviceDays: DefaultInactiveDeviceDays,
+		KnownProxies:       []netip.Prefix{},
 		DetailedLog:        false,
 
 		AnalysisTimeout:     DefaultAnalysisTimeout,
@@ -139,9 +143,9 @@ func DefaultSettings() Settings {
 type SettingBounds struct {
 	// Default is the setting's value on a new server.
 	Default any
-	// Min and Max bound a number, or the length of a text: in characters
-	// for the server name, in bytes for the others. Bounded tells whether
-	// they apply.
+	// Min and Max bound a number, the length of a text, in characters for
+	// the server name and in bytes for the others, or the number of
+	// entries of a list of addresses. Bounded tells whether they apply.
 	Min, Max float64
 	Bounded  bool
 	// Zero tells that 0 is accepted too, below Min, turning the setting
@@ -195,6 +199,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"serverImports":      is(d.ServerImports),
 		"loginAttempts":      orZero(MinLoginAttempts, MaxLoginAttempts, d.LoginAttempts),
 		"inactiveDeviceDays": between(0, MaxInactiveDeviceDays, d.InactiveDeviceDays),
+		"knownProxies":       between(0, MaxKnownProxies, d.KnownProxies),
 		"detailedLog":        is(d.DetailedLog),
 
 		"analysisTimeout":     between(MinAnalysisTimeout, MaxAnalysisTimeout, d.AnalysisTimeout),

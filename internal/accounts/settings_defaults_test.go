@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"errors"
+	"net/netip"
 	"reflect"
 	"slices"
 	"strings"
@@ -125,6 +126,18 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				if err := try(name, strings.Repeat(letter, int(b.Min)-1)); err == nil {
 					t.Errorf("%s: %v long accepted", name, b.Min-1)
 				}
+			}
+		case b.Bounded && kind == reflect.Slice:
+			// A list of addresses holds up to Max of them.
+			networks := make([]netip.Prefix, int(b.Max)+1)
+			for i := range networks {
+				networks[i] = netip.PrefixFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 32)
+			}
+			if err := try(name, networks[:int(b.Max)]); err != nil {
+				t.Errorf("%s: %v entries refused: %v", name, b.Max, err)
+			}
+			if err := try(name, networks); err == nil {
+				t.Errorf("%s: %v entries accepted", name, b.Max+1)
 			}
 		case b.Choices != nil && kind != reflect.Slice:
 			for _, choice := range b.Choices {

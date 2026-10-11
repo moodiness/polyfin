@@ -374,6 +374,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidSegmentSourcesOff, http.StatusBadRequest, "invalid_segment_sources_off"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
 		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
+		{accounts.ErrInvalidKnownProxies, http.StatusBadRequest, "invalid_known_proxies"},
 		{accounts.ErrInvalidAnalysisTimeout, http.StatusBadRequest, "invalid_analysis_timeout"},
 		{accounts.ErrInvalidVersionAttempts, http.StatusBadRequest, "invalid_version_attempts"},
 		{accounts.ErrInvalidMaxConversions, http.StatusBadRequest, "invalid_max_conversions"},

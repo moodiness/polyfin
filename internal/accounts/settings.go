@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -94,6 +95,77 @@ const (
 	MaxInactiveDeviceDays     = 365
 	DefaultInactiveDeviceDays = 0
 )
+
+// ErrInvalidKnownProxies reports a Settings.KnownProxies entry that is not
+// an IP address nor a network, or more than MaxKnownProxies entries.
+var ErrInvalidKnownProxies = errors.New("invalid known proxies")
+
+// MaxKnownProxies is how many addresses and networks Settings.KnownProxies
+// holds at most.
+const MaxKnownProxies = 64
+
+// ParseKnownProxies reads the entries of Known proxies: IPv4 and IPv6
+// addresses, and networks in CIDR notation, such as 172.18.0.0/16 (see
+// canonicalProxies).
+func ParseKnownProxies(entries []string) ([]netip.Prefix, error) {
+	if len(entries) > MaxKnownProxies {
+		return nil, ErrInvalidKnownProxies
+	}
+	proxies := make([]netip.Prefix, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		network, err := netip.ParsePrefix(entry)
+		if err != nil {
+			address, err := netip.ParseAddr(entry)
+			if err != nil || address.Zone() != "" {
+				return nil, ErrInvalidKnownProxies
+			}
+			network = netip.PrefixFrom(address, address.BitLen())
+		}
+		proxies = append(proxies, network)
+	}
+	return canonicalProxies(proxies)
+}
+
+// FormatKnownProxies writes known proxies as ParseKnownProxies reads them,
+// a single address without its prefix length.
+func FormatKnownProxies(proxies []netip.Prefix) []string {
+	entries := make([]string, len(proxies))
+	for i, network := range proxies {
+		if network.IsSingleIP() {
+			entries[i] = network.Addr().String()
+		} else {
+			entries[i] = network.String()
+		}
+	}
+	return entries
+}
+
+// canonicalProxies checks known proxies and returns them as they are
+// compared with addresses: a network without its host bits, an
+// IPv4-mapped IPv6 network as IPv4, each once, in the order given; empty,
+// not nil, for none, as the column holds no NULL.
+func canonicalProxies(proxies []netip.Prefix) ([]netip.Prefix, error) {
+	if len(proxies) > MaxKnownProxies {
+		return nil, ErrInvalidKnownProxies
+	}
+	canonical := make([]netip.Prefix, 0, len(proxies))
+	for _, network := range proxies {
+		if !network.IsValid() {
+			return nil, ErrInvalidKnownProxies
+		}
+		if address := network.Addr(); address.Is4In6() {
+			if network.Bits() < 96 {
+				return nil, ErrInvalidKnownProxies
+			}
+			network = netip.PrefixFrom(address.Unmap(), network.Bits()-96)
+		}
+		if network = network.Masked(); !slices.Contains(canonical, network) {
+			canonical = append(canonical, network)
+		}
+	}
+	return canonical, nil
+}
 
 // ErrInvalidAnalysisTimeout reports an AnalysisTimeout outside
 // [MinAnalysisTimeout, MaxAnalysisTimeout].
@@ -688,6 +760,11 @@ type Settings struct {
 	// InactiveDeviceDays is after how many days unused a Jellyfin app is
 	// signed out; 0 never signs it out.
 	InactiveDeviceDays int
+	// KnownProxies are the addresses and networks of the reverse proxies
+	// whose forwarded headers tell the client of their requests (see
+	// forwarded.Resolve). Empty by default: no forwarded header is
+	// trusted.
+	KnownProxies []netip.Prefix
 	// DetailedLog logs at the debug level rather than at the info level
 	// (see FollowLogLevel).
 	DetailedLog bool
@@ -938,7 +1015,7 @@ func validWebText(text string, max int) bool {
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
-	"personal_addons, server_imports, login_attempts, inactive_device_days, detailed_log, " +
+	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -968,7 +1045,8 @@ func (settings *Settings) fields() []any {
 		&settings.UpdateCheck,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
 		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
-		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.DetailedLog,
+		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
+		&settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
@@ -1049,6 +1127,12 @@ func (s *Store) sealSecrets(settings Settings) Settings {
 // process is the only writer, so the cached copy is always current.
 func (s *Store) Settings() Settings {
 	return *s.settings.Load()
+}
+
+// KnownProxies returns Settings().KnownProxies without copying the
+// settings: every request reads it.
+func (s *Store) KnownProxies() []netip.Prefix {
+	return s.settings.Load().KnownProxies
 }
 
 // Environment is what the environment variables that were options before
@@ -1198,6 +1282,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.InactiveDeviceDays < 0 || settings.InactiveDeviceDays > MaxInactiveDeviceDays {
 		return Settings{}, ErrInvalidInactiveDeviceDays
 	}
+	proxies, err := canonicalProxies(settings.KnownProxies)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.KnownProxies = proxies
 	if settings.AnalysisTimeout < MinAnalysisTimeout || settings.AnalysisTimeout > MaxAnalysisTimeout {
 		return Settings{}, ErrInvalidAnalysisTimeout
 	}
