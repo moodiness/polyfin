@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -181,13 +182,48 @@ func assTimestamp(value string) (time.Duration, bool) {
 }
 
 // decode turns subtitle bytes into text with "\n" line endings, without
-// byte order mark, reading text that is not valid UTF-8 as Windows-1252.
+// byte order mark: UTF-16 with a byte order mark, or without one when its
+// first character is ASCII, as a subtitle's is; else UTF-8, text that is
+// not valid UTF-8 being read as Windows-1252.
 func decode(data []byte) string {
+	if units, ok := utf16Units(data); ok {
+		data = []byte(string(utf16.Decode(units)))
+	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(data) {
 		data = fromWindows1252(data)
 	}
 	return strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\r", "\n")
+}
+
+// utf16Units reads data as UTF-16 when it is: its byte order mark, or a
+// first character that is ASCII, tells little or big endian. The byte
+// order mark is left out.
+func utf16Units(data []byte) ([]uint16, bool) {
+	if len(data) < 2 {
+		return nil, false
+	}
+	var big bool
+	switch {
+	case data[0] == 0xff && data[1] == 0xfe:
+		data = data[2:]
+	case data[0] == 0xfe && data[1] == 0xff:
+		data, big = data[2:], true
+	case data[0] != 0 && data[0] < 0x80 && data[1] == 0:
+	case data[0] == 0 && data[1] != 0 && data[1] < 0x80:
+		big = true
+	default:
+		return nil, false
+	}
+	units := make([]uint16, len(data)/2)
+	for i := range units {
+		if big {
+			units[i] = uint16(data[2*i])<<8 | uint16(data[2*i+1])
+		} else {
+			units[i] = uint16(data[2*i+1])<<8 | uint16(data[2*i])
+		}
+	}
+	return units, true
 }
 
 // isScript reports text whose first line is the [Script Info] section

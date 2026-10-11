@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 func TestSubRipBecomesWebVTT(t *testing.T) {
@@ -42,6 +43,40 @@ func TestWindows1252IsDecoded(t *testing.T) {
 	}
 	if got := cues[0].Lines; !slices.Equal(got, []string{"Déjà vu … “cool”"}) {
 		t.Errorf("got %q", got)
+	}
+}
+
+// UTF-16 is read in either byte order, with or without its byte order
+// mark; ASS scripts too.
+func TestUTF16IsDecoded(t *testing.T) {
+	encode := func(text string, big, mark bool) []byte {
+		var data []byte
+		if mark {
+			text = "\ufeff" + text
+		}
+		for _, unit := range utf16.Encode([]rune(text)) {
+			if big {
+				data = append(data, byte(unit>>8), byte(unit))
+			} else {
+				data = append(data, byte(unit), byte(unit>>8))
+			}
+		}
+		return data
+	}
+	srt := "1\r\n00:00:01,000 --> 00:00:02,000\r\nDéjà vu “cool” 字幕\r\n"
+	for _, big := range []bool{false, true} {
+		for _, mark := range []bool{false, true} {
+			cues, err := Parse(encode(srt, big, mark))
+			if err != nil || len(cues) != 1 || !slices.Equal(cues[0].Lines, []string{"Déjà vu “cool” 字幕"}) {
+				t.Errorf("big endian %v, mark %v: %q %v", big, mark, cues, err)
+			}
+		}
+	}
+	script := "[Script Info]\nScriptType: v4.00+\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+		"Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Été\n"
+	if parsed, err := ParseScript(encode(script, false, true)); err != nil || len(parsed.Events) != 1 ||
+		!slices.Equal(parsed.Cues()[0].Lines, []string{"Été"}) {
+		t.Errorf("script: %+v %v", parsed, err)
 	}
 }
 
