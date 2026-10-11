@@ -198,6 +198,11 @@ export type Settings = {
   loginAttempts: number
   /** Days unused after which a Jellyfin app is signed out; 0 never signs it out. */
   inactiveDeviceDays: number
+  /**
+   * Addresses and networks of the reverse proxies whose forwarded headers tell a request's client,
+   * such as 172.18.0.0/16; empty trusts no forwarded header.
+   */
+  knownProxies: string[]
   /** Logs in detail (debug level), to diagnose a problem. */
   detailedLog: boolean
   /** Seconds one analysis of a version or a channel's stream may take before it is given up. */
@@ -2049,6 +2054,7 @@ export type HealthProblem = {
   | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
   | { code: 'conversions_full' }
   | { code: 'thumbnails_paused'; host: string }
+  | { code: 'unknown_proxy'; address: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
   | { code: 'backup_failed' }

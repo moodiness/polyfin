@@ -332,6 +332,9 @@ const settings: typeof en = {
     inactiveDeviceDays: 'Déconnecter les appareils inutilisés depuis (jours, 0 = jamais)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
       `Les applications Jellyfin qui n’ont pas servi depuis ce nombre de jours sont déconnectées et doivent se reconnecter. La vérification a lieu toutes les heures. La connexion à cette page d’administration n’est pas concernée. De ${r.min} à ${r.max}.`,
+    knownProxies: 'Proxys connus',
+    knownProxiesHelp: (r: RangeText) =>
+      `Les adresses des proxys inverses placés devant Polyfin, une par ligne : une adresse IP, ou un réseau comme 172.18.0.0/16 quand l’adresse d’un proxy peut changer, jusqu’à ${r.max}. Une requête de l’un d’eux vient du client que nomme son en-tête X-Forwarded-For ou X-Real-IP : c’est cette adresse qui limite les connexions échouées, qui s’affiche pour les appareils et qui indique le réseau local. Les en-têtes de transfert venant de toute autre adresse sont ignorés. Laissez vide si rien ne se trouve devant Polyfin.`,
     detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',
@@ -437,7 +440,8 @@ const settings: typeof en = {
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
-      security: 'Addons et importations des utilisateurs, comptes bloqués et appareils inutilisés.',
+      security:
+        'Addons et importations des utilisateurs, comptes bloqués, appareils inutilisés et proxys inverses.',
       liveTv:
         'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',

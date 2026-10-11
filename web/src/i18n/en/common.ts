@@ -128,6 +128,8 @@ const common = {
       'Wrong passwords before an account is blocked must be 0, or a whole number from 3 to 20.',
     invalid_inactive_device_days:
       'Days before unused devices are signed out must be a whole number from 0 to 365.',
+    invalid_known_proxies:
+      'Known proxies must be IP addresses or networks such as 172.18.0.0/16, one a line, 64 at most.',
     personal_addons_disabled:
       'Your own addons are turned off by an administrator. They are kept, but you cannot add, refresh or turn on any.',
     invalid_hidden_libraries: 'The library list changed in the meantime. Reload the page.',

@@ -470,6 +470,23 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).inactiveDeviceDaysHelp(r('inactiveDeviceDays')),
     codes: ['invalid_inactive_device_days'],
   },
+  {
+    section: 'security',
+    anchor: 'known-proxies',
+    label: (t) => s(t).knownProxies,
+    help: (t, r) => s(t).knownProxiesHelp(r('knownProxies')),
+    keywords: [
+      'reverse proxy',
+      'X-Forwarded-For',
+      'X-Real-IP',
+      'Traefik',
+      'nginx',
+      'Caddy',
+      'Docker',
+      'IP',
+    ],
+    codes: ['invalid_known_proxies'],
+  },
   // Tracking
   {
     section: 'tracking',

@@ -79,6 +79,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.conversionsFull
     case 'thumbnails_paused':
       return text.paused(problem.host)
+    case 'unknown_proxy':
+      return text.unknownProxy(problem.address)
     case 'secrets_unreadable':
       return text.unreadableSecrets(
         problem.secrets.map((secret) => unreadableName(t, secret)).join(', '),

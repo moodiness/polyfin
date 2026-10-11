@@ -124,6 +124,8 @@ const system: typeof en = {
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,
+        unknownProxy: (address: string) =>
+          `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
         task: (name: string) => `La tâche « ${name} » a échoué.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',

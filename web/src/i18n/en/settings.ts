@@ -324,6 +324,9 @@ const settings = {
     inactiveDeviceDays: 'Sign out devices unused for (days, 0 = never)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
       `Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. From ${r.min} to ${r.max}.`,
+    knownProxies: 'Known proxies',
+    knownProxiesHelp: (r: RangeText) =>
+      `The addresses of the reverse proxies in front of Polyfin, one a line: an IP address, or a network such as 172.18.0.0/16 when a proxy’s address can change, up to ${r.max}. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. Forwarded headers from any other address are ignored. Leave it empty when nothing stands in front of Polyfin.`,
     detailedLog: 'Detailed log (to diagnose a problem)',
     detailedLogHelp:
       'Polyfin writes much more to its log, at once and without a restart. Turn it off once the problem is found.',
@@ -427,7 +430,8 @@ const settings = {
       playback: 'How Polyfin picks and prepares the versions it plays.',
       content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
-      security: 'Users’ own addons and imports, blocked accounts and unused devices.',
+      security:
+        'Users’ own addons and imports, blocked accounts, unused devices and reverse proxies.',
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
       notifications:

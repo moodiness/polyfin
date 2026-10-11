@@ -1,11 +1,19 @@
 import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { fetchStatus, queryKeys, revealServerSecret } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
-import { ExternalButtonLink, Notice, NumberInput, SecretField, Select, TextInput } from '@/ui'
+import {
+  ExternalButtonLink,
+  Notice,
+  NumberInput,
+  SecretField,
+  Select,
+  Textarea,
+  TextInput,
+} from '@/ui'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
 import ConversionSection from './ConversionSection'
@@ -545,7 +553,43 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
           )}
         />
       </FieldRow>
+      <FieldRow
+        anchor="known-proxies"
+        label={s.knownProxies}
+        help={s.knownProxiesHelp(range('knownProxies'))}
+        error={error('known-proxies')}
+      >
+        <ProxyList value={form.knownProxies} onValue={(knownProxies) => update({ knownProxies })} />
+      </FieldRow>
     </SettingsGroup>
+  )
+}
+
+/** What separates the entries of a list of addresses: line breaks, spaces or commas. */
+const proxySeparators = /[\s,]+/
+
+/**
+ * Known proxies, one address or network a line. The text stays as typed while it lists the same
+ * entries, so that a new line can be started; discarding or saving writes it anew.
+ */
+function ProxyList({ value, onValue }: { value: string[]; onValue: (value: string[]) => void }) {
+  const [text, setText] = useState(() => value.join('\n'))
+  if (text.split(proxySeparators).filter(Boolean).join('\n') !== value.join('\n')) {
+    setText(value.join('\n'))
+  }
+  return (
+    <Textarea
+      mono
+      rows={3}
+      value={text}
+      placeholder="172.18.0.0/16"
+      autoComplete="off"
+      spellCheck={false}
+      onValue={(next) => {
+        setText(next)
+        onValue(next.split(proxySeparators).filter(Boolean))
+      }}
+    />
   )
 }
 

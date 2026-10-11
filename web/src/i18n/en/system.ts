@@ -117,6 +117,8 @@ const system = {
           `${name}: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
+        unknownProxy: (address: string) =>
+          `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         task: (name: string) => `The task “${name}” failed.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
