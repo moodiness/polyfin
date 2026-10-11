@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/net/webdav"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -169,6 +171,13 @@ func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
 // to the movie, and the disc's media source in the movie's details.
 func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
+	return localDiscOn(t, ffprobe, populate, false)
+}
+
+// localDiscOn is localDisc, the folder served as a WebDAV share when share
+// is set.
+func localDiscOn(t *testing.T, ffprobe string, populate func(at string), share bool) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -180,7 +189,13 @@ func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playback
 	p := playingOn(t, s)
 	dir := t.TempDir()
 	populate(filepath.Join(dir, "Movie (2008)"))
-	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+	location := dir
+	if share {
+		server := httptest.NewServer(&webdav.Handler{FileSystem: webdav.Dir(dir), LockSystem: webdav.NewMemLS()})
+		t.Cleanup(server.Close)
+		location = server.URL + "/"
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: location, Kind: localfiles.KindMovies})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +221,13 @@ func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playback
 // localDVD is localDisc with the test DVD of package localfiles.
 func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
-	return localDisc(t, ffprobe, func(dir string) {
+	return localDVDOn(t, ffprobe, false)
+}
+
+// localDVDOn is localDVD, on a WebDAV share when share is set.
+func localDVDOn(t *testing.T, ffprobe string, share bool) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDiscOn(t, ffprobe, func(dir string) {
 		source := filepath.Join("..", "localfiles", "testdata", "dvd", "VIDEO_TS")
 		entries, err := os.ReadDir(source)
 		if err != nil {
@@ -224,14 +245,20 @@ func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
 				t.Fatal(err)
 			}
 		}
-	})
+	}, share)
 }
 
 // localBluRay is localDisc with the test Blu-ray disc of package
 // localfiles, whose main playlist plays two clips, 190 seconds in all.
 func localBluRay(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
-	return localDisc(t, ffprobe, func(dir string) {
+	return localBluRayOn(t, ffprobe, false)
+}
+
+// localBluRayOn is localBluRay, on a WebDAV share when share is set.
+func localBluRayOn(t *testing.T, ffprobe string, share bool) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDiscOn(t, ffprobe, func(dir string) {
 		archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", "bluray.tar.gz"))
 		if err != nil {
 			t.Fatal(err)
@@ -265,7 +292,7 @@ func localBluRay(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) 
 				t.Fatal(err)
 			}
 		}
-	})
+	}, share)
 }
 
 // A DVD of a local folder is one version, named after its folder, which is
@@ -902,7 +929,13 @@ func TestLocalPictureSubtitleFilesAreBurnedIn(t *testing.T) {
 // dvd or bluray, as the file "Movie (2008).iso".
 func localImage(t *testing.T, ffprobe, name string) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
-	return localDisc(t, ffprobe, func(at string) {
+	return localImageOn(t, ffprobe, name, false)
+}
+
+// localImageOn is localImage, on a WebDAV share when share is set.
+func localImageOn(t *testing.T, ffprobe, name string, share bool) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDiscOn(t, ffprobe, func(at string) {
 		archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", name+".iso.gz"))
 		if err != nil {
 			t.Fatal(err)
@@ -919,7 +952,7 @@ func localImage(t *testing.T, ffprobe, name string) (playbackSetup, MediaSourceI
 		if err := os.WriteFile(at+".iso", data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-	})
+	}, share)
 }
 
 // A disc image plays its main title from the image itself, over HLS only:
@@ -954,4 +987,47 @@ func TestLocalDiscImagesPlay(t *testing.T) {
 		p, local := localImage(t, ffprobe, "bluray-udf")
 		playsCopied(t, p, local, ffmpeg, ffprobe)
 	})
+}
+
+// A Blu-ray disc on a WebDAV share, in its folder or in an image, ISO 9660
+// or UDF, plays its main playlist as one MPEG-TS file Polyfin serves FFmpeg
+// from the share, its video copied, cut on the keyframes of its clips'
+// EP maps read on the share: whole, and from a seek (see playsCopied).
+func TestShareBluRaysPlayCopied(t *testing.T) {
+	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpegts")
+	t.Run("folder", func(t *testing.T) {
+		p, local := localBluRayOn(t, ffprobe, true)
+		playsCopied(t, p, local, ffmpeg, ffprobe)
+	})
+	for _, name := range []string{"bluray", "bluray-udf"} {
+		t.Run(name, func(t *testing.T) {
+			p, local := localImageOn(t, ffprobe, name, true)
+			playsCopied(t, p, local, ffmpeg, ffprobe)
+		})
+	}
+}
+
+// A DVD on a WebDAV share, in its folder or in an image, plays its main
+// title's cells as one MPEG program stream Polyfin serves FFmpeg from the
+// share, its tracks' languages read from its IFO files, its video
+// converted: the segments make the title's eight seconds, even read from
+// a seek.
+func TestShareDVDsPlayOverHLS(t *testing.T) {
+	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpeg")
+	for name, open := range map[string]func() (playbackSetup, MediaSourceInfo){
+		"folder": func() (playbackSetup, MediaSourceInfo) { return localDVDOn(t, ffprobe, true) },
+		"image":  func() (playbackSetup, MediaSourceInfo) { return localImageOn(t, ffprobe, "dvd", true) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, local := open()
+			source := playDisc(t, p, local, 8*time.Second)
+			if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video mpeg2video ", "Audio ac3 eng", "Audio ac3 fra", "Subtitle DVDSUB eng"}) {
+				t.Errorf("tracks: %q", got)
+			}
+			frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
+			if seconds := float64(frames) * 1001 / 30000; seconds < 7.5 || seconds > 8.5 || start != 10 {
+				t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+			}
+		})
+	}
 }
