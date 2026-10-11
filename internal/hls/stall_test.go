@@ -248,3 +248,27 @@ func TestSearchedVersionsSeekToThePreviousSegment(t *testing.T) {
 		}
 	}
 }
+
+// The encoder makes a converted segment's keyframe on the first frame at
+// or after the time asked, a fraction of a frame early: a keyframe that
+// falls up to that lead before the segment's start starts it, as one of
+// a 29.97 fps source 8 ms before does. A copied segment's keyframe is the
+// source's, within the rounding of the index.
+func TestForcedKeyframesStartTheirSegment(t *testing.T) {
+	plan := NewGridPlan(30 * time.Second)
+	converted := Remux{Plan: plan, Encode: &VideoEncoding{Encoder: "libx264", FrameRate: 30000.0 / 1001}}
+	copied := Remux{Plan: plan}
+	keyframe := plan.Start(2) - 8*time.Millisecond
+	if keyframe < plan.Start(2)-converted.cutTolerance() {
+		t.Errorf("a converted keyframe 8 ms early does not start its segment: tolerance %v", converted.cutTolerance())
+	}
+	if keyframe >= plan.Start(2)-copied.cutTolerance() {
+		t.Errorf("a copied keyframe 8 ms early starts its segment: tolerance %v", copied.cutTolerance())
+	}
+	args := converted.Encode.args(plan, 2)
+	asked := args[slices.Index(args, "-force_key_frames")+1]
+	first, _, _ := strings.Cut(asked, ",")
+	if want := strconv.FormatFloat((plan.Start(2) - converted.Encode.keyframeLead()).Seconds(), 'f', 4, 64); first != want {
+		t.Errorf("keyframes asked at %s, want %s first", asked, want)
+	}
+}

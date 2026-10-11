@@ -287,19 +287,38 @@ func (v *VideoEncoding) burnGraph(video int, from time.Duration) string {
 
 // args are FFmpeg's encoder options for a job starting at segment n.
 func (v *VideoEncoding) args(plan Plan, n int) []string {
-	// The encoder compares times in its frame rate's time base, where a
-	// keyframe's exact time can fall just before the time asked: each is
-	// asked a fraction of a frame early.
-	rate := v.FrameRate
-	if rate <= 0 {
-		rate = 24
-	}
-	lead := 0.4 / rate
+	lead := v.keyframeLead().Seconds()
 	times := make([]string, 0, plan.Len()-n)
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
 	}
 	return v.encoderArgs(strings.Join(times, ","))
+}
+
+// keyframeLead is how early each keyframe is asked of the encoder: it
+// compares times in its frame rate's time base, where a keyframe's exact
+// time can fall just before the time asked, so each is asked a fraction
+// of a frame early. The encoder makes it on the first frame at or after
+// that time: one a little before the segment's start when the source's
+// frames fall so.
+func (v *VideoEncoding) keyframeLead() time.Duration {
+	rate := v.FrameRate
+	if rate <= 0 {
+		rate = 24
+	}
+	return time.Duration(0.4 / rate * float64(time.Second))
+}
+
+// cutTolerance is how far before a segment's start a keyframe of FFmpeg's
+// output may be and still start it: the rounding between the keyframe
+// index and the output's timestamps, and for converted video, the lead its
+// keyframes are asked with (see keyframeLead), and the tenth of a
+// millisecond its times are written to.
+func (r Remux) cutTolerance() time.Duration {
+	if r.Encode == nil {
+		return tolerance
+	}
+	return tolerance + r.Encode.keyframeLead()
 }
 
 // nvencPresets are NVENC's presets for x264's names, as Jellyfin maps
@@ -1080,12 +1099,12 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 	if j.file == nil {
 		// FFmpeg may start on a keyframe before the segment: what comes
 		// before it is not part of the job.
-		if !p.keyframe || p.at < plan.Start(j.next)-tolerance {
+		if !p.keyframe || p.at < plan.Start(j.next)-e.remux.cutTolerance() {
 			return nil
 		}
 		return e.begin(j, p.data)
 	}
-	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-tolerance {
+	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-e.remux.cutTolerance() {
 		if err := e.close(j); err != nil {
 			return err
 		}
