@@ -355,3 +355,26 @@ func TestShareWatchFindsNewMovie(t *testing.T) {
 		}
 	}
 }
+
+// The files of discs a scan walks count in a folder's print, so that a
+// poll sees them change: a disc image, a DVD's video files and a Blu-ray
+// disc's playlists. A file a scan does not walk does not.
+func TestFolderPrintCountsDiscFiles(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	for _, c := range []struct{ rel, name string }{
+		{"", "Box (2010).iso"},
+		{"Nosferatu (1922)/VIDEO_TS", "VTS_01_1.VOB"},
+		{"The General (1926)/BDMV/PLAYLIST", "00000.mpls"},
+	} {
+		file := remoteEntry{name: c.name, size: 10, modified: at}
+		grown := file
+		grown.size = 11
+		print := folderPrint(KindMovies, c.rel, []remoteEntry{file})
+		if print == folderPrint(KindMovies, c.rel, nil) || print == folderPrint(KindMovies, c.rel, []remoteEntry{grown}) {
+			t.Errorf("%s/%s does not count in its folder's print", c.rel, c.name)
+		}
+	}
+	if folderPrint(KindMovies, "", []remoteEntry{{name: "notes.txt", size: 10, modified: at}}) != folderPrint(KindMovies, "", nil) {
+		t.Error("a file a scan does not read counts in its folder's print")
+	}
+}

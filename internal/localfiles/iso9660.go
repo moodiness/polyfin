@@ -163,3 +163,15 @@ func (img *isoImage) file(path ...string) (*io.SectionReader, error) {
 	}
 	return img.reader(entry), nil
 }
+
+// spansOf locates the file at path in the image: one extent.
+func (img *isoImage) spansOf(path ...string) ([]span, error) {
+	entry, err := img.lookup(path...)
+	if err != nil {
+		return nil, err
+	}
+	if entry.dir {
+		return nil, fmt.Errorf("%w: %s is a folder", errNotISO, entry.name)
+	}
+	return []span{{at: entry.at, n: entry.size}}, nil
+}

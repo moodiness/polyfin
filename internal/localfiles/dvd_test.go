@@ -298,8 +298,8 @@ func TestDVDsAreOneMovie(t *testing.T) {
 }
 
 // A DVD at a folder's root is named after the folder; a DVD in a shows
-// folder is left out, and so is one on a share, FFmpeg reading a DVD from
-// a path.
+// folder is left out; one on a share is read as a local one is, its IFO
+// files read on the share.
 func TestDVDsAtTheRootInShowsAndOnShares(t *testing.T) {
 	e := newEnv(t)
 	dir := filepath.Join(t.TempDir(), "The General (1926)")
@@ -347,7 +347,8 @@ func TestDVDsAtTheRootInShowsAndOnShares(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.idle(share.ID)
-	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"Nosferatu (1922).mkv": "tt0013442"}) {
+	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"Nosferatu (1922).mkv": "tt0013442",
+		"The General (1926)/VIDEO_TS/VTS_02_1.VOB": "tt0017925"}) {
 		t.Errorf("a share: %v", got)
 	}
 }

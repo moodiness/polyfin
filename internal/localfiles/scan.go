@@ -356,9 +356,15 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return s.finish(ctx, id, at, list)
 	}
 	files := list.files
-	collapseDiscs(folder.Kind, root, files)
+	collapseDiscs(folder.Kind, files, func(rel string) (io.ReadCloser, error) { return list.open(ctx, rel) })
 	if folder.Share == "" {
-		collapseDVDs(folder.Kind, root, files)
+		collapseDVDs(folder.Kind, files, func(videoTS string) ([]dvdChoice, error) {
+			return dvdTitles(filepath.Join(root, filepath.FromSlash(videoTS)))
+		})
+	} else {
+		collapseDVDs(folder.Kind, files, func(videoTS string) ([]dvdChoice, error) {
+			return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return readIFO(ctx, list, path.Join(videoTS, name)) })
+		})
 	}
 	if err := s.collapseImages(ctx, id, folder, root, list); err != nil {
 		return err

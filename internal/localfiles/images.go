@@ -38,9 +38,9 @@ import (
 //
 // Each of an image's other movies is a title of its own, a unit linked by
 // hand, kept as the image's path with its number (see discTitlePath).
-// FFmpeg plays an image's titles from the image itself (see Input). A
-// shows folder leaves images out, and so do shares, FFmpeg reading an
-// image from a path.
+// FFmpeg plays an image's titles from the image itself (see Input), and
+// those of an image on a share from its files' bytes in the image, served
+// as one file (see sharedisc.go). A shows folder leaves images out.
 
 // Kinds of disc images, as local_disc_images keeps them, and as Unmatched
 // tells them.
@@ -80,12 +80,13 @@ type storedImage struct {
 
 // collapseImages keeps, of the files a walk of the folder at root found,
 // the disc images of a movies folder in the container, each with an entry
-// per other movie it holds, and none of a shows folder's or a share's; it
-// leaves out the images of no disc. Each image new or changed since the
-// last scan is read again, and the answers kept.
+// per other movie it holds, and none of a shows folder's; it leaves out
+// the images of no disc. Each image new or changed since the last scan is
+// read again, and the answers kept. A share's images are read on the
+// share, by ranges (see shareImage).
 func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Folder, root string, list listing) error {
 	files := list.files
-	if folder.Kind == KindShows || folder.Share != "" {
+	if folder.Kind == KindShows {
 		for rel := range files {
 			if imageFile(rel) {
 				delete(files, rel)
@@ -119,7 +120,11 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 		image, known := stored[rel]
 		if !known || image.file.size != f.size || !image.file.modified.Equal(f.modified) {
 			image = storedImage{file: f}
-			image.kind, image.title, image.titles = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)))
+			if folder.Share != "" {
+				image.kind, image.title, image.titles = shareImage(ctx, list, rel)
+			} else {
+				image.kind, image.title, image.titles = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)))
+			}
 			read[rel] = image
 		}
 		seen[rel] = image
@@ -181,6 +186,28 @@ func (s *Service) readImage(ctx context.Context, path string) (kind string, titl
 	kind, title, others, err = readDisc(file)
 	if errors.Is(err, errUnsupportedUDF) && s.probe != nil && s.probe(ctx, media.Input{Options: []string{"-playlist", "-1"}, Path: "bluray:" + path}) {
 		return imageBluRay, -1, nil
+	}
+	return kind, title, others
+}
+
+// shareImage reads what the image rel of a share is, through the walk's
+// opener, by ranges (see readImage). FFmpeg reads a share's disc only as
+// the titles Polyfin lays out: an image whose titles cannot be read, a
+// Blu-ray image's playlists or a DVD image's IFO files, or whose UDF
+// layout is not read, is no disc's here.
+func shareImage(ctx context.Context, list listing, rel string) (kind string, title int, others []int) {
+	file, err := list.open(ctx, rel)
+	if err != nil {
+		return "", 0, nil
+	}
+	defer file.Close()
+	at, err := readerAt(file)
+	if err != nil {
+		return "", 0, nil
+	}
+	kind, title, others, _ = readDisc(at)
+	if kind == "" || title < 0 || kind == imageDVD && title == 0 {
+		return "", 0, nil
 	}
 	return kind, title, others
 }

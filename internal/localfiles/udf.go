@@ -548,3 +548,15 @@ func (s spanReader) ReadAt(p []byte, off int64) (int, error) {
 	}
 	return read, nil
 }
+
+// spansOf locates the file at path in the image: its extents, in order.
+func (img *udfImage) spansOf(path ...string) ([]span, error) {
+	node, err := img.lookup(path...)
+	if err != nil {
+		return nil, err
+	}
+	if node.dir || node.embedded != nil {
+		return nil, fmt.Errorf("%w: %s is no file of extents", errNotUDF, strings.Join(path, "/"))
+	}
+	return node.spans, nil
+}

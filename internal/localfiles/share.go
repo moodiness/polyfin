@@ -207,10 +207,11 @@ func (s *Service) folderRemote(id accounts.ID, address, user, sealed string) (re
 }
 
 // walkShare lists the files a scan of a folder of kind reads under a
-// share's folder, and their side files, one folder after the other, from
-// the listings alone, with the print of each folder it listed (see
-// folderPrint). The folders it could not list, missing or refused, are
-// skipped. A share that stops answering fails the walk.
+// share's folder, disc images, the files of DVDs and Blu-ray discs'
+// playlists among them (see walked), and their side files, one folder
+// after the other, from the listings alone, with the print of each folder
+// it listed (see folderPrint). The folders it could not list, missing or
+// refused, are skipped. A share that stops answering fails the walk.
 func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
 	list := listing{files: map[string]found{}, sides: map[string]found{}, prints: map[string]uint64{},
 		open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
@@ -243,7 +244,7 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 				return listing{}, err
 			}
 		}
-		list.prints[next.rel] = folderPrint(kind, entries)
+		list.prints[next.rel] = folderPrint(kind, next.rel, entries)
 		for _, e := range entries {
 			rel := e.name
 			if next.rel != "" {
@@ -257,7 +258,7 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 				}
 				continue
 			}
-			switch file, side := listed(kind, e.name); {
+			switch file, side := walked(kind, rel); {
 			case file:
 				list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
 			case side:
@@ -269,17 +270,18 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 }
 
 // folderPrint sums what a scan of a folder of kind reads of a share's
-// folder: the names of the folders it enters, and the names, sizes and
-// modification times of its files and side files. Two listings of the
-// folder have the same print, in whatever order they list it, unless one
-// of those changed; the other entries count for nothing.
-func folderPrint(kind string, entries []remoteEntry) uint64 {
+// folder at rel: the names of the folders it enters, and the names, sizes
+// and modification times of its files and side files, disc images and
+// the files of discs among them (see walked). Two listings of the folder
+// have the same print, in whatever order they list it, unless one of
+// those changed; the other entries count for nothing.
+func folderPrint(kind, rel string, entries []remoteEntry) uint64 {
 	h := fnv.New64a()
 	var sum uint64
 	var number [8]byte
 	for _, e := range entries {
 		h.Reset()
-		switch file, side := listed(kind, e.name); {
+		switch file, side := walked(kind, path.Join(rel, e.name)); {
 		case e.folder:
 			if skippedIn(kind, e.name) {
 				continue

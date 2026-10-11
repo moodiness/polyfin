@@ -170,9 +170,10 @@ func TestReadImage(t *testing.T) {
 }
 
 // A disc image in a movies folder is one movie, matched by its file's
-// name, or its folder's when the file's is no title's, the image its unit, read from the image itself. What a scan read
-// of an image is kept while its size and modification time stay; images
-// of no disc are left out, and so are a shows folder's and a share's.
+// name, or its folder's when the file's is no title's, the image its
+// unit, read from the image itself. What a scan read of an image is kept
+// while its size and modification time stay; images of no disc are left
+// out, and so are a shows folder's; a share's are read on the share.
 func TestDiscImagesAreMovies(t *testing.T) {
 	e := newEnv(t)
 	dir := t.TempDir()
@@ -300,7 +301,7 @@ func TestDiscImagesAreMovies(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.idle(share.ID)
-	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"Nosferatu (1922).mkv": "tt0013442"}) {
+	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"Nosferatu (1922).mkv": "tt0013442", "The General (1926).iso": "tt0017925"}) {
 		t.Errorf("a share: %v", got)
 	}
 }

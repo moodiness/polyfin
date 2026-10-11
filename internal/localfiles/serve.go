@@ -225,9 +225,10 @@ var ErrGone = errors.New("the file is no longer in its folder")
 // gives them, a video, a subtitle file, a track or an album's artwork, for
 // reading, with its modification time: within its folder, through no
 // symbolic link leading out of it, or from its share; a cover a track
-// embeds, from what its scan kept. A VobSub pair is named by its .idx
-// file, whose key with the .sub extension opens its .sub file, as FFmpeg
-// finds it. A share that cannot be read fails with why (see shareFailure).
+// embeds, from what its scan kept; the title of a disc on a share, as one
+// file (see openTitle). A VobSub pair is named by its .idx file, whose key
+// with the .sub extension opens its .sub file, as FFmpeg finds it. A share
+// that cannot be read fails with why (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, extension, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
@@ -253,6 +254,9 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	}
 	if data != nil {
 		return readSeekNopCloser{bytes.NewReader(data)}, *modified, nil
+	}
+	if shareKind(root) != "" && shareTitle(rel) {
+		return s.openTitle(ctx, id)
 	}
 	if shareKind(root) != "" {
 		r, err := s.folderRemote(folder, root, user, sealed)

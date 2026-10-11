@@ -146,7 +146,7 @@ func (w *watcher) round(ctx context.Context, p *sharePoll) {
 		return
 	}
 	p.retried = false
-	if folderPrint(kind, root) != prints[""] {
+	if folderPrint(kind, "", root) != prints[""] {
 		w.changedShare(ctx, p.id, seen.kept)
 		return
 	}
@@ -179,7 +179,7 @@ func (w *watcher) round(ctx context.Context, p *sharePoll) {
 		case err != nil:
 			w.unreachable(ctx, p, err)
 			return
-		case folderPrint(kind, entries) != prints[rel]:
+		case folderPrint(kind, rel, entries) != prints[rel]:
 			w.changedShare(ctx, p.id, seen.kept)
 			return
 		}

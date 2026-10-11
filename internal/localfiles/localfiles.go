@@ -17,10 +17,11 @@
 // matched to a title by the identifiers its name gives, else by those its
 // NFO file gives (see readNFO), else by its name and year through the
 // metadata addons' searches, kept only when they find one title. A
-// Blu-ray disc copied as it is, a folder holding BDMV, is one movie of a
-// movies folder, its largest stream, and is left out of a shows folder
-// (see collapseDiscs); so is a DVD, a folder holding VIDEO_TS, in a folder
-// in the container, played from its folder (see collapseDVDs). An
+// Blu-ray disc copied as it is, a folder holding BDMV, is the movies of a
+// movies folder its playlists are, and is left out of a shows folder (see
+// collapseDiscs); so is a DVD, a folder holding VIDEO_TS, played from its
+// folder (see collapseDVDs), and a disc image (see collapseImages), on
+// the server's disk or on a share (see sharedisc.go). An
 // administrator links the files left unmatched to an IMDb identifier by
 // hand. The subtitle files beside a video are offered with its stream (see
 // sidecars). A music folder answers as an Eclipse addon instead (see
@@ -119,6 +120,9 @@ type Service struct {
 	scanned map[accounts.ID]bool
 	prints  map[accounts.ID]map[string]uint64
 	kept    map[accounts.ID]int
+	// layouts are how the titles of discs on shares are laid out, by
+	// version (see openTitle).
+	layouts map[accounts.ID]titleLayout
 
 	// shares are the readers of the folders that are network shares, by
 	// folder, kept between requests.

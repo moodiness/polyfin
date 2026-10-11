@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,12 +17,12 @@ import (
 // A Blu-ray disc's movies are its playlists, BDMV/PLAYLIST/*.mpls, each
 // playing clips, the streams in BDMV/STREAM, from one time to another. A
 // disc in a folder in the container plays its main playlist, the longest,
-// whole, through FFmpeg's bluray protocol (see Service.Input); each other
-// playlist long enough to be a movie, and playing streams the titles kept
-// before it do not, is a title of its own, a unit to match or link
-// (see discTitles). A share's discs, which FFmpeg cannot read from a path,
-// and a disc whose playlists cannot be read or are too short for FFmpeg,
-// play their largest stream.
+// whole, through FFmpeg's bluray protocol (see Service.Input), and a disc
+// on a share the same bytes, served as one file (see sharedisc.go); each
+// other playlist long enough to be a movie, and playing streams the
+// titles kept before it do not, is a title of its own, a unit to match or
+// link (see discTitles). A disc whose playlists cannot be read or are too
+// short for FFmpeg plays its largest stream.
 
 // minMovie is how long a playlist other than the main one plays at least
 // to be a title of its own: shorter ones are extras and menus' clips.
@@ -228,14 +226,14 @@ type discFiles struct {
 	streams, playlists map[string]found
 }
 
-// collapseDiscs keeps, of the files a walk of the folder at root found,
-// the entries of each Blu-ray disc of a movies folder, and none of a shows
-// folder's discs: a disc of episodes is no one episode. A disc whose
-// playlists the walk listed has an entry per title (see playlistEntries);
+// collapseDiscs keeps, of the files a walk found, the entries of each
+// Blu-ray disc of a movies folder, and none of a shows folder's discs: a
+// disc of episodes is no one episode. A disc whose playlists the walk
+// listed, and open reads, has an entry per title (see playlistEntries);
 // another, its largest stream (the first by path among streams of the
 // same size). The other files in a disc's BDMV folder are left out; those
 // beside it stay.
-func collapseDiscs(kind, root string, files map[string]found) {
+func collapseDiscs(kind string, files map[string]found, open func(rel string) (io.ReadCloser, error)) {
 	discs := map[string]discFiles{}
 	for rel, f := range files {
 		disc, ok := discOf(rel)
@@ -258,7 +256,7 @@ func collapseDiscs(kind, root string, files map[string]found) {
 		}
 	}
 	for _, d := range discs {
-		if entries := playlistEntries(root, d); len(entries) > 0 {
+		if entries := playlistEntries(d, open); len(entries) > 0 {
 			maps.Copy(files, entries)
 			continue
 		}
@@ -275,13 +273,13 @@ func collapseDiscs(kind, root string, files map[string]found) {
 }
 
 // playlistEntries are the entries of a disc's titles (see discTitles), of
-// its files a walk of the folder at root found: each its playlist, sized
-// as the streams it plays, modified when the last of them or the playlist
+// its files a walk found: each its playlist, read through open, sized as
+// the streams it plays, modified when the last of them or the playlist
 // was, the titles other than the main one marked as such. A playlist that
 // cannot be read, or plays a stream the walk did not find, is left out;
 // none is kept when the main title is too short for FFmpeg to play (see
 // minPlayable).
-func playlistEntries(root string, d discFiles) map[string]found {
+func playlistEntries(d discFiles, open func(rel string) (io.ReadCloser, error)) map[string]found {
 	clips := map[string]found{}
 	for rel, f := range d.streams {
 		clips[strings.ToUpper(strings.TrimSuffix(path.Base(rel), path.Ext(rel)))] = f
@@ -290,7 +288,7 @@ func playlistEntries(root string, d discFiles) map[string]found {
 	paths := map[int]string{}
 	for rel := range d.playlists {
 		_, number, _ := discPlaylist(rel)
-		file, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
+		file, err := open(rel)
 		if err != nil {
 			continue
 		}

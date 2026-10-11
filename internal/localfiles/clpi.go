@@ -2,6 +2,7 @@ package localfiles
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -39,6 +40,28 @@ const epPrecision = 1 << 9
 // video's entry points, in units of 90 kHz of the clip's timestamps, in
 // order, each known to epPrecision.
 func readEPMap(data []byte) ([]uint64, error) {
+	entries, err := readEPEntries(data)
+	if err != nil {
+		return nil, err
+	}
+	times := make([]uint64, len(entries))
+	for i, e := range entries {
+		times[i] = e.pts
+	}
+	return times, nil
+}
+
+// epEntry is an entry point of a clip's video: its time, in units of
+// 90 kHz, and its source packet, the 192-byte packet of the clip's file
+// its I-frame starts in.
+type epEntry struct {
+	pts uint64
+	spn uint32
+}
+
+// readEPEntries reads a clip information file's EP map: the video's entry
+// points, in order (see readEPMap).
+func readEPEntries(data []byte) ([]epEntry, error) {
 	if len(data) < 20 || string(data[:4]) != "HDMV" {
 		return nil, errNotClip
 	}
@@ -64,18 +87,18 @@ func readEPMap(data []byte) ([]uint64, error) {
 			continue
 		}
 		coarse, fine := int(fields>>18&0xFFFF), int(fields&0x3FFFF)
-		return epTimes(data, epMap+int(binary.BigEndian.Uint32(data[at+8:])), coarse, fine)
+		return epEntries(data, epMap+int(binary.BigEndian.Uint32(data[at+8:])), coarse, fine)
 	}
 	return nil, fmt.Errorf("%w: the EP map maps no video", errNotClip)
 }
 
-// epTimes reads the times of a stream's entry points, whose entries start
-// at start: the offset of its fine entries from start, then its coarse
-// entries, 8 bytes each, the first fine entry each covers (18 bits), the
-// time's bits 32 to 19 (14 bits) and a source packet; then its fine
-// entries, 4 bytes each, a flag and the I-frame's end (4 bits), the time's
-// bits 19 to 9 (11 bits) and the low bits of a source packet.
-func epTimes(data []byte, start, coarse, fine int) ([]uint64, error) {
+// epEntries reads a stream's entry points, whose entries start at start:
+// the offset of its fine entries from start, then its coarse entries, 8
+// bytes each, the first fine entry each covers (18 bits), the time's bits
+// 32 to 19 (14 bits) and a source packet; then its fine entries, 4 bytes
+// each, a flag and the I-frame's end (4 bits), the time's bits 19 to 9
+// (11 bits) and the low 17 bits of a source packet.
+func epEntries(data []byte, start, coarse, fine int) ([]epEntry, error) {
 	if start+4 > len(data) || start+4+coarse*8 > len(data) || coarse == 0 && fine > 0 {
 		return nil, fmt.Errorf("%w: the EP map is cut short", errNotClip)
 	}
@@ -83,29 +106,36 @@ func epTimes(data []byte, start, coarse, fine int) ([]uint64, error) {
 	if fines+fine*4 > len(data) {
 		return nil, fmt.Errorf("%w: the EP map is cut short", errNotClip)
 	}
-	entry := func(c int) (first int, high uint64) {
+	entry := func(c int) (first int, high uint64, spn uint32) {
 		word := binary.BigEndian.Uint32(data[start+4+c*8:])
-		return int(word >> 14), uint64(word & 0x3FFF)
+		return int(word >> 14), uint64(word & 0x3FFF), binary.BigEndian.Uint32(data[start+8+c*8:])
 	}
-	times := make([]uint64, 0, fine)
+	entries := make([]epEntry, 0, fine)
 	c := 0
 	for i := range fine {
 		for c+1 < coarse {
-			if next, _ := entry(c + 1); next > i {
+			if next, _, _ := entry(c + 1); next > i {
 				break
 			}
 			c++
 		}
-		first, high := entry(c)
+		first, high, coarseSPN := entry(c)
 		if first > i {
 			return nil, fmt.Errorf("%w: entry point %d has no coarse entry", errNotClip, i)
 		}
-		low := uint64(binary.BigEndian.Uint32(data[fines+i*4:]) >> 17 & 0x7FF)
-		// Bit 19 is in both: the fine entry's is kept.
-		times = append(times, (high&^1)<<19+low<<9)
+		word := binary.BigEndian.Uint32(data[fines+i*4:])
+		low := uint64(word >> 17 & 0x7FF)
+		// The fine entry's source packet replaces the coarse one's low 17
+		// bits, and follows it.
+		spn := coarseSPN&^0x1FFFF | word&0x1FFFF
+		if spn < coarseSPN {
+			spn += 0x20000
+		}
+		// Bit 19 of the time is in both: the fine entry's is kept.
+		entries = append(entries, epEntry{pts: (high&^1)<<19 + low<<9, spn: spn})
 	}
-	slices.Sort(times)
-	return times, nil
+	slices.SortFunc(entries, func(a, b epEntry) int { return cmp.Compare(a.pts, b.pts) })
+	return entries, nil
 }
 
 // titleKeyframes maps the entry points of a playlist's clips, by clip,
@@ -142,6 +172,17 @@ func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, e
 	if d.kind != DiscBluRay || d.title < 0 {
 		return nil, errNoKeyframes
 	}
+	read := func(fsys discFS) func(names ...string) ([]byte, error) {
+		return func(names ...string) ([]byte, error) { return readDiscFile(fsys, maxClipInfoSize, names...) }
+	}
+	if d.share {
+		fsys, release, err := s.shareDiscFS(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+		return blurayKeyframes(read(fsys), d.title)
+	}
 	if !d.image {
 		return blurayKeyframes(folderReader(d.path), d.title)
 	}
@@ -154,9 +195,7 @@ func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, e
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errNoKeyframes, err)
 	}
-	return blurayKeyframes(func(names ...string) ([]byte, error) {
-		return readDiscFile(fsys, maxClipInfoSize, names...)
-	}, d.title)
+	return blurayKeyframes(read(fsys), d.title)
 }
 
 // maxTitleClipInfo bounds the bytes of clip information read for a title.

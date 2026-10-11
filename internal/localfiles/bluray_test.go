@@ -311,8 +311,8 @@ func TestDiscPlaylistsAreTitles(t *testing.T) {
 }
 
 // A disc a 0.30 scan read as its largest stream is read as its main
-// playlist at the next scan, keeping its link; a share's discs keep their
-// largest stream.
+// playlist at the next scan, keeping its link; so is a share's, its
+// playlists read on the share.
 func TestDiscStreamsBecomePlaylists(t *testing.T) {
 	e := newEnv(t)
 	dir := t.TempDir()
@@ -361,7 +361,7 @@ func TestDiscStreamsBecomePlaylists(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.idle(share.ID)
-	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"The General (1926)/BDMV/STREAM/00000.m2ts": "tt0017925"}) {
+	if got := e.files(share.ID); !maps.Equal(got, map[string]string{"The General (1926)/BDMV/PLAYLIST/00000.mpls": "tt0017925"}) {
 		t.Errorf("a share: %v", got)
 	}
 }
