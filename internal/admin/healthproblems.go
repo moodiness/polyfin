@@ -167,7 +167,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 				} else if folder.Unwatched != "" {
 					sources = append(sources, healthProblemJSON{Key: "folder_unwatched:" + addon.ID.String(), Code: problemFolderUnwatched,
 						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
-						Failure: folder.Unwatched})
+						Failure: folder.Unwatched, Share: folder.Share})
 				}
 				continue
 			}
@@ -370,6 +370,22 @@ func (p healthProblemJSON) text(language string) string {
 		return say("%s: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.",
 			"%s : Polyfin ne peut pas lire ce dossier local. Vérifiez qu’il est monté et lisible par l’utilisateur 65532.", name)
 	case problemFolderUnwatched:
+		if p.Share != "" {
+			switch p.Failure {
+			case "unreachable":
+				return say("%s: Polyfin cannot watch this network share for changes: it cannot be reached. "+
+					"It is scanned on its schedule, and again once it answers.",
+					"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau : il est injoignable. "+
+						"Il est analysé selon sa planification, et de nouveau dès qu’il répond.", name)
+			case "refused":
+				return say("%s: Polyfin cannot watch this network share for changes: it refuses Polyfin’s user or password. "+
+					"Check them, and enter them again.",
+					"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau : il refuse l’utilisateur ou le mot de passe de Polyfin. "+
+						"Vérifiez-les, et saisissez-les à nouveau.", name)
+			}
+			return say("%s: Polyfin cannot watch this network share for changes. It is still scanned on its schedule.",
+				"%s : Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification.", name)
+		}
 		switch p.Failure {
 		case "watch_limit":
 			return say("%s: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. "+
