@@ -2,7 +2,9 @@ package localfiles
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"net/url"
@@ -206,13 +208,15 @@ func (s *Service) folderRemote(id accounts.ID, address, user, sealed string) (re
 
 // walkShare lists the files a scan of a folder of kind reads under a
 // share's folder, and their side files, one folder after the other, from
-// the listings alone. The folders it could not list, missing or refused,
-// are skipped. A share that stops answering fails the walk.
+// the listings alone, with the print of each folder it listed (see
+// folderPrint). The folders it could not list, missing or refused, are
+// skipped. A share that stops answering fails the walk.
 func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
-	list := listing{files: map[string]found{}, sides: map[string]found{}, open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
-		file, _, err := r.open(ctx, rel)
-		return file, err
-	}}
+	list := listing{files: map[string]found{}, sides: map[string]found{}, prints: map[string]uint64{},
+		open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
+			file, _, err := r.open(ctx, rel)
+			return file, err
+		}}
 	type pending struct {
 		rel     string
 		listed  bool
@@ -239,6 +243,7 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 				return listing{}, err
 			}
 		}
+		list.prints[next.rel] = folderPrint(kind, entries)
 		for _, e := range entries {
 			rel := e.name
 			if next.rel != "" {
@@ -261,6 +266,38 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 		}
 	}
 	return list, nil
+}
+
+// folderPrint sums what a scan of a folder of kind reads of a share's
+// folder: the names of the folders it enters, and the names, sizes and
+// modification times of its files and side files. Two listings of the
+// folder have the same print, in whatever order they list it, unless one
+// of those changed; the other entries count for nothing.
+func folderPrint(kind string, entries []remoteEntry) uint64 {
+	h := fnv.New64a()
+	var sum uint64
+	var number [8]byte
+	for _, e := range entries {
+		h.Reset()
+		switch file, side := listed(kind, e.name); {
+		case e.folder:
+			if skippedIn(kind, e.name) {
+				continue
+			}
+			h.Write([]byte{'d'})
+		case file || side:
+			h.Write([]byte{'f'})
+			binary.LittleEndian.PutUint64(number[:], uint64(e.size))
+			h.Write(number[:])
+			binary.LittleEndian.PutUint64(number[:], uint64(e.modified.UTC().Truncate(time.Microsecond).UnixMicro()))
+			h.Write(number[:])
+		default:
+			continue
+		}
+		h.Write([]byte(e.name))
+		sum += h.Sum64()
+	}
+	return sum
 }
 
 // shareFiles lists a share's files for a folder of kind, or tells why it

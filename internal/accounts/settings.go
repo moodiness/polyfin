@@ -871,9 +871,10 @@ type Settings struct {
 	// scanned at startup, when an administrator asks and, when watched,
 	// when they change.
 	LocalScanHours int
-	// WatchLocalFolders watches the local folders mounted in the container
-	// for changes, and scans a folder again a few seconds after its files
-	// stop changing; network shares are never watched.
+	// WatchLocalFolders watches the local folders for changes: those
+	// mounted in the container, each scanned again a few seconds after its
+	// files stop changing, and network shares, listed again every few
+	// minutes and scanned again once a listing changed.
 	WatchLocalFolders bool
 	// CustomCss and LoginDisclaimer are Jellyfin's branding: the CSS
 	// jellyfin-web applies to every page, unless a user turns it off in

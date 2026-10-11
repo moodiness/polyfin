@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -69,13 +70,15 @@ type found struct {
 // them (see listed). skipped are the folders it could not read: what was
 // found in them before is not gone. open opens one of the files found for
 // reading, seekable; root is a folder's real path in the container, empty
-// for a share.
+// for a share. prints are a share's folders listed, by path, "" for its
+// root, with their print (see folderPrint).
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
 	skipped []string
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
 	root    string
+	prints  map[string]uint64
 }
 
 // walk lists the files a scan of a folder of kind reads under root, disc
@@ -251,12 +254,16 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	if err != nil {
 		return err
 	}
-	// The connections of the shares removed since are closed.
+	// The connections of the shares removed since are closed, and what
+	// their scans listed forgotten.
 	local := map[accounts.ID]bool{}
 	for _, addon := range installed {
 		local[addon.ID] = addon.Local()
 	}
 	s.forgetRemotes(func(id accounts.ID) bool { return local[id] })
+	s.mu.Lock()
+	maps.DeleteFunc(s.prints, func(id accounts.ID, _ map[string]uint64) bool { return !local[id] })
+	s.mu.Unlock()
 	hours := s.settings().LocalScanHours
 	for _, addon := range installed {
 		if !addon.Local() || !addon.Enabled && !all {
@@ -345,8 +352,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		if err := s.scanMusic(ctx, id, list, local); err != nil {
 			return err
 		}
-		_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at)
-		return err
+		return s.finish(ctx, id, at, list)
 	}
 	files := list.files
 	collapseDiscs(folder.Kind, root, files)
@@ -436,8 +442,21 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if err := s.storeSubtitles(ctx, id, list, sidecars(folder.Kind, rootName, entries, list.sides)); err != nil {
 		return err
 	}
-	_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at)
-	return err
+	return s.finish(ctx, id, at, list)
+}
+
+// finish marks a folder scanned at at, and keeps the prints of a share's
+// folders its listing has (see Service.shareSeen).
+func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list listing) error {
+	if _, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at); err != nil {
+		return err
+	}
+	if list.prints != nil {
+		s.mu.Lock()
+		s.prints[id] = list.prints
+		s.mu.Unlock()
+	}
+	return nil
 }
 
 // storedFiles reads the files a folder's scans found, by path.

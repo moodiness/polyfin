@@ -38,7 +38,7 @@ func newWatchTest(t *testing.T, folders func(context.Context) ([]watchFolder, er
 	wg := &sync.WaitGroup{}
 	scans := make(chan accounts.ID, 64)
 	w := newWatcher(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), folders,
-		func(_ context.Context, id accounts.ID) { scans <- id }, open, wg.Go)
+		func(_ context.Context, id accounts.ID) { scans <- id }, open, nil, wg.Go)
 	w.quiet, w.check = testQuiet, time.Hour
 	t.Cleanup(func() {
 		cancel()
@@ -268,18 +268,19 @@ func TestWatchable(t *testing.T) {
 		t.Fatal("folders are not watched by default")
 	}
 	local := addons.Addon{ID: testID(1), Kind: addons.KindLocal, ManifestURL: "/media/movies", Enabled: true}
+	smb := addons.Addon{ID: testID(2), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media/movies", Enabled: true}
+	dav := addons.Addon{ID: testID(3), Kind: addons.KindLocal, ManifestURL: "https://nas.local/dav/shows", Enabled: true}
 	music := addons.Addon{ID: testID(6), Kind: addons.KindLocal, ManifestURL: "/media/music", Enabled: true, Music: &eclipse.Manifest{}}
 	installed := []addons.Addon{
-		local,
-		{ID: testID(2), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media/movies", Enabled: true},
-		{ID: testID(3), Kind: addons.KindLocal, ManifestURL: "https://nas.local/dav/shows", Enabled: true},
+		local, smb, dav,
 		{ID: testID(4), Kind: addons.KindLocal, ManifestURL: "/media/off", Enabled: false},
 		{ID: testID(5), Kind: addons.KindStremio, ManifestURL: "https://addon.example/manifest.json", Enabled: true},
 		music,
 	}
-	if got := watchable(on, installed); !slices.Equal(got, []watchFolder{{id: local.ID, root: local.ManifestURL},
-		{id: music.ID, root: music.ManifestURL, kind: KindMusic}}) {
-		t.Errorf("watched %v, want the local folders only, the music folder as such", got)
+	want := []watchFolder{{id: local.ID, root: local.ManifestURL}, {id: smb.ID, root: smb.ManifestURL}, {id: dav.ID, root: dav.ManifestURL},
+		{id: music.ID, root: music.ManifestURL, kind: KindMusic}}
+	if got := watchable(on, installed); !slices.Equal(got, want) {
+		t.Errorf("watched %v, want the enabled folders and shares, the music folder as such", got)
 	}
 	off := on
 	off.WatchLocalFolders = false
@@ -310,7 +311,8 @@ func TestWatchNothingWhenOff(t *testing.T) {
 	}
 }
 
-func TestWatchSharesNever(t *testing.T) {
+// Shares are polled, never given to the system's watcher.
+func TestWatchPollsShares(t *testing.T) {
 	settings := accounts.DefaultSettings()
 	installed := []addons.Addon{
 		{ID: testID(1), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media", Enabled: true},
@@ -324,7 +326,16 @@ func TestWatchSharesNever(t *testing.T) {
 		})
 	wt.w.reconcile()
 	if opened.Load() != 0 || len(wt.w.dirs) != 0 {
-		t.Error("a network share is watched")
+		t.Error("a network share is given to the system's watcher")
+	}
+	if len(wt.w.polls) != 2 {
+		t.Errorf("polls %v, want both shares", wt.w.polls)
+	}
+	// Turned off, they are polled no more.
+	settings.WatchLocalFolders = false
+	wt.w.reconcile()
+	if len(wt.w.polls) != 0 {
+		t.Errorf("polls %v with the setting off", wt.w.polls)
 	}
 }
 
@@ -386,7 +397,7 @@ func TestWatchLimitKeepsSchedule(t *testing.T) {
 	fake := newFakeWatcher()
 	fake.limit = 1
 	w := newWatcher(e.service.ctx, e.service.logger, e.service.watchable, e.service.watchScan,
-		func() (fileWatcher, error) { return fake, nil }, e.service.wg.Go)
+		func() (fileWatcher, error) { return fake, nil }, e.service, e.service.wg.Go)
 	e.service.watch = w
 	w.reconcile()
 
@@ -414,7 +425,7 @@ func TestWatchLimitKeepsSchedule(t *testing.T) {
 func TestWatchFindsNewFile(t *testing.T) {
 	e := newEnv(t)
 	addon, dir := e.folder(KindMovies, map[string]int{"Nosferatu (1922).mkv": 10})
-	w := newWatcher(e.service.ctx, e.service.logger, e.service.watchable, e.service.watchScan, openNotifyWatcher, e.service.wg.Go)
+	w := newWatcher(e.service.ctx, e.service.logger, e.service.watchable, e.service.watchScan, openNotifyWatcher, e.service, e.service.wg.Go)
 	w.quiet = testQuiet
 	e.service.watch = w
 	w.reconcile()

@@ -8,10 +8,11 @@
 // other addons' streams.
 //
 // Folders are scanned at startup, every Settings.LocalScanHours and when an
-// administrator asks. The folders in the container are also watched for
-// changes, unless Settings.WatchLocalFolders is off, each scanned again a
-// few seconds after its files stop changing; network shares are not
-// watched. A scan reads only what changed since
+// administrator asks. They are also watched for changes, unless
+// Settings.WatchLocalFolders is off: the folders in the container through
+// the system's notifications, each scanned again a few seconds after its
+// files stop changing, and network shares by listing their folders again
+// every few minutes (see sharewatch.go). A scan reads only what changed since
 // the last one, by path, size and modification time; each new file is
 // matched to a title by the identifiers its name gives, else by those its
 // NFO file gives (see readNFO), else by its name and year through the
@@ -111,17 +112,19 @@ type Service struct {
 
 	mu sync.Mutex
 	// running are the scans under way, by folder, each closed when it
-	// ends; scanned the folders scanned since the service started.
+	// ends; scanned the folders scanned since the service started; prints
+	// the prints of the folders the last scan of a share listed, by
+	// folder (see listing).
 	running map[accounts.ID]chan struct{}
 	scanned map[accounts.ID]bool
+	prints  map[accounts.ID]map[string]uint64
 
 	// shares are the readers of the folders that are network shares, by
 	// folder, kept between requests.
 	sharesMu sync.Mutex
 	shares   map[accounts.ID]*pooledRemote
 
-	// watch watches the folders in the container for changes, nil until
-	// Watch.
+	// watch watches the folders for changes, nil until Watch.
 	watch *watcher
 }
 
@@ -137,7 +140,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
 		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{},
-		scanned: map[accounts.ID]bool{}, shares: map[accounts.ID]*pooledRemote{}}
+		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, shares: map[accounts.ID]*pooledRemote{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -151,10 +154,10 @@ func (s *Service) UseFiles(files, inputs string) { s.files, s.inputs = files, in
 // before the service is used.
 func (s *Service) UseTools(ffprobe, ffmpeg string) { s.ffprobe, s.ffmpeg = ffprobe, ffmpeg }
 
-// Watch watches the folders in the container for changes until Close; it
-// is called once, before the service is used.
+// Watch watches the folders for changes until Close; it is called once,
+// before the service is used.
 func (s *Service) Watch() {
-	s.watch = newWatcher(s.ctx, s.logger, s.watchable, s.watchScan, openNotifyWatcher, s.wg.Go)
+	s.watch = newWatcher(s.ctx, s.logger, s.watchable, s.watchScan, openNotifyWatcher, s, s.wg.Go)
 	s.wg.Go(s.watch.run)
 }
 
@@ -177,6 +180,27 @@ func (s *Service) watchScan(ctx context.Context, id accounts.ID) {
 	if err := s.Scan(ctx, id); err != nil && ctx.Err() == nil {
 		s.logger.Warn("A local folder could not be scanned", "folder", id, "error", err)
 	}
+}
+
+// shareReader returns the reader of a share's folder, kept between
+// requests, and what the folder holds.
+func (s *Service) shareReader(ctx context.Context, id accounts.ID, address string) (remote, string, error) {
+	var kind, user, sealed string
+	if err := s.db.QueryRow(ctx, "SELECT kind, share_user, share_password FROM local_folders WHERE addon_id = $1", id).Scan(&kind, &user,
+		&sealed); err != nil {
+		return nil, "", err
+	}
+	r, err := s.folderRemote(id, address, user, sealed)
+	return r, kind, err
+}
+
+// shareSeen returns the prints of the folders the last scan of a share's
+// folder listed, by path, nil until a scan of it succeeds; scanned tells
+// whether a scan of it ended since the service started.
+func (s *Service) shareSeen(id accounts.ID) (prints map[string]uint64, scanned bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.prints[id], s.scanned[id]
 }
 
 // Close stops the watch and the scans under way, waits for them, and
@@ -206,9 +230,11 @@ type NewFolder struct {
 // "unreadable", "not_folder", or for a share "unreachable" or "refused"),
 // whether a scan is under way, its files, those matched to a title, how,
 // and the others, and the links made by hand. Unwatched tells why a
-// folder in the container Polyfin should watch is not: "watch_limit" when
-// the system's limit of watches is reached, "instance_limit" when its
-// limit of watchers or of open files is, "failed" otherwise; empty when it
+// folder Polyfin should watch is not: for a folder in the container
+// "watch_limit" when the system's limit of watches is reached,
+// "instance_limit" when its limit of watchers or of open files is; for a
+// share "unreachable" when its last listing could not reach it, "refused"
+// when it refused the user or password; "failed" otherwise; empty when it
 // is watched or need not be.
 type Folder struct {
 	Addon       addons.Addon

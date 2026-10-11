@@ -65,9 +65,9 @@ func (n notifyWatcher) Events() <-chan fsnotify.Event { return n.w.Events }
 func (n notifyWatcher) Errors() <-chan error          { return n.w.Errors }
 func (n notifyWatcher) Close() error                  { return n.w.Close() }
 
-// watchFolder is a folder to watch: its addon, its path in the container,
-// and its kind, KindMusic for a music folder, else empty: a watch reads
-// the folders of movies and shows alike.
+// watchFolder is a folder to watch: its addon, its path in the container
+// or a share's address, and its kind, KindMusic for a music folder, else
+// empty: a watch reads the folders of movies and shows alike.
 type watchFolder struct {
 	id   accounts.ID
 	root string
@@ -75,15 +75,15 @@ type watchFolder struct {
 }
 
 // watchable are the folders to watch among the server's addons: the
-// enabled local folders in the container, none when the setting is off.
-// Network shares are never watched: they keep their schedule.
+// enabled local folders, in the container or network shares, none when
+// the setting is off.
 func watchable(settings accounts.Settings, installed []addons.Addon) []watchFolder {
 	if !settings.WatchLocalFolders {
 		return nil
 	}
 	var folders []watchFolder
 	for _, addon := range installed {
-		if addon.Local() && addon.Enabled && shareKind(addon.ManifestURL) == "" {
+		if addon.Local() && addon.Enabled {
 			folder := watchFolder{id: addon.ID, root: addon.ManifestURL}
 			if addon.HasMusic() {
 				folder.kind = KindMusic
@@ -111,7 +111,8 @@ type watching struct {
 // but those a scan leaves out, and scans a folder quiet after its video
 // files, side files or folders stop changing. It looks for the folders to
 // watch every check, and when kicked; a folder it could not watch is tried
-// again after retry, and keeps its schedule meanwhile.
+// again after retry, and keeps its schedule meanwhile. It polls the
+// network shares among them instead, read through shares (see poll).
 type watcher struct {
 	// ctx ends the watch.
 	ctx     context.Context
@@ -119,14 +120,20 @@ type watcher struct {
 	folders func(ctx context.Context) ([]watchFolder, error)
 	scan    func(ctx context.Context, id accounts.ID)
 	open    func() (fileWatcher, error)
+	shares  shareSource
 	// spawn runs a scan in the background: Service.wg.Go.
 	spawn func(func())
 
 	quiet, check, retry time.Duration
+	// every, gap and lists pace the polls of the shares (see shareEvery).
+	every, gap time.Duration
+	lists      int
 
 	kicks chan struct{}
 	due   chan accounts.ID
 	done  chan accounts.ID
+	// polled are the shares a poll found changed.
+	polled chan accounts.ID
 
 	mu sync.Mutex
 	// unwatched are why the folders to watch that could not be are not,
@@ -137,22 +144,23 @@ type watcher struct {
 	// watched; dirs are the folders watched, by path, with their folder;
 	// changed the last change of the folders waiting for their scan;
 	// scanning the folders a scan of the watch is under way for, again
-	// those that changed meanwhile.
+	// those that changed meanwhile; polls the shares polled.
 	files    fileWatcher
 	watched  map[accounts.ID]*watching
 	dirs     map[string]accounts.ID
 	changed  map[accounts.ID]time.Time
 	scanning map[accounts.ID]bool
 	again    map[accounts.ID]bool
+	polls    map[accounts.ID]*polling
 }
 
 func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.Context) ([]watchFolder, error), scan func(context.Context, accounts.ID),
-	open func() (fileWatcher, error), spawn func(func())) *watcher {
-	return &watcher{ctx: ctx, logger: logger, folders: folders, scan: scan, open: open, spawn: spawn,
-		quiet: watchQuiet, check: watchCheck, retry: watchRetry,
-		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID),
+	open func() (fileWatcher, error), shares shareSource, spawn func(func())) *watcher {
+	return &watcher{ctx: ctx, logger: logger, folders: folders, scan: scan, open: open, shares: shares, spawn: spawn,
+		quiet: watchQuiet, check: watchCheck, retry: watchRetry, every: shareEvery, gap: shareGap, lists: shareLists,
+		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan accounts.ID),
 		unwatched: map[accounts.ID]string{}, watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{},
-		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}}
+		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
 }
 
 // run watches the folders until the watch ends.
@@ -194,6 +202,13 @@ func (w *watcher) loop() {
 			w.failure(err)
 		case id := <-w.due:
 			w.settle(id)
+		case id := <-w.polled:
+			// A poll finds a share changed until a scan lists it again:
+			// a share waiting for its scan, or being scanned, is not
+			// made to wait longer. One no longer watched waits for none.
+			if _, waiting := w.changed[id]; w.polls[id] != nil && !waiting && !w.scanning[id] {
+				w.change(id)
+			}
 		case id := <-w.done:
 			delete(w.scanning, id)
 			if w.again[id] {
@@ -239,7 +254,8 @@ func (w *watcher) setReason(id accounts.ID, reason string) {
 
 // reconcile watches the folders to watch not watched yet, those back after
 // they went missing and those to try again, and stops watching the others;
-// with none to watch, no watcher runs.
+// with none in the container to watch, no watcher runs. The shares to
+// watch are polled, and those no longer to watch are not.
 func (w *watcher) reconcile() {
 	list, err := w.folders(w.ctx)
 	if err != nil {
@@ -249,9 +265,15 @@ func (w *watcher) reconcile() {
 		return
 	}
 	want := map[accounts.ID]watchFolder{}
+	shares := map[accounts.ID]string{}
 	for _, folder := range list {
-		want[folder.id] = folder
+		if shareKind(folder.root) != "" {
+			shares[folder.id] = folder.root
+		} else {
+			want[folder.id] = folder
+		}
 	}
+	w.pollShares(shares)
 	for id, state := range w.watched {
 		if folder, ok := want[id]; !ok || folder.root != state.root || folder.kind != state.kind {
 			w.unwatch(id)
