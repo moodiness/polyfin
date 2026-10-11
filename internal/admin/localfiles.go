@@ -3,12 +3,18 @@ package admin
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 )
+
+// maxTitleQuery bounds the text of a title search, in bytes.
+const maxTitleQuery = 200
 
 // folderJSON describes a local folder: what it holds, its path or share
 // address, the kind of share it is ("smb", "webdav", empty for a path in
@@ -201,6 +207,65 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 			file.Year = new(u.Year)
 		}
 		result.Files = append(result.Files, file)
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// titleJSON is a title a search found for a link: its IMDb identifier,
+// name, year, kind ("movie" or "show"), and the item whose Primary image
+// is its poster, null without one.
+type titleJSON struct {
+	ImdbID   string  `json:"imdbId"`
+	Name     string  `json:"name"`
+	Year     *int    `json:"year"`
+	Kind     string  `json:"kind"`
+	PosterID *string `json:"posterId"`
+}
+
+// searchFolderTitles searches the metadata addons for titles of a local
+// folder's kind, for one of its units to be linked to: query is free text,
+// year, optional, puts that year's titles first.
+func (h *handler) searchFolderTitles(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	year := 0
+	if text := r.URL.Query().Get("year"); text != "" {
+		parsed, err := strconv.Atoi(text)
+		if err != nil || parsed < 1 || parsed > 9999 {
+			writeError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		year = parsed
+	}
+	if len(query) > maxTitleQuery {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	items, err := h.Folders.Search(r.Context(), id, query, year)
+	if h.answerFailure(w, r, err) {
+		return
+	}
+	result := struct {
+		Titles []titleJSON `json:"titles"`
+	}{Titles: make([]titleJSON, 0, len(items))}
+	for _, item := range items {
+		title := titleJSON{ImdbID: item.ProviderIDs["Imdb"], Name: item.Name, Kind: "movie"}
+		if item.Kind == library.KindSeries {
+			title.Kind = "show"
+		}
+		if item.ProductionYear > 0 {
+			title.Year = new(item.ProductionYear)
+		}
+		if item.Images.Primary != "" {
+			title.PosterID = new(item.ID.String())
+		}
+		result.Titles = append(result.Titles, title)
 	}
 	writeJSON(w, http.StatusOK, result)
 }

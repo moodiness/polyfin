@@ -235,6 +235,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/scopes/{scope}/folders/{id}", h.signedIn(h.updateFolder))
 	mux.Handle("POST /admin/api/scopes/{scope}/folders/{id}/scan", h.signedIn(h.startFolderScan))
 	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/unmatched", h.signedIn(h.folderUnmatched))
+	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/titles", h.signedIn(h.searchFolderTitles))
 	mux.Handle("PUT /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.linkFolderFile))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.unlinkFolderFile))
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))

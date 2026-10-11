@@ -63,6 +63,9 @@ var (
 	ErrInvalidPath = errors.New("a folder is an absolute path in the container, other than /")
 	ErrInvalidKind = errors.New("a folder holds movies or shows")
 	ErrInvalidIMDb = errors.New("an IMDb identifier is tt followed by digits")
+	// ErrSearchFailed wraps the error of a search of the metadata addons
+	// (see Service.Search).
+	ErrSearchFailed = errors.New("the metadata addons could not be searched")
 )
 
 // Titles finds titles in the server's metadata addons: library.Service.

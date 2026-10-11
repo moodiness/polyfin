@@ -3,7 +3,9 @@ package localfiles
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,8 +45,12 @@ const (
 	byLink   = "link"
 )
 
-// searchLimit bounds the titles a search reads.
-const searchLimit = 20
+// searchLimit bounds the titles a search reads, and maxCandidates those a
+// search for a link answers (see Search).
+const (
+	searchLimit   = 20
+	maxCandidates = 10
+)
 
 // imdbPattern is an IMDb identifier.
 var imdbPattern = regexp.MustCompile(`^tt\d{1,12}$`)
@@ -295,6 +301,39 @@ func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]
 		e.nfo = nfo
 		return e, nil
 	})
+}
+
+// Search looks query up in the metadata addons for titles of the folder's
+// kind, as a scan looks a file's name up, for an administrator to link one
+// of its units to (see Link). It answers the titles a link can name, those
+// with an IMDb identifier, each once, those of year first when year is
+// given, at most maxCandidates.
+func (s *Service) Search(ctx context.Context, id accounts.ID, query string, year int) ([]library.Item, error) {
+	folder, err := s.Folder(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	kind := titleKind(folder.Kind)
+	results, err := s.titles.RemoteSearch(ctx, kind, query, searchLimit)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrSearchFailed, err)
+	}
+	items := []library.Item{}
+	seen := map[string]bool{}
+	for _, r := range results {
+		imdb := r.Item.ProviderIDs["Imdb"]
+		if r.Item.Kind != kind || !imdbPattern.MatchString(imdb) || seen[imdb] {
+			continue
+		}
+		seen[imdb] = true
+		items = append(items, r.Item)
+	}
+	if year > 0 {
+		// The titles of that year first, each list in the addons' order.
+		dated := slices.DeleteFunc(slices.Clone(items), func(item library.Item) bool { return item.ProductionYear != year })
+		items = append(dated, slices.DeleteFunc(items, func(item library.Item) bool { return item.ProductionYear == year })...)
+	}
+	return items[:min(len(items), maxCandidates)], nil
 }
 
 // Link links a unit of a folder to an IMDb identifier, for good: path is
