@@ -52,17 +52,20 @@ func readable(path string) string {
 	return ""
 }
 
-// found is a file a scan found: its size and modification time.
+// found is a file a scan found: its size and modification time. extra
+// marks the entry of a disc's title other than its main one, a unit of its
+// own (see titleUnit).
 type found struct {
 	size     int64
 	modified time.Time
+	extra    bool
 }
 
 // listing is what a walk found under a folder, by path in it, with
-// slashes: its video files and the files of DVDs (see dvdFile), and the
-// side files beside them (see sideFile). skipped are the folders it could
-// not read: what was found in them before is not gone. open opens one of
-// the files found for reading.
+// slashes: its video files, the files of DVDs (see dvdFile) and Blu-ray
+// discs' playlists (see playlistFile), and the side files beside them (see
+// sideFile). skipped are the folders it could not read: what was found in
+// them before is not gone. open opens one of the files found for reading.
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
@@ -70,9 +73,9 @@ type listing struct {
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
 }
 
-// walk lists the video files, the files of DVDs and the side files under
-// root. It follows no symbolic link to a folder, and none to a file out of
-// root.
+// walk lists the video files, the files of DVDs, Blu-ray discs' playlists
+// and the side files under root. It follows no symbolic link to a folder,
+// and none to a file out of root.
 func walk(ctx context.Context, root string) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -117,7 +120,7 @@ func walk(ctx context.Context, root string) (listing, error) {
 				return fs.SkipDir
 			}
 			return nil
-		case !videoFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()):
+		case !videoFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) && !playlistFile(rel):
 			return nil
 		case d.Type()&fs.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
@@ -313,7 +316,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return err
 	}
 	files := list.files
-	collapseDiscs(folder.Kind, files)
+	collapseDiscs(folder.Kind, root, files)
 	if folder.Share == "" {
 		collapseDVDs(folder.Kind, root, files)
 	}
@@ -355,7 +358,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		case ok && old.nfo != e.nfo:
 			renewed[e.unit] = true
 		case !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit:
-		case old.matched || old.reason == reasonUnreadableName:
+		case old.matched || old.reason == reasonUnreadableName || old.reason == reasonDiscTitle:
 			continue
 		}
 		units[e.unit] = append(units[e.unit], e)
@@ -449,12 +452,16 @@ type entry struct {
 
 // readEntry reads what a file's path tells in a folder of kind, root being
 // the folder's name (see locationName): a disc's entry, a Blu-ray disc's
-// stream or a DVD's VOB, is read as its disc, matched by its folder's
-// name.
+// playlist or stream or a DVD's VOB, is read as its disc, matched by its
+// folder's name. A disc's title other than its main one is a unit of its
+// own, which its name does not tell: it is matched by hand.
 func readEntry(kind, root, rel string, f found) entry {
 	if kind == KindShows {
 		show, episode, unit := episodeName(rel)
 		return entry{path: rel, file: f, unit: unit, title: show, episode: episode}
+	}
+	if disc, number, ok := discPlaylist(rel); ok && f.extra {
+		return entry{path: rel, file: f, unit: titleUnit(disc, number)}
 	}
 	if _, disc, ok := discEntry(rel); ok {
 		return entry{path: rel, file: f, unit: discUnit(disc), title: discName(disc, root)}
@@ -465,12 +472,12 @@ func readEntry(kind, root, rel string, f found) entry {
 // moveStreamLinks moves to their disc the links made on a disc's streams
 // when scans read each stream as a movie of its own: a stream is no unit
 // any more. A disc without a link takes its stream's, the one of the
-// stream kept when several are linked, else the first by path; the
-// stream's links are removed. The links of a disc not found now stay.
+// stream it is read as when several are linked, else the first by path;
+// the stream's links are removed. The links of a disc not found now stay.
 func (s *Service) moveStreamLinks(ctx context.Context, id accounts.ID, files map[string]found, links map[string]string) (map[string]string, error) {
 	kept := map[string]string{}
-	for rel := range files {
-		if disc, ok := discStream(rel); ok {
+	for rel, f := range files {
+		if kind, disc, ok := discEntry(rel); ok && kind == DiscBluRay && !f.extra {
 			kept[discUnit(disc)] = rel
 		}
 	}

@@ -1,7 +1,10 @@
 package jellyfin
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -154,10 +158,10 @@ func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
 	}
 }
 
-// localDVD is a test server, its ffprobe at ffprobe, with a local folder
-// holding the test DVD of package localfiles in "Movie (2008)", linked to
-// the movie, and the DVD's media source in the movie's details.
-func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
+// localDisc is a test server, its ffprobe at ffprobe, with a local folder
+// holding the disc populate puts in the disc folder "Movie (2008)", linked
+// to the movie, and the disc's media source in the movie's details.
+func localDisc(t *testing.T, ffprobe string, populate func(dir string)) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
@@ -169,23 +173,7 @@ func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
 	})
 	p := playingOn(t, s)
 	dir := t.TempDir()
-	source := filepath.Join("..", "localfiles", "testdata", "dvd", "VIDEO_TS")
-	entries, err := os.ReadDir(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "Movie (2008)", "VIDEO_TS"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		data, err := os.ReadFile(filepath.Join(source, e.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "Movie (2008)", "VIDEO_TS", e.Name()), data, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	populate(filepath.Join(dir, "Movie (2008)"))
 	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +190,71 @@ func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
 		t.Fatalf("media sources: %+v", movie.MediaSources)
 	}
 	return p, (*movie.MediaSources)[2]
+}
+
+// localDVD is localDisc with the test DVD of package localfiles.
+func localDVD(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDisc(t, ffprobe, func(dir string) {
+		source := filepath.Join("..", "localfiles", "testdata", "dvd", "VIDEO_TS")
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "VIDEO_TS"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			data, err := os.ReadFile(filepath.Join(source, e.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "VIDEO_TS", e.Name()), data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+}
+
+// localBluRay is localDisc with the test Blu-ray disc of package
+// localfiles, whose main playlist plays two clips, 190 seconds in all.
+func localBluRay(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) {
+	t.Helper()
+	return localDisc(t, ffprobe, func(dir string) {
+		archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", "bluray.tar.gz"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer archive.Close()
+		unzipped, err := gzip.NewReader(archive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := tar.NewReader(unzipped)
+		for {
+			header, err := files.Next()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if header.Typeflag != tar.TypeReg {
+				continue
+			}
+			target := filepath.Join(dir, filepath.FromSlash(header.Name))
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(files)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(target, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
 }
 
 // A DVD of a local folder is one version, named after its folder, which is
@@ -224,28 +277,42 @@ func TestLocalDVDsAreNotOneFile(t *testing.T) {
 	}
 }
 
-// dvdFFmpeg is the FFmpeg of POLYFIN_TEST_FFMPEG, with its ffprobe beside
-// it, skipping the test when it is not set or reads no DVD (dvdvideo
-// demuxer).
-func dvdFFmpeg(t *testing.T) (ffmpeg, ffprobe string) {
+// A Blu-ray disc in a local folder is its main playlist, sized as both its
+// clips, which is not one file: neither played as it is nor downloaded.
+func TestLocalBluRaysAreNotOneFile(t *testing.T) {
+	p, local := localBluRay(t, "ffprobe-not-installed")
+	if local.Size == nil || *local.Size != 2893824+2838528 || local.SupportsDirectPlay || local.SupportsDirectStream {
+		t.Errorf("the disc's version: %+v", local)
+	}
+	var version BaseItemDto
+	if p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+local.Id, p.token, &version); version.Path != "Movie (2008).m2ts" {
+		t.Errorf("the disc's name: %q", version.Path)
+	}
+	if response, _ := fetchURL(t, p.url+"/Items/"+local.Id+"/Download?ApiKey="+p.token, nil); response.StatusCode != http.StatusBadRequest {
+		t.Errorf("a download of the disc: %d", response.StatusCode)
+	}
+}
+
+// discFFmpeg is the FFmpeg of POLYFIN_TEST_FFMPEG, with its ffprobe beside
+// it, skipping the test when it is not set or lacks the demuxer or
+// protocol name that reads a disc: list is -demuxers or -protocols.
+func discFFmpeg(t *testing.T, list, name string) (ffmpeg, ffprobe string) {
 	t.Helper()
 	ffmpeg = os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
-	output, err := exec.Command(ffmpeg, "-hide_banner", "-demuxers").Output()
-	if err != nil || !strings.Contains(string(output), " dvdvideo ") {
-		t.Skip("the FFmpeg of POLYFIN_TEST_FFMPEG has no dvdvideo demuxer")
+	output, err := exec.Command(ffmpeg, "-hide_banner", list).Output()
+	if err != nil || !slices.Contains(strings.Fields(string(output)), name) {
+		t.Skipf("the FFmpeg of POLYFIN_TEST_FFMPEG has no %s", name)
 	}
 	return ffmpeg, filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
 }
 
-// A DVD plays its main title, analyzed through FFmpeg's dvdvideo demuxer
-// with its tracks, over HLS only, its video converted: the playlist's
-// segments make the title's eight seconds.
-func TestLocalDVDsPlayOverHLS(t *testing.T) {
-	ffmpeg, ffprobe := dvdFFmpeg(t)
-	p, local := localDVD(t, ffprobe)
+// playDisc asks PlaybackInfo for the disc's media source on jellyfin-web,
+// checks it plays over HLS only, for want, and returns it.
+func playDisc(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Duration) MediaSourceInfo {
+	t.Helper()
 	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
 		"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
 	var info playbackInfoResponse
@@ -254,19 +321,19 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 	}
 	source := info.MediaSources[0]
 	if source.Id != local.Id || source.SupportsDirectPlay || source.SupportsDirectStream || !source.SupportsTranscoding ||
-		source.TranscodingUrl == "" || source.RunTimeTicks == nil || *source.RunTimeTicks != 8*10_000_000 {
-		t.Fatalf("the DVD's source: %+v", source)
+		source.TranscodingUrl == "" || source.RunTimeTicks == nil || (time.Duration(*source.RunTimeTicks)*100-want).Abs() > 100*time.Millisecond {
+		t.Fatalf("the disc's source: %+v", source)
 	}
-	var tracks []string
-	for _, stream := range source.MediaStreams {
-		tracks = append(tracks, stream.Type+" "+stream.Codec+" "+stream.Language)
-	}
-	// The movie's subtitle file, then the title's tracks.
-	if !slices.Equal(tracks, []string{"Subtitle subrip fra", "Video mpeg2video ", "Audio ac3 eng", "Audio ac3 fra", "Subtitle DVDSUB eng"}) {
-		t.Errorf("tracks: %q", tracks)
-	}
+	return source
+}
 
-	// The segments, joined, play the whole title.
+// playedFrames reads the HLS playback of a transcoding URL, its last
+// segment first, as an app seeking there does, then every segment in
+// order, and returns how many video frames they hold together, which
+// decode, and when they start: Polyfin shifts the title's times by 10
+// seconds (see hls.timestampOffset).
+func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding string) (frames int, start float64) {
+	t.Helper()
 	get := func(path string) []byte {
 		t.Helper()
 		status, body := p.call(http.MethodGet, path, "", nil)
@@ -275,7 +342,7 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 		}
 		return body
 	}
-	base := source.TranscodingUrl[:strings.Index(source.TranscodingUrl, "master.m3u8")]
+	base := transcoding[:strings.Index(transcoding, "master.m3u8")]
 	resolve := func(uri string) string {
 		if strings.HasPrefix(uri, "/") {
 			return uri
@@ -283,14 +350,12 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 		return base + uri
 	}
 	var playlist string
-	for line := range strings.Lines(string(get(source.TranscodingUrl))) {
+	for line := range strings.Lines(string(get(transcoding))) {
 		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
 			playlist = resolve(line)
 			break
 		}
 	}
-	// An app seeking to the last segment first has FFmpeg seek in the
-	// title; the segments, then read in order and joined, play it whole.
 	var uris []string
 	for line := range strings.Lines(string(get(playlist))) {
 		line = strings.TrimSpace(line)
@@ -316,11 +381,59 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 		t.Fatalf("the segments do not decode: %v %s", err, output)
 	}
 	// The segments keep the title's times, shifted: their video frames
-	// tell how long they play, at the title's rate.
+	// tell how long they play.
 	output, err = exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
 		"-of", "csv=p=0", file).Output()
-	frames, _ := strconv.Atoi(strings.TrimSpace(string(output)))
-	if seconds := float64(frames) * 1001 / 30000; err != nil || seconds < 7.5 || seconds > 8.5 {
-		t.Errorf("the segments play %d frames: %v", frames, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, _ = strconv.Atoi(strings.TrimSpace(string(output)))
+	output, err = exec.Command(ffprobe, "-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0", file).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, _ = strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	return frames, start
+}
+
+// tracks lists a media source's tracks, by type, codec and language.
+func tracks(source MediaSourceInfo) []string {
+	var list []string
+	for _, stream := range source.MediaStreams {
+		list = append(list, stream.Type+" "+stream.Codec+" "+stream.Language)
+	}
+	return list
+}
+
+// A DVD plays its main title, analyzed through FFmpeg's dvdvideo demuxer
+// with its tracks, over HLS only, its video converted: the playlist's
+// segments make the title's eight seconds, even read from a seek.
+func TestLocalDVDsPlayOverHLS(t *testing.T) {
+	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
+	p, local := localDVD(t, ffprobe)
+	source := playDisc(t, p, local, 8*time.Second)
+	// The movie's subtitle file, then the title's tracks.
+	if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video mpeg2video ", "Audio ac3 eng", "Audio ac3 fra", "Subtitle DVDSUB eng"}) {
+		t.Errorf("tracks: %q", got)
+	}
+	frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
+	if seconds := float64(frames) * 1001 / 30000; seconds < 7.5 || seconds > 8.5 || start != 10 {
+		t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+	}
+}
+
+// A Blu-ray disc plays its main playlist through FFmpeg's bluray protocol,
+// both its clips, over HLS only, its video converted, starting at zero
+// though its clips start at 600 seconds.
+func TestLocalBluRaysPlayTheirMainPlaylist(t *testing.T) {
+	ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
+	p, local := localBluRay(t, ffprobe)
+	source := playDisc(t, p, local, 190*time.Second)
+	if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
+		t.Errorf("tracks: %q", got)
+	}
+	frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
+	if seconds := float64(frames) / 24; seconds < 189 || seconds > 191 || start != 10 {
+		t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
 	}
 }

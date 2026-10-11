@@ -9,10 +9,10 @@ import (
 )
 
 // A Blu-ray disc copied as it is: a disc folder holding a BDMV folder,
-// whose streams are the .m2ts files directly in BDMV/STREAM, any case. Its
-// movie is one of them, the largest as a rule; the others are menus,
-// extras and pieces. A scan keeps one entry per disc, its largest stream,
-// matched by the disc folder's name.
+// whose streams are the .m2ts files directly in BDMV/STREAM, any case, and
+// whose playlists, in BDMV/PLAYLIST, play them (see bluray.go). A scan
+// keeps an entry per title of a disc, its main title matched by the disc
+// folder's name, or, when it cannot read its playlists, its largest stream.
 
 // discMarker is a disc folder's name that only numbers the disc, as in
 // "Disc 1", "DISC01", "Disk 2", "CD1", "BD 1" or "Part 2": the title is the
@@ -60,45 +60,21 @@ const (
 	DiscDVD    = "dvd"
 )
 
-// discEntry tells whether rel is the entry a scan keeps for a disc of a
-// movies folder, a Blu-ray disc's stream or a DVD's VOB, with the disc's
-// kind and its folder's path, "" for a disc at the folder's root.
+// discEntry tells whether rel is an entry a scan keeps for a disc of a
+// movies folder, a Blu-ray disc's playlist or stream or a DVD's VOB, with
+// the disc's kind and its folder's path, "" for a disc at the folder's
+// root.
 func discEntry(rel string) (kind, disc string, ok bool) {
 	if disc, ok := discStream(rel); ok {
+		return DiscBluRay, disc, true
+	}
+	if disc, _, ok := discPlaylist(rel); ok {
 		return DiscBluRay, disc, true
 	}
 	if disc, ok := dvdOf(rel); ok && dvdSet(rel) > 0 {
 		return DiscDVD, disc, true
 	}
 	return "", "", false
-}
-
-// collapseDiscs keeps, of the video files a walk found, one per disc of a
-// movies folder, its largest stream (the first by path among streams of
-// the same size), and none of a shows folder's discs: a disc of episodes
-// is no one episode. The other files in a disc's BDMV folder are left
-// out; those beside it stay.
-func collapseDiscs(kind string, files map[string]found) {
-	largest := map[string]string{}
-	streams := map[string]found{}
-	for rel, f := range files {
-		disc, ok := discOf(rel)
-		if !ok {
-			continue
-		}
-		delete(files, rel)
-		if _, stream := discStream(rel); !stream || kind == KindShows {
-			continue
-		}
-		streams[rel] = f
-		best, seen := largest[disc]
-		if !seen || f.size > streams[best].size || f.size == streams[best].size && rel < best {
-			largest[disc] = rel
-		}
-	}
-	for _, rel := range largest {
-		files[rel] = streams[rel]
-	}
 }
 
 // discName is what a disc's folder tells, as a movie file's name does: its

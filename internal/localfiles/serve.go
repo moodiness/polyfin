@@ -110,8 +110,10 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 // Streams answers the streams of a folder for a title or an episode: its
 // files, named after the folder, with their resolution and size, which
 // the loopback interface serves (see UseFiles). A disc's entry bears its
-// disc's name as its file name (see discLabel); a DVD's has the address of
-// its input as its URL, FFmpeg reading it itself (see Input).
+// disc's name as its file name (see discLabel), a title other than the
+// disc's main one its playlist's number too, as in "Box - DISC02 - title
+// 2.m2ts"; a Blu-ray disc's playlist and a DVD have the address of their
+// input as their URL, FFmpeg reading them itself (see Input).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -133,11 +135,11 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		}
 		season, _ := strconv.Atoi(m[2])
 		episode, _ := strconv.Atoi(m[3])
-		rows, err = s.db.Query(ctx, `SELECT id, path, size, height FROM local_files
+		rows, err = s.db.Query(ctx, `SELECT id, path, unit, size, height FROM local_files
 			WHERE addon_id = $1 AND stremio_id = $2 AND season = $3 AND episode <= $4 AND last_episode >= $4 ORDER BY size DESC, path`,
 			source, m[1], season, episode)
 	} else {
-		rows, err = s.db.Query(ctx, `SELECT id, path, size, height FROM local_files
+		rows, err = s.db.Query(ctx, `SELECT id, path, unit, size, height FROM local_files
 			WHERE addon_id = $1 AND stremio_id = $2 ORDER BY size DESC, path`, source, id)
 	}
 	if err != nil {
@@ -145,10 +147,10 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
 		var file accounts.ID
-		var rel string
+		var rel, unit string
 		var size int64
 		var height *int
-		if err := row.Scan(&file, &rel, &size, &height); err != nil {
+		if err := row.Scan(&file, &rel, &unit, &size, &height); err != nil {
 			return stremio.Stream{}, err
 		}
 		details := []string{formatSize(size)}
@@ -157,8 +159,16 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		}
 		filename, address := path.Base(rel), s.files+file.String()+strings.ToLower(path.Ext(rel))
 		if disc, folder, ok := discEntry(rel); ok && kind == KindMovies {
-			filename = discLabel(folder, locationName(location)) + path.Ext(rel)
-			if disc == DiscDVD {
+			label := discLabel(folder, locationName(location))
+			filename = label + path.Ext(rel)
+			if _, number, playlist := discPlaylist(rel); playlist {
+				if unit != discUnit(folder) {
+					label += " - title " + strconv.Itoa(number)
+				}
+				// The bluray protocol answers an MPEG-TS stream, as a disc's
+				// streams are.
+				filename, address = label+".m2ts", s.inputs+file.String()
+			} else if disc == DiscDVD {
 				address = s.inputs + file.String()
 			}
 		}

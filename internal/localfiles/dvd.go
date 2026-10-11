@@ -136,10 +136,11 @@ func dvdEntry(root string, parts map[string]found) (rel string, f found, ok bool
 }
 
 // Input finds what FFmpeg reads the version key names from, its
-// identifier as Streams gives it: a DVD's main title, read from its
-// VIDEO_TS folder with the dvdvideo demuxer, through no symbolic link
-// leading out of its folder. Only a DVD of a movies folder in the
-// container has one.
+// identifier as Streams gives it, through no symbolic link leading out of
+// its folder: a Blu-ray disc's title, its playlist played from the disc's
+// folder with the bluray protocol, or a DVD's main title, read from its
+// VIDEO_TS folder with the dvdvideo demuxer. Only the discs of a movies
+// folder in the container have one.
 func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 	id, err := accounts.ParseID(key)
 	if err != nil {
@@ -155,16 +156,33 @@ func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 	if err != nil {
 		return media.Input{}, err
 	}
-	if _, ok := dvdOf(rel); !ok || dvdSet(rel) == 0 || kind != KindMovies || shareKind(root) != "" {
+	if kind != KindMovies || shareKind(root) != "" {
 		return media.Input{}, ErrGone
 	}
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return media.Input{}, ErrGone
 	}
-	dir, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(path.Dir(rel))))
-	if err != nil || !within(real, dir) {
+	folder := func(rel string) (string, error) {
+		dir, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
+		if err != nil || !within(real, dir) {
+			return "", ErrGone
+		}
+		return dir, nil
+	}
+	if disc, number, ok := discPlaylist(rel); ok {
+		dir, err := folder(disc)
+		if err != nil {
+			return media.Input{}, err
+		}
+		return media.Input{Options: []string{"-playlist", strconv.Itoa(number)}, Path: "bluray:" + dir}, nil
+	}
+	if _, ok := dvdOf(rel); !ok || dvdSet(rel) == 0 {
 		return media.Input{}, ErrGone
+	}
+	dir, err := folder(path.Dir(rel))
+	if err != nil {
+		return media.Input{}, err
 	}
 	title, _, err := dvdMain(dir)
 	if err != nil {

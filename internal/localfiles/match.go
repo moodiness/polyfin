@@ -30,6 +30,9 @@ const (
 	reasonOtherYear = "other_year"
 	// reasonSearchFailed: the search failed.
 	reasonSearchFailed = "search_failed"
+	// reasonDiscTitle: it is a disc's title other than its main one, which
+	// the disc folder's name does not tell (see titleUnit).
+	reasonDiscTitle = "disc_title"
 )
 
 // How a file was matched, its matched_by.
@@ -124,6 +127,9 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 	}
 	if e.nfo != "" {
 		return s.described(ctx, kind, e.nfo, n, byNFO), nil
+	}
+	if e.file.extra {
+		return match{reason: reasonDiscTitle}, nil
 	}
 	if n.title == "" {
 		return match{reason: reasonUnreadableName}, nil
@@ -282,6 +288,9 @@ func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]
 		if err := row.Scan(&rel, &f.size, &f.modified, &nfo); err != nil {
 			return entry{}, err
 		}
+		if disc, _, ok := discPlaylist(rel); ok {
+			f.extra = unit != discUnit(disc)
+		}
 		e := readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f)
 		e.nfo = nfo
 		return e, nil
@@ -354,7 +363,8 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 // Unmatched is a file of a folder no title was matched to: its path, the
 // unit a link would link (see Link), what its name tells, and why. Disc
 // is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
-// its unit the disc's folder; empty for any other file.
+// its unit the disc's folder, or one of its titles' (see titleUnit);
+// empty for any other file.
 type Unmatched struct {
 	Path   string
 	Unit   string
@@ -387,8 +397,10 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
 		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason)
-		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies && u.Unit == discUnit(disc) {
-			u.Disc = kind
+		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies {
+			if _, number, playlist := discPlaylist(u.Path); u.Unit == discUnit(disc) || playlist && u.Unit == titleUnit(disc, number) {
+				u.Disc = kind
+			}
 		}
 		return u, err
 	})
