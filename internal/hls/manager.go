@@ -1204,9 +1204,9 @@ func (r Remux) args(n int) []string {
 		// file again before it seeks, and 2 MB of it, which the analysis
 		// left in the source cache, describe the streams it copies or
 		// decodes. 0 would be FFmpeg's 5 s, not none. A burned image
-		// track may need more to know its size, and an MPEG-TS file to find
-		// every stream: both probe as usual.
-		if (r.Encode == nil || r.Encode.Burn == nil) && !r.Plan.Grid() {
+		// track may need more to know its size, and an MPEG-TS file or
+		// disc to find every stream: both probe as usual.
+		if (r.Encode == nil || r.Encode.Burn == nil) && !r.Plan.Grid() && !r.Plan.searched {
 			args = append(args, "-probesize", "2M", "-analyzeduration", "1M")
 		}
 	}

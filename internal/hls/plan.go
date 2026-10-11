@@ -43,6 +43,9 @@ type Plan struct {
 	// grid marks a plan cut on a fixed grid, not on keyframes (see
 	// NewGridPlan).
 	grid bool
+	// searched marks a plan whose version FFmpeg seeks in by searching its
+	// timestamps (see Searched).
+	searched bool
 }
 
 // NewGridPlan cuts a version lasting duration, whose keyframes are not
@@ -63,6 +66,16 @@ func NewGridPlan(duration time.Duration) Plan {
 // Grid reports whether the plan is cut on a fixed grid rather than on
 // the version's keyframes: its segments need the video converted.
 func (p Plan) Grid() bool { return p.grid }
+
+// Searched returns the plan of a version FFmpeg seeks in by searching its
+// timestamps, as its MPEG-TS demuxer does reading a Blu-ray disc: it then
+// lands on the first keyframe after the time asked, not on the one before
+// (see seekTime). Nor does FFmpeg probe less of it before a seek: an
+// MPEG-TS stream needs a full probe to find every track.
+func (p Plan) Searched() Plan {
+	p.searched = true
+	return p
+}
 
 // NewPlan cuts a version lasting duration into segments starting on its
 // keyframes: the first ends on the first keyframe at least firstDuration
@@ -126,7 +139,13 @@ func (p Plan) TargetDuration() int {
 // line seeks 3/23 s before the time it is given when the video has
 // B-frames, and its demuxers then go back to the closest keyframe: asking
 // a little past the keyframe a segment starts on lands on it in both
-// cases, as no other keyframe follows it within seekMargin.
+// cases, as no other keyframe follows it within seekMargin. A searched
+// version is asked for the previous segment's start: its demuxer goes on
+// to the next keyframe, at the latest the one segment n starts on, and
+// what it reads before that is left out (see encoding.take).
 func (p Plan) seekTime(n int) time.Duration {
+	if p.searched {
+		return p.starts[n-1] + 132*time.Millisecond
+	}
 	return p.starts[n] + 132*time.Millisecond
 }

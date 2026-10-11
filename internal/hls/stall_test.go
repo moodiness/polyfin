@@ -190,8 +190,8 @@ func TestProgressCountsWhatMoves(t *testing.T) {
 }
 
 // Jobs past the first segment probe 2 MB of the file, which the analysis
-// left in the cache, rather than 5; burned subtitles and MPEG-TS files,
-// cut on a grid, probe as usual.
+// left in the cache, rather than 5; burned subtitles, MPEG-TS files, cut
+// on a grid, and discs, searched, probe as usual.
 func TestLaterJobsProbeLess(t *testing.T) {
 	plan := NewPlan(seconds(0, 2, 6, 10), 14*time.Second)
 	burned := 3
@@ -203,6 +203,7 @@ func TestLaterJobsProbeLess(t *testing.T) {
 	converted := Remux{Input: "in", Audio: -1, Format: TS, Plan: plan, Encode: &VideoEncoding{Encoder: "libx264", Width: 1280, Height: 720}}
 	burning := Remux{Input: "in", Audio: -1, Format: TS, Plan: plan, Encode: &VideoEncoding{Encoder: "libx264", Width: 1280, Height: 720, Burn: &burned}}
 	grid := Remux{Input: "in", Audio: -1, Format: TS, Plan: NewGridPlan(14 * time.Second), Encode: &VideoEncoding{Encoder: "libx264", Width: 1280, Height: 720}}
+	disc := Remux{Input: "bluray:/discs/Movie", Audio: -1, Format: FMP4, Plan: plan.Searched()}
 	for name, tc := range map[string]struct {
 		r    Remux
 		n    int
@@ -213,9 +214,37 @@ func TestLaterJobsProbeLess(t *testing.T) {
 		"a conversion from a later segment": {converted, 1, true},
 		"burned subtitles":                  {burning, 2, false},
 		"an MPEG-TS file":                   {grid, 2, false},
+		"a disc":                            {disc, 2, false},
 	} {
 		if got := probes(tc.r, tc.n); got != tc.want {
 			t.Errorf("%s: probing less %v, want %v: %q", name, got, tc.want, tc.r.args(tc.n))
+		}
+	}
+}
+
+// FFmpeg is asked a little past the keyframe a segment starts on, and
+// lands on it; a searched version, which FFmpeg's MPEG-TS demuxer lands
+// on the first keyframe after the time asked in, is asked for the
+// previous segment's start, whether it is cut on keyframes or on a grid.
+func TestSearchedVersionsSeekToThePreviousSegment(t *testing.T) {
+	plan := NewPlan(seconds(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), 14*time.Second)
+	seek := func(plan Plan, n int) string {
+		args := Remux{Input: "in", Audio: -1, Format: FMP4, Plan: plan}.args(n)
+		return args[slices.Index(args, "-ss")+1]
+	}
+	for _, tc := range []struct {
+		plan Plan
+		n    int
+		want string
+	}{
+		{plan, 1, "2.132000"},
+		{plan, 2, "6.132000"},
+		{plan.Searched(), 1, "0.132000"},
+		{plan.Searched(), 3, "6.132000"},
+		{NewGridPlan(14 * time.Second).Searched(), 2, "2.132000"},
+	} {
+		if got := seek(tc.plan, tc.n); got != tc.want {
+			t.Errorf("segment %d of %v: -ss %s, want %s", tc.n, tc.plan.starts, got, tc.want)
 		}
 	}
 }
