@@ -238,11 +238,12 @@ const sources = {
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',
     unmatchedHelp:
-      'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc or a DVD, the whole disc.',
+      'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc or a DVD, the whole disc, or one movie of a disc that holds several.',
     noUnmatched: 'Every file is matched to a title.',
     shownOf: (shown: string, total: string) => `${shown} shown of ${total}.`,
     reasons: {
       unreadable_name: 'Its name gives no title, or no episode number',
+      disc_title: 'Another movie of the disc: link it to its title',
       not_found: 'The metadata addons know no title of this name',
       ambiguous: 'Several titles have this name: add the year to it, or link it',
       other_year: 'Titles of this name are of other years',
@@ -250,6 +251,7 @@ const sources = {
     } as Record<string, string>,
     read: (title: string) => `Read as “${title}”`,
     showFolder: (unit: string) => `Show folder: ${unit}`,
+    discTitle: (disc: string, title: number) => `${disc} · title ${title}`,
     disc: {
       bluray: (unit: string) => `Blu-ray disc: ${unit}`,
       dvd: (unit: string) => `DVD: ${unit}`,

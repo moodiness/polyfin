@@ -250,11 +250,12 @@ const sources: typeof en = {
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',
     unmatchedTitle: 'Fichiers non associés',
     unmatchedHelp:
-      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque.',
+      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque, ou l’un des films d’un disque qui en contient plusieurs.',
     noUnmatched: 'Chaque fichier est associé à un titre.',
     shownOf: (shown: string, total: string) => `${shown} affichés sur ${total}.`,
     reasons: {
       unreadable_name: 'Son nom ne donne aucun titre, ou aucun numéro d’épisode',
+      disc_title: 'Un autre film du disque : associez-le à son titre',
       not_found: 'Les addons de métadonnées ne connaissent aucun titre de ce nom',
       ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
       other_year: 'Les titres de ce nom sont d’autres années',
@@ -262,6 +263,7 @@ const sources: typeof en = {
     } as Record<string, string>,
     read: (title: string) => `Lu comme « ${title} »`,
     showFolder: (unit: string) => `Dossier de la série : ${unit}`,
+    discTitle: (disc: string, title: number) => `${disc} · titre ${title}`,
     disc: {
       bluray: (unit: string) => `Disque Blu-ray : ${unit}`,
       dvd: (unit: string) => `DVD : ${unit}`,

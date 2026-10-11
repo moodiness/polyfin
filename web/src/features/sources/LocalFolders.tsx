@@ -358,7 +358,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
     mutationFn: (unit: string) => unlinkLocalFile(addon.id, unit),
     onSuccess: (updated, unit) => {
       replaceCachedAddon('shared', updated)
-      toast(text.unlinked(unitName(unit, folder)))
+      toast(text.unlinked(unitName(unit, folder, text.discTitle)))
     },
     onSettled: () => {
       invalidateScope('shared')
@@ -402,12 +402,12 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
               <li key={link.unit} className="flex items-center justify-between gap-4 py-2">
                 <span className="min-w-0">
                   <span className="block font-mono text-small break-all text-ink-2">
-                    {unitName(link.unit, folder)}
+                    {unitName(link.unit, folder, text.discTitle)}
                   </span>
                   <Badge tone="accent">{link.imdbId}</Badge>
                 </span>
                 <IconButton
-                  label={text.unlinkLabel(unitName(link.unit, folder))}
+                  label={text.unlinkLabel(unitName(link.unit, folder, text.discTitle))}
                   icon={LinkBreakIcon}
                   size="sm"
                   disabled={unlink.isPending}
@@ -441,7 +441,7 @@ function UnmatchedRow({
     mutationFn: () => linkLocalFile(addon.id, file.path, imdbId.trim()),
     onSuccess: (updated) => {
       replaceCachedAddon('shared', updated)
-      toast(text.linked(unitName(file.unit, folder), imdbId.trim().toLowerCase()))
+      toast(text.linked(unitName(file.unit, folder, text.discTitle), imdbId.trim().toLowerCase()))
     },
     onSettled: () => {
       invalidateScope('shared')
@@ -464,7 +464,7 @@ function UnmatchedRow({
             text.reasons[file.reason] ?? file.reason,
             title !== '' ? text.read(title) : '',
             file.disc
-              ? text.disc[file.disc](unitName(file.unit, folder))
+              ? text.disc[file.disc](unitName(file.unit, folder, text.discTitle))
               : file.unit !== file.path
                 ? text.showFolder(file.unit)
                 : '',
@@ -502,8 +502,16 @@ function UnmatchedRow({
 /**
  * A unit as the admin app names it. "." is a disc at the folder's root: it bears the
  * folder's own name, the last element of its path or share address, as the scan reads its title.
+ * A Blu-ray disc's title other than its main one is the disc's unit, # and its playlist's number,
+ * named through titled.
  */
-function unitName(unit: string, folder: LocalFolder): string {
+function unitName(
+  unit: string,
+  folder: LocalFolder,
+  titled: (disc: string, title: number) => string,
+): string {
+  const title = /^(.*)#(\d{5})$/.exec(unit)
+  if (title) return titled(unitName(title[1], folder, titled), Number(title[2]))
   if (unit !== '.') return unit
   const last =
     folder.path
