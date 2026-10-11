@@ -1,7 +1,6 @@
 package playback
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -99,9 +98,7 @@ func TestTheMasteringDisplayOfAnInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newService(t, &fakeSource{}, ffprobe, nil)
-	base := s.LocalInputs(func(_ context.Context, key string) (media.Input, error) {
-		return media.Input{Options: []string{"-playlist", key}, Path: "bluray:/discs/Movie (2008)"}, nil
-	})
+	base := s.LocalInputs(fakeInputs{})
 	version := library.Version{ID: accounts.ID{8}, URL: base + "3"}
 	learned, ok := s.LearnMasteringDisplay(t.Context(), version, old, conversion)
 	if got := learned.Streams[0].MasteringDisplay; !ok || got == nil || !*got {

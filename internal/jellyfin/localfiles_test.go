@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -39,7 +40,7 @@ func TestLocalFilesAreVersions(t *testing.T) {
 			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
-		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := playingOn(t, s)
 	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
@@ -114,7 +115,7 @@ func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
 			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
-		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := playingOn(t, s)
 	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
@@ -174,7 +175,7 @@ func localDisc(t *testing.T, ffprobe string, populate func(at string)) (playback
 			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
-		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := playingOn(t, s)
 	dir := t.TempDir()
@@ -323,8 +324,14 @@ func discFFmpeg(t *testing.T, list, name string) (ffmpeg, ffprobe string) {
 // checks it plays over HLS only, for want, and returns it.
 func playDisc(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Duration) MediaSourceInfo {
 	t.Helper()
+	return playDiscOn(t, p, local, want, p.profile(t, "jellyfin-web-chrome"))
+}
+
+// playDiscOn is playDisc on the app of profile.
+func playDiscOn(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Duration, profile json.RawMessage) MediaSourceInfo {
+	t.Helper()
 	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
-		"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+		"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": profile})
 	var info playbackInfoResponse
 	if err := json.Unmarshal(data, &info); status != http.StatusOK || err != nil || len(info.MediaSources) != 1 {
 		t.Fatalf("PlaybackInfo: %d %s", status, data)
@@ -337,20 +344,90 @@ func playDisc(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Du
 	return source
 }
 
-// playedFrames reads the HLS playback of a transcoding URL (see played),
-// and returns how many video frames its segments hold together, which
-// decode, and when they start: Polyfin shifts the title's times by 10
-// seconds (see hls.timestampOffset).
-func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding string) (frames int, start float64) {
+// getSegment reads a playlist or segment of an HLS playback.
+func getSegment(t *testing.T, p playbackSetup, path string) []byte {
 	t.Helper()
-	file := played(t, p, transcoding)
+	status, body := p.call(http.MethodGet, path, "", nil)
+	if status != http.StatusOK {
+		t.Fatalf("%s: %d %s", path, status, body)
+	}
+	return body
+}
+
+// segmentURIs lists the segments of the HLS playback of a transcoding
+// URL, its initialization segment first.
+func segmentURIs(t *testing.T, p playbackSetup, transcoding string) []string {
+	t.Helper()
+	base := transcoding[:strings.Index(transcoding, "master.m3u8")]
+	resolve := func(uri string) string {
+		if strings.HasPrefix(uri, "/") {
+			return uri
+		}
+		return base + uri
+	}
+	var playlist string
+	for line := range strings.Lines(string(getSegment(t, p, transcoding))) {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			playlist = resolve(line)
+			break
+		}
+	}
+	var uris []string
+	for line := range strings.Lines(string(getSegment(t, p, playlist))) {
+		line = strings.TrimSpace(line)
+		if uri, ok := strings.CutPrefix(line, `#EXT-X-MAP:URI="`); ok {
+			uris = append(uris, resolve(strings.TrimSuffix(uri, `"`)))
+		} else if line != "" && !strings.HasPrefix(line, "#") {
+			uris = append(uris, resolve(line))
+		}
+	}
+	if len(uris) < 3 {
+		t.Fatalf("segments: %q", uris)
+	}
+	return uris
+}
+
+// decoded writes segments joined to a file, checks they decode, and
+// returns the file.
+func decoded(t *testing.T, ffmpeg string, segments ...[]byte) string {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "played")
+	if err := os.WriteFile(file, slices.Concat(segments...), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	output, err := exec.Command(ffmpeg, "-hide_banner", "-v", "error", "-i", file, "-f", "null", "-").CombinedOutput()
 	if err != nil {
 		t.Fatalf("the segments do not decode: %v %s", err, output)
 	}
+	return file
+}
+
+// played reads the HLS playback of a transcoding URL, its last segment
+// first, as an app seeking there does, then every segment in order, and
+// returns the file of the segments joined, which decode.
+func played(t *testing.T, p playbackSetup, ffmpeg, transcoding string) string {
+	t.Helper()
+	uris := segmentURIs(t, p, transcoding)
+	if len(getSegment(t, p, uris[len(uris)-1])) == 0 {
+		t.Fatalf("the last segment of %q", uris)
+	}
+	var segments [][]byte
+	for _, uri := range uris {
+		segments = append(segments, getSegment(t, p, uri))
+	}
+	return decoded(t, ffmpeg, segments...)
+}
+
+// playedFrames reads the HLS playback of a transcoding URL (see played),
+// and returns how many video frames its segments hold together, and when
+// they start: Polyfin shifts the title's times by 10 seconds (see
+// hls.timestampOffset).
+func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding string) (frames int, start float64) {
+	t.Helper()
+	file := played(t, p, ffmpeg, transcoding)
 	// The segments keep the title's times, shifted: their video frames
 	// tell how long they play.
-	output, err = exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
+	output, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
 		"-of", "csv=p=0", file).Output()
 	if err != nil {
 		t.Fatal(err)
@@ -364,54 +441,65 @@ func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding st
 	return frames, start
 }
 
-// played reads the HLS playback of a transcoding URL, its last segment
-// first, as an app seeking there does, then every segment in order, and
-// returns the file of the segments joined.
-func played(t *testing.T, p playbackSetup, transcoding string) string {
+// frameTimes are the times of the video frames of file, in order, and
+// its video's codec.
+func frameTimes(t *testing.T, ffprobe, file string) (times []float64, codec string) {
 	t.Helper()
-	get := func(path string) []byte {
-		t.Helper()
-		status, body := p.call(http.MethodGet, path, "", nil)
-		if status != http.StatusOK {
-			t.Fatalf("%s: %d %s", path, status, body)
-		}
-		return body
-	}
-	base := transcoding[:strings.Index(transcoding, "master.m3u8")]
-	resolve := func(uri string) string {
-		if strings.HasPrefix(uri, "/") {
-			return uri
-		}
-		return base + uri
-	}
-	var playlist string
-	for line := range strings.Lines(string(get(transcoding))) {
-		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
-			playlist = resolve(line)
-			break
-		}
-	}
-	var uris []string
-	for line := range strings.Lines(string(get(playlist))) {
-		line = strings.TrimSpace(line)
-		if uri, ok := strings.CutPrefix(line, `#EXT-X-MAP:URI="`); ok {
-			uris = append(uris, resolve(strings.TrimSuffix(uri, `"`)))
-		} else if line != "" && !strings.HasPrefix(line, "#") {
-			uris = append(uris, resolve(line))
-		}
-	}
-	if len(uris) < 3 || len(get(uris[len(uris)-1])) == 0 {
-		t.Fatalf("the last segment of %q", uris)
-	}
-	var joined []byte
-	for _, uri := range uris {
-		joined = append(joined, get(uri)...)
-	}
-	file := filepath.Join(t.TempDir(), "played")
-	if err := os.WriteFile(file, joined, 0o644); err != nil {
+	output, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name:packet=pts_time",
+		"-of", "csv=p=0", file).Output()
+	if err != nil {
 		t.Fatal(err)
 	}
-	return file
+	for line := range strings.Lines(string(output)) {
+		line = strings.Trim(strings.TrimSpace(line), ",")
+		if at, err := strconv.ParseFloat(line, 64); err == nil {
+			times = append(times, at)
+		} else if line != "" && line != "N/A" {
+			codec = line
+		}
+	}
+	slices.Sort(times)
+	return times, codec
+}
+
+// playsCopied checks that the test Blu-ray disc's main title plays over
+// HLS on jellyfin-web with its H.264 video copied, cut on the keyframes
+// of its clips' EP maps: its segments, in order, hold each of the title's
+// 4560 frames once, a frame every 1/24 s from 10 s (see
+// hls.timestampOffset); a later segment read first, from a seek, holds
+// the same frames as in order.
+func playsCopied(t *testing.T, p playbackSetup, local MediaSourceInfo, ffmpeg, ffprobe string) {
+	t.Helper()
+	source := playDisc(t, p, local, 190*time.Second)
+	if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
+		t.Errorf("tracks: %q", got)
+	}
+	if strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") {
+		t.Fatalf("the video is converted: %s", source.TranscodingUrl)
+	}
+	seek := playDisc(t, p, local, 190*time.Second)
+	uris := segmentURIs(t, p, seek.TranscodingUrl)
+	later := len(uris) * 2 / 3
+	sought, _ := frameTimes(t, ffprobe, decoded(t, ffmpeg, getSegment(t, p, uris[0]), getSegment(t, p, uris[later])))
+
+	uris = segmentURIs(t, p, source.TranscodingUrl)
+	segments := make([][]byte, len(uris))
+	for i, uri := range uris {
+		segments[i] = getSegment(t, p, uri)
+	}
+	times, codec := frameTimes(t, ffprobe, decoded(t, ffmpeg, segments...))
+	if len(times) != 190*24 || codec != "h264" {
+		t.Fatalf("the segments hold %d %s frames", len(times), codec)
+	}
+	for i, at := range times {
+		if want := 10 + float64(i)/24; math.Abs(at-want) > 0.002 {
+			t.Fatalf("frame %d at %.4f s, not %.4f s", i, at, want)
+		}
+	}
+	inOrder, _ := frameTimes(t, ffprobe, decoded(t, ffmpeg, segments[0], segments[later]))
+	if len(sought) == 0 || !slices.Equal(sought, inOrder) {
+		t.Errorf("segment %d from a seek: %d frames from %v, in order %d from %v", later-1, len(sought), sought[:min(1, len(sought))], len(inOrder), inOrder[:min(1, len(inOrder))])
+	}
 }
 
 // tracks lists a media source's tracks, by type, codec and language.
@@ -441,18 +529,39 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 }
 
 // A Blu-ray disc plays its main playlist through FFmpeg's bluray protocol,
-// both its clips, over HLS only, its video converted, starting at zero
-// though its clips start at 600 seconds.
+// both its clips, over HLS only, starting at zero though its clips start
+// at 600 seconds, its video copied (see playsCopied).
 func TestLocalBluRaysPlayTheirMainPlaylist(t *testing.T) {
 	ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 	p, local := localBluRay(t, ffprobe)
-	source := playDisc(t, p, local, 190*time.Second)
-	if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
-		t.Errorf("tracks: %q", got)
+	playsCopied(t, p, local, ffmpeg, ffprobe)
+}
+
+// An app that does not take a Blu-ray disc's video codec has it
+// converted, though it is cut on its keyframes.
+func TestLocalBluRaysConvertForAppsWithoutTheirCodec(t *testing.T) {
+	ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
+	p, local := localBluRay(t, ffprobe)
+	var profile map[string]any
+	if err := json.Unmarshal(p.profile(t, "jellyfin-web-chrome"), &profile); err != nil {
+		t.Fatal(err)
 	}
-	frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
-	if seconds := float64(frames) / 24; seconds < 189 || seconds > 191 || start != 10 {
-		t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+	for _, entry := range profile["TranscodingProfiles"].([]any) {
+		if entry := entry.(map[string]any); entry["Type"] == "Video" {
+			entry["VideoCodec"] = "hevc"
+		}
+	}
+	data, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := playDiscOn(t, p, local, 190*time.Second, data)
+	if !strings.Contains(source.TranscodingUrl, "VideoCodec=hevc&") || !strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") {
+		t.Fatalf("the video is not converted: %s", source.TranscodingUrl)
+	}
+	uris := segmentURIs(t, p, source.TranscodingUrl)
+	if _, codec := frameTimes(t, ffprobe, decoded(t, ffmpeg, getSegment(t, p, uris[0]), getSegment(t, p, uris[1]))); codec != "hevc" {
+		t.Errorf("the segment's video: %q", codec)
 	}
 }
 
@@ -467,7 +576,7 @@ func TestLocalSubtitleFilesAreTracks(t *testing.T) {
 			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
-		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := playingOn(t, s)
 	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
@@ -609,7 +718,7 @@ func localPictureFiles(t *testing.T, ffprobe string, video []byte) (playbackSetu
 			o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
-		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := playingOn(t, s)
 	rectangle := testsubtitles.Rectangle{CanvasWidth: 320, CanvasHeight: 180, X: 60, Y: 120, Width: 200, Height: 40,
@@ -769,7 +878,7 @@ func TestLocalPictureSubtitleFilesAreBurnedIn(t *testing.T) {
 			source.MediaStreams[c.subtitle].DeliveryMethod != "Encode" {
 			t.Fatalf("subtitle %d chosen: %s %s", c.subtitle, source.MediaStreams[c.subtitle].DeliveryMethod, source.TranscodingUrl)
 		}
-		file := played(t, p, source.TranscodingUrl)
+		file := played(t, p, ffmpeg, source.TranscodingUrl)
 		// The color of a pixel inside the rectangle, at a time of the
 		// title, shifted as the segments are (see hls.timestampOffset).
 		for _, at := range []struct {
@@ -814,8 +923,9 @@ func localImage(t *testing.T, ffprobe, name string) (playbackSetup, MediaSourceI
 }
 
 // A disc image plays its main title from the image itself, over HLS only:
-// a DVD image through the dvdvideo demuxer, a Blu-ray image through the
-// bluray protocol, each whole.
+// a DVD image through the dvdvideo demuxer, its video converted, a
+// Blu-ray image through the bluray protocol, its video copied on the
+// keyframes read through its ISO 9660 file system, each whole.
 func TestLocalDiscImagesPlay(t *testing.T) {
 	t.Run("dvd", func(t *testing.T) {
 		ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
@@ -836,13 +946,6 @@ func TestLocalDiscImagesPlay(t *testing.T) {
 	t.Run("bluray", func(t *testing.T) {
 		ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 		p, local := localImage(t, ffprobe, "bluray")
-		source := playDisc(t, p, local, 190*time.Second)
-		if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
-			t.Errorf("tracks: %q", got)
-		}
-		frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
-		if seconds := float64(frames) / 24; seconds < 189 || seconds > 191 || start != 10 {
-			t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
-		}
+		playsCopied(t, p, local, ffmpeg, ffprobe)
 	})
 }

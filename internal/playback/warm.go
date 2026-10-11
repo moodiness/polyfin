@@ -69,8 +69,12 @@ func (s *Service) Warm(version library.Version, start time.Duration) {
 // warm is Warm; a warm that does not replace one under way, nor repeats
 // one done lately from any start, nor runs while the version is remuxed,
 // is what Plan starts, urgent unless Plan was asked in the background. An
-// urgent warm replaces one in the background from the same start.
+// urgent warm replaces one in the background from the same start. A
+// version read from its input, on the server's disk, is not warmed.
 func (s *Service) warm(version library.Version, start time.Duration, replace, urgent bool) {
+	if s.ReadsInput(version) {
+		return
+	}
 	if warmed, ok := s.warmed.Get(version.ID); ok && (warmed == start || !replace) {
 		return
 	}

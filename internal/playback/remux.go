@@ -52,8 +52,8 @@ type Remux struct {
 // index on first use. An MPEG-TS file, which has no index, is cut every
 // few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
 // Jellyfin plays such files, with FFmpeg reading it from the time asked.
-// So is a version read from its input (see LocalInputs), whose index
-// Polyfin does not read. The bytes of its first segment are warmed
+// So is a version read from its input (see LocalInputs) whose keyframes
+// the disc does not tell. The bytes of its first segment are warmed
 // meanwhile, unless a warm of the version ran lately (see Warm), in the
 // background when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
@@ -74,7 +74,15 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 		return hls.Plan{}, ErrNotRemuxable
 	}
 	if s.ReadsInput(version) {
-		return hls.NewGridPlan(analysis.Duration), nil
+		plan := hls.NewGridPlan(analysis.Duration)
+		if times, err := s.inputKeyframes(ctx, version); err == nil {
+			plan = hls.NewPlan(times, analysis.Duration)
+		}
+		// FFmpeg reads a Blu-ray disc as an MPEG-TS stream.
+		if transportStream(analysis) {
+			plan = plan.Searched()
+		}
+		return plan, nil
 	}
 	times, err := s.keyframes(ctx, version, analysis)
 	if errors.Is(err, container.ErrNoIndex) && transportStream(analysis) {
@@ -114,21 +122,14 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		// Shared and kept like an analysis: read to the end, and saved, even
 		// once the request that started it is canceled.
 		ctx := context.WithoutCancel(ctx)
-		var data []byte
-		err := s.db.QueryRow(ctx, "SELECT keyframes FROM media_keyframes WHERE version_id = $1", version.ID).Scan(&data)
-		if err == nil {
-			if times, err := decodeKeyframes(data); err == nil {
-				s.indexes.Put(version.ID, times)
-				return times, nil
-			}
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			s.logger.Warn("Reading a keyframe index failed", "error", err)
+		if times, ok := s.savedKeyframes(ctx, version.ID); ok {
+			return times, nil
 		}
 		src := s.open(version)
 		defer src.Release()
 		started := time.Now()
 		var times []time.Duration
-		err = s.readSized(ctx, version, analysis, src, func(size int64) error {
+		err := s.readSized(ctx, version, analysis, src, func(size int64) error {
 			var err error
 			if times, err = container.Keyframes(ctx, src, size); err == nil {
 				// From the blocks just read: no request more.
@@ -156,11 +157,7 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 			}
 			return nil, err
 		}
-		if _, err := s.db.Exec(ctx, `INSERT INTO media_keyframes (version_id, keyframes) VALUES ($1, $2)
-			ON CONFLICT (version_id) DO UPDATE SET keyframes = excluded.keyframes, indexed_at = now()`, version.ID, encodeKeyframes(times)); err != nil {
-			s.logger.Warn("Saving a keyframe index failed", "error", err)
-		}
-		s.indexes.Put(version.ID, times)
+		s.saveKeyframes(ctx, version.ID, times)
 		s.logger.Debug("Read a keyframe index", "addon", version.Addon, "keyframes", len(times), "duration", time.Since(started))
 		return times, nil
 	})
@@ -168,6 +165,31 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		return nil, err
 	}
 	return result.([]time.Duration), nil
+}
+
+// savedKeyframes returns a version's saved keyframe times, then
+// remembered.
+func (s *Service) savedKeyframes(ctx context.Context, version accounts.ID) ([]time.Duration, bool) {
+	var data []byte
+	err := s.db.QueryRow(ctx, "SELECT keyframes FROM media_keyframes WHERE version_id = $1", version).Scan(&data)
+	if err == nil {
+		if times, err := decodeKeyframes(data); err == nil {
+			s.indexes.Put(version, times)
+			return times, true
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		s.logger.Warn("Reading a keyframe index failed", "error", err)
+	}
+	return nil, false
+}
+
+// saveKeyframes saves and remembers a version's keyframe times.
+func (s *Service) saveKeyframes(ctx context.Context, version accounts.ID, times []time.Duration) {
+	if _, err := s.db.Exec(ctx, `INSERT INTO media_keyframes (version_id, keyframes) VALUES ($1, $2)
+		ON CONFLICT (version_id) DO UPDATE SET keyframes = excluded.keyframes, indexed_at = now()`, version, encodeKeyframes(times)); err != nil {
+		s.logger.Warn("Saving a keyframe index failed", "error", err)
+	}
+	s.indexes.Put(version, times)
 }
 
 // encodeKeyframes packs ascending times as varints of the microseconds

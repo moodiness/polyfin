@@ -15,20 +15,33 @@ import (
 // files FFmpeg reads with its dvdvideo demuxer. FFmpeg and ffprobe read
 // such a version from its input (see media.Input), on the server's disk,
 // rather than through the source cache. Nothing serves its bytes: it plays
-// only over HLS, cut every few seconds as an MPEG-TS file is, its video
-// converted (see hls.NewGridPlan).
+// only over HLS, cut into segments on its keyframes when the disc's own
+// tables tell them, as a Blu-ray disc's do, so that its video may be
+// copied; cut every few seconds otherwise, as an MPEG-TS file is, its
+// video converted (see hls.NewGridPlan).
 
 // ErrNoFile reports a version that is not one file, whose bytes nothing
 // serves: it plays only over HLS.
 var ErrNoFile = errors.New("the version is not one file: it plays only over HLS")
 
+// Inputs finds, by key, what FFmpeg reads the versions of local folders
+// that are not one file from (see localfiles.Service).
+type Inputs interface {
+	// Input is what FFmpeg reads the version from.
+	Input(ctx context.Context, key string) (media.Input, error)
+	// Keyframes are the version's keyframe times, on the timeline FFmpeg
+	// reads it on from zero, read from the disc's own tables; an error
+	// when they cannot be.
+	Keyframes(ctx context.Context, key string) ([]time.Duration, error)
+}
+
 // LocalInputs reads the versions of local folders that are not one file
-// from the inputs input finds by key (see localfiles.Service.Input). It
-// returns the address the keys are appended to: the URL of such a version,
-// which nothing serves, and by which ReadsInput knows it.
-func (s *Service) LocalInputs(input func(ctx context.Context, key string) (media.Input, error)) string {
+// from the inputs inputs finds by key. It returns the address the keys are
+// appended to: the URL of such a version, which nothing serves, and by
+// which ReadsInput knows it.
+func (s *Service) LocalInputs(inputs Inputs) string {
 	s.loopback.mu.Lock()
-	s.loopback.input = input
+	s.loopback.inputs = inputs
 	s.loopback.mu.Unlock()
 	return s.inputBase()
 }
@@ -46,16 +59,64 @@ func (s *Service) ReadsInput(version library.Version) bool {
 	return ok && key != ""
 }
 
-// input finds what FFmpeg reads a version from, ReadsInput being true.
-func (s *Service) input(ctx context.Context, version library.Version) (media.Input, error) {
+// inputKey is the key of a version read from its input, and what finds
+// its input.
+func (s *Service) inputKey(version library.Version) (Inputs, string, error) {
 	s.loopback.mu.Lock()
-	input := s.loopback.input
+	inputs := s.loopback.inputs
 	s.loopback.mu.Unlock()
 	key, ok := strings.CutPrefix(version.URL, s.inputBase())
-	if !ok || input == nil {
-		return media.Input{}, fmt.Errorf("%w: no input", ErrNoFile)
+	if !ok || inputs == nil {
+		return nil, "", fmt.Errorf("%w: no input", ErrNoFile)
 	}
-	return input(ctx, key)
+	return inputs, key, nil
+}
+
+// input finds what FFmpeg reads a version from, ReadsInput being true.
+func (s *Service) input(ctx context.Context, version library.Version) (media.Input, error) {
+	inputs, key, err := s.inputKey(version)
+	if err != nil {
+		return media.Input{}, err
+	}
+	return inputs.Input(ctx, key)
+}
+
+// inputKeyframes returns the keyframe times of a version read from its
+// input: remembered, saved, or read from the disc's own tables, and then
+// saved as a file's index is. A version whose keyframes cannot be read,
+// such as a DVD, is not read again for a while.
+func (s *Service) inputKeyframes(ctx context.Context, version library.Version) ([]time.Duration, error) {
+	if times, ok := s.indexes.Get(version.ID); ok {
+		return times, nil
+	}
+	if err, failed := s.unindexed.Get(version.ID); failed {
+		return nil, err
+	}
+	result, err, _ := s.flight.Do("keyframes "+version.ID.String(), func() (any, error) {
+		ctx := context.WithoutCancel(ctx)
+		if times, ok := s.savedKeyframes(ctx, version.ID); ok {
+			return times, nil
+		}
+		inputs, key, err := s.inputKey(version)
+		var times []time.Duration
+		if err == nil {
+			times, err = inputs.Keyframes(ctx, key)
+		}
+		if err == nil && len(times) == 0 {
+			err = errors.New("the disc lists no keyframe")
+		}
+		if err != nil {
+			s.unindexed.Put(version.ID, err)
+			return nil, err
+		}
+		s.saveKeyframes(ctx, version.ID, times)
+		s.logger.Debug("Read a disc's keyframes", "addon", version.Addon, "keyframes", len(times))
+		return times, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.([]time.Duration), nil
 }
 
 // analyzeInput is Analyze for a version read from its input: ffprobe reads

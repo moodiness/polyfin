@@ -15,7 +15,6 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
-	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
 )
 
@@ -168,9 +167,9 @@ type loopback struct {
 	files   map[accounts.ID]string
 	local   func(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
 	fileKey string
-	// input finds what FFmpeg reads a version of a local folder that is
+	// inputs finds what FFmpeg reads a version of a local folder that is
 	// not one file from (see LocalInputs).
-	input func(ctx context.Context, key string) (media.Input, error)
+	inputs Inputs
 }
 
 func newLoopback() (*loopback, error) {
