@@ -267,6 +267,8 @@ const sources: typeof en = {
     disc: {
       bluray: (unit: string) => `Disque Blu-ray : ${unit}`,
       dvd: (unit: string) => `DVD : ${unit}`,
+      bluray_image: (unit: string) => `Image Blu-ray : ${unit}`,
+      dvd_image: (unit: string) => `Image DVD : ${unit}`,
     },
     imdbId: 'Identifiant IMDb',
     imdbPlaceholder: 'tt0000000',

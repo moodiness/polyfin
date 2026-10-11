@@ -255,6 +255,8 @@ const sources = {
     disc: {
       bluray: (unit: string) => `Blu-ray disc: ${unit}`,
       dvd: (unit: string) => `DVD: ${unit}`,
+      bluray_image: (unit: string) => `Blu-ray image: ${unit}`,
+      dvd_image: (unit: string) => `DVD image: ${unit}`,
     },
     imdbId: 'IMDb identifier',
     imdbPlaceholder: 'tt0000000',

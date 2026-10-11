@@ -511,8 +511,11 @@ export type UnmatchedFile = {
   size: number
   reason:
     'unreadable_name' | 'not_found' | 'ambiguous' | 'other_year' | 'search_failed' | 'disc_title'
-  /** The kind of disc the file is read as, its unit the disc's folder; null for another file. */
-  disc: 'bluray' | 'dvd' | null
+  /**
+   * The kind of disc the file is read as, its unit the disc's folder, or the image itself for a
+   * disc image; null for another file.
+   */
+  disc: 'bluray' | 'dvd' | 'bluray_image' | 'dvd_image' | null
 }
 
 export type NewLocalFolder = {
