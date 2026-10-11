@@ -207,6 +207,13 @@ const sources = {
     files: 'Video files',
     matched: 'Matched to a title',
     unmatched: 'Unmatched',
+    matchedBy: (parts: string[]) => `Matched: ${parts.join(', ')}.`,
+    matchMethods: {
+      name: (count: string) => `${count} by an identifier in the name`,
+      nfo: (count: string) => `${count} by an NFO file`,
+      search: (count: string) => `${count} by a search`,
+      link: (count: string) => `${count} by hand`,
+    },
     holds: 'Holds',
     lastScan: 'Last scan',
     lastAttempt: 'Last attempt',
@@ -231,7 +238,7 @@ const sources = {
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',
     unmatchedHelp:
-      'No title was found for these files. Rename them with the title and year, then scan, or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc, the whole disc.',
+      'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc, the whole disc.',
     noUnmatched: 'Every file is matched to a title.',
     shownOf: (shown: string, total: string) => `${shown} shown of ${total}.`,
     reasons: {
@@ -252,7 +259,8 @@ const sources = {
     linksTitle: 'Linked by hand',
     unlink: 'Remove the link',
     unlinkLabel: (unit: string) => `Remove the link of ${unit}`,
-    unlinked: (unit: string) => `The link of ${unit} was removed: it is matched by its name again.`,
+    unlinked: (unit: string) =>
+      `The link of ${unit} was removed: it is matched by its name or NFO file again.`,
     openPage: 'Open the folder’s page',
   },
   mySources: {

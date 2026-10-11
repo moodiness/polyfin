@@ -456,6 +456,9 @@ export type FolderKind = 'movies' | 'shows'
 /** Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder. */
 export type FolderShare = '' | 'smb' | 'webdav'
 
+/** How a local file was matched to its title. */
+export type MatchMethod = 'name' | 'nfo' | 'search' | 'link'
+
 /**
  * A local folder: a folder mounted in the container, or a network share Polyfin reads itself,
  * scanned for the titles of its files.
@@ -480,6 +483,11 @@ export type LocalFolder = {
   scanning: boolean
   files: number
   matched: number
+  /**
+   * The matched files by how they were matched: an identifier in their name, their NFO file, a
+   * search, or a link made by hand.
+   */
+  matchedBy: Record<MatchMethod, number>
   unmatched: number
   /** The files, or shows' folders, linked to an IMDb identifier by hand. */
   links: { unit: string; imdbId: string }[]

@@ -21,6 +21,7 @@ import {
   type FolderKind,
   type FolderShare,
   type LocalFolder,
+  type MatchMethod,
   type UnmatchedFile,
 } from '@/api'
 import { errorMessage, formatBytes } from '@/format'
@@ -42,6 +43,9 @@ import {
   useToast,
 } from '@/ui'
 import { invalidateScope, replaceCachedAddon } from './model'
+
+/** The ways files are matched, in the order a folder's figures tell them. */
+const matchMethods: MatchMethod[] = ['name', 'nfo', 'search', 'link']
 
 /**
  * Keeps the server's sources fresh while a folder's scan goes on, every 2 seconds, so that its
@@ -284,8 +288,8 @@ export function LocalFolderEditForm({
 }
 
 /**
- * A folder's figures: its files, those matched and the others, its last scan, and why it cannot be
- * read when it cannot.
+ * A folder's figures: its files, those matched, how, and the others, its last scan, and why it
+ * cannot be read when it cannot.
  */
 export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const { language, t } = useI18n()
@@ -295,6 +299,9 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
     { label: text.matched, value: folder.matched, warn: false },
     { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
   ]
+  const methods = matchMethods
+    .filter((method) => folder.matchedBy[method] > 0)
+    .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
   return (
     <PanelSection>
@@ -316,6 +323,9 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           </div>
         ))}
       </dl>
+      {methods.length > 0 && (
+        <p className="mt-4 text-small text-ink-3">{text.matchedBy(methods)}</p>
+      )}
       {folder.error !== '' && (
         <Notice tone="danger" className="mt-5">
           <strong className="font-medium">
