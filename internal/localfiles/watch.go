@@ -133,7 +133,7 @@ type watcher struct {
 	due   chan accounts.ID
 	done  chan accounts.ID
 	// polled are the shares a poll found changed.
-	polled chan accounts.ID
+	polled chan sharePolled
 
 	mu sync.Mutex
 	// unwatched are why the folders to watch that could not be are not,
@@ -158,7 +158,7 @@ func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.C
 	open func() (fileWatcher, error), shares shareSource, spawn func(func())) *watcher {
 	return &watcher{ctx: ctx, logger: logger, folders: folders, scan: scan, open: open, shares: shares, spawn: spawn,
 		quiet: watchQuiet, check: watchCheck, retry: watchRetry, every: shareEvery, gap: shareGap, lists: shareLists,
-		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan accounts.ID),
+		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan sharePolled),
 		unwatched: map[accounts.ID]string{}, watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{},
 		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
 }
@@ -202,13 +202,8 @@ func (w *watcher) loop() {
 			w.failure(err)
 		case id := <-w.due:
 			w.settle(id)
-		case id := <-w.polled:
-			// A poll finds a share changed until a scan lists it again:
-			// a share waiting for its scan, or being scanned, is not
-			// made to wait longer. One no longer watched waits for none.
-			if _, waiting := w.changed[id]; w.polls[id] != nil && !waiting && !w.scanning[id] {
-				w.change(id)
-			}
+		case poll := <-w.polled:
+			w.polledShare(poll)
 		case id := <-w.done:
 			delete(w.scanning, id)
 			if w.again[id] {
@@ -474,6 +469,20 @@ func (w *watcher) change(id accounts.ID) {
 		w.arm(id, w.quiet)
 	}
 	w.changed[id] = time.Now()
+}
+
+// polledShare has a share a poll found changed scanned again quiet later.
+// A poll finds a share changed until a scan lists it again: a share
+// waiting for its scan, or being scanned, is not made to wait longer; nor
+// is one a scan kept other prints of since the poll read those it
+// compared, as the next round compares with them. One no longer watched
+// waits for none.
+func (w *watcher) polledShare(poll sharePolled) {
+	if _, waiting := w.changed[poll.id]; w.polls[poll.id] == nil || waiting || w.scanning[poll.id] ||
+		w.shares.shareSeen(poll.id).kept != poll.kept {
+		return
+	}
+	w.change(poll.id)
 }
 
 func (w *watcher) arm(id accounts.ID, after time.Duration) {

@@ -263,6 +263,7 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	s.forgetRemotes(func(id accounts.ID) bool { return local[id] })
 	s.mu.Lock()
 	maps.DeleteFunc(s.prints, func(id accounts.ID, _ map[string]uint64) bool { return !local[id] })
+	maps.DeleteFunc(s.kept, func(id accounts.ID, _ int) bool { return !local[id] })
 	s.mu.Unlock()
 	hours := s.settings().LocalScanHours
 	for _, addon := range installed {
@@ -454,6 +455,7 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list
 	if list.prints != nil {
 		s.mu.Lock()
 		s.prints[id] = list.prints
+		s.kept[id]++
 		s.mu.Unlock()
 	}
 	return nil

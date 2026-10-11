@@ -31,6 +31,7 @@ type fakeShares struct {
 	mu      sync.Mutex
 	r       remote
 	prints  map[string]uint64
+	kept    int
 	scanned bool
 }
 
@@ -41,10 +42,10 @@ func (f *fakeShares) shareReader(context.Context, accounts.ID, string) (remote, 
 	return f.r, f.kind, nil
 }
 
-func (f *fakeShares) shareSeen(accounts.ID) (map[string]uint64, bool) {
+func (f *fakeShares) shareSeen(accounts.ID) seenShare {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.prints, f.scanned
+	return seenShare{prints: f.prints, kept: f.kept, scanned: f.scanned}
 }
 
 func (f *fakeShares) use(r remote) {
@@ -68,6 +69,7 @@ func (f *fakeShares) rescan() {
 		return
 	}
 	f.prints, f.scanned = list.prints, true
+	f.kept++
 }
 
 // davRemote reads a share served by serveWebDAV.
@@ -230,7 +232,7 @@ func TestShareWatchRoundsAreBounded(t *testing.T) {
 	counted := &countedRemote{remote: shares.r}
 	shares.use(counted)
 	wt.w.lists = 3
-	wt.w.polled = make(chan accounts.ID, 8)
+	wt.w.polled = make(chan sharePolled, 8)
 	p := &sharePoll{id: id}
 
 	// The last of the seven folders changes: each round lists the root
@@ -244,7 +246,7 @@ func TestShareWatchRoundsAreBounded(t *testing.T) {
 		}
 		select {
 		case got := <-wt.w.polled:
-			if got != id || round != 4 {
+			if got.id != id || round != 4 {
 				t.Fatalf("round %d found %v changed, want round 4", round, got)
 			}
 			return
@@ -252,6 +254,46 @@ func TestShareWatchRoundsAreBounded(t *testing.T) {
 		}
 	}
 	t.Fatal("the change was never found")
+}
+
+// A poll that compared the prints of a scan before the last one is
+// stale: the scan that ended since listed the share again, and the next
+// round compares with what that scan kept. A poll that compared the last
+// prints has the share scanned.
+func TestShareWatchDropsStalePolls(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	id := testID(1)
+	wt, shares, address := newShareWatchTest(t, dir, oneShare(id))
+	wt.w.polls[id] = &polling{address: address, cancel: func() {}}
+	wt.w.polled = make(chan sharePolled, 1)
+	p := &sharePoll{id: id, address: address}
+	poll := func() sharePolled {
+		t.Helper()
+		wt.w.round(t.Context(), p)
+		select {
+		case got := <-wt.w.polled:
+			return got
+		default:
+			t.Fatal("the change was not found")
+			return sharePolled{}
+		}
+	}
+
+	write(t, filepath.Join(dir, "movies", "The General (1926)", "The General (1926).mkv"), 10)
+	stale := poll()
+	// A scan ends before the watch reads the poll: it kept the share as
+	// it is now.
+	shares.rescan()
+	wt.w.polledShare(stale)
+	if _, waiting := wt.w.changed[id]; waiting {
+		t.Fatal("a poll that compared the prints of an earlier scan has the share scanned again")
+	}
+	write(t, filepath.Join(dir, "movies", "Metropolis (1927)", "Metropolis (1927).mkv"), 10)
+	wt.w.polledShare(poll())
+	if _, waiting := wt.w.changed[id]; !waiting {
+		t.Fatal("a poll that compared the last prints does not have the share scanned")
+	}
 }
 
 // A movie copied to a WebDAV share is scanned and matched without a scan

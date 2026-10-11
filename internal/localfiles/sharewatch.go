@@ -30,10 +30,26 @@ type shareSource interface {
 	// shareReader returns the reader of a share's folder and what the
 	// folder holds.
 	shareReader(ctx context.Context, id accounts.ID, address string) (remote, string, error)
-	// shareSeen returns the prints of the folders the last scan of a
-	// share's folder listed, by path, nil until a scan of it succeeds;
-	// scanned tells whether a scan of it ended since the service started.
-	shareSeen(id accounts.ID) (prints map[string]uint64, scanned bool)
+	// shareSeen returns what the scans of a share's folder saw.
+	shareSeen(id accounts.ID) seenShare
+}
+
+// seenShare is what the scans of a share's folder saw since the service
+// started: the prints of the folders the last scan that succeeded listed,
+// by path, nil until one does; how many scans kept prints, which tells a
+// poll whether those it compared are still the last; and whether a scan
+// of it ended.
+type seenShare struct {
+	prints  map[string]uint64
+	kept    int
+	scanned bool
+}
+
+// sharePolled is a share a poll found changed, against the prints the
+// kept-th scan of it kept (see seenShare).
+type sharePolled struct {
+	id   accounts.ID
+	kept int
 }
 
 // polling is a share polled: its address, and the end of its poll.
@@ -106,7 +122,8 @@ func (w *watcher) round(ctx context.Context, p *sharePoll) {
 		}
 		return
 	}
-	prints, scanned := w.shares.shareSeen(p.id)
+	seen := w.shares.shareSeen(p.id)
+	prints := seen.prints
 	root, err := listFolder(ctx, r, "")
 	if err != nil {
 		w.unreachable(ctx, p, err)
@@ -117,20 +134,20 @@ func (w *watcher) round(ctx context.Context, p *sharePoll) {
 	w.setPollReason(ctx, p.id, "")
 	switch {
 	case back:
-		w.changedShare(ctx, p.id)
+		w.changedShare(ctx, p.id, seen.kept)
 		return
 	case prints == nil:
 		// Its last scan failed, and it answers now: one more scan, not
 		// one a round.
-		if scanned && !p.retried {
+		if seen.scanned && !p.retried {
 			p.retried = true
-			w.changedShare(ctx, p.id)
+			w.changedShare(ctx, p.id, seen.kept)
 		}
 		return
 	}
 	p.retried = false
 	if folderPrint(kind, root) != prints[""] {
-		w.changedShare(ctx, p.id)
+		w.changedShare(ctx, p.id, seen.kept)
 		return
 	}
 	// The root comes first: "" sorts before any other path.
@@ -157,13 +174,13 @@ func (w *watcher) round(ctx context.Context, p *sharePoll) {
 		entries, err := listFolder(ctx, r, rel)
 		switch {
 		case errors.Is(err, fs.ErrNotExist), errors.Is(err, fs.ErrPermission), errors.Is(err, errIsFile):
-			w.changedShare(ctx, p.id)
+			w.changedShare(ctx, p.id, seen.kept)
 			return
 		case err != nil:
 			w.unreachable(ctx, p, err)
 			return
 		case folderPrint(kind, entries) != prints[rel]:
-			w.changedShare(ctx, p.id)
+			w.changedShare(ctx, p.id, seen.kept)
 			return
 		}
 	}
@@ -176,10 +193,11 @@ func listFolder(ctx context.Context, r remote, rel string) ([]remoteEntry, error
 	return r.list(ctx, rel)
 }
 
-// changedShare has a share scanned again quiet later.
-func (w *watcher) changedShare(ctx context.Context, id accounts.ID) {
+// changedShare has a share scanned again quiet later, found changed
+// against the prints the kept-th scan of it kept.
+func (w *watcher) changedShare(ctx context.Context, id accounts.ID, kept int) {
 	select {
-	case w.polled <- id:
+	case w.polled <- sharePolled{id, kept}:
 	case <-ctx.Done():
 	}
 }

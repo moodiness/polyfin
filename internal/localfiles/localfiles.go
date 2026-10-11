@@ -114,10 +114,11 @@ type Service struct {
 	// running are the scans under way, by folder, each closed when it
 	// ends; scanned the folders scanned since the service started; prints
 	// the prints of the folders the last scan of a share listed, by
-	// folder (see listing).
+	// folder (see listing), and kept how many scans of a share kept them.
 	running map[accounts.ID]chan struct{}
 	scanned map[accounts.ID]bool
 	prints  map[accounts.ID]map[string]uint64
+	kept    map[accounts.ID]int
 
 	// shares are the readers of the folders that are network shares, by
 	// folder, kept between requests.
@@ -140,7 +141,8 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
 		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{},
-		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, shares: map[accounts.ID]*pooledRemote{}}
+		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
+		shares: map[accounts.ID]*pooledRemote{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -194,13 +196,12 @@ func (s *Service) shareReader(ctx context.Context, id accounts.ID, address strin
 	return r, kind, err
 }
 
-// shareSeen returns the prints of the folders the last scan of a share's
-// folder listed, by path, nil until a scan of it succeeds; scanned tells
-// whether a scan of it ended since the service started.
-func (s *Service) shareSeen(id accounts.ID) (prints map[string]uint64, scanned bool) {
+// shareSeen returns what the scans of a share's folder saw since the
+// service started (see seenShare).
+func (s *Service) shareSeen(id accounts.ID) seenShare {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.prints[id], s.scanned[id]
+	return seenShare{prints: s.prints[id], kept: s.kept[id], scanned: s.scanned[id]}
 }
 
 // Close stops the watch and the scans under way, waits for them, and
