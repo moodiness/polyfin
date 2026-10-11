@@ -116,7 +116,7 @@ func newEnv(t *testing.T) env {
 	titles := &countedTitles{Service: lib}
 	service := New(pool, store, titles, logger, users.Settings, nil)
 	t.Cleanup(service.Close)
-	service.UseFiles("http://files.example/")
+	service.UseFiles("http://files.example/", "http://inputs.example/")
 	lib.UseLocal(service)
 	return env{t: t, pool: pool, service: service, addons: store, library: lib, titles: titles}
 }

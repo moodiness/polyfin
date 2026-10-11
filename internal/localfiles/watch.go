@@ -417,7 +417,7 @@ func (w *watcher) event(event fsnotify.Event) {
 			return
 		}
 	}
-	if (videoFile(base) || sideFile(base)) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+	if (videoFile(base) || sideFile(base) || dvdFile(filepath.Base(filepath.Dir(name)), base)) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.change(id)
 	}
 }

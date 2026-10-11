@@ -135,11 +135,11 @@ func TestDiscsAreOneMovie(t *testing.T) {
 		t.Errorf("folder: %+v %v", folder, err)
 	}
 	unmatched, total, err := e.service.Unmatched(t.Context(), addon.ID)
-	discs := map[string]bool{}
+	discs := map[string]string{}
 	for _, u := range unmatched {
 		discs[u.Unit] = u.Disc
 	}
-	if err != nil || total != 3 || !maps.Equal(discs, map[string]bool{"Box/DISC01_xyz": true, "Movie (2001)": true, "Other (1999)/Disc 1": true}) {
+	if err != nil || total != 3 || !maps.Equal(discs, map[string]string{"Box/DISC01_xyz": DiscBluRay, "Movie (2001)": DiscBluRay, "Other (1999)/Disc 1": DiscBluRay}) {
 		t.Errorf("unmatched: %d %+v %v", total, unmatched, err)
 	}
 	// The disc's version is named after its folder, not its stream.

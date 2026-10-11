@@ -192,15 +192,17 @@ func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) 
 }
 
 // describedSource describes a version as item details do, without a
-// device profile: playable as it is, its tracks as far as it was analyzed,
-// or, until it is, as RemuxDB describes its file.
+// device profile: playable as it is, unless it is not one file, its tracks
+// as far as it was analyzed, or, until it is, as RemuxDB describes its
+// file.
 func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID) MediaSourceInfo {
 	analysis, known := h.Playback.Analyzed(r.Context(), version.ID)
 	if !known {
 		analysis, known = h.RemuxDB.Described(version)
 	}
 	source := h.baseSource(r, p, version, id, analysis, known)
-	source.SupportsDirectPlay, source.SupportsDirectStream = true, true
+	whole := !h.Playback.ReadsInput(version)
+	source.SupportsDirectPlay, source.SupportsDirectStream = whole, whole
 	if known {
 		source.Container = playback.DisplayContainer(analysis, version.Filename)
 		source.DefaultAudioStreamIndex = p.tracks.audio(source.MediaStreams)

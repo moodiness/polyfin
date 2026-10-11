@@ -59,9 +59,10 @@ type found struct {
 }
 
 // listing is what a walk found under a folder, by path in it, with
-// slashes: its video files, and the side files beside them (see sideFile).
-// skipped are the folders it could not read: what was found in them
-// before is not gone. open opens one of the files found for reading.
+// slashes: its video files and the files of DVDs (see dvdFile), and the
+// side files beside them (see sideFile). skipped are the folders it could
+// not read: what was found in them before is not gone. open opens one of
+// the files found for reading.
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
@@ -69,8 +70,9 @@ type listing struct {
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
 }
 
-// walk lists the video and side files under root. It follows no symbolic
-// link to a folder, and none to a file out of root.
+// walk lists the video files, the files of DVDs and the side files under
+// root. It follows no symbolic link to a folder, and none to a file out of
+// root.
 func walk(ctx context.Context, root string) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -115,7 +117,7 @@ func walk(ctx context.Context, root string) (listing, error) {
 				return fs.SkipDir
 			}
 			return nil
-		case !videoFile(d.Name()) && !sideFile(d.Name()):
+		case !videoFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()):
 			return nil
 		case d.Type()&fs.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
@@ -134,10 +136,10 @@ func walk(ctx context.Context, root string) (listing, error) {
 			return nil
 		}
 		f := found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
-		if videoFile(d.Name()) {
-			list.files[rel] = f
-		} else {
+		if sideFile(d.Name()) {
 			list.sides[rel] = f
+		} else {
+			list.files[rel] = f
 		}
 		return nil
 	})
@@ -312,6 +314,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	files := list.files
 	collapseDiscs(folder.Kind, files)
+	if folder.Share == "" {
+		collapseDVDs(folder.Kind, root, files)
+	}
 	known, err := s.storedFiles(ctx, id)
 	if err != nil {
 		return err
@@ -443,14 +448,15 @@ type entry struct {
 }
 
 // readEntry reads what a file's path tells in a folder of kind, root being
-// the folder's name (see locationName): a disc's stream is read as its
-// disc, matched by its folder's name.
+// the folder's name (see locationName): a disc's entry, a Blu-ray disc's
+// stream or a DVD's VOB, is read as its disc, matched by its folder's
+// name.
 func readEntry(kind, root, rel string, f found) entry {
 	if kind == KindShows {
 		show, episode, unit := episodeName(rel)
 		return entry{path: rel, file: f, unit: unit, title: show, episode: episode}
 	}
-	if disc, ok := discStream(rel); ok {
+	if _, disc, ok := discEntry(rel); ok {
 		return entry{path: rel, file: f, unit: discUnit(disc), title: discName(disc, root)}
 	}
 	return entry{path: rel, file: f, unit: rel, title: movieName(rel)}

@@ -53,6 +53,26 @@ func discUnit(disc string) string {
 	return disc
 }
 
+// Kinds of discs, each read as one movie: a Blu-ray disc's folder, and a
+// DVD's (see dvd.go).
+const (
+	DiscBluRay = "bluray"
+	DiscDVD    = "dvd"
+)
+
+// discEntry tells whether rel is the entry a scan keeps for a disc of a
+// movies folder, a Blu-ray disc's stream or a DVD's VOB, with the disc's
+// kind and its folder's path, "" for a disc at the folder's root.
+func discEntry(rel string) (kind, disc string, ok bool) {
+	if disc, ok := discStream(rel); ok {
+		return DiscBluRay, disc, true
+	}
+	if disc, ok := dvdOf(rel); ok && dvdSet(rel) > 0 {
+		return DiscDVD, disc, true
+	}
+	return "", "", false
+}
+
 // collapseDiscs keeps, of the video files a walk found, one per disc of a
 // movies folder, its largest stream (the first by path among streams of
 // the same size), and none of a shows folder's discs: a disc of episodes

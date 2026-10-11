@@ -127,7 +127,9 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 		id = h.firstWorkingVersion(ctx, user, item)
 	}
 	version, err := h.Library.Version(ctx, user, item.ID, id)
-	if err != nil {
+	// Images are made of keyframes read by ranges through a file's index:
+	// a version that is not one file, a DVD, gets none.
+	if err != nil || h.Playback.ReadsInput(version) {
 		return
 	}
 	h.Thumbnails.Queue(version, device)

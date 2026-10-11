@@ -549,16 +549,22 @@ func (h *Handler) unconverted(ctx context.Context, d decided, request playbackIn
 // decide decides how the version at index plays on the app, for its device
 // profile. Only the conversions allowed are planned: it reports false when
 // the version would need another to play on the app. named tells whether
-// the app asked for this version, whose tracks it may have chosen.
+// the app asked for this version, whose tracks it may have chosen. A
+// version that is not one file, a DVD, plays only over HLS: never as it
+// is, nor on an app that sends no device profile.
 func (h *Handler) decide(r *http.Request, p playable, index int, version library.Version, id accounts.ID, analysis media.Analysis,
 	request playbackInfoRequest, allowed accounts.Conversions, named bool) (decided, bool) {
+	notFile := h.Playback.ReadsInput(version)
+	if notFile && request.DeviceProfile == nil {
+		return decided{}, false
+	}
 	source := h.baseSource(r, p, version, id, analysis, true)
 	streams := source.MediaStreams
 	options := playback.Options{
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
 		UserBitrate:         request.userLimit,
-		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
-		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
+		EnableDirectPlay:    (request.EnableDirectPlay == nil || *request.EnableDirectPlay) && !notFile,
+		EnableDirectStream:  (request.EnableDirectStream == nil || *request.EnableDirectStream) && !notFile,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
 		MaxHeight:           request.group,

@@ -353,7 +353,8 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 
 // Unmatched is a file of a folder no title was matched to: its path, the
 // unit a link would link (see Link), what its name tells, and why. Disc
-// tells a disc's stream kept for its disc, its unit the disc's folder.
+// is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
+// its unit the disc's folder; empty for any other file.
 type Unmatched struct {
 	Path   string
 	Unit   string
@@ -361,7 +362,7 @@ type Unmatched struct {
 	Year   int
 	Size   int64
 	Reason string
-	Disc   bool
+	Disc   string
 }
 
 // maxUnmatched bounds the unmatched files listed at once.
@@ -386,8 +387,8 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
 		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason)
-		if disc, ok := discStream(u.Path); ok && folder.Kind == KindMovies {
-			u.Disc = u.Unit == discUnit(disc)
+		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies && u.Unit == discUnit(disc) {
+			u.Disc = kind
 		}
 		return u, err
 	})

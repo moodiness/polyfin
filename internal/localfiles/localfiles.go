@@ -18,8 +18,10 @@
 // metadata addons' searches, kept only when they find one title. A
 // Blu-ray disc copied as it is, a folder holding BDMV, is one movie of a
 // movies folder, its largest stream, and is left out of a shows folder
-// (see collapseDiscs). An administrator links the files left unmatched to
-// an IMDb identifier by hand.
+// (see collapseDiscs); so is a DVD, a folder holding VIDEO_TS, in a folder
+// in the container, played from its folder (see collapseDVDs). An
+// administrator links the files left unmatched to an IMDb identifier by
+// hand.
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.
@@ -80,9 +82,10 @@ type Service struct {
 	box *secrets.Box
 	now func() time.Time
 	// files is the address the loopback interface serves the folders'
-	// files at, a file's key appended (see UseFiles); empty, folders list
-	// no stream.
-	files string
+	// files at, a file's key appended, and inputs the one the versions
+	// that are not one file have, their key appended (see UseFiles);
+	// empty, folders list no stream.
+	files, inputs string
 	// workers bounds the units matched at once in a scan.
 	workers int
 
@@ -123,9 +126,10 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
-// key appended (see playback.Service.LocalFiles); it is called before the
-// service is used.
-func (s *Service) UseFiles(base string) { s.files = base }
+// key appended (see playback.Service.LocalFiles), and the one of the
+// versions FFmpeg reads from their input, a DVD's (see Input and
+// playback.Service.LocalInputs); it is called before the service is used.
+func (s *Service) UseFiles(files, inputs string) { s.files, s.inputs = files, inputs }
 
 // Watch watches the folders in the container for changes until Close; it
 // is called once, before the service is used.

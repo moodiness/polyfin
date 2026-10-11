@@ -84,9 +84,10 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
-	if err != nil {
+	if err != nil || h.Playback.ReadsInput(version) {
 		// Jellyfin refuses to download what has no file, a series or a
-		// season, as a request it cannot process.
+		// season, as a request it cannot process; a version that is not one
+		// file, a DVD, is refused the same way.
 		processingError(w, http.StatusBadRequest)
 		return
 	}
@@ -131,13 +132,16 @@ func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, i
 
 // setDownload tells apps that a movie or an episode with versions can be
 // downloaded, when they asked, the user may download and one of the
-// versions fits their quality group, and with withPath names in Path the
-// file the version it was opened as (see openedIndex) downloads as.
+// versions, one file, fits their quality group, and with withPath names in
+// Path the file the version it was opened as (see openedIndex) downloads
+// as.
 func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, opened accounts.ID, withPath bool) {
 	if len(versions) == 0 {
 		return
 	}
-	fits := slices.ContainsFunc(versions, func(v library.Version) bool { return user.FitsGroup(h.versionHeight(r.Context(), v)) })
+	fits := slices.ContainsFunc(versions, func(v library.Version) bool {
+		return !h.Playback.ReadsInput(v) && user.FitsGroup(h.versionHeight(r.Context(), v))
+	})
 	if dto.CanDownload != nil && h.Accounts.MayDownload(user) && fits {
 		dto.CanDownload = new(true)
 	}

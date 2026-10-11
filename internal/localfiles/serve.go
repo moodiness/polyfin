@@ -109,8 +109,9 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 
 // Streams answers the streams of a folder for a title or an episode: its
 // files, named after the folder, with their resolution and size, which
-// the loopback interface serves (see UseFiles). A disc's stream bears its
-// disc's name as its file name (see discLabel).
+// the loopback interface serves (see UseFiles). A disc's entry bears its
+// disc's name as its file name (see discLabel); a DVD's has the address of
+// its input as its URL, FFmpeg reading it itself (see Input).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -154,12 +155,14 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		if height != nil {
 			details = append([]string{strconv.Itoa(*height) + "p"}, details...)
 		}
-		filename := path.Base(rel)
-		if disc, ok := discStream(rel); ok && kind == KindMovies {
-			filename = discLabel(disc, locationName(location)) + path.Ext(rel)
+		filename, address := path.Base(rel), s.files+file.String()+strings.ToLower(path.Ext(rel))
+		if disc, folder, ok := discEntry(rel); ok && kind == KindMovies {
+			filename = discLabel(folder, locationName(location)) + path.Ext(rel)
+			if disc == DiscDVD {
+				address = s.inputs + file.String()
+			}
 		}
-		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "),
-			URL:           s.files + file.String() + strings.ToLower(path.Ext(rel)),
+		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: address,
 			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil
 	})
 }

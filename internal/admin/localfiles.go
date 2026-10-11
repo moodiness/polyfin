@@ -168,9 +168,9 @@ type unmatchedJSON struct {
 	Year   *int   `json:"year"`
 	Size   int64  `json:"size"`
 	Reason string `json:"reason"`
-	// Disc tells a Blu-ray disc's stream, read as its disc: unit is the
-	// disc's folder.
-	Disc bool `json:"disc"`
+	// Disc is the kind of the disc the file is read as, "bluray" or "dvd",
+	// unit being the disc's folder; null for another file.
+	Disc *string `json:"disc"`
 }
 
 // folderUnmatched lists the files of a local folder no title was matched
@@ -192,7 +192,10 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 		Files []unmatchedJSON `json:"files"`
 	}{Total: total, Files: make([]unmatchedJSON, 0, len(list))}
 	for _, u := range list {
-		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: u.Disc}
+		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason}
+		if u.Disc != "" {
+			file.Disc = new(u.Disc)
+		}
 		if u.Year > 0 {
 			file.Year = new(u.Year)
 		}
