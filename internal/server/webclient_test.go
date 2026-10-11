@@ -559,7 +559,9 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		ask     = "ask http://polyfin.test/Polyfin/Items/" + id + "/Versions"
 		details = "details t"
 	)
-	// A source is a version as the title's details list it.
+	// A source is a version as the title's details list it. An Id may end
+	// with "=" and the source's ETag, which Polyfin gives each source: the
+	// version's own identifier, the first source's included.
 	type source struct {
 		Id, Name string
 		Size     int64 `json:",omitempty"`
@@ -727,6 +729,53 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 			steps: []string{title, "menu", "pick t", "tick", "render", "menu", "tick", "tick"},
 			want: slices.Concat([]string{ask, details, "menu t v0 *v1 shown"}, reloads, []string{ask, details}, reloads,
 				[]string{"tracks v5", "menu t *v5 v0 v1 shown", ask, "idle"})},
+		// Polyfin names a version otherwise in a later answer, as when its
+		// link changed or its size became known: the version picked is the
+		// one source with its name, and its size when both are known.
+		"a version picked whose link changed stays picked": {options: []source{{id, "Version 0", 0}, {"u1", "Version 1", 0}}, picked: "u1",
+			answers: []answer{{0, 3, []source{{id, "Version 0", 0}, {"u2", "Version 1", 0}, {"v2", "Version 2", 0}}}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, ask, "idle", "menu t *u2 v2 shown"})},
+		"a version picked whose size became known stays picked": {options: []source{{id, "Version 0", 0}, {"u1", "Version 1", 0}}, picked: "u1",
+			answers: []answer{
+				{1, 3, []source{{id, "Version 0", 0}, {"u1", "Version 1", 0}, {"v2", "Version 2", 0}}},
+				{0, 4, []source{{id, "Version 0", 0}, {"f1", "Version 1", 700}, {"v2", "Version 2", 0}, {"v3", "Version 3", 0}}},
+			}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details, ask, details}, reloads, []string{ask, "idle", "menu t *f1 v2 v3 shown"})},
+		"a version picked whose name others share is not guessed": {options: []source{{id, "Version 0", 0}, {"u1", "Same", 0}}, picked: "u1",
+			answers: []answer{{0, 3, []source{{id, "Version 0", 0}, {"u2", "Same", 0}, {"u3", "Same", 0}}}}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, ask, "idle", "menu *t u2 u3 shown"})},
+		// The version shown first is followed by its ETag, once the script
+		// listed it: another version comes first while it is renamed, and
+		// it stays selected under its own identifier.
+		"the version shown first stays selected when another comes first as it is renamed": {listed: 2,
+			answers: []answer{
+				{1, 3, []source{{id + "=v0", "Version 0", 0}, {"v1=v1", "Version 1", 0}, {"v2=v2", "Version 2", 0}}},
+				{0, 4, []source{{id + "=v9", "Version 9", 0}, {"v0=v0", "Version 0 · 2 GB", 2000}, {"v1=v1", "Version 1", 0}, {"v2=v2", "Version 2", 0}}},
+			}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details, ask, details}, reloads, []string{ask, "idle", "menu t *v0 v1 v2 shown"})},
+		// The placeholder gave way, the page reloaded: jellyfin-web's options
+		// stand for the sources the script was last given under their
+		// names, ETags included.
+		"the version shown first after the placeholder stays selected when another comes first as it is renamed": {options: []source{{id, "Movie", 0}},
+			answers: []answer{
+				{1, 3, []source{{id + "=v0", "Version 0", 0}, {"v1=v1", "Version 1", 0}, {"v2=v2", "Version 2", 0}}},
+				{0, 4, []source{{id + "=v9", "Version 9", 0}, {"v0=v0", "Version 0 · 2 GB", 2000}, {"v1=v1", "Version 1", 0}, {"v2=v2", "Version 2", 0}}},
+			}, forever: true,
+			steps: steps(4, "menu"),
+			want:  slices.Concat([]string{ask, details}, reloads, []string{ask, details}, reloads, []string{ask, "idle", "menu t *v0 v1 v2 shown"})},
+		// A version keeps its ETag as its name and size change: it stays
+		// picked as it is, the page not reloaded.
+		"a version picked stays picked as it is renamed": {listed: 2, picked: "v1",
+			answers: []answer{
+				{1, 3, []source{{id + "=v0", "Version 0", 0}, {"v1=v1", "Version 1", 0}, {"v2=v2", "Version 2", 0}}},
+				{0, 4, []source{{id + "=v9", "Version 9", 0}, {"v0=v0", "Version 0", 0}, {"v1=v1", "Version 1 · 2 GB", 2000}, {"v2=v2", "Version 2", 0}}},
+			}, forever: true,
+			steps: steps(4, "menu"),
+			want:  []string{ask, details, ask, details, ask, "idle", "menu t v0 *v1 v2 shown"}},
 		// Adding no version to an open page, Polyfin still has the
 		// placeholder give way, once; a page that lists versions keeps them.
 		"off, the placeholder still gives way": {off: true, options: []source{{id, "Movie", 0}},
@@ -780,9 +829,14 @@ async function run(scenario) {
     observe() { observers.add(this) }
     disconnect() { observers.delete(this) }
   }
+  // A source's ETag follows its Id after "=".
+  const tagged = (list) => list.map((source) => {
+    const [Id, ETag] = source.Id.split('=')
+    return ETag ? { ...source, Id, ETag } : source
+  })
   // What the title's details list now, and jellyfin-web's own copy of the
   // versions it listed last.
-  let sources = scenario.options || versions(scenario.listed)
+  let sources = tagged(scenario.options || versions(scenario.listed))
   let copy = []
   let focused = null
   const container = { hidden: false, classList: { toggle: (name, force) => { if (name === 'hide') container.hidden = force } } }
@@ -853,7 +907,7 @@ async function run(scenario) {
       log.push('ask ' + url)
       const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
       if (!answer) return Promise.reject(new Error('down'))
-      sources = answer.Sources || versions(answer.Count)
+      sources = tagged(answer.Sources || versions(answer.Count))
       return Promise.resolve({ Pending: answer.Pending, Count: answer.Count, AddVersions: !scenario.off })
     },
     getItem: (user, id) => {

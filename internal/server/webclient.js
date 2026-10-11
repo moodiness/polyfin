@@ -38,9 +38,12 @@
 // It reloads the page's details instead, as jellyfin-web does when the page
 // is shown again, when the version picked is gone or no longer the same
 // version, since the track menus describe it. The first version carries the
-// title's own identifier: when a version listed first takes it, the version
-// picked that had it, by jellyfin-web or the user, is picked under its own
-// identifier before the reload, which jellyfin-web then keeps. It never
+// title's own identifier, and each source its version's own identifier as
+// its ETag: when a version listed first takes the title's identifier, or
+// Polyfin names the version picked otherwise, the version picked, by
+// jellyfin-web or the user, is found by its ETag, else as the one source
+// with its name, and its size when both are known, and picked under its
+// new identifier before the reload, which jellyfin-web then keeps. It never
 // changes the page while a video plays or while the version menu has focus,
 // where it could be open: it tries again at the next answer, or as soon as
 // the menu loses focus. When the answers say AddVersions false (Settings ›
@@ -204,11 +207,18 @@
   // messages the script hears.
   var pushed = false
   var heard = null
-  // The options this script added to the version menu, and the size of the
-  // version each option stood for when the script last listed it.
-  // jellyfin-web fills the menu with new options, which forgets both.
+  // The options this script added to the version menu, and the size and
+  // the ETag of the version each option stood for when the script last
+  // listed it. Polyfin gives each source the identifier of its version as
+  // its ETag, the first source's included, which carries the title's.
+  // jellyfin-web fills the menu with new options, which forgets them all:
+  // given, the sources the script was last given by identifier, tells them
+  // again for an option jellyfin-web listed under a source's identifier and
+  // name.
   var added = new WeakSet()
   var sizes = new WeakMap()
+  var tags = new WeakMap()
+  var given = {}
   // The version picked among those added, until jellyfin-web lists it: the
   // observer that waits for jellyfin-web's options, and the identifier of
   // the version picked.
@@ -226,37 +236,55 @@
     page.dispatchEvent(new CustomEvent('viewshow', { detail: { isRestored: false } }))
   }
   // stale tells whether an option no longer stands for a source with its
-  // identifier: jellyfin-web names an option after its source, and the
-  // title's own identifier passes from the placeholder to the first version,
-  // then to whichever version comes first, the version it leaves taking an
-  // identifier of its own.
+  // identifier: the title's own identifier passes from the placeholder to
+  // the first version, then to whichever version comes first, the version
+  // it leaves taking an identifier of its own. When the script knows the
+  // option's ETag, a version keeping its ETag as its name or size changes
+  // is the same; otherwise jellyfin-web names an option after its source,
+  // and the name and the size the script knows tell.
   function stale(option, source) {
+    if (tags.has(option) && source.ETag) return tags.get(option) !== source.ETag
     return option.textContent !== source.Name || (sizes.has(option) && sizes.get(option) !== source.Size)
+  }
+  // remember notes the size and the ETag of the source an option stands for.
+  function remember(option, source) {
+    sizes.set(option, source.Size)
+    if (source.ETag) tags.set(option, source.ETag)
+    else tags.delete(option)
   }
   // place lists sources in the version menu, in their order, keeping the
   // version picked, and tells whether it could. An option jellyfin-web
   // listed is kept while it stands for the same source, as jellyfin-web
-  // knows that source's tracks. When the version picked lost its identifier
-  // to another, it cannot: it is picked under its new one (see keep).
+  // knows that source's tracks, and named as the source is now. When the
+  // version picked lost its identifier, to another or because Polyfin names
+  // it otherwise now, it cannot: it is picked under its new one (see keep).
   function place(menu, sources) {
     var picked = menu.options[menu.selectedIndex]
     var kept = {}
-    for (var i = 0; i < menu.options.length; i++) kept[menu.options[i].value] = menu.options[i]
+    for (var i = 0; i < menu.options.length; i++) {
+      var listed = menu.options[i]
+      var known = given[listed.value]
+      if (!sizes.has(listed) && known && known.Name === listed.textContent) remember(listed, known)
+      kept[listed.value] = listed
+    }
+    given = {}
+    sources.forEach(function (source) {
+      given[source.Id] = source
+    })
     var found = false
-    var moved = false
     var options = sources.map(function (source) {
       var option = kept[source.Id]
-      if (option && stale(option, source)) {
-        if (option === picked) moved = true
-        option = null
-      }
+      if (option && stale(option, source)) option = null
       if (!option) option = sourceOption(source)
+      else if (option.textContent !== source.Name) option.textContent = source.Name
       if (option === picked) found = true
-      sizes.set(option, source.Size)
+      remember(option, source)
       return option
     })
-    if (moved) keep(menu, picked, sources)
-    if (!found) return false
+    if (!found) {
+      if (picked) keep(menu, picked, sources)
+      return false
+    }
     options.forEach(function (option, i) {
       if (menu.options[i] !== option) menu.insertBefore(option, menu.options[i] || null)
     })
@@ -272,30 +300,40 @@
     option.value = source.Id
     option.textContent = source.Name
     added.add(option)
-    sizes.set(option, source.Size)
+    remember(option, source)
     return option
   }
   // keep picks, in place of the option picked, the version it stood for
-  // when the title's identifier passed from it to a version listed first:
-  // the source with its name, and its size when the script knows it, under
-  // another identifier. The page's details are then reloaded, and
-  // jellyfin-web keeps the identifier picked when it lists it, where it
-  // would pick the version that took the old one. Without such a source,
-  // as when the placeholder gives way to the first version, the option
-  // stays, and jellyfin-web picks the version that took its identifier. A
-  // version picked among those added is then made again under its new
-  // identifier (see pick).
+  // when its identifier no longer names it: the title's identifier passed
+  // from it to a version listed first, or Polyfin names it otherwise now.
+  // That version is the source with its ETag, when the script knows it,
+  // else the one source with its name, and its size when both are known,
+  // under another identifier; several such sources tell nothing. The
+  // page's details are then reloaded, and jellyfin-web keeps the identifier
+  // picked when it lists it, where it would pick the version that took the
+  // old one, or the first. Without such a source, as when the placeholder
+  // gives way to the first version, the option stays, and jellyfin-web
+  // picks the version that took its identifier, or the first. A version
+  // picked among those added is then made again under its new identifier
+  // (see pick).
   function keep(menu, picked, sources) {
+    var tag = tags.get(picked)
+    var size = sizes.get(picked)
+    var found = null
+    var named = []
     for (var i = 0; i < sources.length; i++) {
       var source = sources[i]
-      if (source.Id === picked.value || source.Name !== picked.textContent) continue
-      if (sizes.has(picked) && sizes.get(picked) !== source.Size) continue
-      menu.insertBefore(sourceOption(source), picked)
-      menu.removeChild(picked)
-      menu.value = source.Id
-      if (picking) picking.value = source.Id
-      return
+      if (source.Id === picked.value) continue
+      if (tag && source.ETag === tag) found = found || source
+      var sized = !(size > 0 && source.Size > 0 && size !== source.Size)
+      if (source.Name === picked.textContent && sized) named.push(source)
     }
+    if (!found && named.length === 1) found = named[0]
+    if (!found) return
+    menu.insertBefore(sourceOption(found), picked)
+    menu.removeChild(picked)
+    menu.value = found.Id
+    if (picking) picking.value = found.Id
   }
   // update brings the title page to the versions Polyfin knows when an
   // answer tells it lists fewer, or a different number once no addon is
@@ -574,6 +612,7 @@
     title = id
     latest = null
     updatedFor = 0
+    given = {}
     pushed = false
     if (picking) picking.observer.disconnect()
     picking = null
