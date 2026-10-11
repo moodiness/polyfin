@@ -214,10 +214,11 @@ var ErrGone = errors.New("the file is no longer in its folder")
 // gives them, a video, a subtitle file, a track or an album's artwork, for
 // reading, with its modification time: within its folder, through no
 // symbolic link leading out of it, or from its share; a cover a track
-// embeds, from what its scan kept. A share that cannot be read fails with
-// why (see shareFailure).
+// embeds, from what its scan kept. A VobSub pair is named by its .idx
+// file, whose key with the .sub extension opens its .sub file, as FFmpeg
+// finds it. A share that cannot be read fails with why (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
-	raw, _, _ := strings.Cut(key, ".")
+	raw, extension, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
 	if err != nil {
 		return nil, time.Time{}, ErrGone
@@ -228,10 +229,10 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	var modified *time.Time
 	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, f.data, f.modified, l.share_user, l.share_password
 		FROM (SELECT addon_id, path, NULL::bytea AS data, NULL::timestamptz AS modified FROM local_files WHERE id = $1
-			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_subtitles WHERE id = $1
+			UNION ALL SELECT addon_id, CASE WHEN $2 AND pair <> '' THEN pair ELSE path END, NULL, NULL FROM local_subtitles WHERE id = $1
 			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_tracks WHERE id = $1
 			UNION ALL SELECT addon_id, path, data, modified FROM local_covers WHERE id = $1) f
-		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id).
+		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id, strings.EqualFold(extension, "sub")).
 		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, time.Time{}, ErrGone

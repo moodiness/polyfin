@@ -1,7 +1,9 @@
 package localfiles
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"path"
 	"strconv"
 	"strings"
@@ -15,17 +17,19 @@ import (
 )
 
 // Subtitle files beside a video, as Jellyfin reads them: SubRip, ASS, SSA
-// or WebVTT files in the video's folder whose name begins with the
-// video's, then tells their language, title and flags, as in
-// "Movie (2001).srt", "Movie (2001).fr.srt", "Movie (2001).en.forced.srt"
-// or "Movie (2001).en.sdh.ass". A disc's are in its disc folder, named
+// or WebVTT files, PGS files (.sup) and VobSub pairs (an .idx file and the
+// .sub file of the same name) in the video's folder whose name begins with
+// the video's, then tells their language, title and flags, as in
+// "Movie (2001).srt", "Movie (2001).fr.srt", "Movie (2001).en.forced.sup"
+// or "Movie (2001).en.sdh.idx". A disc's are in its disc folder, named
 // after the folder. A scan stores them with their video; the folder's
 // streams offer them as the video's subtitle files (see Streams), read
 // from the folder or the share as its videos are (see Open).
 
 // subtitleFormats are the subtitle files a scan lists, by their extension,
-// and their format.
-var subtitleFormats = map[string]string{".srt": "srt", ".ass": "ass", ".ssa": "ssa", ".vtt": "vtt"}
+// and their format. A VobSub pair is listed by its .idx file, whose .sub
+// file is its pair.
+var subtitleFormats = map[string]string{".srt": "srt", ".ass": "ass", ".ssa": "ssa", ".vtt": "vtt", ".sup": "sup", ".idx": "idx"}
 
 // subtitleTags is what a subtitle file's name tells past its video's: its
 // language as written ("fr", "fre", "French"), its title (the words that
@@ -67,10 +71,13 @@ func readSubtitleTags(rest string) subtitleTags {
 
 // sidecar is a subtitle file found beside a video: the video's path, the
 // file's size and modification time, its format and what its name tells.
+// A VobSub pair's .sub file is pair; its size is both files' and its
+// modification time the later one.
 type sidecar struct {
 	video  string
 	file   found
 	format string
+	pair   string
 	subtitleTags
 }
 
@@ -79,8 +86,9 @@ type sidecar struct {
 // with, followed by a dot or its extension, the longest such name when
 // several are; names are compared in any case. A disc's name is its
 // folder's, the folder's own (root) for a disc at its root. Subtitle files
-// that belong to no video are left out. entries are the folder's files, by
-// path, as a scan reads them in a folder of kind.
+// that belong to no video are left out, and so are .idx files without
+// their .sub file. entries are the folder's files, by path, as a scan
+// reads them in a folder of kind.
 func sidecars(kind, root string, entries map[string]entry, sides map[string]found) map[string]sidecar {
 	type video struct{ name, path string }
 	videos := map[string][]video{}
@@ -94,6 +102,13 @@ func sidecars(kind, root string, entries map[string]entry, sides map[string]foun
 		}
 		if name != "" {
 			videos[dir] = append(videos[dir], video{name: name, path: rel})
+		}
+	}
+	// A VobSub pair's .sub file, by its .idx file's path, in any case.
+	subs := map[string]string{}
+	for rel := range sides {
+		if strings.EqualFold(path.Ext(rel), ".sub") {
+			subs[strings.ToLower(strings.TrimSuffix(rel, path.Ext(rel)))] = rel
 		}
 	}
 	result := map[string]sidecar{}
@@ -113,7 +128,18 @@ func sidecars(kind, root string, entries map[string]entry, sides map[string]foun
 		if owner.path == "" {
 			continue
 		}
-		result[rel] = sidecar{video: owner.path, file: f, format: format, subtitleTags: readSubtitleTags(name[len(owner.name):])}
+		side := sidecar{video: owner.path, file: f, format: format, subtitleTags: readSubtitleTags(name[len(owner.name):])}
+		if format == "idx" {
+			if side.pair = subs[strings.ToLower(strings.TrimSuffix(rel, path.Ext(rel)))]; side.pair == "" {
+				continue
+			}
+			sub := sides[side.pair]
+			side.file.size += sub.size
+			if sub.modified.After(side.file.modified) {
+				side.file.modified = sub.modified
+			}
+		}
+		result[rel] = side
 	}
 	return result
 }
@@ -128,12 +154,14 @@ type storedSubtitle struct {
 // same reports whether a stored subtitle file is the one found now.
 func (s storedSubtitle) same(video accounts.ID, found sidecar) bool {
 	return s.video == video && s.file.size == found.file.size && s.file.modified.Equal(found.file.modified) &&
-		s.format == found.format && s.subtitleTags == found.subtitleTags
+		s.format == found.format && s.pair == found.pair && s.subtitleTags == found.subtitleTags
 }
 
 // storeSubtitles stores the subtitle files found beside a folder's videos
 // (see sidecars), those new or changed, and forgets those gone, but those
 // in the folders the walk skipped. A video's files are forgotten with it.
+// A VobSub pair whose name tells no language has its .idx file's, read
+// when the pair is new or changed (see idxLanguage).
 func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listing, found map[string]sidecar) error {
 	rows, err := s.db.Query(ctx, "SELECT path, id FROM local_files WHERE addon_id = $1", id)
 	if err != nil {
@@ -148,14 +176,14 @@ func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listi
 	}); err != nil {
 		return err
 	}
-	rows, err = s.db.Query(ctx, `SELECT path, file_id, size, modified, format, language, title, forced, hearing_impaired, is_default
+	rows, err = s.db.Query(ctx, `SELECT path, file_id, size, modified, format, pair, language, title, forced, hearing_impaired, is_default
 		FROM local_subtitles WHERE addon_id = $1`, id)
 	if err != nil {
 		return err
 	}
 	stored := map[string]storedSubtitle{}
 	var row storedSubtitle
-	if _, err := pgx.ForEachRow(rows, []any{&rel, &row.video, &row.file.size, &row.file.modified, &row.format, &row.language, &row.title,
+	if _, err := pgx.ForEachRow(rows, []any{&rel, &row.video, &row.file.size, &row.file.modified, &row.format, &row.pair, &row.language, &row.title,
 		&row.forced, &row.hearingImpaired, &row.isDefault}, func() error {
 		stored[rel] = row
 		return nil
@@ -169,14 +197,22 @@ func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listi
 			delete(found, rel)
 			continue
 		}
+		if f.format == "idx" && f.language == "" {
+			if old, ok := stored[rel]; ok && old.language != "" && old.file.size == f.file.size && old.file.modified.Equal(f.file.modified) {
+				f.language = old.language
+			} else {
+				f.language = idxLanguage(ctx, list, rel)
+			}
+			found[rel] = f
+		}
 		if old, ok := stored[rel]; ok && old.same(video, f) {
 			continue
 		}
-		batch.Queue(`INSERT INTO local_subtitles (addon_id, file_id, path, size, modified, format, language, title, forced, hearing_impaired,
-				is_default) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			ON CONFLICT (addon_id, path) DO UPDATE SET file_id = $2, size = $4, modified = $5, format = $6, language = $7, title = $8,
-				forced = $9, hearing_impaired = $10, is_default = $11`,
-			id, video, rel, f.file.size, f.file.modified, f.format, f.language, f.title, f.forced, f.hearingImpaired, f.isDefault)
+		batch.Queue(`INSERT INTO local_subtitles (addon_id, file_id, path, size, modified, format, pair, language, title, forced,
+				hearing_impaired, is_default) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ON CONFLICT (addon_id, path) DO UPDATE SET file_id = $2, size = $4, modified = $5, format = $6, pair = $7, language = $8,
+				title = $9, forced = $10, hearing_impaired = $11, is_default = $12`,
+			id, video, rel, f.file.size, f.file.modified, f.format, f.pair, f.language, f.title, f.forced, f.hearingImpaired, f.isDefault)
 	}
 	var gone []string
 	for rel := range stored {
@@ -191,6 +227,28 @@ func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listi
 		return nil
 	}
 	return s.db.SendBatch(ctx, batch).Close()
+}
+
+// idxLanguage is the language of a VobSub pair's first track, as its .idx
+// file names it, as in "id: fr, index: 0": empty when it names none
+// Polyfin knows, or cannot be read. A pair offers its first track only.
+func idxLanguage(ctx context.Context, list listing, rel string) string {
+	file, err := list.open(ctx, rel)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	lines := bufio.NewScanner(io.LimitReader(file, 1<<20))
+	for lines.Scan() {
+		if value, ok := strings.CutPrefix(strings.TrimSpace(lines.Text()), "id:"); ok {
+			code, _, _ := strings.Cut(value, ",")
+			if code = strings.TrimSpace(code); playback.KnownLanguage(code) {
+				return code
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 // fileSubtitles lists the subtitle files of a folder's videos, by video:

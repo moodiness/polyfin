@@ -190,23 +190,26 @@ func TestWatchScansAfterNFOChanges(t *testing.T) {
 }
 
 // A subtitle file added or removed beside a video starts a scan, whatever
-// its format.
+// its format, a VobSub pair's .sub file too.
 func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
 	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
 	wt.start()
-	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).en.ass", "Nosferatu (1922).de.SSA", "Nosferatu (1922).vtt"} {
+	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).en.ass", "Nosferatu (1922).de.SSA", "Nosferatu (1922).vtt",
+		"Nosferatu (1922).es.sup", "Nosferatu (1922).it.idx", "Nosferatu (1922).it.SUB"} {
 		write(t, filepath.Join(root, name), 10)
 		wt.scanned(id)
 		wt.still()
 	}
-	if err := os.Remove(filepath.Join(root, "Nosferatu (1922).fr.srt")); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).it.SUB"} {
+		if err := os.Remove(filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+		wt.scanned(id)
+		wt.still()
 	}
-	wt.scanned(id)
-	wt.still()
 }
 
 // An audio file, an album's or an artist's image, a lyrics file or a
