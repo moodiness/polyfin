@@ -317,9 +317,9 @@ const settings: typeof en = {
     localScanHours: 'Analyser les dossiers locaux toutes les (heures, 0 = jamais)',
     localScanHoursHelp: (r: RangeText) =>
       `À quelle fréquence chaque dossier local est analysé à nouveau pour trouver les fichiers ajoutés, modifiés ou supprimés. Les dossiers sont aussi analysés au démarrage, à la demande, et quand ceux qui sont surveillés changent. 0 désactive cette planification. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
-    watchLocalFolders: 'Surveiller les changements des dossiers locaux',
+    watchLocalFolders: 'Surveiller les changements des dossiers et des partages',
     watchLocalFoldersHelp:
-      'Analyse à nouveau un dossier local quelques secondes après que ses fichiers ont cessé de changer, pour que les fichiers ajoutés, renommés ou supprimés apparaissent en moins d’une minute. Les partages réseau ne sont pas surveillés : ils ne sont analysés que selon la planification. Si la limite de dossiers surveillés du système est atteinte, Système › Santé indique quels dossiers ne sont pas surveillés.',
+      'Analyse à nouveau un dossier du conteneur quelques secondes après que ses fichiers ont cessé de changer, pour que les fichiers ajoutés, renommés ou supprimés apparaissent en moins d’une minute. Les partages réseau sont listés de nouveau toutes les 2 minutes, en plusieurs fois pour un partage de nombreux dossiers, et analysés à nouveau quand une liste a changé. Système › Santé indique quels dossiers ou partages ne peuvent pas être surveillés, et pourquoi.',
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',

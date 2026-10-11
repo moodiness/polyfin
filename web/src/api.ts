@@ -283,7 +283,7 @@ export type Settings = {
   liveTvRefreshHours: number
   /** Hours after its last scan a local folder is scanned again; 0 for never on a schedule. */
   localScanHours: number
-  /** Whether the local folders in the container are watched for changes; shares never are. */
+  /** Whether the local folders, in the container and network shares, are watched for changes. */
   watchLocalFolders: boolean
   /** CSS jellyfin-web applies to every page, unless a user turns it off (Jellyfin's branding). */
   customCss: string
@@ -2101,7 +2101,7 @@ export type HealthProblem = {
   | { code: 'backup_stale' }
   | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
-  | { code: 'folder_unwatched'; name: string; failure: string }
+  | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'task'; task: string }
 )
 

@@ -406,7 +406,7 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'watch-local-folders',
     label: (t) => s(t).watchLocalFolders,
     help: (t) => s(t).watchLocalFoldersHelp,
-    keywords: ['folder', 'scan', 'inotify'],
+    keywords: ['folder', 'scan', 'inotify', 'share', 'SMB', 'WebDAV'],
   },
   // Thumbnails
   {
