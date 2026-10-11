@@ -98,6 +98,23 @@ An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`
 
 Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out, as are the streams of a Blu-ray disc other than the one it plays.
 
+### NFO files
+
+Folders organized by Jellyfin or a media manager often hold NFO files, which give each title's identifiers. Polyfin reads them from:
+
+- a movie's own NFO file, the video's name with `.nfo`, such as `Nosferatu (1922) - 1080p.nfo`;
+- else `movie.nfo` in the movie's folder, when that folder is the movie's own: its videos are all read as one title, such as the versions of one movie;
+- a Blu-ray disc's `movie.nfo`, in its disc folder;
+- a show's `tvshow.nfo`, in its folder.
+
+```
+/media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
+/media/movies/Nosferatu (1922)/movie.nfo
+/media/shows/The Lone Ranger (1949)/tvshow.nfo
+```
+
+In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots, ratings and artwork still come from the metadata addons, and episodes' NFO files are not read.
+
 ## Blu-ray discs
 
 A Blu-ray disc copied as it is is a folder tree: the disc folder holds a `BDMV` folder, whose `STREAM` folder holds the disc's streams, `.m2ts` files, beside `index.bdmv`, `PLAYLIST`, `CLIPINF` and often a `CERTIFICATE` folder. The movie is one of the streams; the others are menus, extras and pieces of it.
@@ -133,13 +150,16 @@ Each file, each disc, or each show's folder, is matched to a title:
 
 1. a link made by hand (see below);
 2. else an identifier written in its name: an IMDb identifier as it is; a TMDB identifier through the metadata addons, which give its IMDb identifier;
-3. else its name and year are searched in the server's metadata addons, the searches the metadata editor uses: the match is kept only when the addons find exactly one title of that name and kind, of that year when the name gives one.
+3. else an identifier its NFO file gives (see [NFO files](#nfo-files)), read the same way, the IMDb identifier when it gives both;
+4. else its name and year are searched in the server's metadata addons, the searches the metadata editor uses: the match is kept only when the addons find exactly one title of that name and kind, of that year when the name gives one.
 
-The title is kept under its IMDb identifier, which the addons answer streams for, with its TMDB identifier when known. Without a metadata addon offering searches, only identifiers in names and links match files.
+The title is kept under its IMDb identifier, which the addons answer streams for, with its TMDB identifier when known. Without a metadata addon offering searches, only identifiers in names and NFO files, and links, match files.
+
+A folder's figures tell how its matched files were matched: by an identifier in the name, by an NFO file, by a search or by hand.
 
 ## Unmatched files
 
-A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, or the search failed. Rename the file and scan again, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc, the whole disc folder. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
+A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, or the search failed. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc, the whole disc folder. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
 
 ## Scanning
 
@@ -153,7 +173,7 @@ Folders mounted in the container are also watched for changes, with inotify on L
 - Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos do not start a scan.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos and NFO files do not start a scan.
 
 Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
 
@@ -164,7 +184,7 @@ sudo sysctl --system
 
 When Health says the limit of watchers or of open files is reached, raise `fs.inotify.max_user_instances` the same way, or the container's limit of open files (`--ulimit nofile=…` with Docker).
 
-A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it.
+A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO files are listed with the folders, and only those new or changed are read.
 
 Symbolic links to files of the folder are followed; links leading out of the folder, and links to folders, are not.
 
@@ -177,11 +197,11 @@ A matched file is one more version of its title, or of each of its episodes, nam
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
 - Jellyfin's "Identify" matches an item by hand; Polyfin links an unmatched file to an IMDb identifier.
-- NFO files, local artwork and side-car subtitle files are not read.
+- Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork. Local artwork and side-car subtitle files are not read.
 
 ## For app developers
 
-A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind, last scan, error, counts and links. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
+A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind, last scan, error, counts and links. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
 
 | Route | What it does |
 |---|---|
