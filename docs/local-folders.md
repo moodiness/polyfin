@@ -62,6 +62,17 @@ The address holds no user or password: they have fields of their own, and an add
 - A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**, and are watched for changes by listing their folders again every 2 minutes, at most 100 listings a round (see [watching for changes](#watching-for-changes)). A share mounted on the host and declared as a local folder is watched with inotify instead, which only sees the changes made through that host, not those made on the NAS.
 - A video plays only as fast as the network carries it: a high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
 
+### Discs on shares
+
+Blu-ray discs, DVDs and disc images on a share are read on the share itself, as on a local folder: they have the same titles, units, links and names (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)).
+
+- A scan reads a disc's playlists and IFO files, and an image's ISO 9660 or UDF file system, by byte ranges: a few reads per disc, the image never read whole.
+- FFmpeg cannot read a disc from a share, so Polyfin serves it each title as one file:
+  - for a Blu-ray disc, its playlist's clips, each from its in time to its out time, in order, the bytes FFmpeg's Blu-ray reader reads of a local disc, as one MPEG-TS stream;
+  - for a DVD, its title's cells, in order, from its title set's `.VOB` files, as one MPEG program stream.
+- A Blu-ray disc's video is copied when the app takes it, cut on the keyframes its clips' information files list, read on the share; a DVD's is converted, as on a local folder.
+- A DVD's track languages and length come from its IFO files, as FFmpeg's DVD reader reads them on a local folder.
+
 ### Health
 
 A share Polyfin cannot read is reported on its page and under **System › Health**, with why:
@@ -173,8 +184,8 @@ Files beside `BDMV` in a disc folder are read as any other file, and folders a s
 
 Limits:
 
-- On a network share, a disc plays its largest stream, as one file, played as it is when the app takes it: FFmpeg reads a disc's playlists from a path. A movie split over several streams then plays its largest stream only. Mount the share on the host and declare it as a local folder to play the whole playlist.
-- A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream the same way.
+- A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream, as one file, played as it is when the app takes it. A movie split over several streams then plays its largest stream only.
+- On a network share, a disc is read as on a local folder (see [Discs on shares](#discs-on-shares)). A play item that ends before its clip does ends on the clip's next keyframe, as libbluray reads it: a title whose play items replay parts of clips, as seamless branching does, may show a few frames twice where they join.
 - There is no direct play and no download of a playlist, and no thumbnails or chapter images are made for it.
 - A seek in a disc starts FFmpeg one segment early, as its Blu-ray reader lands on the keyframe after the time asked: the first segment after a seek takes a little longer to come.
 - The disc must not be encrypted: Polyfin reads discs copied without their copy protection.
@@ -212,7 +223,7 @@ The DVD is read from its folder rather than as one file, so it always plays conv
 
 Limits:
 
-- DVDs on network shares are left out: FFmpeg reads a DVD from a path. Mount the share on the host and declare it as a local folder instead.
+- On a network share, a DVD's title is read as one MPEG program stream of its cells (see [Discs on shares](#discs-on-shares)) rather than through FFmpeg's DVD reader: it has no chapters, and its cells' timestamps are read as they are, without the corrections FFmpeg's DVD reader makes where they restart.
 - There is no direct play, and no download.
 - A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video.
 - No thumbnails or chapter images are made for a DVD.
@@ -249,7 +260,7 @@ Images a scan read before Polyfin listed their other movies, and UDF-only images
 
 Limits:
 
-- Images on network shares are left out, as FFmpeg reads an image from a path, and so are images in a shows folder.
+- Images in a shows folder are left out. On a network share, an image is read on the share (see [Discs on shares](#discs-on-shares)); one whose titles cannot be read there, or whose UDF file system Polyfin does not read, is left out, as FFmpeg's Blu-ray reader cannot open it from the share.
 - There is no direct play and no download, and no thumbnails or chapter images are made for an image.
 - A Blu-ray image's main title must last at least 3 minutes, as FFmpeg's Blu-ray reader requires.
 - An image whose UDF file system Polyfin does not read (see above) lists its main title only, and plays it converted.
