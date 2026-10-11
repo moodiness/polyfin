@@ -91,7 +91,7 @@ func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
 	}
 	h.withHistory()
 	h.Service.files = fakeFiles{added: []localfiles.Added{{Name: "Tides", Kind: localfiles.KindShows, Files: 3},
-		{Name: "Old Mill", Kind: localfiles.KindMovies, Files: 1}}}
+		{Name: "Old Mill", Kind: localfiles.KindMovies, Files: 1}, {Name: "Sine Studies", Kind: localfiles.KindMusic, Files: 2}}}
 	quiet, err := h.store.CreateUser(ctx, accounts.NewUser{Name: "quiet", Password: "correct horse"})
 	if err != nil {
 		t.Fatal(err)
@@ -179,7 +179,9 @@ func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
 		if strings.Join(names(sum["users"]), ", ") != "guest" || invitedBy["name"] != "admin" {
 			t.Errorf("%s: users who joined %v", path, users)
 		}
-		if sum["addedFiles"] != 4.0 || strings.Join(names(sum["added"]), ", ") != "Tides, Old Mill" {
+		added := sum["added"].([]any)
+		if sum["addedFiles"] != 6.0 || strings.Join(names(sum["added"]), ", ") != "Tides, Old Mill, Sine Studies" ||
+			added[0].(map[string]any)["kind"] != "show" || added[1].(map[string]any)["kind"] != "movie" || added[2].(map[string]any)["kind"] != "album" {
 			t.Errorf("%s: added %v %v", path, sum["addedFiles"], sum["added"])
 		}
 		if len(problems) != 1 || problems[0].(map[string]any)["key"] != "backup" || problems[0].(map[string]any)["severity"] != SeverityError {
@@ -190,7 +192,7 @@ func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
 		t.Errorf("message: %q", server.body["message"])
 	}
 	for _, line := range []string{"3.1 hours watched, 4 playbacks.", "Movies: Harbour Lights, Old Mill.", "Series: Tides.",
-		"1 new episode of the series users follow.", "New user: guest.", "4 files added to the local folders.",
+		"1 new episode of the series users follow.", "New user: guest.", "6 files added to the local folders.",
 		"1 problem found by System › Health."} {
 		if !strings.Contains(server.body["message"].(string), line+"\n") && !strings.HasSuffix(server.body["message"].(string), line) {
 			t.Errorf("the server's message lacks %q: %q", line, server.body["message"])

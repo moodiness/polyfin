@@ -97,7 +97,10 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 		section := summarySection{Heading: s.addedHeading(sum)}
 		for _, a := range sum.Added {
 			item := summaryItem{Name: a.Name}
-			if a.Kind == "show" || a.Files > 1 {
+			switch {
+			case a.Kind == "album":
+				item.Detail = s.count(a.Files, "%d track", "%d tracks", "%d piste", "%d pistes")
+			case a.Kind == "show" || a.Files > 1:
 				item.Detail = s.count(a.Files, "%d file", "%d files", "%d fichier", "%d fichiers")
 			}
 			section.Items = append(section.Items, item)

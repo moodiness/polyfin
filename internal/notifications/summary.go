@@ -94,7 +94,8 @@ type JoinedJSON struct {
 }
 
 // AddedJSON is a title files were added for to the local folders: a
-// "movie" or a "show", by its name, with how many files.
+// "movie" or a "show", by its name, or an "album" of a music folder, by
+// its title, with how many files (an album's tracks).
 type AddedJSON struct {
 	Name  string `json:"name"`
 	Kind  string `json:"kind"`
@@ -321,8 +322,11 @@ func (s *Service) serverSummary(ctx context.Context, start, end time.Time) (Summ
 		sum.AddedFiles = total
 		for _, a := range added {
 			kind := "movie"
-			if a.Kind == localfiles.KindShows {
+			switch a.Kind {
+			case localfiles.KindShows:
 				kind = "show"
+			case localfiles.KindMusic:
+				kind = "album"
 			}
 			sum.Added = append(sum.Added, AddedJSON{Name: a.Name, Kind: kind, Files: a.Files})
 		}
