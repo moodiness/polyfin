@@ -70,10 +70,11 @@ var (
 
 // Remux is what an encoding reads and produces.
 type Remux struct {
-	// Input is the URL FFmpeg reads the version from.
+	// Input is what FFmpeg reads the version from: its URL, or a disc's
+	// path (see media.Input).
 	Input string
-	// InputOptions are FFmpeg's options for reading a live Input, such as
-	// those of its HLS demuxer.
+	// InputOptions are FFmpeg's options for reading Input, such as those of
+	// its HLS demuxer for a live Input, or of a disc's demuxer.
 	InputOptions []string
 	// Video and Audio are FFmpeg stream indexes; Audio is -1 for none.
 	Video, Audio int
@@ -1184,6 +1185,7 @@ func (r Remux) args(n int) []string {
 	if r.Encode != nil {
 		args = append(args, r.Encode.inputs()...)
 	}
+	args = append(args, r.InputOptions...)
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)
 	if r.Encode != nil && r.Encode.Burn != nil {

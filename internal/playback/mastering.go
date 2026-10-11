@@ -17,10 +17,11 @@ import (
 // analysis; it reports true with the analysis then known, after which the
 // conversion is planned again. A frame that cannot be read leaves the
 // version on the processor, and is not read again for a while. Other GPUs,
-// and video Intel would not tone map anyway, read nothing.
+// video Intel would not tone map anyway, and versions read from their
+// input (see LocalInputs), read nothing.
 func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Version, analysis media.Analysis, conversion *VideoConversion) (media.Analysis, bool) {
 	if conversion == nil || !conversion.ToneMapOnCPU || conversion.Hardware.Method != "vaapi" || !s.settings().GPUToneMapping ||
-		version.HoldsConnection || !slices.ContainsFunc(analysis.Streams, media.NeedsMasteringProbe) {
+		version.HoldsConnection || s.ReadsInput(version) || !slices.ContainsFunc(analysis.Streams, media.NeedsMasteringProbe) {
 		return analysis, false
 	}
 	if _, failed := s.unmastered.Get(version.ID); failed {

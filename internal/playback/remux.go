@@ -50,8 +50,10 @@ type Remux struct {
 // index on first use. An MPEG-TS file, which has no index, is cut every
 // few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
 // Jellyfin plays such files, with FFmpeg reading it from the time asked.
-// The bytes of its first segment are warmed meanwhile, unless a warm of
-// the version ran lately (see Warm), in the background when ctx is.
+// So is a version read from its input (see LocalInputs), whose index
+// Polyfin does not read. The bytes of its first segment are warmed
+// meanwhile, unless a warm of the version ran lately (see Warm), in the
+// background when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	plan, err := s.plan(ctx, version)
 	if err == nil && !plan.Grid() {
@@ -68,6 +70,9 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 	}
 	if _, ok := videoOf(analysis); !ok || analysis.Duration <= 0 {
 		return hls.Plan{}, ErrNotRemuxable
+	}
+	if s.ReadsInput(version) {
+		return hls.NewGridPlan(analysis.Duration), nil
 	}
 	times, err := s.keyframes(ctx, version, analysis)
 	if errors.Is(err, container.ErrNoIndex) && transportStream(analysis) {
@@ -400,7 +405,8 @@ func (r Remux) key() hls.Key {
 // subtitles at the same time, until the version's are all extracted. A
 // source failing meanwhile has the version kept as failed, so that the
 // next PlaybackInfo plays another. A version that holds one of its
-// source's connections takes it while FFmpeg reads (see Hold).
+// source's connections takes it while FFmpeg reads (see Hold). A version
+// read from its input is read there by FFmpeg itself (see LocalInputs).
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -425,6 +431,20 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		if !x.Covers(0, analysis.Duration) {
 			streams = textSubtitles(analysis)
 		}
+		r := hls.Remux{Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan, Subtitles: streams, Extracted: x}
+		if s.ReadsInput(remux.Version) {
+			in, err := s.input(ctx, remux.Version)
+			if err != nil {
+				hold()
+				return hls.Remux{}, nil, err
+			}
+			r.Input, r.InputOptions = in.Path, in.Args()
+			remux.convert(&r, video, TuningOf(s.settings()))
+			return r, func() {
+				hold()
+				s.saveExtracted(context.Background(), remux.Version.ID, x)
+			}, nil
+		}
 		// A remux is a playback: its reads never wait behind background
 		// ones of the host.
 		src := s.open(remux.Version)
@@ -443,8 +463,7 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// The encoding stops as soon as the source fails, rather than
 		// taking a body cut short for the end of the file.
 		failed := src.Failed()
-		r := hls.Remux{Input: target, Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan,
-			Subtitles: streams, Extracted: x, Failed: failed, Failure: func() error { return failureOf(src, failed) }}
+		r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
 			r.ADTS = true
 		}

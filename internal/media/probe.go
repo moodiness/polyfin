@@ -140,6 +140,39 @@ func (p Prober) Probe(ctx context.Context, url string) (Analysis, error) {
 	return p.probe(ctx, url, "-probesize", "20M", "-analyzeduration", "10M")
 }
 
+// Input is what FFmpeg and ffprobe read a version from when it is not one
+// file they read over HTTP: a disc on the server's disk, read by one of
+// FFmpeg's demuxers or protocols.
+type Input struct {
+	// Format is the demuxer, such as dvdvideo; empty lets FFmpeg choose,
+	// as it does for a protocol's address.
+	Format string
+	// Options are the demuxer's or the protocol's, such as -title 2.
+	Options []string
+	// Path is what FFmpeg opens: a folder, an image file, or a protocol's
+	// address.
+	Path string
+}
+
+// Args are FFmpeg's options for reading the input, which go before its -i.
+func (in Input) Args() []string {
+	var args []string
+	if in.Format != "" {
+		args = append(args, "-f", in.Format)
+	}
+	return append(args, in.Options...)
+}
+
+// ProbeInput analyzes the version FFmpeg reads from in, as Probe does a
+// file over HTTP.
+func (p Prober) ProbeInput(ctx context.Context, in Input) (Analysis, error) {
+	data, err := p.run(ctx, in.Path, false, slices.Concat(analysisSections, []string{"-probesize", "20M", "-analyzeduration", "10M"}, in.Args())...)
+	if err != nil {
+		return Analysis{}, err
+	}
+	return Parse(data)
+}
+
 // NeedsMasteringProbe reports whether stream is a PQ video track whose
 // mastering display is not known yet.
 func NeedsMasteringProbe(stream Stream) bool {

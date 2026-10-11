@@ -232,10 +232,14 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 // keyframe index of a Matroska file is read meanwhile, as an HLS play
 // reads it next (see indexAhead). An analysis for a playback, ctx not
 // marked Background, reads its source as a playback, even when it joins
-// one started in the background.
+// one started in the background. A version read from its input is
+// analyzed there (see LocalInputs).
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
+	}
+	if s.ReadsInput(version) {
+		return s.analyzeInput(ctx, version)
 	}
 	if _, failed := s.failures.Get(version.ID); !failed {
 		s.indexAhead(version)
@@ -320,22 +324,28 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		if analysis.Duration <= 0 && version.HoldsConnection && version.Runtime > 0 && transportStream(analysis) {
 			analysis.Duration = version.Runtime
 		}
-		data, err := json.Marshal(analysis)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := s.db.Exec(ctx, `INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)
-			ON CONFLICT (version_id) DO UPDATE SET analysis = excluded.analysis, analyzed_at = now()`, version.ID, data); err != nil {
-			s.logger.Warn("Saving a media analysis failed", "error", err)
-		}
-		s.analyses.Put(version.ID, analysis)
-		s.logger.Debug("Analyzed a version", "addon", version.Addon, "duration", time.Since(started))
-		return analysis, nil
+		return s.keepAnalysis(ctx, version, analysis, started), nil
 	})
 	if err != nil {
 		return media.Analysis{}, err
 	}
 	return result.(media.Analysis), nil
+}
+
+// keepAnalysis saves and remembers the analysis of a version, started at
+// a time, and returns it.
+func (s *Service) keepAnalysis(ctx context.Context, version library.Version, analysis media.Analysis, started time.Time) media.Analysis {
+	data, err := json.Marshal(analysis)
+	if err == nil {
+		_, err = s.db.Exec(ctx, `INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)
+			ON CONFLICT (version_id) DO UPDATE SET analysis = excluded.analysis, analyzed_at = now()`, version.ID, data)
+	}
+	if err != nil {
+		s.logger.Warn("Saving a media analysis failed", "error", err)
+	}
+	s.analyses.Put(version.ID, analysis)
+	s.logger.Debug("Analyzed a version", "addon", version.Addon, "duration", time.Since(started))
+	return analysis
 }
 
 // notPlaylist fails with ErrPlaylistReplay when src starts as an HLS
@@ -432,8 +442,13 @@ type Delivery struct {
 // no headers, is on a public address, and answers now. Otherwise, or when
 // the delivery says so, Polyfin relays the bytes, as it always does those
 // of a version that holds one of its source's connections (see Hold). An
-// expired link is renewed once.
+// expired link is renewed once. A version that is not one file is refused
+// with ErrNoFile.
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
+	if s.ReadsInput(version) {
+		http.Error(w, "not one file", http.StatusNotFound)
+		return ErrNoFile
+	}
 	if !delivery.Relay && !version.HoldsConnection && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
