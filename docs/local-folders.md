@@ -226,6 +226,8 @@ A folder's figures tell how its matched files were matched: by an identifier in 
 
 A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, the search failed, or the file is another movie of a Blu-ray disc, which only a link matches. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder, or one title of a disc holding several movies. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
 
+To find the title without leaving Polyfin, choose **Find the title** beside a file. The search is filled with what the file's name was read as, and its year; change them and choose **Search**, or press Enter. Polyfin searches the server's metadata addons for titles of the folder's kind, movies or shows, and lists at most 10 with their poster, name, year and kind, those of the year given first. Choosing one links the file, its show folder or its disc, as typing its identifier does. Only titles with an IMDb identifier are listed, since links are made to IMDb identifiers; for a title the search does not find, type its identifier.
+
 ## Scanning
 
 Folders are scanned at startup, every **Settings › Catalogs › Scan local folders every (hours, 0 = never)** (6 by default, 0 turns the schedule off), and when an administrator chooses **Scan now** on a folder or runs **Scan local folders** under **System › Schedule** (which scans every folder).
@@ -261,7 +263,7 @@ A matched file is one more version of its title, or of each of its episodes, nam
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
-- Jellyfin's "Identify" matches an item by hand; Polyfin links an unmatched file to an IMDb identifier.
+- Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
 - Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read.
 
@@ -275,6 +277,7 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
 | `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's number (`Box/DISC02#00002`), and `null` for other files |
+| `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. A failed search answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
