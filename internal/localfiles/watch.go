@@ -65,11 +65,13 @@ func (n notifyWatcher) Events() <-chan fsnotify.Event { return n.w.Events }
 func (n notifyWatcher) Errors() <-chan error          { return n.w.Errors }
 func (n notifyWatcher) Close() error                  { return n.w.Close() }
 
-// watchFolder is a folder to watch: its addon and its path in the
-// container.
+// watchFolder is a folder to watch: its addon, its path in the container,
+// and its kind, KindMusic for a music folder, else empty: a watch reads
+// the folders of movies and shows alike.
 type watchFolder struct {
 	id   accounts.ID
 	root string
+	kind string
 }
 
 // watchable are the folders to watch among the server's addons: the
@@ -82,19 +84,24 @@ func watchable(settings accounts.Settings, installed []addons.Addon) []watchFold
 	var folders []watchFolder
 	for _, addon := range installed {
 		if addon.Local() && addon.Enabled && shareKind(addon.ManifestURL) == "" {
-			folders = append(folders, watchFolder{id: addon.ID, root: addon.ManifestURL})
+			folder := watchFolder{id: addon.ID, root: addon.ManifestURL}
+			if addon.HasMusic() {
+				folder.kind = KindMusic
+			}
+			folders = append(folders, folder)
 		}
 	}
 	return folders
 }
 
 // watching is how the watch of a folder goes: its path, and the same with
-// its symbolic links resolved, as events name it; whether it is watched;
-// whether it went missing, so that it is scanned when it is back; and when
-// it last could not be watched.
+// its symbolic links resolved, as events name it; its kind (see
+// watchFolder); whether it is watched; whether it went missing, so that it
+// is scanned when it is back; and when it last could not be watched.
 type watching struct {
 	root     string
 	real     string
+	kind     string
 	on       bool
 	lost     bool
 	failedAt time.Time
@@ -241,12 +248,12 @@ func (w *watcher) reconcile() {
 		}
 		return
 	}
-	want := map[accounts.ID]string{}
+	want := map[accounts.ID]watchFolder{}
 	for _, folder := range list {
-		want[folder.id] = folder.root
+		want[folder.id] = folder
 	}
 	for id, state := range w.watched {
-		if root, ok := want[id]; !ok || root != state.root {
+		if folder, ok := want[id]; !ok || folder.root != state.root || folder.kind != state.kind {
 			w.unwatch(id)
 			delete(w.watched, id)
 			delete(w.changed, id)
@@ -257,13 +264,14 @@ func (w *watcher) reconcile() {
 		w.close()
 		return
 	}
-	for id, root := range want {
+	for id, folder := range want {
 		if w.watched[id] == nil {
-			w.watched[id] = &watching{root: root}
+			w.watched[id] = &watching{root: folder.root, kind: folder.kind}
 		}
 	}
 	now := time.Now()
-	for id, root := range want {
+	for id, folder := range want {
+		root := folder.root
 		state := w.watched[id]
 		if state.on || !state.failedAt.IsZero() && now.Sub(state.failedAt) < w.retry {
 			continue
@@ -305,13 +313,14 @@ func (w *watcher) reconcile() {
 // addTree watches a folder and the folders under it a scan reads; a
 // failure leaves the whole folder unwatched, and reports false.
 func (w *watcher) addTree(id accounts.ID, top string) bool {
+	kind := w.watched[id].kind
 	err := filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
 		// A folder gone meanwhile, or that cannot be listed, is skipped,
 		// as a scan skips it.
 		if err != nil || !d.IsDir() {
 			return nil
 		}
-		if path != top && skippedFolder(d.Name()) {
+		if path != top && skippedIn(kind, d.Name()) {
 			return fs.SkipDir
 		}
 		if err := w.files.Add(path); err != nil {
@@ -389,8 +398,8 @@ func (w *watcher) close() {
 }
 
 // event handles a change: a folder added is watched, a folder watched gone
-// is no longer, and a change of a folder, of a video, side or audio file,
-// or of an album's image, schedules the scan of its folder.
+// is no longer, and a change of a folder, or of a file its folder's scan
+// lists (see walked), schedules the scan of its folder.
 func (w *watcher) event(event fsnotify.Event) {
 	name := filepath.Clean(event.Name)
 	if id, ok := w.dirs[name]; ok {
@@ -409,16 +418,16 @@ func (w *watcher) event(event fsnotify.Event) {
 		return
 	}
 	base := filepath.Base(name)
+	kind := w.watched[id].kind
 	if event.Has(fsnotify.Create) {
 		if info, err := os.Lstat(name); err == nil && info.IsDir() {
-			if !skippedFolder(base) && w.addTree(id, name) {
+			if !skippedIn(kind, base) && w.addTree(id, name) {
 				w.change(id)
 			}
 			return
 		}
 	}
-	if (videoFile(base) || imageFile(base) || sideFile(base) || audioFile(base) || folderImage(base) || dvdFile(filepath.Base(filepath.Dir(name)), base) ||
-		playlistFile(filepath.ToSlash(name))) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+	if file, side := walked(kind, filepath.ToSlash(name)); (file || side) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.change(id)
 	}
 }

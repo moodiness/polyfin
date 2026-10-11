@@ -19,6 +19,19 @@ var (
 	wordTag = regexp.MustCompile(`<\d{1,4}:\d{1,2}(?:[.:]\d{1,3})?>`)
 )
 
+// Parse reads a track's own lyrics, those of a lyrics file or tag beside
+// it: synced when they hold a timed line (LRC), else plain. Lyrics without
+// a line of text are none.
+func Parse(text string) (Lyrics, bool) {
+	if lines := parseLRC(text); len(lines) > 0 {
+		return Lyrics{Synced: true, Lines: lines}, true
+	}
+	if strings.TrimSpace(text) == "" {
+		return Lyrics{}, false
+	}
+	return Lyrics{Lines: plainLines(text)}, true
+}
+
 // parseLRC reads LRC lyrics into lines, sorted by their start, as Jellyfin
 // reads a track's LRC file: each time tag of a line starts a line of its
 // text, trimmed, empty ones included (they mark pauses). Lines without a

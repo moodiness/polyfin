@@ -140,7 +140,8 @@ func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 // Local answers, for Polyfin's own local folders, the catalog, meta and
 // stream requests addons answer over HTTP (see package localfiles); for
 // its music folders, those Eclipse addons answer: the pages of their rows,
-// album and artist pages, searches and streams. A folder has no playlist.
+// album, artist and playlist pages, searches and streams, and also their
+// album artists, their playlists and the lyrics of their tracks.
 type Local interface {
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
@@ -148,8 +149,12 @@ type Local interface {
 	MusicCatalog(ctx context.Context, source accounts.ID, catalog eclipse.Catalog, skip int) ([]eclipse.Item, int, error)
 	MusicAlbum(ctx context.Context, source accounts.ID, id string) (eclipse.Album, error)
 	MusicArtist(ctx context.Context, source accounts.ID, id string) (eclipse.Artist, error)
+	MusicArtists(ctx context.Context, source accounts.ID) ([]eclipse.Artist, error)
+	MusicPlaylist(ctx context.Context, source accounts.ID, id string) (eclipse.Playlist, error)
+	MusicPlaylists(ctx context.Context, source accounts.ID) ([]eclipse.Playlist, error)
 	MusicSearch(ctx context.Context, source accounts.ID, term string) (eclipse.Results, error)
 	MusicStream(ctx context.Context, source accounts.ID, id string) (eclipse.Stream, error)
+	MusicLyrics(ctx context.Context, source accounts.ID, id string) (string, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the

@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/eclipse"
 )
 
 // testQuiet is how long the folders of the tests stay unchanged before
@@ -162,6 +163,7 @@ func TestWatchIgnoresOtherFiles(t *testing.T) {
 	write(t, filepath.Join(root, "notes.txt"), 10)
 	write(t, filepath.Join(root, "Extras", "Making of.mkv"), 10)
 	write(t, filepath.Join(root, ".hidden", "The General (1926).mkv"), 10)
+	write(t, filepath.Join(root, "Theme.flac"), 10)
 	wt.still()
 }
 
@@ -207,19 +209,29 @@ func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 	wt.still()
 }
 
-// An audio file or an album's image added starts a scan; any other image
-// does not.
+// An audio file, an album's or an artist's image, a lyrics file or a
+// playlist added to a music folder starts a scan, in its subfolders named
+// like a movie's extras too, which its scans read; any other file does
+// not.
 func TestWatchScansAfterMusicChanges(t *testing.T) {
 	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Band", "Extras"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) {
+		return []watchFolder{{id: id, root: root, kind: KindMusic}}, nil
+	}, openNotifyWatcher)
 	wt.start()
-	for _, name := range []string{"Band/Live/01 Opening.flac", "Band/Live/02 Closing.M4A", "Band/Live/Cover.jpg"} {
+	for _, name := range []string{"Band/Live/01 Opening.flac", "Band/Live/02 Closing.M4A", "Band/Live/Cover.jpg", "Band/Artist.png",
+		"Band/Live/01 Opening.lrc", "Band/Live/Live.m3u8", "Band/Extras/01 Demo.mp3", "Band/Other/01 B-side.ogg"} {
 		write(t, filepath.Join(root, filepath.FromSlash(name)), 10)
 		wt.scanned(id)
 		wt.still()
 	}
 	write(t, filepath.Join(root, "Band", "Live", "booklet.jpg"), 10)
+	write(t, filepath.Join(root, "Band", "Live", "clip.mkv"), 10)
+	write(t, filepath.Join(root, "Band", "Live", "notes.nfo"), 10)
 	wt.still()
 }
 
@@ -253,15 +265,18 @@ func TestWatchable(t *testing.T) {
 		t.Fatal("folders are not watched by default")
 	}
 	local := addons.Addon{ID: testID(1), Kind: addons.KindLocal, ManifestURL: "/media/movies", Enabled: true}
+	music := addons.Addon{ID: testID(6), Kind: addons.KindLocal, ManifestURL: "/media/music", Enabled: true, Music: &eclipse.Manifest{}}
 	installed := []addons.Addon{
 		local,
 		{ID: testID(2), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media/movies", Enabled: true},
 		{ID: testID(3), Kind: addons.KindLocal, ManifestURL: "https://nas.local/dav/shows", Enabled: true},
 		{ID: testID(4), Kind: addons.KindLocal, ManifestURL: "/media/off", Enabled: false},
 		{ID: testID(5), Kind: addons.KindStremio, ManifestURL: "https://addon.example/manifest.json", Enabled: true},
+		music,
 	}
-	if got := watchable(on, installed); !slices.Equal(got, []watchFolder{{id: local.ID, root: local.ManifestURL}}) {
-		t.Errorf("watched %v, want the local folder only", got)
+	if got := watchable(on, installed); !slices.Equal(got, []watchFolder{{id: local.ID, root: local.ManifestURL},
+		{id: music.ID, root: music.ManifestURL, kind: KindMusic}}) {
+		t.Errorf("watched %v, want the local folders only, the music folder as such", got)
 	}
 	off := on
 	off.WatchLocalFolders = false

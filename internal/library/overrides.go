@@ -548,18 +548,17 @@ func (set *overrideSet) apply(item *Item) {
 		}
 		item.People = people
 	}
-	if slices.ContainsFunc(item.Artists, func(c Credit) bool { return set.renames(c.ID) }) {
-		artists := slices.Clone(item.Artists)
-		for i := range artists {
-			set.rename(&artists[i])
+	renamed := func(credits []Credit) []Credit {
+		if !slices.ContainsFunc(credits, func(c Credit) bool { return set.renames(c.ID) }) {
+			return credits
 		}
-		item.Artists = artists
+		credits = slices.Clone(credits)
+		for i := range credits {
+			set.rename(&credits[i])
+		}
+		return credits
 	}
-	if item.AlbumArtist != nil && set.renames(item.AlbumArtist.ID) {
-		artist := *item.AlbumArtist
-		set.rename(&artist)
-		item.AlbumArtist = &artist
-	}
+	item.Artists, item.AlbumArtists = renamed(item.Artists), renamed(item.AlbumArtists)
 }
 
 // touches reports whether an administrator changed anything of an item.

@@ -207,8 +207,8 @@ func (h *Handler) searchHint(item library.Item) SearchHint {
 		if item.IndexNumber > 0 {
 			hint.IndexNumber = new(item.IndexNumber)
 		}
-		if item.AlbumArtist != nil {
-			hint.AlbumArtist = item.AlbumArtist.Name
+		if len(item.AlbumArtists) > 0 {
+			hint.AlbumArtist = item.AlbumArtists[0].Name
 		}
 		hint.Artists = *creditNames(item.Artists)
 	}

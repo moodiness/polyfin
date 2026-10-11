@@ -6,8 +6,10 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -306,5 +308,251 @@ func TestShareMusic(t *testing.T) {
 	page, err := e.service.MusicAlbum(t.Context(), addon.ID, live.ID)
 	if err != nil || len(page.Tracks) != 2 || page.Tracks[0].Title != "Opening" || page.Tracks[1].Title != "Closing" || page.Tracks[1].Number != 2 {
 		t.Errorf("tracks: %+v %v", page.Tracks, err)
+	}
+}
+
+// A track's artists are those of its artists tag, else of its artist tag,
+// split at ";"; its artist stays as written. Its album artists split the
+// same way only when its album artist tag names several; without one, its
+// album artist is its artist as written. Its lyrics are its lyrics tag's,
+// an ID3 tag's too.
+func TestArtistsAndLyricsTags(t *testing.T) {
+	for _, tc := range []struct {
+		name                  string
+		tags                  string
+		artist, albumArtist   string
+		artists, albumArtists []string
+		lyrics                string
+	}{
+		{"one artist", `{"artist": "Ann", "album": "A", "title": "T"}`, "Ann", "Ann", []string{"Ann"}, []string{"Ann"}, ""},
+		{"an artists tag", `{"ARTIST": "Ann feat. Ben", "ARTISTS": "Ann;Ben", "album": "A", "title": "T", "LYRICS": "[00:01.00]Hi"}`,
+			"Ann feat. Ben", "Ann feat. Ben", []string{"Ann", "Ben"}, []string{"Ann feat. Ben"}, "[00:01.00]Hi"},
+		{"names separated", `{"artist": "Ann; Ben ;ann", "album": "A", "title": "T", "lyrics-eng": "Words"}`,
+			"Ann; Ben ;ann", "Ann; Ben ;ann", []string{"Ann", "Ben"}, []string{"Ann; Ben ;ann"}, "Words"},
+		{"several album artists", `{"artist": "Ann", "album_artist": "Cat; Dan", "album": "A", "title": "T"}`,
+			"Ann", "Cat; Dan", []string{"Ann"}, []string{"Cat", "Dan"}, ""},
+		{"an artists tag alone", `{"artists": "Ann;Ben", "album": "A", "title": "T", "unsyncedlyrics": "Plain"}`,
+			"Ann; Ben", "Ann; Ben", []string{"Ann", "Ben"}, []string{"Ann; Ben"}, "Plain"},
+	} {
+		info, err := readProbe([]byte(`{"streams": [{"codec_type": "audio", "codec_name": "flac"}], "format": {"tags": ` + tc.tags + `}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, _ = named("A/T.flac", info)
+		if info.artist != tc.artist || info.albumArtist != tc.albumArtist || !slices.Equal(info.artists, tc.artists) ||
+			!slices.Equal(info.albumArtists, tc.albumArtists) || info.lyrics != tc.lyrics {
+			t.Errorf("%s: %q %q %q %q %q", tc.name, info.artist, info.albumArtist, info.artists, info.albumArtists, info.lyrics)
+		}
+	}
+	if info, _ := named("Various/Hits/01 Up.flac", trackInfo{title: "Up", artist: "Ann;Ben", album: "Hits", compilation: true}); info.albumArtist != variousArtists ||
+		!slices.Equal(info.albumArtists, []string{variousArtists}) || !slices.Equal(info.artists, []string{"Ann", "Ben"}) {
+		t.Errorf("a compilation: %+v", info)
+	}
+}
+
+// A playlist's lines name tracks by paths relative to its folder, or
+// absolute within the folder, as paths or file: addresses, with slashes
+// or backslashes; those leading out of it are left out. Its title is its
+// #PLAYLIST line's, else its name.
+func TestM3UPlaylistsAreRead(t *testing.T) {
+	text := "#EXTM3U\n#PLAYLIST:Evening Mix\n#EXTINF:123,Ann - Evening\nEvening.flac\n\n  ../Other/Night.mp3  \n/media/music/Ann/Debut/Morning.flac\n" +
+		"/srv/real/Ann/Debut/Noon.flac\nfile:///media/music/Ann/Debut/Dusk%20Song.flac\nAnn\\Live\\Encore.flac\n/elsewhere/Song.flac\n" +
+		"../../../outside.flac\nhttps://radio.example/stream.mp3\nC:\\Music\\Song.flac\n"
+	title, entries := readM3U("Ann/Debut/Mix.m3u8", text, []string{"/media/music", "/srv/real"})
+	want := []string{"Ann/Debut/Evening.flac", "Ann/Other/Night.mp3", "Ann/Debut/Morning.flac", "Ann/Debut/Noon.flac", "Ann/Debut/Dusk Song.flac",
+		"Ann/Debut/Ann/Live/Encore.flac"}
+	if title != "Evening Mix" || !slices.Equal(entries, want) {
+		t.Errorf("%q %q", title, entries)
+	}
+	if title, entries := readM3U("Road Trip.m3u", "Ann/Debut/Evening.flac\n/media/music/Ann/x.flac", nil); title != "Road Trip" ||
+		!slices.Equal(entries, []string{"Ann/Debut/Evening.flac"}) {
+		t.Errorf("a share's playlist: %q %q", title, entries)
+	}
+}
+
+// An artist's folder holds the folders of their albums, and of no album
+// of another artist or of several.
+func TestArtistFolders(t *testing.T) {
+	got := artistFolders(map[string][]string{
+		"Ann/Debut/01.flac":       {"ann"},
+		"Ann/Live/CD2/01.flac":    {"ann"},
+		"Mixed/One/01.flac":       {"ben"},
+		"Mixed/Two/01.flac":       {"cat"},
+		"Duo/Joint/01.flac":       {"cat", "dan"},
+		"Loose.flac":              {"eve"},
+		"Single/01.flac":          {"fay"},
+		"Deep/Fay/Album/01.flac":  {"fay"},
+		"Deep/Fay/Album2/02.flac": {"fay"},
+	})
+	if want := map[string]string{"Ann": "ann", "Deep/Fay": "fay"}; !maps.Equal(got, want) {
+		t.Errorf("%v, want %v", got, want)
+	}
+}
+
+// A music folder's playlists list the tracks they name in their order,
+// leaving out lines naming none; a track lists under each of its artists,
+// an album under each of its album artists; a track's lyrics are its
+// lyrics file's, else its lyrics tag's; an artist's picture is the image
+// in their folder. Rescans read them again when they change.
+func TestMusicPlaylistsArtistsLyricsAndPictures(t *testing.T) {
+	ffmpeg, ffprobe := musicTools(t)
+	e := newEnv(t)
+	e.service.UseTools(ffprobe, ffmpeg)
+	dir := t.TempDir()
+	debut := filepath.Join(dir, "Ann", "Debut")
+	tone(t, ffmpeg, filepath.Join(debut, "01 Morning.flac"), map[string]string{"title": "Morning", "artist": "Ann feat. Ben", "ARTISTS": "Ann;Ben",
+		"album": "Debut", "album_artist": "Ann", "track": "1", "lyrics": "Tag words"}, "")
+	tone(t, ffmpeg, filepath.Join(debut, "02 Evening.flac"), map[string]string{"title": "Evening", "artist": "Ann", "album": "Debut", "track": "2",
+		"lyrics": "[00:00.50]Evening line"}, "")
+	tone(t, ffmpeg, filepath.Join(debut, "03 Night.flac"), map[string]string{"title": "Night", "artist": "Ann", "album": "Debut", "track": "3"}, "")
+	tone(t, ffmpeg, filepath.Join(dir, "Duo", "Joint", "01 Shared.flac"), map[string]string{"title": "Shared", "artist": "Cat; Dan",
+		"album_artist": "Cat; Dan", "album": "Joint"}, "")
+	image(t, ffmpeg, filepath.Join(dir, "Ann", "artist.jpg"), "purple")
+	lrc := filepath.Join(debut, "01 Morning.LRC")
+	now := time.Now()
+	writeText(t, lrc, "[ti:Morning]\n[00:00.20]First line\n[00:00.70]Second line\n", now)
+	mix := filepath.Join(dir, "Mix.m3u8")
+	writeText(t, mix, "#EXTM3U\n#PLAYLIST:Evening Mix\nAnn/Debut/02 Evening.flac\n"+filepath.ToSlash(filepath.Join(dir, "Ann", "Debut", "01 Morning.flac"))+
+		"\nAnn/Debut/missing.flac\n../outside.flac\nann/debut/03 NIGHT.flac\n", now)
+	writeText(t, filepath.Join(debut, "Best.m3u"), "01 Morning.flac\n", now)
+	writeText(t, filepath.Join(dir, "Empty.m3u"), "nothing.flac\n", now)
+	id := e.musicFolder(dir)
+
+	albums := e.albumTitles(id)
+	debutAlbum, joint := albums["Debut by Ann"], albums["Joint by Cat; Dan"]
+	if len(albums) != 2 || debutAlbum.ID == "" || !slices.Equal(joint.Artists, []string{"Cat", "Dan"}) || debutAlbum.ArtworkURL != "" {
+		t.Fatalf("albums: %+v", albums)
+	}
+	page, err := e.service.MusicAlbum(t.Context(), id, debutAlbum.ID)
+	if err != nil || len(page.Tracks) != 3 {
+		t.Fatalf("Debut: %+v %v", page, err)
+	}
+	morning, evening, night := page.Tracks[0], page.Tracks[1], page.Tracks[2]
+	if morning.Artist != "Ann feat. Ben" || !slices.Equal(morning.Artists, []string{"Ann", "Ben"}) || !morning.Lyrics || !evening.Lyrics || night.Lyrics {
+		t.Errorf("tracks: %+v", page.Tracks)
+	}
+
+	// Each artist has their page.
+	for _, tc := range []struct {
+		name           string
+		albums, tracks int
+	}{{"Ann", 1, 3}, {"Ben", 0, 1}, {"Cat", 1, 1}, {"Dan", 1, 1}} {
+		artist, err := e.service.MusicArtist(t.Context(), id, nameID("ar", tc.name))
+		if err != nil || artist.Name != tc.name || len(artist.Albums) != tc.albums || len(artist.TopTracks) != tc.tracks {
+			t.Errorf("%s: %+v %v", tc.name, artist, err)
+		}
+	}
+	if _, err := e.service.MusicArtist(t.Context(), id, nameID("ar", "Cat; Dan")); err == nil {
+		t.Error("an album artist tag naming several is an artist")
+	}
+	results, err := e.service.MusicSearch(t.Context(), id, "ben")
+	if err != nil || len(results.Artists) != 1 || results.Artists[0].Name != "Ben" || len(results.Tracks) != 1 {
+		t.Errorf("a search for an artist: %+v %v", results, err)
+	}
+	if folder, err := e.service.Folder(t.Context(), id); err != nil || folder.Artists != 3 {
+		t.Errorf("figures: %+v %v", folder, err)
+	}
+
+	// Ann's picture is the image of her folder; Cat and Dan have none.
+	ann, _ := e.service.MusicArtist(t.Context(), id, nameID("ar", "Ann"))
+	if ann.ArtworkURL == "" || filepath.Ext(strings.Split(ann.ArtworkURL, "?")[0]) != ".jpg" {
+		t.Errorf("Ann's picture: %q", ann.ArtworkURL)
+	}
+	if cat, _ := e.service.MusicArtist(t.Context(), id, nameID("ar", "Cat")); cat.ArtworkURL != "" {
+		t.Errorf("Cat's picture: %q", cat.ArtworkURL)
+	}
+	file, _, err := e.service.Open(t.Context(), path.Base(strings.Split(ann.ArtworkURL, "?")[0]))
+	if err != nil {
+		t.Fatalf("Ann's picture: %v", err)
+	}
+	data, _ := io.ReadAll(file)
+	file.Close()
+	if !bytes.HasPrefix(data, []byte{0xff, 0xd8}) {
+		t.Errorf("Ann's picture: % x", data[:min(len(data), 4)])
+	}
+
+	// The playlists, by title, keep the tracks they name in order.
+	playlists, err := e.service.MusicPlaylists(t.Context(), id)
+	if err != nil || len(playlists) != 2 || playlists[0].Title != "Best" || playlists[0].TrackCount != 1 || playlists[1].Title != "Evening Mix" ||
+		playlists[1].TrackCount != 3 {
+		t.Fatalf("playlists: %+v %v", playlists, err)
+	}
+	titles := func(id accounts.ID, playlist string) []string {
+		t.Helper()
+		page, err := e.service.MusicPlaylist(t.Context(), id, playlist)
+		if err != nil {
+			t.Fatalf("a playlist: %v", err)
+		}
+		var titles []string
+		for _, track := range page.Tracks {
+			titles = append(titles, track.Title)
+		}
+		return titles
+	}
+	if got := titles(id, playlists[1].ID); !slices.Equal(got, []string{"Evening", "Morning", "Night"}) {
+		t.Errorf("Evening Mix: %v", got)
+	}
+	if results, _ := e.service.MusicSearch(t.Context(), id, "mix"); len(results.Playlists) != 1 || results.Playlists[0].Title != "Evening Mix" {
+		t.Errorf("a search for a playlist: %+v", results.Playlists)
+	}
+
+	// The lyrics file comes before the tag.
+	lyricsOf := func(track eclipse.Track) string {
+		t.Helper()
+		text, err := e.service.MusicLyrics(t.Context(), id, track.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	if got := lyricsOf(morning); !strings.Contains(got, "[00:00.20]First line") {
+		t.Errorf("Morning's lyrics: %q", got)
+	}
+	if got := lyricsOf(evening); got != "[00:00.50]Evening line" {
+		t.Errorf("Evening's lyrics: %q", got)
+	}
+	if got := lyricsOf(night); got != "" {
+		t.Errorf("Night's lyrics: %q", got)
+	}
+
+	// Without its lyrics file, a track has its tag's; a playlist changed
+	// is read again; an artist's picture gone is forgotten.
+	if err := os.Remove(lrc); err != nil {
+		t.Fatal(err)
+	}
+	writeText(t, mix, "#PLAYLIST:Evening Mix\nAnn/Debut/03 Night.flac\nAnn/Debut/02 Evening.flac\n", now.Add(time.Minute))
+	if err := os.Remove(filepath.Join(dir, "Ann", "artist.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.Scan(t.Context(), id); err != nil {
+		t.Fatal(err)
+	}
+	if got := lyricsOf(morning); got != "Tag words" {
+		t.Errorf("Morning's lyrics without its file: %q", got)
+	}
+	if got := titles(id, playlists[1].ID); !slices.Equal(got, []string{"Night", "Evening"}) {
+		t.Errorf("Evening Mix changed: %v", got)
+	}
+	if ann, _ := e.service.MusicArtist(t.Context(), id, nameID("ar", "Ann")); ann.ArtworkURL != "" {
+		t.Errorf("Ann's picture gone: %q", ann.ArtworkURL)
+	}
+}
+
+// The tracks a scan first finds count among the files added, by album.
+func TestAddedTracksAreCountedByAlbum(t *testing.T) {
+	ffmpeg, ffprobe := musicTools(t)
+	e := newEnv(t)
+	e.service.UseTools(ffprobe, ffmpeg)
+	since := time.Now().Add(-time.Second)
+	dir := t.TempDir()
+	for _, name := range []string{"01 One.flac", "02 Two.flac"} {
+		tone(t, ffmpeg, filepath.Join(dir, "Band", "Early", name), map[string]string{"artist": "Band", "album": "Early"}, "")
+	}
+	tone(t, ffmpeg, filepath.Join(dir, "stray.flac"), nil, "")
+	e.folder(KindMovies, map[string]int{"The General (1926).mkv": 10})
+	e.musicFolder(dir)
+	added, total, err := e.service.Added(t.Context(), since, time.Now().Add(time.Minute), 10)
+	if err != nil || total != 4 || len(added) != 2 || added[0] != (Added{Name: "Early", Kind: KindMusic, Files: 2}) || added[1].Kind != KindMovies {
+		t.Errorf("added: %+v, %d files, %v", added, total, err)
 	}
 }

@@ -121,17 +121,20 @@ type Item struct {
 	// guide gives one.
 	EpisodeTitle string
 	// Music: a track's album, by name and item, and its artwork; a track's
-	// or album's artists, and the artist of a track's album; whether it is
-	// explicit; and how many tracks an album or playlist holds, or albums
-	// an artist, when known. ISRC identifies a track's recording.
-	Album       string
-	AlbumID     accounts.ID
-	AlbumPoster string
-	Artists     []Credit
-	AlbumArtist *Credit
-	Explicit    bool
-	ChildCount  *int
-	ISRC        string
+	// or album's artists, and the artists of a track's album, the first
+	// its album artist; whether it is explicit; and how many tracks an
+	// album or playlist holds, or albums an artist, when known. ISRC
+	// identifies a track's recording. Lyrics tells that a track of a local
+	// music folder has lyrics of its own (see Service.TrackLyrics).
+	Album        string
+	AlbumID      accounts.ID
+	AlbumPoster  string
+	Artists      []Credit
+	AlbumArtists []Credit
+	Explicit     bool
+	ChildCount   *int
+	ISRC         string
+	Lyrics       bool
 	// Container is a track's format, as its addon labels it, until its
 	// stream is known.
 	Container string

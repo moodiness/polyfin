@@ -101,8 +101,8 @@ func playedTitle(item library.Item) plays.Title {
 	switch {
 	case len(item.Artists) > 0:
 		t.Artist = item.Artists[0].Name
-	case item.AlbumArtist != nil:
-		t.Artist = item.AlbumArtist.Name
+	case len(item.AlbumArtists) > 0:
+		t.Artist = item.AlbumArtists[0].Name
 	}
 	return t
 }

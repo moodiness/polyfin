@@ -731,7 +731,9 @@ func (h *Handler) addPlaylistsView(r *http.Request, user accounts.User, views []
 
 // playlistListing answers the listings that hold playlists: the Playlists
 // view's, a listing of playlists across the server, and a playlist's
-// titles listed as its children. It reports whether it answered.
+// titles listed as its children. The first two list the user's playlists
+// and those of the local music folders they reach, by name. It reports
+// whether it answered.
 func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, hasParent bool, start, limit int) bool {
 	if hasParent && parent != playlistsViewID {
 		p, err := h.Playlists.Get(r.Context(), parent)
@@ -753,25 +755,71 @@ func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user a
 		return false
 	}
 	media := listQuery(r, "mediaTypes")
-	if len(include) > 0 && !matches(include, "Playlist") || matches(listQuery(r, "excludeItemTypes"), "Playlist") ||
-		len(media) > 0 && !matches(media, "Video") || matches(listQuery(r, "filters"), "IsNotFolder") {
-		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
-		return true
+	excluded := len(include) > 0 && !matches(include, "Playlist") || matches(listQuery(r, "excludeItemTypes"), "Playlist") ||
+		matches(listQuery(r, "filters"), "IsNotFolder")
+	own := !excluded && (len(media) == 0 || matches(media, "Video"))
+	folders := !excluded && (len(media) == 0 || matches(media, "Audio"))
+	var lists []playlists.Playlist
+	var music []library.Item
+	var err error
+	if own {
+		if lists, err = h.Playlists.Visible(r.Context(), user.ID); err != nil {
+			h.internalError(w, r, err)
+			return true
+		}
 	}
-	lists, err := h.Playlists.Visible(r.Context(), user.ID)
-	if err != nil {
-		h.internalError(w, r, err)
-		return true
+	if folders {
+		if music, err = h.Library.FolderPlaylists(r.Context(), user); err != nil {
+			h.internalError(w, r, err)
+			return true
+		}
 	}
 	inRange := letterRange(r)
 	lists = slices.DeleteFunc(lists, func(p playlists.Playlist) bool { return !inRange(strings.ToLower(strings.TrimSpace(p.Name))) })
-	from, to := bounds(len(lists), start, limit)
-	dtos, err := h.playlistDtos(r, user, lists[from:to], requestedFields(r), false)
+	music = slices.DeleteFunc(music, func(item library.Item) bool { return !inRange(sortName(item)) })
+	// Both are by name: merged, a user's playlist is its index in lists,
+	// a folder's playlist -1 less its index in music.
+	merged := make([]int, 0, len(lists)+len(music))
+	for i, j := 0, 0; i < len(lists) || j < len(music); {
+		if j == len(music) || i < len(lists) && strings.ToLower(strings.TrimSpace(lists[i].Name)) <= sortName(music[j]) {
+			merged = append(merged, i)
+			i++
+		} else {
+			merged = append(merged, -1-j)
+			j++
+		}
+	}
+	from, to := bounds(len(merged), start, limit)
+	var pageLists []playlists.Playlist
+	var pageMusic []library.Item
+	for _, k := range merged[from:to] {
+		if k >= 0 {
+			pageLists = append(pageLists, lists[k])
+		} else {
+			pageMusic = append(pageMusic, music[-1-k])
+		}
+	}
+	fields := requestedFields(r)
+	ownDtos, err := h.playlistDtos(r, user, pageLists, fields, false)
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
 	}
-	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(lists), StartIndex: start})
+	state, err := h.userState(r.Context(), user, pageMusic)
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	musicDtos := h.listDtos(r, user, pageMusic, fields, state)
+	dtos := make([]BaseItemDto, 0, to-from)
+	for _, k := range merged[from:to] {
+		if k >= 0 {
+			dtos, ownDtos = append(dtos, ownDtos[0]), ownDtos[1:]
+		} else {
+			dtos, musicDtos = append(dtos, musicDtos[0]), musicDtos[1:]
+		}
+	}
+	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(merged), StartIndex: start})
 	return true
 }
 

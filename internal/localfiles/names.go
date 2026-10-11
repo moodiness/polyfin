@@ -50,25 +50,46 @@ func audioFile(name string) bool {
 }
 
 // folderImageNames are the images beside an album's tracks that may be its
-// artwork, in the order they are preferred.
-var folderImageNames = []string{"cover", "folder", "front"}
+// artwork, and artistImageNames those in an artist's folder that may be
+// their picture (see artistFolders), in the order they are preferred.
+var (
+	folderImageNames = []string{"cover", "folder", "front"}
+	artistImageNames = []string{"artist", "folder", "photo"}
+)
 
-// folderImage reports whether name is an image a music folder's scan lists
-// beside the tracks: cover, folder or front, as JPEG or PNG.
-func folderImage(name string) bool {
-	switch strings.ToLower(path.Ext(name)) {
-	case ".jpg", ".jpeg", ".png":
-		return slices.Contains(folderImageNames, strings.ToLower(stem(name)))
+// imageExtensions are those of the images a music folder's scan reads:
+// JPEG and PNG.
+var imageExtensions = []string{".jpg", ".jpeg", ".png"}
+
+// musicImage reports whether name is an image a music folder's scan lists
+// beside the tracks: an album's artwork or an artist's picture, as JPEG or
+// PNG, by one of folderImageNames or artistImageNames.
+func musicImage(name string) bool {
+	if !slices.Contains(imageExtensions, strings.ToLower(path.Ext(name))) {
+		return false
 	}
-	return false
+	s := strings.ToLower(stem(name))
+	return slices.Contains(folderImageNames, s) || slices.Contains(artistImageNames, s)
+}
+
+// lyricsFile reports whether name is a lyrics file, LRC, which gives the
+// lyrics of the tracks of the same name beside it.
+func lyricsFile(name string) bool { return strings.EqualFold(path.Ext(name), ".lrc") }
+
+// m3uFile reports whether name is a playlist a music folder's scan reads:
+// an M3U file, .m3u or .m3u8.
+func m3uFile(name string) bool {
+	extension := strings.ToLower(path.Ext(name))
+	return extension == ".m3u" || extension == ".m3u8"
 }
 
 // listed tells which files a scan of a folder of kind lists, by name: the
 // files it reads (videos, or a music folder's audio files), and the side
-// files beside them (NFO and subtitle files, or a music folder's images).
+// files beside them (NFO and subtitle files, or a music folder's images,
+// lyrics files and playlists).
 func listed(kind, name string) (file, side bool) {
 	if kind == KindMusic {
-		return audioFile(name), folderImage(name)
+		return audioFile(name), musicImage(name) || lyricsFile(name) || m3uFile(name)
 	}
 	return videoFile(name), sideFile(name)
 }

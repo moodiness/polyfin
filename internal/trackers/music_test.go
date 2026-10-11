@@ -480,7 +480,7 @@ func TestSongsAndMoviesGoToTheirOwnServicesOnly(t *testing.T) {
 func TestSongOfNeedsAnArtistAndATitle(t *testing.T) {
 	album := accounts.ID{30}
 	track := library.Item{ID: accounts.ID{20}, Kind: library.KindTrack, Name: "A Song", Album: "An Album", AlbumID: album, ParentID: album,
-		IndexNumber: 3, Artists: []library.Credit{{Name: "The Artist"}}, AlbumArtist: &library.Credit{Name: "the artist"}}
+		IndexNumber: 3, Artists: []library.Credit{{Name: "The Artist"}}, AlbumArtists: []library.Credit{{Name: "the artist"}}}
 	song, ok := SongOf(track, 200*time.Second)
 	if !ok || song.Artist != "The Artist" || song.Title != "A Song" || song.TrackNumber != 3 || song.AlbumArtist != "" || song.DurationMS != 200_000 {
 		t.Errorf("album track: %+v %v", song, ok)

@@ -656,7 +656,7 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if item.Kind == library.KindRecording && h.describeRecording(w, r, user, item.ID) {
 		return
 	}
-	if track, ok := lyricsTrack(item); ok {
+	if track, ok := lyricsTrack(item); ok && !item.Lyrics {
 		// A song's details tell whether it has lyrics, which apps show
 		// a button for: a song never looked up is, for a moment at most.
 		_, _ = h.Lyrics.Lyrics(r.Context(), track, detailsWait)

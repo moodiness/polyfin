@@ -69,38 +69,47 @@ func AudioKind(kind Kind) bool {
 // and identifier in the addon (empty for an album or artist only named by
 // a track, whose Resolved is the addon's identifier once found), and what
 // describes it. Duration is in seconds; Index is a track's place on its
-// album or playlist; Count, an album's or playlist's tracks.
+// album or playlist; Count, an album's or playlist's tracks. Artist and
+// AlbumArtist are as written; Artists and AlbumArtists name them one by
+// one when a local music folder's tags give several, or other names than
+// written (see artistNames). Lyrics tells that a local track has lyrics of
+// its own.
 type musicEntry struct {
-	Type        string   `json:"type"`
-	ID          string   `json:"id,omitempty"`
-	Resolved    string   `json:"resolved,omitempty"`
-	Title       string   `json:"title"`
-	Artist      string   `json:"artist,omitempty"`
-	AlbumArtist string   `json:"albumArtist,omitempty"`
-	Album       string   `json:"album,omitempty"`
-	AlbumID     string   `json:"albumId,omitempty"`
-	Duration    float64  `json:"duration,omitempty"`
-	Artwork     string   `json:"artwork,omitempty"`
-	ISRC        string   `json:"isrc,omitempty"`
-	Explicit    bool     `json:"explicit,omitempty"`
-	Year        int      `json:"year,omitempty"`
-	Index       int      `json:"index,omitempty"`
-	Disc        int      `json:"disc,omitempty"`
-	Count       int      `json:"count,omitempty"`
-	Genres      []string `json:"genres,omitempty"`
-	Overview    string   `json:"overview,omitempty"`
-	StreamURL   string   `json:"streamUrl,omitempty"`
-	Format      string   `json:"format,omitempty"`
-	Content     string   `json:"content,omitempty"`
+	Type         string   `json:"type"`
+	ID           string   `json:"id,omitempty"`
+	Resolved     string   `json:"resolved,omitempty"`
+	Title        string   `json:"title"`
+	Artist       string   `json:"artist,omitempty"`
+	AlbumArtist  string   `json:"albumArtist,omitempty"`
+	Artists      []string `json:"artists,omitempty"`
+	AlbumArtists []string `json:"albumArtists,omitempty"`
+	Album        string   `json:"album,omitempty"`
+	AlbumID      string   `json:"albumId,omitempty"`
+	Duration     float64  `json:"duration,omitempty"`
+	Artwork      string   `json:"artwork,omitempty"`
+	ISRC         string   `json:"isrc,omitempty"`
+	Explicit     bool     `json:"explicit,omitempty"`
+	Year         int      `json:"year,omitempty"`
+	Index        int      `json:"index,omitempty"`
+	Disc         int      `json:"disc,omitempty"`
+	Count        int      `json:"count,omitempty"`
+	Genres       []string `json:"genres,omitempty"`
+	Overview     string   `json:"overview,omitempty"`
+	StreamURL    string   `json:"streamUrl,omitempty"`
+	Format       string   `json:"format,omitempty"`
+	Content      string   `json:"content,omitempty"`
+	Lyrics       bool     `json:"lyrics,omitempty"`
 }
 
 func trackEntry(t eclipse.Track, index int, content string) musicEntry {
 	e := musicEntry{Type: eclipse.TypeTrack, ID: t.ID, Title: t.Title, Artist: t.Artist, Album: t.Album, AlbumID: t.AlbumID,
 		Duration: t.Duration.Duration().Seconds(), Artwork: t.ArtworkURL, ISRC: t.ISRC, Explicit: t.Explicit, Year: t.Year, Index: index,
-		StreamURL: t.StreamURL, Format: t.Format, Content: content, Disc: t.Disc, Genres: t.Genres}
+		StreamURL: t.StreamURL, Format: t.Format, Content: content, Disc: t.Disc, Genres: t.Genres, Lyrics: t.Lyrics}
 	if t.AlbumArtist != "" && !strings.EqualFold(t.AlbumArtist, t.Artist) {
 		e.AlbumArtist = t.AlbumArtist
 	}
+	e.Artists = artistNames(t.Artists, e.Artist)
+	e.AlbumArtists = artistNames(t.AlbumArtists, e.albumArtist())
 	// A local track's number is its place on its disc.
 	if t.Number > 0 {
 		e.Index = t.Number
@@ -108,9 +117,19 @@ func trackEntry(t eclipse.Track, index int, content string) musicEntry {
 	return e
 }
 
+// artistNames is names, the artists a local music folder names one by
+// one, unless they are only the one name written: nil then.
+func artistNames(names []string, written string) []string {
+	if len(names) == 0 || len(names) == 1 && musicName(names[0]) == musicName(written) {
+		return nil
+	}
+	return names
+}
+
 func albumEntry(a eclipse.Album, content string) musicEntry {
 	e := musicEntry{Type: eclipse.TypeAlbum, ID: a.ID, Title: a.Title, Artist: a.Artist, Artwork: a.ArtworkURL, Year: a.Year,
-		Explicit: a.Explicit, Overview: a.Description, Count: a.TrackCount, Content: content, Genres: a.Genres}
+		Explicit: a.Explicit, Overview: a.Description, Count: a.TrackCount, Content: content, Genres: a.Genres,
+		Artists: artistNames(a.Artists, a.Artist)}
 	if len(a.Tracks) > 0 {
 		e.Count = len(a.Tracks)
 		for _, t := range a.Tracks {
@@ -161,6 +180,23 @@ func (e musicEntry) albumArtist() string {
 		return e.AlbumArtist
 	}
 	return e.Artist
+}
+
+// artistList names a track's or an album's artists one by one: Artists,
+// else the one Artist written.
+func (e musicEntry) artistList() []string {
+	if len(e.Artists) > 0 {
+		return e.Artists
+	}
+	return uniqueNames(e.Artist)
+}
+
+// albumArtistList names the artists of a track's album one by one.
+func (e musicEntry) albumArtistList() []string {
+	if len(e.AlbumArtists) > 0 {
+		return e.AlbumArtists
+	}
+	return uniqueNames(e.albumArtist())
 }
 
 // key is the stable key of an entry's item.
@@ -219,25 +255,29 @@ func musicRecord(entry installed, e musicEntry, parent *accounts.ID) record {
 	return record{ID: itemID(key), Key: key, Kind: e.kind(), Addon: &addon, Parent: parent, Music: &e, Confined: entry.confined}
 }
 
-// stubs are the records of the album and artists a track names, which
-// stand for them until they are listed themselves (see saveNew).
+// stubs are the records of the album and artists a track names, and of
+// the artists an album names, which stand for them until they are listed
+// themselves (see saveNew).
 func stubs(entry installed, records []record) []record {
 	var result []record
+	artists := func(e *musicEntry, names ...string) {
+		for _, name := range uniqueNames(names...) {
+			result = append(result, musicRecord(entry, musicEntry{Type: eclipse.TypeArtist, Title: name, Content: e.Content}, nil))
+		}
+	}
 	for _, r := range records {
 		e := r.Music
 		switch {
 		case e == nil:
 		case e.Type == eclipse.TypeTrack:
 			if e.Album != "" {
-				album := musicEntry{Type: eclipse.TypeAlbum, ID: e.AlbumID, Title: e.Album, Artist: e.albumArtist(), Artwork: e.Artwork,
-					Year: e.Year, Content: e.Content}
+				album := musicEntry{Type: eclipse.TypeAlbum, ID: e.AlbumID, Title: e.Album, Artist: e.albumArtist(), Artists: e.AlbumArtists,
+					Artwork: e.Artwork, Year: e.Year, Content: e.Content}
 				result = append(result, musicRecord(entry, album, nil))
 			}
-			for _, name := range uniqueNames(e.Artist, e.albumArtist()) {
-				result = append(result, musicRecord(entry, musicEntry{Type: eclipse.TypeArtist, Title: name, Content: e.Content}, nil))
-			}
-		case e.Type == eclipse.TypeAlbum && e.Artist != "":
-			result = append(result, musicRecord(entry, musicEntry{Type: eclipse.TypeArtist, Title: e.Artist, Content: e.Content}, nil))
+			artists(e, slices.Concat(e.artistList(), e.albumArtistList())...)
+		case e.Type == eclipse.TypeAlbum:
+			artists(e, e.artistList()...)
 		}
 	}
 	return result
@@ -257,6 +297,14 @@ func credit(addon accounts.ID, name string) Credit {
 	return Credit{ID: itemID(namedArtistKey(addon, name)), Name: name}
 }
 
+func creditList(addon accounts.ID, names []string) []Credit {
+	credits := make([]Credit, 0, len(names))
+	for _, name := range names {
+		credits = append(credits, credit(addon, name))
+	}
+	return credits
+}
+
 // musicItem describes the item of a record.
 func musicItem(r record) Item {
 	e := r.Music
@@ -273,25 +321,17 @@ func musicItem(r record) Item {
 		item.IndexNumber, item.ParentIndexNumber = e.Index, e.Disc
 		item.Container = e.Format
 		item.Album = e.Album
+		item.Lyrics = e.Lyrics
 		if ref := e.albumRef(addon); ref != "" {
 			item.AlbumID = itemID(ref)
 			item.AlbumPoster = e.Artwork
 		}
-		if e.Artist != "" {
-			item.Artists = []Credit{credit(addon, e.Artist)}
-		}
-		if artist := e.albumArtist(); artist != "" {
-			item.AlbumArtist = new(credit(addon, artist))
-		}
+		item.Artists, item.AlbumArtists = creditList(addon, e.artistList()), creditList(addon, e.albumArtistList())
 	case eclipse.TypeAlbum:
-		if e.Artist != "" {
-			item.Artists = []Credit{credit(addon, e.Artist)}
-			item.AlbumArtist = new(credit(addon, e.Artist))
-		}
+		item.Artists = creditList(addon, e.artistList())
+		item.AlbumArtists = item.Artists
 	case eclipse.TypePlaylist:
-		if e.Artist != "" {
-			item.Artists = []Credit{credit(addon, e.Artist)}
-		}
+		item.Artists = creditList(addon, uniqueNames(e.Artist))
 	}
 	if e.Count > 0 {
 		item.ChildCount = new(e.Count)
@@ -504,8 +544,8 @@ func (s *Service) artistPage(ctx context.Context, entry installed, id string) (e
 }
 
 func (s *Service) playlistPage(ctx context.Context, entry installed, id string) (eclipse.Playlist, error) {
-	if entry.addon.Local() {
-		return eclipse.Playlist{}, stremio.ErrNotFound
+	if s.localMusic(entry) {
+		return s.local.MusicPlaylist(ctx, entry.addon.ID, id)
 	}
 	return remember(ctx, s, s.musicCache.playlists, entry.musicKey("playlist", id, 0), func(ctx context.Context) (eclipse.Playlist, error) {
 		return s.music.Playlist(ctx, entry.eclipseAddon(), id)
@@ -685,6 +725,7 @@ func (s *Service) albumTracks(ctx context.Context, v view, entry installed, r re
 		// lead back to the same item.
 		for i := range tracks {
 			tracks[i].Music.AlbumID, tracks[i].Music.Album, tracks[i].Music.AlbumArtist = "", e.Title, e.Artist
+			tracks[i].Music.AlbumArtists = e.Artists
 		}
 	}
 	return tracks, nil
@@ -991,8 +1032,9 @@ func (s *Service) folderMusic(ctx context.Context, v view, entry installed, r re
 // asked for, else those of each kind asked for, derived from the row's
 // items when they are of another kind: the tracks of albums, playlists or
 // artists (their top tracks), read for at most musicExpansion of them; the
-// albums and artists the tracks or albums name; an artist's albums. My
-// music, whose items are of every kind, lists them as myMusic does.
+// albums and artists the tracks or albums name; an artist's albums; a local
+// music folder's playlists, which its row does not list. My music, whose
+// items are of every kind, lists them as myMusic does.
 func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []Kind, recursive, shallow bool) ([]record, error) {
 	records, err := s.musicLibraryRecords(ctx, v, l)
 	if err != nil {
@@ -1028,6 +1070,12 @@ func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []K
 	var result []record
 	for _, kind := range kinds {
 		switch {
+		case kind == KindMusicPlaylist && s.localMusic(l.addon):
+			playlists, err := s.localPlaylists(ctx, l)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, playlists...)
 		case kind == rowKind:
 			result = append(result, records...)
 		case !recursive:
@@ -1038,6 +1086,17 @@ func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []K
 			result = append(result, s.expandArtistAlbums(ctx, v, l.addon, records, parent)...)
 		case kind == KindAlbum:
 			result = append(result, derived(l.addon, tracksOf(), KindAlbum, parent)...)
+		case kind == KindArtist && rowKind == KindAlbum && s.localMusic(l.addon):
+			artists, err := s.local.MusicArtists(ctx, l.addon.addon.ID)
+			if err != nil {
+				return nil, err
+			}
+			for _, a := range artists {
+				// Named as their albums and songs name them, with their
+				// page and picture.
+				e := musicEntry{Type: eclipse.TypeArtist, Title: a.Name, Resolved: a.ID, Artwork: a.ArtworkURL, Content: l.addon.content()}
+				result = append(result, musicRecord(l.addon, e, parent))
+			}
 		case kind == KindArtist && rowKind == KindAlbum:
 			result = append(result, derived(l.addon, records, KindArtist, parent)...)
 		case kind == KindArtist:
@@ -1045,6 +1104,69 @@ func (s *Service) musicLibrary(ctx context.Context, v view, l library, kinds []K
 		}
 	}
 	return result, nil
+}
+
+// localPlaylists lists the playlists of a local music folder's library.
+func (s *Service) localPlaylists(ctx context.Context, l library) ([]record, error) {
+	playlists, err := s.local.MusicPlaylists(ctx, l.addon.addon.ID)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]record, 0, len(playlists))
+	for _, p := range playlists {
+		records = append(records, musicRecord(l.addon, playlistEntry(p, l.addon.content()), &l.item.ID))
+	}
+	return records, nil
+}
+
+// FolderPlaylists lists the playlists of the local music folders the
+// user reaches, which Jellyfin apps list with the user's own playlists.
+func (s *Service) FolderPlaylists(ctx context.Context, user accounts.User) ([]Item, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	var records []record
+	listed := map[accounts.ID]bool{}
+	for _, l := range v.libraries {
+		if !l.addon.addon.HasMusic() || !s.localMusic(l.addon) || listed[l.addon.addon.ID] {
+			continue
+		}
+		listed[l.addon.addon.ID] = true
+		list, err := s.localPlaylists(ctx, l)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, list...)
+	}
+	items, err := s.musicItems(ctx, v, records, nil)
+	return s.overridden(items), err
+}
+
+// TrackLyrics returns the lyrics of a track of a local music folder the
+// user reaches, LRC or plain text (see Local.MusicLyrics): empty for a
+// track without, or of an addon.
+func (s *Service) TrackLyrics(ctx context.Context, user accounts.User, id accounts.ID) (string, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return "", err
+	}
+	r, err := s.load(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if !AudioKind(r.Kind) || !v.allowsMusic(r) {
+		return "", nil
+	}
+	entry, _ := v.addon(*r.Addon)
+	if !entry.addon.HasMusic() || !s.localMusic(entry) {
+		return "", nil
+	}
+	text, err := s.local.MusicLyrics(ctx, entry.addon.ID, r.Music.ID)
+	if errors.Is(err, stremio.ErrNotFound) {
+		return "", nil
+	}
+	return text, err
 }
 
 // myMusic lists My music's items of each kind asked for, with, when
@@ -1415,8 +1537,8 @@ func (s *Service) InstantMix(ctx context.Context, user accounts.User, id account
 			}
 		case r.Kind == KindAlbum:
 			pool = related(r.ID)
-			if item := musicItem(r); item.AlbumArtist != nil {
-				pool = append(pool, related(item.AlbumArtist.ID)...)
+			for _, artist := range musicItem(r).AlbumArtists {
+				pool = append(pool, related(artist.ID)...)
 			}
 		default:
 			pool, err = s.folderMusic(ctx, v, entry, r, []Kind{KindTrack})

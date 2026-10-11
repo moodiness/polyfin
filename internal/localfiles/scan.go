@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -119,11 +120,7 @@ func walk(ctx context.Context, root, kind string) (listing, error) {
 		var info fs.FileInfo
 		file, side := false, false
 		if !d.IsDir() {
-			file, side = listed(kind, d.Name())
-			// Disc images, a DVD's files and a Blu-ray disc's playlists are
-			// read as their disc (see collapseImages, collapseDVDs,
-			// collapseDiscs).
-			file = file || kind != KindMusic && (imageFile(d.Name()) || dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) || playlistFile(rel))
+			file, side = walked(kind, rel)
 		}
 		switch {
 		case path == real:
@@ -160,6 +157,17 @@ func walk(ctx context.Context, root, kind string) (listing, error) {
 		return nil
 	})
 	return list, err
+}
+
+// walked tells which files a walk of a folder of kind lists, by their
+// path, with slashes: those listed tells, and outside music folders, disc
+// images, a DVD's files and a Blu-ray disc's playlists, read as their disc
+// (see collapseImages, collapseDVDs, collapseDiscs).
+func walked(kind, rel string) (file, side bool) {
+	name := path.Base(rel)
+	file, side = listed(kind, name)
+	file = file || kind != KindMusic && (imageFile(name) || dvdFile(path.Base(path.Dir(rel)), name) || playlistFile(rel))
+	return file, side
 }
 
 // within reports whether path is root or under it, both clean.
@@ -330,7 +338,11 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return err
 	}
 	if folder.Kind == KindMusic {
-		if err := s.scanMusic(ctx, id, list); err != nil {
+		local := root
+		if folder.Share != "" {
+			local = ""
+		}
+		if err := s.scanMusic(ctx, id, list, local); err != nil {
 			return err
 		}
 		_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at)

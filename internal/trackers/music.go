@@ -59,8 +59,8 @@ func SongOf(item library.Item, length time.Duration) (Song, bool) {
 		song.Artist = strings.TrimSpace(item.Artists[0].Name)
 	}
 	// Last.fm wants the album's artist only when it is not the song's.
-	if item.AlbumArtist != nil && !strings.EqualFold(strings.TrimSpace(item.AlbumArtist.Name), song.Artist) {
-		song.AlbumArtist = strings.TrimSpace(item.AlbumArtist.Name)
+	if len(item.AlbumArtists) > 0 && !strings.EqualFold(strings.TrimSpace(item.AlbumArtists[0].Name), song.Artist) {
+		song.AlbumArtist = strings.TrimSpace(item.AlbumArtists[0].Name)
 	}
 	// A track's index is its place where it was listed: on its album, or
 	// in a playlist, which is not a track number.

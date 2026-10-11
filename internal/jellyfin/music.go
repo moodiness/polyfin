@@ -55,18 +55,19 @@ func creditNames(list []library.Credit) *[]string {
 }
 
 // describeMusic adds to a DTO what describes music: a song's album and
-// artists, and whether it has lyrics, an album's artists and, in its
-// details, its tracks and length, as Jellyfin's do; an artist's details
-// count their albums.
+// artists, and whether it has lyrics (those LRCLIB gave, or its own in a
+// local music folder), an album's artists and, in its details, its tracks
+// and length, as Jellyfin's do; an artist's details count their albums.
+// Its album artist is the first of its album's artists, as on Jellyfin.
 func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail, hasLyrics bool) {
 	if !library.MusicKind(item.Kind) {
 		return
 	}
-	albumArtists := []library.Credit{}
-	if item.AlbumArtist != nil {
-		albumArtists = []library.Credit{*item.AlbumArtist}
-		dto.AlbumArtist = item.AlbumArtist.Name
+	albumArtists := item.AlbumArtists
+	if len(albumArtists) > 0 {
+		dto.AlbumArtist = albumArtists[0].Name
 	}
+	hasLyrics = hasLyrics || item.Lyrics
 	children := 0
 	if item.ChildCount != nil {
 		children = *item.ChildCount
@@ -275,8 +276,8 @@ func sortMusic(items []library.Item, keys, orders []string, state userState) {
 		return ""
 	}
 	albumArtist := func(item library.Item) string {
-		if item.AlbumArtist != nil {
-			return strings.ToLower(item.AlbumArtist.Name)
+		if len(item.AlbumArtists) > 0 {
+			return strings.ToLower(item.AlbumArtists[0].Name)
 		}
 		return artist(item)
 	}
@@ -494,26 +495,30 @@ func lyricsTrack(item library.Item) (lyrics.Track, bool) {
 	track := lyrics.Track{ID: item.ID, Title: item.Name, Album: item.Album, Duration: item.Runtime}
 	if len(item.Artists) > 0 {
 		track.Artist = item.Artists[0].Name
-	} else if item.AlbumArtist != nil {
-		track.Artist = item.AlbumArtist.Name
+	} else if len(item.AlbumArtists) > 0 {
+		track.Artist = item.AlbumArtists[0].Name
 	}
 	return track, true
 }
 
 // lookUpLyrics asks LRCLIB about a track played, in the background, so
-// that its lyrics are known when an app asks for them.
+// that its lyrics are known when an app asks for them; never about a
+// track with lyrics of its own.
 func (h *Handler) lookUpLyrics(item library.Item) {
-	if track, ok := lyricsTrack(item); ok {
+	if track, ok := lyricsTrack(item); ok && !item.Lyrics {
 		h.Lyrics.LookUp(track)
 	}
 }
 
-// lyrics answers a track's lyrics, from LRCLIB (see lyrics.Service), as
-// Jellyfin answers those of a track with an LRC or text file: synced line
-// by line when LRCLIB has them, plain otherwise. A track without lyrics,
-// an instrumental, one LRCLIB does not know, and every track while lyrics
-// are turned off, answers as Jellyfin does without lyrics. A track never
-// looked up is looked up now, waited for lyricsWait at most.
+// lyrics answers a track's lyrics as Jellyfin answers those of a track
+// with an LRC or text file: synced line by line when they are, plain
+// otherwise. A track of a local music folder has those of its lyrics file,
+// else of its lyrics tag (see library.Service.TrackLyrics), whether lyrics
+// from LRCLIB are on or not; other tracks those of LRCLIB (see
+// lyrics.Service). A track without lyrics, an instrumental, one LRCLIB
+// does not know, and every track without its own while lyrics are turned
+// off, answers as Jellyfin does without lyrics. A track never looked up is
+// looked up now, waited for lyricsWait at most.
 func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")
@@ -531,7 +536,15 @@ func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
 		notFoundProblem(w)
 		return
 	}
-	found, ok := h.Lyrics.Lyrics(r.Context(), track, lyricsWait)
+	own, err := h.Library.TrackLyrics(r.Context(), user, id)
+	if err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	found, ok := lyrics.Parse(own)
+	if !ok {
+		found, ok = h.Lyrics.Lyrics(r.Context(), track, lyricsWait)
+	}
 	if !ok {
 		notFoundProblem(w)
 		return

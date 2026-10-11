@@ -361,11 +361,10 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "DELETE FROM local_tracks WHERE addon_id = $1", id); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "DELETE FROM local_covers WHERE addon_id = $1", id); err != nil {
-			return err
+		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists"} {
+			if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE addon_id = $1", id); err != nil {
+				return err
+			}
 		}
 		var checked *time.Time
 		failure := ""
@@ -404,7 +403,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
 				(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
 			(SELECT count(DISTINCT album_id) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
-			(SELECT count(DISTINCT album_artist_id) FROM local_tracks WHERE addon_id = $1 AND reason = '')
+			(SELECT count(DISTINCT a) FROM local_tracks, unnest(album_artist_ids) a WHERE addon_id = $1 AND reason = '')
 		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password, &f.Files, &f.Matched,
 		&f.Albums, &f.Artists)
 	f.PasswordSet = password != ""

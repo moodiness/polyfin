@@ -181,11 +181,12 @@ func assTimestamp(value string) (time.Duration, bool) {
 	return total, true
 }
 
-// decode turns subtitle bytes into text with "\n" line endings, without
-// byte order mark: UTF-16 with a byte order mark, or without one when its
-// first character is ASCII, as a subtitle's is; else UTF-8, text that is
-// not valid UTF-8 being read as Windows-1252.
-func decode(data []byte) string {
+// DecodeText turns the bytes of a subtitle, or of another text file such
+// as a music folder's lyrics files and playlists, into text with "\n" line
+// endings, without byte order mark: UTF-16 with a byte order mark, or
+// without one when its first character is ASCII, as a subtitle's is; else
+// UTF-8, text that is not valid UTF-8 being read as Windows-1252.
+func DecodeText(data []byte) string {
 	if units, ok := utf16Units(data); ok {
 		data = []byte(string(utf16.Decode(units)))
 	}
@@ -254,7 +255,7 @@ func withNewline(s string) string {
 // Picture, ...) are dropped: players show none of them. A script whose
 // [Events] section has no Format line gets the standard one.
 func ParseScript(data []byte) (*Script, error) {
-	text := decode(data)
+	text := DecodeText(data)
 	if !isScript(text) {
 		return nil, ErrUnsupported
 	}
@@ -530,7 +531,7 @@ type MatroskaEvent struct {
 // fields of blocks, whatever the CodecPrivate gives. Blocks not shaped as
 // the format says are dropped.
 func MatroskaScript(codecPrivate []byte, events []MatroskaEvent) (*Script, error) {
-	text := decode(bytes.TrimRight(codecPrivate, "\x00"))
+	text := DecodeText(bytes.TrimRight(codecPrivate, "\x00"))
 	if !isScript(text) {
 		return nil, ErrUnsupported
 	}
@@ -549,7 +550,7 @@ func MatroskaScript(codecPrivate []byte, events []MatroskaEvent) (*Script, error
 	}
 	list := make([]ordered, 0, len(events))
 	for _, block := range events {
-		data := strings.TrimRight(decode(bytes.TrimRight(block.Data, "\x00")), "\n")
+		data := strings.TrimRight(DecodeText(bytes.TrimRight(block.Data, "\x00")), "\n")
 		// A Dialogue line holds no line ending: a break the block carries
 		// raw becomes the one ASS writes.
 		data = strings.ReplaceAll(data, "\n", `\N`)

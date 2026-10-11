@@ -33,7 +33,7 @@ type Cue struct {
 // shows (see Script.Cues). Text that is not valid UTF-8 is read as
 // Windows-1252, the usual encoding of subtitles that are not UTF-8.
 func Parse(data []byte) ([]Cue, error) {
-	text := decode(data)
+	text := DecodeText(data)
 	if isScript(text) {
 		script, _ := parseScript(text)
 		return script.Cues(), nil
