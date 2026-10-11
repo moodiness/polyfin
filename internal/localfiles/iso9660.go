@@ -134,3 +134,32 @@ func (img *isoImage) lookup(path ...string) (isoEntry, error) {
 func (img *isoImage) reader(file isoEntry) *io.SectionReader {
 	return io.NewSectionReader(img.r, file.at, file.size)
 }
+
+// names lists the names of the folder at path's entries.
+func (img *isoImage) names(path ...string) ([]string, error) {
+	dir, err := img.lookup(path...)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := img.list(dir)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.name
+	}
+	return names, nil
+}
+
+// file opens the file at path.
+func (img *isoImage) file(path ...string) (*io.SectionReader, error) {
+	entry, err := img.lookup(path...)
+	if err != nil {
+		return nil, err
+	}
+	if entry.dir {
+		return nil, fmt.Errorf("%w: %s is a folder", errNotISO, entry.name)
+	}
+	return img.reader(entry), nil
+}

@@ -88,3 +88,11 @@ genisoimage -quiet -dvd-video -V MOVIE_DVD -o dvd.iso dvdroot
 genisoimage -quiet -udf -iso-level 3 -V MOVIE_BD -o bluray.iso bdroot
 gzip -9 -n dvd.iso bluray.iso
 ```
+
+`bluray-udf.iso.gz` is an image of the unpacked `bluray.tar.gz` with a UDF
+2.50 file system only, its files described in a metadata partition, as
+Blu-ray images often are, written by the tests' own UDF writer (`buildUDF`
+in `udf_test.go`): `POLYFIN_UPDATE_FIXTURES=1 go test -run
+TestUDFFixtureIsTheBuildersImage ./internal/localfiles` writes it again.
+FFmpeg's bluray protocol reads it, and `udfinfo` of udftools 2.3 reads it
+as UDF 2.50.

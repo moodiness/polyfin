@@ -3,6 +3,8 @@ package localfiles
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -16,22 +18,27 @@ import (
 )
 
 // A disc kept as an image: an .iso file in a movies folder in the
-// container, a DVD's or a Blu-ray disc's, one movie matched by its file's
-// name. A scan reads what each new or changed image is, and its main
-// title, and keeps the answer by the image's size and modification time
+// container, a DVD's or a Blu-ray disc's, its main title one movie
+// matched by its file's name. A scan reads what each new or changed image
+// is, and its titles, through its ISO 9660 file system, or its UDF one when
+// it has no ISO 9660 one holding the disc's files (see openDiscFS), and
+// keeps the answer by the image's size and modification time
 // (local_disc_images):
 //
-//   - an image whose ISO 9660 file system holds VIDEO_TS/VIDEO_TS.IFO is a
-//     DVD's, its main title read from its IFO files as a DVD folder's is;
-//   - one whose ISO 9660 file system holds BDMV is a Blu-ray disc's, its
-//     main title its longest playlist (see discTitles), or libbluray's
-//     choice when its playlists cannot be read there;
-//   - one with a UDF file system only, as Blu-ray images often are, is a
-//     Blu-ray disc's when FFmpeg's bluray protocol reads it (see
-//     UseProbe), libbluray choosing its main title;
+//   - an image holding VIDEO_TS/VIDEO_TS.IFO is a DVD's, its titles read
+//     from its IFO files as a DVD folder's are;
+//   - one holding BDMV is a Blu-ray disc's, its titles its playlists, as a
+//     disc folder's are (see discTitles), or libbluray's choice when its
+//     playlists cannot be read;
+//   - one whose UDF file system is laid out in a way Polyfin does not read,
+//     as those of rewritable and write-once media are, is a Blu-ray disc's
+//     when FFmpeg's bluray protocol reads it (see UseProbe), one movie,
+//     libbluray's choice;
 //   - any other is no disc's, and is left out.
 //
-// FFmpeg plays an image's main title from the image itself (see Input). A
+// Each of an image's other movies is a title of its own, a unit linked by
+// hand, kept as the image's path with its number (see discTitlePath).
+// FFmpeg plays an image's titles from the image itself (see Input). A
 // shows folder leaves images out, and so do shares, FFmpeg reading an
 // image from a path.
 
@@ -61,25 +68,21 @@ func imageKind(kind string) string {
 	return ""
 }
 
-// UseProbe sets what tells whether FFmpeg reads an input, a Blu-ray image
-// read with the bluray protocol (see playback.Service.ProbesInput); it is
-// called before the service is used. Without it, images with a UDF file
-// system only are left out.
-func (s *Service) UseProbe(probe func(ctx context.Context, in media.Input) bool) { s.probe = probe }
-
 // storedImage is what a scan found an image to be: its kind, empty for no
-// disc's, and its main title, -1 for libbluray's choice (see Input).
+// disc's, its main title, -1 for libbluray's choice and 0 for FFmpeg's
+// (see Input), and its other movies' titles.
 type storedImage struct {
-	file  found
-	kind  string
-	title int
+	file   found
+	kind   string
+	title  int
+	titles []int
 }
 
 // collapseImages keeps, of the files a walk of the folder at root found,
-// the disc images of a movies folder in the container, and none of a
-// shows folder's or a share's; it leaves out the images of no disc. Each
-// image new or changed since the last scan is read again, and the answers
-// kept.
+// the disc images of a movies folder in the container, each with an entry
+// per other movie it holds, and none of a shows folder's or a share's; it
+// leaves out the images of no disc. Each image new or changed since the
+// last scan is read again, and the answers kept.
 func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Folder, root string, list listing) error {
 	files := list.files
 	if folder.Kind == KindShows || folder.Share != "" {
@@ -90,7 +93,7 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 		}
 		return nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, kind, title FROM local_disc_images WHERE addon_id = $1", id)
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, kind, title, titles FROM local_disc_images WHERE addon_id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -98,7 +101,7 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 	for rows.Next() {
 		var rel string
 		var image storedImage
-		if err := rows.Scan(&rel, &image.file.size, &image.file.modified, &image.kind, &image.title); err != nil {
+		if err := rows.Scan(&rel, &image.file.size, &image.file.modified, &image.kind, &image.title, &image.titles); err != nil {
 			rows.Close()
 			return err
 		}
@@ -108,25 +111,33 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 		return err
 	}
 	read := map[string]storedImage{}
-	seen := map[string]bool{}
+	seen := map[string]storedImage{}
 	for rel, f := range files {
 		if !imageFile(rel) {
 			continue
 		}
-		seen[rel] = true
 		image, known := stored[rel]
 		if !known || image.file.size != f.size || !image.file.modified.Equal(f.modified) {
 			image = storedImage{file: f}
-			image.kind, image.title = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)))
+			image.kind, image.title, image.titles = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)))
 			read[rel] = image
 		}
+		seen[rel] = image
+	}
+	for rel, image := range seen {
 		if image.kind == "" {
 			delete(files, rel)
+			continue
+		}
+		for _, title := range image.titles {
+			f := files[rel]
+			f.extra = true
+			files[discTitlePath(rel, title)] = f
 		}
 	}
 	var forgotten []string
 	for rel := range stored {
-		if !seen[rel] && !under(rel, list.skipped) {
+		if _, ok := seen[rel]; !ok && !under(rel, list.skipped) {
 			forgotten = append(forgotten, rel)
 		}
 	}
@@ -135,9 +146,13 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 	}
 	batch := &pgx.Batch{}
 	for rel, image := range read {
-		batch.Queue(`INSERT INTO local_disc_images (addon_id, path, size, modified, kind, title) VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, kind = $5, title = $6`,
-			id, rel, image.file.size, image.file.modified, image.kind, image.title)
+		titles := image.titles
+		if titles == nil {
+			titles = []int{}
+		}
+		batch.Queue(`INSERT INTO local_disc_images (addon_id, path, size, modified, kind, title, titles) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, kind = $5, title = $6, titles = $7`,
+			id, rel, image.file.size, image.file.modified, image.kind, image.title, titles)
 	}
 	if len(forgotten) > 0 {
 		batch.Queue("DELETE FROM local_disc_images WHERE addon_id = $1 AND path = ANY($2)", id, forgotten)
@@ -145,73 +160,95 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 	return s.db.SendBatch(ctx, batch).Close()
 }
 
+// UseProbe sets what tells whether FFmpeg reads an input, a Blu-ray image
+// read with the bluray protocol (see playback.Service.ProbesInput); it is
+// called before the service is used. Without it, the images whose UDF file
+// system is laid out in a way Polyfin does not read are left out.
+func (s *Service) UseProbe(probe func(ctx context.Context, in media.Input) bool) { s.probe = probe }
+
 // readImage reads what the image at path is: its kind, empty for no
-// disc's, and its main title (see storedImage).
-func (s *Service) readImage(ctx context.Context, path string) (kind string, title int) {
+// disc's, its main title, and its other movies' titles (see storedImage).
+// An image whose UDF file system is laid out in a way Polyfin does not
+// read (see errUnsupportedUDF), as those of rewritable and write-once
+// media are, is a Blu-ray disc's when FFmpeg's bluray protocol reads it,
+// one movie, libbluray choosing its title; a broken one is no disc's.
+func (s *Service) readImage(ctx context.Context, path string) (kind string, title int, others []int) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", 0
+		return "", 0, nil
 	}
 	defer file.Close()
-	if img, err := openISO(file); err == nil {
-		if dir, err := img.lookup("VIDEO_TS"); err == nil && dir.dir {
-			title, _, err := dvdMainOf(func(name string) (io.ReaderAt, error) {
-				entry, err := img.lookup("VIDEO_TS", name)
-				if err != nil {
-					return nil, err
-				}
-				return img.reader(entry), nil
-			})
-			if err != nil {
-				// FFmpeg plays the DVD's first title.
-				return imageDVD, 0
-			}
-			return imageDVD, title
-		}
-		if dir, err := img.lookup("BDMV"); err == nil && dir.dir {
-			return imageBluRay, imagePlaylist(img)
-		}
+	kind, title, others, err = readDisc(file)
+	if errors.Is(err, errUnsupportedUDF) && s.probe != nil && s.probe(ctx, media.Input{Options: []string{"-playlist", "-1"}, Path: "bluray:" + path}) {
+		return imageBluRay, -1, nil
 	}
-	if !udfVolume(file) || s.probe == nil {
-		return "", 0
-	}
-	if !s.probe(ctx, media.Input{Options: []string{"-playlist", "-1"}, Path: "bluray:" + path}) {
-		return "", 0
-	}
-	return imageBluRay, -1
+	return kind, title, others
 }
 
-// imagePlaylist is the main playlist of a Blu-ray image, read through its
-// ISO 9660 file system (see discTitles), -1 for libbluray's choice when its
-// playlists cannot be read there.
-func imagePlaylist(img *isoImage) int {
-	streams, err := img.lookup("BDMV", "STREAM")
+// readDisc reads what the image r is (see readImage), or why its file
+// systems hold no disc Polyfin reads.
+func readDisc(r io.ReaderAt) (kind string, title int, others []int, err error) {
+	fsys, err := openDiscFS(r)
 	if err != nil {
-		return -1
+		return "", 0, nil, err
+	}
+	if _, err := fsys.names("VIDEO_TS"); err == nil {
+		titles, err := dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file("VIDEO_TS", name) })
+		if err != nil {
+			// FFmpeg plays the DVD's first title.
+			return imageDVD, 0, nil, nil
+		}
+		for _, t := range titles[1:] {
+			others = append(others, t.title)
+		}
+		return imageDVD, titles[0].title, others, nil
+	}
+	if _, err = fsys.names("BDMV"); err == nil {
+		titles, err := imagePlaylists(fsys)
+		if err != nil {
+			// libbluray chooses the disc's main title.
+			return imageBluRay, -1, nil, nil
+		}
+		return imageBluRay, titles[0], titles[1:], nil
+	}
+	return "", 0, nil, err
+}
+
+// maxImagePlaylists bounds the bytes of playlists read in an image, those
+// of a disc hiding its movie among hundreds of playlists included: a few
+// KB each as a rule.
+const maxImagePlaylists = 16 << 20
+
+// imagePlaylists are the titles of a Blu-ray image, its playlists' numbers
+// (see discTitles), the main title first; an error when none can be read.
+func imagePlaylists(fsys discFS) ([]int, error) {
+	streams, err := fsys.names("BDMV", "STREAM")
+	if err != nil {
+		return nil, err
 	}
 	clips := map[string]bool{}
-	entries, err := img.list(streams)
-	if err != nil {
-		return -1
+	for _, name := range streams {
+		clips[strings.ToUpper(strings.TrimSuffix(name, path.Ext(name)))] = true
 	}
-	for _, e := range entries {
-		clips[strings.ToUpper(strings.TrimSuffix(e.name, path.Ext(e.name)))] = true
-	}
-	folder, err := img.lookup("BDMV", "PLAYLIST")
+	names, err := fsys.names("BDMV", "PLAYLIST")
 	if err != nil {
-		return -1
-	}
-	entries, err = img.list(folder)
-	if err != nil {
-		return -1
+		return nil, err
 	}
 	var playlists []playlist
-	for _, e := range entries {
-		_, number, ok := discPlaylist("BDMV/PLAYLIST/" + e.name)
+	budget := int64(maxImagePlaylists)
+	for _, name := range names {
+		_, number, ok := discPlaylist("BDMV/PLAYLIST/" + name)
 		if !ok {
 			continue
 		}
-		p, err := readPlaylist(img.reader(e))
+		file, err := fsys.file("BDMV", "PLAYLIST", name)
+		if err != nil || file.Size() > maxPlaylistSize {
+			continue
+		}
+		if budget -= file.Size(); budget < 0 {
+			return nil, errors.New("the image's playlists are too large")
+		}
+		p, err := readPlaylist(file)
 		if err != nil {
 			continue
 		}
@@ -227,9 +264,57 @@ func imagePlaylist(img *isoImage) int {
 	}
 	titles := discTitles(playlists)
 	if len(titles) == 0 {
-		return -1
+		return nil, errors.New("no playlist of the image can be read")
 	}
-	return titles[0].number
+	numbers := make([]int, len(titles))
+	for i, t := range titles {
+		numbers[i] = t.number
+	}
+	return numbers, nil
+}
+
+// discFS is a disc image's file system, ISO 9660 or UDF: enough of it to
+// list a folder and read a file, by their path, any case.
+type discFS interface {
+	// names lists the names of the folder at path's entries, the folder
+	// itself and its parent left out.
+	names(path ...string) ([]string, error)
+	// file opens the file at path.
+	file(path ...string) (*io.SectionReader, error)
+}
+
+// errNotDisc reports an image whose file systems hold no disc.
+var errNotDisc = errors.New("no disc's file system")
+
+// openDiscFS opens the file system of the image r holding its disc's
+// files: its ISO 9660 one when it holds VIDEO_TS or BDMV, as DVD images
+// do and many Blu-ray images too, else its UDF one, which Blu-ray images
+// often have alone.
+func openDiscFS(r io.ReaderAt) (discFS, error) {
+	if img, err := openISO(r); err == nil {
+		for _, folder := range []string{"VIDEO_TS", "BDMV"} {
+			if _, err := img.names(folder); err == nil {
+				return img, nil
+			}
+		}
+	}
+	if !udfVolume(r) {
+		return nil, errNotDisc
+	}
+	return openUDF(r)
+}
+
+// readDiscFile reads a file of a disc image's file system at path, at
+// most limit bytes.
+func readDiscFile(fsys discFS, limit int64, path ...string) ([]byte, error) {
+	file, err := fsys.file(path...)
+	if err != nil {
+		return nil, err
+	}
+	if file.Size() > limit {
+		return nil, fmt.Errorf("%s is too large", strings.Join(path, "/"))
+	}
+	return io.ReadAll(file)
 }
 
 // udfVolume reports whether the image r has a UDF file system: an NSR

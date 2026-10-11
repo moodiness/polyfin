@@ -97,7 +97,7 @@ func TestDiscsAreCutOnTheirKeyframes(t *testing.T) {
 }
 
 // FFmpeg's bluray protocol reads a Blu-ray image, and no DVD image: a scan
-// tells a Blu-ray image with a UDF file system only so (see
+// tells a Blu-ray image whose UDF file system it does not read so (see
 // localfiles.Service.UseProbe).
 func TestProbesInput(t *testing.T) {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")

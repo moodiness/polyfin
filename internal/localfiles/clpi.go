@@ -131,9 +131,9 @@ func titleKeyframes(p playlist, points map[string][]uint64) []time.Duration {
 
 // Keyframes reads the keyframe times of the version key names (see
 // Input), on its title's timeline: a Blu-ray disc's playlist's, from its
-// clips' EP maps, in its folder or in an image's ISO 9660 file system.
-// Those of a DVD, of a title libbluray chooses, and of an image with a
-// UDF file system only are not read.
+// clips' EP maps, in its folder or in an image's file system (see
+// openDiscFS). Those of a DVD and of a title libbluray chooses are not
+// read.
 func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, error) {
 	d, err := s.disc(ctx, key)
 	if err != nil {
@@ -150,21 +150,17 @@ func (s *Service) Keyframes(ctx context.Context, key string) ([]time.Duration, e
 		return nil, err
 	}
 	defer file.Close()
-	img, err := openISO(file)
+	fsys, err := openDiscFS(file)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errNoKeyframes, err)
 	}
 	return blurayKeyframes(func(names ...string) ([]byte, error) {
-		entry, err := img.lookup(names...)
-		if err != nil {
-			return nil, err
-		}
-		if entry.dir || entry.size > maxClipInfoSize {
-			return nil, fmt.Errorf("%s is no clip information", strings.Join(names, "/"))
-		}
-		return io.ReadAll(img.reader(entry))
+		return readDiscFile(fsys, maxClipInfoSize, names...)
 	}, d.title)
 }
+
+// maxTitleClipInfo bounds the bytes of clip information read for a title.
+const maxTitleClipInfo = 64 << 20
 
 // blurayKeyframes reads the keyframe times of a disc's playlist number,
 // read reading the disc's files by their path, any case.
@@ -178,6 +174,7 @@ func blurayKeyframes(read func(names ...string) ([]byte, error), number int) ([]
 		return nil, err
 	}
 	points := map[string][]uint64{}
+	budget := maxTitleClipInfo
 	for _, part := range p.clips {
 		if _, ok := points[part.clip]; ok {
 			continue
@@ -185,6 +182,9 @@ func blurayKeyframes(read func(names ...string) ([]byte, error), number int) ([]
 		data, err := read("BDMV", "CLIPINF", part.clip+".clpi")
 		if err != nil {
 			return nil, err
+		}
+		if budget -= len(data); budget < 0 {
+			return nil, errors.New("the title's clip information is too large")
 		}
 		if points[part.clip], err = readEPMap(data); err != nil {
 			return nil, fmt.Errorf("clip %s: %w", part.clip, err)

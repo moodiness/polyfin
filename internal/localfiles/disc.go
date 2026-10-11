@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -61,9 +62,9 @@ const (
 )
 
 // discEntry tells whether rel is an entry a scan keeps for a disc of a
-// movies folder, a Blu-ray disc's playlist or stream or a DVD's VOB, with
-// the disc's kind and its folder's path, "" for a disc at the folder's
-// root.
+// movies folder, a Blu-ray disc's playlist or stream or a DVD's VOB, or
+// the title of a DVD other than its main one (see discTitlePath), with the
+// disc's kind and its folder's path, "" for a disc at the folder's root.
 func discEntry(rel string) (kind, disc string, ok bool) {
 	if disc, ok := discStream(rel); ok {
 		return DiscBluRay, disc, true
@@ -71,10 +72,47 @@ func discEntry(rel string) (kind, disc string, ok bool) {
 	if disc, _, ok := discPlaylist(rel); ok {
 		return DiscBluRay, disc, true
 	}
+	if base, _, ok := titleOf(rel); ok {
+		rel = base
+	}
 	if disc, ok := dvdOf(rel); ok && dvdSet(rel) > 0 {
 		return DiscDVD, disc, true
 	}
 	return "", "", false
+}
+
+// discTitlePath is the path a scan keeps for a disc's title other than its
+// main one when no file of its own stands for it, as a Blu-ray disc's
+// playlist does: the path of the file standing for the disc, the first VOB
+// of the title's set or the image, then # and the title's number, as in
+// "Box/VIDEO_TS/VTS_02_1.VOB#3" or "Box.iso#2". No file a walk lists has
+// such a name.
+func discTitlePath(rel string, number int) string {
+	return rel + "#" + strconv.Itoa(number)
+}
+
+// titlePath matches a disc title's path (see discTitlePath).
+var titlePath = regexp.MustCompile(`^(.+)#(\d{1,5})$`)
+
+// titleOf tells whether rel is a disc title's path (see discTitlePath),
+// with the path of the file standing for the disc and the title's number.
+func titleOf(rel string) (base string, number int, ok bool) {
+	m := titlePath.FindStringSubmatch(rel)
+	if m == nil || !imageFile(m[1]) && dvdSet(m[1]) == 0 {
+		return "", 0, false
+	}
+	number, _ = strconv.Atoi(m[2])
+	return m[1], number, true
+}
+
+// extraTitle reports whether the file rel of unit is a disc's title other
+// than its main one, a unit of its own (see titleUnit).
+func extraTitle(rel, unit string) bool {
+	if _, _, ok := titleOf(rel); ok {
+		return true
+	}
+	disc, _, ok := discPlaylist(rel)
+	return ok && unit != discUnit(disc)
 }
 
 // discName is what a disc's folder tells, as a movie file's name does: its

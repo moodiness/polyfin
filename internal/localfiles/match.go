@@ -294,9 +294,7 @@ func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]
 		if err := row.Scan(&rel, &f.size, &f.modified, &nfo); err != nil {
 			return entry{}, err
 		}
-		if disc, _, ok := discPlaylist(rel); ok {
-			f.extra = unit != discUnit(disc)
-		}
+		f.extra = extraTitle(rel, unit)
 		e := readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f)
 		e.nfo = nfo
 		return e, nil
@@ -427,7 +425,7 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		return nil, 0, err
 	}
 	query := `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, coalesce(i.kind, '') AS image FROM local_files f
-		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path
+		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = regexp_replace(f.path, '#[0-9]+$', '')
 		WHERE f.addon_id = $1 AND f.stremio_id IS NULL`
 	if folder.Kind == KindMusic {
 		query = `SELECT path, path, title, year, size, reason, '' AS image FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
@@ -446,7 +444,11 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &image)
 		u.Disc = imageKind(image)
 		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies {
-			if _, number, playlist := discPlaylist(u.Path); u.Unit == discUnit(disc) || playlist && u.Unit == titleUnit(disc, number) {
+			_, number, playlist := discPlaylist(u.Path)
+			if _, title, ok := titleOf(u.Path); ok {
+				number, playlist = title, true
+			}
+			if u.Unit == discUnit(disc) || playlist && u.Unit == titleUnit(disc, number) {
 				u.Disc = kind
 			}
 		}

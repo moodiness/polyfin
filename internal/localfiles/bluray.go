@@ -70,7 +70,9 @@ func playlistFile(rel string) bool {
 
 // titleUnit is the unit of a disc's title other than its main one, whose
 // unit is the disc's (see discUnit): the disc's, then # and the title's
-// playlist number, as in "Box/DISC02#00002".
+// number, a Blu-ray disc's playlist or a DVD's title, as in
+// "Box/DISC02#00002". A disc image's titles are the image's, as in
+// "Box.iso#00002".
 func titleUnit(disc string, number int) string {
 	return fmt.Sprintf("%s#%05d", discUnit(disc), number)
 }
@@ -140,41 +142,79 @@ func readPlaylist(r io.Reader) (playlist, error) {
 	return p, nil
 }
 
-// discTitles chooses a disc's titles among its playlists: its main title,
-// the longest playlist, the first by number of those as long, then, by
-// length, each other playlist at least minMovie long that plays mostly
-// streams the titles chosen before it do not: another cut, angle or
-// language of a movie counts once. A disc that would have more than
-// maxDiscTitles titles has its main title only.
+// discTitles chooses a disc's titles among its playlists (see
+// chooseTitles), each playing its clips.
 func discTitles(playlists []playlist) []playlist {
-	if len(playlists) == 0 {
+	candidates := make([]titleCandidate, len(playlists))
+	for i, p := range playlists {
+		candidates[i] = titleCandidate{number: p.number, length: p.length}
+		for _, part := range p.clips {
+			candidates[i].parts = append(candidates[i].parts, titlePart{key: part.clip, length: part.length})
+		}
+	}
+	var titles []playlist
+	for _, i := range chooseTitles(candidates) {
+		titles = append(titles, playlists[i])
+	}
+	return titles
+}
+
+// titleCandidate is a title of a disc that may be one of its movies: its
+// number, how long it plays, and the parts of the disc it plays, a Blu-ray
+// disc's clips or a DVD's cells.
+type titleCandidate struct {
+	number int
+	length time.Duration
+	parts  []titlePart
+}
+
+// titlePart is a part of a disc a title plays, by what tells it, and how
+// long it plays.
+type titlePart struct {
+	key    string
+	length time.Duration
+}
+
+// chooseTitles chooses a disc's titles among its candidates, and returns
+// their indexes: its main title, the longest, the first by number of
+// those as long, then, by length, each other title at least minMovie long
+// that plays mostly parts the titles chosen before it do not: another cut,
+// angle or language of a movie counts once. A disc that would have more
+// than maxDiscTitles titles has its main title only.
+func chooseTitles(candidates []titleCandidate) []int {
+	if len(candidates) == 0 {
 		return nil
 	}
-	sorted := slices.Clone(playlists)
-	slices.SortFunc(sorted, func(a, b playlist) int {
-		return cmp.Or(cmp.Compare(b.length, a.length), cmp.Compare(a.number, b.number))
-	})
-	titles := []playlist{sorted[0]}
-	played := map[string]bool{}
-	for _, part := range sorted[0].clips {
-		played[part.clip] = true
+	sorted := make([]int, len(candidates))
+	for i := range sorted {
+		sorted[i] = i
 	}
-	for _, p := range sorted[1:] {
-		if p.length < minMovie {
+	slices.SortFunc(sorted, func(a, b int) int {
+		return cmp.Or(cmp.Compare(candidates[b].length, candidates[a].length), cmp.Compare(candidates[a].number, candidates[b].number))
+	})
+	titles := []int{sorted[0]}
+	played := map[string]bool{}
+	for _, part := range candidates[sorted[0]].parts {
+		played[part.key] = true
+	}
+	for _, i := range sorted[1:] {
+		c := candidates[i]
+		if c.length < minMovie {
 			break
 		}
-		var fresh time.Duration
-		for _, part := range p.clips {
-			if !played[part.clip] {
+		var fresh, total time.Duration
+		for _, part := range c.parts {
+			total += part.length
+			if !played[part.key] {
 				fresh += part.length
 			}
 		}
-		if fresh*2 <= p.length {
+		if fresh*2 <= total {
 			continue
 		}
-		titles = append(titles, p)
-		for _, part := range p.clips {
-			played[part.clip] = true
+		titles = append(titles, i)
+		for _, part := range c.parts {
+			played[part.key] = true
 		}
 	}
 	if len(titles) > maxDiscTitles {

@@ -513,8 +513,9 @@ type entry struct {
 // readEntry reads what a file's path tells in a folder of kind, root being
 // the folder's name (see locationName): a disc's entry, a Blu-ray disc's
 // playlist or stream or a DVD's VOB, is read as its disc, matched by its
-// folder's name. A disc's title other than its main one is a unit of its
-// own, which its name does not tell: it is matched by hand.
+// folder's name. A disc's title other than its main one, a disc image's
+// included, is a unit of its own, which its name does not tell: it is
+// matched by hand.
 func readEntry(kind, root, rel string, f found) entry {
 	if kind == KindShows {
 		show, episode, unit := episodeName(rel)
@@ -522,6 +523,13 @@ func readEntry(kind, root, rel string, f found) entry {
 	}
 	if disc, number, ok := discPlaylist(rel); ok && f.extra {
 		return entry{path: rel, file: f, unit: titleUnit(disc, number)}
+	}
+	if base, number, ok := titleOf(rel); ok {
+		f.extra = true
+		if _, disc, ok := discEntry(rel); ok {
+			return entry{path: rel, file: f, unit: titleUnit(disc, number)}
+		}
+		return entry{path: rel, file: f, unit: titleUnit(base, number)}
 	}
 	if _, disc, ok := discEntry(rel); ok {
 		return entry{path: rel, file: f, unit: discUnit(disc), title: discName(disc, root)}
