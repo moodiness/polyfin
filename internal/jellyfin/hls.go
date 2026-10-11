@@ -192,6 +192,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		} else {
 			files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
 		}
+		files = versionFiles(files, version)
 	}
 	if err != nil {
 		processingError(w, http.StatusNotFound)
@@ -205,7 +206,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 	// Jellyfin does not have.
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
 		convert := func() {
-			streams := playback.MediaStreams(analysis, playable{item: item, subtitles: files}.externals(), h.Accounts.Settings().Language)
+			streams := playback.MediaStreams(analysis, externalStreams(files), h.Accounts.Settings().Language)
 			if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
 				remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), h.conversionLimits(r, user), streams[i], h.Playback.Capabilities())
 			}
@@ -354,7 +355,7 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 // app chose shown by default: the addons' files and the embedded tracks
 // FFmpeg extracts. The app's player can switch between them.
 func (h *Handler) renditions(req remuxRequest, selected, rawQuery string) []hls.Rendition {
-	streams := playback.MediaStreams(req.analysis, playable{item: req.item, subtitles: req.files}.externals(), h.Accounts.Settings().Language)
+	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), h.Accounts.Settings().Language)
 	var renditions []hls.Rendition
 	for _, stream := range streams {
 		if stream.Type != "Subtitle" || !(stream.IsExternal || playback.ExtractableSubtitle(req.analysis, stream.Index-len(req.files))) {

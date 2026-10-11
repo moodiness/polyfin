@@ -103,7 +103,7 @@ func (h *Handler) searchRemoteSubtitles(w http.ResponseWriter, r *http.Request) 
 	files = slices.DeleteFunc(files, func(file library.ExternalSubtitle) bool { return file.Uploaded })
 	// The streams the files become give the language and the name players
 	// show for them.
-	streams := playback.ExternalStreams(playable{subtitles: files}.externals(), h.Accounts.Settings().Language)
+	streams := playback.ExternalStreams(externalStreams(files), h.Accounts.Settings().Language)
 	language := r.PathValue("language")
 	for i, file := range files {
 		if !playback.SameLanguage(file.Language, language) {

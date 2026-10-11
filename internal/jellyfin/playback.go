@@ -981,8 +981,14 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		p, _ := h.playable(r.Context(), user, title)
 		files = p.subtitles
 	}
-	// External subtitles come first among a version's streams; embedded
-	// tracks follow, served whole (see embeddedTrack and pgsTrack).
+	// External subtitles come first among a version's streams, its title's
+	// then its own; embedded tracks follow, served whole (see embeddedTrack
+	// and pgsTrack). The version is looked for past its title's files only.
+	if index >= len(files) {
+		if version, ok := h.sourceVersion(r, item); ok {
+			files = versionFiles(files, version)
+		}
+	}
 	var text subtitleText
 	switch {
 	case index < 0:
@@ -1030,20 +1036,27 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 // host slows Polyfin down.
 const trackWait = 2 * time.Minute
 
+// sourceVersion is the version a subtitle URL names, for a signed-in
+// caller: the URL carries the caller's token, as Jellyfin writes
+// DeliveryUrls.
+func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Version, bool) {
+	user, _, signedIn := h.streamAccess(r)
+	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
+	if !signedIn || !ok {
+		return library.Version{}, false
+	}
+	version, err := h.Library.Version(r.Context(), user, item, wanted)
+	return version, err == nil
+}
+
 // embeddedTrack returns an embedded text track of the version a subtitle
 // URL names, stream being its FFmpeg index. A track the version's index
 // lists is read whole through it, now if it was not before: its file keeps
 // what the WebVTT remuxes extract loses, ASS styles first. Else it is the
-// track remuxes extracted whole, if they did. The URL carries the caller's
-// token, as Jellyfin writes DeliveryUrls.
+// track remuxes extracted whole, if they did.
 func (h *Handler) embeddedTrack(r *http.Request, item accounts.ID, stream int) (subtitleText, bool) {
-	user, _, signedIn := h.streamAccess(r)
-	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
-	if !signedIn || !ok {
-		return subtitleText{}, false
-	}
-	version, err := h.Library.Version(r.Context(), user, item, wanted)
-	if err != nil {
+	version, ok := h.sourceVersion(r, item)
+	if !ok {
 		return subtitleText{}, false
 	}
 	analysis, ok := h.Playback.Analyzed(r.Context(), version.ID)
@@ -1073,13 +1086,8 @@ func pgsFormat(format string) bool {
 // names, stream being its FFmpeg index, as a SUP file read whole through
 // the version's index, and whether it could be.
 func (h *Handler) pgsTrack(r *http.Request, item accounts.ID, stream int) ([]byte, bool) {
-	user, _, signedIn := h.streamAccess(r)
-	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
-	if !signedIn || !ok {
-		return nil, false
-	}
-	version, err := h.Library.Version(r.Context(), user, item, wanted)
-	if err != nil {
+	version, ok := h.sourceVersion(r, item)
+	if !ok {
 		return nil, false
 	}
 	analysis, ok := h.Playback.Analyzed(r.Context(), version.ID)

@@ -19,8 +19,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -435,5 +438,126 @@ func TestLocalBluRaysPlayTheirMainPlaylist(t *testing.T) {
 	frames, start := playedFrames(t, p, ffmpeg, ffprobe, source.TranscodingUrl)
 	if seconds := float64(frames) / 24; seconds < 189 || seconds > 191 || start != 10 {
 		t.Errorf("the segments play %.1f s from %.3f s", seconds, start)
+	}
+}
+
+// The subtitle files beside a local file are subtitle streams of its
+// version alone, after its title's files, with the language, title and
+// flags their names tell, and Polyfin serves them in the format each app
+// asks for, French accents of Windows-1252 included.
+func TestLocalSubtitleFilesAreTracks(t *testing.T) {
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
+			o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+	})
+	p := playingOn(t, s)
+	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, data := range map[string]string{
+		"Movie (2008) 1080p.mkv":           string(file),
+		"Movie (2008) 1080p.fr.srt":        "1\r\n00:00:01,000 --> 00:00:02,500\r\nD\xe9j\xe0 vu, \x93cool\x94\r\n",
+		"Movie (2008) 1080p.en.forced.srt": "1\n00:00:03,000 --> 00:00:04,000\nSigns\n",
+		"Movie (2008) 1080p.en.sdh.ass": "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n" +
+			"Format: Name, Fontname, Fontsize\nStyle: Default,Arial,20\n\n[Events]\n" +
+			"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+			"Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,{\\i1}[door creaks]{\\i0}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Link(t.Context(), addon.ID, "Movie (2008) 1080p.mkv", "tt1000"); err != nil {
+		t.Fatal(err)
+	}
+
+	var movie BaseItemDto
+	p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &movie)
+	if movie.MediaSources == nil || len(*movie.MediaSources) != 3 {
+		t.Fatalf("media sources: %+v", movie.MediaSources)
+	}
+	type track struct {
+		language, codec, title    string
+		forced, hearing, external bool
+	}
+	externals := func(streams []playback.MediaStream) []track {
+		var tracks []track
+		for _, stream := range streams {
+			if stream.IsExternal {
+				tracks = append(tracks, track{stream.Language, stream.Codec, stream.DisplayTitle, stream.IsForced, stream.IsHearingImpaired, true})
+			}
+		}
+		return tracks
+	}
+	// The addon's French file, the title's, comes first; then the local
+	// file's own, by name.
+	addonFile := track{"fra", "subrip", "French - SUBRIP - External", false, false, true}
+	want := []track{addonFile,
+		{"eng", "subrip", "English - Forced - SUBRIP - External", true, false, true},
+		{"eng", "ass", "English - Hearing Impaired - ASS - External", false, true, true},
+		{"fra", "subrip", "French - SUBRIP - External", false, false, true},
+	}
+	local := (*movie.MediaSources)[2]
+	if got := externals(local.MediaStreams); !slices.Equal(got, want) {
+		t.Errorf("the local version's subtitle files: %+v", got)
+	}
+	if got := externals((*movie.MediaSources)[0].MediaStreams); !slices.Equal(got, []track{addonFile}) {
+		t.Errorf("another version's: %+v", got)
+	}
+
+	// PlaybackInfo plays the local version as it is, once analyzed.
+	movieID, _ := accounts.ParseID(p.movie)
+	versions, err := p.library.Versions(t.Context(), p.user, movieID)
+	if i := slices.IndexFunc(versions, func(v library.Version) bool { return v.ID.String() == local.Id }); err != nil || i < 0 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	} else {
+		p.analyzed(t, versions[i], "h264-aac-mp4")
+	}
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var info playbackInfoResponse
+	if err := json.Unmarshal(data, &info); status != http.StatusOK || err != nil || len(info.MediaSources) != 1 {
+		t.Fatalf("PlaybackInfo: %d %s", status, data)
+	}
+	source := info.MediaSources[0]
+	if got := externals(source.MediaStreams); !slices.Equal(got, want) {
+		t.Errorf("PlaybackInfo's subtitle files: %+v", got)
+	}
+	french := source.MediaStreams[3]
+	if french.DeliveryMethod != "External" || !strings.Contains(french.DeliveryUrl, "/Subtitles/3/0/Stream.vtt") {
+		t.Errorf("delivery: %s %s", french.DeliveryMethod, french.DeliveryUrl)
+	}
+	subtitle := func(index, format string) string {
+		t.Helper()
+		response, body := fetchURL(t, p.url+"/Videos/"+p.movie+"/"+local.Id+"/Subtitles/"+index+"/0/Stream."+format+"?ApiKey="+p.token, nil)
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("subtitle %s as %s: %d %s", index, format, response.StatusCode, body)
+		}
+		return body
+	}
+	if got := subtitle("3", "vtt"); got != "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nDéjà vu, “cool”\n" {
+		t.Errorf("as WebVTT: %q", got)
+	}
+	if got := subtitle("3", "srt"); got != "1\n00:00:01,000 --> 00:00:02,500\nDéjà vu, “cool”\n" {
+		t.Errorf("as SubRip: %q", got)
+	}
+	if got := subtitle("2", "ass"); !strings.Contains(got, `{\i1}[door creaks]{\i0}`) || !strings.Contains(got, "Style: Default,Arial,20") {
+		t.Errorf("an ASS file as ASS keeps its styles: %q", got)
+	}
+	if got := subtitle("1", "vtt"); !strings.Contains(got, "Signs") {
+		t.Errorf("the forced file: %q", got)
 	}
 }

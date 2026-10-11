@@ -21,7 +21,8 @@
 // (see collapseDiscs); so is a DVD, a folder holding VIDEO_TS, in a folder
 // in the container, played from its folder (see collapseDVDs). An
 // administrator links the files left unmatched to an IMDb identifier by
-// hand.
+// hand. The subtitle files beside a video are offered with its stream (see
+// sidecars).
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.

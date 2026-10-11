@@ -187,6 +187,26 @@ func TestWatchScansAfterNFOChanges(t *testing.T) {
 	wt.still()
 }
 
+// A subtitle file added or removed beside a video starts a scan, whatever
+// its format.
+func TestWatchScansAfterSubtitleChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "Nosferatu (1922).mkv"), 10)
+	id := testID(1)
+	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt.start()
+	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).en.ass", "Nosferatu (1922).de.SSA", "Nosferatu (1922).vtt"} {
+		write(t, filepath.Join(root, name), 10)
+		wt.scanned(id)
+		wt.still()
+	}
+	if err := os.Remove(filepath.Join(root, "Nosferatu (1922).fr.srt")); err != nil {
+		t.Fatal(err)
+	}
+	wt.scanned(id)
+	wt.still()
+}
+
 func TestWatchFolderBack(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "movies")

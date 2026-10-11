@@ -54,6 +54,9 @@ type Version struct {
 	// connections while it plays, as a channel's stream does: a replay
 	// programme's, from an IPTV provider's archive.
 	HoldsConnection bool
+	// Subtitles are the version's own subtitle files, those beside a local
+	// file, which the version offers after its title's.
+	Subtitles []ExternalSubtitle
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
@@ -63,7 +66,8 @@ type Origin struct {
 }
 
 // ExternalSubtitle is a subtitle file offered for an item: by an addon, or
-// added by a user (see UploadSubtitle).
+// added by a user (see UploadSubtitle); or for a version, beside a local
+// file (see Version.Subtitles).
 type ExternalSubtitle struct {
 	ID accounts.ID
 	// Language is the addon's code, usually ISO 639-2 ("fre").
@@ -72,11 +76,15 @@ type ExternalSubtitle struct {
 	Addon    string
 	Confined bool
 	// Uploaded is set for a file a user added, whose text Polyfin keeps
-	// (see UploadedSubtitleText), in Format, with its flags.
+	// (see UploadedSubtitleText). A file a user added or a local file
+	// tells its Format (srt, vtt, ass or ssa) and its flags; a local file,
+	// a Title too.
 	Uploaded        bool
 	Format          string
+	Title           string
 	Forced          bool
 	HearingImpaired bool
+	Default         bool
 }
 
 // target is what to ask addons for: a title or an episode.
@@ -445,6 +453,18 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		HoldsConnection: t.kind == KindReplay,
 	}
 	version.ID = versionID(t.item, version)
+	// A local file's subtitle files are its own. Those addons list with a
+	// stream are not read yet.
+	if entry.addon.Local() {
+		for _, subtitle := range stream.Subtitles {
+			if !subtitle.Valid() {
+				continue
+			}
+			version.Subtitles = append(version.Subtitles, ExternalSubtitle{ID: subtitleID(entry.addon.ID, subtitle), Language: subtitle.Lang,
+				URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
+				Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
+		}
+	}
 	return version
 }
 
@@ -665,14 +685,12 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 			if !subtitle.Valid() {
 				continue
 			}
-			sum := sha256.Sum256([]byte(serving[i].addon.ID.String() + "|" + subtitleIdentity(subtitle)))
-			var subtitleID accounts.ID
-			copy(subtitleID[:], sum[:16])
-			if seen[subtitleID] {
+			file := subtitleID(serving[i].addon.ID, subtitle)
+			if seen[file] {
 				continue
 			}
-			seen[subtitleID] = true
-			result = append(result, ExternalSubtitle{ID: subtitleID, Language: subtitle.Lang, URL: subtitle.URL,
+			seen[file] = true
+			result = append(result, ExternalSubtitle{ID: file, Language: subtitle.Lang, URL: subtitle.URL,
 				Addon: serving[i].addon.Manifest.Name, Confined: serving[i].confined})
 		}
 	}
@@ -695,6 +713,14 @@ func (s *Service) subtitleList(ctx context.Context, entry installed, t target) (
 		}
 		return s.followSubtitles(ctx, entry, key, subtitles), nil
 	})
+}
+
+// subtitleID identifies a subtitle of an addon, without revealing either.
+func subtitleID(addon accounts.ID, subtitle stremio.Subtitle) accounts.ID {
+	sum := sha256.Sum256([]byte(addon.String() + "|" + subtitleIdentity(subtitle)))
+	var id accounts.ID
+	copy(id[:], sum[:16])
+	return id
 }
 
 // subtitleIdentity is the file a subtitle is among those of its addon.

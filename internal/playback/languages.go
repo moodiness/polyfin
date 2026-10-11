@@ -93,6 +93,15 @@ func streamLanguage(language string) string {
 // is kept as given.
 func addonLanguage(language string) string {
 	language = strings.TrimSpace(language)
+	i, ok := addonIndex(language)
+	if !ok {
+		return language
+	}
+	return languages[i].code
+}
+
+// addonIndex finds a language as addonLanguage reads it.
+func addonIndex(language string) (int, bool) {
 	index := languageLookup().addon
 	key := strings.ToLower(language)
 	i, ok := index[key]
@@ -101,10 +110,15 @@ func addonLanguage(language string) string {
 			i, ok = index[base]
 		}
 	}
-	if !ok {
-		return language
-	}
-	return languages[i].code
+	return i, ok
+}
+
+// KnownLanguage reports whether a word names a language addonLanguage
+// knows, as a part of a subtitle file's name does ("fr", "fre", "French",
+// "pt-BR").
+func KnownLanguage(word string) bool {
+	_, ok := addonIndex(strings.TrimSpace(word))
+	return ok
 }
 
 // SameLanguage reports whether two languages, as apps and addons give them,

@@ -142,17 +142,35 @@ func (h *Handler) offered(ctx context.Context, user accounts.User, versions []li
 	return h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
 }
 
-func (p playable) externals() []playback.ExternalSubtitle {
-	result := make([]playback.ExternalSubtitle, len(p.subtitles))
-	for i, subtitle := range p.subtitles {
+// externals are the subtitle files a version offers as streams: its
+// title's, then its own (see versionFiles).
+func (p playable) externals(version library.Version) []playback.ExternalSubtitle {
+	return externalStreams(versionFiles(p.subtitles, version))
+}
+
+// versionFiles lists the subtitle files of a version, which come first
+// among its streams: its title's, files, those users added then the
+// addons', followed by its own, beside a local file.
+func versionFiles(files []library.ExternalSubtitle, version library.Version) []library.ExternalSubtitle {
+	if len(version.Subtitles) == 0 {
+		return files
+	}
+	return append(slices.Clip(files), version.Subtitles...)
+}
+
+// externalStreams describes subtitle files as the streams they are.
+func externalStreams(files []library.ExternalSubtitle) []playback.ExternalSubtitle {
+	result := make([]playback.ExternalSubtitle, len(files))
+	for i, subtitle := range files {
 		// Addon files are served as SubRip whatever they are; a file a user
-		// added keeps its format, as Jellyfin names its external files.
+		// added or a local file keeps its format, as Jellyfin names its
+		// external files.
 		codec := "subrip"
-		if subtitle.Uploaded {
-			codec = uploadedCodecs[subtitle.Format]
+		if subtitle.Format != "" {
+			codec = subtitleCodecs[subtitle.Format]
 		}
-		result[i] = playback.ExternalSubtitle{Language: subtitle.Language, Codec: codec,
-			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired}
+		result[i] = playback.ExternalSubtitle{Language: subtitle.Language, Title: subtitle.Title, Codec: codec,
+			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default}
 	}
 	return result
 }
@@ -250,7 +268,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || known && len(chapterSegments(analysis.Chapters)) > 0)
 	size, runtime := version.Size, version.Runtime
 	if known {
-		source.MediaStreams = playback.MediaStreams(analysis, p.externals(), language)
+		source.MediaStreams = playback.MediaStreams(analysis, p.externals(version), language)
 		source.MediaAttachments = mediaAttachments(analysis)
 		size = cmp.Or(analysis.Size, size)
 		runtime = cmp.Or(analysis.Duration, runtime)
@@ -258,7 +276,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 			source.Bitrate = new(analysis.Bitrate)
 		}
 	} else {
-		source.MediaStreams = playback.ExternalStreams(p.externals(), language)
+		source.MediaStreams = playback.ExternalStreams(p.externals(version), language)
 	}
 	if size > 0 {
 		source.Size = new(size)

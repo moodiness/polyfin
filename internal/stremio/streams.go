@@ -72,6 +72,12 @@ type Subtitle struct {
 	URL string `json:"url"`
 	// Lang is usually an ISO 639-2 code, sometimes a language name.
 	Lang string `json:"lang"`
+	// Polyfin's own local folders also tell a file's format ("srt",
+	// "ass", "ssa" or "vtt"), the title and flags its name gives; addons
+	// never do.
+	Format                           string `json:"-"`
+	Title                            string `json:"-"`
+	Forced, HearingImpaired, Default bool   `json:"-"`
 }
 
 // Valid reports whether the subtitle can be downloaded.

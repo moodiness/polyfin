@@ -283,7 +283,8 @@ type stored struct {
 // scan reads a folder: files gone are forgotten, new and changed ones read
 // and matched, and those left unmatched matched again, unless their name
 // could not be read; a unit with files already matched keeps their title,
-// unless the identifier its NFO file gives changed.
+// unless the identifier its NFO file gives changed. The subtitle files
+// beside the videos are stored as they are now (see storeSubtitles).
 func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -395,6 +396,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		})
 	}
 	if err := group.Wait(); err != nil {
+		return err
+	}
+	if err := s.storeSubtitles(ctx, id, list, sidecars(folder.Kind, rootName, entries, list.sides)); err != nil {
 		return err
 	}
 	_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at)

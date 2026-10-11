@@ -20,10 +20,10 @@ import (
 // offers it first among the title's subtitle files (see
 // library.Service.Subtitles); administrators delete them, as in Jellyfin.
 
-// uploadedCodecs are the formats a subtitle file may be added in, which
-// Polyfin reads, and the codec its stream reports, as Jellyfin names its
-// external files' codecs.
-var uploadedCodecs = map[string]string{"srt": "subrip", "vtt": "webvtt", "ass": "ass", "ssa": "ssa"}
+// subtitleCodecs are the formats Polyfin reads subtitle files in, which a
+// file a user adds must be in, and the codec a file's stream reports, as
+// Jellyfin names its external files' codecs.
+var subtitleCodecs = map[string]string{"srt": "subrip", "vtt": "webvtt", "ass": "ass", "ssa": "ssa"}
 
 // maxUploadBody bounds the body of a subtitle upload: a file of
 // maxSubtitleBytes in base64, inside JSON.
@@ -105,7 +105,7 @@ func (h *Handler) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item := h.subtitleOwner(id)
-	if _, known := uploadedCodecs[format]; !known || len(language) > 32 || strings.ContainsAny(language, `/\`) ||
+	if _, known := subtitleCodecs[format]; !known || len(language) > 32 || strings.ContainsAny(language, `/\`) ||
 		decodeErr != nil || len(data) == 0 || len(data) > maxSubtitleBytes {
 		// Checked after the item in Jellyfin, which answers 404 first.
 		if _, err := h.Library.Item(r.Context(), user, item); errors.Is(err, library.ErrNotFound) {

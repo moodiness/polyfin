@@ -108,12 +108,13 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 }
 
 // Streams answers the streams of a folder for a title or an episode: its
-// files, named after the folder, with their resolution and size, which
-// the loopback interface serves (see UseFiles). A disc's entry bears its
-// disc's name as its file name (see discLabel), a title other than the
-// disc's main one its playlist's number too, as in "Box - DISC02 - title
-// 2.m2ts"; a Blu-ray disc's playlist and a DVD have the address of their
-// input as their URL, FFmpeg reading them itself (see Input).
+// files, named after the folder, with their resolution and size, and the
+// subtitle files beside them, which the loopback interface serves (see
+// UseFiles). A disc's entry bears its disc's name as its file name (see
+// discLabel), a title other than the disc's main one its playlist's number
+// too, as in "Box - DISC02 - title 2.m2ts"; a Blu-ray disc's playlist and
+// a DVD have the address of their input as their URL, FFmpeg reading them
+// itself (see Input).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -145,7 +146,8 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
+	var files []accounts.ID
+	streams, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
 		var file accounts.ID
 		var rel, unit string
 		var size int64
@@ -153,6 +155,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		if err := row.Scan(&file, &rel, &unit, &size, &height); err != nil {
 			return stremio.Stream{}, err
 		}
+		files = append(files, file)
 		details := []string{formatSize(size)}
 		if height != nil {
 			details = append([]string{strconv.Itoa(*height) + "p"}, details...)
@@ -175,6 +178,17 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: address,
 			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil
 	})
+	if err != nil || len(files) == 0 {
+		return streams, err
+	}
+	subtitles, err := s.fileSubtitles(ctx, files)
+	if err != nil {
+		return nil, err
+	}
+	for i := range streams {
+		streams[i].Subtitles = subtitles[files[i]]
+	}
+	return streams, nil
 }
 
 // formatSize writes a file's size in decimal units, as players show them.
@@ -193,9 +207,10 @@ func formatSize(size int64) string {
 var ErrGone = errors.New("the file is no longer in its folder")
 
 // Open opens the file key names, its identifier and extension as Streams
-// gives them, for reading, with its modification time: within its folder,
-// through no symbolic link leading out of it, or from its share. A share
-// that cannot be read fails with why (see shareFailure).
+// gives them, a video or a subtitle file, for reading, with its
+// modification time: within its folder, through no symbolic link leading
+// out of it, or from its share. A share that cannot be read fails with why
+// (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, _, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
@@ -205,7 +220,8 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	var folder accounts.ID
 	var root, rel, user, sealed string
 	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, l.share_user, l.share_password
-		FROM local_files f JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.id = $1`, id).
+		FROM (SELECT addon_id, path FROM local_files WHERE id = $1 UNION ALL SELECT addon_id, path FROM local_subtitles WHERE id = $1) f
+		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id).
 		Scan(&folder, &root, &rel, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, time.Time{}, ErrGone

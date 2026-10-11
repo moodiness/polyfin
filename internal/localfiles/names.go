@@ -26,8 +26,9 @@ func videoFile(name string) bool {
 }
 
 // sideExtensions are the files a scan lists beside the videos, by their
-// extension: NFO files, which may tell a title's identifiers.
-var sideExtensions = map[string]bool{".nfo": true}
+// extension: NFO files, which may tell a title's identifiers, and subtitle
+// files (see subtitleFormats).
+var sideExtensions = map[string]bool{".nfo": true, ".srt": true, ".ass": true, ".ssa": true, ".vtt": true}
 
 // sideFile reports whether name is a side file a scan lists.
 func sideFile(name string) bool {
