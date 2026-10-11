@@ -90,7 +90,8 @@ const (
 // container. For an Eclipse addon, Music is its manifest, Manifest what
 // libraries see of it (its name, icon and catalog rows, and
 // eclipse.MyMusic, see eclipse.Manifest.Stremio), and Settings the values
-// chosen for its settings.
+// chosen for its settings. A local music folder has a Music manifest too,
+// which its catalog rows give (see localMusic).
 type Addon struct {
 	ID          accounts.ID
 	Kind        string
@@ -114,6 +115,10 @@ func (a Addon) Local() bool { return a.Kind == KindLocal }
 
 // Eclipse reports whether the addon is an Eclipse music addon.
 func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
+
+// HasMusic reports whether the addon answers as an Eclipse addon: an
+// Eclipse addon, or a local music folder.
+func (a Addon) HasMusic() bool { return a.Music != nil }
 
 // Library is a catalog of an addon of the scope, shown as a library when
 // Enabled.
@@ -154,7 +159,7 @@ type Library struct {
 // maximum as a library: catalogs of titles and collections do, live TV and
 // music catalogs do not.
 func Filterable(addon Addon, catalog stremio.Catalog) bool {
-	return catalog.Type != "tv" && addon.Kind != KindEclipse
+	return catalog.Type != "tv" && !addon.HasMusic()
 }
 
 // Genres lists the genres a catalog offers in its genre filter, in order.
@@ -286,7 +291,32 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 		addon.Music, addon.Manifest = &music, music.Stremio()
 		return addon, nil
 	}
-	return addon, json.Unmarshal(manifest, &addon.Manifest)
+	if err := json.Unmarshal(manifest, &addon.Manifest); err != nil {
+		return addon, err
+	}
+	if addon.Kind == KindLocal {
+		if music := localMusic(addon.Manifest); music != nil {
+			addon.Music, addon.Manifest = music, music.Stremio()
+		}
+	}
+	return addon, nil
+}
+
+// localMusic is the Eclipse manifest of a local music folder, whose
+// catalogs are Eclipse rows: it answers searches, and every track it lists
+// is music. Nil for any other folder.
+func localMusic(m stremio.Manifest) *eclipse.Manifest {
+	if len(m.Catalogs) == 0 || slices.ContainsFunc(m.Catalogs, func(c stremio.Catalog) bool { return !eclipse.CatalogType(c.Type) }) {
+		return nil
+	}
+	music := &eclipse.Manifest{ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description, Resources: []string{"search"},
+		Types: m.Types, ContentType: eclipse.ContentMusic}
+	for _, c := range m.Catalogs {
+		if c.ID != eclipse.MyMusic {
+			music.Catalogs = append(music.Catalogs, eclipse.Catalog{ID: c.ID, Type: c.Type, Name: c.Name})
+		}
+	}
+	return music
 }
 
 const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at"
@@ -472,9 +502,15 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 			JOIN addons a ON a.id = l.addon_id WHERE a.owner_id IS NOT DISTINCT FROM $1`, scope.Owner).Scan(&last); err != nil {
 			return err
 		}
-		for i, catalog := range addon.Manifest.Catalogs {
+		// A music folder's My music is enabled by hand, as for an addon
+		// with rows.
+		for _, catalog := range addon.Manifest.Catalogs {
+			if catalog.ID == eclipse.MyMusic {
+				continue
+			}
+			last++
 			if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4)",
-				addon.ID, catalog.Type, catalog.ID, last+i+1); err != nil {
+				addon.ID, catalog.Type, catalog.ID, last); err != nil {
 				return err
 			}
 		}
@@ -577,7 +613,7 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 	wanted := func(catalog stremio.Catalog) bool {
 		return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
 	}
-	if addon.Eclipse() {
+	if addon.HasMusic() {
 		rowless := len(addon.Music.Catalogs) == 0
 		wanted = func(catalog stremio.Catalog) bool {
 			return eclipse.CatalogType(catalog.Type) && (catalog.ID != eclipse.MyMusic || rowless)

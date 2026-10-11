@@ -365,7 +365,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		// A track's stream resource gives a fresh link, which is now the
 		// track's.
 		r, err := s.load(ctx, old.Item)
-		if err != nil || r.Music == nil || !addon.Eclipse() {
+		if err != nil || r.Music == nil || !addon.HasMusic() {
 			return Version{}, ErrNotFound
 		}
 		return s.resolveTrack(ctx, entry, r, true)

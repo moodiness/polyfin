@@ -204,11 +204,11 @@ func (s *Service) folderRemote(id accounts.ID, address, user, sealed string) (re
 	return s.remote(id, address, user, password)
 }
 
-// walkShare lists the video and side files under a share's folder, one
-// folder after the other, from the listings alone. The folders it could
-// not list, missing or refused, are skipped. A share that stops answering
-// fails the walk.
-func walkShare(ctx context.Context, r remote, root []remoteEntry) (listing, error) {
+// walkShare lists the files a scan of a folder of kind reads under a
+// share's folder, and their side files, one folder after the other, from
+// the listings alone. The folders it could not list, missing or refused,
+// are skipped. A share that stops answering fails the walk.
+func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
 	list := listing{files: map[string]found{}, sides: map[string]found{}, open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
 		file, _, err := r.open(ctx, rel)
 		return file, err
@@ -244,14 +244,18 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry) (listing, erro
 			if next.rel != "" {
 				rel = next.rel + "/" + e.name
 			}
-			switch {
-			case e.folder && !skippedFolder(e.name):
-				// Listed once its turn comes, so that one folder's entries
-				// at most are held at once.
-				queue = append(queue, pending{rel: rel})
-			case !e.folder && videoFile(e.name):
+			if e.folder {
+				if !skippedIn(kind, e.name) {
+					// Listed once its turn comes, so that one folder's
+					// entries at most are held at once.
+					queue = append(queue, pending{rel: rel})
+				}
+				continue
+			}
+			switch file, side := listed(kind, e.name); {
+			case file:
 				list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
-			case !e.folder && sideFile(e.name):
+			case side:
 				list.sides[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
 			}
 		}
@@ -259,9 +263,9 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry) (listing, erro
 	return list, nil
 }
 
-// shareFiles lists a share's video and side files, or tells why it
+// shareFiles lists a share's files for a folder of kind, or tells why it
 // cannot.
-func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user, sealed string) (list listing, failure string, err error) {
+func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user, sealed, kind string) (list listing, failure string, err error) {
 	r, err := s.folderRemote(id, address, user, sealed)
 	if err != nil {
 		return listing{}, shareFailure(err), nil
@@ -270,7 +274,7 @@ func (s *Service) shareFiles(ctx context.Context, id accounts.ID, address, user,
 	root, err := r.list(listCtx, "")
 	cancel()
 	if err == nil {
-		list, err = walkShare(ctx, r, root)
+		list, err = walkShare(ctx, r, root, kind)
 	}
 	if err != nil {
 		if ctx.Err() != nil {

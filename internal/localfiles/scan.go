@@ -62,27 +62,31 @@ type found struct {
 }
 
 // listing is what a walk found under a folder, by path in it, with
-// slashes: its video files, disc images (see imageFile), the files of DVDs
-// (see dvdFile) and Blu-ray discs' playlists (see playlistFile), and the
-// side files beside them (see sideFile). skipped are the folders it could
-// not read: what was found in them before is not gone. open opens one of
-// the files found for reading.
+// slashes: the files it reads, videos with disc images (see imageFile), the
+// files of DVDs (see dvdFile) and Blu-ray discs' playlists (see
+// playlistFile), or a music folder's audio files, and the side files beside
+// them (see listed). skipped are the folders it could not read: what was
+// found in them before is not gone. open opens one of the files found for
+// reading, seekable; root is a folder's real path in the container, empty
+// for a share.
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
 	skipped []string
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
+	root    string
 }
 
-// walk lists the video files, disc images, the files of DVDs, Blu-ray
-// discs' playlists and the side files under root. It follows no symbolic link to a folder,
-// and none to a file out of root.
-func walk(ctx context.Context, root string) (listing, error) {
+// walk lists the files a scan of a folder of kind reads under root, disc
+// images, the files of DVDs and Blu-ray discs' playlists among them, and
+// their side files. It follows no symbolic link to a folder, and none to a
+// file out of root.
+func walk(ctx context.Context, root, kind string) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return listing{}, err
 	}
-	list := listing{files: map[string]found{}, sides: map[string]found{}, open: func(_ context.Context, rel string) (io.ReadCloser, error) {
+	list := listing{files: map[string]found{}, sides: map[string]found{}, root: real, open: func(_ context.Context, rel string) (io.ReadCloser, error) {
 		target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
 		if err != nil {
 			return nil, err
@@ -113,15 +117,23 @@ func walk(ctx context.Context, root string) (listing, error) {
 			return nil
 		}
 		var info fs.FileInfo
+		file, side := false, false
+		if !d.IsDir() {
+			file, side = listed(kind, d.Name())
+			// Disc images, a DVD's files and a Blu-ray disc's playlists are
+			// read as their disc (see collapseImages, collapseDVDs,
+			// collapseDiscs).
+			file = file || kind != KindMusic && (imageFile(d.Name()) || dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) || playlistFile(rel))
+		}
 		switch {
 		case path == real:
 			return nil
 		case d.IsDir():
-			if skippedFolder(d.Name()) {
+			if skippedIn(kind, d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
-		case !videoFile(d.Name()) && !imageFile(d.Name()) && !sideFile(d.Name()) && !dvdFile(filepath.Base(filepath.Dir(path)), d.Name()) && !playlistFile(rel):
+		case !file && !side:
 			return nil
 		case d.Type()&fs.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
@@ -140,7 +152,7 @@ func walk(ctx context.Context, root string) (listing, error) {
 			return nil
 		}
 		f := found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
-		if sideFile(d.Name()) {
+		if !file {
 			list.sides[rel] = f
 		} else {
 			list.files[rel] = f
@@ -300,12 +312,12 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		if err := s.db.QueryRow(ctx, "SELECT share_password FROM local_folders WHERE addon_id = $1", id).Scan(&sealed); err != nil {
 			return err
 		}
-		if list, failure, err = s.shareFiles(ctx, id, root, folder.User, sealed); err != nil {
+		if list, failure, err = s.shareFiles(ctx, id, root, folder.User, sealed, folder.Kind); err != nil {
 			return err
 		}
 	} else if failure = readable(root); failure != "" {
 		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.Manifest.Name, "path", root, "reason", failure)
-	} else if list, err = walk(ctx, root); err != nil {
+	} else if list, err = walk(ctx, root, folder.Kind); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -315,6 +327,13 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if failure != "" {
 		// What was found before stays.
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
+		return err
+	}
+	if folder.Kind == KindMusic {
+		if err := s.scanMusic(ctx, id, list); err != nil {
+			return err
+		}
+		_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at)
 		return err
 	}
 	files := list.files

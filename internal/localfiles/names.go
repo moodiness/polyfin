@@ -3,6 +3,7 @@ package localfiles
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -35,6 +36,43 @@ func sideFile(name string) bool {
 	return sideExtensions[strings.ToLower(path.Ext(name))]
 }
 
+// audioContainers are the audio files a music folder's scan lists, by
+// their extension, with the container apps know them as.
+var audioContainers = map[string]string{
+	".mp3": "mp3", ".flac": "flac", ".m4a": "m4a", ".m4b": "m4a", ".alac": "m4a", ".aac": "aac", ".ogg": "ogg", ".oga": "ogg",
+	".opus": "ogg", ".wav": "wav", ".aif": "aiff", ".aiff": "aiff", ".wma": "asf", ".ape": "ape", ".wv": "wv", ".dsf": "dsf",
+}
+
+// audioFile reports whether name is an audio file a music folder's scan
+// lists.
+func audioFile(name string) bool {
+	return audioContainers[strings.ToLower(path.Ext(name))] != ""
+}
+
+// folderImageNames are the images beside an album's tracks that may be its
+// artwork, in the order they are preferred.
+var folderImageNames = []string{"cover", "folder", "front"}
+
+// folderImage reports whether name is an image a music folder's scan lists
+// beside the tracks: cover, folder or front, as JPEG or PNG.
+func folderImage(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".jpg", ".jpeg", ".png":
+		return slices.Contains(folderImageNames, strings.ToLower(stem(name)))
+	}
+	return false
+}
+
+// listed tells which files a scan of a folder of kind lists, by name: the
+// files it reads (videos, or a music folder's audio files), and the side
+// files beside them (NFO and subtitle files, or a music folder's images).
+func listed(kind, name string) (file, side bool) {
+	if kind == KindMusic {
+		return audioFile(name), folderImage(name)
+	}
+	return videoFile(name), sideFile(name)
+}
+
 // skippedFolder reports whether a scan leaves a folder out: hidden ones,
 // those of system files, and the extras of a title, which are not one of
 // its versions.
@@ -48,6 +86,16 @@ func skippedFolder(name string) bool {
 		return true
 	}
 	return false
+}
+
+// skippedIn reports whether a scan of a folder of kind leaves a folder
+// out: in a music folder, hidden folders and those of system files only,
+// as an album may be named "Other" or "Interviews".
+func skippedIn(kind, name string) bool {
+	if kind == KindMusic {
+		return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") || strings.EqualFold(name, "lost+found")
+	}
+	return skippedFolder(name)
 }
 
 // name is what a file's or folder's name tells: the title and year it

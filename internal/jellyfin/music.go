@@ -86,6 +86,10 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail,
 		if item.IndexNumber > 0 {
 			dto.IndexNumber = new(item.IndexNumber)
 		}
+		// A disc number, which local music folders tell.
+		if item.ParentIndexNumber > 0 {
+			dto.ParentIndexNumber = new(item.ParentIndexNumber)
+		}
 		dto.Artists, dto.ArtistItems, dto.AlbumArtists = creditNames(item.Artists), credits(item.Artists), credits(albumArtists)
 	case library.KindAlbum:
 		dto.Artists, dto.ArtistItems, dto.AlbumArtists = creditNames(item.Artists), credits(item.Artists), credits(albumArtists)
@@ -294,6 +298,8 @@ func sortMusic(items []library.Item, keys, orders []string, state userState) {
 				c = cmp.Compare(a.Runtime, b.Runtime)
 			case "indexnumber":
 				c = cmp.Compare(a.IndexNumber, b.IndexNumber)
+			case "parentindexnumber":
+				c = cmp.Compare(a.ParentIndexNumber, b.ParentIndexNumber)
 			case "playcount":
 				c = cmp.Compare(state.data[a.ID].PlayCount, state.data[b.ID].PlayCount)
 			case "dateplayed":

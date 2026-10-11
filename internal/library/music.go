@@ -85,6 +85,7 @@ type musicEntry struct {
 	Explicit    bool     `json:"explicit,omitempty"`
 	Year        int      `json:"year,omitempty"`
 	Index       int      `json:"index,omitempty"`
+	Disc        int      `json:"disc,omitempty"`
 	Count       int      `json:"count,omitempty"`
 	Genres      []string `json:"genres,omitempty"`
 	Overview    string   `json:"overview,omitempty"`
@@ -94,14 +95,22 @@ type musicEntry struct {
 }
 
 func trackEntry(t eclipse.Track, index int, content string) musicEntry {
-	return musicEntry{Type: eclipse.TypeTrack, ID: t.ID, Title: t.Title, Artist: t.Artist, Album: t.Album, AlbumID: t.AlbumID,
+	e := musicEntry{Type: eclipse.TypeTrack, ID: t.ID, Title: t.Title, Artist: t.Artist, Album: t.Album, AlbumID: t.AlbumID,
 		Duration: t.Duration.Duration().Seconds(), Artwork: t.ArtworkURL, ISRC: t.ISRC, Explicit: t.Explicit, Year: t.Year, Index: index,
-		StreamURL: t.StreamURL, Format: t.Format, Content: content}
+		StreamURL: t.StreamURL, Format: t.Format, Content: content, Disc: t.Disc, Genres: t.Genres}
+	if t.AlbumArtist != "" && !strings.EqualFold(t.AlbumArtist, t.Artist) {
+		e.AlbumArtist = t.AlbumArtist
+	}
+	// A local track's number is its place on its disc.
+	if t.Number > 0 {
+		e.Index = t.Number
+	}
+	return e
 }
 
 func albumEntry(a eclipse.Album, content string) musicEntry {
 	e := musicEntry{Type: eclipse.TypeAlbum, ID: a.ID, Title: a.Title, Artist: a.Artist, Artwork: a.ArtworkURL, Year: a.Year,
-		Explicit: a.Explicit, Overview: a.Description, Count: a.TrackCount, Content: content}
+		Explicit: a.Explicit, Overview: a.Description, Count: a.TrackCount, Content: content, Genres: a.Genres}
 	if len(a.Tracks) > 0 {
 		e.Count = len(a.Tracks)
 		for _, t := range a.Tracks {
@@ -261,7 +270,7 @@ func musicItem(r record) Item {
 	}
 	switch e.Type {
 	case eclipse.TypeTrack:
-		item.IndexNumber = e.Index
+		item.IndexNumber, item.ParentIndexNumber = e.Index, e.Disc
 		item.Container = e.Format
 		item.Album = e.Album
 		if ref := e.albumRef(addon); ref != "" {
@@ -460,7 +469,16 @@ func remember[V any](ctx context.Context, s *Service, c musicCache[V], key music
 // musicFlight is the key in s.flight of the requests for key to its addon.
 func musicFlight(key musicKey) string { return fmt.Sprintf("music %v", key) }
 
+// localMusic reports whether entry is a local music folder, whose pages
+// are read from its scans each time, never kept: a scan changes them at
+// once.
+func (s *Service) localMusic(entry installed) bool { return entry.addon.Local() && s.local != nil }
+
 func (s *Service) musicCatalogPage(ctx context.Context, entry installed, catalog eclipse.Catalog, skip int) (musicPage, error) {
+	if s.localMusic(entry) {
+		items, length, err := s.local.MusicCatalog(ctx, entry.addon.ID, catalog, skip)
+		return musicPage{items: items, length: length}, err
+	}
 	return remember(ctx, s, s.musicCache.pages, entry.musicKey("catalog", catalog.ID, skip), func(ctx context.Context) (musicPage, error) {
 		items, length, err := s.music.Catalog(ctx, entry.eclipseAddon(), catalog, skip)
 		return musicPage{items: items, length: length}, err
@@ -468,27 +486,47 @@ func (s *Service) musicCatalogPage(ctx context.Context, entry installed, catalog
 }
 
 func (s *Service) albumPage(ctx context.Context, entry installed, id string) (eclipse.Album, error) {
+	if s.localMusic(entry) {
+		return s.local.MusicAlbum(ctx, entry.addon.ID, id)
+	}
 	return remember(ctx, s, s.musicCache.albums, entry.musicKey("album", id, 0), func(ctx context.Context) (eclipse.Album, error) {
 		return s.music.Album(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) artistPage(ctx context.Context, entry installed, id string) (eclipse.Artist, error) {
+	if s.localMusic(entry) {
+		return s.local.MusicArtist(ctx, entry.addon.ID, id)
+	}
 	return remember(ctx, s, s.musicCache.artists, entry.musicKey("artist", id, 0), func(ctx context.Context) (eclipse.Artist, error) {
 		return s.music.Artist(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) playlistPage(ctx context.Context, entry installed, id string) (eclipse.Playlist, error) {
+	if entry.addon.Local() {
+		return eclipse.Playlist{}, stremio.ErrNotFound
+	}
 	return remember(ctx, s, s.musicCache.playlists, entry.musicKey("playlist", id, 0), func(ctx context.Context) (eclipse.Playlist, error) {
 		return s.music.Playlist(ctx, entry.eclipseAddon(), id)
 	})
 }
 
 func (s *Service) musicSearch(ctx context.Context, entry installed, term string) (eclipse.Results, error) {
+	if s.localMusic(entry) {
+		return s.local.MusicSearch(ctx, entry.addon.ID, term)
+	}
 	return remember(ctx, s, s.musicCache.searches, entry.musicKey("search", musicName(term), 0), func(ctx context.Context) (eclipse.Results, error) {
 		return s.music.Search(ctx, entry.eclipseAddon(), term)
 	})
+}
+
+// musicStream resolves where an addon's track plays from.
+func (s *Service) musicStream(ctx context.Context, entry installed, id string) (eclipse.Stream, error) {
+	if s.localMusic(entry) {
+		return s.local.MusicStream(ctx, entry.addon.ID, id)
+	}
+	return s.music.Stream(ctx, entry.eclipseAddon(), id)
 }
 
 // musicCatalog reads a catalog row from its start, a page of
@@ -755,10 +793,13 @@ func (s *Service) playlistTracks(ctx context.Context, entry installed, r record)
 }
 
 // expand lists the tracks of albums, playlists or artists (their top
-// tracks), reading at most musicExpansion of their pages, a few at once. A
-// page that cannot be read leaves its tracks out.
+// tracks), reading at most musicExpansion of their pages, a few at once,
+// but every page of a local music folder, which asks no addon. A page that
+// cannot be read leaves its tracks out.
 func (s *Service) expand(ctx context.Context, v view, entry installed, folders []record) []record {
-	folders = folders[:min(len(folders), musicExpansion)]
+	if !s.localMusic(entry) {
+		folders = folders[:min(len(folders), musicExpansion)]
+	}
 	lists := make([][]record, len(folders))
 	var g errgroup.Group
 	g.SetLimit(musicFetches)
@@ -827,7 +868,7 @@ func (s *Service) MusicFolder(ctx context.Context, user accounts.User, id accoun
 		return false, err
 	}
 	if l, ok := v.library(id); ok {
-		return l.addon.addon.Eclipse(), nil
+		return l.addon.addon.HasMusic(), nil
 	}
 	r, err := s.load(ctx, id)
 	if errors.Is(err, ErrNotFound) {
@@ -872,7 +913,7 @@ func (s *Service) Music(ctx context.Context, user accounts.User, q MusicQuery) (
 		}
 	case q.Parent == (accounts.ID{}):
 		for _, l := range v.libraries {
-			if !l.addon.addon.Eclipse() {
+			if !l.addon.addon.HasMusic() {
 				continue
 			}
 			list, err := s.musicLibrary(ctx, v, l, q.Kinds, true, q.Shallow)
@@ -884,7 +925,7 @@ func (s *Service) Music(ctx context.Context, user accounts.User, q MusicQuery) (
 		}
 	default:
 		if l, ok := v.library(q.Parent); ok {
-			if !l.addon.addon.Eclipse() {
+			if !l.addon.addon.HasMusic() {
 				return nil, ErrNotFound
 			}
 			list, err := s.musicLibrary(ctx, v, l, q.Kinds, q.Recursive, q.Shallow)
@@ -926,7 +967,7 @@ func (s *Service) musicFolder(ctx context.Context, v view, id accounts.ID) (reco
 		return record{}, installed{}, ErrNotFound
 	}
 	entry, _ := v.addon(*r.Addon)
-	if !entry.addon.Eclipse() {
+	if !entry.addon.HasMusic() {
 		return record{}, installed{}, ErrNotFound
 	}
 	return r, entry, nil
@@ -1154,7 +1195,7 @@ func (s *Service) musicDetails(ctx context.Context, v view, r record) (Item, err
 		return Item{}, ErrNotFound
 	}
 	entry, _ := v.addon(*r.Addon)
-	if !entry.addon.Eclipse() {
+	if !entry.addon.HasMusic() {
 		return Item{}, ErrNotFound
 	}
 	e := *r.Music
@@ -1215,7 +1256,7 @@ func (s *Service) ArtistByName(ctx context.Context, user accounts.User, name str
 		return Item{}, err
 	}
 	for _, entry := range v.addons {
-		if !entry.addon.Eclipse() {
+		if !entry.addon.HasMusic() {
 			continue
 		}
 		r, err := s.load(ctx, itemID(namedArtistKey(entry.addon.ID, name)))
@@ -1251,7 +1292,7 @@ func (s *Service) SearchMusic(ctx context.Context, user accounts.User, term stri
 	}
 	var entries []installed
 	for _, entry := range v.addons {
-		if entry.addon.Eclipse() && entry.addon.Music.Has("search") {
+		if entry.addon.HasMusic() && entry.addon.Music.Has("search") {
 			entries = append(entries, entry)
 		}
 	}
@@ -1332,7 +1373,7 @@ func (s *Service) InstantMix(ctx context.Context, user accounts.User, id account
 	var pool []record
 	var named []record
 	if l, ok := v.library(id); ok {
-		if !l.addon.addon.Eclipse() {
+		if !l.addon.addon.HasMusic() {
 			return nil, ErrNotFound
 		}
 		if pool, err = s.musicLibrary(ctx, v, l, []Kind{KindTrack, KindAudiobook}, true, false); err != nil {
@@ -1348,7 +1389,7 @@ func (s *Service) InstantMix(ctx context.Context, user accounts.User, id account
 			return nil, ErrNotFound
 		}
 		entry, _ := v.addon(*r.Addon)
-		if !entry.addon.Eclipse() {
+		if !entry.addon.HasMusic() {
 			return nil, ErrNotFound
 		}
 		related := func(id accounts.ID) []record {
@@ -1447,7 +1488,7 @@ func (s *Service) trackVersion(ctx context.Context, v view, r record, renew bool
 		return Version{}, ErrNotFound
 	}
 	entry, _ := v.addon(*r.Addon)
-	if !entry.addon.Eclipse() {
+	if !entry.addon.HasMusic() {
 		return Version{}, ErrNotFound
 	}
 	return s.resolveTrack(ctx, entry, r, renew)
@@ -1472,7 +1513,7 @@ func (s *Service) resolveTrack(ctx context.Context, entry installed, r record, r
 		return version, nil
 	}
 	return shared(ctx, s, "track "+r.ID.String(), func(ctx context.Context) (Version, error) {
-		stream, err := s.music.Stream(ctx, entry.eclipseAddon(), e.ID)
+		stream, err := s.musicStream(ctx, entry, e.ID)
 		if errors.Is(err, stremio.ErrNotFound) {
 			return Version{}, ErrNotFound
 		}

@@ -1,6 +1,7 @@
 package localfiles
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -210,10 +211,11 @@ func formatSize(size int64) string {
 var ErrGone = errors.New("the file is no longer in its folder")
 
 // Open opens the file key names, its identifier and extension as Streams
-// gives them, a video or a subtitle file, for reading, with its
-// modification time: within its folder, through no symbolic link leading
-// out of it, or from its share. A share that cannot be read fails with why
-// (see shareFailure).
+// gives them, a video, a subtitle file, a track or an album's artwork, for
+// reading, with its modification time: within its folder, through no
+// symbolic link leading out of it, or from its share; a cover a track
+// embeds, from what its scan kept. A share that cannot be read fails with
+// why (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, _, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
@@ -222,15 +224,23 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	}
 	var folder accounts.ID
 	var root, rel, user, sealed string
-	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, l.share_user, l.share_password
-		FROM (SELECT addon_id, path FROM local_files WHERE id = $1 UNION ALL SELECT addon_id, path FROM local_subtitles WHERE id = $1) f
+	var data []byte
+	var modified *time.Time
+	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, f.data, f.modified, l.share_user, l.share_password
+		FROM (SELECT addon_id, path, NULL::bytea AS data, NULL::timestamptz AS modified FROM local_files WHERE id = $1
+			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_subtitles WHERE id = $1
+			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_tracks WHERE id = $1
+			UNION ALL SELECT addon_id, path, data, modified FROM local_covers WHERE id = $1) f
 		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id).
-		Scan(&folder, &root, &rel, &user, &sealed)
+		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, time.Time{}, ErrGone
 	}
 	if err != nil {
 		return nil, time.Time{}, err
+	}
+	if data != nil {
+		return readSeekNopCloser{bytes.NewReader(data)}, *modified, nil
 	}
 	if shareKind(root) != "" {
 		r, err := s.folderRemote(folder, root, user, sealed)
@@ -262,3 +272,8 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	}
 	return file, info.ModTime(), nil
 }
+
+// readSeekNopCloser closes nothing.
+type readSeekNopCloser struct{ io.ReadSeeker }
+
+func (readSeekNopCloser) Close() error { return nil }

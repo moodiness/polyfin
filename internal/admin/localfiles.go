@@ -21,7 +21,8 @@ const maxTitleQuery = 200
 // the container) with its user and whether a password is stored, never
 // the password itself, how its last scan went and whether one is under
 // way, its files, those matched to a title, how, and the others, and the
-// links made by hand.
+// links made by hand. A music folder's files are its tracks, matched those
+// with a title and an album, which its albums and artists count.
 type folderJSON struct {
 	Kind        string        `json:"kind"`
 	Path        string        `json:"path"`
@@ -36,6 +37,8 @@ type folderJSON struct {
 	Matched     int           `json:"matched"`
 	MatchedBy   matchedByJSON `json:"matchedBy"`
 	Unmatched   int           `json:"unmatched"`
+	Albums      int           `json:"albums"`
+	Artists     int           `json:"artists"`
 	Links       []linkJSON    `json:"links"`
 }
 
@@ -61,7 +64,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
-		Unmatched: f.Unmatched, Links: links}
+		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Links: links}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -79,9 +82,9 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 }
 
 // folderRequest adds or changes a local folder: its name, its path in the
-// container or a share's address, and, on adding, what it holds, "movies"
-// or "shows"; a share's user and password. On a change, a password left
-// out keeps the one stored, and an empty one removes it.
+// container or a share's address, and, on adding, what it holds, "movies",
+// "shows" or "music"; a share's user and password. On a change, a password
+// left out keeps the one stored, and an empty one removes it.
 type folderRequest struct {
 	Name     *string `json:"name"`
 	Path     *string `json:"path"`

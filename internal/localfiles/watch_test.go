@@ -207,6 +207,22 @@ func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 	wt.still()
 }
 
+// An audio file or an album's image added starts a scan; any other image
+// does not.
+func TestWatchScansAfterMusicChanges(t *testing.T) {
+	root := t.TempDir()
+	id := testID(1)
+	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt.start()
+	for _, name := range []string{"Band/Live/01 Opening.flac", "Band/Live/02 Closing.M4A", "Band/Live/Cover.jpg"} {
+		write(t, filepath.Join(root, filepath.FromSlash(name)), 10)
+		wt.scanned(id)
+		wt.still()
+	}
+	write(t, filepath.Join(root, "Band", "Live", "booklet.jpg"), 10)
+	wt.still()
+}
+
 func TestWatchFolderBack(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "movies")

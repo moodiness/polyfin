@@ -22,7 +22,8 @@
 // in the container, played from its folder (see collapseDVDs). An
 // administrator links the files left unmatched to an IMDb identifier by
 // hand. The subtitle files beside a video are offered with its stream (see
-// sidecars).
+// sidecars). A music folder answers as an Eclipse addon instead (see
+// music.go).
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.
@@ -44,16 +45,19 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// Kinds of folders: a folder holds movies, or shows with their episodes.
+// Kinds of folders: a folder holds movies, shows with their episodes, or
+// music.
 const (
 	KindMovies = "movies"
 	KindShows  = "shows"
+	KindMusic  = "music"
 )
 
 // catalogID identifies a folder's one catalog.
@@ -62,7 +66,7 @@ const catalogID = "local"
 var (
 	ErrInvalidName = errors.New("folder names are 1 to 64 printable characters")
 	ErrInvalidPath = errors.New("a folder is an absolute path in the container, other than /")
-	ErrInvalidKind = errors.New("a folder holds movies or shows")
+	ErrInvalidKind = errors.New("a folder holds movies, shows or music")
 	ErrInvalidIMDb = errors.New("an IMDb identifier is tt followed by digits")
 	// ErrSearchFailed wraps the error of a search of the metadata addons
 	// (see Service.Search).
@@ -94,6 +98,9 @@ type Service struct {
 	// probe tells whether FFmpeg reads an input (see UseProbe), nil until
 	// set.
 	probe func(ctx context.Context, in media.Input) bool
+	// ffprobe and ffmpeg read a music folder's tracks: their tags, and
+	// their embedded covers (see UseTools).
+	ffprobe, ffmpeg string
 	// workers bounds the units matched at once in a scan.
 	workers int
 
@@ -129,8 +136,8 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
-		workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{}, scanned: map[accounts.ID]bool{},
-		shares: map[accounts.ID]*pooledRemote{}}
+		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{},
+		scanned: map[accounts.ID]bool{}, shares: map[accounts.ID]*pooledRemote{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -138,6 +145,11 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 // versions FFmpeg reads from their input, a DVD's (see Input and
 // playback.Service.LocalInputs); it is called before the service is used.
 func (s *Service) UseFiles(files, inputs string) { s.files, s.inputs = files, inputs }
+
+// UseTools sets the ffprobe and FFmpeg executables music folders' tracks
+// are read with, ffprobe and ffmpeg from PATH until then; it is called
+// before the service is used.
+func (s *Service) UseTools(ffprobe, ffmpeg string) { s.ffprobe, s.ffmpeg = ffprobe, ffmpeg }
 
 // Watch watches the folders in the container for changes until Close; it
 // is called once, before the service is used.
@@ -214,6 +226,9 @@ type Folder struct {
 	MatchedBy   Matches
 	Links       []Link
 	Unwatched   string
+	// Albums and Artists count a music folder's albums and their artists;
+	// its Files are its tracks, Matched those with a title and an album.
+	Albums, Artists int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -243,7 +258,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	if folder.Kind != KindMovies && folder.Kind != KindShows {
+	if folder.Kind != KindMovies && folder.Kind != KindShows && folder.Kind != KindMusic {
 		return addons.Addon{}, ErrInvalidKind
 	}
 	share := shareKind(location)
@@ -346,6 +361,12 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, "DELETE FROM local_tracks WHERE addon_id = $1", id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM local_covers WHERE addon_id = $1", id); err != nil {
+			return err
+		}
 		var checked *time.Time
 		failure := ""
 		if share == "" {
@@ -379,9 +400,13 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	f := Folder{Addon: addon, Share: shareKind(addon.ManifestURL)}
 	var password string
 	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password,
-			(SELECT count(*) FROM local_files WHERE addon_id = $1),
-			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL)
-		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password, &f.Files, &f.Matched)
+			(SELECT count(*) FROM local_files WHERE addon_id = $1) + (SELECT count(*) FROM local_tracks WHERE addon_id = $1),
+			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
+				(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
+			(SELECT count(DISTINCT album_id) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
+			(SELECT count(DISTINCT album_artist_id) FROM local_tracks WHERE addon_id = $1 AND reason = '')
+		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password, &f.Files, &f.Matched,
+		&f.Albums, &f.Artists)
 	f.PasswordSet = password != ""
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Folder{}, addons.ErrNotFound
@@ -444,10 +469,11 @@ func metaType(kind string) string {
 var idPrefixes = []string{"tt", "tmdb:"}
 
 // manifest describes a folder as an addon: one catalog of its titles,
-// searchable, and the descriptions and streams of their identifiers.
+// searchable, and the descriptions and streams of their identifiers. A
+// music folder's one catalog is a row of its albums, an Eclipse row, which
+// makes it answer as an Eclipse addon (see addons.Addon.HasMusic and
+// music.go).
 func manifest(id accounts.ID, name, kind, share string) stremio.Manifest {
-	typ := metaType(kind)
-	types := []string{typ}
 	description := "Local folder"
 	switch share {
 	case ShareSMB:
@@ -455,6 +481,13 @@ func manifest(id accounts.ID, name, kind, share string) stremio.Manifest {
 	case ShareWebDAV:
 		description = "WebDAV folder"
 	}
+	if kind == KindMusic {
+		return stremio.Manifest{ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: description,
+			Types:    []string{eclipse.TypeAlbum, eclipse.TypeArtist, eclipse.TypeTrack},
+			Catalogs: []stremio.Catalog{{Type: eclipse.TypeAlbum, ID: catalogID, Name: name}}}
+	}
+	typ := metaType(kind)
+	types := []string{typ}
 	return stremio.Manifest{
 		ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: description, Types: types,
 		Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: types, IDPrefixes: idPrefixes},

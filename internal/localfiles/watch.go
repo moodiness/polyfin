@@ -389,8 +389,8 @@ func (w *watcher) close() {
 }
 
 // event handles a change: a folder added is watched, a folder watched gone
-// is no longer, and a change of a folder, of a video file or of a side
-// file schedules the scan of its folder.
+// is no longer, and a change of a folder, of a video, side or audio file,
+// or of an album's image, schedules the scan of its folder.
 func (w *watcher) event(event fsnotify.Event) {
 	name := filepath.Clean(event.Name)
 	if id, ok := w.dirs[name]; ok {
@@ -417,7 +417,8 @@ func (w *watcher) event(event fsnotify.Event) {
 			return
 		}
 	}
-	if (videoFile(base) || imageFile(base) || sideFile(base) || dvdFile(filepath.Base(filepath.Dir(name)), base) || playlistFile(filepath.ToSlash(name))) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+	if (videoFile(base) || imageFile(base) || sideFile(base) || audioFile(base) || folderImage(base) || dvdFile(filepath.Base(filepath.Dir(name)), base) ||
+		playlistFile(filepath.ToSlash(name))) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.change(id)
 	}
 }

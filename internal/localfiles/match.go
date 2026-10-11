@@ -404,7 +404,8 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 // is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
 // its unit the disc's folder, or one of its titles' (see titleUnit), or
 // of the disc image it is (DiscDVDImage, DiscBluRayImage); empty for any
-// other file.
+// other file. In a music folder, it is a track whose tags and names give no
+// title ("no_title") or no album ("no_album"), which no link links.
 type Unmatched struct {
 	Path   string
 	Unit   string
@@ -425,13 +426,17 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	if err != nil {
 		return nil, 0, err
 	}
+	query := `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, coalesce(i.kind, '') AS image FROM local_files f
+		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path
+		WHERE f.addon_id = $1 AND f.stremio_id IS NULL`
+	if folder.Kind == KindMusic {
+		query = `SELECT path, path, title, year, size, reason, '' AS image FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
+	}
 	var total int
-	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NULL", id).Scan(&total); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM ("+query+") u", id).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.db.Query(ctx, `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, coalesce(i.kind, '') FROM local_files f
-		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = f.path
-		WHERE f.addon_id = $1 AND f.stremio_id IS NULL ORDER BY f.path LIMIT $2`, id, maxUnmatched)
+	rows, err := s.db.Query(ctx, query+" ORDER BY path LIMIT $2", id, maxUnmatched)
 	if err != nil {
 		return nil, 0, err
 	}

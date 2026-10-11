@@ -56,7 +56,7 @@ func (s *Service) automaticImage(ctx context.Context, src source, recorded func(
 		return kept.value
 	}
 	// A music catalog's pages are not kept here.
-	if !src.addon.addon.Eclipse() {
+	if !src.addon.addon.HasMusic() {
 		if url, err := s.automaticImageOf(withKeptOnly(ctx), src); err == nil && url != "" {
 			s.libraryImages.Put(key, fetched[string]{url, s.now()})
 			return url
@@ -119,7 +119,7 @@ func (s *Service) findImage(ctx context.Context, src source) string {
 // listed for each user from their own music, has none: it is not a row the
 // addon lists.
 func (s *Service) automaticImageOf(ctx context.Context, src source) (string, error) {
-	if entry := src.addon; entry.addon.Eclipse() {
+	if entry := src.addon; entry.addon.HasMusic() {
 		row, ok := entry.addon.Music.Catalog(src.catalog.ID)
 		if !ok {
 			return "", nil

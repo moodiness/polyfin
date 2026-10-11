@@ -138,11 +138,18 @@ type IPTV interface {
 func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 
 // Local answers, for Polyfin's own local folders, the catalog, meta and
-// stream requests addons answer over HTTP (see package localfiles).
+// stream requests addons answer over HTTP (see package localfiles); for
+// its music folders, those Eclipse addons answer: the pages of their rows,
+// album and artist pages, searches and streams. A folder has no playlist.
 type Local interface {
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
+	MusicCatalog(ctx context.Context, source accounts.ID, catalog eclipse.Catalog, skip int) ([]eclipse.Item, int, error)
+	MusicAlbum(ctx context.Context, source accounts.ID, id string) (eclipse.Album, error)
+	MusicArtist(ctx context.Context, source accounts.ID, id string) (eclipse.Artist, error)
+	MusicSearch(ctx context.Context, source accounts.ID, term string) (eclipse.Results, error)
+	MusicStream(ctx context.Context, source accounts.ID, id string) (eclipse.Stream, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -857,7 +864,7 @@ func (s *Service) KnownPages(ctx context.Context, user accounts.User, count int)
 	ctx = withKeptOnly(ctx)
 	pages := make([]Page, 0, len(v.libraries))
 	for _, l := range v.libraries {
-		if l.addon.addon.Eclipse() {
+		if l.addon.addon.HasMusic() {
 			continue
 		}
 		page, err := s.libraryChildren(ctx, v, l, 0, count, "", false)
@@ -926,7 +933,7 @@ func slicePage(items []Item, start, count int) Page {
 func (r record) seriesItemID() accounts.ID { return itemID(titleKey(KindSeries, r.SeriesID)) }
 
 func (s *Service) libraryChildren(ctx context.Context, v view, l library, start, count int, genre string, first bool) (Page, error) {
-	if l.addon.addon.Eclipse() {
+	if l.addon.addon.HasMusic() {
 		records, err := s.musicLibraryRecords(ctx, v, l)
 		if err != nil {
 			return Page{}, err
