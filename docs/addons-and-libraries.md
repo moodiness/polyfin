@@ -118,6 +118,8 @@ Each catalog row (songs, albums, artists or playlists) is a library under **Cont
 
 Podcasts have no Jellyfin type: their episodes are songs.
 
+A [local music folder](local-folders.md#music-folders) is a music library too: its row of albums, read from its scans rather than from an addon, with albums, artists, search, lyrics, scrobbling and playback as an Eclipse addon's. It is never kept as addon answers are, and its songs view lists every album's songs, not the first 50.
+
 Each user can have the songs they play scrobbled to their own Last.fm or ListenBrainz account: see [Music: Last.fm and ListenBrainz](tracking.md#music-last-fm-and-listenbrainz).
 
 A row lists its own items. When an app asks for another kind, the library derives it:

@@ -1,6 +1,6 @@
 # Local folders
 
-Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it.
+Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it. A folder may also hold music: see [Music folders](#music-folders).
 
 Folders on a NAS or another computer can be mounted on the host and declared as local folders, or read by Polyfin over SMB or WebDAV, with no mount: see [network shares](#network-shares).
 
@@ -290,17 +290,70 @@ Symbolic links to files of the folder are followed; links leading out of the fol
 
 A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play converted only (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
 
+## Music folders
+
+A folder or share added as holding **Music** is a music library of its own. Its audio files are read with their tags and grouped into albums and artists, and the library answers as an [Eclipse music addon](addons-and-libraries.md#music-addons)'s does: albums, artists and songs views, album and artist pages, search, lyrics, scrobbling, statistics and playback all work as for an addon's music. What a folder holds is chosen when it is added and cannot change.
+
+```
+/media/music/Tone Quartet/Sine Studies/01 First Light.flac
+/media/music/Tone Quartet/Sine Studies/CD2/01 Second Wind.flac
+/media/music/Tone Quartet/Sine Studies/cover.jpg
+```
+
+### Files and tags
+
+A scan lists the files ending in `.mp3`, `.flac`, `.m4a`, `.m4b`, `.alac`, `.aac`, `.ogg`, `.oga`, `.opus`, `.wav`, `.aif`, `.aiff`, `.wma`, `.ape`, `.wv` and `.dsf`. Hidden folders are left out; a music folder's subfolders named `Extras` or `Other` are read, as an album may bear such a name.
+
+Each new or changed file is read with ffprobe: its title, artist, album, album artist, track and disc numbers, year (from its date), genres (several separated by `;`), whether it is part of a compilation, its length, its audio and whether it embeds a cover. Tags of MP3 (ID3), FLAC, Ogg and Opus (Vorbis comments), MP4 and M4A, WMA and WAV are read as ffprobe reads them.
+
+A file without some tags takes them from its path, as in `Artist/Album/01 Title.flac`:
+
+- its title is its name without the number heading it, which is its track number (`1-07 Title` gives disc 1, track 7);
+- its album is its folder's name; a folder named only after a disc, such as `CD2` or `Disc 2`, gives the disc number, and the folder above gives the album;
+- its artist is the name of the folder above the album's.
+
+A file whose tags and path give no title or no album, such as an untagged file at the folder's root, is left out of the library, and its page lists it under **Tracks left out** with why.
+
+On a share, ffprobe and FFmpeg read each new or changed file through Polyfin, at most 16 MB of it per scan: the tags, the stream headers and the embedded cover at its head, and the index at its end for the MP4 files that keep it there. A file whose tags lie beyond is read by its path.
+
+### Albums and artists
+
+- Tracks of the same album name and album artist, in any letter case, are one album. A track's album artist is its album artist tag, else "Various Artists" for a compilation (the compilation tag set to 1), else its artist.
+- An album's tracks are in disc, then track order, then by path. Its title and artist are those of its first track; its year, the latest of its tracks'; its genres, all of theirs.
+- Albums group into artists by album artist. An artist's page lists their albums and their songs, including those on other artists' albums, at most 100.
+- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg` or `.png`, any letter case) beside its first track. An artist's artwork is that of their first album.
+- Search finds songs by title, artist and album, albums by title and artist, and artists by name; every word must be found, in any letter case.
+
+The folder's figures count its tracks, albums and artists, and the tracks left out.
+
+### Playback
+
+Songs play from the folder or the share through Polyfin, as other local files do: as they are when the app takes their format, else converted as an addon's songs are (see [Music playback](addons-and-libraries.md#music-playback)). Their format, codec, sample rate and bit depth come from the scan, so playback decides without probing them.
+
+### Rescans
+
+A rescan reads again the files new or changed by size and modification time, forgets the files gone, and chooses again the artwork of the albums whose first track or image changed. Watching notices audio files and artwork images, as it notices videos.
+
+### Limits
+
+- A folder lists no playlists: its library has albums, artists and songs. Apps that open a playlist of a music folder find none.
+- A track's artist tag is read as one name, as written: `A feat. B` is an artist of that name.
+- Lyrics come from LRCLIB, as for an addon's songs (see [Lyrics](addons-and-libraries.md#lyrics)); lyrics files beside the tracks and lyrics tags are not read.
+- A music folder's tracks are not counted in the weekly summary of files added.
+- One image is read per album, and none per artist: artist pictures in the folder are not read.
+
 ## Compared with Jellyfin
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
-- Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read.
+- Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read for movies and shows.
+- Both read music folders with their tags. Polyfin groups albums by album artist and name rather than by folder, and offers no playlists from the folder.
 
 ## For app developers
 
-A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind, last scan, error, counts and links. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
+A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows` or `music`), last scan, error, counts and links. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
 
 | Route | What it does |
 |---|---|
