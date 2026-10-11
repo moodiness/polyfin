@@ -100,13 +100,15 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 
 - The first segment ends on the first keyframe at least 2 seconds in, and each next one on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
 - An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds.
+- A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
 - Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
 - An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good ends its conversion, and the next request answers `503` too.
 
 **For app developers:**
 
 - `EXT-X-TARGETDURATION` is the longest segment, rounded up.
-- After a seek, FFmpeg probes 2 MB of the file's head, which the analysis already read, rather than 5 MB; conversions burning subtitles in, and MPEG-TS files, probe as usual.
+- After a seek, FFmpeg probes 2 MB of the file's head, which the analysis already read, rather than 5 MB; conversions burning subtitles in, MPEG-TS files and discs probe as usual.
+- After a seek in a Blu-ray disc, FFmpeg starts at the previous segment's keyframe, as its Blu-ray reader lands on the keyframe after the time asked, and what comes before the segment asked is left out.
 
 ## Conversion settings
 

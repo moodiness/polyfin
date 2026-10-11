@@ -167,7 +167,7 @@ A disc holding several movies, as a box set's discs do, lists each other movie a
 - a title other than the main one is not matched by the disc folder's name: link it by hand, beside its playlist in the unmatched files, listed as `Blu-ray disc: Box/DISC02 · title 2` for playlist `00002.mpls`;
 - through the Jellyfin API, its version is named after the disc folder and its number, such as `Box - DISC02 - title 2`.
 
-A disc plays its playlists from its folder rather than as one file, so it always plays converted, as a DVD does (see [DVD folders](#dvd-folders)): its video is converted over HLS, and its audio is copied when the app takes it.
+A disc plays its playlists from its folder rather than as one file, so it plays over HLS only. Its segments are cut on the keyframes its clips' information files (`BDMV/CLIPINF/*.clpi`) list, so its video is copied when the app takes its codec, as a file's is: H.264 and HEVC, HDR10 included, on most apps; VC-1 and MPEG-2 video only on apps that declare them, and converted otherwise. Its audio is copied when the app takes it. A disc whose clips' information cannot be read is cut every few seconds and its video converted, as a DVD's is (see [DVD folders](#dvd-folders)).
 
 Files beside `BDMV` in a disc folder are read as any other file, and folders a scan leaves out, such as `Extras`, still are.
 
@@ -176,7 +176,7 @@ Limits:
 - On a network share, a disc plays its largest stream, as one file, played as it is when the app takes it: FFmpeg reads a disc's playlists from a path. A movie split over several streams then plays its largest stream only. Mount the share on the host and declare it as a local folder to play the whole playlist.
 - A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream the same way.
 - There is no direct play and no download of a playlist, and no thumbnails or chapter images are made for it.
-- The video is always converted, even when the app takes its codec: Polyfin does not read the keyframes of a disc's streams, which copying the video needs.
+- A seek in a disc starts FFmpeg one segment early, as its Blu-ray reader lands on the keyframe after the time asked: the first segment after a seek takes a little longer to come.
 - The disc must not be encrypted: Polyfin reads discs copied without their copy protection.
 - In a shows folder, discs are left out: a disc of episodes is not read as one episode. Extract its episodes to files of their own.
 
@@ -200,7 +200,7 @@ In a movies folder, any folder holding a `VIDEO_TS` folder (any case) is a DVD, 
 - a link covers the disc folder; the unmatched files list it as `DVD: …`;
 - through the Jellyfin API, its version is named after the disc folder.
 
-The DVD is read from its folder rather than as one file, so it always plays converted: its video is converted over HLS, as an MPEG-TS file's is, and its audio is copied when the app takes it. A user who may not have video converted is not offered it.
+The DVD is read from its folder rather than as one file, so it always plays converted: its video is converted over HLS, cut every few seconds as an MPEG-TS file's is, and its audio is copied when the app takes it. A user who may not have video converted is not offered it.
 
 Limits:
 
@@ -208,6 +208,7 @@ Limits:
 - There is no direct play, and no download.
 - A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video.
 - No thumbnails or chapter images are made for a DVD.
+- A DVD's MPEG-2 video is converted even for an app that takes it: the IFO files' time maps tell where each second starts, not where each keyframe does, and FFmpeg's DVD reader starts a seek's timestamps at the time asked rather than at the keyframe it lands on, so copied segments would not join.
 - A DVD holding several movies plays its longest title only, and in a shows folder, DVDs are left out, as discs are.
 - The DVD must not be encrypted: Polyfin reads DVDs copied without their copy protection.
 
@@ -232,7 +233,7 @@ A scan reads what each new or changed image is, and keeps the answer while the i
 - one with a UDF file system only, as many Blu-ray images are, is a Blu-ray disc's when FFmpeg's Blu-ray reader opens it, which it tries once per new or changed image; its main title is then the playlist FFmpeg's reader takes for the longest;
 - any other image, such as a data disc's, is left out.
 
-An image plays converted, as the discs it holds do (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)).
+An image plays as the disc it holds does (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)): a Blu-ray image's video is copied when the app takes its codec, its keyframes read through the image's ISO 9660 file system, and a DVD image's video is converted.
 
 Limits:
 
@@ -240,6 +241,7 @@ Limits:
 - There is no direct play and no download, and no thumbnails or chapter images are made for an image.
 - A Blu-ray image is one movie, its main title: the other movies of a box set's image are not listed, as they are for a disc folder. Extract the image to a folder to list them.
 - A Blu-ray image's main title must last at least 3 minutes, as FFmpeg's Blu-ray reader requires.
+- A Blu-ray image with a UDF file system only always plays converted: Polyfin reads its clips' information through ISO 9660 only.
 - The image's disc must not be encrypted, and a DVD image's subtitles are pictures, as a DVD folder's are.
 
 ## Matching
@@ -298,7 +300,7 @@ Symbolic links to files of the folder are followed; links leading out of the fol
 
 ## Versions
 
-A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play converted only (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
+A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play over HLS only, a Blu-ray disc's video copied when the app takes it and a DVD's converted (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
 
 ## Music folders
 
