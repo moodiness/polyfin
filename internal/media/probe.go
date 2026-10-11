@@ -180,13 +180,16 @@ func NeedsMasteringProbe(stream Stream) bool {
 }
 
 // MasteringDisplay reports whether the first frame of the video track at
-// index in the source at url carries the mastering display metadata of
-// HDR10: from the video's own SEI, or from its container, which FFmpeg's
-// decoder passes on to every frame. ffprobe opens the source as Probe
-// does, then reads that track's first packet and decodes its frame.
-func (p Prober) MasteringDisplay(ctx context.Context, url string, index int) (bool, error) {
-	data, err := p.run(ctx, url, true, "-select_streams", strconv.Itoa(index), "-show_frames", "-read_intervals", "%+#1",
-		"-show_entries", "frame=stream_index:frame_side_data=side_data_type")
+// index in the source in carries the mastering display metadata of HDR10:
+// from the video's own SEI, or from its container, which FFmpeg's decoder
+// passes on to every frame. ffprobe opens the source as Probe does a URL,
+// or ProbeInput an input of its own, then reads that track's first packet
+// and decodes its frame.
+func (p Prober) MasteringDisplay(ctx context.Context, in Input, index int) (bool, error) {
+	// A file over HTTP is read again when the connection drops.
+	remote := strings.Contains(in.Path, "://")
+	data, err := p.run(ctx, in.Path, remote, slices.Concat(in.Args(), []string{"-select_streams", strconv.Itoa(index), "-show_frames",
+		"-read_intervals", "%+#1", "-show_entries", "frame=stream_index:frame_side_data=side_data_type"})...)
 	if err != nil {
 		return false, err
 	}

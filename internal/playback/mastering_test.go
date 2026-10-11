@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -80,5 +81,35 @@ func TestTheMasteringDisplayIsLearnedOnceForIntel(t *testing.T) {
 	}
 	if failed() != 1 {
 		t.Errorf("a failing frame read %d times", failed())
+	}
+}
+
+// A version read from its input has ffprobe read the input itself for its
+// first frame, as for its analysis (see LocalInputs).
+func TestTheMasteringDisplayOfAnInput(t *testing.T) {
+	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
+	conversion := &VideoConversion{Codec: "h264", Encoder: "h264_vaapi", ToneMap: true, ToneMapOnCPU: true, Hardware: intel}
+	old := media.Analysis{Format: "mpegts", Streams: []media.Stream{{Index: 0, Type: "video", Codec: "hevc", ColorTransfer: "smpte2084"}}}
+	dir := t.TempDir()
+	args := filepath.Join(dir, "args")
+	script := "#!/bin/sh\necho \"$@\" > " + args + "\n" +
+		`echo '{"frames": [{"stream_index": 0, "side_data_list": [{"side_data_type": "Mastering display metadata"}]}]}'` + "\n"
+	ffprobe := filepath.Join(dir, "ffprobe")
+	if err := os.WriteFile(ffprobe, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := newService(t, &fakeSource{}, ffprobe, nil)
+	base := s.LocalInputs(func(_ context.Context, key string) (media.Input, error) {
+		return media.Input{Options: []string{"-playlist", key}, Path: "bluray:/discs/Movie (2008)"}, nil
+	})
+	version := library.Version{ID: accounts.ID{8}, URL: base + "3"}
+	learned, ok := s.LearnMasteringDisplay(t.Context(), version, old, conversion)
+	if got := learned.Streams[0].MasteringDisplay; !ok || got == nil || !*got {
+		t.Fatalf("learned %v: %v", ok, got)
+	}
+	data, _ := os.ReadFile(args)
+	if line := strings.TrimSpace(string(data)); !strings.Contains(line, "-playlist 3 ") || !strings.HasSuffix(line, "-i bluray:/discs/Movie (2008)") ||
+		strings.Contains(line, "-reconnect") {
+		t.Errorf("ffprobe's arguments: %s", line)
 	}
 }

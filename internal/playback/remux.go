@@ -438,7 +438,10 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 				hold()
 				return hls.Remux{}, nil, err
 			}
-			r.Input, r.InputOptions = in.Path, in.Args()
+			// A disc's title may start late, as a Blu-ray disc's clips start
+			// at 600 seconds: its timestamps are shifted to start at zero, as
+			// the plan's times do.
+			r.Input, r.InputOptions = in.Path, append(in.Args(), "-start_at_zero")
 			remux.convert(&r, video, TuningOf(s.settings()))
 			return r, func() {
 				hold()

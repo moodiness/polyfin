@@ -199,11 +199,11 @@ func TestTheMasteringDisplayComesFromTheContainerOrTheFirstFrame(t *testing.T) {
 		t.Errorf("an SDR track's analysis: %+v, %v", analysis, err)
 	}
 	for name, want := range map[string]bool{"mastered.mkv": true, "bare.mkv": false} {
-		if got, err := prober.MasteringDisplay(t.Context(), server.URL+"/"+name, 1); err != nil || got != want {
+		if got, err := prober.MasteringDisplay(t.Context(), Input{Path: server.URL + "/" + name}, 1); err != nil || got != want {
 			t.Errorf("%s's first frame: mastering display %v, %v, want %v", name, got, err, want)
 		}
 	}
-	if _, err := prober.MasteringDisplay(t.Context(), server.URL+"/mastered.mkv", 5); err == nil {
+	if _, err := prober.MasteringDisplay(t.Context(), Input{Path: server.URL + "/mastered.mkv"}, 5); err == nil {
 		t.Error("a track that does not exist has a mastering display")
 	}
 }

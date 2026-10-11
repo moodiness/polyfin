@@ -95,3 +95,19 @@ func (s *Service) analyzeInput(ctx context.Context, version library.Version) (me
 	}
 	return result.(media.Analysis), nil
 }
+
+// probeInput is what ffprobe reads a version from until release: its
+// input, or its source, through the source cache on the loopback
+// interface.
+func (s *Service) probeInput(ctx context.Context, version library.Version) (in media.Input, release func(), err error) {
+	if s.ReadsInput(version) {
+		in, err := s.input(ctx, version)
+		return in, func() {}, err
+	}
+	src := s.open(version)
+	target, unregister := s.loopback.register(src)
+	return media.Input{Path: target}, func() {
+		unregister()
+		src.Release()
+	}, nil
+}

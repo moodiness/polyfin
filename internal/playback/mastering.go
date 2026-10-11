@@ -17,11 +17,11 @@ import (
 // analysis; it reports true with the analysis then known, after which the
 // conversion is planned again. A frame that cannot be read leaves the
 // version on the processor, and is not read again for a while. Other GPUs,
-// video Intel would not tone map anyway, and versions read from their
-// input (see LocalInputs), read nothing.
+// and video Intel would not tone map anyway, read nothing. A version read
+// from its input (see LocalInputs) has ffprobe read the input itself.
 func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Version, analysis media.Analysis, conversion *VideoConversion) (media.Analysis, bool) {
 	if conversion == nil || !conversion.ToneMapOnCPU || conversion.Hardware.Method != "vaapi" || !s.settings().GPUToneMapping ||
-		version.HoldsConnection || s.ReadsInput(version) || !slices.ContainsFunc(analysis.Streams, media.NeedsMasteringProbe) {
+		version.HoldsConnection || !slices.ContainsFunc(analysis.Streams, media.NeedsMasteringProbe) {
 		return analysis, false
 	}
 	if _, failed := s.unmastered.Get(version.ID); failed {
@@ -31,9 +31,12 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 		// The answer is kept even once the request that asked for it is
 		// canceled, as an analysis is.
 		ctx := context.WithoutCancel(ctx)
-		src := s.open(version)
-		defer src.Release()
-		target, release := s.loopback.register(src)
+		in, release, err := s.probeInput(ctx, version)
+		if err != nil {
+			s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
+			s.unmastered.Put(version.ID, err)
+			return analysis, nil
+		}
 		defer release()
 		learned := analysis
 		learned.Streams = slices.Clone(analysis.Streams)
@@ -41,7 +44,7 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 			if !media.NeedsMasteringProbe(stream) {
 				continue
 			}
-			found, err := s.ffprobe().MasteringDisplay(ctx, target, stream.Index)
+			found, err := s.ffprobe().MasteringDisplay(ctx, in, stream.Index)
 			if err != nil {
 				s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
 				s.unmastered.Put(version.ID, err)
