@@ -5,6 +5,7 @@ import {
   HardDrivesIcon,
   LinkBreakIcon,
   MagnifyingGlassIcon,
+  MusicNotesIcon,
   TelevisionSimpleIcon,
 } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
@@ -175,6 +176,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
           options={[
             { value: 'movies', label: text.kinds.movies, icon: FilmSlateIcon },
             { value: 'shows', label: text.kinds.shows, icon: TelevisionSimpleIcon },
+            { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
           ]}
           className="self-start"
         />
@@ -291,23 +293,32 @@ export function LocalFolderEditForm({
 
 /**
  * A folder's figures: its files, those matched, how, and the others, its last scan, and why it
- * cannot be read when it cannot.
+ * cannot be read when it cannot. A music folder's are its tracks, albums and artists, and its
+ * tracks left out.
  */
 export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const { language, t } = useI18n()
   const text = t.localFolders
-  const figures = [
-    { label: text.files, value: folder.files, warn: false },
-    { label: text.matched, value: folder.matched, warn: false },
-    { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
-  ]
+  const figures =
+    folder.kind === 'music'
+      ? [
+          { label: text.tracks, value: folder.files, warn: false },
+          { label: text.albums, value: folder.albums, warn: false },
+          { label: text.artists, value: folder.artists, warn: false },
+          { label: text.leftOut, value: folder.unmatched, warn: folder.unmatched > 0 },
+        ]
+      : [
+          { label: text.files, value: folder.files, warn: false },
+          { label: text.matched, value: folder.matched, warn: false },
+          { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
+        ]
   const methods = matchMethods
     .filter((method) => folder.matchedBy[method] > 0)
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
   return (
     <PanelSection>
-      <dl className="grid grid-cols-3 gap-y-4">
+      <dl className={cx('grid gap-y-4', figures.length === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
         {figures.map((figure, i) => (
           <div
             key={figure.label}
@@ -341,7 +352,10 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   )
 }
 
-/** The files of a folder no title was matched to, each linkable to an IMDb identifier, and the links made. */
+/**
+ * The files of a folder no title was matched to, each linkable to an IMDb identifier, and the links
+ * made; a music folder's tracks left out of its albums, which no link links.
+ */
 export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalFolder }) {
   const { language, t } = useI18n()
   const text = t.localFolders
@@ -370,7 +384,10 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
 
   return (
     <>
-      <PanelSection title={text.unmatchedTitle} description={text.unmatchedHelp}>
+      <PanelSection
+        title={folder.kind === 'music' ? text.leftOutTitle : text.unmatchedTitle}
+        description={folder.kind === 'music' ? text.leftOutHelp : text.unmatchedHelp}
+      >
         {unmatched.isPending ? (
           <Skeleton className="h-24 rounded-panel" />
         ) : unmatched.isError ? (
@@ -378,7 +395,9 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
             {errorMessage(t, unmatched.error)}
           </InlineError>
         ) : unmatched.data.files.length === 0 ? (
-          <p className="text-control text-ink-3">{text.noUnmatched}</p>
+          <p className="text-control text-ink-3">
+            {folder.kind === 'music' ? text.noLeftOut : text.noUnmatched}
+          </p>
         ) : (
           <>
             <ul className="flex flex-col divide-y divide-line">
@@ -482,37 +501,39 @@ function UnmatchedRow({
         </p>
         {link.isError && <FieldError>{errorMessage(t, link.error)}</FieldError>}
       </div>
-      <form onSubmit={submit} noValidate className="flex items-end gap-2">
-        <Field label={text.linkLabel(file.path)} hideLabel>
-          <TextInput
-            value={imdbId}
-            onValue={(value) => {
-              link.reset()
-              setImdbId(value)
-            }}
-            placeholder={text.imdbPlaceholder}
-            autoComplete="off"
-            spellCheck={false}
+      {folder.kind !== 'music' && (
+        <form onSubmit={submit} noValidate className="flex items-end gap-2">
+          <Field label={text.linkLabel(file.path)} hideLabel>
+            <TextInput
+              value={imdbId}
+              onValue={(value) => {
+                link.reset()
+                setImdbId(value)
+              }}
+              placeholder={text.imdbPlaceholder}
+              autoComplete="off"
+              spellCheck={false}
+              size="sm"
+              mono
+              className="w-[150px]"
+            />
+          </Field>
+          <Button type="submit" size="sm" loading={link.isPending} disabled={imdbId.trim() === ''}>
+            {text.link}
+          </Button>
+          <Button
+            variant="ghost"
             size="sm"
-            mono
-            className="w-[150px]"
-          />
-        </Field>
-        <Button type="submit" size="sm" loading={link.isPending} disabled={imdbId.trim() === ''}>
-          {text.link}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={MagnifyingGlassIcon}
-          aria-expanded={searching}
-          aria-controls={searching ? searchId : undefined}
-          onClick={() => setSearching(!searching)}
-        >
-          {text.findTitle}
-        </Button>
-      </form>
-      {searching && (
+            icon={MagnifyingGlassIcon}
+            aria-expanded={searching}
+            aria-controls={searching ? searchId : undefined}
+            onClick={() => setSearching(!searching)}
+          >
+            {text.findTitle}
+          </Button>
+        </form>
+      )}
+      {folder.kind !== 'music' && searching && (
         <div id={searchId} className="basis-full">
           <TitleSearch
             folderId={addon.id}

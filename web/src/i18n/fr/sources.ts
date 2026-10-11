@@ -156,13 +156,13 @@ const sources: typeof en = {
     series: (count: string) => `${count} séries`,
   },
   localFolders: {
-    help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
+    help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
     location: 'Emplacement',
     locations: { local: 'Dossier local', smb: 'Partage SMB', webdav: 'Dossier WebDAV' },
     shareHelp: {
-      smb: 'Un dossier partagé en SMB (partage de fichiers Windows) par un NAS ou un autre ordinateur, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons.',
+      smb: 'Un dossier partagé en SMB (partage de fichiers Windows) par un NAS ou un autre ordinateur, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale.',
       webdav:
-        'Un dossier qu’un serveur partage en WebDAV, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons.',
+        'Un dossier qu’un serveur partage en WebDAV, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale.',
     },
     address: 'Adresse',
     addressHint: {
@@ -188,12 +188,14 @@ const sources: typeof en = {
       'L’endroit où le dossier est monté dans le conteneur de Polyfin, pas son chemin sur l’hôte.',
     pathPlaceholder: '/media/films',
     kind: 'Il contient',
-    kinds: { movies: 'Des films', shows: 'Des séries' },
+    kinds: { movies: 'Des films', shows: 'Des séries', music: 'Musique' },
     kindHelp: {
       movies:
         'Un fichier par film, seul ou dans un dossier à lui, nommé d’après le film et son année.',
       shows:
         'Un dossier par série, avec la saison et l’épisode dans le nom de chaque fichier, comme S01E02.',
+      music:
+        'Des fichiers audio lus d’après leurs tags, sinon leurs noms, comme Artiste/Album/01 Titre.flac, regroupés en albums et en artistes.',
     },
     kindFixed:
       'Le contenu d’un dossier ne peut pas changer : supprimez-le et ajoutez-le à nouveau.',
@@ -216,6 +218,10 @@ const sources: typeof en = {
     files: 'Fichiers vidéo',
     matched: 'Associés à un titre',
     unmatched: 'Non associés',
+    tracks: 'Morceaux',
+    albums: 'Albums',
+    artists: 'Artistes',
+    leftOut: 'Laissés de côté',
     matchedBy: (parts: string[]) => `Associés : ${parts.join(', ')}.`,
     matchMethods: {
       name: (count: string) => `${count} par un identifiant dans le nom`,
@@ -252,6 +258,10 @@ const sources: typeof en = {
     unmatchedHelp:
       'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque, ou l’un des films d’un disque qui en contient plusieurs.',
     noUnmatched: 'Chaque fichier est associé à un titre.',
+    leftOutTitle: 'Morceaux laissés de côté',
+    leftOutHelp:
+      'Ni les tags ni les noms de ces fichiers ne donnent un titre ou un album. Ajoutez-leur des tags, ou placez-les dans un dossier Artiste/Album, puis lancez une analyse.',
+    noLeftOut: 'Chaque morceau est dans un album.',
     shownOf: (shown: string, total: string) => `${shown} affichés sur ${total}.`,
     reasons: {
       unreadable_name: 'Son nom ne donne aucun titre, ou aucun numéro d’épisode',
@@ -260,6 +270,8 @@ const sources: typeof en = {
       ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
       other_year: 'Les titres de ce nom sont d’autres années',
       search_failed: 'La recherche auprès des addons de métadonnées a échoué',
+      no_title: 'Ses tags et son nom ne donnent aucun titre',
+      no_album: 'Ses tags et ses dossiers ne donnent aucun album',
     } as Record<string, string>,
     read: (title: string) => `Lu comme « ${title} »`,
     showFolder: (unit: string) => `Dossier de la série : ${unit}`,

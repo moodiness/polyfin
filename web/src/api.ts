@@ -456,7 +456,7 @@ export type Addon = {
 }
 
 /** What a local folder holds. */
-export type FolderKind = 'movies' | 'shows'
+export type FolderKind = 'movies' | 'shows' | 'music'
 
 /** Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder. */
 export type FolderShare = '' | 'smb' | 'webdav'
@@ -486,6 +486,7 @@ export type LocalFolder = {
   error: string
   /** Whether a scan is under way. */
   scanning: boolean
+  /** Its video files, or a music folder's tracks, matched those with a title and an album. */
   files: number
   matched: number
   /**
@@ -494,6 +495,9 @@ export type LocalFolder = {
    */
   matchedBy: Record<MatchMethod, number>
   unmatched: number
+  /** A music folder's albums, and their artists. */
+  albums: number
+  artists: number
   /** The files, or shows' folders, linked to an IMDb identifier by hand. */
   links: { unit: string; imdbId: string }[]
 }

@@ -152,13 +152,13 @@ const sources = {
     series: (count: string) => `${count} series`,
   },
   localFolders: {
-    help: 'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams. Polyfin runs as user 65532, which must be able to read it.',
+    help: 'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library. Polyfin runs as user 65532, which must be able to read it.',
     location: 'Where',
     locations: { local: 'Local folder', smb: 'SMB share', webdav: 'WebDAV folder' },
     shareHelp: {
-      smb: 'A folder shared over SMB (Windows file sharing) by a NAS or another computer, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams.',
+      smb: 'A folder shared over SMB (Windows file sharing) by a NAS or another computer, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library.',
       webdav:
-        'A folder a server shares over WebDAV, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams.',
+        'A folder a server shares over WebDAV, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library.',
     },
     address: 'Address',
     addressHint: {
@@ -183,11 +183,13 @@ const sources = {
     pathHint: 'Where the folder is mounted in Polyfin’s container, not its path on the host.',
     pathPlaceholder: '/media/movies',
     kind: 'It holds',
-    kinds: { movies: 'Movies', shows: 'Shows' },
+    kinds: { movies: 'Movies', shows: 'Shows', music: 'Music' },
     kindHelp: {
       movies:
         'One file per movie, alone or in a folder of its own, named after the movie and its year.',
       shows: 'A folder per show, with the season and episode in each file’s name, such as S01E02.',
+      music:
+        'Audio files read with their tags, else their names, such as Artist/Album/01 Title.flac, grouped into albums and artists.',
     },
     kindFixed: 'What a folder holds cannot be changed: remove it and add it again.',
     add: 'Add the folder',
@@ -207,6 +209,10 @@ const sources = {
     files: 'Video files',
     matched: 'Matched to a title',
     unmatched: 'Unmatched',
+    tracks: 'Tracks',
+    albums: 'Albums',
+    artists: 'Artists',
+    leftOut: 'Left out',
     matchedBy: (parts: string[]) => `Matched: ${parts.join(', ')}.`,
     matchMethods: {
       name: (count: string) => `${count} by an identifier in the name`,
@@ -240,6 +246,10 @@ const sources = {
     unmatchedHelp:
       'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc or a DVD, the whole disc, or one movie of a disc that holds several.',
     noUnmatched: 'Every file is matched to a title.',
+    leftOutTitle: 'Tracks left out',
+    leftOutHelp:
+      'Neither the tags nor the names of these files give a title or an album. Tag them, or move them into an Artist/Album folder, then scan.',
+    noLeftOut: 'Every track is in an album.',
     shownOf: (shown: string, total: string) => `${shown} shown of ${total}.`,
     reasons: {
       unreadable_name: 'Its name gives no title, or no episode number',
@@ -248,6 +258,8 @@ const sources = {
       ambiguous: 'Several titles have this name: add the year to it, or link it',
       other_year: 'Titles of this name are of other years',
       search_failed: 'The metadata addons could not be searched',
+      no_title: 'Its tags and name give no title',
+      no_album: 'Its tags and folders give no album',
     } as Record<string, string>,
     read: (title: string) => `Read as “${title}”`,
     showFolder: (unit: string) => `Show folder: ${unit}`,
