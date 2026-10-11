@@ -117,7 +117,7 @@ In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tm
 
 ### Subtitle files
 
-Subtitle files beside a video are offered as subtitles of its version, as Jellyfin reads them: SubRip (`.srt`), ASS (`.ass`), SSA (`.ssa`) and WebVTT (`.vtt`) files in the video's folder whose name begins with the video's, followed by a dot.
+Subtitle files beside a video are offered as subtitles of its version, as Jellyfin reads them: SubRip (`.srt`), ASS (`.ass`), SSA (`.ssa`) and WebVTT (`.vtt`) files, PGS picture subtitles (`.sup`) and VobSub picture subtitles (an `.idx` file with the `.sub` file of the same name) in the video's folder whose name begins with the video's, followed by a dot.
 
 ```
 /media/movies/Nosferatu (1922)/Nosferatu (1922) - 1080p.mkv
@@ -136,7 +136,7 @@ The words after the video's name, separated by dots, are read in any order and l
 - `default`: the subtitles shown by default;
 - any other word is the subtitles' title, such as `Movie (2001).en.Commentary.srt`.
 
-When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. Picture subtitle files (`.sup`, `.idx` and `.sub`) are not read. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps.
+When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. A VobSub pair is named by its `.idx` file; an `.idx` file without its `.sub` file is left out, and a `.sub` file alone is not read. When the name of a VobSub pair tells no language, the language of the first track its `.idx` file lists is used, and only that first track is offered. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps.
 
 ## Blu-ray discs
 
@@ -360,7 +360,7 @@ The tracks a scan first finds count among the files added of the [weekly summary
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
-- Both offer the text subtitle files beside a video, named after it. Polyfin reads only those in the video's own folder, and no picture subtitle files (`.sup`, `.idx` and `.sub`). Local artwork is not read for movies and shows.
+- Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder. Local artwork is not read for movies and shows.
 - Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
 
 ## For app developers

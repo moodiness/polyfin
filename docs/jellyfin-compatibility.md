@@ -130,6 +130,7 @@ When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matr
 
 - A track the index does not list block by block, or larger than 32 MB, is not offered as a file.
 - DVD (VobSub) tracks are not offered as files.
+- A PGS file (`.sup`) beside a local file reaches the app as it is, by ranges. A VobSub pair beside a local file (`.idx` and `.sub`) is burned in, as Jellyfin 12.2 does: it gives VobSub as a file only extracted as Matroska.
 
 **For app developers:** `GET /Videos/{id}/{mediaSourceId}/Subtitles/{index}/0/Stream.pgssub` (or `.sup`) answers `application/octet-stream` and supports `Range`.
 

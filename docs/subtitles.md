@@ -14,12 +14,13 @@ All reach each app in the format it takes. Apps can save the user's subtitle lan
 
 ## Subtitle files beside local files
 
-A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and WebVTT files beside it, named after it, such as `Movie (2001).fr.srt` or `Movie (2001).en.sdh.ass`. [Naming files](local-folders.md#subtitle-files) tells how their names give their language and flags.
+A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and WebVTT files beside it, named after it, such as `Movie (2001).fr.srt` or `Movie (2001).en.sdh.ass`, and its picture subtitle files: PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`). [Naming files](local-folders.md#subtitle-files) tells how their names give their language and flags.
 
 - They are subtitles of that file's version only, listed after the addons' subtitles, with their language, title, and whether they are forced, for the hearing impaired or shown by default.
 - Each app gets them in the format it asks for, as it gets the addons' subtitles: WebVTT, SubRip, ASS or JSON. An ASS file asked as ASS keeps its styles and positions.
 - Files in UTF-8 (with or without a byte order mark) and UTF-16 are read as they are. A file that is not valid UTF-8 is read as Windows-1252, the usual encoding of older subtitles, so that accents survive.
 - Polyfin reads them from the folder or the network share when an app asks for them, and keeps their text for a while. A file that changes is read again after the next scan.
+- Picture subtitle files are listed with the codec Jellyfin gives them, `PGSSUB` or `DVDSUB`. They are never converted to text. An app that draws PGS, such as jellyfin-web, gets the `.sup` file as it is, read by byte ranges. A VobSub pair is not one file: like Jellyfin 12.2, which gives VobSub as a file only extracted as Matroska, Polyfin burns it into the video, and so it does a PGS file for an app that does not draw PGS (see [Image subtitles](#image-subtitles)).
 
 ## Text tracks inside files
 
@@ -51,4 +52,4 @@ Fallback fonts, which apps load when a subtitle's own fonts are missing, come fr
 
 ## Image subtitles
 
-When an app cannot show image subtitles, Polyfin burns them into the video. This is a video conversion: it counts toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md).
+When an app cannot show image subtitles, Polyfin burns them into the video: an image track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
