@@ -222,11 +222,18 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 			}
 		}
 	}
-	// A subtitle burned in is an image track inside the file, counted after
-	// the addons' files.
-	if index, err := strconv.Atoi(query(r, "subtitleStreamIndex")); err == nil && remux.ConvertVideo != nil &&
-		strings.EqualFold(query(r, "subtitleMethod"), "Encode") && playback.BurnableSubtitle(analysis, index-len(files)) {
-		remux.Burn = new(index - len(files))
+	// A subtitle burned in is a picture file, among the files counted
+	// first, read from its address, or an image track inside the file.
+	if index, err := strconv.Atoi(query(r, "subtitleStreamIndex")); err == nil && index >= 0 && remux.ConvertVideo != nil &&
+		strings.EqualFold(query(r, "subtitleMethod"), "Encode") {
+		switch {
+		case index < len(files):
+			if pictureFile(files[index]) {
+				remux.BurnFile = files[index].URL
+			}
+		case playback.BurnableSubtitle(analysis, index-len(files)):
+			remux.Burn = new(index - len(files))
+		}
 	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
 		channels, layout := 0, ""
@@ -352,13 +359,13 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 }
 
 // renditions are the text subtitles a remux offers in HLS, the one the
-// app chose shown by default: the addons' files and the embedded tracks
+// app chose shown by default: the text files and the embedded tracks
 // FFmpeg extracts. The app's player can switch between them.
 func (h *Handler) renditions(req remuxRequest, selected, rawQuery string) []hls.Rendition {
 	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), h.Accounts.Settings().Language)
 	var renditions []hls.Rendition
 	for _, stream := range streams {
-		if stream.Type != "Subtitle" || !(stream.IsExternal || playback.ExtractableSubtitle(req.analysis, stream.Index-len(req.files))) {
+		if stream.Type != "Subtitle" || !(stream.IsExternal && stream.IsTextSubtitleStream || playback.ExtractableSubtitle(req.analysis, stream.Index-len(req.files))) {
 			continue
 		}
 		index := strconv.Itoa(stream.Index)
@@ -434,7 +441,7 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 		return
 	}
 	stream := index - len(req.files)
-	if index >= len(req.files) && !playback.ExtractableSubtitle(req.analysis, stream) {
+	if index >= len(req.files) && !playback.ExtractableSubtitle(req.analysis, stream) || index < len(req.files) && pictureFile(req.files[index]) {
 		processingError(w, http.StatusNotFound)
 		return
 	}

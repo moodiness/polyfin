@@ -593,10 +593,11 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 		decision = playback.Decide(request.DeviceProfile, described, options)
 		// A subtitle the app can only take burned into the video is burned
-		// in when it is an image track inside the file and the video can be
-		// converted, as burning it in requires, and may be. Any other is left
-		// out rather than preventing playback, and so is one the app would
-		// take in HLS when the version cannot be streamed so.
+		// in when it is pictures, an image track inside the file or a
+		// picture file beside it, and the video can be converted, as burning
+		// it in requires, and may be. Any other is left out rather than
+		// preventing playback, and so is one the app would take in HLS when
+		// the version cannot be streamed so.
 		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
 			method := decision.Subtitles[*selected].Method
 			if method == "Encode" && allowed.Video && burnable(streams, analysis, *selected) {
@@ -721,8 +722,8 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 // what it plays as it is; subtitle files, the embedded text tracks that
 // remuxes extracted whole or that the version's index lists block by block,
 // and the PGS tracks it lists so, as external files; text subtitles as HLS
-// renditions; and the image track chosen burned into converted video. Any
-// other is left out.
+// renditions; and the pictures chosen, an image track or a picture file,
+// burned into converted video. Any other is left out.
 func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, streamed bool) {
 	files := subtitleFiles(streams)
 	whole := h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration)
@@ -788,10 +789,15 @@ func (h *Handler) prefetchSubtitle(ctx context.Context, decision playback.Decisi
 }
 
 // burnable reports whether the subtitle stream of Jellyfin index index can
-// be burned into converted video: an image track inside the file.
+// be burned into converted video: a picture subtitle file, or an image
+// track inside the file.
 func burnable(streams []playback.MediaStream, analysis media.Analysis, index int) bool {
 	files := subtitleFiles(streams)
-	return index >= files && playback.BurnableSubtitle(analysis, index-files)
+	if index < files {
+		i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Subtitle" && s.Index == index })
+		return i >= 0 && !streams[i].IsTextSubtitleStream
+	}
+	return playback.BurnableSubtitle(analysis, index-files)
 }
 
 // permitted reports whether the conversions a decision plans, of the video
@@ -1012,6 +1018,15 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 			processingError(w, http.StatusInternalServerError)
 			return
 		}
+	case pictureFile(files[index]):
+		// A PGS file goes out as it is, as Jellyfin 12.2 serves one; a
+		// VobSub pair is not one file, and pictures are not text.
+		if files[index].Format != "sup" || !pgsFormat(format) {
+			processingError(w, http.StatusInternalServerError)
+			return
+		}
+		h.pgsFile(w, r, files[index])
+		return
 	default:
 		var err error
 		if text, err = h.subtitleFile(r.Context(), files[index]); err != nil {
@@ -1101,6 +1116,37 @@ func (h *Handler) pgsTrack(r *http.Request, item accounts.ID, stream int) ([]byt
 		return nil, false
 	}
 	return track.Data, true
+}
+
+// pgsFile serves a PGS file beside a local file as it is, byte ranges
+// included: apps that draw PGS read it by ranges as they play.
+func (h *Handler) pgsFile(w http.ResponseWriter, r *http.Request, file library.ExternalSubtitle) {
+	header := http.Header{}
+	for _, name := range []string{"Range", "If-Range"} {
+		if value := r.Header.Get(name); value != "" {
+			header.Set(name, value)
+		}
+	}
+	response, err := h.Stremio.Open(r.Context(), r.Method, file.URL, header, file.Confined)
+	if err != nil {
+		processingError(w, http.StatusInternalServerError)
+		return
+	}
+	defer response.Body.Close()
+	switch response.StatusCode {
+	case http.StatusOK, http.StatusPartialContent, http.StatusRequestedRangeNotSatisfiable:
+	default:
+		processingError(w, http.StatusInternalServerError)
+		return
+	}
+	for _, name := range []string{"Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified"} {
+		if value := response.Header.Get(name); value != "" {
+			w.Header().Set(name, value)
+		}
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(response.StatusCode)
+	_, _ = io.Copy(w, response.Body)
 }
 
 // maxSubtitleBytes bounds subtitle downloads.

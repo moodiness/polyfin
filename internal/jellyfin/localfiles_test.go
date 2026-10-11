@@ -23,8 +23,10 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/testsubtitles"
 )
 
 // A file of a local folder linked to a title is one more of its versions,
@@ -335,12 +337,37 @@ func playDisc(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Du
 	return source
 }
 
-// playedFrames reads the HLS playback of a transcoding URL, its last
-// segment first, as an app seeking there does, then every segment in
-// order, and returns how many video frames they hold together, which
+// playedFrames reads the HLS playback of a transcoding URL (see played),
+// and returns how many video frames its segments hold together, which
 // decode, and when they start: Polyfin shifts the title's times by 10
 // seconds (see hls.timestampOffset).
 func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding string) (frames int, start float64) {
+	t.Helper()
+	file := played(t, p, transcoding)
+	output, err := exec.Command(ffmpeg, "-hide_banner", "-v", "error", "-i", file, "-f", "null", "-").CombinedOutput()
+	if err != nil {
+		t.Fatalf("the segments do not decode: %v %s", err, output)
+	}
+	// The segments keep the title's times, shifted: their video frames
+	// tell how long they play.
+	output, err = exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
+		"-of", "csv=p=0", file).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, _ = strconv.Atoi(strings.TrimSpace(string(output)))
+	output, err = exec.Command(ffprobe, "-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0", file).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, _ = strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	return frames, start
+}
+
+// played reads the HLS playback of a transcoding URL, its last segment
+// first, as an app seeking there does, then every segment in order, and
+// returns the file of the segments joined.
+func played(t *testing.T, p playbackSetup, transcoding string) string {
 	t.Helper()
 	get := func(path string) []byte {
 		t.Helper()
@@ -384,24 +411,7 @@ func playedFrames(t *testing.T, p playbackSetup, ffmpeg, ffprobe, transcoding st
 	if err := os.WriteFile(file, joined, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	output, err := exec.Command(ffmpeg, "-hide_banner", "-v", "error", "-i", file, "-f", "null", "-").CombinedOutput()
-	if err != nil {
-		t.Fatalf("the segments do not decode: %v %s", err, output)
-	}
-	// The segments keep the title's times, shifted: their video frames
-	// tell how long they play.
-	output, err = exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
-		"-of", "csv=p=0", file).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	frames, _ = strconv.Atoi(strings.TrimSpace(string(output)))
-	output, err = exec.Command(ffprobe, "-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0", file).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	start, _ = strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
-	return frames, start
+	return file
 }
 
 // tracks lists a media source's tracks, by type, codec and language.
@@ -564,6 +574,218 @@ func TestLocalSubtitleFilesAreTracks(t *testing.T) {
 	}
 	if got := subtitle("1", "vtt"); !strings.Contains(got, "Signs") {
 		t.Errorf("the forced file: %q", got)
+	}
+}
+
+// pictureProfile is jellyfin-web's Chrome profile as jellyfin-web 12.2
+// sends it where it draws picture subtitles itself: PGS as files, VobSub
+// as Matroska files.
+func pictureProfile(t *testing.T, p playbackSetup) json.RawMessage {
+	t.Helper()
+	var profile map[string]any
+	if err := json.Unmarshal(p.profile(t, "jellyfin-web-chrome"), &profile); err != nil {
+		t.Fatal(err)
+	}
+	profile["SubtitleProfiles"] = append(profile["SubtitleProfiles"].([]any), map[string]any{"Format": "pgssub", "Method": "External"},
+		map[string]any{"Format": "vobsub", "Container": "mks", "Method": "External"})
+	data, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+// localPictureFiles is a test server, its ffprobe at ffprobe, with a local
+// folder holding "Movie (2008)", whose video, from video, is linked to the
+// movie, beside a PGS file, "Movie (2008).en.forced.sup", and a VobSub
+// pair, "Movie (2008).sdh.idx" and ".sub", whose .idx file tells English,
+// the red rectangle of each shown from 1 to 3 seconds and from 5 to 7. It
+// returns the PGS file and the local version's media source.
+func localPictureFiles(t *testing.T, ffprobe string, video []byte) (playbackSetup, []byte, MediaSourceInfo) {
+	t.Helper()
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
+			o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders.Input))
+	})
+	p := playingOn(t, s)
+	rectangle := testsubtitles.Rectangle{CanvasWidth: 320, CanvasHeight: 180, X: 60, Y: 120, Width: 200, Height: 40,
+		Shown: [][2]time.Duration{{time.Second, 3 * time.Second}, {5 * time.Second, 7 * time.Second}}}
+	pgs := rectangle.PGS()
+	idx, sub := rectangle.VobSub()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "Movie (2008)"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{"Movie (2008).mkv": video, "Movie (2008).en.forced.sup": pgs, "Movie (2008).sdh.idx": []byte(idx),
+		"Movie (2008).sdh.sub": sub} {
+		if err := os.WriteFile(filepath.Join(dir, "Movie (2008)", name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Link(t.Context(), addon.ID, "Movie (2008)/Movie (2008).mkv", "tt1000"); err != nil {
+		t.Fatal(err)
+	}
+	var movie BaseItemDto
+	p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &movie)
+	if movie.MediaSources == nil || len(*movie.MediaSources) != 3 {
+		t.Fatalf("media sources: %+v", movie.MediaSources)
+	}
+	return p, pgs, (*movie.MediaSources)[2]
+}
+
+// pictureInfo asks PlaybackInfo for the local version on profile, with
+// the subtitle stream subtitle chosen, -1 for the user's preference.
+func pictureInfo(t *testing.T, p playbackSetup, local MediaSourceInfo, profile json.RawMessage, subtitle int) MediaSourceInfo {
+	t.Helper()
+	body := map[string]any{"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": profile}
+	if subtitle >= 0 {
+		body["SubtitleStreamIndex"] = subtitle
+	}
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), body)
+	var info playbackInfoResponse
+	if err := json.Unmarshal(data, &info); status != http.StatusOK || err != nil || len(info.MediaSources) != 1 {
+		t.Fatalf("PlaybackInfo: %d %s", status, data)
+	}
+	return info.MediaSources[0]
+}
+
+// localVersion is the version of the movie a local media source stands
+// for.
+func localVersion(t *testing.T, p playbackSetup, local MediaSourceInfo) library.Version {
+	t.Helper()
+	movieID, _ := accounts.ParseID(p.movie)
+	versions, err := p.library.Versions(t.Context(), p.user, movieID)
+	i := slices.IndexFunc(versions, func(v library.Version) bool { return v.ID.String() == local.Id })
+	if err != nil || i < 0 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	return versions[i]
+}
+
+// The picture subtitle files beside a local file, a PGS file and a VobSub
+// pair, are subtitle streams of its version, PGSSUB and DVDSUB as Jellyfin
+// names them, with the language and flags of their names, or of the .idx
+// file. An app that draws PGS takes the PGS file as it is, by ranges; a
+// VobSub pair is not one file, nor are pictures text.
+func TestLocalPictureSubtitleFilesAreTracks(t *testing.T) {
+	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, pgs, local := localPictureFiles(t, "ffprobe-not-installed", file)
+	p.analyzed(t, localVersion(t, p, local), "h264-aac-mp4")
+	type track struct {
+		codec, title     string
+		forced, hearing  bool
+		text             bool
+		delivery, format string
+	}
+	files := func(source MediaSourceInfo) []track {
+		var tracks []track
+		for _, stream := range source.MediaStreams {
+			if stream.IsExternal {
+				_, format, _ := strings.Cut(stream.DeliveryUrl, "/0/Stream.")
+				format, _, _ = strings.Cut(format, "?")
+				tracks = append(tracks, track{stream.Codec, stream.DisplayTitle, stream.IsForced, stream.IsHearingImpaired, stream.IsTextSubtitleStream,
+					stream.DeliveryMethod, format})
+			}
+		}
+		return tracks
+	}
+	addonFile := track{"subrip", "French - SUBRIP - External", false, false, true, "External", "vtt"}
+	pgsFile := track{"PGSSUB", "English - Forced - PGSSUB - External", true, false, false, "External", "pgssub"}
+	vobSub := track{"DVDSUB", "English - Hearing Impaired - DVDSUB - External", false, true, false, "Drop", ""}
+	if got := files(pictureInfo(t, p, local, pictureProfile(t, p), -1)); !slices.Equal(got, []track{addonFile, pgsFile, vobSub}) {
+		t.Errorf("the files, for an app that draws PGS: %+v", got)
+	}
+	subtitle := func(index, format string, header http.Header) (*http.Response, string) {
+		return fetchURL(t, p.url+"/Videos/"+p.movie+"/"+local.Id+"/Subtitles/"+index+"/0/Stream."+format+"?ApiKey="+p.token, header)
+	}
+	if response, body := subtitle("1", "pgssub", nil); response.StatusCode != http.StatusOK || body != string(pgs) {
+		t.Errorf("the PGS file: %d, %d bytes", response.StatusCode, len(body))
+	}
+	if response, body := subtitle("1", "pgssub", http.Header{"Range": {"bytes=2-5"}}); response.StatusCode != http.StatusPartialContent ||
+		body != string(pgs[2:6]) || response.Header.Get("Content-Range") != "bytes 2-5/"+strconv.Itoa(len(pgs)) {
+		t.Errorf("a range of the PGS file: %d %v", response.StatusCode, response.Header)
+	}
+	for _, c := range []struct{ index, format string }{{"1", "vtt"}, {"2", "pgssub"}, {"2", "sub"}} {
+		if response, _ := subtitle(c.index, c.format, nil); response.StatusCode != http.StatusInternalServerError {
+			t.Errorf("subtitle %s as %s: %d", c.index, c.format, response.StatusCode)
+		}
+	}
+}
+
+// A picture subtitle file chosen on an app that cannot draw it is burned
+// into the video FFmpeg converts, reading the file through the loopback
+// interface, a VobSub pair's .sub file beside its .idx file: the pair
+// always, as it is not one file, the PGS file on an app that does not draw
+// PGS.
+func TestLocalPictureSubtitleFilesAreBurnedIn(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	video := filepath.Join(t.TempDir(), "video.mkv")
+	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24",
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "8", "-c:v", "libx264", "-preset", "veryfast", "-g", "48",
+		"-c:a", "aac", video).CombinedOutput(); err != nil {
+		t.Fatalf("make the video: %v: %s", err, out)
+	}
+	data, err := os.ReadFile(video)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _, local := localPictureFiles(t, ffprobe, data)
+	// Analyzed ahead: an 8-second video would stand in for the movie's two
+	// hours.
+	analysis, err := media.Prober{Path: ffprobe, Timeout: time.Minute}.Probe(t.Context(), video)
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis.Remote = true
+	encoded, _ := json.Marshal(analysis)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", localVersion(t, p, local).ID, encoded); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		profile  json.RawMessage
+		subtitle int
+	}{{pictureProfile(t, p), 2}, {p.profile(t, "jellyfin-web-chrome"), 1}} {
+		source := pictureInfo(t, p, local, c.profile, c.subtitle)
+		if !strings.Contains(source.TranscodingUrl, "SubtitleStreamIndex="+strconv.Itoa(c.subtitle)+"&") ||
+			!strings.Contains(source.TranscodingUrl, "SubtitleMethod=Encode") || !strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") ||
+			source.MediaStreams[c.subtitle].DeliveryMethod != "Encode" {
+			t.Fatalf("subtitle %d chosen: %s %s", c.subtitle, source.MediaStreams[c.subtitle].DeliveryMethod, source.TranscodingUrl)
+		}
+		file := played(t, p, source.TranscodingUrl)
+		// The color of a pixel inside the rectangle, at a time of the
+		// title, shifted as the segments are (see hls.timestampOffset).
+		for _, at := range []struct {
+			seconds float64
+			red     bool
+		}{{2, true}, {4, false}, {6, true}} {
+			out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-i", file,
+				"-vf", "select=gte(t\\,"+strconv.FormatFloat(at.seconds+10, 'f', 3, 64)+"),scale=160:90,format=rgb24,crop=1:1:80:70",
+				"-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-").Output()
+			if err != nil || len(out) != 3 {
+				t.Fatalf("subtitle %d, pixel at %.0f s: %v", c.subtitle, at.seconds, err)
+			}
+			if red := out[0] > 160 && out[1] < 90 && out[2] < 90; red != at.red {
+				t.Errorf("subtitle %d at %.0f s: color %v, subtitle shown %v", c.subtitle, at.seconds, out, at.red)
+			}
+		}
 	}
 }
 

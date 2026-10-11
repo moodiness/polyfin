@@ -158,6 +158,17 @@ func versionFiles(files []library.ExternalSubtitle, version library.Version) []l
 	return append(slices.Clip(files), version.Subtitles...)
 }
 
+// pictureCodecs are the codecs of the picture subtitle files beside local
+// files, by their format, as Jellyfin names them: PGS files, and VobSub
+// pairs, by their .idx file.
+var pictureCodecs = map[string]string{"sup": "PGSSUB", "idx": "DVDSUB"}
+
+// pictureFile reports whether a subtitle file is pictures, which Polyfin
+// serves as they are or burns in, but never converts.
+func pictureFile(file library.ExternalSubtitle) bool {
+	return pictureCodecs[file.Format] != ""
+}
+
 // externalStreams describes subtitle files as the streams they are.
 func externalStreams(files []library.ExternalSubtitle) []playback.ExternalSubtitle {
 	result := make([]playback.ExternalSubtitle, len(files))
@@ -167,7 +178,7 @@ func externalStreams(files []library.ExternalSubtitle) []playback.ExternalSubtit
 		// external files.
 		codec := "subrip"
 		if subtitle.Format != "" {
-			codec = subtitleCodecs[subtitle.Format]
+			codec = cmp.Or(subtitleCodecs[subtitle.Format], pictureCodecs[subtitle.Format])
 		}
 		result[i] = playback.ExternalSubtitle{Language: subtitle.Language, Title: subtitle.Title, Codec: codec,
 			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default}
