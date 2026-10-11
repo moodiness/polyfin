@@ -233,7 +233,7 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the Live TV guide's included, may get before Polyfin reads it again. Apps never wait for it. |
 | **Read every collection each day** | **Settings › Catalogs** | Never (or an hour, 0 to 23) | Reads every collection of the server's collection libraries at this hour of the server's time zone, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others. |
 | **Scan local folders every (hours, 0 = never)** | **Settings › Catalogs** | 6 (0 to 168) | How long after its last scan a local folder or network share is scanned again (see [Local folders](local-folders.md#scanning)). 0 turns the schedule off. |
-| **Watch local folders for changes** | **Settings › Catalogs** | On | Scans a folder mounted in the container a few seconds after its files stop changing. Network shares are not watched (see [Watching for changes](local-folders.md#watching-for-changes)). |
+| **Watch folders and shares for changes** | **Settings › Catalogs** | On | Scans a folder mounted in the container a few seconds after its files stop changing, and a network share a few seconds after a listing of its folders, made every 2 minutes, differs from its last scan's (see [Watching for changes](local-folders.md#watching-for-changes)). |
 
 A library can have its own maximum instead, lower or higher, and list only one genre of its catalog: see [Genre and maximum](#genre-and-maximum).
 

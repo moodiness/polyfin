@@ -59,7 +59,7 @@ The address holds no user or password: they have fields of their own, and an add
 
 - Files are read from the share at each request, with byte ranges, and never copied. Direct play, remuxing, conversions, analysis and thumbnails read them through Polyfin as they read a local file; seeking asks the share for the part needed only.
 - Connections are kept between requests: one SMB session per share, signed in again when it ends, such as when the server restarts; HTTP keep-alive for WebDAV.
-- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**, but are not watched for changes: raise it for a large share on a slow link, or set it to 0 and choose **Scan now** when files change. A share mounted on the host and declared as a local folder is watched, but inotify only sees the changes made through that host, not those made on the NAS.
+- A scan lists the share folder by folder. Listings over the network are slower than on a disk, but scans only read the files that are new or changed, so the first scan is the long one. Shares follow the same schedule as local folders, **Settings › Catalogs › Scan local folders every (hours, 0 = never)**, and are watched for changes by listing their folders again every 2 minutes, at most 100 listings a round (see [watching for changes](#watching-for-changes)). A share mounted on the host and declared as a local folder is watched with inotify instead, which only sees the changes made through that host, not those made on the NAS.
 - A video plays only as fast as the network carries it: a high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
 
 ### Health
@@ -73,6 +73,8 @@ A share Polyfin cannot read is reported on its page and under **System › Healt
 - the address is a file (`not_folder`).
 
 As with a local folder, the files found before stay in the library while the share cannot be read, so a NAS that is off for a while empties no library.
+
+A share that was read but cannot be listed while it is watched is reported under **System › Health** as a warning, with why: it does not answer (`unreachable`), or it refuses the user or password (`refused`). It keeps its schedule meanwhile, and is scanned again once it answers.
 
 ## Naming files
 
@@ -267,11 +269,19 @@ Folders are scanned at startup, every **Settings › Catalogs › Scan local fol
 
 Folders mounted in the container are also watched for changes, with inotify on Linux. When files are added, renamed or removed in a folder, or in any folder under it, Polyfin waits until they stop changing for a few seconds, then scans that folder again. A movie copied into a folder shows in its library within a minute of the copy's end, without **Scan now**.
 
-- **Settings › Catalogs › Watch local folders for changes** turns it off or on (on by default). Off, no folder is watched.
-- Network shares (SMB and WebDAV) are not watched: they follow the schedule only.
+- **Settings › Catalogs › Watch folders and shares for changes** turns it off or on, for folders and network shares alike (on by default). Off, no folder or share is watched.
+- Network shares (SMB and WebDAV) are watched by listing their folders again, as described below.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
 - Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, disc images, NFO files, subtitle files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan. In a music folder, its subfolders named `Extras` or `Other` are watched, as its scans read them, and its audio files, artwork, lyrics files and playlists start a scan.
+
+Network shares give no notice of their changes to Polyfin: WebDAV has none, and the SMB library Polyfin uses does not offer SMB's change notifications. So Polyfin lists each share's folders again every 2 minutes, and compares each listing with the one its last scan read: the names of its folders, and the names, sizes and modification times of its videos, NFO, subtitle and other files a scan reads. When one differs, the share is scanned again a few seconds later, which reads only what changed. A movie copied onto a share shows within a few minutes of the copy's end.
+
+- Each round lists the share's top folder first, where a new movie's folder lands, then the folders under it in turn, at most 100 listings a round, half a second apart. A share of more folders is listed whole over several rounds, from where the last round stopped: with 1,000 folders, a change deep in it is seen within 20 minutes, a new folder at the top within 2.
+- The folders listed are those the last scan read: hidden folders and those a scan leaves out are not, and a new folder is seen through its parent's listing.
+- The first round comes 2 minutes after Polyfin starts, or after the share is added, which are scanned then anyway.
+- A copy still under way may be scanned before it ends; the next round sees its size change and scans it again.
+- A share that cannot be listed is reported under **System › Health** (see [Health](#health)), and scanned again once it answers.
 
 Linux limits the folders one user may watch, with `fs.inotify.max_user_watches`. Polyfin watches each folder of a tree, so a large library may reach it. A folder that cannot be watched is still scanned on its schedule; **System › Health** lists it with why, and Polyfin tries again every 10 minutes. The container shares the host's limits, so raise it on the host:
 
@@ -357,7 +367,7 @@ The tracks a scan first finds count among the files added of the [weekly summary
 ## Compared with Jellyfin
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
-- Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and does not watch network shares it reads itself.
+- Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and watches the network shares it reads itself by listing them again every few minutes.
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
 - Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder. Local artwork is not read for movies and shows.
@@ -377,6 +387,6 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
 
-An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder in the container that cannot be watched is a problem of its own (`code` `folder_unwatched`), its `failure` being `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
+An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder that cannot be watched is a problem of its own (`code` `folder_unwatched`): in the container, its `failure` is `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`; for a share, which carries `share`, it is `unreachable`, `refused` or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
 Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, and its media source plays as a DVD's does. A share's files are served the same way.
