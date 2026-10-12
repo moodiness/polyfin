@@ -34,6 +34,7 @@ import (
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // The services, by the names the admin API gives them.
@@ -93,6 +94,12 @@ func scrobbles(service string) bool {
 // imports reports whether Polyfin reads the watch history of service.
 func imports(service string) bool {
 	return known(service) && !Music(service)
+}
+
+// watchlists reports whether Polyfin reads the watchlist of service: Trakt's
+// watchlist, Simkl's Plan to Watch.
+func watchlists(service string) bool {
+	return service == Trakt || service == Simkl
 }
 
 // known reports whether service is one of Services.
@@ -292,6 +299,8 @@ type Service struct {
 	anime *anime.Service
 	// stopped is told as a connection stops (see Options.Stopped).
 	stopped func(user accounts.ID, service string)
+	// watchlist keeps the watchlists the imports read.
+	watchlist *watchlist.Store
 }
 
 // New returns a service keeping connections and queued changes in the
@@ -331,6 +340,7 @@ func New(options Options) *Service {
 		publicMetaDBIMDb: map[string]string{},
 		anime:            options.Anime,
 		stopped:          options.Stopped,
+		watchlist:        watchlist.New(options.DB),
 	}
 }
 

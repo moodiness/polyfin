@@ -91,12 +91,12 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 
 	status, body, _ := member.call(http.MethodGet, "/account/tracking", nil)
 	want := `{"importEveryMinutes":360,"services":[
-		{"service":"trakt","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
-		{"service":"simkl","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
-		{"service":"mdblist","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
-		{"service":"publicmetadb","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
-		{"service":"lastfm","connection":"signin","music":true,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
-		{"service":"listenbrainz","connection":"key","music":true,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null}]}`
+		{"service":"trakt","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":true,"importWatchlist":false},
+		{"service":"simkl","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":true,"importWatchlist":false},
+		{"service":"mdblist","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":false,"importWatchlist":false},
+		{"service":"publicmetadb","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":false,"importWatchlist":false},
+		{"service":"lastfm","connection":"signin","music":true,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":false,"importWatchlist":false},
+		{"service":"listenbrainz","connection":"key","music":true,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null,"watchlist":false,"importWatchlist":false}]}`
 	var expected map[string]any
 	_ = json.Unmarshal([]byte(want), &expected)
 	if encoded, _ := json.Marshal(body); status != http.StatusOK || string(encoded) != mustCompact(t, expected) {
@@ -223,6 +223,8 @@ func TestHistoryImportFollowsTheContract(t *testing.T) {
 		// The music services have no history.
 		{http.MethodPatch, "/account/tracking/listenbrainz", map[string]bool{"importHistory": true}, http.StatusNotFound, "not_found"},
 		{http.MethodPost, "/account/tracking/lastfm/import", nil, http.StatusNotFound, "not_found"},
+		// Only Trakt and Simkl have a watchlist Polyfin imports.
+		{http.MethodPatch, "/account/tracking/mdblist", map[string]bool{"importWatchlist": true}, http.StatusNotFound, "not_found"},
 	} {
 		if status, body, _ := member.call(check.method, check.path, check.body); status != check.status || body["error"] != check.code {
 			t.Errorf("%s %s: %d %v", check.method, check.path, status, body)
@@ -249,7 +251,7 @@ func TestHistoryImportFollowsTheContract(t *testing.T) {
 	}
 	at, _ := last["at"].(string)
 	if parsed, err := time.Parse(time.RFC3339, at); err != nil || parsed.Location() != time.UTC || last["played"] != 0.0 || last["resumed"] != 0.0 ||
-		last["unmapped"] != 0.0 || last["problem"] != nil || len(last) != 5 {
+		last["watchlist"] != 0.0 || last["unmapped"] != 0.0 || last["problem"] != nil || len(last) != 6 {
 		t.Errorf("last import: %v", last)
 	}
 	if status, body, _ := member.call(http.MethodPost, "/account/tracking/mdblist/import", nil); status != http.StatusAccepted || body["importHistory"] != true {

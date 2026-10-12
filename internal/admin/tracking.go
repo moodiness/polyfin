@@ -33,15 +33,21 @@ type trackingServiceJSON struct {
 	Importing     bool                `json:"importing"`
 	LastImport    *trackingImportJSON `json:"lastImport"`
 	NextImport    *time.Time          `json:"nextImportAt"`
+	// Watchlist tells that the service has a watchlist Polyfin imports
+	// (Trakt, Simkl), ImportWatchlist that it does.
+	Watchlist       bool `json:"watchlist"`
+	ImportWatchlist bool `json:"importWatchlist"`
 }
 
-// trackingImportJSON is how the last import of a watch history went.
+// trackingImportJSON is how the last import of a watch history and a
+// watchlist went.
 type trackingImportJSON struct {
-	At       time.Time `json:"at"`
-	Played   int       `json:"played"`
-	Resumed  int       `json:"resumed"`
-	Unmapped int       `json:"unmapped"`
-	Problem  *string   `json:"problem"`
+	At        time.Time `json:"at"`
+	Played    int       `json:"played"`
+	Resumed   int       `json:"resumed"`
+	Watchlist int       `json:"watchlist"`
+	Unmapped  int       `json:"unmapped"`
+	Problem   *string   `json:"problem"`
 }
 
 // trackingCodeJSON is a code waiting for the user to enter it on the
@@ -72,9 +78,10 @@ func newTrackingServiceJSON(status trackers.Status) trackingServiceJSON {
 			ExpiresAt: status.Code.ExpiresAt.UTC().Truncate(time.Second)}
 	}
 	result.ImportHistory, result.Importing, result.NextImport = status.ImportHistory, status.Importing, utcSeconds(status.NextImport)
+	result.Watchlist, result.ImportWatchlist = status.Watchlist, status.ImportWatchlist
 	if last := status.LastImport; last != nil {
 		result.LastImport = &trackingImportJSON{At: last.At.UTC().Truncate(time.Second), Played: last.Played, Resumed: last.Resumed,
-			Unmapped: last.Unmapped}
+			Watchlist: last.Watchlist, Unmapped: last.Unmapped}
 		if last.Problem != "" {
 			result.LastImport.Problem = &last.Problem
 		}
@@ -167,8 +174,9 @@ func (h *handler) disconnectTracking(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// setTrackingImport turns the import of the signed-in user's watch history
-// from a connected service on or off; turned on, it imports at once.
+// setTrackingImport turns the import of the signed-in user's watch history,
+// or watchlist, from a connected service on or off; turned on, it imports
+// at once. A body may change both.
 func (h *handler) setTrackingImport(w http.ResponseWriter, r *http.Request) {
 	service := r.PathValue("service")
 	if h.Trackers == nil || !slices.Contains(trackers.Services, service) {
@@ -176,16 +184,25 @@ func (h *handler) setTrackingImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ImportHistory *bool `json:"importHistory"`
+		ImportHistory   *bool `json:"importHistory"`
+		ImportWatchlist *bool `json:"importWatchlist"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.ImportHistory == nil {
+	if body.ImportHistory == nil && body.ImportWatchlist == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	status, err := h.Trackers.SetImport(r.Context(), sessionFrom(r.Context()).User.ID, service, *body.ImportHistory)
+	user := sessionFrom(r.Context()).User.ID
+	var status trackers.Status
+	var err error
+	if body.ImportHistory != nil {
+		status, err = h.Trackers.SetImport(r.Context(), user, service, *body.ImportHistory)
+	}
+	if err == nil && body.ImportWatchlist != nil {
+		status, err = h.Trackers.SetWatchlistImport(r.Context(), user, service, *body.ImportWatchlist)
+	}
 	h.importAnswer(w, r, http.StatusOK, status, err)
 }
 

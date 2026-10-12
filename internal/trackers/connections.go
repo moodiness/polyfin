@@ -138,6 +138,10 @@ type Status struct {
 	Importing     bool
 	LastImport    *ImportResult
 	NextImport    *time.Time
+	// Watchlist tells that Polyfin can import the service's watchlist
+	// (Trakt, Simkl), and ImportWatchlist that it does, with the imports
+	// of the history.
+	Watchlist, ImportWatchlist bool
 }
 
 // Code is a code waiting for a user to enter it on a service's site, or,
@@ -186,7 +190,7 @@ func (s *Service) Stopped(ctx context.Context) ([]StoppedConnection, error) {
 
 func (s *Service) status(ctx context.Context, user accounts.ID, service string) (Status, error) {
 	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), Music: Music(service),
-		Available: Available(service, s.settings())}
+		Available: Available(service, s.settings()), Watchlist: watchlists(service)}
 	c, ok, err := s.connection(ctx, user, service)
 	if err != nil {
 		return status, err
@@ -579,7 +583,8 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, service stri
 		delete(s.pending, key)
 	}
 	s.mu.Unlock()
-	// Its imports stop; what they imported stays.
+	// Its imports stop; what they imported into the user's data stays, and
+	// what its watchlist alone held leaves the watchlist.
 	if err := s.forgetImport(ctx, key); err != nil {
 		return err
 	}

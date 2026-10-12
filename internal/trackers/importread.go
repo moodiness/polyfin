@@ -149,22 +149,28 @@ func (s *Service) holdPace(wait time.Duration) {
 	p.mu.Unlock()
 }
 
+// authorize refreshes a code service's token before it expires, before
+// an import reads anything; a key stays.
+func (r *reader) authorize(ctx context.Context) error {
+	if !ByCode(r.key.service) {
+		return nil
+	}
+	conn, err := r.s.fresh(ctx, r.key, "")
+	if errors.Is(err, errTokenRefused) {
+		r.s.refusedToken(ctx, r.key)
+		return errTokenRefused
+	}
+	if err != nil {
+		return ErrUnreachable
+	}
+	r.token = conn.token
+	return nil
+}
+
 // read reads the history of the connection: the titles watched and the
 // resume points. cursor tells where the history stood at the last import,
 // as the service gave it; next is where it stands now.
 func (r *reader) read(ctx context.Context, cursor string) (h watchHistory, next string, err error) {
-	// A code service's token is refreshed before it expires; a key stays.
-	if ByCode(r.key.service) {
-		conn, err := r.s.fresh(ctx, r.key, "")
-		if errors.Is(err, errTokenRefused) {
-			r.s.refusedToken(ctx, r.key)
-			return h, cursor, errTokenRefused
-		}
-		if err != nil {
-			return h, cursor, ErrUnreachable
-		}
-		r.token = conn.token
-	}
 	switch r.key.service {
 	case Trakt:
 		return r.readTrakt(ctx, cursor)
