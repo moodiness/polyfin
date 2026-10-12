@@ -34,6 +34,7 @@ import { useI18n, type Messages } from '@/i18n'
 import {
   Badge,
   Button,
+  ConfirmDialog,
   cx,
   Field,
   FieldError,
@@ -175,20 +176,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
           </Field>
         </>
       )}
-      <Field label={text.kind} help={text.kindHelp[kind]}>
-        <Segmented<FolderKind>
-          label={text.kind}
-          value={kind}
-          onChange={setKind}
-          options={[
-            { value: 'movies', label: text.kinds.movies, icon: FilmSlateIcon },
-            { value: 'shows', label: text.kinds.shows, icon: TelevisionSimpleIcon },
-            { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
-            { value: 'homevideos', label: text.kinds.homevideos, icon: VideoCameraIcon },
-          ]}
-          className="self-start"
-        />
-      </Field>
+      <KindField kind={kind} onChange={setKind} />
       {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
@@ -205,8 +193,9 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
 }
 
 /**
- * The form changing a folder's name, path or address, a share's user and password, and whether a
- * movies or shows folder's titles show its artwork; what it holds stays.
+ * The form changing a folder's name, path or address, a share's user and password, whether a
+ * movies or shows folder's titles show its artwork, and what it holds. A change of what it holds
+ * is asked first: what follows the files and what is dropped.
  */
 export function LocalFolderEditForm({
   addon,
@@ -227,22 +216,33 @@ export function LocalFolderEditForm({
   // undefined keeps the stored password, '' removes it.
   const [password, setPassword] = useState<string | undefined>(undefined)
   const [useArtwork, setUseArtwork] = useState(folder.useArtwork)
+  const [kind, setKind] = useState<FolderKind>(folder.kind)
+  const [confirming, setConfirming] = useState(false)
   const share = shareOf(path)
+  const retyped = kind !== folder.kind
   const mutation = useMutation({
     mutationFn: () =>
       updateLocalFolder(addon.id, {
         name: name.trim(),
         path: path.trim(),
         ...(share === '' ? {} : { user: user.trim(), password }),
-        ...(folder.kind === 'music' || folder.kind === 'homevideos' ? {} : { useArtwork }),
+        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork }),
+        ...(retyped ? { kind } : {}),
       }),
-    onSuccess: onSaved,
+    onSuccess: (updated) => {
+      setConfirming(false)
+      onSaved(updated)
+    },
     onSettled: () => invalidateScope('shared'),
   })
   const moved = path.trim() !== folder.path
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (retyped) {
+      setConfirming(true)
+      return
+    }
     mutation.mutate()
   }
 
@@ -292,22 +292,92 @@ export function LocalFolderEditForm({
           />
         </>
       )}
-      {folder.kind !== 'music' && folder.kind !== 'homevideos' && (
+      <KindField kind={kind} onChange={setKind} />
+      {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
         </Field>
       )}
-      <p className="text-small text-ink-3">
-        {text.holds}: {text.kinds[folder.kind]}. {text.kindFixed}
-      </p>
-      {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
+      {mutation.isError && !confirming && (
+        <FieldError>{errorMessage(t, mutation.error)}</FieldError>
+      )}
       <div className="flex gap-2">
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+        <Button type="submit" variant="primary" loading={mutation.isPending && !confirming}>
           {text.save}
         </Button>
         <Button onClick={onCancel}>{text.cancel}</Button>
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => {
+          setConfirming(false)
+          mutation.reset()
+        }}
+        onConfirm={() => mutation.mutate()}
+        title={text.changeKindTitle(addon.name)}
+        confirmLabel={text.changeKind}
+        tone={folder.links.length > 0 || folder.episodes.length > 0 ? 'danger' : 'primary'}
+        busy={mutation.isPending}
+        error={mutation.isError ? errorMessage(t, mutation.error) : undefined}
+      >
+        <KindChange folder={folder} kind={kind} />
+      </ConfirmDialog>
     </form>
+  )
+}
+
+/** The choice of what a folder holds, with what each kind means. */
+function KindField({ kind, onChange }: { kind: FolderKind; onChange: (kind: FolderKind) => void }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  return (
+    <Field label={text.kind} help={text.kindHelp[kind]}>
+      <Segmented<FolderKind>
+        label={text.kind}
+        value={kind}
+        onChange={onChange}
+        options={[
+          { value: 'movies', label: text.kinds.movies, icon: FilmSlateIcon },
+          { value: 'shows', label: text.kinds.shows, icon: TelevisionSimpleIcon },
+          { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
+          { value: 'homevideos', label: text.kinds.homevideos, icon: VideoCameraIcon },
+        ]}
+        className="self-start"
+      />
+    </Field>
+  )
+}
+
+/**
+ * What a change of what a folder holds does, as the server does it: the folder is scanned again
+ * as the new kind; between movies, shows and home videos what users did with a video follows it,
+ * and home videos come back as the same titles within 30 days; to or from music nothing follows;
+ * links made by hand and episodes given to discs are dropped.
+ */
+function KindChange({ folder, kind }: { folder: LocalFolder; kind: FolderKind }) {
+  const { language, t } = useI18n()
+  const text = t.localFolders
+  const music = folder.kind === 'music' || kind === 'music'
+  const dropped = [
+    ...(folder.links.length > 0
+      ? [text.linksDropped(folder.links.length, folder.links.length.toLocaleString(language))]
+      : []),
+    ...(folder.episodes.length > 0
+      ? [
+          text.episodesDropped(
+            folder.episodes.length,
+            folder.episodes.length.toLocaleString(language),
+          ),
+        ]
+      : []),
+  ]
+  return (
+    <div className="flex flex-col gap-2">
+      <p>{text.changeKindScan(text.kindNouns[folder.kind], text.kindNouns[kind])}</p>
+      <p>{music ? text.changeKindNothing : text.changeKindFollows}</p>
+      {folder.kind === 'homevideos' && <p>{text.changeKindBack}</p>}
+      {dropped.length > 0 && <p>{text.changeKindDrops(dropped)}</p>}
+    </div>
   )
 }
 

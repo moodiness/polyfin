@@ -193,7 +193,25 @@ const sources = {
       homevideos:
         'Each video is a title of its own, named after its file, or its folder when it is alone in it, and dated by its NFO file, its recording or the file. No metadata addon is asked.',
     },
-    kindFixed: 'What a folder holds cannot be changed: remove it and add it again.',
+    kindNouns: { movies: 'movies', shows: 'shows', music: 'music', homevideos: 'home videos' },
+    changeKind: 'Change it',
+    changeKindTitle: (name: string) => `Change what ${name} holds?`,
+    changeKindScan: (from: string, to: string) =>
+      `It holds ${from}; it will hold ${to}. The folder and its library keep their identifiers, its address and its settings, and Polyfin scans it again as ${to}, in the background.`,
+    changeKindFollows:
+      'What users did with each video, its watch state, resume point and favorite, follows it to its new title, as an import adds it: played marks are added, the newer resume point is kept, favorites are set.',
+    changeKindNothing:
+      'Nothing follows: songs and videos are other files. What users did with its titles stays with them and no longer shows.',
+    changeKindBack:
+      'Its home videos are remembered for 30 days: holding home videos again within that time, it lists them as the same titles, with what users did with them.',
+    linksDropped: (count: number, figure: string) =>
+      count === 1 ? 'the link made by hand' : `the ${figure} links made by hand`,
+    episodesDropped: (count: number, figure: string) =>
+      count === 1
+        ? 'the episodes given to a disc’s title'
+        : `the episodes given to ${figure} titles of discs`,
+    changeKindDrops: (parts: string[]) =>
+      `Dropped, as they were made for what it holds now: ${parts.join(' and ')}.`,
     useArtwork: 'Use its artwork',
     useArtworkHelp:
       'Posters, backdrops and logos beside the files, such as poster.jpg or Movie (2001)-fanart.jpg, show in place of the metadata addons’ for their titles, and episodes’ images in place of their stills. Off, the addons’ show.',

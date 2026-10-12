@@ -597,13 +597,17 @@ export type NewLocalFolder = {
   useArtwork?: boolean
 }
 
-/** A change of a folder; a password left out keeps the stored one, an empty one removes it. */
+/**
+ * A change of a folder; a password left out keeps the stored one, an empty one removes it. A new
+ * kind scans the folder again as that kind.
+ */
 export type LocalFolderPatch = Partial<{
   name: string
   path: string
   user: string
   password: string
   useArtwork: boolean
+  kind: FolderKind
 }>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */

@@ -204,8 +204,30 @@ const sources: typeof en = {
       homevideos:
         'Chaque vidéo est un titre à part, nommé d’après son fichier, ou son dossier quand elle y est seule, et daté par son fichier NFO, son enregistrement ou le fichier. Aucun addon de métadonnées n’est interrogé.',
     },
-    kindFixed:
-      'Le contenu d’un dossier ne peut pas changer : supprimez-le et ajoutez-le à nouveau.',
+    kindNouns: {
+      movies: 'des films',
+      shows: 'des séries',
+      music: 'de la musique',
+      homevideos: 'des vidéos personnelles',
+    },
+    changeKind: 'Changer',
+    changeKindTitle: (name: string) => `Changer le contenu de ${name} ?`,
+    changeKindScan: (from: string, to: string) =>
+      `Il contient ${from} ; il contiendra ${to}. Le dossier et sa bibliothèque gardent leurs identifiants, son adresse et ses réglages, et Polyfin l’analyse à nouveau en arrière-plan.`,
+    changeKindFollows:
+      'Ce que les utilisateurs ont fait de chaque vidéo, son état de lecture, son point de reprise et son favori, la suit vers son nouveau titre, comme une importation l’ajoute : ce qui a été vu s’ajoute, le point de reprise le plus récent est gardé, les favoris s’ajoutent.',
+    changeKindNothing:
+      'Rien ne suit : les morceaux et les vidéos sont d’autres fichiers. Ce que les utilisateurs ont fait de ses titres leur reste attaché et ne s’affiche plus.',
+    changeKindBack:
+      'Ses vidéos personnelles sont gardées en mémoire 30 jours : s’il contient à nouveau des vidéos personnelles d’ici là, il les présente comme les mêmes titres, avec ce que les utilisateurs en ont fait.',
+    linksDropped: (count: number, figure: string) =>
+      count <= 1 ? 'l’association manuelle' : `les ${figure} associations manuelles`,
+    episodesDropped: (count: number, figure: string) =>
+      count <= 1
+        ? 'les épisodes indiqués pour le titre d’un disque'
+        : `les épisodes indiqués pour ${figure} titres de disques`,
+    changeKindDrops: (parts: string[]) =>
+      `Ce qui était fait pour son contenu actuel est supprimé : ${parts.join(' et ')}.`,
     useArtwork: 'Utiliser ses illustrations',
     useArtworkHelp:
       'Les affiches, fonds et logos à côté des fichiers, comme poster.jpg ou Film (2001)-fanart.jpg, s’affichent à la place de ceux des addons de métadonnées pour leurs titres, et les images des épisodes à la place de leurs vignettes. Désactivé, ceux des addons s’affichent.',
