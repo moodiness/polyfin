@@ -219,9 +219,9 @@ func (h *History) rank(ctx context.Context, f Filter, query string, limit int) (
 	})
 }
 
-// Summary is what a weekly summary tells of the playbacks a filter
-// selects: how many, how long they played, and the movies and series that
-// played longest.
+// Summary is what a weekly summary, or a month or year in review, tells of
+// the playbacks a filter selects: how many, how long they played, and the
+// movies and series that played longest.
 type Summary struct {
 	Plays          int
 	Played         time.Duration
@@ -244,6 +244,37 @@ func (h *History) Summary(ctx context.Context, f Filter, top int) (Summary, erro
 	}
 	sum.Series, err = h.rank(ctx, f, seriesRanking, top)
 	return sum, err
+}
+
+// Total is how many playbacks, and how long they played.
+type Total struct {
+	Plays  int
+	Played time.Duration
+}
+
+// Totals sums the playbacks f selects that started between each of bounds,
+// in order, and the next: one Total fewer than bounds.
+func (h *History) Totals(ctx context.Context, f Filter, bounds []time.Time) ([]Total, error) {
+	if len(bounds) < 2 {
+		return nil, nil
+	}
+	totals := make([]Total, len(bounds)-1)
+	rows, err := h.db.Query(ctx, `SELECT width_bucket(h.started_at, $4::timestamptz[]) AS slot, count(*), sum(h.played_seconds)
+		FROM playback_history h WHERE `+filterWhere+` GROUP BY slot`, append(f.args(), bounds)...)
+	if err != nil {
+		return nil, err
+	}
+	var slot, plays int
+	var played int64
+	_, err = pgx.ForEachRow(rows, []any{&slot, &plays, &played}, func() error {
+		// width_bucket counts from 1 between the first bound and the
+		// second; 0 is before the first, len(bounds) after the last.
+		if slot >= 1 && slot < len(bounds) {
+			totals[slot-1] = Total{Plays: plays, Played: seconds(played)}
+		}
+		return nil
+	})
+	return totals, err
 }
 
 func seconds(n int64) time.Duration {
