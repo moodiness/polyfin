@@ -91,7 +91,7 @@ const account: typeof en = {
         'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, elle s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien deux fois.',
       read: (count: number) => (count <= 1 ? `${count} titre lu.` : `${count} titres lus.`),
       counts: (read: number, played: number, resumed: number, favorites: number) =>
-        `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played} marqués vus, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}.`,
+        `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}.`,
       unmatched: (count: number) =>
         count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
       unmatchedTitle: 'Titres introuvables',
