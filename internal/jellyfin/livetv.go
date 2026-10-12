@@ -82,7 +82,7 @@ func (h *Handler) liveTvInfo(w http.ResponseWriter, r *http.Request) {
 			h.internalError(w, r, err)
 			return
 		}
-		if has && !user.IsDisabled {
+		if has && !user.Refused(h.now()) {
 			enabled = append(enabled, user.ID.String())
 		}
 	}
@@ -886,7 +886,7 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	user, userErr := h.Accounts.User(r.Context(), grant.User)
-	if !ok || userErr != nil || user.IsDisabled || h.outsideHours(user) {
+	if !ok || userErr != nil || user.Refused(h.now()) || h.outsideHours(user) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

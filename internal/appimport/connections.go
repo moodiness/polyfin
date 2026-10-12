@@ -440,17 +440,19 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 // importDue starts the imports due: of connections not stopped, not
-// imported for the interval the settings give, of users enabled,
-// administrators or members while the setting lets users import their
-// watch history. A new interval applies at once, to every connection.
+// imported for the interval the settings give, of users enabled whose
+// account has not ended, administrators or members while the setting lets
+// users import their watch history. A new interval applies at once, to
+// every connection.
 func (s *Service) importDue() {
 	if s.db == nil {
 		return
 	}
 	settings := s.settings()
+	now := s.now()
 	rows, err := s.db.Query(s.ctx, `SELECT c.user_id, c.app FROM app_connections c JOIN users u ON u.id = c.user_id
-		WHERE c.problem IS NULL AND NOT u.is_disabled AND (u.is_administrator OR $1)
-			AND coalesce(c.last_import_at, c.connected_at) <= $2`, settings.ServerImports, s.now().Add(-settings.ImportEvery()))
+		WHERE c.problem IS NULL AND NOT u.is_disabled AND (u.ends_on IS NULL OR u.ends_on > $3) AND (u.is_administrator OR $1)
+			AND coalesce(c.last_import_at, c.connected_at) <= $2`, settings.ServerImports, now.Add(-settings.ImportEvery()), accounts.Day(now))
 	if err != nil {
 		if s.ctx.Err() == nil {
 			s.logger.Warn("The app connections due could not be read", "error", err)

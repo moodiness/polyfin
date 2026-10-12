@@ -119,7 +119,7 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 		h.internalError(w, r, err)
 		return
 	}
-	if user.IsDisabled {
+	if user.Refused(h.now()) {
 		processingError(w, http.StatusForbidden)
 		return
 	}

@@ -220,10 +220,13 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	// An account that ended shows disabled to apps (see newUserDto): sent
+	// back, that is not the administrator disabling it.
+	disabled := policy.IsDisabled && (user.IsDisabled || !user.Ended(h.now()))
 	updated, err := h.Accounts.UpdateUserFromDevice(r.Context(), id, accounts.UserChanges{
 		IsAdministrator: &policy.IsAdministrator,
 		IsHidden:        &policy.IsHidden,
-		IsDisabled:      &policy.IsDisabled,
+		IsDisabled:      &disabled,
 		Parental: &accounts.ParentalControl{
 			MaxRating:    policy.MaxParentalRating,
 			MaxSubRating: policy.MaxParentalSubRating,

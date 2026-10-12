@@ -31,7 +31,7 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	visible := []UserDto{}
 	var libraries []library.ServerLibrary
 	for _, user := range users {
-		if user.IsHidden || user.IsDisabled {
+		if user.IsHidden || user.Refused(h.now()) {
 			continue
 		}
 		dto := newUserDto(user, h.ServerID)
@@ -150,7 +150,7 @@ func (h *Handler) users(w http.ResponseWriter, r *http.Request) {
 	}
 	result := []UserDto{}
 	for _, user := range users {
-		if (hiddenSet && user.IsHidden != hidden) || (disabledSet && user.IsDisabled != disabled) {
+		if (hiddenSet && user.IsHidden != hidden) || (disabledSet && user.Refused(h.now()) != disabled) {
 			continue
 		}
 		dto, err := h.userDto(r.Context(), user)

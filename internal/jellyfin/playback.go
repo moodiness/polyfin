@@ -834,7 +834,7 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 			continue
 		}
 		user, err := h.Accounts.User(r.Context(), grant.User)
-		if err == nil && !user.IsDisabled && !h.outsideHours(user) {
+		if err == nil && !user.Refused(h.now()) && !h.outsideHours(user) {
 			return user, grant, true
 		}
 	}

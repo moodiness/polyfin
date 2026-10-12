@@ -384,7 +384,7 @@ func (s *Service) recordPart(ctx context.Context, t Timer, recording accounts.ID
 	if err != nil {
 		return err
 	}
-	if user.IsDisabled || !user.LiveTv {
+	if user.Refused(s.now()) || !user.LiveTv {
 		return errors.New("the user who made the timer may not watch Live TV")
 	}
 	versions, err := s.guide.Versions(ctx, user, t.Channel)
@@ -597,7 +597,7 @@ func (s *Service) RefreshSeriesTimers(ctx context.Context) error {
 // programmes it no longer records.
 func (s *Service) refreshSeries(ctx context.Context, st SeriesTimer) {
 	user, err := s.users.User(ctx, st.User)
-	if err != nil || user.IsDisabled || !user.LiveTv {
+	if err != nil || user.Refused(s.now()) || !user.LiveTv {
 		return
 	}
 	now := s.now()

@@ -81,7 +81,7 @@ func (s *Service) CheckEpisodes(ctx context.Context) {
 		return
 	}
 	for _, user := range users {
-		if user.IsDisabled || !everyone && !personal[user.ID] {
+		if user.Refused(s.now()) || !everyone && !personal[user.ID] {
 			continue
 		}
 		if err := s.checkUser(ctx, user, told[user.ID], server); err != nil && ctx.Err() == nil {

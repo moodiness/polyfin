@@ -225,11 +225,12 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 		// it. Jellyfin's tags are not genres: titles in Polyfin have none,
 		// so none are blocked or allowed; the genres a user blocks are
 		// Polyfin's own setting. libraryAccess lists the server's libraries
-		// the user sees when they hide some.
+		// the user sees when they hide some. Jellyfin has no end date: an
+		// account that ended is disabled to apps.
 		Policy: UserPolicy{
 			IsAdministrator:                 user.IsAdministrator,
 			IsHidden:                        user.IsHidden,
-			IsDisabled:                      user.IsDisabled,
+			IsDisabled:                      user.Refused(time.Now()),
 			EnableCollectionManagement:      user.CollectionManagement,
 			BlockedTags:                     []string{},
 			AllowedTags:                     []string{},

@@ -379,7 +379,7 @@ func (s *Service) summaries(ctx context.Context, event string, start, end time.T
 		return nil, err
 	}
 	for _, user := range users {
-		if !personal[user.ID] || user.IsDisabled || user.IsAdministrator {
+		if !personal[user.ID] || user.Refused(s.now()) || user.IsAdministrator {
 			continue
 		}
 		sum, err := s.userSummary(ctx, event, user, start, end)
