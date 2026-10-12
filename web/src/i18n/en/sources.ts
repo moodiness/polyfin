@@ -196,7 +196,7 @@ const sources = {
     kindFixed: 'What a folder holds cannot be changed: remove it and add it again.',
     useArtwork: 'Use its artwork',
     useArtworkHelp:
-      'Posters, backdrops and logos beside the files, such as poster.jpg or Movie (2001)-fanart.jpg, show in place of the metadata addons’ for their titles. Off, the addons’ show.',
+      'Posters, backdrops and logos beside the files, such as poster.jpg or Movie (2001)-fanart.jpg, show in place of the metadata addons’ for their titles, and episodes’ images in place of their stills. Off, the addons’ show.',
     add: 'Add the folder',
     added: (name: string) => `${name} was added. Its first scan has started.`,
     edit: 'Edit the folder',

@@ -208,7 +208,7 @@ const sources: typeof en = {
       'Le contenu d’un dossier ne peut pas changer : supprimez-le et ajoutez-le à nouveau.',
     useArtwork: 'Utiliser ses illustrations',
     useArtworkHelp:
-      'Les affiches, fonds et logos à côté des fichiers, comme poster.jpg ou Film (2001)-fanart.jpg, s’affichent à la place de ceux des addons de métadonnées pour leurs titres. Désactivé, ceux des addons s’affichent.',
+      'Les affiches, fonds et logos à côté des fichiers, comme poster.jpg ou Film (2001)-fanart.jpg, s’affichent à la place de ceux des addons de métadonnées pour leurs titres, et les images des épisodes à la place de leurs vignettes. Désactivé, ceux des addons s’affichent.',
     add: 'Ajouter le dossier',
     added: (name: string) => `${name} a été ajouté. Sa première analyse a commencé.`,
     edit: 'Modifier le dossier',
