@@ -466,7 +466,8 @@ func serve(ctx context.Context) error {
 	go recorder.Run(ctx)
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
-	// The app connections due are imported, then every 6 hours.
+	// The app connections due are imported, then as often as the settings
+	// say.
 	go fromApps.Run(ctx)
 	go notifier.Run(ctx)
 	go updateCheck.Run(ctx)

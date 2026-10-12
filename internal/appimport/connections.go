@@ -11,10 +11,11 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// A user who stays connected to an app has the account imported again
-// every 6 hours, and when they ask, the way it was imported first: the
-// profile chosen then, with the same merge, and never its addons. Polyfin
-// only reads the account: nothing is written to the app.
+// A user who stays connected to an app has the account imported again as
+// often as the setting says (accounts.Settings.ImportEveryMinutes), and
+// when they ask, the way it was imported first: the profile chosen then,
+// with the same merge, and never its addons. Polyfin only reads the
+// account: nothing is written to the app.
 //
 // A connection keeps, in app_connections, what reads the account again
 // (see SignIn), sealed with the server's secret key: never answered nor
@@ -89,14 +90,13 @@ type Source interface {
 	SignOut(ctx context.Context, signIn SignIn)
 }
 
-// timing is how often connections are imported. Tests shorten it.
+// timing is how often connections due are looked for: often enough for
+// the shortest interval the setting offers. Tests shorten it.
 type timing struct {
-	// every is how long after an import of a connection the next one
-	// runs, connections being looked for every check.
-	every, check time.Duration
+	check time.Duration
 }
 
-var defaultTiming = timing{every: 6 * time.Hour, check: 10 * time.Minute}
+var defaultTiming = timing{check: time.Minute}
 
 // connectionKey names a connection: its user, and its app.
 type connectionKey struct {
@@ -141,8 +141,9 @@ type Connection struct {
 	Importing bool
 	// LastImport is how the last import went, nil before the first ends.
 	LastImport *ConnectionImport
-	// NextImport is when the next import runs, nil while the connection
-	// is stopped or paused.
+	// NextImport is when the next import runs, the last import, or the
+	// connection, plus the interval the settings give at the time asked;
+	// nil while the connection is stopped or paused.
 	NextImport *time.Time
 }
 
@@ -296,7 +297,8 @@ var errUnopened = errors.New("the sign-in of an app connection cannot be opened"
 // describe completes c, a connection of user, with whether an import of
 // it runs, importing, and what is due.
 func (s *Service) describe(c *Connection, user accounts.User, importing bool) {
-	c.Paused = !user.IsAdministrator && !s.settings().ServerImports
+	settings := s.settings()
+	c.Paused = !user.IsAdministrator && !settings.ServerImports
 	c.Importing = importing
 	if c.Problem != "" || c.Paused {
 		return
@@ -305,7 +307,7 @@ func (s *Service) describe(c *Connection, user accounts.User, importing bool) {
 	if c.LastImport != nil {
 		next = c.LastImport.At
 	}
-	next = next.Add(s.timing.every)
+	next = next.Add(settings.ImportEvery())
 	c.NextImport = &next
 }
 
@@ -438,15 +440,17 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 // importDue starts the imports due: of connections not stopped, not
-// imported for timing.every, of users enabled, administrators or members
-// while the setting lets users import their watch history.
+// imported for the interval the settings give, of users enabled,
+// administrators or members while the setting lets users import their
+// watch history. A new interval applies at once, to every connection.
 func (s *Service) importDue() {
 	if s.db == nil {
 		return
 	}
+	settings := s.settings()
 	rows, err := s.db.Query(s.ctx, `SELECT c.user_id, c.app FROM app_connections c JOIN users u ON u.id = c.user_id
 		WHERE c.problem IS NULL AND NOT u.is_disabled AND (u.is_administrator OR $1)
-			AND coalesce(c.last_import_at, c.connected_at) <= $2`, s.settings().ServerImports, s.now().Add(-s.timing.every))
+			AND coalesce(c.last_import_at, c.connected_at) <= $2`, settings.ServerImports, s.now().Add(-settings.ImportEvery()))
 	if err != nil {
 		if s.ctx.Err() == nil {
 			s.logger.Warn("The app connections due could not be read", "error", err)

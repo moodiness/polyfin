@@ -188,6 +188,26 @@ func (h connectionHarness) stored(t *testing.T, user accounts.ID) (signIn string
 	return signIn, owned
 }
 
+// aged moves the imports of every connection back by d, as if they ran d
+// earlier.
+func (h connectionHarness) aged(t *testing.T, d time.Duration) {
+	t.Helper()
+	if _, err := h.pool.Exec(t.Context(), "UPDATE app_connections SET last_import_at = last_import_at - make_interval(secs => $1)",
+		d.Seconds()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// setInterval sets how often connections are imported, in minutes.
+func (h connectionHarness) setInterval(t *testing.T, minutes int) {
+	t.Helper()
+	settings := h.store.Settings()
+	settings.ImportEveryMinutes = minutes
+	if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 	t.Parallel()
 	h := newConnectionHarness(t)
@@ -263,7 +283,7 @@ func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 		t.Errorf("importing a stopped connection: %v", err)
 	}
 	reads := len(h.source.reads)
-	h.timing.every = 0
+	h.aged(t, 7*time.Hour)
 	h.importDue()
 	h.idle(t)
 	if len(h.source.reads) != reads {
@@ -366,7 +386,7 @@ func TestTheSettingPausesMembersConnections(t *testing.T) {
 	if len(h.source.reads) != 0 {
 		t.Errorf("read early: %v", h.source.reads)
 	}
-	h.timing.every = 0
+	h.aged(t, 7*time.Hour)
 
 	// The setting off pauses Bob's connection, not the administrator's;
 	// a disabled user's never runs.
@@ -387,5 +407,56 @@ func TestTheSettingPausesMembersConnections(t *testing.T) {
 	h.idle(t)
 	if h.source.readsWith("bob's") != 1 || h.source.readsWith("carol's") != 0 {
 		t.Errorf("reads with the setting on: %v", h.source.reads)
+	}
+}
+
+func TestTheNextImportFollowsTheSetting(t *testing.T) {
+	t.Parallel()
+	h := newConnectionHarness(t)
+	alice := h.user(t, "alice", false)
+	account := Account{Profiles: []Profile{{ID: "1"}}}
+	h.source.set(func(f *fakeSource) { f.account, f.accepted["alice's"] = account, true })
+	c := h.connected(t, alice, alice, account, SignIn{Secret: "alice's", Owned: true}, Choice{Profile: "1"})
+	if c.NextImport == nil || c.NextImport.Sub(c.LastImport.At) != 6*time.Hour {
+		t.Fatalf("by default: %+v", c)
+	}
+
+	// An hour later, nothing is due at 6 hours.
+	h.aged(t, time.Hour)
+	h.importDue()
+	h.idle(t)
+	if n := h.source.readsWith("alice's"); n != 0 {
+		t.Errorf("read within 6 hours: %d", n)
+	}
+
+	// 30 minutes bring the import due forward: the next import shown
+	// follows at once, and the import runs at the next check.
+	h.setInterval(t, 30)
+	c = h.connectionOf(t, alice)
+	if c.NextImport == nil || c.NextImport.Sub(c.LastImport.At) != 30*time.Minute || !c.NextImport.Before(time.Now()) {
+		t.Errorf("at 30 minutes: %+v", c)
+	}
+	h.importDue()
+	h.idle(t)
+	if n := h.source.readsWith("alice's"); n != 1 {
+		t.Errorf("not brought forward: %d reads", n)
+	}
+	c = h.connectionOf(t, alice)
+	if c.NextImport == nil || c.NextImport.Sub(c.LastImport.At) != 30*time.Minute || !c.NextImport.After(time.Now()) {
+		t.Errorf("after the import: %+v", c)
+	}
+	h.importDue()
+	h.idle(t)
+	if n := h.source.readsWith("alice's"); n != 1 {
+		t.Errorf("read again within 30 minutes: %d reads", n)
+	}
+
+	// A longer interval puts it off.
+	h.aged(t, 2*time.Hour)
+	h.setInterval(t, 3*60)
+	h.importDue()
+	h.idle(t)
+	if n := h.source.readsWith("alice's"); n != 1 {
+		t.Errorf("read within 3 hours: %d reads", n)
 	}
 }

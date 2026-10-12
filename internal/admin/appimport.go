@@ -64,7 +64,8 @@ func (h *handler) userAppImportTarget(w http.ResponseWriter, r *http.Request) (a
 
 // ownAppImport answers whether the user may import from an app, whether
 // they may add their own addons, the import into their account running,
-// else the last one, null when none, and their connections.
+// else the last one, null when none, their connections, and how often, in
+// minutes, connections are imported.
 func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
 	enabled := h.AppImport != nil && h.Accounts.Settings().ServerImports
@@ -76,17 +77,20 @@ func (h *handler) ownAppImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	settings := h.Accounts.Settings()
 	writeJSON(w, http.StatusOK, struct {
-		Enabled       bool                `json:"enabled"`
-		AddonsAllowed bool                `json:"addonsAllowed"`
-		Import        *appImportJSON      `json:"import"`
-		Connections   []appConnectionJSON `json:"connections"`
-	}{enabled, h.Accounts.Settings().PersonalAddonsAllowed(user), current, connections})
+		Enabled            bool                `json:"enabled"`
+		AddonsAllowed      bool                `json:"addonsAllowed"`
+		Import             *appImportJSON      `json:"import"`
+		Connections        []appConnectionJSON `json:"connections"`
+		ImportEveryMinutes int                 `json:"importEveryMinutes"`
+	}{enabled, settings.PersonalAddonsAllowed(user), current, connections, settings.ImportEveryMinutes})
 }
 
 // userAppImport answers, to an administrator, whether the user the path
 // names may add their own addons, the import into their account running,
-// else the last one, and their connections.
+// else the last one, their connections, and how often, in minutes,
+// connections are imported.
 func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.userAppImportTarget(w, r)
 	if !ok {
@@ -96,11 +100,13 @@ func (h *handler) userAppImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	settings := h.Accounts.Settings()
 	writeJSON(w, http.StatusOK, struct {
-		AddonsAllowed bool                `json:"addonsAllowed"`
-		Import        *appImportJSON      `json:"import"`
-		Connections   []appConnectionJSON `json:"connections"`
-	}{h.Accounts.Settings().PersonalAddonsAllowed(user), newAppImportJSON(h.AppImport.Current(user.ID)), connections})
+		AddonsAllowed      bool                `json:"addonsAllowed"`
+		Import             *appImportJSON      `json:"import"`
+		Connections        []appConnectionJSON `json:"connections"`
+		ImportEveryMinutes int                 `json:"importEveryMinutes"`
+	}{settings.PersonalAddonsAllowed(user), newAppImportJSON(h.AppImport.Current(user.ID)), connections, settings.ImportEveryMinutes})
 }
 
 // appConnections lists user's connections, or answers why it could not.

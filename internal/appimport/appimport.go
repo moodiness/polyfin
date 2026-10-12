@@ -12,7 +12,7 @@
 // that profile in the background (see Service.Start). Nothing the source
 // signed in with is kept, unless the user chose to stay connected: then
 // the import keeps what reads the account again, sealed, and imports the
-// same profile every 6 hours (see connections.go).
+// same profile as often as the settings say (see connections.go).
 //
 // Titles are found by the identifiers the source names them by (see
 // TitleRef), as the watch histories of tracking services and other servers
@@ -406,7 +406,8 @@ type Choice struct {
 // needs them to be allowed; only an administrator's import reaches
 // addresses on local networks. An account read to stay connected becomes
 // user's connection to its app, in place of the one there was, which
-// imports the profile chosen again every 6 hours, and never its addons.
+// imports the profile chosen again as often as the settings say, and never
+// its addons.
 // Start stops holding the account, and returns the import. It fails with
 // ErrExpired, ErrUnknownProfile, ErrUnknownAddon, ErrAddonsNotAllowed, or
 // ErrRunning while an import into user's account runs, holding the account
