@@ -15,11 +15,12 @@ import (
 // age rating, the source's own description filling what it lacks. The
 // title's identifiers, name, category and episodes stay the source's,
 // which play; episodes take the addon's artwork and overviews where they
-// have none. The addons are asked when ask is set, for a request opening
-// the title (see iptv.Opening), once, as descriptions are cached; else
-// only cached descriptions count. ok reports whether an addon's
+// have none. how says how far the addons' descriptions are looked for:
+// the addons are asked (fromAddons) for a request opening the title (see
+// iptv.Opening), once, as descriptions are kept; else only the kept ones
+// count, in memory or in the database too. ok reports whether an addon's
 // description completed the source's.
-func (s *Service) enrich(ctx context.Context, v view, source installed, meta stremio.Meta, shared, ask bool) (_ stremio.Meta, ok bool) {
+func (s *Service) enrich(ctx context.Context, v view, source installed, meta stremio.Meta, shared bool, how reach) (_ stremio.Meta, ok bool) {
 	if s.iptv == nil || meta.Type != "movie" && meta.Type != "series" || !s.iptv.Enrichment(ctx, source.addon.ID) {
 		return meta, false
 	}
@@ -36,14 +37,14 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 				continue
 			}
 			var described stremio.Meta
-			if ask {
+			if how == fromAddons {
 				var err error
 				if described, err = s.meta(ctx, candidate, meta.Type, id); err != nil {
 					s.logger.Debug("An addon could not describe an IPTV title", "addon", candidate.addon.Manifest.Name, "error", err)
 					continue
 				}
-			} else if cached, ok := s.metas.Get(metaKey{candidate.addon.ID, meta.Type, id}); ok {
-				described = cached.value
+			} else if kept, ok := s.keptDescription(ctx, candidate, metaKey{candidate.addon.ID, meta.Type, id}, how); ok {
+				described = kept
 			} else {
 				continue
 			}

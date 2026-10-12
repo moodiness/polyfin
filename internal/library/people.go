@@ -270,7 +270,7 @@ func (s *Service) creditedTitles(ctx context.Context, v view, credited []record,
 			continue
 		}
 		meta := *r.Meta
-		if full, _, ok := s.describedMeta(ctx, v, r, false); ok {
+		if full, _, ok := s.describedMeta(ctx, v, r, false, inMemory); ok {
 			meta = full
 		}
 		item := Item{ID: r.ID, Kind: r.Kind, Available: true}

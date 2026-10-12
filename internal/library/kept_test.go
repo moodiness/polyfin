@@ -831,3 +831,94 @@ func TestKnownPagesAskNothing(t *testing.T) {
 		t.Errorf("first page kept: %d items, more=%v, %d requests", len(pages[0].Items), pages[0].More, len(addon.catalogRequests())-before)
 	}
 }
+
+// After a restart, the images a title's details list, but its listing
+// lacks, are served from the description kept in the database: the addon
+// that described the title is not asked again, and the title need not be
+// opened first.
+func TestDescribedArtworkOutlivesARestart(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	listed := stremio.Meta{ID: "tt100", Type: "movie", Name: "Movie", Poster: "https://images.example/poster.jpg"}
+	described := listed
+	described.Background, described.Logo = "https://images.example/backdrop.jpg", "https://images.example/logo.png"
+	// The catalog addon lists the movie and describes nothing.
+	catalog := &fakeAddon{
+		manifest: stremio.Manifest{ID: "catalog", Name: "Catalog", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}},
+			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}},
+		catalogs: map[string][]stremio.Meta{"movie/top": {listed}},
+	}
+	metadata := &fakeAddon{
+		manifest: stremio.Manifest{ID: "metadata", Name: "Metadata", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "meta", Types: []string{"movie"}, IDPrefixes: []string{"tt"}}}},
+		metas: map[string]stremio.Meta{"movie/tt100": described},
+	}
+	e.install(addons.Shared(), catalog)
+	e.install(addons.Shared(), metadata)
+	page, err := e.service.Children(t.Context(), e.member, e.library(e.member, "Top").ID, 0, 10, "")
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("the listing: %+v %v", page.Items, err)
+	}
+	id := page.Items[0].ID
+	if item, err := e.service.Item(t.Context(), e.member, id); err != nil || item.Images.Backdrop != described.Background {
+		t.Fatalf("the details: %+v %v", item.Images, err)
+	}
+	asked := requestsTo(metadata, "meta/")
+	e = e.restarted()
+	for imageType, want := range map[string]string{"Backdrop": described.Background, "Logo": described.Logo} {
+		if url, _, err := e.service.Artwork(t.Context(), id, imageType); err != nil || url != want {
+			t.Errorf("%s after a restart: %q %v, want %q", imageType, url, err, want)
+		}
+	}
+	if n := requestsTo(metadata, "meta/"); n != asked {
+		t.Errorf("the images asked the addon again: %d requests, %d before", n, asked)
+	}
+}
+
+// enrichingIPTV is an IPTV source whose movies and series the other addons
+// complete: enrich asks nothing else of it.
+type enrichingIPTV struct{ IPTV }
+
+func (enrichingIPTV) Enrichment(context.Context, accounts.ID) bool { return true }
+
+// After a restart, an IPTV movie is completed from the metadata addon's
+// description kept in the database, without asking the addon, as its
+// details and images are; what completes many titles at once reads the
+// descriptions in memory only.
+func TestIPTVTitlesAreCompletedFromKeptDescriptionsAfterARestart(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	metadata := &fakeAddon{
+		manifest: stremio.Manifest{ID: "metadata", Name: "Metadata", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "meta", Types: []string{"movie"}, IDPrefixes: []string{"tt"}}}},
+		metas: map[string]stremio.Meta{"movie/tt100": {ID: "tt100", Type: "movie", Name: "Movie", Logo: "https://images.example/logo.png"}},
+	}
+	e.install(addons.Shared(), metadata)
+	source := installed{addon: addons.Addon{ID: accounts.ID{9}, Kind: addons.KindXtream}}
+	own := stremio.Meta{ID: "box:1", Type: "movie", Name: "Movie", ImdbID: "tt100"}
+	e.service.iptv = enrichingIPTV{}
+	v, err := e.service.view(t.Context(), e.member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Opened, the movie asks the addon, which keeps its description.
+	if meta, ok := e.service.enrich(t.Context(), v, source, own, true, fromAddons); !ok || meta.Logo == "" {
+		t.Fatalf("opened: %+v %v", meta, ok)
+	}
+	asked := requestsTo(metadata, "meta/")
+	e = e.restarted()
+	e.service.iptv = enrichingIPTV{}
+	if v, err = e.service.view(t.Context(), e.member); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.service.enrich(t.Context(), v, source, own, true, inMemory); ok {
+		t.Error("completed from memory after a restart")
+	}
+	if meta, ok := e.service.enrich(t.Context(), v, source, own, true, inDatabase); !ok || meta.Logo != "https://images.example/logo.png" {
+		t.Errorf("after a restart: %+v %v", meta, ok)
+	}
+	if n := requestsTo(metadata, "meta/"); n != asked {
+		t.Errorf("the addon was asked again: %d requests, %d before", n, asked)
+	}
+}

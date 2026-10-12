@@ -79,7 +79,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 			seen[item.ID] = true
 			// A title already described compares with its credits too,
 			// whichever addon described it.
-			if full, _, ok := s.describedMeta(ctx, v, r, false); ok {
+			if full, _, ok := s.describedMeta(ctx, v, r, false, inMemory); ok {
 				fromMeta(&item, full)
 			}
 			// Like a search result, the title keeps the folder it was last

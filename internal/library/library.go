@@ -1379,7 +1379,11 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		if err == nil {
 			meta := kept.value
 			if candidate.addon.IPTV() {
-				meta, _ = s.enrich(ctx, v, candidate, meta, shared, iptv.IsOpening(ctx))
+				how := inDatabase
+				if iptv.IsOpening(ctx) {
+					how = fromAddons
+				}
+				meta, _ = s.enrich(ctx, v, candidate, meta, shared, how)
 			}
 			if candidate.shared && !candidate.addon.Local() {
 				s.learnTraits(ctx, r, meta, kept.at)
@@ -1431,22 +1435,23 @@ func describers(v view, r record, shared bool) []installed {
 
 // describedMeta returns the complete description describe gives of a
 // title, as far as it is known without asking any addon: that of the
-// first of describers whose description is cached, wherever the title was
-// listed. A local folder or an IPTV source describes its titles from its
-// database, kept nowhere: the one that listed the title gives what its
-// enrichment adds from the cache to its listing, if anything; another
+// first of describers whose description is kept, in memory, or in the
+// database too when how is inDatabase, wherever the title was listed. A
+// local folder or an IPTV source describes its titles from its database,
+// kept nowhere: the one that listed the title gives what its enrichment
+// adds from the kept descriptions to its listing, if anything; another
 // local folder gives nothing. It returns the addon that described the
-// title.
-func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bool) (stremio.Meta, installed, bool) {
+// title. how is inMemory or inDatabase: describedMeta never asks an addon.
+func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bool, how reach) (stremio.Meta, installed, bool) {
 	for _, candidate := range describers(v, r, shared) {
 		switch {
 		case !own(candidate.addon):
-			if kept, ok := s.metas.Get(metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}); ok {
-				return kept.value, candidate, true
+			if meta, ok := s.keptDescription(ctx, candidate, metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}, how); ok {
+				return meta, candidate, true
 			}
 		case r.Addon != nil && candidate.addon.ID == *r.Addon:
 			if candidate.addon.IPTV() {
-				if meta, ok := s.enrich(ctx, v, candidate, *r.Meta, shared, false); ok {
+				if meta, ok := s.enrich(ctx, v, candidate, *r.Meta, shared, how); ok {
 					return meta, candidate, true
 				}
 			}
@@ -2168,7 +2173,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			if err != nil {
 				return "", false, err
 			}
-			if full, describer, ok := s.describedMeta(ctx, v, r, false); ok {
+			if full, describer, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 				fromMeta(&item, full)
 				images = item.Images
 				confined = confined || describer.confined
@@ -2192,14 +2197,14 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			return "", false, ErrNotFound
 		}
 		// The season's own artwork, and its series', are read from the
-		// series' complete metadata while it is cached, else as their
-		// last listing recorded them: the images apps were given tags
-		// for, without asking the addon again.
+		// series' complete metadata while it is kept, else as their last
+		// listing recorded them: the images apps were given tags for,
+		// without asking the addon again.
 		v, err := s.artworkView(ctx, series)
 		if err != nil {
 			return "", false, err
 		}
-		full, describer, described := s.describedMeta(ctx, v, series, false)
+		full, describer, described := s.describedMeta(ctx, v, series, false, inDatabase)
 		images = withLocal(Images{Primary: cmp.Or(full.Poster, series.Meta.Poster), Backdrop: cmp.Or(full.Background, series.Meta.Background)},
 			Images{Primary: local[series.ID].Primary, Backdrop: local[series.ID].Backdrop})
 		// A season shows its series' artwork, local or uploaded, unless it

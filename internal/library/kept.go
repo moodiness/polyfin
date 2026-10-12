@@ -435,6 +435,36 @@ func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (f
 	return kept, true
 }
 
+// reach is how far describedMeta and enrich look for an addon's
+// description of a title.
+type reach int
+
+const (
+	// inMemory reaches the descriptions in memory only: what judges or
+	// completes many titles at once, as parental control does, would
+	// otherwise read the database for each of them.
+	inMemory reach = iota
+	// inDatabase reaches the descriptions kept in the database too, which
+	// outlive a restart, without asking the addon.
+	inDatabase
+	// fromAddons asks the addon for a description it has none kept of.
+	fromAddons
+)
+
+// keptDescription returns an addon's description of a title kept in
+// memory, else in the database when how reaches it, without asking the
+// addon.
+func (s *Service) keptDescription(ctx context.Context, addon installed, key metaKey, how reach) (stremio.Meta, bool) {
+	if kept, ok := s.metas.Get(key); ok {
+		return kept.value, true
+	}
+	if how == inMemory {
+		return stremio.Meta{}, false
+	}
+	kept, ok := s.loadMeta(ctx, addon, key)
+	return kept.value, ok
+}
+
 func (s *Service) storeMeta(ctx context.Context, addon installed, key metaKey, kept fetched[stremio.Meta]) error {
 	data, err := json.Marshal(kept.value)
 	if err != nil {

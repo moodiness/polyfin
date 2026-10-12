@@ -187,12 +187,12 @@ func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, 
 		if r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating) {
 			return kept, false
 		}
-		if full, _, ok := s.describedMeta(ctx, v, r, true); ok {
+		if full, _, ok := s.describedMeta(ctx, v, r, true, inMemory); ok {
 			return describedTraits(full), false
 		}
 		return kept, true
 	}
-	if full, _, ok := s.describedMeta(ctx, v, r, true); ok {
+	if full, _, ok := s.describedMeta(ctx, v, r, true, inMemory); ok {
 		return describedTraits(full), false
 	}
 	describable := v.rates(r)
