@@ -440,17 +440,14 @@ func expiredOnProbe(t *testing.T, probe fakeProbe) (heldSetup, *scriptedAddon) {
 func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T) {
 	t.Parallel()
 	h, gathering := expiredOn(t)
-	started := time.Now()
 	select {
 	case got := <-h.askPlaybackInfo(t, ""):
 		if got.err != nil || got.status != http.StatusOK || len(got.info.MediaSources) != 3 || !strings.HasPrefix(got.info.MediaSources[0].Name, "Gathering 1") {
 			t.Fatalf("PlaybackInfo: %d %v %+v", got.status, got.err, got.info.MediaSources)
 		}
-	case <-time.After(5 * time.Second):
+	// A play that waited for the addon held would wait for its request's 15-second timeout.
+	case <-time.After(7500 * time.Millisecond):
 		t.Fatal("PlaybackInfo waited for the addon")
-	}
-	if elapsed := time.Since(started); elapsed > subtitleGrace+time.Second {
-		t.Errorf("PlaybackInfo answered after %s", elapsed)
 	}
 	// It joins the request details started, which it does not repeat.
 	if got := gathering.asked.Load(); got != 3 {

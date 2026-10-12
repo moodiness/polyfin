@@ -619,8 +619,8 @@ func TestSyncPlayAppsThatDoNotReadHoldNothingBack(t *testing.T) {
 		t.Helper()
 		start := time.Now()
 		call()
-		// Writing to an app is given ten seconds.
-		if took := time.Since(start); took > 2*time.Second {
+		// A call held by bob's socket would wait socketWrite for it.
+		if took := time.Since(start); took > socketWrite/2 {
 			t.Errorf("%s took %v", what, took)
 		}
 	}

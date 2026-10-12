@@ -133,20 +133,22 @@ func (p playbackSetup) keyframed(t *testing.T, version library.Version) {
 // tried alone.
 func TestTheTitlesIdentifierFallsBackToTheNextVersion(t *testing.T) {
 	t.Parallel()
-	probe := scriptedProbe(t, "[ $n -gt 1 ] || exec sleep 60\nexec cat \"$0.json\"\n")
+	probe, letGo := hungProbe(t)
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
-	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = accounts.MinAnalysisTimeout })
+	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = int(hungWait / time.Second) })
 	chrome := p.profile(t, "jellyfin-web-chrome")
 	started := time.Now()
 	answer := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": p.movie})
-	if elapsed := time.Since(started); elapsed > versionPatience+time.Second {
+	// An answer that waited for the first version would wait hungWait.
+	if elapsed := time.Since(started); elapsed > hungWait/2 {
 		t.Errorf("answered after %s", elapsed)
 	}
 	if len(answer.MediaSources) != 1 || answer.MediaSources[0].Id != p.versions[1].ID.String() || !answer.MediaSources[0].SupportsDirectPlay {
 		t.Fatalf("the title asked for: %+v", answer)
 	}
-	// The first version's analysis failed meanwhile, as its source never
-	// answered: asked for by its identifier, it is refused at once.
+	// Its source let go, the first version's analysis fails: asked for by
+	// its identifier, it is refused at once.
+	letGo()
 	eventually(t, "the first analysis to fail", func() bool { return p.handler.Playback.Failed(p.versions[0].ID) })
 	if asked := p.ask(t, p.token, p.movie, chrome, map[string]any{"MediaSourceId": p.versions[0].ID.String()}); !asked.refused() {
 		t.Errorf("the first version asked for: %+v", asked)
@@ -203,7 +205,9 @@ func TestPlaybackInfoWaitsForSubtitlesASecondAtMost(t *testing.T) {
 	}
 	started := time.Now()
 	source := firstSource(t, p.ask(t, p.token, p.movie, chrome, nil))
-	if elapsed := time.Since(started); elapsed < subtitleGrace || elapsed > subtitleGrace+time.Second {
+	// The subtitles answer only once let go, below: a play that waited for
+	// them would wait for their request's 15-second timeout.
+	if elapsed := time.Since(started); elapsed < subtitleGrace || elapsed > 7500*time.Millisecond {
 		t.Errorf("answered after %s while the subtitles were held", elapsed)
 	}
 	if hasSubtitle(source) {

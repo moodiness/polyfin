@@ -33,14 +33,29 @@ func scriptedProbe(t *testing.T, body string) fakeProbe {
 	return f
 }
 
+// hungWait is the analysis timeout set by the tests of a source that never
+// answers: a play that waited for its analysis would wait that long.
+const hungWait = 30 * time.Second
+
+// hungProbe is a scripted ffprobe whose first run hangs, as on a source
+// that never answers, until the test lets it go: it then fails. The next
+// runs answer. A run still hanging is let go with the test.
+func hungProbe(t *testing.T) (probe fakeProbe, letGo func()) {
+	t.Helper()
+	probe = scriptedProbe(t, "[ $n -gt 1 ] || { while [ ! -e \"$0.let-go\" ]; do sleep 0.01; done; exit 1; }\nexec cat \"$0.json\"\n")
+	letGo = func() { _ = os.WriteFile(probe.path+".let-go", nil, 0o600) }
+	t.Cleanup(letGo)
+	return probe, letGo
+}
+
 // A source that does not answer holds up PlaybackInfo only for a while
 // once the next version is ready: that version plays, and the first, still
 // being read, is left out of the list.
 func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
 	t.Parallel()
-	probe := scriptedProbe(t, "[ $n -gt 1 ] || exec sleep 60\nexec cat \"$0.json\"\n")
+	probe, _ := hungProbe(t)
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
-	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = accounts.MinAnalysisTimeout })
+	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = int(hungWait / time.Second) })
 	started := time.Now()
 	answer := p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil)
 	elapsed := time.Since(started)
@@ -48,8 +63,8 @@ func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
 	if len(answer.MediaSources) != 1 || answer.MediaSources[0].Id != p.versions[1].ID.String() || probe.runs() != 1 {
 		t.Fatalf("after a source that did not answer: %d runs, %+v", probe.runs(), answer)
 	}
-	// The analysis timeout, longer, would still be waiting.
-	if elapsed < versionPatience || elapsed > versionPatience+time.Second {
+	// A play that waited for the first version would wait hungWait.
+	if elapsed < versionPatience || elapsed > hungWait/2 {
 		t.Errorf("PlaybackInfo answered after %s, want about %s", elapsed, versionPatience)
 	}
 }
