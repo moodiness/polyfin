@@ -31,10 +31,13 @@ const guide = `<?xml version="1.0" encoding="UTF-8"?>
     <episode-num system="xmltv_ns">2 . 4/10 . 0/1</episode-num>
     <icon src="https://img.example/news.jpg"/>
     <rating system="CSA"><value>-10</value></rating>
+    <previously-shown start="20250104"/>
   </programme>
   <programme start="20260104213000" stop="20260104230000" channel="one.fr">
     <title>A Movie</title>
     <episode-num system="onscreen">S03E07</episode-num>
+    <previously-shown/>
+    <new/>
   </programme>
   <programme start="20260104230000 +0000" stop="20260104220000 +0000" channel="one.fr"><title>Ends before it starts</title></programme>
   <programme start="20260104230000 +0000" stop="20260105000000 +0000" channel="one.fr"><title> </title></programme>
@@ -90,6 +93,10 @@ func TestGuidesReadPlainOrCompressed(t *testing.T) {
 		// Without an offset, a time is in UTC.
 		if !movie.Start.Equal(time.Date(2026, 1, 4, 21, 30, 0, 0, time.UTC)) || movie.Season != 3 || movie.Episode != 7 {
 			t.Errorf("%s: movie %+v", name, movie)
+		}
+		// Marked new, a programme is no repeat, even marked previously shown.
+		if news.New || !news.PreviouslyShown || !movie.New || movie.PreviouslyShown {
+			t.Errorf("%s: marks %+v %+v", name, news, movie)
 		}
 	}
 	// Without a title in the language asked for, the first one.

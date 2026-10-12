@@ -46,17 +46,21 @@ type Channel struct {
 }
 
 // Programme is a programme of a guide's channel. Season and Episode count
-// from 1; 0 when the guide does not number it.
+// from 1; 0 when the guide does not number it. New and PreviouslyShown
+// are the guide's marks, <new/> and <previously-shown>: a programme marked
+// new is not taken as previously shown.
 type Programme struct {
-	Channel     string
-	Start, Stop time.Time
-	Title       string
-	SubTitle    string
-	Description string
-	Categories  []string
-	Season      int
-	Episode     int
-	Icon        string
+	Channel         string
+	Start, Stop     time.Time
+	Title           string
+	SubTitle        string
+	Description     string
+	Categories      []string
+	Season          int
+	Episode         int
+	Icon            string
+	New             bool
+	PreviouslyShown bool
 }
 
 // Options tune Read. Limit is MaxSize when zero; Language is the language
@@ -305,18 +309,22 @@ type programmeElement struct {
 	Icons []struct {
 		Src string `xml:"src,attr"`
 	} `xml:"icon"`
+	New             *struct{} `xml:"new"`
+	PreviouslyShown *struct{} `xml:"previously-shown"`
 }
 
 func (e programmeElement) programme(language string) (Programme, bool) {
 	start, okStart := parseTime(e.Start)
 	stop, okStop := parseTime(e.Stop)
 	p := Programme{
-		Channel:     strings.TrimSpace(e.Channel),
-		Start:       start,
-		Stop:        stop,
-		Title:       pick(e.Titles, language),
-		SubTitle:    pick(e.SubTitles, language),
-		Description: pick(e.Description, language),
+		Channel:         strings.TrimSpace(e.Channel),
+		Start:           start,
+		Stop:            stop,
+		Title:           pick(e.Titles, language),
+		SubTitle:        pick(e.SubTitles, language),
+		Description:     pick(e.Description, language),
+		New:             e.New != nil,
+		PreviouslyShown: e.PreviouslyShown != nil && e.New == nil,
 	}
 	if p.Channel == "" || p.Title == "" || !okStart || !okStop || !stop.After(start) {
 		return Programme{}, false
