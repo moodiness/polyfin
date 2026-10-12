@@ -13,8 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // fakeGitHub answers the latest release of Polyfin's repository as a test
@@ -84,10 +83,7 @@ type harness struct {
 
 func newHarness(t *testing.T, version string) harness {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	h := harness{github: newFakeGitHub(t), pool: pool, enabled: &atomic.Bool{}, mu: &sync.Mutex{}, notified: &[]Release{}}
 	h.enabled.Store(true)
 	h.Checker = h.restart(t, version)

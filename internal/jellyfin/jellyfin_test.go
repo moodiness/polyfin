@@ -33,7 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/updates"
@@ -69,10 +69,7 @@ func newTestServer(t *testing.T, failures int) testServer {
 // ffprobe. configure, if any, completes the handler's options.
 func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...func(*Options, *pgxpool.Pool)) testServer {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

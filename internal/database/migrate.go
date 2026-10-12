@@ -38,15 +38,34 @@ type migration struct {
 // by a newer Polyfin: both would leave the schema in a state the code does
 // not expect.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	files, err := fs.Sub(embedded, "migrations")
-	if err != nil {
-		return err
-	}
-	migrations, err := loadMigrations(files)
+	migrations, err := shippedMigrations()
 	if err != nil {
 		return err
 	}
 	return migrate(ctx, pool, migrations)
+}
+
+// Fingerprint identifies the schema Migrate brings a database to: it
+// changes with every migration added or edited. Tests name the database
+// they copy migrated databases from after it.
+func Fingerprint() (string, error) {
+	migrations, err := shippedMigrations()
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.New()
+	for _, m := range migrations {
+		fmt.Fprintf(sum, "%d %s %s\n", m.version, m.name, m.checksum)
+	}
+	return hex.EncodeToString(sum.Sum(nil)), nil
+}
+
+func shippedMigrations() ([]migration, error) {
+	files, err := fs.Sub(embedded, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	return loadMigrations(files)
 }
 
 func loadMigrations(files fs.FS) ([]migration, error) {

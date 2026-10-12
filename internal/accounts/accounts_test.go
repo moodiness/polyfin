@@ -9,16 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 func newStore(t *testing.T) *Store {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	store, err := Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

@@ -9,8 +9,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 type historyHarness struct {
@@ -22,10 +21,7 @@ type historyHarness struct {
 
 func newHistoryHarness(t *testing.T) historyHarness {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

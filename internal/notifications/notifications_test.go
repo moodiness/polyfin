@@ -16,12 +16,11 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -228,10 +227,7 @@ type harness struct {
 // sending to fake targets, retrying soon and giving up after a second.
 func newHarness(t *testing.T) harness {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
 	if err != nil {
 		t.Fatal(err)

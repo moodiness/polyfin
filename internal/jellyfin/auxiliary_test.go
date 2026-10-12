@@ -14,9 +14,8 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/preferences"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -29,10 +28,7 @@ type auxiliaryServer struct {
 
 func newAuxiliaryServer(t *testing.T) auxiliaryServer {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

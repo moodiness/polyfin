@@ -14,8 +14,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // syncedLRC is a song's synced lyrics as LRCLIB gives them: a description
@@ -125,10 +124,7 @@ func (c *clock) advance(d time.Duration) {
 // holds true, on a clock tests move.
 func newService(t *testing.T, f *fakeLRCLIB) (*Service, *atomic.Bool, *clock) {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	on := &atomic.Bool{}
 	on.Store(true)
 	settings := func() accounts.Settings {

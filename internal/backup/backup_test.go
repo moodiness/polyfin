@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // password is the database password of the tests, which must appear
@@ -126,10 +125,7 @@ func TestThePasswordStaysOutOfTheCommandLineAndTheLogs(t *testing.T) {
 // one; its error, with pg_dump's, is what the run returns and records, and
 // the last backup made stays recorded.
 func TestAFailedDumpLeavesNoBackup(t *testing.T) {
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	h := newHarness(t, pool)
 	made := time.Date(2026, 10, 4, 4, 0, 0, 0, time.Local)
 	h.service.now = func() time.Time { return made }

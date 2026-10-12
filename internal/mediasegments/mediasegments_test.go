@@ -15,8 +15,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // reply is a database's answer: a status, a JSON body and, if any, a
@@ -134,10 +133,7 @@ func (c *clock) advance(d time.Duration) { c.now = c.now.Add(d) }
 // on a fresh database, at a time the test controls.
 func service(t *testing.T, d *databases, names ...string) (*Service, *clock) {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	var sources []Source
 	for _, name := range names {
 		sources = append(sources, Source{Name: name, URL: d.url})

@@ -17,12 +17,11 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // fakeSource answers like a remote file server, recording requests. Links
@@ -84,10 +83,7 @@ func (f *fileSource) Open(ctx context.Context, method, target string, header htt
 
 func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewer) *Service {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, opener, logger)
 	if err != nil {

@@ -18,9 +18,8 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/stremio"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // fakeAddon is a Stremio addon serving fixed catalogs and metas, recording
@@ -174,10 +173,7 @@ type env struct {
 
 func newEnv(t *testing.T) env {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	users, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

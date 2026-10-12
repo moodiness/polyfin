@@ -18,12 +18,11 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/stremio"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
 
@@ -53,10 +52,7 @@ type testDeps struct {
 // newTestAPI serves the admin API; configure, if any, completes its options.
 func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps)) testAPI {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
@@ -183,10 +179,8 @@ func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
 
 // The admin app links to the web client only when Polyfin serves one.
 func TestStatusTellsWhetherTheWebClientIsServed(t *testing.T) {
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
+	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)

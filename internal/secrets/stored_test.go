@@ -13,9 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/secrets"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/trackers"
 )
 
@@ -121,10 +120,7 @@ func (l *lockedLog) reset() {
 
 func TestStoredSecretsAreSealedOnceAndUnreadableOnesCountAsUnset(t *testing.T) {
 	ctx := t.Context()
-	pool := testdb.New(t)
-	if err := database.Migrate(ctx, pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	// A server that ran without a key: its secrets are plaintext.
 	plain, err := accounts.Open(ctx, pool)
 	if err != nil {

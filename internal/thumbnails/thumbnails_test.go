@@ -21,11 +21,10 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/container"
-	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
-	"github.com/moodiness/polyfin/internal/testdb"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
 // countingSource serves a file from memory, as a host would, recording
@@ -129,10 +128,7 @@ type testService struct {
 
 func newTestService(t *testing.T, ffmpeg string) *testService {
 	t.Helper()
-	pool := testdb.New(t)
-	if err := database.Migrate(t.Context(), pool); err != nil {
-		t.Fatal(err)
-	}
+	pool := migrated.New(t)
 	ts := &testService{settings: accounts.Settings{Trickplay: true, TrickplayInterval: 5, TrickplayWidth: 240,
 		ChapterImages: true, ThumbnailStorageGB: 1}}
 	ts.Service = New(Options{
