@@ -69,13 +69,19 @@ type Programme struct {
 	Image    string
 	Start    time.Time
 	End      time.Time
+	// Season, Episode and EpisodeTitle are the episode the programme airs,
+	// when its guide numbers or names it; numbers count from 1.
+	Season       int
+	Episode      int
+	EpisodeTitle string
 }
 
 // ProgrammeOf describes a programme item of the guide.
 func ProgrammeOf(item library.Item) Programme {
 	id := item.ID
 	p := Programme{Program: &id, Name: item.Name, Overview: item.Overview, Genres: slices.Clone(item.Genres),
-		Rating: item.OfficialRating, Image: item.Images.Primary}
+		Rating: item.OfficialRating, Image: item.Images.Primary, Season: max(item.ParentIndexNumber, 0), Episode: max(item.IndexNumber, 0),
+		EpisodeTitle: item.EpisodeTitle}
 	if item.Channel != nil {
 		p.Channel = item.Channel.ID
 	}
@@ -172,12 +178,13 @@ type Recording struct {
 func (r Recording) InProgress() bool { return r.Ended == nil }
 
 const timerColumns = "id, user_id, series_timer_id, channel_id, program_id, name, overview, genres, rating, image, start_at, end_at, " +
-	"pre_padding, post_padding, keep_until, priority, status, is_manual, created_at"
+	"season, episode, episode_title, pre_padding, post_padding, keep_until, priority, status, is_manual, created_at"
 
 func scanTimer(row pgx.Row) (Timer, error) {
 	var t Timer
 	err := row.Scan(&t.ID, &t.User, &t.SeriesTimer, &t.Channel, &t.Program, &t.Name, &t.Overview, &t.Genres, &t.Rating, &t.Image,
-		&t.Start, &t.End, &t.PrePadding, &t.PostPadding, &t.KeepUntil, &t.Priority, &t.Status, &t.Manual, &t.Created)
+		&t.Start, &t.End, &t.Season, &t.Episode, &t.EpisodeTitle, &t.PrePadding, &t.PostPadding, &t.KeepUntil, &t.Priority, &t.Status, &t.Manual,
+		&t.Created)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, ErrNotFound
 	}
@@ -198,12 +205,12 @@ func scanSeries(row pgx.Row) (SeriesTimer, error) {
 }
 
 const recordingColumns = "id, timer_id, series_timer_id, user_id, channel_id, program_id, name, overview, genres, rating, image, " +
-	"start_at, end_at, started_at, ended_at, partial, file, size"
+	"start_at, end_at, season, episode, episode_title, started_at, ended_at, partial, file, size"
 
 func scanRecording(row pgx.Row) (Recording, error) {
 	var r Recording
 	err := row.Scan(&r.ID, &r.Timer, &r.SeriesTimer, &r.User, &r.Channel, &r.Program, &r.Name, &r.Overview, &r.Genres, &r.Rating, &r.Image,
-		&r.Start, &r.End, &r.Started, &r.Ended, &r.Partial, &r.File, &r.Size)
+		&r.Start, &r.End, &r.Season, &r.Episode, &r.EpisodeTitle, &r.Started, &r.Ended, &r.Partial, &r.File, &r.Size)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -250,10 +257,10 @@ func (s *Service) CreateTimer(ctx context.Context, user accounts.ID, p Programme
 		}
 		var err error
 		t, err = scanTimer(tx.QueryRow(ctx, `INSERT INTO live_timers (user_id, channel_id, program_id, name, overview, genres, rating, image,
-				start_at, end_at, pre_padding, post_padding, keep_until, priority)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING `+timerColumns,
-			user, p.Channel, p.Program, p.Name, p.Overview, nonNil(p.Genres), p.Rating, p.Image, p.Start, p.End,
-			o.PrePadding, o.PostPadding, o.KeepUntil, o.Priority))
+				start_at, end_at, season, episode, episode_title, pre_padding, post_padding, keep_until, priority)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING `+timerColumns,
+			user, p.Channel, p.Program, p.Name, p.Overview, nonNil(p.Genres), p.Rating, p.Image, p.Start, p.End, p.Season, p.Episode,
+			p.EpisodeTitle, o.PrePadding, o.PostPadding, o.KeepUntil, o.Priority))
 		return err
 	})
 	if uniqueViolation(err) {

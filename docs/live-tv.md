@@ -110,7 +110,7 @@ The catalog's row then shows when its first guide was last fetched, when it will
 #### What a download keeps
 
 - The guide's channels, with their names and icons. A channel its programmes name without declaring it counts as one without a name.
-- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers and image. The guide channels of IPTV channels whose provider keeps past programmes keep theirs as far back as that archive, at most 30 days (see [Replay](iptv.md#guides-and-the-archive-window)).
+- Its programmes from a day before the fetch to eight days after it, with their title, episode title, description, categories, season and episode numbers, image, and whether the guide marks them new (`<new/>`) or previously shown (`<previously-shown>`); a programme marked both is new. The guide channels of IPTV channels whose provider keeps past programmes keep theirs as far back as that archive, at most 30 days (see [Replay](iptv.md#guides-and-the-archive-window)).
 - A failed fetch keeps those of the last one.
 
 #### How channels are matched to the guide
@@ -152,6 +152,7 @@ Recommended programmes airing now are listed by channel number; those to come, b
 
 **For app developers:**
 - Programmes from either guide give apps their episode title and their season and episode numbers, as Jellyfin's do.
+- XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
 - `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
 
 ## Recordings
@@ -183,8 +184,9 @@ From a programme of the guide, apps make:
 
 Notes on series timers:
 
-- The guide marks no repeats, so "new episodes only" records every one.
-- Like Jellyfin, the days of the week a series timer lists are not looked at.
+- A series timer records only on the days of the week it lists, in the server's time zone, where Jellyfin does not look at them. Listing none, or all of them, records every day.
+- "New episodes only" leaves out the programmes the guide marks previously shown, and records those it marks new. A programme without either mark is left out when the series timer already recorded the same episode in full: told by its season and episode numbers, else its episode title, else its description, the first of these both have. A programme with none of them is recorded, and so is an episode recorded only in part, such as one whose stream failed for a while.
+- The episodes a series timer recorded in full are kept with it, even once their recordings are deleted, and go with it. Once one is recorded, the timers the series timer made for the same episode's other airings go.
 - **Keep up to** deletes a series' oldest recordings past that many.
 
 Timers, series timers and recordings are kept in the database.

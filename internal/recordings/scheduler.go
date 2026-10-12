@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -330,9 +331,10 @@ func partPath(dir string, recording accounts.ID, n int) string {
 func (s *Service) record(ctx context.Context, t Timer, a *active) {
 	var id accounts.ID
 	err := s.db.QueryRow(ctx, `INSERT INTO live_recordings (timer_id, series_timer_id, user_id, channel_id, program_id, name, overview,
-			genres, rating, image, start_at, end_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-		t.ID, t.SeriesTimer, t.User, t.Channel, t.Program, t.Name, t.Overview, nonNil(t.Genres), t.Rating, t.Image, t.Start, t.End).Scan(&id)
+			genres, rating, image, start_at, end_at, season, episode, episode_title)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+		t.ID, t.SeriesTimer, t.User, t.Channel, t.Program, t.Name, t.Overview, nonNil(t.Genres), t.Rating, t.Image, t.Start, t.End,
+		t.Season, t.Episode, t.EpisodeTitle).Scan(&id)
 	if err == nil {
 		_, err = s.db.Exec(ctx, "UPDATE live_timers SET status = 'InProgress' WHERE id = $1", t.ID)
 	}
@@ -471,6 +473,9 @@ func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until 
 		}
 	}
 	if series != nil {
+		if !partial {
+			s.remember(ctx, id, *series)
+		}
 		s.keepUpTo(ctx, *series)
 	}
 	s.tell(ctx, ended)
@@ -497,6 +502,29 @@ func parts(dir string, id accounts.ID) []string {
 		} else {
 			_ = os.Remove(path)
 		}
+	}
+}
+
+// remember keeps with its series timer the episode of a recording made in
+// full, which outlives the recording. A series timer that records new
+// episodes only then drops the timers it made for the episode's other
+// airings (see Matches).
+func (s *Service) remember(ctx context.Context, recording, series accounts.ID) {
+	tag, err := s.db.Exec(ctx, `INSERT INTO live_series_episodes (series_timer_id, season, episode, title, description)
+		SELECT st.id, r.season, r.episode, r.episode_title, r.overview
+		FROM live_recordings r JOIN live_series_timers st ON st.id = r.series_timer_id
+		WHERE r.id = $1 AND (r.episode > 0 OR r.episode_title <> '' OR r.overview <> '')
+			AND NOT EXISTS (SELECT 1 FROM live_series_episodes e WHERE e.series_timer_id = st.id AND e.season = r.season
+				AND e.episode = r.episode AND e.title = r.episode_title AND e.description = r.overview)`, recording)
+	if err != nil {
+		s.logger.Warn("A series timer's recorded episode could not be kept", "error", err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		return
+	}
+	if st, err := s.SeriesTimer(ctx, series); err == nil && st.RecordNewOnly {
+		s.refreshSeries(ctx, st)
 	}
 }
 
@@ -608,19 +636,26 @@ func (s *Service) refreshSeries(ctx context.Context, st SeriesTimer) {
 		}
 		return
 	}
+	var recorded []Episode
+	if st.RecordNewOnly {
+		if recorded, err = s.recordedEpisodes(ctx, st.ID); err != nil {
+			s.logger.Warn("A series timer's recorded episodes could not be read", "error", err)
+			return
+		}
+	}
 	matched := []accounts.ID{}
 	for _, item := range programs {
-		if !Matches(st, item, now) || !Allows(user, programKind, item.OfficialRating, item.Genres) {
+		if !Matches(st, item, recorded, now) || !Allows(user, programKind, item.OfficialRating, item.Genres) {
 			continue
 		}
 		p := ProgrammeOf(item)
 		_, err := s.db.Exec(ctx, `INSERT INTO live_timers (user_id, series_timer_id, channel_id, program_id, name, overview, genres, rating,
-				image, start_at, end_at, pre_padding, post_padding, keep_until, priority, is_manual)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, false)
+				image, start_at, end_at, season, episode, episode_title, pre_padding, post_padding, keep_until, priority, is_manual)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, false)
 			ON CONFLICT (program_id) DO UPDATE SET series_timer_id = excluded.series_timer_id
 				WHERE live_timers.series_timer_id IS NULL`,
 			st.User, st.ID, p.Channel, p.Program, p.Name, p.Overview, nonNil(p.Genres), p.Rating, p.Image, p.Start, p.End,
-			st.PrePadding, st.PostPadding, st.KeepUntil, st.Priority)
+			p.Season, p.Episode, p.EpisodeTitle, st.PrePadding, st.PostPadding, st.KeepUntil, st.Priority)
 		if err != nil {
 			s.logger.Warn("A series timer's timer could not be made", "error", err)
 			return
@@ -634,13 +669,57 @@ func (s *Service) refreshSeries(ctx context.Context, st SeriesTimer) {
 	s.Wake()
 }
 
+// Episode is an episode a series timer recorded in full: its numbers,
+// counted from 1 and 0 when unknown, its title and its description.
+type Episode struct {
+	Season, Episode    int
+	Title, Description string
+}
+
+// episodeOf is the episode a programme of the guide airs.
+func episodeOf(program library.Item) Episode {
+	return Episode{Season: max(program.ParentIndexNumber, 0), Episode: max(program.IndexNumber, 0),
+		Title: strings.TrimSpace(program.EpisodeTitle), Description: strings.TrimSpace(program.Overview)}
+}
+
+// same reports whether two episodes are one, told by the first of their
+// numbers, titles and descriptions that both have: two episodes without
+// any in common are not.
+func (e Episode) same(o Episode) bool {
+	switch {
+	case e.Episode > 0 && o.Episode > 0:
+		return e.Season == o.Season && e.Episode == o.Episode
+	case e.Title != "" && o.Title != "":
+		return strings.EqualFold(e.Title, o.Title)
+	case e.Description != "" && o.Description != "":
+		return strings.EqualFold(e.Description, o.Description)
+	}
+	return false
+}
+
+// recordedEpisodes lists the episodes a series timer recorded in full.
+func (s *Service) recordedEpisodes(ctx context.Context, series accounts.ID) ([]Episode, error) {
+	rows, err := s.db.Query(ctx, "SELECT season, episode, title, description FROM live_series_episodes WHERE series_timer_id = $1", series)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Episode, error) {
+		var e Episode
+		err := row.Scan(&e.Season, &e.Episode, &e.Title, &e.Description)
+		e.Title, e.Description = strings.TrimSpace(e.Title), strings.TrimSpace(e.Description)
+		return e, err
+	})
+}
+
 // Matches reports whether a series timer records a programme of the
-// guide, as Jellyfin decides: a programme of the same title, still to end,
+// guide. As Jellyfin decides, a programme of the same title, still to end,
 // on the series timer's channel unless RecordAnyChannel, starting within
-// ten minutes of its time of day unless RecordAnyTime. RecordNewOnly
-// leaves out repeats, which the guide does not mark: every programme
-// counts as new. Like Jellyfin, the days of the week are not looked at.
-func Matches(st SeriesTimer, program library.Item, now time.Time) bool {
+// ten minutes of its time of day unless RecordAnyTime. Then, when it lists
+// days, on one of them in now's time zone, the server's. RecordNewOnly
+// leaves out the programmes the guide marks previously shown and keeps
+// those it marks new; an unmarked one is left out when it airs one of the
+// episodes recorded.
+func Matches(st SeriesTimer, program library.Item, recorded []Episode, now time.Time) bool {
 	if program.Kind != library.KindProgram || program.StartDate == nil || program.EndDate == nil || program.Channel == nil ||
 		!program.EndDate.After(now) || !strings.EqualFold(strings.TrimSpace(program.Name), strings.TrimSpace(st.Name)) {
 		return false
@@ -653,6 +732,12 @@ func Matches(st SeriesTimer, program library.Item, now time.Time) bool {
 		if (a - b).Abs() >= timeOfDayTolerance {
 			return false
 		}
+	}
+	if len(st.Days) > 0 && !slices.Contains(st.Days, Days[program.StartDate.In(now.Location()).Weekday()]) {
+		return false
+	}
+	if st.RecordNewOnly && !program.New {
+		return !program.Repeat && !slices.ContainsFunc(recorded, episodeOf(program).same)
 	}
 	return true
 }

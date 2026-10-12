@@ -117,18 +117,82 @@ func TestSeriesTimersMatchProgrammesByTitle(t *testing.T) {
 		{"ended", program(t, "05000000000000000000000000000000", "The Show", x, now.Add(-16*time.Hour)), false, false},
 	}
 	for _, tc := range cases {
-		if got := Matches(st, tc.program, now); got != tc.strict {
+		if got := Matches(st, tc.program, nil, now); got != tc.strict {
 			t.Errorf("%s: matched %v", tc.name, got)
 		}
 		loose := st
 		loose.RecordAnyChannel, loose.RecordAnyTime = true, true
-		if got := Matches(loose, tc.program, now); got != tc.any {
+		if got := Matches(loose, tc.program, nil, now); got != tc.any {
 			t.Errorf("%s, any channel and time: matched %v", tc.name, got)
 		}
 	}
 	// Ten minutes from the time of day is too far.
-	if Matches(st, program(t, "06000000000000000000000000000000", "The Show", x, now.Add(8*time.Hour+10*time.Minute)), now) {
+	if Matches(st, program(t, "06000000000000000000000000000000", "The Show", x, now.Add(8*time.Hour+10*time.Minute)), nil, now) {
 		t.Error("a programme ten minutes late matched")
+	}
+}
+
+// A series timer records on the days it lists, in the server's time zone;
+// none, or all of them, is every day.
+func TestSeriesTimersKeepToTheirDays(t *testing.T) {
+	zone := time.FixedZone("UTC+2", 2*3600)
+	// Sunday 4 October 2026, noon in the server's time zone.
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, zone)
+	x := id(t, channelX)
+	weekdays := []string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
+	st := SeriesTimer{Programme: Programme{Channel: x, Name: "The Show"}, SeriesOptions: SeriesOptions{RecordAnyTime: true, Days: weekdays}}
+	friday := program(t, "01000000000000000000000000000000", "The Show", x, time.Date(2026, 10, 9, 20, 0, 0, 0, zone))
+	saturday := program(t, "02000000000000000000000000000000", "The Show", x, time.Date(2026, 10, 10, 20, 0, 0, 0, zone))
+	// Friday 23:30 in UTC, already Saturday in the server's time zone.
+	lateFriday := program(t, "03000000000000000000000000000000", "The Show", x, time.Date(2026, 10, 9, 23, 30, 0, 0, time.UTC))
+	if !Matches(st, friday, nil, now) || Matches(st, saturday, nil, now) || Matches(st, lateFriday, nil, now) {
+		t.Error("a weekdays series timer records on another day, or not on Friday")
+	}
+	for _, days := range [][]string{nil, Days} {
+		st.Days = days
+		if !Matches(st, saturday, nil, now) {
+			t.Errorf("days %v: Saturday not recorded", days)
+		}
+	}
+}
+
+// A series timer that records new episodes only leaves out repeats: those
+// the guide marks previously shown, and, unmarked, those airing an episode
+// it recorded, told by its numbers, else its title, else its description.
+func TestSeriesTimersRecordNewEpisodesOnly(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	x := id(t, channelX)
+	st := SeriesTimer{Programme: Programme{Channel: x, Name: "The Show"}, SeriesOptions: SeriesOptions{RecordAnyTime: true, RecordNewOnly: true}}
+	recorded := []Episode{{Season: 1, Episode: 2, Title: "The Second", Description: "Second."}, {Title: "Untold"}, {Description: "Told only."}}
+	airing := func(season, episode int, title, overview string, isNew, repeat bool) library.Item {
+		p := program(t, "01000000000000000000000000000000", "The Show", x, now.Add(time.Hour))
+		p.ParentIndexNumber, p.IndexNumber, p.EpisodeTitle, p.Overview, p.New, p.Repeat = season, episode, title, overview, isNew, repeat
+		return p
+	}
+	cases := []struct {
+		name    string
+		program library.Item
+		want    bool
+	}{
+		{"marked previously shown", airing(9, 9, "", "", false, true), false},
+		{"marked new, an episode recorded", airing(1, 2, "", "", true, false), true},
+		{"an episode number recorded", airing(1, 2, "Renamed", "", false, false), false},
+		{"another episode number, a title recorded", airing(1, 3, "The Second", "Second.", false, false), true},
+		{"another season", airing(2, 2, "", "", false, false), true},
+		{"no number, a title recorded", airing(0, 0, " untold ", "", false, false), false},
+		{"no number, another title, a description recorded", airing(0, 0, "Another", "Second.", false, false), true},
+		{"no number nor title, a description recorded", airing(0, 0, "", "Told only.", false, false), false},
+		{"nothing to tell it by", airing(0, 0, "", "", false, false), true},
+	}
+	for _, tc := range cases {
+		if got := Matches(st, tc.program, recorded, now); got != tc.want {
+			t.Errorf("%s: recorded %v", tc.name, got)
+		}
+	}
+	// Recording every episode, a series timer records repeats too.
+	st.RecordNewOnly = false
+	if !Matches(st, airing(1, 2, "", "", false, true), recorded, now) {
+		t.Error("a repeat not recorded without new episodes only")
 	}
 }
 
@@ -338,5 +402,79 @@ func TestRecordingFollowsTheSettingsFolder(t *testing.T) {
 	f.folder.Store(&other)
 	if !f.service.Available() || f.service.Dir() != other || f.service.Path(Recording{File: "a.mkv"}) != filepath.Join(other, "a.mkv") {
 		t.Errorf("another folder: %q", f.service.Dir())
+	}
+}
+
+// A series timer recording new episodes only remembers those it recorded
+// in full, past their recordings, and drops their other airings; an
+// episode recorded in part is recorded again.
+func TestSeriesTimersSkipEpisodesRecordedInFull(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	now := time.Now().UTC().Truncate(time.Minute)
+	x := id(t, channelX)
+	airing := func(programID string, episode int, start time.Duration) library.Item {
+		p := program(t, programID, "The Show", x, now.Add(start))
+		p.ParentIndexNumber, p.IndexNumber = 1, episode
+		return p
+	}
+	first, second := airing("01000000000000000000000000000000", 1, time.Hour), airing("02000000000000000000000000000000", 2, 2*time.Hour)
+	f.guide.programs = []library.Item{first, second,
+		airing("03000000000000000000000000000000", 1, 25*time.Hour), airing("04000000000000000000000000000000", 2, 26*time.Hour)}
+	if _, err := f.service.CreateSeriesTimer(ctx, f.user.ID, ProgrammeOf(first), Options{KeepUntil: KeepUntil[0]},
+		SeriesOptions{RecordAnyTime: true, RecordNewOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	scheduled := func() []string {
+		timers, err := f.service.Timers(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result []string
+		for _, timer := range timers {
+			if timer.Status == StatusNew {
+				result = append(result, timer.Program.String()[:2])
+			}
+		}
+		return result
+	}
+	if got := scheduled(); !slices.Equal(got, []string{"01", "02", "03", "04"}) {
+		t.Fatalf("timers before any recording: %v", got)
+	}
+	// record has the programme's timer record it, as the scheduler does,
+	// in full or in part.
+	record := func(p library.Item, partial bool) accounts.ID {
+		t.Helper()
+		var recording accounts.ID
+		if err := f.service.db.QueryRow(ctx, `WITH started AS (UPDATE live_timers SET status = 'InProgress' WHERE program_id = $1 RETURNING *)
+			INSERT INTO live_recordings (timer_id, series_timer_id, user_id, channel_id, program_id, name, start_at, end_at, season, episode,
+				episode_title)
+			SELECT id, series_timer_id, user_id, channel_id, program_id, name, start_at, end_at, season, episode, episode_title FROM started
+			RETURNING id`, p.ID).Scan(&recording); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(partPath(f.dir, recording, 0), []byte("video"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		f.service.finish(ctx, f.dir, recording, time.Now(), partial)
+		return recording
+	}
+	recorded := record(first, false)
+	if got := scheduled(); !slices.Equal(got, []string{"02", "04"}) {
+		t.Errorf("timers once the first episode is recorded in full: %v", got)
+	}
+	record(second, true)
+	if got := scheduled(); !slices.Equal(got, []string{"04"}) {
+		t.Errorf("timers once the second episode is recorded in part: %v", got)
+	}
+	// The episode stays recorded once its recording is deleted.
+	if err := f.service.DeleteRecording(ctx, recorded); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.RefreshSeriesTimers(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := scheduled(); !slices.Equal(got, []string{"04"}) {
+		t.Errorf("timers once the recording is deleted: %v", got)
 	}
 }
