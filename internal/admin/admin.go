@@ -18,6 +18,8 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/appimport"
+	"github.com/moodiness/polyfin/internal/appimport/nuvio"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -114,6 +116,11 @@ type Options struct {
 	// JellyfinImport imports users and their watch data from Jellyfin
 	// servers; nil offers no import.
 	JellyfinImport *jellyfinimport.Service
+	// AppImport imports the watch data of accounts on apps built on
+	// addons; nil offers no import.
+	AppImport *appimport.Service
+	// Nuvio reads Nuvio accounts, for AppImport; nil offers none.
+	Nuvio *nuvio.Reader
 	// Notifications keeps the server's and users' notification targets;
 	// nil offers none.
 	Notifications *notifications.Service
@@ -159,6 +166,9 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
 	mux.Handle("GET /admin/api/account/server-import", h.signedIn(h.ownImport))
 	mux.Handle("POST /admin/api/account/server-import", h.signedIn(h.startOwnImport))
+	mux.Handle("GET /admin/api/account/app-import", h.signedIn(h.ownAppImport))
+	mux.Handle("POST /admin/api/account/app-import", h.signedIn(h.startAppImport(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/nuvio", h.signedIn(h.readNuvio(h.ownAppImportTarget)))
 	own := notificationRoutes{h: h, owner: ownTargets}
 	mux.Handle("GET /admin/api/account/notifications", h.signedIn(own.list))
 	mux.Handle("POST /admin/api/account/notifications/targets", h.signedIn(own.create))
@@ -178,6 +188,9 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/users/{id}", h.administrator(h.deleteUser))
 	mux.Handle("GET /admin/api/users/{id}/devices", h.administrator(h.userDevices))
 	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
+	mux.Handle("GET /admin/api/users/{id}/app-import", h.administrator(h.userAppImport))
+	mux.Handle("POST /admin/api/users/{id}/app-import", h.administrator(h.startAppImport(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/nuvio", h.administrator(h.readNuvio(h.userAppImportTarget)))
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))

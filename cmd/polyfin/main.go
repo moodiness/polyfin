@@ -21,6 +21,8 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/admin"
 	"github.com/moodiness/polyfin/internal/anime"
+	"github.com/moodiness/polyfin/internal/appimport"
+	"github.com/moodiness/polyfin/internal/appimport/nuvio"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
@@ -321,6 +323,13 @@ func serve(ctx context.Context) error {
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
 		Logger: logger})
 	defer fromJellyfin.Close()
+	// The watch data of accounts on apps built on addons, Nuvio's first,
+	// finds its titles and merges the same way; the accounts' addons
+	// become their users' own.
+	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
+		Activity: activityLog, Logger: logger})
+	defer fromApps.Close()
+	fromNuvio := nuvio.New(nuvio.Options{Anime: animeMapping, Version: version})
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
@@ -403,6 +412,8 @@ func serve(ctx context.Context) error {
 		Trackers:       tracking,
 		Backups:        backups,
 		JellyfinImport: fromJellyfin,
+		AppImport:      fromApps,
+		Nuvio:          fromNuvio,
 		Plays:          history,
 	}
 	// Notifications tell of new episodes, ended recordings, the problems

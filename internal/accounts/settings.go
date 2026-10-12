@@ -776,7 +776,8 @@ type Settings struct {
 	// own permission allows to (see PersonalAddonsAllowed).
 	PersonalAddons bool
 	// ServerImports lets users import their own watch history from another
-	// Jellyfin or Emby server, under My account.
+	// Jellyfin or Emby server, or from an app's account (see appimport),
+	// under My account.
 	ServerImports bool
 	// LoginAttempts is how many wrong passwords in a row block an account
 	// for LoginBlock; 0 never blocks.
