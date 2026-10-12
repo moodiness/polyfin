@@ -182,6 +182,6 @@ Nothing waits for the services: reports and marks are sent in the background.
 ### Tokens and keys
 
 - Trakt and Simkl tokens are refreshed before they expire, and revoked when the user disconnects. Last.fm session keys do not expire; disconnecting forgets the key, and removing Polyfin from the applications of the Last.fm account revokes it.
-- Deleting a user deletes their connections and what waited to be sent.
+- Deleting a user deletes their connections and what waited to be sent, and revokes their Trakt and Simkl tokens in the background, as disconnecting does; their other keys are only forgotten. The deletion never waits for a service, and does not fail when one does not answer: a token Polyfin could not revoke is logged, without the token. See [Deleting a user](users.md#deleting-a-user).
 - Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key or ListenBrainz token shows as dots, and its owner can show it with its eye; Trakt and Simkl tokens and Last.fm session keys are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
 - With `POLYFIN_SECRET_KEY` set, tokens and keys are stored encrypted. A connection whose tokens cannot be decrypted with it counts as not connected until the user connects again or the right key is set; nothing is sent with it meanwhile. See [Stored keys and tokens](configuration.md#stored-keys-and-tokens).
