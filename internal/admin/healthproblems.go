@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/notifications"
@@ -49,6 +50,7 @@ const (
 	problemDiscoveryPort     = "discovery_port"
 	problemDiscoveryAddress  = "discovery_address"
 	problemProxyName         = "proxy_name_unresolved"
+	problemConnectionStopped = "connection_stopped"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -62,9 +64,12 @@ const (
 // for an address that sends forwarded headers without being a known
 // proxy, or for a container's address discovery announces; Port for the
 // UDP port discovery cannot listen on; Task, in the language asked, for a
-// task; Secrets for those the key cannot decrypt. To is the admin app's
-// page that describes it, with its anchor. Transient ones come and go with
-// the load: notifications leave them out.
+// task; Secrets for those the key cannot decrypt; Kind ("app" or
+// "tracking"), Name, the app or service as the API names it, and Owner,
+// its user, for a stopped connection. To is the admin app's page that
+// describes it, with its anchor. Transient ones are not told as health
+// problems: they come and go with the load, or, for stopped connections,
+// the connection_stopped event told them already.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -82,6 +87,7 @@ type healthProblemJSON struct {
 	Port      int              `json:"port,omitempty"`
 	Task      string           `json:"task,omitempty"`
 	Secrets   []unreadableJSON `json:"secrets,omitempty"`
+	Kind      string           `json:"kind,omitempty"`
 }
 
 // healthProblemsRoute answers the problems System › Health shows, errors
@@ -291,6 +297,12 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		}
 	}
 
+	stopped, err := h.stoppedConnections(ctx)
+	if err != nil {
+		return nil, err
+	}
+	problems = append(problems, stopped...)
+
 	slices.SortStableFunc(problems, func(a, b healthProblemJSON) int {
 		return cmp.Compare(toneRank(a.Tone), toneRank(b.Tone))
 	})
@@ -305,9 +317,45 @@ func toneRank(tone string) int {
 	return 1
 }
 
+// stoppedConnections lists the app connections and tracking services that
+// stopped, the apps or services having refused what Polyfin kept, by user
+// name, then app or service. Each opens its user's page.
+func (h *handler) stoppedConnections(ctx context.Context) ([]healthProblemJSON, error) {
+	var stopped []healthProblemJSON
+	add := func(user accounts.ID, name, kind, service string) {
+		stopped = append(stopped, healthProblemJSON{Key: "connection_stopped:" + kind + ":" + service + ":" + user.String(),
+			Code: problemConnectionStopped, Tone: notifications.SeverityWarning, To: "/users/" + user.String(), Transient: true,
+			Name: service, Owner: &ownerJSON{ID: user.String(), Name: name}, Kind: kind})
+	}
+	if h.AppImport != nil {
+		apps, err := h.AppImport.Stopped(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range apps {
+			add(c.User, c.UserName, notifications.ConnectionApp, c.App)
+		}
+	}
+	if h.Trackers != nil {
+		services, err := h.Trackers.Stopped(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range services {
+			add(c.User, c.UserName, notifications.ConnectionTracking, c.Service)
+		}
+	}
+	slices.SortStableFunc(stopped, func(a, b healthProblemJSON) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a.Owner.Name), strings.ToLower(b.Owner.Name)), cmp.Compare(a.Owner.ID, b.Owner.ID),
+			cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Name, b.Name))
+	})
+	return stopped, nil
+}
+
 // HealthProblems returns what finds, for notifications, the problems System
-// › Health shows, named in the server language, but for those that come
-// and go with the load.
+// › Health shows, named in the server language, but for the transient ones:
+// those that come and go with the load, and the stopped connections, which
+// their own event tells.
 func HealthProblems(options Options) func(context.Context) ([]notifications.Problem, error) {
 	h := &handler{Options: options, now: time.Now}
 	if options.Now != nil {
@@ -349,8 +397,8 @@ var diskFolders = map[string][2]string{
 	"backups":    {"backups", "des sauvegardes"},
 }
 
-// text tells a problem notifications send in English or French. Those
-// that come and go with the load are never sent: they have none.
+// text tells a problem notifications send in English or French. The
+// transient ones are never sent: they have none.
 func (p healthProblemJSON) text(language string) string {
 	pick := func(words [2]string) string {
 		if language == "fr" {

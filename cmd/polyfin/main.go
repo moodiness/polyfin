@@ -324,9 +324,13 @@ func serve(ctx context.Context) error {
 	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
 	defer animeMapping.Close()
 	// Imported watch histories find their titles in the library and add to
-	// the users' data.
+	// the users' data. A connection a service stops is told to the
+	// notifications, made below, as recordings are.
 	tracking := trackers.New(trackers.Options{DB: pool, Settings: store.Settings, Secrets: box, Version: version, Logger: logger,
-		Titles: lib, UserData: userData, Anime: animeMapping})
+		Titles: lib, UserData: userData, Anime: animeMapping,
+		Stopped: func(user accounts.ID, service string) {
+			notifier.ConnectionStopped(user, notifications.ConnectionTracking, service)
+		}})
 	defer tracking.Close()
 	// Users and their watch data imported from a Jellyfin server find
 	// their titles and merge the same way.
@@ -338,12 +342,14 @@ func serve(ctx context.Context) error {
 	// addons become their users' own. A series of Stremio's tells its
 	// episodes watched by their places in the list its metadata addons
 	// give, which the server's addons give again. The users who stay
-	// connected keep what reads their accounts again, sealed.
+	// connected keep what reads their accounts again, sealed; a connection
+	// its app stops is told to the notifications.
 	fromNuvio := nuvio.New(nuvio.Options{Anime: animeMapping, Version: version})
 	fromStremio := stremioimport.New(stremioimport.Options{Anime: animeMapping, Metas: lib, Version: version})
 	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
 		Activity: activityLog, Logger: logger, DB: pool, Secrets: box,
-		Sources: map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio}})
+		Sources: map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
+		Stopped: func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) }})
 	defer fromApps.Close()
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
