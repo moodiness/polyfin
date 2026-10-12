@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"path/filepath"
@@ -69,6 +70,11 @@ type userJSON struct {
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
+	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
+	// zone, null for never; Ended is set once it has come, and the account
+	// is refused as a disabled one is.
+	EndsOn *string `json:"endsOn"`
+	Ended  bool    `json:"ended"`
 }
 
 type passwordResetPinJSON struct {
@@ -158,7 +164,32 @@ func newUserJSON(user accounts.User) userJSON {
 		LiveTvManagement: user.LiveTvManagement,
 		// The tallest video the user is offered.
 		QualityGroup: user.QualityGroup,
+		// When the account ends.
+		EndsOn: endsOn(user),
+		Ended:  user.Ended(time.Now()),
 	}
+}
+
+// endsOn is the date user's account ends, nil for never.
+func endsOn(user accounts.User) *string {
+	if user.EndsOn == nil {
+		return nil
+	}
+	return new(user.EndsOn.Format(time.DateOnly))
+}
+
+// endDate reads the end date a change sets: a YYYY-MM-DD date, or null for
+// never, which is the zero time.
+func endDate(raw json.RawMessage) (time.Time, bool) {
+	if string(raw) == "null" {
+		return time.Time{}, true
+	}
+	var text string
+	if json.Unmarshal(raw, &text) != nil {
+		return time.Time{}, false
+	}
+	date, err := time.Parse(time.DateOnly, text)
+	return date, err == nil && !date.IsZero()
 }
 
 // imageTag is the tag of user's profile picture, nil without one.
@@ -772,6 +803,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		LiveTvManagement *bool `json:"liveTvManagement"`
 		// QualityGroup, see userJSON.
 		QualityGroup *int `json:"qualityGroup"`
+		// EndsOn, see userJSON: a date, or null for never.
+		EndsOn json.RawMessage `json:"endsOn"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -824,6 +857,14 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 			schedules = append(schedules, accounts.AccessSchedule{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
 		}
 		changes.AccessSchedules = &schedules
+	}
+	if body.EndsOn != nil {
+		end, ok := endDate(body.EndsOn)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid_ends_on")
+			return
+		}
+		changes.EndsOn = &end
 	}
 	user, err := h.Accounts.UpdateUser(r.Context(), id, changes, keep)
 	if accountError(w, err) {

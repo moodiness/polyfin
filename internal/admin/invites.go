@@ -34,22 +34,24 @@ func newInviteUserJSON(user *accounts.InviteUser) *inviteUserJSON {
 // inviteJSON is an invite link as the invites list shows it: how many
 // accounts it may create and has created, when it expires (null for
 // never), the user whose settings new accounts copy (null for a new user's
-// defaults), who created it (null once deleted), and its state: active,
-// used_up, expired or revoked.
+// defaults), who created it (null once deleted), its state: active,
+// used_up, expired or revoked, and how many days after its creation each
+// account it creates ends (null for never).
 type inviteJSON struct {
-	ID        string          `json:"id"`
-	MaxUses   int             `json:"maxUses"`
-	Uses      int             `json:"uses"`
-	ExpiresAt *time.Time      `json:"expiresAt"`
-	CreatedAt time.Time       `json:"createdAt"`
-	RevokedAt *time.Time      `json:"revokedAt"`
-	Model     *inviteUserJSON `json:"model"`
-	CreatedBy *inviteUserJSON `json:"createdBy"`
-	State     string          `json:"state"`
+	ID                string          `json:"id"`
+	MaxUses           int             `json:"maxUses"`
+	Uses              int             `json:"uses"`
+	ExpiresAt         *time.Time      `json:"expiresAt"`
+	CreatedAt         time.Time       `json:"createdAt"`
+	RevokedAt         *time.Time      `json:"revokedAt"`
+	Model             *inviteUserJSON `json:"model"`
+	CreatedBy         *inviteUserJSON `json:"createdBy"`
+	State             string          `json:"state"`
+	AccountsEndInDays *int            `json:"accountsEndInDays"`
 }
 
 func (h *handler) newInviteJSON(invite accounts.Invite) inviteJSON {
-	return inviteJSON{
+	listed := inviteJSON{
 		ID:        invite.ID.String(),
 		MaxUses:   invite.MaxUses,
 		Uses:      invite.Uses,
@@ -60,6 +62,10 @@ func (h *handler) newInviteJSON(invite accounts.Invite) inviteJSON {
 		CreatedBy: newInviteUserJSON(invite.CreatedBy),
 		State:     invite.State(h.now()),
 	}
+	if invite.AccountDays > 0 {
+		listed.AccountsEndInDays = &invite.AccountDays
+	}
+	return listed
 }
 
 func (h *handler) invites(w http.ResponseWriter, r *http.Request) {
@@ -76,14 +82,17 @@ func (h *handler) invites(w http.ResponseWriter, r *http.Request) {
 }
 
 // createInvite creates an invite link. maxUses defaults to 1, and
-// expiresInDays to 7; null expiresInDays never expires. The answer holds
-// the link's token, given this once, and its address when the server's
-// public address is set (null otherwise: the admin app completes it).
+// expiresInDays to 7; null expiresInDays never expires. accountsEndInDays,
+// null or left out for never, ends each account the link creates that many
+// days after. The answer holds the link's token, given this once, and its
+// address when the server's public address is set (null otherwise: the
+// admin app completes it).
 func (h *handler) createInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		MaxUses       *int            `json:"maxUses"`
-		ExpiresInDays json.RawMessage `json:"expiresInDays"`
-		ModelUserID   *string         `json:"modelUserId"`
+		MaxUses           *int            `json:"maxUses"`
+		ExpiresInDays     json.RawMessage `json:"expiresInDays"`
+		ModelUserID       *string         `json:"modelUserId"`
+		AccountsEndInDays *int            `json:"accountsEndInDays"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -99,6 +108,14 @@ func (h *handler) createInvite(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_invite_expiry")
 			return
 		}
+	}
+	if days := body.AccountsEndInDays; days != nil {
+		// 0 would mean never: only null says so.
+		if *days == 0 {
+			writeError(w, http.StatusBadRequest, "invalid_invite_account_end")
+			return
+		}
+		invite.AccountDays = *days
 	}
 	if body.ModelUserID != nil {
 		id, err := accounts.ParseID(*body.ModelUserID)
@@ -154,6 +171,7 @@ func inviteError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidInviteUses, http.StatusBadRequest, "invalid_invite_uses"},
 		{accounts.ErrInvalidInviteExpiry, http.StatusBadRequest, "invalid_invite_expiry"},
 		{accounts.ErrInvalidInviteModel, http.StatusBadRequest, "invalid_invite_model"},
+		{accounts.ErrInvalidInviteAccountEnd, http.StatusBadRequest, "invalid_invite_account_end"},
 		{accounts.ErrInviteUnknown, http.StatusNotFound, "invite_unknown"},
 		{accounts.ErrInviteUsedUp, http.StatusGone, "invite_used_up"},
 		{accounts.ErrInviteExpired, http.StatusGone, "invite_expired"},

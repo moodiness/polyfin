@@ -465,6 +465,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},
+		{accounts.ErrAdministratorEnds, http.StatusConflict, "administrator_cannot_end"},
 		{accounts.ErrSetupComplete, http.StatusConflict, "setup_complete"},
 		{accounts.ErrNotFound, http.StatusNotFound, "not_found"},
 		{accounts.ErrWrongPassword, http.StatusForbidden, "wrong_password"},
