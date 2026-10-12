@@ -341,12 +341,13 @@ type settingsJSON struct {
 	// KnownProxies lists addresses, networks such as 172.18.0.0/16, and
 	// host names, the names after the rest.
 	KnownProxies *[]string `json:"knownProxies"`
-	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, MaxConversions
-	// and MaxConversionHeight keep their current values when a PUT leaves
-	// them out.
+	// AnalysisTimeout, VersionAttempts, PreferDirectPlay,
+	// SyncAddonSubtitles, MaxConversions and MaxConversionHeight keep their
+	// current values when a PUT leaves them out.
 	AnalysisTimeout     *int  `json:"analysisTimeout"`
 	VersionAttempts     *int  `json:"versionAttempts"`
 	PreferDirectPlay    *bool `json:"preferDirectPlay"`
+	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
 	// The settings tuning conversions keep their current values when a
@@ -535,6 +536,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
 		PreferDirectPlay:      &settings.PreferDirectPlay,
+		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
 
@@ -1073,6 +1075,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
+		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
 

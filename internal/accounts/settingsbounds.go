@@ -73,6 +73,7 @@ func DefaultSettings() Settings {
 		AnalysisTimeout:     DefaultAnalysisTimeout,
 		VersionAttempts:     DefaultVersionAttempts,
 		PreferDirectPlay:    false,
+		SyncAddonSubtitles:  true,
 		MaxConversions:      DefaultMaxConversions,
 		MaxConversionHeight: ConversionHeights[0],
 
@@ -214,6 +215,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"analysisTimeout":     between(MinAnalysisTimeout, MaxAnalysisTimeout, d.AnalysisTimeout),
 		"versionAttempts":     between(MinVersionAttempts, MaxVersionAttempts, d.VersionAttempts),
 		"preferDirectPlay":    is(d.PreferDirectPlay),
+		"syncAddonSubtitles":  is(d.SyncAddonSubtitles),
 		"maxConversions":      between(MinMaxConversions, MaxMaxConversions, d.MaxConversions),
 		"maxConversionHeight": choice(d.MaxConversionHeight, anys(ConversionHeights)),
 
