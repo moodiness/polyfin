@@ -86,8 +86,8 @@ type Source interface {
 	// sign-in.
 	Reread(ctx context.Context, signIn SignIn) (Account, SignIn, error)
 	// SignOut ends the session signIn signs in to, when Polyfin opened it,
-	// as best it can.
-	SignOut(ctx context.Context, signIn SignIn)
+	// as best it can within ctx. Its error never holds the sign-in.
+	SignOut(ctx context.Context, signIn SignIn) error
 }
 
 // timing is how often connections due are looked for: often enough for
@@ -439,11 +439,62 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 	}
 	if signIn, err := s.open(stored, owned); err == nil && owned {
 		if source := s.sources[app]; source != nil {
-			source.SignOut(ctx, signIn)
+			s.signOutNow(ctx, source, signIn, app)
 		}
 	}
 	s.logger.Info("A user disconnected an app", "user_id", user.String(), "app", app)
 	return nil
+}
+
+// Leaving reads, in tx, the sessions Polyfin opened for user's
+// connections, as user is being deleted, and returns what signs them out
+// in the background once the deletion is committed (see
+// accounts.Store.OnDelete), with the account user holds for an import, and
+// stops the imports of their connections. Keys the user pasted are only
+// forgotten, and sign-ins the server's key cannot open too.
+func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (func(), error) {
+	rows, err := tx.Query(ctx, "SELECT app, sign_in FROM app_connections WHERE user_id = $1 AND owned", user)
+	if err != nil {
+		return nil, err
+	}
+	type owned struct {
+		app    string
+		signIn SignIn
+	}
+	var sessions []owned
+	for rows.Next() {
+		var app, stored string
+		if err := rows.Scan(&app, &stored); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if signIn, err := s.open(stored, true); err == nil {
+			sessions = append(sessions, owned{app, signIn})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for key, run := range s.connecting {
+			if key.user == user {
+				if run.cancel != nil {
+					run.cancel()
+				}
+				delete(s.connecting, key)
+			}
+		}
+		if h := s.held[user]; h != nil {
+			h.timer.Stop()
+			delete(s.held, user)
+			s.release(h.account.SignIn, h.account.App)
+		}
+		for _, session := range sessions {
+			s.release(&session.signIn, session.app)
+		}
+	}, nil
 }
 
 // Run imports the connections due until ctx ends, then stops the imports

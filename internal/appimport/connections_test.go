@@ -30,6 +30,9 @@ type fakeSource struct {
 	// reads are the secrets read with, signedOut those signed out.
 	reads, signedOut []string
 	renewals         int
+	// signOutFails fails the sign-outs; hang has them wait for their
+	// context to end, and fail.
+	signOutFails, hang bool
 }
 
 func (f *fakeSource) Reread(_ context.Context, signIn SignIn) (Account, SignIn, error) {
@@ -51,10 +54,21 @@ func (f *fakeSource) Reread(_ context.Context, signIn SignIn) (Account, SignIn, 
 	return f.account, signIn, nil
 }
 
-func (f *fakeSource) SignOut(_ context.Context, signIn SignIn) {
+func (f *fakeSource) SignOut(ctx context.Context, signIn SignIn) error {
+	f.mu.Lock()
+	hang, fails := f.hang, f.signOutFails
+	f.mu.Unlock()
+	if hang {
+		<-ctx.Done()
+		return errors.New("the app does not answer")
+	}
+	if fails {
+		return errors.New("the app answered 500")
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.signedOut = append(f.signedOut, signIn.Secret)
+	return nil
 }
 
 func (f *fakeSource) set(change func(*fakeSource)) {

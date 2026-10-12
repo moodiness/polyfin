@@ -247,7 +247,9 @@ func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
 	}
 
 	// Signing out ends the session, and only it.
-	r.SignOut(t.Context(), renewed)
+	if err := r.SignOut(t.Context(), renewed); err != nil {
+		t.Errorf("signing out: %v", err)
+	}
 	if b.Open() != 0 {
 		t.Error("the session is still open")
 	}
@@ -272,5 +274,9 @@ func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
 	b.EndSessions()
 	if _, _, err := r.Reread(t.Context(), *account.SignIn); !errors.Is(err, appimport.ErrSignInRefused) {
 		t.Errorf("a session ended: %v", err)
+	}
+	// Signing out a session the backend ended already is no failure.
+	if err := r.SignOut(t.Context(), *account.SignIn); err != nil {
+		t.Errorf("signing out a session ended: %v", err)
 	}
 }

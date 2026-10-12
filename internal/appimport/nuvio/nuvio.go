@@ -181,7 +181,7 @@ func (r *Reader) Read(ctx context.Context, address, email, password string, keep
 	kept := false
 	defer func() {
 		if !kept {
-			s.signOut()
+			_ = s.signOut(context.Background())
 		}
 	}()
 	account, err := s.backup(ctx)
@@ -309,17 +309,22 @@ func rereadError(err error) error {
 }
 
 // SignOut ends the session of a connection's refresh token: it renews it,
-// to sign out with its access token, as best it can.
-func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) {
+// to sign out with its access token, as best it can within ctx. A refresh
+// token the backend refuses has its session ended already.
+func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) error {
 	ctx, cancel := context.WithTimeout(ctx, r.timing.signOut)
 	defer cancel()
 	s, err := r.open(ctx, signIn.Backend)
 	if err != nil {
-		return
+		return err
 	}
-	if _, err := s.refresh(ctx, signIn.Secret); err == nil {
-		s.signOut()
+	switch _, err := s.refresh(ctx, signIn.Secret); {
+	case errors.Is(err, errRefused):
+		return nil
+	case err != nil:
+		return err
 	}
+	return s.signOut(ctx)
 }
 
 // errRefused and errMissing are a request the backend answered refused,
@@ -428,11 +433,18 @@ func (s *session) do(ctx context.Context, method, path string, body []byte) (int
 
 // signOut ends the session, so that the account does not keep it: this
 // session only, not the account's others, on the user's own devices.
-func (s *session) signOut() {
-	ctx, cancel := context.WithTimeout(context.Background(), s.r.timing.signOut)
+func (s *session) signOut(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, s.r.timing.signOut)
 	defer cancel()
-	_, _, _, _ = s.do(ctx, http.MethodPost, "/auth/v1/logout?scope=local", []byte("{}"))
+	status, _, _, err := s.do(ctx, http.MethodPost, "/auth/v1/logout?scope=local", []byte("{}"))
 	s.token = ""
+	switch {
+	case err != nil:
+		return ErrUnreachable
+	case status >= http.StatusMultipleChoices:
+		return fmt.Errorf("the backend answered %d", status)
+	}
+	return nil
 }
 
 // retryAfter reads a Retry-After header in seconds, zero when absent.

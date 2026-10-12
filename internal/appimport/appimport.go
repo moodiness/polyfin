@@ -202,6 +202,11 @@ type Service struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
+	// signOuts bounds the sign-outs in the background, which Close gives
+	// closeWait to end before cancelling them.
+	signOuts       context.Context
+	cancelSignOuts context.CancelFunc
+	closeWait      time.Duration
 
 	mu     sync.Mutex
 	closed bool
@@ -223,15 +228,21 @@ type held struct {
 // New returns a service importing with options.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
+	signOuts, cancelSignOuts := context.WithCancel(context.Background())
 	return &Service{settings: options.Settings, titles: options.Titles, userData: options.UserData, addons: options.Addons,
 		activity: options.Activity, logger: options.Logger, db: options.DB, box: options.Secrets, sources: options.Sources, now: time.Now,
 		stopped: options.Stopped,
-		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{},
-		connecting: map[connectionKey]*connectionRun{}}
+		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, signOuts: signOuts, cancelSignOuts: cancelSignOuts,
+		closeWait: closeWait, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}, connecting: map[connectionKey]*connectionRun{}}
 }
 
+// closeWait is how long Close waits, at most, for the sessions being
+// signed out.
+const closeWait = 5 * time.Second
+
 // Close drops the accounts held, signing out the sessions they kept open,
-// stops the imports running and waits for them to end.
+// stops the imports running and waits for them to end, and for the
+// sign-outs under way, for closeWait at most.
 func (s *Service) Close() {
 	s.mu.Lock()
 	for by, h := range s.held {
@@ -242,6 +253,8 @@ func (s *Service) Close() {
 	s.closed = true
 	s.mu.Unlock()
 	s.cancel()
+	stop := time.AfterFunc(s.closeWait, s.cancelSignOuts)
+	defer stop.Stop()
 	s.wg.Wait()
 }
 
@@ -268,7 +281,15 @@ func (s *Service) release(signIn *SignIn, app string) {
 		return
 	}
 	kept := *signIn
-	s.spawn(func() { source.SignOut(context.Background(), kept) })
+	s.spawn(func() { s.signOutNow(s.signOuts, source, kept, app) })
+}
+
+// signOutNow signs out the session signIn of app keeps open with source,
+// logging a failure, without the sign-in.
+func (s *Service) signOutNow(ctx context.Context, source Source, signIn SignIn, app string) {
+	if err := source.SignOut(ctx, signIn); err != nil {
+		s.logger.Warn("A session Polyfin opened at an app could not be signed out", "app", app, "error", err)
+	}
 }
 
 // Hold keeps account, which by read, while they choose what to import,

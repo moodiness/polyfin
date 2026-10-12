@@ -262,7 +262,7 @@ func (r *Reader) ReadKey(ctx context.Context, key string, keep bool) (appimport.
 func (r *Reader) read(ctx context.Context, key string, owned, keep bool, name string) (appimport.Account, error) {
 	items, descriptors, err := r.fetch(ctx, key)
 	if owned && (!keep || err != nil) {
-		r.signOut(key)
+		_ = r.signOut(context.Background(), key)
 	}
 	switch {
 	case errors.Is(err, errRefused):
@@ -316,10 +316,11 @@ func (r *Reader) Reread(ctx context.Context, signIn appimport.SignIn) (appimport
 // SignOut ends the session of a connection's auth key when Polyfin
 // obtained it, by a link code or a password: a key the user pasted is
 // only forgotten, as signing it out would sign their own browser out.
-func (r *Reader) SignOut(_ context.Context, signIn appimport.SignIn) {
+func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) error {
 	if signIn.Owned && signIn.Secret != "" {
-		r.signOut(signIn.Secret)
+		return r.signOut(ctx, signIn.Secret)
 	}
+	return nil
 }
 
 // fetch reads the account's library items and addon descriptors, as
@@ -346,12 +347,12 @@ func (r *Reader) fetch(ctx context.Context, key string) (items, descriptors []js
 }
 
 // signOut ends the session key signs in to, so that the account does not
-// keep it.
-func (r *Reader) signOut(key string) {
-	ctx, cancel := context.WithTimeout(context.Background(), r.timing.signOut)
+// keep it, within ctx and a few seconds.
+func (r *Reader) signOut(ctx context.Context, key string) error {
+	ctx, cancel := context.WithTimeout(ctx, r.timing.signOut)
 	defer cancel()
 	var ignored json.RawMessage
-	_ = r.call(ctx, http.MethodPost, r.api+"/api/logout", struct {
+	return r.call(ctx, http.MethodPost, r.api+"/api/logout", struct {
 		AuthKey string `json:"authKey"`
 	}{key}, &ignored)
 }

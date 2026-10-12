@@ -447,7 +447,9 @@ func TestStayingConnectedKeepsTheKeyForLaterReads(t *testing.T) {
 
 	// Signing out ends the session Polyfin opened; Stremio refuses the key
 	// from then on.
-	r.SignOut(t.Context(), kept)
+	if err := r.SignOut(t.Context(), kept); err != nil {
+		t.Errorf("signing out: %v", err)
+	}
 	if f.Open() != 0 {
 		t.Error("the session is still open")
 	}
@@ -480,7 +482,9 @@ func TestAPastedKeyKeptIsNeverSignedOut(t *testing.T) {
 	if err != nil || account.SignIn == nil || account.SignIn.Owned || account.SignIn.Secret != pasted {
 		t.Fatalf("account: %+v %v", account.SignIn, err)
 	}
-	r.SignOut(t.Context(), *account.SignIn)
+	if err := r.SignOut(t.Context(), *account.SignIn); err != nil {
+		t.Errorf("signing out: %v", err)
+	}
 	for _, request := range f.Requests() {
 		if request.Path == "/api/logout" {
 			t.Error("a pasted key was signed out")
