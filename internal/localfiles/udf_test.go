@@ -489,13 +489,13 @@ func TestHostileUDFImagesFail(t *testing.T) {
 		if err != nil {
 			return true
 		}
-		_, err = imagePlaylists(fsys)
+		_, err = imagePlaylists(fsys, chooseTitles)
 		_, fileErr := fsys.file("BDMV", "STREAM", "00000.m2ts")
 		return err != nil || fileErr != nil
 	}
 	if fsys, err := openDiscFS(readerOf(good)); err != nil || fails(good) {
 		t.Fatalf("the image itself: %v", err)
-	} else if titles, err := imagePlaylists(fsys); !slices.Equal(titles, []int{0}) {
+	} else if titles, err := imagePlaylists(fsys, chooseTitles); len(titles) != 1 || titles[0].number != 0 {
 		t.Fatalf("the image's titles: %v %v", titles, err)
 	}
 	for name, mutate := range map[string]func(img []byte) []byte{
@@ -557,7 +557,7 @@ func TestHostileUDFImagesFail(t *testing.T) {
 			t.Errorf("%s: read", name)
 		}
 		// A broken image is no layout FFmpeg would be asked to read.
-		if _, _, _, err := readDisc(readerOf(img)); errors.Is(err, errUnsupportedUDF) {
+		if _, err := readDisc(readerOf(img), KindMovies); errors.Is(err, errUnsupportedUDF) {
 			t.Errorf("%s: %v", name, err)
 		}
 		if elapsed := time.Since(start); elapsed > time.Second {

@@ -1,6 +1,7 @@
 package localfiles
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -35,6 +37,10 @@ const (
 	// reasonDiscTitle: it is a disc's title other than its main one, which
 	// the disc folder's name does not tell (see titleUnit).
 	reasonDiscTitle = "disc_title"
+	// reasonDiscEpisode: it is a title of a show's disc whose episodes
+	// neither an administrator nor the disc's name gives (see
+	// numberDiscs).
+	reasonDiscEpisode = "disc_episode"
 )
 
 // How a file was matched, its matched_by; a home video is its own title.
@@ -282,24 +288,43 @@ func (s *Service) matchedUnits(ctx context.Context, id accounts.ID) (map[string]
 }
 
 // unitFiles reads the files of one of a folder's units, as a scan read
-// them, with the identifier their NFO file gave.
+// them, with the identifier their NFO file gave, the titles of a show's
+// discs numbered as a scan numbers them (see numberDiscs).
 func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]entry, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, nfo_id FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path",
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, nfo_id, coalesce(length, 0) FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path",
 		folder.Addon.ID, unit)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (entry, error) {
+	entries, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (entry, error) {
 		var rel, nfo string
 		var f found
-		if err := row.Scan(&rel, &f.size, &f.modified, &nfo); err != nil {
+		var seconds int
+		if err := row.Scan(&rel, &f.size, &f.modified, &nfo, &seconds); err != nil {
 			return entry{}, err
 		}
-		f.extra = extraTitle(rel, unit)
+		f.extra = folder.Kind == KindMovies && extraTitle(rel, unit)
+		f.length = time.Duration(seconds) * time.Second
 		e := readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f)
 		e.nfo = nfo
 		return e, nil
 	})
+	if err != nil || folder.Kind != KindShows {
+		return entries, err
+	}
+	given, err := s.givenEpisodes(ctx, folder.Addon.ID)
+	if err != nil {
+		return nil, err
+	}
+	byPath := make(map[string]entry, len(entries))
+	for _, e := range entries {
+		byPath[e.path] = e
+	}
+	numberDiscs(byPath, given)
+	for i, e := range entries {
+		entries[i] = byPath[e.path]
+	}
+	return entries, nil
 }
 
 // Search looks query up in the metadata addons for titles of the folder's
@@ -413,23 +438,27 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 // is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
 // its unit the disc's folder, or one of its titles' (see titleUnit), or
 // of the disc image it is (DiscDVDImage, DiscBluRayImage); empty for any
-// other file. In a music folder, it is a track whose tags and names give no
-// title ("no_title") or no album ("no_album"), which no link links.
+// other file. A title of a show's disc has the kind of its disc, its unit
+// its show's folder, and DiscTitle telling which it is. In a music folder,
+// it is a track whose tags and names give no title ("no_title") or no
+// album ("no_album"), which no link links.
 type Unmatched struct {
-	Path   string
-	Unit   string
-	Title  string
-	Year   int
-	Size   int64
-	Reason string
-	Disc   string
+	Path      string
+	Unit      string
+	Title     string
+	Year      int
+	Size      int64
+	Reason    string
+	Disc      string
+	DiscTitle *DiscTitle
 }
 
 // maxUnmatched bounds the unmatched files listed at once.
 const maxUnmatched = 1000
 
 // Unmatched lists the files of a folder no title was matched to, by path,
-// at most maxUnmatched, with how many there are.
+// at most maxUnmatched, with how many there are; the titles of a show's
+// disc follow one another, in the order of their numbers.
 func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, int, error) {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -463,7 +492,34 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 				u.Disc = kind
 			}
 		}
+		if kind, _, ok := discEntry(u.Path); ok && folder.Kind == KindShows {
+			u.Disc = kind
+		}
 		return u, err
 	})
-	return list, total, err
+	if err != nil || folder.Kind != KindShows {
+		return list, total, err
+	}
+	titles, err := s.showDiscTitles(ctx, id)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i, u := range list {
+		if title, ok := titles[u.Path]; ok {
+			list[i].DiscTitle = &title
+		}
+	}
+	// A disc's titles in the order of their numbers, where its first is.
+	slices.SortStableFunc(list, func(a, b Unmatched) int {
+		key := func(u Unmatched) (string, int) {
+			if u.DiscTitle == nil {
+				return u.Path, 0
+			}
+			return u.DiscTitle.Disc, u.DiscTitle.Number
+		}
+		pathA, numberA := key(a)
+		pathB, numberB := key(b)
+		return cmp.Or(strings.Compare(pathA, pathB), cmp.Compare(numberA, numberB))
+	})
+	return list, total, nil
 }

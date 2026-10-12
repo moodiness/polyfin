@@ -96,3 +96,34 @@ in `udf_test.go`): `POLYFIN_UPDATE_FIXTURES=1 go test -run
 TestUDFFixtureIsTheBuildersImage ./internal/localfiles` writes it again.
 FFmpeg's bluray protocol reads it, and `udfinfo` of udftools 2.3 reads it
 as UDF 2.50.
+
+`series-bluray.tar.gz` is a show's Blu-ray disc copied as it is, its `BDMV`
+folder, packed. Playlists `00001` and `00002` are its episodes: 185 seconds
+of 64x64 `testsrc` and 200 seconds of `testsrc2` H.264 video, with silent
+AC-3 audio, each in a clip of its own, `00001` and `00002`. Playlist `00000`
+plays all: both clips, in turn. Playlist `00003` is a 30-second extra of
+`smptebars`, clip `00003`. Made with the ffmpeg package of Debian trixie and
+tsMuxeR 2.7.0, in an amd64 container, in this directory:
+
+```sh
+V="-c:v libx264 -preset veryslow -profile:v high -level 4.1 -pix_fmt yuv420p -crf 45 -g 24 -keyint_min 24 -sc_threshold 0 -bsf:v h264_mp4toannexb -f h264"
+ffmpeg -f lavfi -i testsrc=size=64x64:rate=24 -t 185 $V first.264
+ffmpeg -f lavfi -i testsrc2=size=64x64:rate=24 -t 200 $V second.264
+ffmpeg -f lavfi -i smptebars=size=64x64:rate=24 -t 30 $V extra.264
+for n in first:185 second:200 extra:30; do
+  ffmpeg -f lavfi -i anullsrc=r=48000:cl=stereo -t ${n#*:} -c:a ac3 -b:a 96k -ac 2 ${n%:*}.ac3
+done
+for n in first:1 second:2 extra:3; do
+  printf 'MUXOPT --blu-ray --vbr --mplsOffset=%s --m2tsOffset=%s\nV_MPEG4/ISO/AVC, "%s.264", fps=24, insertSEI, contSPS\nA_AC3, "%s.ac3", lang=eng\n' \
+    ${n#*:} ${n#*:} ${n%:*} ${n%:*} > ${n%:*}.meta
+  tsMuxeR ${n%:*}.meta series
+done
+```
+
+tsMuxeR writes a playlist per run. Playlist `00000` was then written from
+`00001` and `00002`: their header and AppInfoPlayList, both play items in
+turn, the second not seamless (connection condition 1), and both
+playlists' marks, those of `00002` moved to the second item. It was
+copied to `BDMV/BACKUP/PLAYLIST` too, and the disc packed with `tar -C
+series -czf series-bluray.tar.gz BDMV`. FFmpeg's bluray protocol plays
+`00000` as 9,240 frames, both clips.

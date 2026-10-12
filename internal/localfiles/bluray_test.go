@@ -176,7 +176,7 @@ func TestDiscTitles(t *testing.T) {
 		}, []int{802}},
 		{"half new", []playlist{list(1, minutes("00001", 60)), list(2, minutes("00001", 30), minutes("00002", 30))}, []int{1}},
 	} {
-		if got := numbers(discTitles(tc.playlists)); !slices.Equal(got, tc.want) {
+		if got := numbers(discTitles(tc.playlists, chooseTitles)); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %v", tc.name, got)
 		}
 	}
@@ -187,14 +187,14 @@ func TestDiscTitles(t *testing.T) {
 		parts := []clipPart{minutes("00001", 50), minutes("00002", 40), minutes("00003", 30)}
 		decoys = append(decoys, list(i, append(parts[i%3:], parts[:i%3]...)...))
 	}
-	if got := numbers(discTitles(decoys)); !slices.Equal(got, []int{0}) {
+	if got := numbers(discTitles(decoys, chooseTitles)); !slices.Equal(got, []int{0}) {
 		t.Errorf("decoys reusing the movie's clips: %v", got)
 	}
 	decoys = decoys[:0]
 	for i := range 40 {
 		decoys = append(decoys, list(i, minutes(strings.Repeat("0", 3)+string(rune('A'+i%26))+string(rune('a'+i/26)), 100)))
 	}
-	if got := numbers(discTitles(decoys)); !slices.Equal(got, []int{0}) {
+	if got := numbers(discTitles(decoys, chooseTitles)); !slices.Equal(got, []int{0}) {
 		t.Errorf("decoys of their own clips: %v", got)
 	}
 }

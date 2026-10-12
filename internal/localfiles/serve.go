@@ -119,10 +119,11 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 // files, named after the folder, with their resolution and size, and the
 // subtitle files beside them, which the loopback interface serves (see
 // UseFiles). A disc's entry bears its disc's name as its file name (see
-// discLabel), a title other than the disc's main one its number too, as in
-// "Box - DISC02 - title 2.m2ts", or for an image's, "Box - title 2.iso"; a
-// Blu-ray disc's playlist, a DVD and a disc image have the address of
-// their input as their URL, FFmpeg reading them itself (see Input).
+// discLabel), a title other than the disc's main one, as each title of a
+// show's disc, its number too, as in "Box - DISC02 - title 2.m2ts", or for
+// an image's, "Box - title 2.iso"; a Blu-ray disc's playlist, a DVD and a
+// disc image have the address of their input as their URL, FFmpeg reading
+// them itself (see Input).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -173,7 +174,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 			base = rel
 		}
 		filename, address := path.Base(rel), s.files+file.String()+strings.ToLower(path.Ext(rel))
-		if disc, folder, ok := discEntry(rel); ok && kind == KindMovies {
+		if disc, folder, ok := discEntry(rel); ok {
 			label := discLabel(folder, locationName(location))
 			if titled {
 				label += " - title " + strconv.Itoa(number)
@@ -190,7 +191,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 				address = s.inputs + file.String()
 			}
 		}
-		if imageFile(base) && kind == KindMovies {
+		if imageFile(base) {
 			address = s.inputs + file.String()
 			if titled {
 				ext := path.Ext(base)

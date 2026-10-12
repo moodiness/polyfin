@@ -119,31 +119,41 @@ func twoDigits(n int) string {
 	return string([]byte{byte('0' + n/10), byte('0' + n%10)})
 }
 
+// movieTitles chooses the movies of the DVD whose VIDEO_TS folder is dir
+// (see dvdTitles), each by its number and set alone.
+func movieTitles(dir string) ([]dvdChoice, error) {
+	titles, err := dvdTitles(dir, chooseTitles)
+	for i := range titles {
+		titles[i] = dvdChoice{title: titles[i].title, set: titles[i].set}
+	}
+	return titles, err
+}
+
 // A DVD's main title is its longest, whatever its number or its set's
 // size; the IFO files tell how long each title plays. Each other title as
 // long as a movie is one too.
 func TestDVDMainTitle(t *testing.T) {
-	titles, err := dvdTitles(filepath.Join("testdata", "dvd", "VIDEO_TS"))
+	titles, err := movieTitles(filepath.Join("testdata", "dvd", "VIDEO_TS"))
 	if err != nil || !slices.Equal(titles, []dvdChoice{{title: 2, set: 2}}) {
 		t.Errorf("the test DVD: %v %v", titles, err)
 	}
 	dir := t.TempDir()
 	writeIFOs(t, dir, ifoTitle{set: 1, seconds: 90}, ifoTitle{set: 2, seconds: 600}, ifoTitle{set: 2, seconds: 5400},
 		ifoTitle{set: 3, seconds: 5400}, ifoTitle{set: 1, seconds: 20})
-	if titles, err := dvdTitles(dir); err != nil || !slices.Equal(titles, []dvdChoice{{title: 3, set: 2}, {title: 4, set: 3}}) {
+	if titles, err := movieTitles(dir); err != nil || !slices.Equal(titles, []dvdChoice{{title: 3, set: 2}, {title: 4, set: 3}}) {
 		t.Errorf("titles: %v %v", titles, err)
 	}
 	// Any case, as libdvdread reads them.
 	if err := os.Rename(filepath.Join(dir, "VTS_02_0.IFO"), filepath.Join(dir, "vts_02_0.ifo")); err != nil {
 		t.Fatal(err)
 	}
-	if titles, err := dvdTitles(dir); err != nil || len(titles) == 0 || titles[0].title != 3 {
+	if titles, err := movieTitles(dir); err != nil || len(titles) == 0 || titles[0].title != 3 {
 		t.Errorf("lower case: %v, %v", titles, err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "VIDEO_TS.IFO"), []byte("not a DVD"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := dvdTitles(dir); err == nil {
+	if _, err := movieTitles(dir); err == nil {
 		t.Error("an unreadable VIDEO_TS.IFO was read")
 	}
 	if got := playbackTime([]byte{0x01, 0x32, 0x05, 0x40 | 0x12}); got != time.Hour+32*time.Minute+5*time.Second+12*time.Second/25 {
@@ -174,7 +184,7 @@ func TestDVDTitlesAreItsMovies(t *testing.T) {
 		ifoTitle{set: 1, seconds: 5700, cells: cut},
 		ifoTitle{set: 2, seconds: 5000, cells: cells(2, 2500, 2500)},
 		ifoTitle{set: 3, seconds: 600, cells: cells(3, 600)})
-	titles, err := dvdTitles(dir)
+	titles, err := movieTitles(dir)
 	if err != nil || !slices.Equal(titles, []dvdChoice{{title: 3, set: 1}, {title: 4, set: 2}}) {
 		t.Errorf("titles: %v %v", titles, err)
 	}
@@ -184,7 +194,7 @@ func TestDVDTitlesAreItsMovies(t *testing.T) {
 	}
 	dir = t.TempDir()
 	writeIFOs(t, dir, many...)
-	if titles, err := dvdTitles(dir); err != nil || !slices.Equal(titles, []dvdChoice{{title: 8, set: 8}}) {
+	if titles, err := movieTitles(dir); err != nil || !slices.Equal(titles, []dvdChoice{{title: 8, set: 8}}) {
 		t.Errorf("decoys: %v %v", titles, err)
 	}
 }

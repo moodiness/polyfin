@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -40,7 +42,9 @@ import (
 // hand, kept as the image's path with its number (see discTitlePath).
 // FFmpeg plays an image's titles from the image itself (see Input), and
 // those of an image on a share from its files' bytes in the image, served
-// as one file (see sharedisc.go). A shows folder leaves images out.
+// as one file (see sharedisc.go). A show's image, in a shows folder, is its
+// episodes, each kept as another movie is (see episodes.go); one whose
+// titles cannot be read is left out.
 
 // Kinds of disc images, as local_disc_images keeps them, and as Unmatched
 // tells them.
@@ -70,31 +74,60 @@ func imageKind(kind string) string {
 
 // storedImage is what a scan found an image to be: its kind, empty for no
 // disc's, its main title, -1 for libbluray's choice and 0 for FFmpeg's
-// (see Input), and its other movies' titles.
+// (see Input), and its other titles, with how long each plays, the main
+// title's first, when the image's tables tell it. A show's image, in a
+// shows folder, has no main title: title is its first episode, and titles
+// its others (see chooseEpisodes).
 type storedImage struct {
-	file   found
-	kind   string
-	title  int
-	titles []int
+	file    found
+	kind    string
+	title   int
+	titles  []int
+	lengths []time.Duration
+}
+
+// entries are the entries of the titles of an image at rel found as f:
+// its main title's, rel itself, and each other title's, marked as such;
+// for a show's image, episodes set, each title's, rel and its number (see
+// discTitlePath). Each has its title's length, when known.
+func (image storedImage) entries(rel string, f found, episodes bool) map[string]found {
+	length := func(i int) time.Duration {
+		if i < len(image.lengths) {
+			return image.lengths[i]
+		}
+		return 0
+	}
+	main := rel
+	if episodes {
+		main = discTitlePath(rel, image.title)
+	}
+	f.length = length(0)
+	entries := map[string]found{main: f}
+	for i, title := range image.titles {
+		f.extra, f.length = !episodes, length(i+1)
+		entries[discTitlePath(rel, title)] = f
+	}
+	return entries
 }
 
 // collapseImages keeps, of the files a walk of the folder at root found,
-// the disc images of a movies folder in the container, each with an entry
-// per other movie it holds, and none of a shows folder's; it leaves out
+// the disc images of a movies folder, each with an entry per other movie
+// it holds, and of a shows folder those of each show's image (see
+// showDisc), an entry per episode (see storedImage.entries); it leaves out
 // the images of no disc. Each image new or changed since the last scan is
 // read again, and the answers kept. A share's images are read on the
 // share, by ranges (see shareImage).
 func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Folder, root string, list listing) error {
 	files := list.files
-	if folder.Kind == KindShows {
+	episodes := folder.Kind == KindShows
+	if episodes {
 		for rel := range files {
-			if imageFile(rel) {
+			if imageFile(rel) && !showDisc(rel, true) {
 				delete(files, rel)
 			}
 		}
-		return nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, kind, title, titles FROM local_disc_images WHERE addon_id = $1", id)
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, kind, title, titles, lengths FROM local_disc_images WHERE addon_id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -102,9 +135,13 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 	for rows.Next() {
 		var rel string
 		var image storedImage
-		if err := rows.Scan(&rel, &image.file.size, &image.file.modified, &image.kind, &image.title, &image.titles); err != nil {
+		var lengths []int
+		if err := rows.Scan(&rel, &image.file.size, &image.file.modified, &image.kind, &image.title, &image.titles, &lengths); err != nil {
 			rows.Close()
 			return err
+		}
+		for _, seconds := range lengths {
+			image.lengths = append(image.lengths, time.Duration(seconds)*time.Second)
 		}
 		stored[rel] = image
 	}
@@ -119,25 +156,21 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 		}
 		image, known := stored[rel]
 		if !known || image.file.size != f.size || !image.file.modified.Equal(f.modified) {
-			image = storedImage{file: f}
 			if folder.Share != "" {
-				image.kind, image.title, image.titles = shareImage(ctx, list, rel)
+				image = shareImage(ctx, list, rel, folder.Kind)
 			} else {
-				image.kind, image.title, image.titles = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)))
+				image = s.readImage(ctx, filepath.Join(root, filepath.FromSlash(rel)), folder.Kind)
 			}
+			image.file = f
 			read[rel] = image
 		}
 		seen[rel] = image
 	}
 	for rel, image := range seen {
-		if image.kind == "" {
-			delete(files, rel)
-			continue
-		}
-		for _, title := range image.titles {
-			f := files[rel]
-			f.extra = true
-			files[discTitlePath(rel, title)] = f
+		f := files[rel]
+		delete(files, rel)
+		if image.kind != "" {
+			maps.Copy(files, image.entries(rel, f, episodes))
 		}
 	}
 	var forgotten []string
@@ -155,9 +188,13 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 		if titles == nil {
 			titles = []int{}
 		}
-		batch.Queue(`INSERT INTO local_disc_images (addon_id, path, size, modified, kind, title, titles) VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, kind = $5, title = $6, titles = $7`,
-			id, rel, image.file.size, image.file.modified, image.kind, image.title, titles)
+		lengths := make([]int, len(image.lengths))
+		for i, length := range image.lengths {
+			lengths[i] = int(length / time.Second)
+		}
+		batch.Queue(`INSERT INTO local_disc_images (addon_id, path, size, modified, kind, title, titles, lengths) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, kind = $5, title = $6, titles = $7, lengths = $8`,
+			id, rel, image.file.size, image.file.modified, image.kind, image.title, titles, lengths)
 	}
 	if len(forgotten) > 0 {
 		batch.Queue("DELETE FROM local_disc_images WHERE addon_id = $1 AND path = ANY($2)", id, forgotten)
@@ -171,74 +208,98 @@ func (s *Service) collapseImages(ctx context.Context, id accounts.ID, folder Fol
 // system is laid out in a way Polyfin does not read are left out.
 func (s *Service) UseProbe(probe func(ctx context.Context, in media.Input) bool) { s.probe = probe }
 
-// readImage reads what the image at path is: its kind, empty for no
-// disc's, its main title, and its other movies' titles (see storedImage).
-// An image whose UDF file system is laid out in a way Polyfin does not
-// read (see errUnsupportedUDF), as those of rewritable and write-once
-// media are, is a Blu-ray disc's when FFmpeg's bluray protocol reads it,
-// one movie, libbluray choosing its title; a broken one is no disc's.
-func (s *Service) readImage(ctx context.Context, path string) (kind string, title int, others []int) {
+// readImage reads what the image at path is, for a folder of kind (see
+// storedImage). An image whose UDF file system is laid out in a way
+// Polyfin does not read (see errUnsupportedUDF), as those of rewritable
+// and write-once media are, is, in a movies folder, a Blu-ray disc's when
+// FFmpeg's bluray protocol reads it, one movie, libbluray choosing its
+// title; a broken one is no disc's, and neither is, in a shows folder, an
+// image whose episodes cannot be read.
+func (s *Service) readImage(ctx context.Context, path, kind string) storedImage {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", 0, nil
+		return storedImage{}
 	}
 	defer file.Close()
-	kind, title, others, err = readDisc(file)
-	if errors.Is(err, errUnsupportedUDF) && s.probe != nil && s.probe(ctx, media.Input{Options: []string{"-playlist", "-1"}, Path: "bluray:" + path}) {
-		return imageBluRay, -1, nil
+	image, err := readDisc(file, kind)
+	if errors.Is(err, errUnsupportedUDF) && kind != KindShows && s.probe != nil &&
+		s.probe(ctx, media.Input{Options: []string{"-playlist", "-1"}, Path: "bluray:" + path}) {
+		return storedImage{kind: imageBluRay, title: -1}
 	}
-	return kind, title, others
+	return image
 }
 
-// shareImage reads what the image rel of a share is, through the walk's
-// opener, by ranges (see readImage). FFmpeg reads a share's disc only as
-// the titles Polyfin lays out: an image whose titles cannot be read, a
-// Blu-ray image's playlists or a DVD image's IFO files, or whose UDF
-// layout is not read, is no disc's here.
-func shareImage(ctx context.Context, list listing, rel string) (kind string, title int, others []int) {
+// shareImage reads what the image rel of a share is, for a folder of
+// kind, through the walk's opener, by ranges (see readImage). FFmpeg reads
+// a share's disc only as the titles Polyfin lays out: an image whose
+// titles cannot be read, a Blu-ray image's playlists or a DVD image's IFO
+// files, or whose UDF layout is not read, is no disc's here.
+func shareImage(ctx context.Context, list listing, rel, kind string) storedImage {
 	file, err := list.open(ctx, rel)
 	if err != nil {
-		return "", 0, nil
+		return storedImage{}
 	}
 	defer file.Close()
 	at, err := readerAt(file)
 	if err != nil {
-		return "", 0, nil
+		return storedImage{}
 	}
-	kind, title, others, _ = readDisc(at)
-	if kind == "" || title < 0 || kind == imageDVD && title == 0 {
-		return "", 0, nil
+	image, _ := readDisc(at, kind)
+	if image.kind == "" || image.title < 0 || image.kind == imageDVD && image.title == 0 {
+		return storedImage{}
 	}
-	return kind, title, others
+	return image
 }
 
-// readDisc reads what the image r is (see readImage), or why its file
-// systems hold no disc Polyfin reads.
-func readDisc(r io.ReaderAt) (kind string, title int, others []int, err error) {
+// errNoEpisodes reports a show's disc image whose episodes cannot be read.
+var errNoEpisodes = errors.New("the image's episodes cannot be read")
+
+// readDisc reads what the image r is, for a folder of kind (see
+// readImage), or why its file systems hold no disc Polyfin reads. A
+// movies folder's image whose titles cannot be read is played as FFmpeg
+// chooses; a shows folder's is left out.
+func readDisc(r io.ReaderAt, kind string) (storedImage, error) {
 	fsys, err := openDiscFS(r)
 	if err != nil {
-		return "", 0, nil, err
+		return storedImage{}, err
 	}
 	if _, err := fsys.names("VIDEO_TS"); err == nil {
-		titles, err := dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file("VIDEO_TS", name) })
-		if err != nil {
+		titles, err := dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file("VIDEO_TS", name) }, titleChooser(kind))
+		switch {
+		case kind == KindShows && len(titles) == 0:
+			return storedImage{}, errNoEpisodes
+		case err != nil:
 			// FFmpeg plays the DVD's first title.
-			return imageDVD, 0, nil, nil
+			return storedImage{kind: imageDVD}, nil
 		}
-		for _, t := range titles[1:] {
-			others = append(others, t.title)
+		image := storedImage{kind: imageDVD, title: titles[0].title}
+		for i, t := range titles {
+			if i > 0 {
+				image.titles = append(image.titles, t.title)
+			}
+			image.lengths = append(image.lengths, t.length)
 		}
-		return imageDVD, titles[0].title, others, nil
+		return image, nil
 	}
 	if _, err = fsys.names("BDMV"); err == nil {
-		titles, err := imagePlaylists(fsys)
-		if err != nil {
+		titles, err := imagePlaylists(fsys, titleChooser(kind))
+		switch {
+		case err != nil && kind == KindShows:
+			return storedImage{}, errNoEpisodes
+		case err != nil:
 			// libbluray chooses the disc's main title.
-			return imageBluRay, -1, nil, nil
+			return storedImage{kind: imageBluRay, title: -1}, nil
 		}
-		return imageBluRay, titles[0], titles[1:], nil
+		image := storedImage{kind: imageBluRay, title: titles[0].number}
+		for i, t := range titles {
+			if i > 0 {
+				image.titles = append(image.titles, t.number)
+			}
+			image.lengths = append(image.lengths, t.length)
+		}
+		return image, nil
 	}
-	return "", 0, nil, err
+	return storedImage{}, err
 }
 
 // maxImagePlaylists bounds the bytes of playlists read in an image, those
@@ -246,9 +307,10 @@ func readDisc(r io.ReaderAt) (kind string, title int, others []int, err error) {
 // KB each as a rule.
 const maxImagePlaylists = 16 << 20
 
-// imagePlaylists are the titles of a Blu-ray image, its playlists' numbers
-// (see discTitles), the main title first; an error when none can be read.
-func imagePlaylists(fsys discFS) ([]int, error) {
+// imagePlaylists are the titles of a Blu-ray image, its playlists chosen
+// by choose (see discTitles), the main title first; an error when none can
+// be read.
+func imagePlaylists(fsys discFS, choose chooser) ([]playlist, error) {
 	streams, err := fsys.names("BDMV", "STREAM")
 	if err != nil {
 		return nil, err
@@ -289,15 +351,11 @@ func imagePlaylists(fsys discFS) ([]int, error) {
 		p.number = number
 		playlists = append(playlists, p)
 	}
-	titles := discTitles(playlists)
+	titles := discTitles(playlists, choose)
 	if len(titles) == 0 {
 		return nil, errors.New("no playlist of the image can be read")
 	}
-	numbers := make([]int, len(titles))
-	for i, t := range titles {
-		numbers[i] = t.number
-	}
-	return numbers, nil
+	return titles, nil
 }
 
 // discFS is a disc image's file system, ISO 9660 or UDF: enough of it to

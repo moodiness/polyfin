@@ -256,7 +256,8 @@ type NewFolder struct {
 // the folder, Error the code of the last failure: "missing",
 // "unreadable", "not_folder", or for a share "unreachable" or "refused"),
 // whether a scan is under way, its files, those matched to a title, how,
-// and the others, and the links made by hand. Unwatched tells why a
+// and the others, the links made by hand, and the episodes given by hand
+// to the titles of shows' discs. Unwatched tells why a
 // folder Polyfin should watch is not: for a folder in the container
 // "watch_limit" when the system's limit of watches is reached,
 // "instance_limit" when its limit of watchers or of open files is; for a
@@ -278,6 +279,7 @@ type Folder struct {
 	Unmatched   int
 	MatchedBy   Matches
 	Links       []Link
+	Episodes    []GivenEpisode
 	Unwatched   string
 	// UseArtwork tells whether the titles of a movies or shows folder
 	// show the artwork beside their files (see Artwork).
@@ -446,7 +448,7 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
 			return err
 		}
-		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists", "local_artwork"} {
+		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists", "local_artwork", "local_disc_episodes"} {
 			if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE addon_id = $1", id); err != nil {
 				return err
 			}
@@ -540,6 +542,9 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			&f.Dated.File); err != nil {
 			return Folder{}, err
 		}
+	}
+	if f.Episodes, err = s.folderEpisodes(ctx, id); err != nil {
+		return Folder{}, err
 	}
 	s.mu.Lock()
 	_, f.Scanning = s.running[id]

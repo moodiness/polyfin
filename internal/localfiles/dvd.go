@@ -35,7 +35,8 @@ import (
 // of its own linked by hand. FFmpeg plays a title from the VIDEO_TS
 // folder, with its dvdvideo demuxer (see Input): the version is not one
 // file; on a share, from its title's cells, served as one file (see
-// sharedisc.go). A shows folder leaves DVDs out.
+// sharedisc.go). A show's DVD, in a shows folder, is its episodes, each
+// kept as another movie is (see episodes.go).
 
 // dvdVOB is the name of a title set's VOB, VTS_nn_1.VOB to VTS_nn_9.VOB,
 // any case: VTS_nn_0.VOB holds the set's menus.
@@ -72,9 +73,10 @@ func dvdSet(rel string) int {
 }
 
 // collapseDVDs keeps, of the files a walk found, the entries of each DVD
-// of a movies folder (see dvdEntries), its titles chosen by titles from
-// its VIDEO_TS folder's path, and none of a shows folder's: a DVD of
-// episodes is no one episode. Without titles, DVDs are left out.
+// of a folder of kind (see dvdEntries), its titles chosen by titles from
+// its VIDEO_TS folder's path: in a movies folder, each DVD's; in a shows
+// folder, those of each show's disc (see showDisc), whose titles are its
+// episodes. Without titles, DVDs are left out.
 func collapseDVDs(kind string, files map[string]found, titles func(videoTS string) ([]dvdChoice, error)) {
 	discs := map[string]map[string]found{}
 	for rel, f := range files {
@@ -83,7 +85,7 @@ func collapseDVDs(kind string, files map[string]found, titles func(videoTS strin
 			continue
 		}
 		delete(files, rel)
-		if kind == KindShows || titles == nil {
+		if kind == KindShows && !showDisc(disc, false) || titles == nil {
 			continue
 		}
 		if discs[disc] == nil {
@@ -92,7 +94,7 @@ func collapseDVDs(kind string, files map[string]found, titles func(videoTS strin
 		discs[disc][rel] = f
 	}
 	for _, parts := range discs {
-		maps.Copy(files, dvdEntries(parts, titles))
+		maps.Copy(files, dvdEntries(parts, titles, kind == KindShows))
 	}
 }
 
@@ -103,8 +105,11 @@ func collapseDVDs(kind string, files map[string]found, titles func(videoTS strin
 // title's number (see discTitlePath), marked as such. The largest set
 // stands for the main title's when the IFO files cannot be read; a DVD
 // without VIDEO_TS.IFO, or without a VOB of that set, is left out, and so
-// is another movie without a VOB of its set.
-func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, error)) map[string]found {
+// is another movie without a VOB of its set. A show's DVD, episodes set,
+// has no main title: each of its episodes is kept as another movie is,
+// sized as its cells when its IFO files tell them, and it is left out
+// when its IFO files cannot be read. Each entry has its title's length.
+func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, error), episodes bool) map[string]found {
 	var ifo string
 	sizes := map[int]int64{}
 	for name, part := range parts {
@@ -118,6 +123,9 @@ func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, 
 		return nil
 	}
 	titles, err := read(path.Dir(ifo))
+	if err != nil && episodes {
+		return nil
+	}
 	if err != nil {
 		set := 0
 		for s, size := range sizes {
@@ -130,7 +138,7 @@ func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, 
 	entries := map[string]found{}
 	for i, title := range titles {
 		var rel string
-		f := found{modified: parts[ifo].modified, extra: i > 0}
+		f := found{modified: parts[ifo].modified, extra: i > 0 && !episodes, length: title.length}
 		for name, part := range parts {
 			if dvdSet(name) != title.set {
 				continue
@@ -144,12 +152,15 @@ func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, 
 			}
 		}
 		switch {
-		case rel == "" && i == 0:
+		case rel == "" && i == 0 && !episodes:
 			return nil
 		case rel == "":
-		case i == 0:
+		case i == 0 && !episodes:
 			entries[rel] = f
 		default:
+			if episodes && title.size > 0 {
+				f.size = title.size
+			}
 			entries[discTitlePath(rel, title.title)] = f
 		}
 	}
@@ -163,8 +174,8 @@ func dvdEntries(parts map[string]found, read func(videoTS string) ([]dvdChoice, 
 // VIDEO_TS folder with the dvdvideo demuxer, or a disc image's main title,
 // read from the image the same ways. A Blu-ray disc's title on a share,
 // in its folder or an image, is read as one MPEG-TS file the loopback
-// interface serves (see openTitle). Only the discs of movies folders have
-// one.
+// interface serves (see openTitle). Only the discs of movies folders, and
+// the titles of shows' discs, have one.
 func (s *Service) Input(ctx context.Context, key string) (media.Input, error) {
 	d, err := s.disc(ctx, key)
 	if err != nil {
@@ -220,7 +231,8 @@ type discInput struct {
 }
 
 // disc finds the disc the version key names plays (see Input): a title
-// other than a disc's main one plays its own number (see discTitlePath).
+// other than a disc's main one, as each title of a show's disc, plays its
+// own number (see discTitlePath).
 func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 	id, err := accounts.ParseID(key)
 	if err != nil {
@@ -242,7 +254,7 @@ func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 	if err != nil {
 		return discInput{}, err
 	}
-	if kind != KindMovies {
+	if _, _, ok := showTitle(rel); kind != KindMovies && (kind != KindShows || !ok) {
 		return discInput{}, ErrGone
 	}
 	folder := func(rel string) (string, error) { return rel, nil }
@@ -295,7 +307,7 @@ func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 		if d.share {
 			titles, err = s.shareDVDTitles(ctx, d)
 		} else {
-			titles, err = dvdTitles(d.path)
+			titles, err = dvdTitles(d.path, chooseTitles)
 		}
 		if err != nil {
 			return discInput{}, err
@@ -313,7 +325,7 @@ func (s *Service) shareDVDTitles(ctx context.Context, d discInput) ([]dvdChoice,
 		return nil, err
 	}
 	defer release()
-	return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file(name) })
+	return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return fsys.file(name) }, chooseTitles)
 }
 
 // errNotDVD reports IFO files that do not describe a DVD's titles.
@@ -327,15 +339,18 @@ const ifoSector = 2048
 // most 99.
 const maxTitles = 99
 
-// dvdChoice is a DVD's title chosen as one of its movies: its number on
-// the disc, and its title set.
+// dvdChoice is a DVD's title chosen as one of its movies or episodes: its
+// number on the disc, its title set, how long it plays, and the bytes of
+// its set's cells it plays, 0 when its IFO files tell none.
 type dvdChoice struct {
 	title, set int
+	length     time.Duration
+	size       int64
 }
 
-// dvdTitles chooses the movies of the DVD whose VIDEO_TS folder is dir
-// (see dvdTitlesOf).
-func dvdTitles(dir string) ([]dvdChoice, error) {
+// dvdTitles chooses with choose the titles of the DVD whose VIDEO_TS
+// folder is dir (see dvdTitlesOf).
+func dvdTitles(dir string, choose chooser) ([]dvdChoice, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -360,14 +375,15 @@ func dvdTitles(dir string) ([]dvdChoice, error) {
 			opened = append(opened, f)
 		}
 		return f, err
-	})
+	}, choose)
 }
 
-// dvdTitlesOf chooses a DVD's movies among the titles its IFO files list,
-// opened by their name in upper case (see chooseTitles): its main title,
-// the longest, first, then the others long enough to be movies, each
-// playing mostly cells the titles before it do not.
-func dvdTitlesOf(open func(name string) (io.ReaderAt, error)) ([]dvdChoice, error) {
+// dvdTitlesOf chooses with choose a DVD's titles among those its IFO
+// files list, opened by their name in upper case: for a movies folder
+// (see chooseTitles), its main title, the longest, first, then the others
+// long enough to be movies, each playing mostly cells the titles before it
+// do not; for a show's disc, its episodes (see chooseEpisodes).
+func dvdTitlesOf(open func(name string) (io.ReaderAt, error), choose chooser) ([]dvdChoice, error) {
 	vmg, err := open("VIDEO_TS.IFO")
 	if err != nil {
 		return nil, err
@@ -392,8 +408,10 @@ func dvdTitlesOf(open func(name string) (io.ReaderAt, error)) ([]dvdChoice, erro
 		candidates[i].number = i + 1
 	}
 	var chosen []dvdChoice
-	for _, i := range chooseTitles(candidates) {
-		chosen = append(chosen, dvdChoice{title: i + 1, set: titles[i].set})
+	for _, i := range choose(candidates) {
+		set := strconv.Itoa(titles[i].set)
+		chosen = append(chosen, dvdChoice{title: i + 1, set: titles[i].set, length: candidates[i].length,
+			size: int64(ranges{set: rangesOf(candidates[i].parts)[set]}.size()) * ifoSector})
 	}
 	return chosen, nil
 }
@@ -447,6 +465,7 @@ func readTitle(vts io.ReaderAt, t dvdTitle) (titleCandidate, error) {
 	if err != nil {
 		return c, err
 	}
+	set := strconv.Itoa(t.set)
 	for _, chain := range chains {
 		length := playbackTime(chain.head[4:])
 		c.length += length
@@ -455,10 +474,14 @@ func readTitle(vts io.ReaderAt, t dvdTitle) (titleCandidate, error) {
 			return c, err
 		}
 		if len(cells) == 0 {
-			cells = []titlePart{{key: "chain " + strconv.Itoa(chain.number), length: length}}
+			key := "chain " + strconv.Itoa(chain.number)
+			cells = []titlePart{{key: key, length: length, source: set + ":" + key, to: 1}}
 		}
 		for i := range cells {
-			cells[i].key = strconv.Itoa(t.set) + ":" + cells[i].key
+			cells[i].key = set + ":" + cells[i].key
+			if cells[i].source == "" {
+				cells[i].source = set
+			}
 		}
 		c.parts = append(c.parts, cells...)
 	}
@@ -544,8 +567,8 @@ func readCells(vts io.ReaderAt, at int64, pgc []byte) ([]titlePart, error) {
 	cells := make([]titlePart, count)
 	for i := range cells {
 		cell := table[24*i:]
-		cells[i] = titlePart{key: fmt.Sprintf("%d-%d", binary.BigEndian.Uint32(cell[8:]), binary.BigEndian.Uint32(cell[20:])),
-			length: playbackTime(cell[4:])}
+		first, last := binary.BigEndian.Uint32(cell[8:]), binary.BigEndian.Uint32(cell[20:])
+		cells[i] = titlePart{key: fmt.Sprintf("%d-%d", first, last), length: playbackTime(cell[4:]), from: uint64(first), to: uint64(last) + 1}
 	}
 	return cells, nil
 }

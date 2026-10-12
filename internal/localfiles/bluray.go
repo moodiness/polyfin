@@ -22,7 +22,9 @@ import (
 // other playlist long enough to be a movie, and playing streams the
 // titles kept before it do not, is a title of its own, a unit to match or
 // link (see discTitles). A disc whose playlists cannot be read or are too
-// short for FFmpeg plays its largest stream.
+// short for FFmpeg plays its largest stream. A show's disc, in a shows
+// folder, is its episodes, its playlists chosen otherwise (see
+// episodes.go), and is left out when its playlists cannot be read.
 
 // minMovie is how long a playlist other than the main one plays at least
 // to be a title of its own: shorter ones are extras and menus' clips.
@@ -140,21 +142,38 @@ func readPlaylist(r io.Reader) (playlist, error) {
 	return p, nil
 }
 
-// discTitles chooses a disc's titles among its playlists (see
-// chooseTitles), each playing its clips.
-func discTitles(playlists []playlist) []playlist {
+// discTitles chooses a disc's titles among its playlists with choose,
+// chooseTitles for a movies folder's discs and chooseEpisodes for a
+// show's, each playing its clips, each clip from its in time to its out
+// time.
+func discTitles(playlists []playlist, choose chooser) []playlist {
 	candidates := make([]titleCandidate, len(playlists))
 	for i, p := range playlists {
 		candidates[i] = titleCandidate{number: p.number, length: p.length}
 		for _, part := range p.clips {
-			candidates[i].parts = append(candidates[i].parts, titlePart{key: part.clip, length: part.length})
+			candidates[i].parts = append(candidates[i].parts, titlePart{key: part.clip, length: part.length, source: part.clip,
+				from: uint64(part.in), to: uint64(part.out)})
 		}
 	}
 	var titles []playlist
-	for _, i := range chooseTitles(candidates) {
+	for _, i := range choose(candidates) {
 		titles = append(titles, playlists[i])
 	}
 	return titles
+}
+
+// chooser chooses a disc's titles among its candidates, and returns their
+// indexes: chooseTitles, a movies folder's, or chooseEpisodes, a shows
+// folder's.
+type chooser func(candidates []titleCandidate) []int
+
+// titleChooser is how the discs of a folder of kind have their titles
+// chosen.
+func titleChooser(kind string) chooser {
+	if kind == KindShows {
+		return chooseEpisodes
+	}
+	return chooseTitles
 }
 
 // titleCandidate is a title of a disc that may be one of its movies: its
@@ -167,10 +186,14 @@ type titleCandidate struct {
 }
 
 // titlePart is a part of a disc a title plays, by what tells it, and how
-// long it plays.
+// long it plays; source holds it, a Blu-ray disc's clip or a DVD's title
+// set, from from to to, the clip's times in units of 45 kHz or the set's
+// sectors (see chooseEpisodes).
 type titlePart struct {
-	key    string
-	length time.Duration
+	key      string
+	length   time.Duration
+	source   string
+	from, to uint64
 }
 
 // chooseTitles chooses a disc's titles among its candidates, and returns
@@ -227,12 +250,13 @@ type discFiles struct {
 }
 
 // collapseDiscs keeps, of the files a walk found, the entries of each
-// Blu-ray disc of a movies folder, and none of a shows folder's discs: a
-// disc of episodes is no one episode. A disc whose playlists the walk
+// Blu-ray disc of a folder of kind: in a movies folder, each disc's; in a
+// shows folder, those of each show's disc (see showDisc), whose titles are
+// its episodes (see chooseEpisodes). A disc whose playlists the walk
 // listed, and open reads, has an entry per title (see playlistEntries);
-// another, its largest stream (the first by path among streams of the
-// same size). The other files in a disc's BDMV folder are left out; those
-// beside it stay.
+// another, in a movies folder, its largest stream (the first by path among
+// streams of the same size). The other files in a disc's BDMV folder are
+// left out; those beside it stay.
 func collapseDiscs(kind string, files map[string]found, open func(rel string) (io.ReadCloser, error)) {
 	discs := map[string]discFiles{}
 	for rel, f := range files {
@@ -241,7 +265,7 @@ func collapseDiscs(kind string, files map[string]found, open func(rel string) (i
 			continue
 		}
 		delete(files, rel)
-		if kind == KindShows {
+		if kind == KindShows && !showDisc(disc, false) {
 			continue
 		}
 		d, ok := discs[disc]
@@ -256,8 +280,12 @@ func collapseDiscs(kind string, files map[string]found, open func(rel string) (i
 		}
 	}
 	for _, d := range discs {
-		if entries := playlistEntries(d, open); len(entries) > 0 {
+		if entries := playlistEntries(d, open, kind); len(entries) > 0 {
 			maps.Copy(files, entries)
+			continue
+		}
+		if kind == KindShows {
+			// A show's disc is its episodes, which its playlists tell.
 			continue
 		}
 		largest := ""
@@ -272,14 +300,15 @@ func collapseDiscs(kind string, files map[string]found, open func(rel string) (i
 	}
 }
 
-// playlistEntries are the entries of a disc's titles (see discTitles), of
-// its files a walk found: each its playlist, read through open, sized as
-// the streams it plays, modified when the last of them or the playlist
-// was, the titles other than the main one marked as such. A playlist that
-// cannot be read, or plays a stream the walk did not find, is left out;
-// none is kept when the main title is too short for FFmpeg to play (see
-// minPlayable).
-func playlistEntries(d discFiles, open func(rel string) (io.ReadCloser, error)) map[string]found {
+// playlistEntries are the entries of the titles of a disc of a folder of
+// kind (see discTitles and titleChooser), of its files a walk found: each
+// its playlist, read through open, sized as the streams it plays, modified
+// when the last of them or the playlist was, with how long it plays; the
+// titles of a movies folder's disc other than its main one are marked as
+// such. A playlist that cannot be read, or plays a stream the walk did not
+// find, is left out; none is kept when the first title is too short for
+// FFmpeg to play (see minPlayable).
+func playlistEntries(d discFiles, open func(rel string) (io.ReadCloser, error), kind string) map[string]found {
 	clips := map[string]found{}
 	for rel, f := range d.streams {
 		clips[strings.ToUpper(strings.TrimSuffix(path.Base(rel), path.Ext(rel)))] = f
@@ -301,14 +330,14 @@ func playlistEntries(d discFiles, open func(rel string) (io.ReadCloser, error)) 
 		playlists = append(playlists, p)
 		paths[number] = rel
 	}
-	titles := discTitles(playlists)
+	titles := discTitles(playlists, titleChooser(kind))
 	if len(titles) == 0 || titles[0].length < minPlayable {
 		return nil
 	}
 	entries := map[string]found{}
 	for i, title := range titles {
 		rel := paths[title.number]
-		f := found{modified: d.playlists[rel].modified, extra: i > 0}
+		f := found{modified: d.playlists[rel].modified, extra: i > 0 && kind != KindShows, length: title.length}
 		counted := map[string]bool{}
 		for _, part := range title.clips {
 			clip := clips[part.clip]

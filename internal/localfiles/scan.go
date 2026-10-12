@@ -56,11 +56,13 @@ func readable(path string) string {
 
 // found is a file a scan found: its size and modification time. extra
 // marks the entry of a disc's title other than its main one, a unit of its
-// own (see titleUnit).
+// own (see titleUnit); length is how long a disc's title plays, as the
+// disc's tables tell it, 0 for another file.
 type found struct {
 	size     int64
 	modified time.Time
 	extra    bool
+	length   time.Duration
 }
 
 // listing is what a walk found under a folder, by path in it, with
@@ -298,8 +300,8 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	return nil
 }
 
-// stored is a file a scan found before, and the identifier its unit's NFO
-// file gave (see nfoID).
+// stored is a file a scan found before, the identifier its unit's NFO
+// file gave (see nfoID), and its episodes, as formatEpisode writes them.
 type stored struct {
 	size     int64
 	modified time.Time
@@ -307,6 +309,7 @@ type stored struct {
 	matched  bool
 	reason   string
 	nfo      string
+	episodes string
 }
 
 // scan reads a folder: files gone are forgotten, new and changed ones read
@@ -364,13 +367,14 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	files := list.files
 	collapseDiscs(folder.Kind, files, func(rel string) (io.ReadCloser, error) { return list.open(ctx, rel) })
+	choose := titleChooser(folder.Kind)
 	if folder.Share == "" {
 		collapseDVDs(folder.Kind, files, func(videoTS string) ([]dvdChoice, error) {
-			return dvdTitles(filepath.Join(root, filepath.FromSlash(videoTS)))
+			return dvdTitles(filepath.Join(root, filepath.FromSlash(videoTS)), choose)
 		})
 	} else {
 		collapseDVDs(folder.Kind, files, func(videoTS string) ([]dvdChoice, error) {
-			return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return readIFO(ctx, list, path.Join(videoTS, name)) })
+			return dvdTitlesOf(func(name string) (io.ReaderAt, error) { return readIFO(ctx, list, path.Join(videoTS, name)) }, choose)
 		})
 	}
 	if err := s.collapseImages(ctx, id, folder, root, list); err != nil {
@@ -396,6 +400,13 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	for rel, f := range files {
 		entries[rel] = readEntry(folder.Kind, rootName, rel, f)
 	}
+	if folder.Kind == KindShows {
+		given, err := s.givenEpisodes(ctx, id)
+		if err != nil {
+			return err
+		}
+		numberDiscs(entries, given)
+	}
 	places := unitNFOs(folder.Kind, entries, list.sides)
 	infos, err := s.readNFOs(ctx, id, list, places)
 	if err != nil {
@@ -404,7 +415,8 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	// The units to match, with their files to store. A file read as
 	// another unit than before, as each stream of a disc was, is read
 	// again, as are the files of a unit whose NFO file gives another
-	// identifier, or none any more.
+	// identifier, or none any more, and the titles of shows' discs whose
+	// episodes changed.
 	units := map[string][]entry{}
 	renewed := map[string]bool{}
 	for rel, e := range entries {
@@ -413,8 +425,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		switch {
 		case ok && old.nfo != e.nfo:
 			renewed[e.unit] = true
-		case !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit:
-		case old.matched || old.reason == reasonUnreadableName || old.reason == reasonDiscTitle:
+		case !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit ||
+			old.episodes != formatEpisode(e.episode):
+		case old.matched || old.reason == reasonUnreadableName || old.reason == reasonDiscTitle || old.reason == reasonDiscEpisode:
 			continue
 		}
 		units[e.unit] = append(units[e.unit], e)
@@ -479,7 +492,8 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list
 
 // storedFiles reads the files a folder's scans found, by path.
 func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]stored, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id FROM local_files WHERE addon_id = $1", id)
+	rows, err := s.db.Query(ctx, `SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id, season, episode, last_episode
+		FROM local_files WHERE addon_id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -487,9 +501,13 @@ func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]s
 	for rows.Next() {
 		var rel string
 		var f stored
-		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo); err != nil {
+		var season, episode, last *int
+		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo, &season, &episode, &last); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if season != nil && episode != nil && last != nil {
+			f.episodes = formatEpisode(name{episodic: true, season: *season, episode: *episode, lastEpisode: *last})
 		}
 		known[rel] = f
 	}
@@ -531,8 +549,16 @@ type entry struct {
 // playlist or stream or a DVD's VOB, is read as its disc, matched by its
 // folder's name. A disc's title other than its main one, a disc image's
 // included, is a unit of its own, which its name does not tell: it is
-// matched by hand.
+// matched by hand. A title of a show's disc is one of its show's files,
+// its episodes given apart (see numberDiscs).
 func readEntry(kind, root, rel string, f found) entry {
+	if _, _, ok := showTitle(rel); ok && kind == KindShows {
+		top, _, _ := strings.Cut(rel, "/")
+		show := parseName(top)
+		show.episodic = false
+		f.extra = false
+		return entry{path: rel, file: f, unit: top, title: show}
+	}
 	if kind == KindShows {
 		show, episode, unit := episodeName(rel)
 		return entry{path: rel, file: f, unit: unit, title: show, episode: episode}
@@ -612,7 +638,8 @@ func (s *Service) moveStreamLinks(ctx context.Context, id accounts.ID, files map
 
 // store saves a unit's files with the title they were matched to, or why
 // they were not. An episode whose numbers its name does not tell is
-// unmatched, whatever its show.
+// unmatched, whatever its show, and so is a title of a show's disc whose
+// episodes neither an administrator nor the disc's name gives.
 func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entries []entry, m match) error {
 	batch := &pgx.Batch{}
 	for _, e := range entries {
@@ -627,6 +654,13 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 		f := m
 		if kind == KindShows && !e.episode.episodic && m.stremioID != "" {
 			f = match{reason: reasonUnreadableName}
+			if _, _, ok := showTitle(e.path); ok {
+				f.reason = reasonDiscEpisode
+			}
+		}
+		var length *int
+		if e.file.length > 0 {
+			length = new(int(e.file.length / time.Second))
 		}
 		var stremioID *string
 		if f.stremioID != "" {
@@ -644,13 +678,13 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			heightValue = &height
 		}
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
-				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
-				matched_by = $18, reason = $19, nfo_id = $20`,
+				matched_by = $18, reason = $19, nfo_id = $20, length = $21`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
-			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo)
+			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length)
 	}
 	return s.db.SendBatch(ctx, batch).Close()
 }

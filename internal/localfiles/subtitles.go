@@ -87,13 +87,16 @@ type sidecar struct {
 // several are; names are compared in any case. A disc's name is its
 // folder's, the folder's own (root) for a disc at its root. Subtitle files
 // that belong to no video are left out, and so are .idx files without
-// their .sub file. entries are the folder's files, by path, as a scan
-// reads them in a folder of kind.
+// their .sub file; the titles of shows' discs have none. entries are the
+// folder's files, by path, as a scan reads them in a folder of kind.
 func sidecars(kind, root string, entries map[string]entry, sides map[string]found) map[string]sidecar {
 	type video struct{ name, path string }
 	videos := map[string][]video{}
 	for rel, e := range entries {
 		dir, name := path.Dir(rel), stem(rel)
+		if _, _, ok := showTitle(rel); ok && kind == KindShows {
+			continue
+		}
 		if kind == KindMovies && e.unit != rel {
 			dir, name = e.unit, path.Base(e.unit)
 			if e.unit == "." {

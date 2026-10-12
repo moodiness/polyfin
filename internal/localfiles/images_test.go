@@ -127,8 +127,9 @@ func TestReadImage(t *testing.T) {
 			"zero.iso":     {},
 			"short.iso":    {},
 		} {
-			if kind, title, titles := s.readImage(t.Context(), filepath.Join(dir, name)); kind != want.kind || title != want.title || !slices.Equal(titles, want.titles) {
-				t.Errorf("%s, movies from %v: %q %d %v", name, movie, kind, title, titles)
+			if got := s.readImage(t.Context(), filepath.Join(dir, name), KindMovies); got.kind != want.kind || got.title != want.title ||
+				!slices.Equal(got.titles, want.titles) {
+				t.Errorf("%s, movies from %v: %q %d %v", name, movie, got.kind, got.title, got.titles)
 			}
 		}
 	}
@@ -139,12 +140,12 @@ func TestReadImage(t *testing.T) {
 	// Without FFmpeg to probe it, or when FFmpeg reads no Blu-ray disc,
 	// such an image is no disc's.
 	s.probe = nil
-	if kind, _, _ := s.readImage(t.Context(), filepath.Join(dir, "sparable.iso")); kind != "" {
-		t.Errorf("unprobed: %q", kind)
+	if image := s.readImage(t.Context(), filepath.Join(dir, "sparable.iso"), KindMovies); image.kind != "" {
+		t.Errorf("unprobed: %q", image.kind)
 	}
 	s.probe = func(context.Context, media.Input) bool { return false }
-	if kind, _, _ := s.readImage(t.Context(), filepath.Join(dir, "virtual.iso")); kind != "" {
-		t.Errorf("not a Blu-ray disc's: %q", kind)
+	if image := s.readImage(t.Context(), filepath.Join(dir, "virtual.iso"), KindMovies); image.kind != "" {
+		t.Errorf("not a Blu-ray disc's: %q", image.kind)
 	}
 
 	file, _ := os.Open(filepath.Join(dir, "dvd.iso"))
