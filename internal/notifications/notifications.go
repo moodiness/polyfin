@@ -3,11 +3,12 @@
 // that finished or failed, a problem System › Health found or that was
 // solved, a user who joined through an invite, a new version of Polyfin, a
 // playback that started, paused, resumed or stopped, once a week a summary
-// of the week, and once a month and once a year a review of the month and
-// of the year. Messages go to targets: generic webhooks, which receive a
-// versioned JSON event (see Event); Discord webhooks, ntfy topics,
-// Telegram chats, Gotify servers and Pushover users, which receive
-// messages formatted for them; and email addresses, through the SMTP server
+// of the week, once a month and once a year a review of the month and of
+// the year, and an app or tracking connection that stopped. Messages go to
+// targets: generic webhooks, which receive a versioned JSON event (see
+// Event); Discord webhooks, ntfy topics, Telegram chats, Gotify servers and
+// Pushover users, which receive messages formatted for them; and email
+// addresses, through the SMTP server
 // of the settings. Administrators add the server's targets, which receive
 // the events of every user; each user adds their own, which receive their
 // own events, and the health, joining and new version events and the
@@ -83,6 +84,10 @@ const (
 	WeeklySummary  = "weekly_summary"
 	MonthlySummary = "monthly_summary"
 	YearlySummary  = "yearly_summary"
+	// ConnectionStopped tells that a user's app connection or tracking
+	// service refused what Polyfin kept, and stopped (see
+	// Service.ConnectionStopped).
+	ConnectionStopped = "connection_stopped"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -90,7 +95,7 @@ const (
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
-	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary}
+	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user

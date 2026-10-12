@@ -48,6 +48,8 @@ type Event struct {
 	Playback  *PlaybackJSON  `json:"playback,omitempty"`
 	Release   *ReleaseJSON   `json:"release,omitempty"`
 	Summary   *SummaryJSON   `json:"summary,omitempty"`
+	// Connection is the connection a connection_stopped event tells of.
+	Connection *ConnectionJSON `json:"connection,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -112,6 +114,29 @@ type ReleaseJSON struct {
 	Version string `json:"version"`
 	URL     string `json:"url"`
 	Current string `json:"current"`
+}
+
+// ConnectionJSON is a user's connection that stopped: Kind is "app" for a
+// connection to an app built on addons, "tracking" for a tracking service;
+// Service names the app or service as the API does ("stremio", "trakt"),
+// Name as people do.
+type ConnectionJSON struct {
+	Kind    string `json:"kind"`
+	Service string `json:"service"`
+	Name    string `json:"name"`
+}
+
+// The kinds of connections that stop (see ConnectionJSON).
+const (
+	ConnectionApp      = "app"
+	ConnectionTracking = "tracking"
+)
+
+// connectionNames name the apps and tracking services as people do, by
+// the names the API gives them.
+var connectionNames = map[string]string{
+	"nuvio": "Nuvio", "stremio": "Stremio",
+	"trakt": "Trakt", "simkl": "Simkl", "mdblist": "MDBList", "publicmetadb": "PublicMetaDB", "lastfm": "Last.fm", "listenbrainz": "ListenBrainz",
 }
 
 // PlaybackJSON is a playback that started, paused, resumed or stopped.
@@ -302,6 +327,33 @@ func (s *Service) newVersionEvent(version, link string) Event {
 	return ev
 }
 
+// connectionStoppedEvent tells that the connection of user to service, of
+// kind ConnectionApp or ConnectionTracking, stopped: what to do, and where.
+func (s *Service) connectionStoppedEvent(user accounts.User, kind, service string) Event {
+	ev := s.newEvent(ConnectionStopped)
+	name := connectionNames[service]
+	if name == "" {
+		name = service
+	}
+	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
+	ev.Connection = &ConnectionJSON{Kind: kind, Service: service, Name: name}
+	ev.Title = s.phrase("Connection stopped: %s", "Connexion arrêtée : %s", name)
+	if kind == ConnectionApp {
+		ev.Message = s.phrase("%s refused the sign-in Polyfin kept for %s: nothing is imported from it until %s signs in again "+
+			"under My account › Import from an app, with Stay connected ticked.",
+			"%s a refusé la connexion que Polyfin gardait pour %s : plus rien n’en est importé tant que %s ne s’y reconnecte pas "+
+				"sous Mon compte › Importer depuis une appli, avec « Rester connecté » coché.", name, user.Name, user.Name)
+		ev.URL = s.adminLink("/me/account#app-import")
+		return ev
+	}
+	ev.Message = s.phrase("%s refused the token or key Polyfin kept for %s: nothing is sent to it or imported from it until %s "+
+		"presses Connect again under My account › Tracking.",
+		"%s a refusé le jeton ou la clé que Polyfin gardait pour %s : plus rien ne lui est envoyé ni n’en est importé tant que %s "+
+			"n’appuie pas sur Reconnecter sous Mon compte › Suivi.", name, user.Name, user.Name)
+	ev.URL = s.adminLink("/me/account#tracking")
+	return ev
+}
+
 // NewVersion tells the server's targets and administrators' own that
 // Polyfin version is out, with its release notes at link. It returns at
 // once, as UserJoined does.
@@ -360,6 +412,28 @@ func (s *Service) RecordingEnded(_ context.Context, ended recordings.Ended) {
 		ev := s.recordingEvent(ended, user, channel)
 		s.dispatch(ev, func(t target) bool {
 			return t.owner == nil || user != nil && *t.owner == user.ID
+		})
+	})
+}
+
+// ConnectionStopped tells the targets of user, and the server's, that the
+// user's connection to service, of kind ConnectionApp or
+// ConnectionTracking, stopped: the app or service refused what Polyfin
+// kept. Callers tell it once, as the connection stops. It returns at once:
+// the message is prepared and sent in the background.
+func (s *Service) ConnectionStopped(user accounts.ID, kind, service string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.spawn(func() {
+		found, err := s.accounts.User(s.ctx, user)
+		if err != nil {
+			if s.ctx.Err() == nil {
+				s.logger.Debug("The user of a stopped connection could not be read", "user_id", user.String(), "error", err)
+			}
+			return
+		}
+		s.dispatch(s.connectionStoppedEvent(found, kind, service), func(t target) bool {
+			return t.owner == nil || *t.owner == user
 		})
 	})
 }
