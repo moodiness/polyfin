@@ -139,6 +139,10 @@ const system = {
           `Stored keys cannot be decrypted with POLYFIN_SECRET_KEY and count as not set: ${names}. Set the key they were encrypted with again, or enter them again.`,
         plaintextSecrets:
           'Keys and tokens are stored unencrypted. Set POLYFIN_SECRET_KEY to encrypt them.',
+        appStopped: (app: string, user: string) =>
+          `${app} refused the sign-in Polyfin kept for ${user}: nothing is imported until ${user} signs in again under My account, with Stay connected ticked.`,
+        trackingStopped: (service: string, user: string) =>
+          `${service} refused the token or key Polyfin kept for ${user}: nothing is sent to it or imported until ${user} presses Connect again under My account › Tracking.`,
       },
       addonsTitle: 'Addons',
       addonsHelp:

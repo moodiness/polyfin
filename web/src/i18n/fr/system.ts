@@ -147,6 +147,10 @@ const system: typeof en = {
           `Des clés enregistrées ne peuvent pas être déchiffrées avec POLYFIN_SECRET_KEY et comptent comme absentes : ${names}. Redonnez la clé avec laquelle elles ont été chiffrées, ou saisissez-les de nouveau.`,
         plaintextSecrets:
           'Les clés et jetons sont enregistrés sans chiffrement. Définissez POLYFIN_SECRET_KEY pour les chiffrer.',
+        appStopped: (app: string, user: string) =>
+          `${app} a refusé la connexion que Polyfin gardait pour ${user} : plus rien n’est importé tant que ${user} ne s’y reconnecte pas sous Mon compte, avec « Rester connecté » coché.`,
+        trackingStopped: (service: string, user: string) =>
+          `${service} a refusé le jeton ou la clé que Polyfin gardait pour ${user} : plus rien ne lui est envoyé ni n’en est importé tant que ${user} n’appuie pas sur Reconnecter sous Mon compte › Suivi.`,
       },
       addonsTitle: 'Addons',
       addonsHelp:

@@ -1221,6 +1221,7 @@ export type NotificationEvent =
   | 'weekly_summary'
   | 'monthly_summary'
   | 'yearly_summary'
+  | 'connection_stopped'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -2425,8 +2426,9 @@ export type UnreadableSecret = {
 /**
  * Something Health shows as needing attention, as the server finds it: `key` names it while it
  * lasts, `code` tells what it is, with its details; `to` is the page that describes it, with its
- * anchor. `transient` ones come and go with the load. An addon, source or guide has an `owner`
- * when it is a user's own.
+ * anchor. `transient` ones are not told as health problems: they come and go with the load, or
+ * their own event told them. An addon, source or guide has an `owner` when it is a user's own; a
+ * stopped connection has its user as `owner`, its `kind` and its app or service as `name`.
  */
 export type HealthProblem = {
   key: string
@@ -2451,6 +2453,13 @@ export type HealthProblem = {
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'task'; task: string }
+  | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
+  | {
+      code: 'connection_stopped'
+      kind: 'tracking'
+      name: TrackingServiceName
+      owner: NonNullable<Owner>
+    }
 )
 
 /** The problems Health shows, errors first, with the tasks named in `language`. */

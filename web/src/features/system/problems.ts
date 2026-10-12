@@ -120,5 +120,9 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.folderUnwatched(problem.name)
     case 'task':
       return text.task(problem.task)
+    case 'connection_stopped':
+      return problem.kind === 'app'
+        ? text.appStopped(t.account.appImport.apps[problem.name], problem.owner.name)
+        : text.trackingStopped(serviceNames[problem.name], problem.owner.name)
   }
 }

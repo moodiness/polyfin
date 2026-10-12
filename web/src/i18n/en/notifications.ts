@@ -98,6 +98,7 @@ const notifications = {
       weekly_summary: 'Weekly summary',
       monthly_summary: 'Month in review',
       yearly_summary: 'Year in review',
+      connection_stopped: 'Connection stopped',
     },
     eventHelp: {
       new_episode:
@@ -120,6 +121,8 @@ const notifications = {
         'On the 1st of each month, at the hour of the weekly summary: the weekly summary’s content over the month that ended. Nothing is sent for a month with nothing to tell.',
       yearly_summary:
         'On January 1st, at the hour of the weekly summary: the hours watched, the ten movies and ten series played longest and the month with the most hours of the year that ended. The server’s and administrators’ targets get the server’s year, with the users who joined and the files added to local folders; others get their own. Nothing is sent for a year with nothing to tell.',
+      connection_stopped:
+        'An app connection or a tracking service refused what Polyfin kept, and stopped: once per stop, with what to do to connect it again.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

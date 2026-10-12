@@ -102,6 +102,7 @@ const notifications: typeof en = {
       weekly_summary: 'Résumé de la semaine',
       monthly_summary: 'Bilan du mois',
       yearly_summary: 'Bilan de l’année',
+      connection_stopped: 'Connexion arrêtée',
     },
     eventHelp: {
       new_episode:
@@ -127,6 +128,8 @@ const notifications: typeof en = {
         'Le 1er de chaque mois, à l’heure du résumé de la semaine : le contenu du résumé de la semaine sur le mois écoulé. Rien n’est envoyé pour un mois sans rien à dire.',
       yearly_summary:
         'Le 1er janvier, à l’heure du résumé de la semaine : les heures regardées, les dix films et les dix séries les plus regardés et le mois le plus regardé de l’année écoulée. Les cibles du serveur et des administrateurs reçoivent l’année du serveur, avec les utilisateurs arrivés et les fichiers ajoutés aux dossiers locaux ; les autres reçoivent la leur. Rien n’est envoyé pour une année sans rien à dire.',
+      connection_stopped:
+        'Une connexion à une appli ou un service de suivi a refusé ce que Polyfin gardait, et s’est arrêté : une fois par arrêt, avec ce qu’il faut faire pour le reconnecter.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',
