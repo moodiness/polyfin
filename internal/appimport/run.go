@@ -9,6 +9,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -66,6 +67,9 @@ func (r *run) run(ctx context.Context) {
 		}
 		r.s.record(r.connection.key, connectedAt, ConnectionImport{Read: counts.Read, Played: counts.Played, Resumed: counts.Resumed,
 			Watchlist: counts.Watchlist, Unmatched: counts.UnmatchedCount, Problem: problem})
+	} else if ctx.Err() == nil {
+		// An import that keeps no connection: the connection counts its own.
+		metrics.Imported(r.status.App, err == nil)
 	}
 	r.update(func(s *Status) {
 		s.State = StateDone

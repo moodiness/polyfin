@@ -1,5 +1,7 @@
 package hls
 
+import "github.com/moodiness/polyfin/internal/metrics"
+
 // Running is an encoding under way, as the admin dashboard shows it.
 type Running struct {
 	Key Key
@@ -87,4 +89,45 @@ func (m *Manager) Conversions() (running, limit int) {
 		limit = max(m.conversions(), 0)
 	}
 	return len(converting), limit
+}
+
+// The methods an encoding makes its video by, as the metrics count them:
+// converted on an NVIDIA GPU, on a GPU through VAAPI, or on the
+// processor, or copied.
+const (
+	MethodNVIDIA    = "nvidia"
+	MethodVAAPI     = "vaapi"
+	MethodProcessor = "processor"
+	MethodCopy      = "copy"
+)
+
+// method is how an encoding converting its video to v makes it, copy for
+// nil.
+func (v *VideoEncoding) method() string {
+	switch {
+	case v == nil:
+		return MethodCopy
+	case v.Hardware == nil:
+		return MethodProcessor
+	case v.Hardware.Method == "cuda":
+		return MethodNVIDIA
+	}
+	// The only other GPU method.
+	return MethodVAAPI
+}
+
+// ConversionsByMethod counts the encodings under way that convert their
+// video, of files and channels, by method, each method told.
+func (m *Manager) ConversionsByMethod() []metrics.Sample {
+	counts := map[string]float64{}
+	for _, r := range m.Running() {
+		if r.Video != nil {
+			counts[r.Video.method()]++
+		}
+	}
+	samples := make([]metrics.Sample, 0, 3)
+	for _, method := range []string{MethodNVIDIA, MethodVAAPI, MethodProcessor} {
+		samples = append(samples, metrics.Sample{Labels: []string{method}, Value: counts[method]})
+	}
+	return samples
 }

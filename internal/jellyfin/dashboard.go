@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -104,6 +105,77 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 		return cmp.Or(b.Playing.Started.Compare(a.Playing.Started), cmp.Compare(a.Device.ID.String(), b.Device.ID.String()))
 	})
 	return sessions, nil
+}
+
+// The kinds of title and the deliveries the metrics count playbacks by
+// (see PlaybackCounts).
+var (
+	playbackKinds      = []string{"video", "live_tv", "music", "audiobook"}
+	playbackDeliveries = []string{"direct_play", "remux", "conversion"}
+)
+
+// PlaybackCounts counts the playbacks under way for the metrics, by kind
+// of title, video, live_tv, music or audiobook, and by delivery:
+// direct_play when the app reads the file as it is, remux when Polyfin
+// streams it copying its tracks, conversion when it converts the video
+// or the audio. Every pair is told, zero when nothing plays so.
+func (h *Handler) PlaybackCounts(ctx context.Context) ([]metrics.Sample, error) {
+	sessions, err := h.LiveSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	counts := map[[2]string]float64{}
+	for _, s := range sessions {
+		counts[[2]string{playbackKind(s.Item.Kind), s.delivery()}]++
+	}
+	samples := make([]metrics.Sample, 0, len(playbackKinds)*len(playbackDeliveries))
+	for _, kind := range playbackKinds {
+		for _, delivery := range playbackDeliveries {
+			samples = append(samples, metrics.Sample{Labels: []string{kind, delivery}, Value: counts[[2]string{kind, delivery}]})
+		}
+	}
+	return samples, nil
+}
+
+// playbackKind is the kind of title the metrics count a playback of an
+// item of kind as: video for movies, episodes, videos, recordings and
+// replays, and for items not found.
+func playbackKind(kind library.Kind) string {
+	switch kind {
+	case library.KindChannel, library.KindProgram:
+		return "live_tv"
+	case library.KindTrack:
+		return "music"
+	case library.KindAudiobook:
+		return "audiobook"
+	}
+	return "video"
+}
+
+// delivery is how the session plays, as the metrics count it: its
+// encodings tell best, one converting over one copying, as an app
+// switching audio track runs both a moment; else what the app reported.
+func (s LiveSession) delivery() string {
+	delivery := ""
+	for _, running := range s.Encodings {
+		switch {
+		case !running.Opened:
+		case running.Video != nil || running.AudioCodec != "":
+			return "conversion"
+		default:
+			delivery = "remux"
+		}
+	}
+	if delivery != "" {
+		return delivery
+	}
+	switch s.Playing.PlayMethod {
+	case "DirectPlay":
+		return "direct_play"
+	case "DirectStream":
+		return "remux"
+	}
+	return "conversion"
 }
 
 // ErrNotControllable reports a session whose app takes no commands: it

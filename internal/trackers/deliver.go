@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/metrics"
 )
 
 // laneKey names what one user sends to one service.
@@ -163,6 +164,7 @@ func (s *Service) deliver(key laneKey, l *lane, t ticket) time.Duration {
 		return time.Second
 	}
 	res := s.send(ctx, key, conn, settings, kind, ev)
+	metrics.TrackingSent(key.service, res.outcome == delivered)
 	s.mu.Lock()
 	l.last = time.Now()
 	if res.after > 0 {

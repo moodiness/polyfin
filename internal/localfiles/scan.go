@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/metrics"
 )
 
 // ScanCheck is how often the folders due for a scan are looked for (see
@@ -191,9 +192,10 @@ func under(rel string, skipped []string) bool {
 	return false
 }
 
-// claim marks a scan of the folder under way, done under ctx; it reports
-// false when one already is. The scan's context ends with release, or
-// when the folder's scan is stopped (see hold).
+// claim marks a scan of the folder under way, done under ctx and counted
+// in the metrics; it reports false when one already is. The scan's
+// context ends with release, or when the folder's scan is stopped (see
+// hold).
 func (s *Service) claim(ctx context.Context, id accounts.ID) (scanCtx context.Context, release func(), ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -203,12 +205,14 @@ func (s *Service) claim(ctx context.Context, id accounts.ID) (scanCtx context.Co
 	scanCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	s.running[id] = scanning{done: done, stop: stop}
+	finished := metrics.ScanStarted()
 	return scanCtx, func() {
 		stop()
 		s.mu.Lock()
 		delete(s.running, id)
 		s.scanned[id] = true
 		s.mu.Unlock()
+		finished()
 		close(done)
 	}, true
 }

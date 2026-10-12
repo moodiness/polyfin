@@ -168,24 +168,24 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	started := time.Now()
 	response, err := c.do(request, confined)
 	if err != nil {
-		c.health.record(ctx, manifestURL, started, failureOf(ctx, err))
+		c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
 		return nil, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		c.health.record(ctx, manifestURL, started, failureOfStatus(response.StatusCode))
+		c.health.record(ctx, manifestURL, target, started, failureOfStatus(response.StatusCode))
 		return nil, fmt.Errorf("%w: %w", ErrUnreachable, httpStatus(response.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
-		c.health.record(ctx, manifestURL, started, failureOf(ctx, err))
+		c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
 		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
 	}
 	if len(body) > maxResponseBytes {
-		c.health.record(ctx, manifestURL, started, FailureInvalidResponse)
+		c.health.record(ctx, manifestURL, target, started, FailureInvalidResponse)
 		return nil, fmt.Errorf("%w: response larger than %d bytes", ErrInvalidResponse, maxResponseBytes)
 	}
-	c.health.record(ctx, manifestURL, started, "")
+	c.health.record(ctx, manifestURL, target, started, "")
 	return body, nil
 }
 

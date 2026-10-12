@@ -1,12 +1,19 @@
 package jellyfin
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -87,5 +94,50 @@ func TestLiveSessionsFindTheVersionThePlaySessionNames(t *testing.T) {
 	}
 	if sessions[0].Source == nil {
 		t.Error("the version played is not described")
+	}
+}
+
+// The metrics count the playbacks under way by kind and delivery, as the
+// apps report them, and their answer names no user and no title.
+func TestPlaybackMetricsCountWhatPlaysAndNameNoOne(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	version := p.versions[1].ID.String()
+	for device, method := range map[string]string{"Living room": "DirectPlay", "Pocket": "Transcode"} {
+		if status, body := p.call(http.MethodPost, "/Sessions/Playing", app(device, p.signIn(p.user.Name, device)),
+			map[string]any{"ItemId": p.movie, "MediaSourceId": version, "PlayMethod": method}); status != http.StatusNoContent {
+			t.Fatalf("%s: %d %s", device, status, body)
+		}
+	}
+	samples, err := p.handler.PlaybackCounts(t.Context())
+	if err != nil || len(samples) != 12 {
+		t.Fatalf("samples: %+v %v", samples, err)
+	}
+	for _, sample := range samples {
+		want := 0.0
+		if sample.Labels[0] == "video" && (sample.Labels[1] == "direct_play" || sample.Labels[1] == "conversion") {
+			want = 1
+		}
+		if sample.Value != want {
+			t.Errorf("%v: %v, want %v", sample.Labels, sample.Value, want)
+		}
+	}
+
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(metrics.NewGauges("polyfin_playbacks", "Playbacks.", []string{"kind", "delivery"},
+		func(ctx context.Context) []metrics.Sample {
+			samples, _ := p.handler.PlaybackCounts(ctx)
+			return samples
+		}))
+	response := httptest.NewRecorder()
+	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := response.Body.String()
+	if !strings.Contains(body, `polyfin_playbacks{delivery="conversion",kind="video"} 1`) {
+		t.Errorf("the answer: %s", body)
+	}
+	for _, personal := range []string{p.user.Name, "Movie", "Living room", "Pocket", "Test App"} {
+		if strings.Contains(body, personal) {
+			t.Errorf("the answer holds %q", personal)
+		}
 	}
 }

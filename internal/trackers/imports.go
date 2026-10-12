@@ -10,6 +10,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -331,10 +332,12 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 	}
 	if err != nil {
 		if ctx.Err() == nil {
+			metrics.Imported(key.service, false)
 			s.logger.Warn("A watch history could not be imported", "service", key.service, "error", err)
 		}
 		return
 	}
+	metrics.Imported(key.service, result.Problem == "")
 	result.At = s.now().UTC()
 	var problem *string
 	if result.Problem != "" {

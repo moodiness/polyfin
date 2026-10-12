@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
@@ -675,6 +676,7 @@ func (s *Service) record(key connectionKey, connectedAt time.Time, result Connec
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	result.At = s.now().UTC()
+	metrics.Imported(key.app, result.Problem == "")
 	var problem *string
 	if result.Problem != "" {
 		problem = &result.Problem

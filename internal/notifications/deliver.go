@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -113,6 +114,7 @@ func (s *Service) drive(id accounts.ID, l *lane) {
 // again, zero once it is done with: delivered, refused, or given up.
 func (s *Service) attempt(id accounts.ID, l *lane, t target, d *delivery, confined bool) time.Duration {
 	res := s.send(t, d.event, confined)
+	metrics.NotificationSent(t.kind, res.outcome == delivered)
 	s.mu.Lock()
 	d.attempts++
 	if res.outcome == retry {

@@ -371,6 +371,21 @@ func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
 	return addon, nil
 }
 
+// Names maps the key of each addon installed, by anyone, to the name it is
+// listed under: its base address (see stremio.BaseURL), by which the
+// metrics count its requests, never shown.
+func (s *Store) Names(ctx context.Context) (map[string]string, error) {
+	snap, err := s.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(snap.addons))
+	for _, addon := range snap.addons {
+		names[stremio.BaseURL(addon.ManifestURL)] = addon.Manifest.Name
+	}
+	return names, nil
+}
+
 // fetched is a downloaded manifest: its normalized URL, the kind of addon
 // it describes, what is stored of it, and what libraries see of it.
 type fetched struct {

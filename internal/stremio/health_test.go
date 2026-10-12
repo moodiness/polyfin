@@ -4,8 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/metrics"
 )
 
 func TestHealthFollowsTheRequestsMadeToAnAddon(t *testing.T) {
@@ -56,5 +59,45 @@ func TestHealthFollowsTheRequestsMadeToAnAddon(t *testing.T) {
 	_, _ = client.Catalog(t.Context(), manifest, "movie", "top", nil, false)
 	if health, _ := client.Health(manifest); health.Failure != FailureUnreachable {
 		t.Errorf("after the addon went away: %+v", health)
+	}
+}
+
+// The metrics count an addon's requests by resource and outcome, under
+// the name the addon is listed with: a failing request moves the failures.
+func TestAddonRequestsAreCountedInTheMetrics(t *testing.T) {
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/stream/") {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write([]byte(`{"metas":[]}`))
+	}))
+	defer addon.Close()
+	manifest := addon.URL + "/secret-config/manifest.json"
+	metrics.AddonNames(func(context.Context) (map[string]string, error) {
+		return map[string]string{BaseURL(manifest): "Failing addon"}, nil
+	})
+	t.Cleanup(func() { metrics.AddonNames(nil) })
+	client := NewClient("test")
+	if _, err := client.Catalog(t.Context(), manifest, "movie", "top", nil, false); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := client.Streams(t.Context(), manifest, "movie", "tt1", false); err == nil {
+			t.Fatal("a stream request answered 502 succeeded")
+		}
+	}
+	for _, c := range []struct {
+		resource, outcome string
+		want              float64
+	}{
+		{"catalog", metrics.Success, 1},
+		{"stream", metrics.Failure, 2},
+		{"stream", metrics.Success, 0},
+	} {
+		labels := map[string]string{"addon": "Failing addon", "resource": c.resource, "outcome": c.outcome}
+		if got := metrics.Value("polyfin_addon_request_duration_seconds", labels); got != c.want {
+			t.Errorf("%s %s: %v, want %v", c.resource, c.outcome, got, c.want)
+		}
 	}
 }

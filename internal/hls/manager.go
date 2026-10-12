@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -1113,6 +1114,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		e.m.logger.Debug("A remux was stopped", "from", j.start, "duration", time.Since(started))
 	case err != nil:
 		e.m.logger.Warn("A remux failed", "from", j.start, "error", err)
+		metrics.EncodingFailed(e.remux.Encode.method())
 	default:
 		e.m.logger.Debug("A remux reached the end", "from", j.start, "duration", time.Since(started))
 	}
@@ -1200,6 +1202,7 @@ func (e *encoding) close(j *job) error {
 		return err
 	}
 	e.ready[j.next] = true
+	metrics.SegmentMade(e.remux.Encode.method())
 	// The cues starting before the segment just made are counted as
 	// extracted once they had time to come, leaving that segment's length
 	// as a margin too.

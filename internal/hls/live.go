@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/metrics"
 )
 
 const (
@@ -268,7 +270,7 @@ func (l *live) start() (*liveRun, error) {
 	previous := l.run
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
 	l.run = run
-	args := l.remux.runArgs(l.dir, l.next, previous != nil)
+	args, method := l.remux.runArgs(l.dir, l.next, previous != nil), l.remux.Encode.method()
 	go func() {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, l.m.ffmpeg, args...)
@@ -284,6 +286,7 @@ func (l *live) start() (*liveRun, error) {
 		case err != nil:
 			err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
 			l.m.logger.Warn("A live encoding failed", "error", err)
+			metrics.EncodingFailed(method)
 		default:
 			// A live stream does not end: its input was interrupted.
 			err = ErrInterrupted

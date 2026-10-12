@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/metrics"
 )
 
 // The failures Health reports, as codes the admin app translates.
@@ -56,15 +59,17 @@ type healthRecords struct {
 	byAddon map[string]*Health
 }
 
-// record accounts for a request to the addon manifestURL installs, started
-// at started, which failed with the code failure, or succeeded when it is
-// empty. A request the caller gave up on tells nothing of the addon.
-func (h *healthRecords) record(ctx context.Context, manifestURL string, started time.Time, failure string) {
+// record accounts for a request for target to the addon manifestURL
+// installs, started at started, which failed with the code failure, or
+// succeeded when it is empty, and counts it in the metrics. A request the
+// caller gave up on tells nothing of the addon.
+func (h *healthRecords) record(ctx context.Context, manifestURL, target string, started time.Time, failure string) {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
 	now := time.Now()
 	key := BaseURL(manifestURL)
+	metrics.AddonRequest(key, resourceOf(manifestURL, target), now.Sub(started), failure == "")
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	health := h.byAddon[key]
@@ -84,6 +89,24 @@ func (h *healthRecords) record(ctx context.Context, manifestURL string, started 
 	}
 	health.LastSuccess = now
 	health.ResponseTime = now.Sub(started)
+}
+
+// resourceOf names the resource target asks of the addon manifestURL
+// installs, as the metrics count it: manifest, catalog, meta, stream,
+// subtitles, or other, for the addons of other protocols.
+func resourceOf(manifestURL, target string) string {
+	if target == manifestURL {
+		return "manifest"
+	}
+	rest, ok := strings.CutPrefix(target, BaseURL(manifestURL)+"/")
+	resource, _, _ := strings.Cut(rest, "/")
+	switch {
+	case !ok:
+		return "other"
+	case resource == "catalog", resource == "meta", resource == "stream", resource == "subtitles":
+		return resource
+	}
+	return "other"
 }
 
 // forgetOldest drops the addon asked least recently; h.mu is held.
