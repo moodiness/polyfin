@@ -122,7 +122,14 @@ func (r *run) merge(ctx context.Context) error {
 		of[i] = -1
 		if Identified(e.Title) {
 			of[i] = len(refs)
-			refs = append(refs, e.Title)
+			// A title no catalog listed is recorded with the name the app
+			// gives it, a series' for its episodes, until an addon
+			// describes it.
+			ref := e.Title
+			if ref.Name == "" {
+				ref.Name = e.Label.Name
+			}
+			refs = append(refs, ref)
 		}
 	}
 	targets := make([][]library.TitleTarget, 0, len(refs))

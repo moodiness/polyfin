@@ -396,3 +396,25 @@ func TestTitlesAreNamedByTheIdentifiersAppsUse(t *testing.T) {
 		}
 	}
 }
+
+// A title no catalog listed is recorded with the name the app gives it, a
+// series' for its episodes, so that lists name it before an addon
+// describes it.
+func TestUnlistedTitlesKeepTheAppsName(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	alice := h.user(t, "alice", false)
+	entries := []Entry{
+		{Title: ref(t, "tt0000901", true, 0, 0), Label: Label{ID: "tt0000901", Name: "The Unlisted Movie", Kind: "movie"}, Played: true},
+		{Title: ref(t, "tt0000902", false, 1, 2), Label: Label{ID: "tt0000902", Name: "The Unlisted Show", Kind: "episode", Season: 1, Episode: 2},
+			Played: true},
+	}
+	h.imported(t, alice, alice, Account{App: "test", Profiles: []Profile{{ID: "1", Entries: entries}}}, Choice{Profile: "1"})
+	for key, want := range map[string]string{"movie|tt0000901": "The Unlisted Movie", "series|tt0000902": "The Unlisted Show"} {
+		var name string
+		if err := h.pool.QueryRow(t.Context(), "SELECT coalesce(data->'meta'->>'name', '') FROM items WHERE key = $1", key).Scan(&name); err != nil ||
+			name != want {
+			t.Errorf("%s: named %q, %v; want %q", key, name, err, want)
+		}
+	}
+}
