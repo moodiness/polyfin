@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
@@ -47,6 +48,9 @@ type HealthSources struct {
 	// Proxies names the addresses that send forwarded headers without
 	// being known proxies; nil names none.
 	Proxies *forwarded.Proxies
+	// Discovery tells how local network discovery goes; nil tells
+	// nothing.
+	Discovery func() discovery.Status
 }
 
 type healthJSON struct {

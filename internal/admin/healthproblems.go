@@ -46,6 +46,8 @@ const (
 	problemGuide             = "guide"
 	problemTask              = "task"
 	problemUnknownProxy      = "unknown_proxy"
+	problemDiscoveryPort     = "discovery_port"
+	problemDiscoveryAddress  = "discovery_address"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -56,10 +58,11 @@ const (
 // or why a local folder is not watched, and Share, the kind of network
 // share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
 // for an address that sends forwarded headers without being a known
-// proxy; Task, in the language asked, for a task; Secrets for those the
-// key cannot decrypt. To is the admin app's page that describes it, with
-// its anchor. Transient ones come and go with the load: notifications
-// leave them out.
+// proxy, or for a container's address discovery announces; Port for the
+// UDP port discovery cannot listen on; Task, in the language asked, for a
+// task; Secrets for those the key cannot decrypt. To is the admin app's
+// page that describes it, with its anchor. Transient ones come and go with
+// the load: notifications leave them out.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -74,6 +77,7 @@ type healthProblemJSON struct {
 	Share     string           `json:"share,omitempty"`
 	Host      string           `json:"host,omitempty"`
 	Address   string           `json:"address,omitempty"`
+	Port      int              `json:"port,omitempty"`
 	Task      string           `json:"task,omitempty"`
 	Secrets   []unreadableJSON `json:"secrets,omitempty"`
 }
@@ -220,6 +224,17 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			p := healthProblemJSON{Key: "unknown_proxy:" + address.String(), Code: problemUnknownProxy, Tone: notifications.SeverityWarning,
 				To: "/settings/security#known-proxies", Address: address.String()}
 			add(p)
+		}
+	}
+	if h.Health.Discovery != nil {
+		status := h.Health.Discovery()
+		if status.Unavailable {
+			add(healthProblemJSON{Key: "discovery:port", Code: problemDiscoveryPort, Tone: notifications.SeverityWarning,
+				To: "/settings/general#local-discovery", Port: status.Port})
+		}
+		if status.ContainerAddress != "" {
+			add(healthProblemJSON{Key: "discovery:address", Code: problemDiscoveryAddress, Tone: notifications.SeverityWarning,
+				To: "/settings/general#local-address", Address: status.ContainerAddress})
 		}
 	}
 
@@ -423,6 +438,16 @@ func (p healthProblemJSON) text(language string) string {
 			"If it is your reverse proxy, add it to Known proxies under Settings › Security.",
 			"%s transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme %s. "+
 				"Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.", p.Address, p.Address)
+	case problemDiscoveryPort:
+		return say("Polyfin cannot listen on UDP port %d, so Jellyfin apps on the local network do not find it by themselves. "+
+			"Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.",
+			"Polyfin ne peut pas écouter sur le port UDP %d : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. "+
+				"Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.", p.Port)
+	case problemDiscoveryAddress:
+		return say("Jellyfin apps that look for servers on the local network are given %s, an address of Polyfin’s container they cannot reach. "+
+			"Set Address on the local network under Settings › General.",
+			"Les applications Jellyfin qui cherchent des serveurs sur le réseau local reçoivent %s, une adresse du conteneur de Polyfin qu’elles ne peuvent pas joindre. "+
+				"Renseignez Adresse sur le réseau local dans Paramètres › Général.", p.Address)
 	}
 	return ""
 }

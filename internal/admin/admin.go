@@ -412,6 +412,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidPublicAddress, http.StatusBadRequest, "invalid_public_address"},
+		{accounts.ErrInvalidLocalAddress, http.StatusBadRequest, "invalid_local_address"},
 		{accounts.ErrInvalidSMTPHost, http.StatusBadRequest, "invalid_smtp_host"},
 		{accounts.ErrInvalidSMTPPort, http.StatusBadRequest, "invalid_smtp_port"},
 		{accounts.ErrInvalidSMTPSecurity, http.StatusBadRequest, "invalid_smtp_security"},

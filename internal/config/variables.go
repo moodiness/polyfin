@@ -3,6 +3,7 @@ package config
 import (
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -42,13 +43,14 @@ func Variables(environ []string, cfg Config) []Variable {
 		}
 	}
 	effective := map[string]string{
-		"POLYFIN_DATABASE_URL": databaseLocation(cfg.DatabaseURL),
-		"POLYFIN_LISTEN":       cfg.Listen,
-		"POLYFIN_FFPROBE":      cfg.FFprobe,
-		"POLYFIN_FFMPEG":       cfg.FFmpeg,
-		"POLYFIN_DATA_DIR":     cfg.DataDir,
-		"POLYFIN_FONTS_DIR":    cfg.FontsDir,
-		"POLYFIN_WEB_DIR":      cfg.WebDir,
+		"POLYFIN_DATABASE_URL":   databaseLocation(cfg.DatabaseURL),
+		"POLYFIN_LISTEN":         cfg.Listen,
+		"POLYFIN_DISCOVERY_PORT": strconv.Itoa(cfg.DiscoveryPort),
+		"POLYFIN_FFPROBE":        cfg.FFprobe,
+		"POLYFIN_FFMPEG":         cfg.FFmpeg,
+		"POLYFIN_DATA_DIR":       cfg.DataDir,
+		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
+		"POLYFIN_WEB_DIR":        cfg.WebDir,
 		// A secret, never shown: secretName hides it.
 		"POLYFIN_SECRET_KEY": "",
 	}

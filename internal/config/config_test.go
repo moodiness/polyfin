@@ -68,6 +68,23 @@ func TestWebClientComesFromTheImageFolderUnlessSet(t *testing.T) {
 	}
 }
 
+// Discovery listens on Jellyfin's port unless another is set; a value that
+// is not a port stops the start.
+func TestDiscoveryPortIsJellyfinsUnlessSet(t *testing.T) {
+	for value, want := range map[string]int{"": 7359, " 18420 ": 18420, "65535": 65535} {
+		cfg, err := Load(with(map[string]string{"POLYFIN_DISCOVERY_PORT": value}))
+		if err != nil || cfg.DiscoveryPort != want {
+			t.Errorf("POLYFIN_DISCOVERY_PORT %q: %d, %v", value, cfg.DiscoveryPort, err)
+		}
+	}
+	for _, value := range []string{"0", "65536", "-1", "port"} {
+		if _, err := Load(with(map[string]string{"POLYFIN_DISCOVERY_PORT": value})); err == nil ||
+			!strings.Contains(err.Error(), "POLYFIN_DISCOVERY_PORT") {
+			t.Errorf("POLYFIN_DISCOVERY_PORT %q: %v", value, err)
+		}
+	}
+}
+
 func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 	_, err := Load(env(map[string]string{
 		"POLYFIN_LISTEN":   "8096",

@@ -25,6 +25,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -183,6 +184,21 @@ func serve(ctx context.Context) error {
 	// The client of a request is read behind the known proxies, for every
 	// route; System › Health names the proxies missing from them.
 	proxies := forwarded.New(store.KnownProxies)
+	// Jellyfin apps that look for servers on the local network find this
+	// one, while the settings turn it on; a port another server uses is
+	// told in System › Health, and never stops the start.
+	localDiscovery := discovery.Start(ctx, discovery.Options{
+		Port:     cfg.DiscoveryPort,
+		HTTP:     listener.Addr().(*net.TCPAddr),
+		ServerID: serverID,
+		Settings: func() discovery.Settings {
+			settings := store.Settings()
+			return discovery.Settings{Enabled: settings.LocalDiscovery, Name: settings.ServerName, Address: settings.LocalAddress}
+		},
+		Changed:     store.SettingsChanged,
+		InContainer: discovery.InContainer(),
+		Logger:      logger,
+	})
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
 	// Addons and libraries are answered from memory while their changes
@@ -380,6 +396,7 @@ func serve(ctx context.Context) error {
 			Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
 			Updates:      updateCheck,
 			Proxies:      proxies,
+			Discovery:    localDiscovery.Status,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,

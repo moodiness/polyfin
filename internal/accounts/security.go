@@ -89,6 +89,31 @@ func (s *Store) FollowLogLevel(level *slog.LevelVar, configured slog.Level) {
 	s.applyLogLevel()
 }
 
+// storeSettings makes settings the current settings, which the log level
+// follows, and tells those waiting on SettingsChanged.
+func (s *Store) storeSettings(settings *Settings) {
+	s.settings.Store(settings)
+	s.applyLogLevel()
+	s.changedMu.Lock()
+	defer s.changedMu.Unlock()
+	if s.changed != nil {
+		close(s.changed)
+		s.changed = nil
+	}
+}
+
+// SettingsChanged returns a channel closed at the next change of the
+// settings, for what follows them without a restart: read the settings
+// after taking it, and take it again once it is closed.
+func (s *Store) SettingsChanged() <-chan struct{} {
+	s.changedMu.Lock()
+	defer s.changedMu.Unlock()
+	if s.changed == nil {
+		s.changed = make(chan struct{})
+	}
+	return s.changed
+}
+
 // applyLogLevel sets the followed level from the current settings.
 func (s *Store) applyLogLevel() {
 	followed := s.logLevel.Load()

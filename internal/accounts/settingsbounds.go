@@ -48,6 +48,8 @@ func DefaultSettings() Settings {
 		CatalogLimit:        DefaultCatalogLimit,
 		ChannelLimit:        DefaultChannelLimit,
 		UpdateCheck:         true,
+		LocalDiscovery:      true,
+		LocalAddress:        "",
 
 		SkipButtons:           true,
 		SegmentOrder:          slices.Clone(SegmentSources),
@@ -182,6 +184,8 @@ func SettingsBounds() map[string]SettingBounds {
 		"catalogLimit":        between(MinCatalogLimit, MaxCatalogLimit, d.CatalogLimit),
 		"channelLimit":        between(MinChannelLimit, MaxChannelLimit, d.ChannelLimit),
 		"updateCheck":         is(d.UpdateCheck),
+		"localDiscovery":      is(d.LocalDiscovery),
+		"localAddress":        text(MaxLocalAddressBytes, d.LocalAddress),
 
 		"skipButtons":           is(d.SkipButtons),
 		"publicMetaDbKey":       text(MaxSegmentKeyBytes, d.PublicMetaDBKey),

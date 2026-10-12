@@ -164,6 +164,10 @@ type Store struct {
 	now func() time.Time
 	// logLevel follows the settings' DetailedLog (see FollowLogLevel).
 	logLevel atomic.Pointer[followedLevel]
+	// changed is closed at the next change of the settings, then made
+	// anew by SettingsChanged; changedMu guards it.
+	changedMu sync.Mutex
+	changed   chan struct{}
 	// box seals the secrets of the settings; nil stores them as they are.
 	box *secrets.Box
 	// secretsMu guards unreadable, the secrets of the settings the box
@@ -306,8 +310,7 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 	})
 	if err == nil && settings != nil {
 		s.openSecrets(settings)
-		s.settings.Store(settings)
-		s.applyLogLevel()
+		s.storeSettings(settings)
 	}
 	return user, err
 }

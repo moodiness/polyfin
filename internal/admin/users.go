@@ -270,6 +270,10 @@ type settingsJSON struct {
 	CatalogLimit        *int   `json:"catalogLimit"`
 	ChannelLimit        *int   `json:"channelLimit"`
 	UpdateCheck         *bool  `json:"updateCheck"`
+	// LocalDiscovery and LocalAddress keep their current values when a
+	// PUT leaves them out; an empty address announces the interface's.
+	LocalDiscovery *bool   `json:"localDiscovery"`
+	LocalAddress   *string `json:"localAddress"`
 	// The content settings keep their current values too when a PUT
 	// leaves them out.
 	SkipButtons *bool `json:"skipButtons"`
@@ -470,6 +474,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CatalogLimit:        &settings.CatalogLimit,
 		ChannelLimit:        &settings.ChannelLimit,
 		UpdateCheck:         &settings.UpdateCheck,
+		LocalDiscovery:      &settings.LocalDiscovery,
+		LocalAddress:        &settings.LocalAddress,
 
 		SkipButtons:           &settings.SkipButtons,
 		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
@@ -992,6 +998,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 		UpdateCheck:         valueOr(body.UpdateCheck, current.UpdateCheck),
+		LocalDiscovery:      valueOr(body.LocalDiscovery, current.LocalDiscovery),
+		LocalAddress:        valueOr(body.LocalAddress, current.LocalAddress),
 
 		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
 		PublicMetaDBKey:       publicMetaDBKey,

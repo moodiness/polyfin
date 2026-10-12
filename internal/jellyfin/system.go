@@ -7,15 +7,22 @@ import (
 )
 
 func (h *Handler) publicInfo(r *http.Request) PublicSystemInfo {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
+	settings := h.Accounts.Settings()
+	// The address on the local network the settings give, as Jellyfin's
+	// PublishedServerUrl, which discovery answers announce too; else the
+	// address this request reached, which apps can use to reach the server
+	// again from the same network.
+	local := settings.LocalAddress
+	if local == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		local = scheme + "://" + r.Host
 	}
 	return PublicSystemInfo{
-		// The address this request reached, which apps can use to reach the
-		// server again from the same network.
-		LocalAddress:           scheme + "://" + r.Host,
-		ServerName:             h.Accounts.Settings().ServerName,
+		LocalAddress:           local,
+		ServerName:             settings.ServerName,
 		Version:                Version,
 		ProductName:            productName,
 		Id:                     h.ServerID,

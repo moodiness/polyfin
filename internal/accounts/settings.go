@@ -536,6 +536,21 @@ func ValidPublicAddress(address string) bool {
 	return address == "" || len(address) <= MaxPublicAddressBytes && ValidRemuxDBURL(address)
 }
 
+// ErrInvalidLocalAddress reports a Settings.LocalAddress that is not empty
+// nor a valid address (see ValidLocalAddress).
+var ErrInvalidLocalAddress = errors.New("invalid local address")
+
+// MaxLocalAddressBytes is the longest Settings.LocalAddress.
+const MaxLocalAddressBytes = 512
+
+// ValidLocalAddress reports whether address may be the address Polyfin is
+// reached at on the local network: empty, or an absolute http or https URL
+// with a host, without user info, query or fragment, of at most
+// MaxLocalAddressBytes, holding no spaces or control characters.
+func ValidLocalAddress(address string) bool {
+	return address == "" || len(address) <= MaxLocalAddressBytes && ValidRemuxDBURL(address)
+}
+
 // The SMTP server email notifications go through: Settings.SMTPSecurity is
 // one of SMTPSecurities, the first by default, which upgrades a plain
 // connection with STARTTLS; "tls" is TLS from the start, "none" neither.
@@ -696,6 +711,15 @@ type Settings struct {
 	// UpdateCheck asks GitHub once a day for Polyfin's latest release, to
 	// tell administrators about a new version (see package updates).
 	UpdateCheck bool
+	// LocalDiscovery answers the discovery messages Jellyfin apps
+	// broadcast on the local network (see package discovery).
+	LocalDiscovery bool
+	// LocalAddress is the address Polyfin is reached at on the local
+	// network, such as http://192.168.1.10:8096, without a trailing slash,
+	// as Jellyfin's PublishedServerUrl: discovery answers announce it, and
+	// /System/Info/Public gives it as LocalAddress. Empty, discovery
+	// announces the address of the interface that reaches the app.
+	LocalAddress string
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.
 	Language string
@@ -1014,7 +1038,7 @@ func validWebText(text string, max int) bool {
 // settingsColumns are the columns of the settings, in the order of
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
-	"update_check, " +
+	"update_check, local_discovery, local_address, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
@@ -1043,7 +1067,7 @@ var updateSettingsQuery = func() string {
 func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
-		&settings.UpdateCheck,
+		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
 		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
@@ -1220,8 +1244,7 @@ func (s *Store) AdoptEnvironment(ctx context.Context, env Environment) error {
 	if err != nil {
 		return err
 	}
-	s.settings.Store(&settings)
-	s.applyLogLevel()
+	s.storeSettings(&settings)
 	return nil
 }
 
@@ -1377,6 +1400,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !ValidPublicAddress(settings.PublicAddress) {
 		return Settings{}, ErrInvalidPublicAddress
 	}
+	settings.LocalAddress = strings.TrimRight(strings.TrimSpace(settings.LocalAddress), "/")
+	if !ValidLocalAddress(settings.LocalAddress) {
+		return Settings{}, ErrInvalidLocalAddress
+	}
 	settings.SMTPHost, settings.SMTPFrom = strings.TrimSpace(settings.SMTPHost), strings.TrimSpace(settings.SMTPFrom)
 	settings.SMTPFromName = strings.TrimSpace(settings.SMTPFromName)
 	switch {
@@ -1423,8 +1450,7 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 			delete(s.unreadable, secret.name)
 		}
 	}
-	s.settings.Store(&settings)
-	s.applyLogLevel()
+	s.storeSettings(&settings)
 	return settings, nil
 }
 

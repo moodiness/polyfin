@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -27,6 +28,9 @@ type Config struct {
 	DatabaseURL string
 	// Listen is the TCP address of the HTTP server, as host:port.
 	Listen string
+	// DiscoveryPort is the UDP port local network discovery listens on,
+	// 7359, the one Jellyfin apps send to, unless tests choose another.
+	DiscoveryPort int
 	// FFprobe and FFmpeg are the executables, paths or names looked up in
 	// PATH.
 	FFprobe string
@@ -121,6 +125,14 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.Listen = DefaultListen
 	} else if err := validateListen(cfg.Listen); err != nil {
 		errs = append(errs, fmt.Errorf("POLYFIN_LISTEN: %w", err))
+	}
+	cfg.DiscoveryPort = discovery.Port
+	if raw := strings.TrimSpace(getenv("POLYFIN_DISCOVERY_PORT")); raw != "" {
+		port, err := strconv.ParseUint(raw, 10, 16)
+		if err != nil || port == 0 {
+			errs = append(errs, fmt.Errorf("POLYFIN_DISCOVERY_PORT: %q is not a port (1-65535)", raw))
+		}
+		cfg.DiscoveryPort = int(port)
 	}
 	switch {
 	case cfg.DataDir == "":
