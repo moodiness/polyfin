@@ -31,6 +31,17 @@ const users = {
     accessTitle: 'Access',
     isDisabled: 'Disabled',
     isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
+    ended: 'Ended',
+    endsOn: (date: string) => `Ends on ${date}`,
+    endedOn: (date: string) => `Ended on ${date}`,
+    endTitle: 'Ends on',
+    endHelp:
+      'From this date, in the server’s time zone, the account is refused as a disabled one is: it cannot sign in, and its devices are refused. Everything it has stays, and a later date, or Never, brings it back.',
+    endAdministratorHelp:
+      'An administrator’s account never ends: making a user an administrator clears their end date.',
+    endDate: 'End date',
+    saveEnd: 'Save date',
+    endNever: 'Never',
     canTranscode: 'Can use conversion (transcoding)',
     canTranscodeHelp:
       'Lets the server re-encode video and audio when this user’s app cannot play a file as it is. Without it, files play as they are or simply repackaged.',
@@ -351,6 +362,10 @@ const users = {
     expires: 'Expires',
     after: (days: number) => (days === 1 ? 'After 1 day' : `After ${days} days`),
     never: 'Never',
+    accountsEnd: 'Accounts end',
+    accountsEndHelp: 'Each account the link creates ends this many days after it is created.',
+    accountsEndAfter: (days: number) =>
+      days === 1 ? 'Accounts end after 1 day' : `Accounts end after ${days} days`,
     model: 'Settings of',
     modelHelp:
       'New accounts copy this user’s permissions, visible libraries, blocked genres, allowed hours, parental control, playback and access limits and quality group. They are never administrators.',

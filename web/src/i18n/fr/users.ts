@@ -35,6 +35,17 @@ const users: typeof en = {
     isDisabled: 'Désactivé',
     isDisabledHelp:
       'Un utilisateur désactivé ne peut plus se connecter, et tous ses appareils sont déconnectés.',
+    ended: 'Terminé',
+    endsOn: (date: string) => `Prend fin le ${date}`,
+    endedOn: (date: string) => `A pris fin le ${date}`,
+    endTitle: 'Prend fin le',
+    endHelp:
+      'À partir de cette date, dans le fuseau horaire du serveur, le compte est refusé comme un compte désactivé : il ne peut plus se connecter, et ses appareils sont refusés. Tout ce qu’il possède est gardé, et une date plus tardive, ou « Jamais », le rétablit.',
+    endAdministratorHelp:
+      'Le compte d’un administrateur ne prend jamais fin : faire d’un utilisateur un administrateur efface sa date de fin.',
+    endDate: 'Date de fin',
+    saveEnd: 'Enregistrer la date',
+    endNever: 'Jamais',
     canTranscode: 'Peut utiliser la conversion (transcodage)',
     canTranscodeHelp:
       'Le serveur peut convertir l’image et le son quand l’application de cet utilisateur ne sait pas lire un fichier tel quel. Sinon, l’image et le son ne sont jamais modifiés.',
@@ -364,6 +375,13 @@ const users: typeof en = {
     expires: 'Expiration',
     after: (days: number) => (days === 1 ? 'Après 1 jour' : `Après ${days} jours`),
     never: 'Jamais',
+    accountsEnd: 'Fin des comptes',
+    accountsEndHelp:
+      'Chaque compte que le lien crée prend fin ce nombre de jours après sa création.',
+    accountsEndAfter: (days: number) =>
+      days === 1
+        ? 'Les comptes prennent fin après 1 jour'
+        : `Les comptes prennent fin après ${days} jours`,
     model: 'Paramètres de',
     modelHelp:
       'Les nouveaux comptes reprennent les autorisations, les bibliothèques visibles, les genres bloqués, les heures autorisées, le contrôle parental, les limites de lecture et d’accès et le groupe de qualité de cet utilisateur. Ils ne sont jamais administrateurs.',

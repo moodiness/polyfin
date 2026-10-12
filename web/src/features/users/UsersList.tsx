@@ -19,7 +19,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { errorMessage } from '@/format'
+import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -161,6 +161,12 @@ function UserRow({ user }: { user: User }) {
       meta={
         <span className="truncate">
           {t.users.lastSignInLabel} {lastSignIn}
+          {user.endsOn !== null && (
+            <span>
+              {' · '}
+              {(user.ended ? t.users.endedOn : t.users.endsOn)(formatDate(user.endsOn, language))}
+            </span>
+          )}
           {restrictions.length > 0 && <span> · {restrictions.join(' · ')}</span>}
         </span>
       }
@@ -168,6 +174,8 @@ function UserRow({ user }: { user: User }) {
         <span className="flex items-center gap-3">
           {user.isDisabled ? (
             <StatusPill tone="muted">{t.users.disabled}</StatusPill>
+          ) : user.ended ? (
+            <StatusPill tone="muted">{t.users.ended}</StatusPill>
           ) : user.blockedUntil !== null ? (
             <StatusPill tone="warn">
               {t.users.blockedUntil(clockTime(user.blockedUntil, language))}

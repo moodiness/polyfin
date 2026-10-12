@@ -336,6 +336,10 @@ const common: typeof en = {
     app_not_connected: 'Cette appli n’est plus connectée au compte.',
     app_connection_stopped:
       'L’appli a refusé la connexion que Polyfin gardait. Reconnectez-vous, avec « Rester connecté » coché.',
+    invalid_ends_on: 'Choisissez la date de fin du compte, ou « Jamais ».',
+    administrator_cannot_end:
+      'Le compte d’un administrateur ne prend jamais fin. Faites-en d’abord un membre pour lui donner une date de fin.',
+    invalid_invite_account_end: 'Choisissez dans la liste quand les comptes prennent fin.',
   },
   status: {
     title: 'État du serveur',

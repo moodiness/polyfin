@@ -45,6 +45,13 @@ export function dateTime(iso: string, language: string): string {
   )
 }
 
+/** A YYYY-MM-DD date as the language writes it, "October 20, 2026", in no time zone. */
+export function formatDate(date: string, language: string): string {
+  return new Intl.DateTimeFormat(language, { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${date}T00:00:00Z`),
+  )
+}
+
 /** An hour of the day, 0 to 23, as the language writes it, "4:00 AM" or "04:00", in no time zone. */
 export function formatHour(hour: number, language: string): string {
   return new Intl.DateTimeFormat(language, {

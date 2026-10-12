@@ -42,7 +42,7 @@ const stateTones: Record<InviteState, StatusTone> = {
   revoked: 'muted',
 }
 
-/** The expiries offered, in days; 0 never expires. */
+/** The expiries, and the ends of the accounts, offered, in days; 0 is never. */
 const expiryDays = [1, 7, 30, 90, 0]
 
 /**
@@ -113,6 +113,8 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
                       <RelativeTime iso={invite.expiresAt} />
                     </>
                   )}
+                  {invite.accountsEndInDays !== null &&
+                    ` · ${text.accountsEndAfter(invite.accountsEndInDays)}`}
                   {' · '}
                   {invite.createdBy === null
                     ? text.createdByDeleted
@@ -162,8 +164,8 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
 
 /**
  * The form creating an invite link, in a floating panel over the list: how many accounts it may
- * create, when it expires, and whose settings the accounts copy. Once created, it shows the link,
- * which the server gives this one time only.
+ * create, when it expires, when the accounts end, and whose settings they copy. Once created, it
+ * shows the link, which the server gives this one time only.
  */
 export function CreateInviteModal({
   open,
@@ -179,6 +181,7 @@ export function CreateInviteModal({
   const formId = useId()
   const [maxUses, setMaxUses] = useState<number | null>(1)
   const [days, setDays] = useState(7)
+  const [accountDays, setAccountDays] = useState(0)
   const [model, setModel] = useState('')
   const mutation = useMutation({
     mutationFn: createInvite,
@@ -189,6 +192,7 @@ export function CreateInviteModal({
     mutation.reset()
     setMaxUses(1)
     setDays(7)
+    setAccountDays(0)
     setModel('')
     onClose()
   }
@@ -199,6 +203,7 @@ export function CreateInviteModal({
       maxUses: maxUses ?? 0,
       expiresInDays: days === 0 ? null : days,
       modelUserId: model === '' ? null : model,
+      accountsEndInDays: accountDays === 0 ? null : accountDays,
     })
   }
 
@@ -246,6 +251,16 @@ export function CreateInviteModal({
           <Select
             value={days}
             onValue={setDays}
+            options={expiryDays.map((value) => ({
+              value,
+              label: value === 0 ? text.never : text.after(value),
+            }))}
+          />
+        </Field>
+        <Field label={text.accountsEnd} help={text.accountsEndHelp}>
+          <Select
+            value={accountDays}
+            onValue={setAccountDays}
             options={expiryDays.map((value) => ({
               value,
               label: value === 0 ? text.never : text.after(value),

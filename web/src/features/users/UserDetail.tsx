@@ -12,7 +12,7 @@ import {
   BooksIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import {
   ApiError,
@@ -28,7 +28,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { errorMessage } from '@/format'
+import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -188,6 +188,8 @@ function UserPage({ user }: { user: User }) {
       </Badge>
       {user.isDisabled ? (
         <StatusPill tone="muted">{t.users.disabled}</StatusPill>
+      ) : user.ended ? (
+        <StatusPill tone="muted">{t.users.ended}</StatusPill>
       ) : user.blockedUntil !== null ? (
         <StatusPill tone="warn">
           {t.users.blockedUntil(clockTime(user.blockedUntil, language))}
@@ -198,6 +200,8 @@ function UserPage({ user }: { user: User }) {
       <span className="text-ink-3">
         {t.users.lastSignInLabel}{' '}
         {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
+        {user.endsOn !== null &&
+          ` · ${(user.ended ? t.users.endedOn : t.users.endsOn)(formatDate(user.endsOn, language))}`}
         {restrictions.length > 0 && ` · ${restrictions.join(' · ')}`}
       </span>
     </span>
@@ -398,7 +402,7 @@ function ProfilePanel({ user }: { user: User }) {
   )
 }
 
-/** The switches that apply at once: role, sign-in screen, disabled, and the user's rights. */
+/** What applies at once: role, sign-in screen, disabled, the end date, and the user's rights. */
 function AccessPanel({ user }: { user: User }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -442,6 +446,12 @@ function AccessPanel({ user }: { user: User }) {
             disabled={access.isPending}
             onChange={(isDisabled) => change({ isDisabled })}
           />
+          <EndRow
+            key={user.endsOn ?? ''}
+            user={user}
+            pending={access.isPending}
+            onSave={(endsOn) => change({ endsOn })}
+          />
           <SwitchRow
             title={t.users.canTranscode}
             help={t.users.canTranscodeHelp}
@@ -479,6 +489,61 @@ function AccessPanel({ user }: { user: User }) {
           />
         </div>
       </Panel>
+    </div>
+  )
+}
+
+/**
+ * When the account ends: a date, saved with its button, or Never, which clears it. An
+ * administrator's account never ends.
+ */
+function EndRow({
+  user,
+  pending,
+  onSave,
+}: {
+  user: User
+  pending: boolean
+  onSave: (endsOn: string | null) => void
+}) {
+  const { t } = useI18n()
+  const helpId = useId()
+  const [end, setEnd] = useState(user.endsOn ?? '')
+
+  return (
+    <div className="flex items-start justify-between gap-6 border-t border-line py-4 max-sm:flex-col max-sm:gap-3">
+      <div className="min-w-0">
+        <p className="text-control font-medium text-ink">{t.users.endTitle}</p>
+        <p id={helpId} className="mt-1 text-small text-ink-3">
+          {user.isAdministrator ? t.users.endAdministratorHelp : t.users.endHelp}
+        </p>
+      </div>
+      {!user.isAdministrator && (
+        <div className="flex shrink-0 items-center gap-2">
+          <TextInput
+            type="date"
+            size="sm"
+            value={end}
+            onValue={setEnd}
+            aria-label={t.users.endDate}
+            aria-describedby={helpId}
+            disabled={pending}
+            className="w-40"
+          />
+          <Button
+            size="sm"
+            disabled={pending || end === '' || end === user.endsOn}
+            onClick={() => onSave(end)}
+          >
+            {t.users.saveEnd}
+          </Button>
+          {user.endsOn !== null && (
+            <Button size="sm" variant="ghost" disabled={pending} onClick={() => onSave(null)}>
+              {t.users.endNever}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

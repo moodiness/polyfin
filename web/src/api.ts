@@ -72,6 +72,10 @@ export type User = {
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
   qualityGroup: QualityGroup
+  /** The date the account ends, YYYY-MM-DD in the server's time zone; null for never. */
+  endsOn: string | null
+  /** Whether the end date has come: the account is refused as a disabled one is. */
+  ended: boolean
 }
 
 /** Jellyfin's SyncPlayUserAccessType. */
@@ -438,6 +442,8 @@ export type UserPatch = Partial<{
   collectionManagement: boolean
   subtitleManagement: boolean
   qualityGroup: QualityGroup
+  /** YYYY-MM-DD, or null for never. */
+  endsOn: string | null
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -1341,8 +1347,9 @@ export type InviteState = 'active' | 'used_up' | 'expired' | 'revoked'
 
 /**
  * An invite link: how many accounts it may create and has created, when it expires (null for
- * never), the user whose settings new accounts copy (null for a new user's), and who created it
- * (null once deleted).
+ * never), the user whose settings new accounts copy (null for a new user's), who created it
+ * (null once deleted), and how many days after its creation each account it creates ends (null
+ * for never).
  */
 export type Invite = {
   id: string
@@ -1354,6 +1361,7 @@ export type Invite = {
   model: { id: string; name: string } | null
   createdBy: { id: string; name: string } | null
   state: InviteState
+  accountsEndInDays: number | null
 }
 
 /**
@@ -1365,11 +1373,12 @@ export type NewInvite = Invite & { token: string; url: string | null }
 export const fetchInvites = (signal?: AbortSignal) =>
   request<Invite[]>('GET', '/invites', undefined, signal)
 
-/** `expiresInDays` null never expires. */
+/** `expiresInDays` null never expires; `accountsEndInDays` null never ends the accounts. */
 export const createInvite = (body: {
   maxUses: number
   expiresInDays: number | null
   modelUserId: string | null
+  accountsEndInDays: number | null
 }) => request<NewInvite>('POST', '/invites', body)
 
 export const revokeInvite = (id: string) => request<Invite>('POST', `/invites/${seg(id)}/revoke`)

@@ -311,6 +311,10 @@ const common = {
     app_not_connected: 'This app is not connected to the account any longer.',
     app_connection_stopped:
       'The app refused the sign-in Polyfin kept. Sign in again, with Stay connected ticked.',
+    invalid_ends_on: 'Choose the date the account ends, or Never.',
+    administrator_cannot_end:
+      'An administrator’s account never ends. Make them a member first to give it an end date.',
+    invalid_invite_account_end: 'Choose when the accounts end from the list.',
   },
   status: {
     title: 'Server status',

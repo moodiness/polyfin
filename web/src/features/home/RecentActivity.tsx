@@ -40,7 +40,9 @@ const filters = {
   problems: { severities: ['Warning', 'Error'] },
   signIns: { types: ['AuthenticationSucceeded', 'AuthenticationFailed'] },
   playback: { types: ['VideoPlayback', 'VideoPlaybackStopped'] },
-  users: { types: ['UserCreated', 'UserDeleted', 'UserPolicyUpdated', 'UserPasswordChanged'] },
+  users: {
+    types: ['UserCreated', 'UserDeleted', 'UserPolicyUpdated', 'UserPasswordChanged', 'UserEnded'],
+  },
   server: {
     types: ['ServerConfigurationUpdated', 'AddonInstalled', 'AddonUninstalled', 'SecretRevealed'],
   },
@@ -57,6 +59,7 @@ const typeIcons: Record<string, Icon> = {
   UserCreated: UserIcon,
   UserDeleted: UserIcon,
   UserPolicyUpdated: UserIcon,
+  UserEnded: UserIcon,
   UserPasswordChanged: PasswordIcon,
   ServerConfigurationUpdated: GearIcon,
   AddonInstalled: PuzzlePieceIcon,
