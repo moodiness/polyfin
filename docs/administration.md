@@ -197,7 +197,7 @@ The activity log records:
 
 - sign-ins and failed sign-ins;
 - playback start and stop;
-- users created, changed or deleted;
+- users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - settings saved;
 - addons installed or removed.
 
@@ -218,6 +218,7 @@ Jellyfin apps see Polyfin's own jobs and can start and stop them:
 
 - signing out unused devices, hourly;
 - cleaning the activity log, daily;
+- recording ended accounts in the activity log, hourly;
 - fetching the IPTV channel lists, then the Live TV guides due under **Settings › Live TV**. Polyfin looks for due ones every 5 minutes; started by hand, the task fetches every list and guide;
 - refreshing ratings, which asks addons and runs only when started.
 

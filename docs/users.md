@@ -6,7 +6,7 @@ This page covers user accounts: what Polyfin keeps for each user, and the limits
 
 Polyfin has separate accounts for each user, with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points and Next Up are tracked per user, and each user can be limited to titles up to a rating.
 
-An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
+An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change, and its **Ends on** date with **Save date** (see [Ending an account](#ending-an-account)); each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
 Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Stremio or Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
@@ -318,19 +318,35 @@ Users who connected Trakt in Stremio can import their history from Trakt as well
 - An unmatched series whose episodes could not be read has the `reason` `episode_list`.
 - Polyfin asks for a link code with `GET https://link.stremio.com/api/v2/create?type=Create` and polls it with `GET https://link.stremio.com/api/v2/read?type=Read&code=…`, signs in with `POST https://api.strem.io/api/login` (`email`, `password`, `facebook` `false`), reads the library with `POST https://api.strem.io/api/datastoreGet` (`collection` `libraryItem`, `ids` `[]`, `all` `true`) and the addons with `POST https://api.strem.io/api/addonCollectionGet` (`update` `true`), reads the account's email with `POST https://api.strem.io/api/getUser` to stay connected, and signs out with `POST https://api.strem.io/api/logout` the keys it obtained, never a key pasted. The key goes in each body as `authKey`, never in an address.
 
+## Ending an account
+
+An account made for a friend's weekend need not stay until someone remembers to delete it. **Ends on**, in the **Access** section of a user's page, takes a date, kept with **Save date**; **Never**, the default, clears it. From that date, in the server's time zone, the account is refused as a disabled one is: it cannot sign in, from a Jellyfin app, Quick Connect or the admin app, and its devices and admin sessions are refused. Unlike **Disabled**, an end signs nothing out: everything the account has stays, its devices included, and a later date, or **Never**, brings it back as it was.
+
+- **Users** lists each account's end date, as "Ends on October 20, 2026", and shows **Ended** once it has passed, as does the user's page.
+- The activity log records each account that ends, once, as "The account of sam ended", within the hour: a scheduled task looks for them every hour (see [Scheduled tasks](administration.md#scheduled-tasks)). An account given a later date is recorded again when it reaches it.
+- Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Disabled** off, and only the admin app changes the date.
+- An administrator's account never ends, so that the last administrator is never locked out: an administrator cannot be given an end date, and making a user an administrator clears theirs.
+- An ended account's Live TV recordings, new episode notifications, weekly summary and imports from an app stop, as a disabled one's do. Its devices still count as unused for **Sign out devices unused for (days, 0 = never)** (see [Signing out unused devices](#signing-out-unused-devices)).
+
+**For app developers:**
+
+- `GET /admin/api/users` and `PATCH /admin/api/users/{id}` answer `endsOn`, a `YYYY-MM-DD` date in the server's time zone or null for never, and `ended`, true once that date has come. `PATCH` takes `endsOn`, a date or null; anything else is 400 `invalid_ends_on`, and a date for an administrator, or for a user made one in the same change, is 409 `administrator_cannot_end`.
+- An ended account signs in as a disabled one does: 403 from `/Users/AuthenticateByName`, Quick Connect and `POST /admin/api/session` (`account_disabled`). Its access tokens answer 401, and its policy's `IsDisabled` is true.
+
 ## Invite links
 
 An invite link lets the people an administrator sends it to create their own account, so that nobody has to choose a password for them and send it in a message. **Create an invite link**, at the top of **Users**, asks for:
 
 - **Accounts it may create**: from 1 to 100, 1 by default. One link can serve a whole family.
 - **Expires**: after 1, 7 (the default), 30 or 90 days, or **Never**.
+- **Accounts end**: **Never**, the default, or 1, 7, 30 or 90 days after each is created. Each account the link creates is given that end date (see [Ending an account](#ending-an-account)).
 - **Settings of**: the user whose settings the new accounts copy, or a new user, as with **Create a user**.
 
-With a model, a new account copies everything the model's page sets except the name, the password and **Administrator**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. An invite link never makes an administrator.
+With a model, a new account copies everything the model's page sets except the name, the password, **Administrator** and **Ends on**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. An invite link never makes an administrator.
 
 The link is shown once, with **Copy link**: Polyfin keeps only a hash of it and cannot show it again. It starts with the **Public address** (**Settings › Notifications**) when one is set, and with the address the admin app is open at otherwise.
 
-**Invite links**, under the accounts, lists each link with the accounts it created out of those it may create, whose settings it gives, when it expires, who created it, and its state: **Active**, **Used up**, **Expired** or **Revoked**. **Revoke** stops an active link at once; the accounts it created are kept. Deleting the user a link copies revokes the link too.
+**Invite links**, under the accounts, lists each link with the accounts it created out of those it may create, whose settings it gives, when it expires, when its accounts end, who created it, and its state: **Active**, **Used up**, **Expired** or **Revoked**. **Revoke** stops an active link at once; the accounts it created are kept. Deleting the user a link copies revokes the link too.
 
 ### The guest's page
 
@@ -354,8 +370,8 @@ Each account created through a link is written to the activity log, as "sam join
 **For app developers:**
 
 - The admin API serves the links to administrators:
-  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted), and `state`: `active`, `used_up`, `expired` or `revoked`.
-  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never) and `modelUserId` (null or left out for a new user's settings). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry` and `invalid_invite_model`.
+  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted), `state`: `active`, `used_up`, `expired` or `revoked`, and `accountsEndInDays` (null for never).
+  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never), `modelUserId` (null or left out for a new user's settings) and `accountsEndInDays` (up to 365, null or left out for never). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry`, `invalid_invite_model` and `invalid_invite_account_end`.
   - `POST /admin/api/invites/{id}/revoke` revokes one, and answers it.
 - The guest's page uses two routes that need no session:
   - `GET /admin/api/invite/{token}` answers `serverName` while the link may create an account.
