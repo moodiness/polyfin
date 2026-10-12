@@ -356,6 +356,12 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		}
 		return s.finish(ctx, id, at, list)
 	}
+	if folder.Kind == KindHomeVideos {
+		if err := s.scanHomeVideos(ctx, id, root, list); err != nil {
+			return err
+		}
+		return s.finish(ctx, id, at, list)
+	}
 	files := list.files
 	collapseDiscs(folder.Kind, files, func(rel string) (io.ReadCloser, error) { return list.open(ctx, rel) })
 	if folder.Share == "" {
@@ -391,7 +397,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		entries[rel] = readEntry(folder.Kind, rootName, rel, f)
 	}
 	places := unitNFOs(folder.Kind, entries, list.sides)
-	ids, err := s.readNFOs(ctx, id, list, places)
+	infos, err := s.readNFOs(ctx, id, list, places)
 	if err != nil {
 		return err
 	}
@@ -402,7 +408,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	units := map[string][]entry{}
 	renewed := map[string]bool{}
 	for rel, e := range entries {
-		e.nfo = ids[places[e.unit]]
+		e.nfo = infos[places[e.unit]].id()
 		old, ok := known[rel]
 		switch {
 		case ok && old.nfo != e.nfo:

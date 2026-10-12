@@ -14,13 +14,14 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// The kinds of what is played.
+// The kinds of what is played; HomeVideo is a local folder's home video.
 const (
 	Movie     = "movie"
 	Episode   = "episode"
 	Channel   = "channel"
 	Recording = "recording"
 	Replay    = "replay"
+	HomeVideo = "video"
 	Song      = "song"
 	Audiobook = "audiobook"
 )
@@ -29,7 +30,7 @@ const (
 // and audiobooks are only told.
 func Video(kind string) bool {
 	switch kind {
-	case Movie, Episode, Channel, Recording, Replay:
+	case Movie, Episode, Channel, Recording, Replay, HomeVideo:
 		return true
 	}
 	return false

@@ -290,7 +290,8 @@ func chooseArtwork(kind, root string, files []imagedFile, images sideImages) map
 		switch _, disc, ok := discEntry(f.path); {
 		case f.unit == f.path:
 			dir := path.Dir(f.path)
-			p = place{dir: dir, stem: stem(f.path), whole: len(titles[dir]) == 1}
+			// A home video at the folder's top is not the folder's own.
+			p = place{dir: dir, stem: stem(f.path), whole: len(titles[dir]) == 1 && (kind != KindHomeVideos || dir != ".")}
 		case ok && discUnit(disc) == f.unit:
 			p = place{dir: f.unit, stem: path.Base(f.unit), whole: true}
 			if f.unit == "." {
@@ -463,13 +464,15 @@ type artworkSet struct {
 }
 
 // Artwork returns the artwork of the titles and seasons of the server's
-// enabled movies and shows folders whose UseArtwork is on, by item (see
-// library.TitleItemID and library.SeasonItemID): images Open opens, by
-// URLs that change with their size and modification time (see
-// artworkURL). Of the images of a type several folders hold for an item,
-// the folder listed first among the server's sources gives it. It is read
-// from memory, again once the artwork or the addons changed; if it cannot
-// be read, titles show the addons' artwork until it can.
+// enabled movies and shows folders whose UseArtwork is on, and of the
+// videos of its home videos folders, by item (see library.TitleItemID and
+// library.SeasonItemID):
+// images Open opens, by URLs that change with their size and modification
+// time (see artworkURL). Of the images of a type several folders hold for
+// an item, the folder listed first among the server's sources gives it. A
+// home video without a poster beside it shows its frame (see storeFrames).
+// It is read from memory, again once the artwork or the addons changed; if
+// it cannot be read, titles show the addons' artwork until it can.
 func (s *Service) Artwork() map[accounts.ID]library.Images {
 	if set := s.artwork.Load(); set != nil && set.changes == s.artworkChanges.Load() && set.addons == s.addons.Changes() {
 		return set.images
@@ -493,7 +496,8 @@ func (s *Service) Artwork() map[accounts.ID]library.Images {
 	return images
 }
 
-// readArtwork reads the artwork Artwork answers.
+// readArtwork reads the artwork Artwork answers. A home videos folder has
+// no UseArtwork: no addon gives its titles artwork.
 func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Images, error) {
 	images := map[accounts.ID]library.Images{}
 	// The title of an image's unit is that of its files matched: a show's
@@ -502,7 +506,7 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 		FROM local_artwork a JOIN local_folders l ON l.addon_id = a.addon_id JOIN addons d ON d.id = a.addon_id
 		CROSS JOIN LATERAL (SELECT stremio_id FROM local_files WHERE addon_id = a.addon_id AND unit = a.unit AND stremio_id IS NOT NULL
 			LIMIT 1) f
-		WHERE l.use_artwork AND d.enabled AND l.kind IN ('movies', 'shows')
+		WHERE (l.use_artwork AND l.kind IN ('movies', 'shows') OR l.kind = 'homevideos') AND d.enabled
 		ORDER BY d.position, d.created_at, d.id, a.unit`)
 	if err != nil {
 		return nil, err
@@ -515,6 +519,8 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 	_, err = pgx.ForEachRow(rows, []any{&image, &kind, &title, &season, &imageType, &rel, &size, &modified}, func() error {
 		item := library.TitleItemID(library.KindMovie, title)
 		switch {
+		case kind == KindHomeVideos:
+			item = library.TitleItemID(library.KindVideo, title)
 		case kind == KindShows && season >= 0:
 			item = library.SeasonItemID(title, season)
 		case kind == KindShows:
@@ -525,6 +531,23 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 			return nil
 		}
 		images[item] = set
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	rows, err = s.db.Query(ctx, `SELECT v.frame_id, f.stremio_id, length(v.frame), v.modified FROM local_videos v
+		JOIN local_files f ON f.addon_id = v.addon_id AND f.path = v.path JOIN addons d ON d.id = v.addon_id
+		WHERE v.frame IS NOT NULL AND f.stremio_id IS NOT NULL AND d.enabled`)
+	if err != nil {
+		return nil, err
+	}
+	_, err = pgx.ForEachRow(rows, []any{&image, &title, &size, &modified}, func() error {
+		item := library.TitleItemID(library.KindVideo, title)
+		set := images[item]
+		if setArtwork(&set, imagePrimary, artworkURL(image, "frame.jpg", size, modified)) {
+			images[item] = set
+		}
 		return nil
 	})
 	return images, err

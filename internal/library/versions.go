@@ -125,12 +125,12 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		return target{item: id, kind: r.Kind, metaType: originEclipse, id: r.Music.ID}, v, nil
-	case r.Kind == KindMovie && r.Meta != nil:
+	case (r.Kind == KindMovie || r.Kind == KindVideo) && r.Meta != nil:
 		meta := r.Meta
 		if full, ok := s.cachedMeta(r); ok {
 			meta = &full
 		}
-		return target{item: id, kind: KindMovie, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil
+		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindReplay:
@@ -526,11 +526,21 @@ func streamServing(v view, t target) []installed {
 	var serving []installed
 	for _, entry := range v.addons {
 		// An IPTV source's channel is only its source's to play.
-		if entry.addon.Manifest.Serves("stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
+		if serves(entry, "stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
 			serving = append(serving, entry)
 		}
 	}
 	return serving
+}
+
+// serves reports whether an addon serves a resource for a title: a home
+// video's are its folder's alone, whatever other addons declare, so that
+// none of them ever hears of it.
+func serves(entry installed, resource, metaType, id string) bool {
+	if (metaType == VideoType || strings.HasPrefix(id, VideoIDPrefix)) && !entry.addon.Local() {
+		return false
+	}
+	return entry.addon.Manifest.Serves(resource, metaType, id)
 }
 
 // KnownSubtitles lists, as Subtitles does, the subtitle files known now,
@@ -745,7 +755,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 	}
 	var serving []installed
 	for _, entry := range v.addons {
-		if entry.addon.Manifest.Serves("subtitles", t.metaType, t.id) {
+		if serves(entry, "subtitles", t.metaType, t.id) {
 			serving = append(serving, entry)
 		}
 	}

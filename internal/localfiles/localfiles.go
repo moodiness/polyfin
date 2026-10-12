@@ -26,7 +26,8 @@
 // administrator links the files left unmatched to an IMDb identifier by
 // hand. The subtitle files beside a video are offered with its stream (see
 // sidecars). A music folder answers as an Eclipse addon instead (see
-// music.go).
+// music.go), and a home videos folder lists its videos as titles of their
+// own, which no metadata addon is asked about (see homevideos.go).
 //
 // A share's files are read from the share at each request, with byte
 // ranges, and never copied; its connections are kept between requests.
@@ -56,12 +57,13 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// Kinds of folders: a folder holds movies, shows with their episodes, or
-// music.
+// Kinds of folders: a folder holds movies, shows with their episodes,
+// music, or home videos.
 const (
-	KindMovies = "movies"
-	KindShows  = "shows"
-	KindMusic  = "music"
+	KindMovies     = "movies"
+	KindShows      = "shows"
+	KindMusic      = "music"
+	KindHomeVideos = "homevideos"
 )
 
 // catalogID identifies a folder's one catalog.
@@ -70,7 +72,7 @@ const catalogID = "local"
 var (
 	ErrInvalidName = errors.New("folder names are 1 to 64 printable characters")
 	ErrInvalidPath = errors.New("a folder is an absolute path in the container, other than /")
-	ErrInvalidKind = errors.New("a folder holds movies, shows or music")
+	ErrInvalidKind = errors.New("a folder holds movies, shows, music or home videos")
 	ErrInvalidIMDb = errors.New("an IMDb identifier is tt followed by digits")
 	// ErrSearchFailed wraps the error of a search of the metadata addons
 	// (see Service.Search).
@@ -102,9 +104,12 @@ type Service struct {
 	// probe tells whether FFmpeg reads an input (see UseProbe), nil until
 	// set.
 	probe func(ctx context.Context, in media.Input) bool
-	// ffprobe and ffmpeg read a music folder's tracks: their tags, and
-	// their embedded covers (see UseTools).
+	// ffprobe and ffmpeg read a music folder's tracks, their tags and
+	// their embedded covers, and a home videos folder's videos, their
+	// dates and frames; toneMapping tells whether ffmpeg brings HDR to SDR
+	// (see UseTools).
 	ffprobe, ffmpeg string
+	toneMapping     bool
 	// workers bounds the units matched at once in a scan.
 	workers int
 
@@ -166,9 +171,14 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 func (s *Service) UseFiles(files, inputs string) { s.files, s.inputs = files, inputs }
 
 // UseTools sets the ffprobe and FFmpeg executables music folders' tracks
-// are read with, ffprobe and ffmpeg from PATH until then; it is called
-// before the service is used.
+// and home videos are read with, ffprobe and ffmpeg from PATH until then;
+// it is called before the service is used.
 func (s *Service) UseTools(ffprobe, ffmpeg string) { s.ffprobe, s.ffmpeg = ffprobe, ffmpeg }
+
+// UseToneMapping tells that FFmpeg has the filters bringing HDR to SDR,
+// which the frames of HDR home videos are made with (see homeFrame); it is
+// called before the service is used.
+func (s *Service) UseToneMapping(on bool) { s.toneMapping = on }
 
 // Watch watches the folders for changes until Close; it is called once,
 // before the service is used.
@@ -227,9 +237,9 @@ func (s *Service) Close() {
 }
 
 // NewFolder is a folder to add: its name, its path in the container or a
-// share's address, what it holds, KindMovies or KindShows, a share's user
-// and password, and whether its titles show the artwork beside their
-// files (see Artwork), nil for yes.
+// share's address, what it holds, KindMovies, KindShows, KindMusic or
+// KindHomeVideos, a share's user and password, and whether its titles
+// show the artwork beside their files (see Artwork), nil for yes.
 type NewFolder struct {
 	Name       string
 	Path       string
@@ -285,6 +295,9 @@ type Folder struct {
 	// Albums and Artists count a music folder's albums and their artists;
 	// its Files are its tracks, Matched those with a title and an album.
 	Albums, Artists int
+	// Dated counts a home videos folder's videos by where their dates
+	// come from (see homeDate); its Files are its videos, all matched.
+	Dated Dates
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -292,6 +305,13 @@ type Folder struct {
 // made by hand.
 type Matches struct {
 	Name, NFO, Search, Link int
+}
+
+// Dates counts home videos by where their dates come from: their NFO
+// file, the creation time their container tells, or their file's
+// modification time.
+type Dates struct {
+	NFO, Created, File int
 }
 
 // Link is a unit of a folder linked by hand to an IMDb identifier: a
@@ -314,7 +334,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	if folder.Kind != KindMovies && folder.Kind != KindShows && folder.Kind != KindMusic {
+	if folder.Kind != KindMovies && folder.Kind != KindShows && folder.Kind != KindMusic && folder.Kind != KindHomeVideos {
 		return addons.Addon{}, ErrInvalidKind
 	}
 	share := shareKind(location)
@@ -514,6 +534,13 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	if err != nil {
 		return Folder{}, err
 	}
+	if f.Kind == KindHomeVideos {
+		if err := s.db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE dated_by = 'nfo'), count(*) FILTER (WHERE dated_by = 'created'),
+			count(*) FILTER (WHERE dated_by = 'file') FROM local_videos WHERE addon_id = $1`, id).Scan(&f.Dated.NFO, &f.Dated.Created,
+			&f.Dated.File); err != nil {
+			return Folder{}, err
+		}
+	}
 	s.mu.Lock()
 	_, f.Scanning = s.running[id]
 	s.mu.Unlock()
@@ -524,14 +551,18 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 
 // metaType is the Stremio type of a folder's titles.
 func metaType(kind string) string {
-	if kind == KindShows {
+	switch kind {
+	case KindShows:
 		return "series"
+	case KindHomeVideos:
+		return library.VideoType
 	}
 	return "movie"
 }
 
 // idPrefixes are the identifiers a folder's titles have: IMDb's, or TMDB's
-// for a title the metadata addons gave no IMDb identifier.
+// for a title the metadata addons gave no IMDb identifier; a home video's
+// are its own (see videoID).
 var idPrefixes = []string{"tt", "tmdb:"}
 
 // manifest describes a folder as an addon: one catalog of its titles,
@@ -553,11 +584,14 @@ func manifest(id accounts.ID, name, kind, share string) stremio.Manifest {
 			Catalogs: []stremio.Catalog{{Type: eclipse.TypeAlbum, ID: catalogID, Name: name}}}
 	}
 	typ := metaType(kind)
-	types := []string{typ}
+	types, prefixes := []string{typ}, idPrefixes
+	if kind == KindHomeVideos {
+		prefixes = []string{library.VideoIDPrefix}
+	}
 	return stremio.Manifest{
 		ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: description, Types: types,
-		Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: types, IDPrefixes: idPrefixes},
-			{Name: "stream", Types: types, IDPrefixes: idPrefixes}},
+		Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", Types: types, IDPrefixes: prefixes},
+			{Name: "stream", Types: types, IDPrefixes: prefixes}},
 		Catalogs: []stremio.Catalog{{Type: typ, ID: catalogID, Name: name, Extra: []stremio.Extra{{Name: "search"}, {Name: "skip"}}}},
 	}
 }

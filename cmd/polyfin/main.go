@@ -237,6 +237,7 @@ func serve(ctx context.Context) error {
 	defer folders.Close()
 	lib.UseLocal(folders)
 	folders.UseTools(cfg.FFprobe, cfg.FFmpeg)
+	folders.UseToneMapping(segments.HasFilters("zscale", "tonemap"))
 	folders.Watch()
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)

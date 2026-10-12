@@ -28,7 +28,8 @@ const catalogPage = 100
 var episodeVideo = regexp.MustCompile(`^(.+):(\d{1,4}):(\d{1,5})$`)
 
 // Catalog answers a folder's catalog: its titles, the latest found first,
-// those whose name holds search when given, from skip.
+// those whose name holds search when given, from skip; a home videos
+// folder's the latest recorded first (see homeCatalog).
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, id string, skip int, search string) ([]stremio.Meta, error) {
 	var kind string
 	err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind)
@@ -37,6 +38,9 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	}
 	if err != nil {
 		return nil, err
+	}
+	if kind == KindHomeVideos {
+		return s.homeCatalog(ctx, source, skip, search)
 	}
 	rows, err := s.db.Query(ctx, `SELECT stremio_id, max(name), max(poster), max(title_year) FROM local_files
 		WHERE addon_id = $1 AND stremio_id IS NOT NULL AND ($2 = '' OR strpos(lower(name), lower($2)) > 0)
@@ -67,6 +71,9 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 			return stremio.Meta{}, stremio.ErrNotFound
 		}
 		return stremio.Meta{}, err
+	}
+	if kind == KindHomeVideos {
+		return s.homeMeta(ctx, source, id)
 	}
 	rows, err := s.db.Query(ctx, `SELECT name, poster, coalesce(title_year, 0), season, episode, last_episode FROM local_files
 		WHERE addon_id = $1 AND stremio_id = $2 ORDER BY season, episode`, source, id)
@@ -225,11 +232,11 @@ var ErrGone = errors.New("the file is no longer in its folder")
 // gives them, a video, a subtitle file, a track, an album's artwork or a
 // title's (see Artwork), for reading, with its modification time: within
 // its folder, through no symbolic link leading out of it, or from its
-// share; a cover a track embeds, from what its scan kept; the title of a
-// disc on a share, as one file (see openTitle). A VobSub pair is named by
-// its .idx file, whose key with the .sub extension opens its .sub file, as
-// FFmpeg finds it. A share that cannot be read fails with why (see
-// shareFailure).
+// share; a cover a track embeds or a home video's frame, from what its
+// scan kept; the title of a disc on a share, as one file (see openTitle).
+// A VobSub pair is named by its .idx file, whose key with the .sub
+// extension opens its .sub file, as FFmpeg finds it. A share that cannot
+// be read fails with why (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, extension, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
@@ -245,7 +252,8 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 			UNION ALL SELECT addon_id, CASE WHEN $2 AND pair <> '' THEN pair ELSE path END, NULL, NULL FROM local_subtitles WHERE id = $1
 			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_tracks WHERE id = $1
 			UNION ALL SELECT addon_id, path, data, modified FROM local_covers WHERE id = $1
-			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_artwork WHERE id = $1) f
+			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_artwork WHERE id = $1
+			UNION ALL SELECT addon_id, path, frame, modified FROM local_videos WHERE frame_id = $1 AND frame IS NOT NULL) f
 		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id, strings.EqualFold(extension, "sub")).
 		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -14,8 +14,9 @@ var ErrInvalidParentalControl = errors.New("invalid parental control")
 
 // UnratedKinds are the kinds of items Jellyfin's user policy can hide when
 // they have no rating (its UnratedItem names), in its order. Polyfin's
-// movies are Movie, and its series, with their seasons and episodes,
-// Series; the others are kept as apps set them.
+// movies are Movie, its series, with their seasons and episodes, Series,
+// and the home videos of local folders Other; the others are kept as apps
+// set them.
 var UnratedKinds = []string{"Movie", "Trailer", "Series", "Music", "Book", "LiveTvChannel", "LiveTvProgram", "ChannelContent", "Other"}
 
 // ParentalControl limits the titles a user reaches by their rating, as
@@ -32,8 +33,9 @@ type ParentalControl struct {
 	BlockUnrated []string
 }
 
-// Restricted reports whether the control hides any of Polyfin's titles,
-// movies and series; the other kinds have no items in Polyfin.
+// Restricted reports whether the control hides any of Polyfin's titles
+// that addons give, movies and series; the home videos of local folders,
+// Other, are judged too (see library), but no addon gives them.
 func (p ParentalControl) Restricted() bool {
 	return p.Judges("Movie") || p.Judges("Series")
 }

@@ -57,14 +57,17 @@ func certification(meta stremio.Meta) string {
 }
 
 // unratedKind names the kind of an item as parental control does (see
-// accounts.UnratedKinds): seasons and episodes follow their series. Other
-// items, folders and people, are never hidden.
+// accounts.UnratedKinds): seasons and episodes follow their series, and
+// home videos are Other, as Jellyfin's videos are. Other items, folders
+// and people, are never hidden.
 func unratedKind(kind Kind) (string, bool) {
 	switch kind {
 	case KindMovie:
 		return "Movie", true
 	case KindSeries, KindSeason, KindEpisode:
 		return "Series", true
+	case KindVideo:
+		return "Other", true
 	}
 	return "", false
 }
@@ -78,9 +81,10 @@ func (v view) judges(kind Kind) bool {
 }
 
 // restricted reports whether the user's parental control or blocked
-// genres hide titles (see accounts.User.Restricted).
+// genres hide titles (see accounts.User.Restricted), home videos, which
+// are Other, included.
 func (v view) restricted() bool {
-	return v.parental.Restricted() || v.blocksGenres()
+	return v.parental.Restricted() || v.parental.Judges("Other") || v.blocksGenres()
 }
 
 func (v view) blocksGenres() bool {
@@ -170,6 +174,11 @@ func (v view) rates(r record) bool {
 // and the genres of its listing. stale is set when the traits kept are old
 // enough to be asked again.
 func (s *Service) knownTraits(v view, r record) (t traits, stale bool) {
+	// A home video has no rating nor genres: it is what its folder tells,
+	// and nothing to look up.
+	if r.Kind == KindVideo {
+		return traits{ratingKnown: true, genresKnown: true}, false
+	}
 	if r.Rating != nil && (r.Genres != nil || !v.blocksGenres()) {
 		kept := traits{rating: *r.Rating, ratingKnown: true, genresKnown: r.Genres != nil}
 		if r.Genres != nil {

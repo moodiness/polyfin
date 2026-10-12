@@ -1400,7 +1400,7 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		return 1
 	})
 	for _, candidate := range candidates {
-		if shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
+		if shared && !candidate.shared || !serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
 			continue
 		}
 		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
@@ -1571,7 +1571,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		item := Item{ID: id, Kind: KindCollection, ParentID: deref(r.Parent)}
 		fromMeta(&item, *r.Meta)
 		return item, nil
-	case KindMovie, KindSeries:
+	case KindMovie, KindSeries, KindVideo:
 		meta := *r.Meta
 		full, described := s.titleMeta(ctx, v, r)
 		if described {

@@ -40,18 +40,19 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	if title.Meta == nil {
 		return nil
 	}
-	// What addons are asked for the streams and subtitles of: the movie or
-	// channel itself, the episode, or every episode of the series.
+	// What addons are asked for the streams and subtitles of: the movie,
+	// home video or channel itself, the episode, or every episode of the
+	// series.
 	var lists []string
 	switch r.Kind {
-	case KindMovie, KindChannel:
+	case KindMovie, KindVideo, KindChannel:
 		lists = []string{title.Meta.ID}
 	case KindEpisode:
 		if r.Video != nil {
 			lists = []string{r.Video.ID}
 		}
 	}
-	if r.Kind == KindMovie || r.Kind == KindEpisode {
+	if r.Kind == KindMovie || r.Kind == KindVideo || r.Kind == KindEpisode {
 		if versions, ok := s.CachedVersions(ctx, user, id); ok {
 			for _, version := range versions {
 				s.versions.Delete(version.ID)

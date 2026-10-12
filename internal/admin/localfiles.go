@@ -23,7 +23,9 @@ const maxTitleQuery = 200
 // way, its files, those matched to a title, how, and the others, the
 // links made by hand, and whether its titles show the artwork beside their
 // files. A music folder's files are its tracks, matched those with a
-// title and an album, which its albums and artists count.
+// title and an album, which its albums and artists count; a home videos
+// folder's are its videos, each its own title, which datedBy counts by
+// where their dates come from.
 type folderJSON struct {
 	Kind        string        `json:"kind"`
 	Path        string        `json:"path"`
@@ -40,6 +42,7 @@ type folderJSON struct {
 	Unmatched   int           `json:"unmatched"`
 	Albums      int           `json:"albums"`
 	Artists     int           `json:"artists"`
+	DatedBy     datedByJSON   `json:"datedBy"`
 	Links       []linkJSON    `json:"links"`
 	UseArtwork  bool          `json:"useArtwork"`
 }
@@ -51,6 +54,15 @@ type matchedByJSON struct {
 	NFO    int `json:"nfo"`
 	Search int `json:"search"`
 	Link   int `json:"link"`
+}
+
+// datedByJSON counts a home videos folder's videos by where their dates
+// come from: their NFO file, their recording (the creation time their
+// container tells) or their file's modification time.
+type datedByJSON struct {
+	NFO     int `json:"nfo"`
+	Created int `json:"created"`
+	File    int `json:"file"`
 }
 
 type linkJSON struct {
@@ -66,7 +78,8 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
-		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Links: links, UseArtwork: f.UseArtwork}
+		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
+		Links: links, UseArtwork: f.UseArtwork}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -85,10 +98,10 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 
 // folderRequest adds or changes a local folder: its name, its path in the
 // container or a share's address, and, on adding, what it holds, "movies",
-// "shows" or "music"; a share's user and password; whether its titles
-// show the artwork beside their files, yes when left out on adding. On a
-// change, a password left out keeps the one stored, and an empty one
-// removes it.
+// "shows", "music" or "homevideos"; a share's user and password; whether
+// its titles show the artwork beside their files, yes when left out on
+// adding. On a change, a password left out keeps the one stored, and an
+// empty one removes it.
 type folderRequest struct {
 	Name       *string `json:"name"`
 	Path       *string `json:"path"`

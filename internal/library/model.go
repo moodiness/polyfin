@@ -51,6 +51,18 @@ const (
 	KindTrack         Kind = "track"
 	KindAudiobook     Kind = "audiobook"
 	KindMusicPlaylist Kind = "musicplaylist"
+	// KindVideo is a home video: a title of a local home videos folder,
+	// which no metadata addon knows (see VideoType).
+	KindVideo Kind = "video"
+)
+
+// Home videos are the titles of local home videos folders, of their own
+// Stremio type and identifiers: no other addon is asked to describe them
+// or for their streams (see describe and streamServing), and their
+// libraries are Jellyfin's homevideos.
+const (
+	VideoType     = "polyfin.homevideo"
+	VideoIDPrefix = "polyfin-video:"
 )
 
 // Item is something a Jellyfin app can browse.
@@ -260,6 +272,8 @@ func titleKind(stremioType string) (Kind, bool) {
 	switch stremioType {
 	case "movie", "anime.movie":
 		return KindMovie, true
+	case VideoType:
+		return KindVideo, true
 	case "series", "anime.series", "anime":
 		return KindSeries, true
 	default:
@@ -278,6 +292,8 @@ func collectionType(catalogType string) string {
 		return "tvshows"
 	case "collection":
 		return "boxsets"
+	case VideoType:
+		return "homevideos"
 	case eclipse.TypeTrack, eclipse.TypeAlbum, eclipse.TypeArtist, eclipse.TypePlaylist:
 		return "music"
 	default:

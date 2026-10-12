@@ -131,13 +131,13 @@ func (s *Service) pendingOf(user accounts.ID, t target, serving []installed) int
 // follow-ups stop, and the addons are asked in the background, as item
 // details ask them (see VersionsNow). Addons still asked for the title are
 // left to answer. ErrNotFound is returned for an item the user cannot
-// reach, or that is neither a movie nor an episode.
+// reach, or that is neither a movie, a home video nor an episode.
 func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.ID) error {
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return err
 	}
-	if t.kind != KindMovie && t.kind != KindEpisode {
+	if t.kind != KindMovie && t.kind != KindVideo && t.kind != KindEpisode {
 		return ErrNotFound
 	}
 	serving := streamServing(v, t)

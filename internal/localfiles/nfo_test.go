@@ -36,9 +36,39 @@ func TestReadNFO(t *testing.T) {
 		{"no address", "Night of the Living Dead (1968)\n", "", ""},
 		{"no address in XML", "<movie><trailer>https://titles.example/title/tt0100258/</trailer></movie>", "", ""},
 	} {
-		imdb, tmdb, err := readNFO(strings.NewReader(tc.text))
-		if err != nil || imdb != tc.imdb || tmdb != tc.tmdb {
-			t.Errorf("%s: %q %q %v", tc.name, imdb, tmdb, err)
+		info, err := readNFO(strings.NewReader(tc.text))
+		if err != nil || info.imdb != tc.imdb || info.tmdb != tc.tmdb {
+			t.Errorf("%s: %q %q %v", tc.name, info.imdb, info.tmdb, err)
+		}
+	}
+}
+
+func TestReadNFOTitlePlotAndDate(t *testing.T) {
+	day := func(text string) *time.Time {
+		at, _ := time.Parse(time.DateOnly, text)
+		return &at
+	}
+	for _, tc := range []struct {
+		name, text, title, plot string
+		released                *time.Time
+		year                    int
+	}{
+		{"all of them", `<movie><title> Lucy's first steps </title><plot>In the garden.</plot><premiered>2019-06-02</premiered>` +
+			`<year>2019</year></movie>`, "Lucy's first steps", "In the garden.", day("2019-06-02"), 2019},
+		{"premiered first", `<episodedetails><aired>2018-01-01</aired><premiered>2019-06-02</premiered></episodedetails>`, "", "",
+			day("2019-06-02"), 0},
+		{"aired, then the release date", `<movie><releasedate>2017-03-04</releasedate><aired>2018-01-01 10:00:00</aired></movie>`, "", "",
+			day("2018-01-01"), 0},
+		{"a date that is none", `<movie><premiered>soon</premiered><releasedate>2017-03-04</releasedate></movie>`, "", "", day("2017-03-04"), 0},
+		{"the root's alone", `<movie><set><title>Holidays</title></set><actor><plot>no</plot></actor><title>Beach</title></movie>`, "Beach", "",
+			nil, 0},
+		{"a year alone", `<movie><year>2015</year><year>2016</year></movie>`, "", "", nil, 2015},
+		{"not XML", "Beach (2015)\n", "", "", nil, 0},
+	} {
+		info, err := readNFO(strings.NewReader(tc.text))
+		if err != nil || info.title != tc.title || info.plot != tc.plot || info.year != tc.year ||
+			(info.released == nil) != (tc.released == nil) || info.released != nil && !info.released.Equal(*tc.released) {
+			t.Errorf("%s: %+v %v", tc.name, info, err)
 		}
 	}
 }

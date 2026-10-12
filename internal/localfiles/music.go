@@ -86,6 +86,7 @@ type probed struct {
 		SampleRate       string            `json:"sample_rate"`
 		BitsPerRawSample string            `json:"bits_per_raw_sample"`
 		BitsPerSample    int               `json:"bits_per_sample"`
+		ColorTransfer    string            `json:"color_transfer"`
 		Disposition      map[string]int    `json:"disposition"`
 		Tags             map[string]string `json:"tags"`
 	} `json:"streams"`

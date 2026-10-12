@@ -35,21 +35,21 @@ type UploadedSubtitle struct {
 	Data            []byte
 }
 
-// uploadTarget checks that the user reaches a movie or an episode, which
-// alone take subtitle files.
+// uploadTarget checks that the user reaches a movie, a home video or an
+// episode, which alone take subtitle files.
 func (s *Service) uploadTarget(ctx context.Context, user accounts.User, id accounts.ID) error {
 	t, _, err := s.target(ctx, user, id)
 	if err != nil {
 		return err
 	}
-	if t.kind != KindMovie && t.kind != KindEpisode {
+	if t.kind != KindMovie && t.kind != KindVideo && t.kind != KindEpisode {
 		return ErrNotFound
 	}
 	return nil
 }
 
-// UploadSubtitle adds a subtitle file to a movie or an episode the user
-// reaches.
+// UploadSubtitle adds a subtitle file to a movie, a home video or an
+// episode the user reaches.
 func (s *Service) UploadSubtitle(ctx context.Context, user accounts.User, id accounts.ID, subtitle UploadedSubtitle) error {
 	if err := s.uploadTarget(ctx, user, id); err != nil {
 		return err

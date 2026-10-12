@@ -37,12 +37,13 @@ const (
 	reasonDiscTitle = "disc_title"
 )
 
-// How a file was matched, its matched_by.
+// How a file was matched, its matched_by; a home video is its own title.
 const (
 	byName   = "name"
 	byNFO    = "nfo"
 	bySearch = "search"
 	byLink   = "link"
+	byOwn    = "own"
 )
 
 // searchLimit bounds the titles a search reads, and maxCandidates those a
@@ -305,11 +306,15 @@ func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]
 // kind, as a scan looks a file's name up, for an administrator to link one
 // of its units to (see Link). It answers the titles a link can name, those
 // with an IMDb identifier, each once, those of year first when year is
-// given, at most maxCandidates.
+// given, at most maxCandidates. A home videos folder, whose titles are its
+// own, asks no metadata addon: it answers addons.ErrNotFound.
 func (s *Service) Search(ctx context.Context, id accounts.ID, query string, year int) ([]library.Item, error) {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if folder.Kind == KindHomeVideos {
+		return nil, addons.ErrNotFound
 	}
 	kind := titleKind(folder.Kind)
 	results, err := s.titles.RemoteSearch(ctx, kind, query, searchLimit)
@@ -370,11 +375,15 @@ func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error
 	return s.rematch(ctx, folder, unit, "")
 }
 
-// unit finds the unit path names in a folder: a unit, or a file of one.
+// unit finds the unit path names in a folder: a unit, or a file of one. A
+// home video is no unit a link links: its title is its own.
 func (s *Service) unit(ctx context.Context, id accounts.ID, path string) (Folder, string, error) {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
 		return Folder{}, "", err
+	}
+	if folder.Kind == KindHomeVideos {
+		return Folder{}, "", addons.ErrNotFound
 	}
 	var unit string
 	err = s.db.QueryRow(ctx, "SELECT unit FROM local_files WHERE addon_id = $1 AND (unit = $2 OR path = $2) LIMIT 1", id, path).Scan(&unit)

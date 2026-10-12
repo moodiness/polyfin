@@ -7,9 +7,11 @@ import (
 	"io"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
@@ -18,10 +20,11 @@ import (
 )
 
 // NFO files, which Jellyfin and media managers write beside a title's
-// files, tell its identifiers. A scan reads those alone, never the
-// names, plots or artwork they hold, from the NFO file of each unit (see
-// unitNFOs), and only once it is new or changed; an identifier found
-// matches the unit when neither a link nor its name does.
+// files, tell its identifiers, and for a home video, its title, plot and
+// date. A scan reads those alone, never the artwork or people they hold,
+// from the NFO file of each unit (see unitNFOs), and only once it is new
+// or changed; an identifier found matches the unit when neither a link nor
+// its name does.
 
 // maxNFO bounds what is read of an NFO file: its identifiers come before
 // its long lists of actors.
@@ -36,22 +39,40 @@ var (
 	tmdbPattern = regexp.MustCompile(`^\d{1,10}$`)
 )
 
-// readNFO reads the IMDb and TMDB identifiers an NFO file gives, empty
-// when it gives none: those of the <uniqueid type="imdb"> and
-// <uniqueid type="tmdb"> elements of its root, else of the older <imdbid>
-// and <tmdbid>; an IMDb title's address in a file that is not XML. A file
-// that stops being well-formed gives what was read before.
-func readNFO(r io.Reader) (imdb, tmdb string, err error) {
+// nfoInfo is what an NFO file gives: the IMDb and TMDB identifiers, and a
+// title, a plot, a date and a year, empty or zero for none.
+type nfoInfo struct {
+	imdb, tmdb, title, plot string
+	released                *time.Time
+	year                    int
+}
+
+// id is the identifier a unit is matched by from what its NFO file gives
+// (see nfoID).
+func (n nfoInfo) id() string { return nfoID(n.imdb, n.tmdb) }
+
+// nfoDates are the elements of an NFO file that give a date, in the order
+// they are preferred.
+var nfoDates = []string{"premiered", "aired", "releasedate"}
+
+// readNFO reads what an NFO file gives: the IMDb and TMDB identifiers of
+// the <uniqueid type="imdb"> and <uniqueid type="tmdb"> elements of its
+// root, else of the older <imdbid> and <tmdbid>; its <title>, <plot> and
+// <year>, and its date, the first of nfoDates read as a day; an IMDb
+// title's address in a file that is not XML. A file that stops being
+// well-formed gives what was read before.
+func readNFO(r io.Reader) (nfoInfo, error) {
+	var info nfoInfo
 	data, err := io.ReadAll(io.LimitReader(r, maxNFO))
 	if err != nil {
-		return "", "", err
+		return info, err
 	}
 	data = bytes.TrimSpace(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")))
 	if !bytes.HasPrefix(data, []byte("<")) {
 		if m := imdbAddress.FindSubmatch(data); m != nil {
-			return strings.ToLower(string(m[1])), "", nil
+			info.imdb = strings.ToLower(string(m[1]))
 		}
-		return "", "", nil
+		return info, nil
 	}
 	decoder := xml.NewDecoder(bytes.NewReader(bytes.ToValidUTF8(data, []byte("?"))))
 	decoder.Strict = false
@@ -59,6 +80,7 @@ func readNFO(r io.Reader) (imdb, tmdb string, err error) {
 	// another one that are not UTF-8 are replaced.
 	decoder.CharsetReader = func(_ string, input io.Reader) (io.Reader, error) { return input, nil }
 	var olderIMDb, olderTMDB, element, kind string
+	dates := map[string]time.Time{}
 	var text strings.Builder
 	depth := 0
 	for {
@@ -84,28 +106,49 @@ func readNFO(r io.Reader) (imdb, tmdb string, err error) {
 			}
 		case xml.EndElement:
 			if depth == 2 {
-				value := strings.ToLower(strings.TrimSpace(text.String()))
+				raw := strings.TrimSpace(text.String())
+				value := strings.ToLower(raw)
 				switch {
-				case element == "uniqueid" && kind == "imdb" && imdb == "" && imdbPattern.MatchString(value):
-					imdb = value
-				case element == "uniqueid" && kind == "tmdb" && tmdb == "" && tmdbPattern.MatchString(value):
-					tmdb = value
+				case element == "uniqueid" && kind == "imdb" && info.imdb == "" && imdbPattern.MatchString(value):
+					info.imdb = value
+				case element == "uniqueid" && kind == "tmdb" && info.tmdb == "" && tmdbPattern.MatchString(value):
+					info.tmdb = value
 				case element == "imdbid" && olderIMDb == "" && imdbPattern.MatchString(value):
 					olderIMDb = value
 				case element == "tmdbid" && olderTMDB == "" && tmdbPattern.MatchString(value):
 					olderTMDB = value
+				case element == "title" && info.title == "":
+					info.title = raw
+				case element == "plot" && info.plot == "":
+					info.plot = raw
+				case element == "year" && info.year == 0:
+					if year, err := strconv.Atoi(raw); err == nil && year > 0 && year < 10000 {
+						info.year = year
+					}
+				case slices.Contains(nfoDates, element):
+					if _, ok := dates[element]; !ok && len(raw) >= 10 {
+						if day, err := time.Parse(time.DateOnly, raw[:10]); err == nil {
+							dates[element] = day
+						}
+					}
 				}
 			}
 			depth--
 		}
 	}
-	if imdb == "" {
-		imdb = olderIMDb
+	if info.imdb == "" {
+		info.imdb = olderIMDb
 	}
-	if tmdb == "" {
-		tmdb = olderTMDB
+	if info.tmdb == "" {
+		info.tmdb = olderTMDB
 	}
-	return imdb, tmdb, nil
+	for _, element := range nfoDates {
+		if day, ok := dates[element]; ok {
+			info.released = &day
+			break
+		}
+	}
+	return info, nil
 }
 
 // nfoID is the identifier a unit is matched by from what its NFO file
@@ -126,8 +169,9 @@ func nfoID(imdb, tmdb string) string {
 // show's is its folder's tvshow.nfo, a disc's its folder's movie.nfo. A
 // movie file's is its own, its name with .nfo, else its folder's movie.nfo
 // when that folder is the movie's own: its video files all read as one
-// title, the versions of one movie. entries are the folder's files, by
-// path.
+// title, the versions of one movie. A home video's is the same, its folder
+// its own when it is the only video in it (see videoFolders). entries are
+// the folder's files, by path.
 func unitNFOs(kind string, entries map[string]entry, sides map[string]found) map[string]string {
 	units := map[string]string{}
 	names := map[string]string{}
@@ -147,7 +191,8 @@ func unitNFOs(kind string, entries map[string]entry, sides map[string]found) map
 	// The folders holding the files of one movie, by the title their files
 	// read as.
 	own := map[string]bool{}
-	if kind == KindMovies {
+	switch kind {
+	case KindMovies:
 		titles := map[string]string{}
 		for rel, e := range entries {
 			if e.unit != rel {
@@ -160,6 +205,8 @@ func unitNFOs(kind string, entries map[string]entry, sides map[string]found) map
 				own[dir] = false
 			}
 		}
+	case KindHomeVideos:
+		own = videoFolders(entries)
 	}
 	for rel, e := range entries {
 		if _, done := units[e.unit]; done {
@@ -186,20 +233,20 @@ func unitNFOs(kind string, entries map[string]entry, sides map[string]found) map
 }
 
 // storedNFO is an NFO file a scan read: its size and modification time
-// then, and the identifiers it gave.
+// then, and what it gave.
 type storedNFO struct {
-	file       found
-	imdb, tmdb string
+	file found
+	info nfoInfo
 }
 
 // readNFOs reads the NFO files of a folder's units, places (see unitNFOs),
 // those new or changed since they were read, a few at once; it stores what
 // they give, and forgets the files no unit has now, but those in the
-// folders the walk skipped. It returns the identifier each file gives, by
-// path (see nfoID). A file that cannot be read gives what it gave before,
-// and is read again at the next scan.
-func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, places map[string]string) (map[string]string, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, imdb_id, tmdb_id FROM local_side_files WHERE addon_id = $1", id)
+// folders the walk skipped. It returns what each file gives, by path. A
+// file that cannot be read gives what it gave before, and is read again at
+// the next scan.
+func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, places map[string]string) (map[string]nfoInfo, error) {
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, imdb_id, tmdb_id, title, plot, released, year FROM local_side_files WHERE addon_id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +254,8 @@ func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, pl
 	for rows.Next() {
 		var rel string
 		var n storedNFO
-		if err := rows.Scan(&rel, &n.file.size, &n.file.modified, &n.imdb, &n.tmdb); err != nil {
+		if err := rows.Scan(&rel, &n.file.size, &n.file.modified, &n.info.imdb, &n.info.tmdb, &n.info.title, &n.info.plot, &n.info.released,
+			&n.info.year); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -216,17 +264,17 @@ func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, pl
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	ids := map[string]string{}
+	infos := map[string]nfoInfo{}
 	read := map[string]storedNFO{}
 	var mu sync.Mutex
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(s.workers)
 	for _, rel := range places {
-		if _, ok := ids[rel]; ok || rel == "" {
+		if _, ok := infos[rel]; ok || rel == "" {
 			continue
 		}
 		old, known := stored[rel]
-		ids[rel] = nfoID(old.imdb, old.tmdb)
+		infos[rel] = old.info
 		f := list.sides[rel]
 		if known && old.file.size == f.size && old.file.modified.Equal(f.modified) {
 			continue
@@ -237,7 +285,7 @@ func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, pl
 			n := storedNFO{file: f}
 			file, err := list.open(readCtx, rel)
 			if err == nil {
-				n.imdb, n.tmdb, err = readNFO(file)
+				n.info, err = readNFO(file)
 				file.Close()
 			}
 			if err != nil {
@@ -257,25 +305,27 @@ func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, pl
 		return nil, err
 	}
 	for rel, n := range read {
-		ids[rel] = nfoID(n.imdb, n.tmdb)
+		infos[rel] = n.info
 	}
 	var forgotten []string
 	for rel := range stored {
-		if _, ok := ids[rel]; !ok && !under(rel, list.skipped) {
+		if _, ok := infos[rel]; !ok && !under(rel, list.skipped) {
 			forgotten = append(forgotten, rel)
 		}
 	}
 	if len(read) == 0 && len(forgotten) == 0 {
-		return ids, nil
+		return infos, nil
 	}
 	batch := &pgx.Batch{}
 	for rel, n := range read {
-		batch.Queue(`INSERT INTO local_side_files (addon_id, path, size, modified, imdb_id, tmdb_id) VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, imdb_id = $5, tmdb_id = $6`,
-			id, rel, n.file.size, n.file.modified, n.imdb, n.tmdb)
+		batch.Queue(`INSERT INTO local_side_files (addon_id, path, size, modified, imdb_id, tmdb_id, title, plot, released, year)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, imdb_id = $5, tmdb_id = $6, title = $7, plot = $8,
+				released = $9, year = $10`,
+			id, rel, n.file.size, n.file.modified, n.info.imdb, n.info.tmdb, n.info.title, n.info.plot, n.info.released, n.info.year)
 	}
 	if len(forgotten) > 0 {
 		batch.Queue("DELETE FROM local_side_files WHERE addon_id = $1 AND path = ANY($2)", id, forgotten)
 	}
-	return ids, s.db.SendBatch(ctx, batch).Close()
+	return infos, s.db.SendBatch(ctx, batch).Close()
 }
