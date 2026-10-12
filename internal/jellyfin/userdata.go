@@ -457,16 +457,16 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	h.recordPlayback(ctx, user, device.DeviceName, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource)
 	// Videos prepare the next episode near the end, make thumbnails and
-	// find their speech, and local episodes without an intro have one
-	// looked for in their season's audio; tracks prepare the next track as
-	// they start, as it comes soon.
+	// find their speech, and local episodes without an intro or credits
+	// have them looked for in their season's audio; tracks prepare the next
+	// track as they start, as it comes soon.
 	audio := library.AudioKind(item.Kind)
 	if !audio && event != playbackStopped && (positionKnown || event == playbackStarted) {
 		h.prepareNearTheEnd(user, deviceID, item, runtime, state.Position)
 	}
 	if !audio && event == playbackStarted {
 		h.queueImages(ctx, user, deviceID, item, mediaSource)
-		h.findIntro(ctx, user, item, mediaSource)
+		h.findInAudio(ctx, user, item, mediaSource)
 		h.findSpeech(ctx, user, item, mediaSource)
 	}
 	if audio && event == playbackStarted {

@@ -13,7 +13,8 @@ import (
 
 // EpisodeFile is a file of a shows folder matched to episodes of a
 // series, which FFmpeg reads as one file: the files whose audio the intros
-// of a season are looked for in (see package audiosegments).
+// and the credits of a season are looked for in (see package
+// audiosegments).
 type EpisodeFile struct {
 	// Path is where the file is: its folder's path in the container, or
 	// its share's address, joined with its path in the folder.

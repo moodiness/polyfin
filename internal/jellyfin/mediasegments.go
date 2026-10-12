@@ -48,9 +48,9 @@ var segmentTypes = map[string]string{
 // for the title's own identifier, once it is analyzed, and that version's
 // chapters may give its own (see versionSegments). A version not analyzed
 // yet is never analyzed for this. An episode's local file without an intro
-// yet may have one found in its audio (see audioIntro). With the skip
-// buttons turned off in the settings, no database is asked and every item
-// has none, as on a Jellyfin server without a segment provider.
+// or credits yet may have them found in its audio (see audioSegments). With
+// the skip buttons turned off in the settings, no database is asked and
+// every item has none, as on a Jellyfin server without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -89,11 +89,12 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		segments = h.Segments.Segments(r.Context(), title)
 	}
 	if version, ok := h.segmentVersion(r.Context(), user, item, opened); ok {
-		if analysis, ok := h.Playback.Analyzed(r.Context(), version); ok {
+		analysis, analyzed := h.Playback.Analyzed(r.Context(), version)
+		if analyzed {
 			segments = versionSegments(segments, analysis, item.Runtime)
 		}
 		if item.Kind == library.KindEpisode {
-			segments = h.audioIntro(r.Context(), segments, version)
+			segments = h.audioSegments(r.Context(), segments, version, analysis.Duration, item.Runtime)
 		}
 	}
 	wanted := map[string]bool{}
@@ -137,44 +138,47 @@ func (h *Handler) segmentVersion(ctx context.Context, user accounts.User, item l
 	return versions[0].ID, true
 }
 
-// audioIntro adds to an episode's segments, when none is an intro, the
-// intro found in the audio of its version's file, if a local file (see
-// package audiosegments): its chapters and the databases come first.
-func (h *Handler) audioIntro(ctx context.Context, segments []mediasegments.Segment, version accounts.ID) []mediasegments.Segment {
-	if h.AudioSegments == nil || slices.ContainsFunc(segments, func(s mediasegments.Segment) bool { return s.Type == mediasegments.Intro }) {
+// audioSegments adds to an episode's segments, shaped for its version (see
+// versionSegments), the intro and the credits found in the audio of the
+// version's file, if a local file (see package audiosegments), of the
+// types none of them is: its chapters and the databases come first. They
+// are fitted to the version lasting end, listed as lasting listed, as the
+// others are (see fitSegments); end is 0 for a version not analyzed.
+func (h *Handler) audioSegments(ctx context.Context, segments []mediasegments.Segment, version accounts.ID, end, listed time.Duration) []mediasegments.Segment {
+	if h.AudioSegments == nil {
 		return segments
 	}
 	known, ok := h.Library.KnownVersion(version)
 	if !ok {
 		return segments
 	}
-	intro, ok := h.AudioSegments.Intro(ctx, known.URL)
-	if !ok {
+	found := slices.DeleteFunc(h.AudioSegments.Segments(ctx, known.URL), func(s mediasegments.Segment) bool { return hasSegment(segments, s.Type) })
+	if len(found) == 0 {
 		return segments
 	}
-	segments = append(segments, intro)
-	slices.SortStableFunc(segments, func(a, b mediasegments.Segment) int { return cmp.Compare(a.Start, b.Start) })
-	return segments
+	return fitSegments(append(segments, found...), end, listed)
 }
 
-// foundIntro reports whether an intro was found in the audio of a version's
-// file (see audioIntro).
-func (h *Handler) foundIntro(ctx context.Context, version library.Version) bool {
-	if h.AudioSegments == nil {
-		return false
-	}
-	_, ok := h.AudioSegments.Intro(ctx, version.URL)
-	return ok
+// hasSegment reports whether one of segments is of type kind.
+func hasSegment(segments []mediasegments.Segment, kind mediasegments.Type) bool {
+	return slices.ContainsFunc(segments, func(s mediasegments.Segment) bool { return s.Type == kind })
 }
 
-// introLookup bounds the look for the segments of an episode played,
+// foundInAudio reports whether an intro or credits were found in the audio
+// of a version's file (see audioSegments).
+func (h *Handler) foundInAudio(ctx context.Context, version library.Version) bool {
+	return h.AudioSegments != nil && len(h.AudioSegments.Segments(ctx, version.URL)) > 0
+}
+
+// audioLookup bounds the look for the segments of an episode played,
 // before its season is compared: the databases were asked as it started.
-const introLookup = time.Minute
+const audioLookup = time.Minute
 
-// findIntro has the season of an episode played from a local file compared
-// in the background (see package audiosegments) when the version played,
-// mediaSource, has no intro from its chapters or a database.
-func (h *Handler) findIntro(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
+// findInAudio has the season of an episode played from a local file
+// compared in the background (see package audiosegments) when the version
+// played, mediaSource, has no intro or no credits from its chapters or a
+// database.
+func (h *Handler) findInAudio(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
 	if h.AudioSegments == nil || item.Kind != library.KindEpisode || !h.Accounts.Settings().SkipButtons {
 		return
 	}
@@ -183,7 +187,7 @@ func (h *Handler) findIntro(ctx context.Context, user accounts.User, item librar
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), introLookup)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), audioLookup)
 		defer cancel()
 		// With a quality group, the title's own identifier stands for its
 		// first version that fits, as in PlaybackInfo.
@@ -204,7 +208,7 @@ func (h *Handler) findIntro(ctx context.Context, user accounts.User, item librar
 		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
 			segments = versionSegments(segments, analysis, item.Runtime)
 		}
-		if !slices.ContainsFunc(segments, func(s mediasegments.Segment) bool { return s.Type == mediasegments.Intro }) {
+		if !hasSegment(segments, mediasegments.Intro) || !hasSegment(segments, mediasegments.Outro) {
 			h.AudioSegments.Played(ctx, version.URL)
 		}
 	}()
@@ -221,21 +225,11 @@ const (
 
 // versionSegments shapes a title's segments for a version of it, from the
 // version's analysis, as jellyfin-web plays them. listed is the runtime the
-// title is listed with, which jellyfin-web queues it with.
-//
-// The version's own chapters named as an intro, a recap, a preview or
-// credits (see chapterSegments) give its segments of those types in place
-// of the databases', which may be timed on another cut. No segment passes
-// the version's end: one starting at or after it is left out, and the
-// others end at the latest there.
-//
-// jellyfin-web shows no skip button for credits ending at or after the
-// listed runtime when a next item is queued: its video page shows its "Up
-// Next" card instead, but only for credits ending at or after the version's
-// own length. Credits running to the end of a version that the listed
-// runtime does not fall short of thus end creditsLead before the end, so
-// that jellyfin-web offers to skip them and skipping still ends the
-// version; the others end exactly at the end, so that it shows its card.
+// title is listed with, which jellyfin-web queues it with. The version's
+// own chapters named as an intro, a recap, a preview or credits (see
+// chapterSegments) give its segments of those types in place of the
+// databases', which may be timed on another cut; all are then fitted to
+// the version (see fitSegments).
 func versionSegments(segments []mediasegments.Segment, analysis media.Analysis, listed time.Duration) []mediasegments.Segment {
 	own := chapterSegments(analysis)
 	shaped := make([]mediasegments.Segment, 0, len(segments)+len(own))
@@ -244,11 +238,27 @@ func versionSegments(segments []mediasegments.Segment, analysis media.Analysis, 
 			shaped = append(shaped, segment)
 		}
 	}
-	shaped = append(shaped, own...)
-	if end := analysis.Duration; end > 0 {
-		shaped = slices.DeleteFunc(shaped, func(s mediasegments.Segment) bool { return s.Start >= end })
-		for i := range shaped {
-			segment := &shaped[i]
+	return fitSegments(append(shaped, own...), analysis.Duration, listed)
+}
+
+// fitSegments fits segments to a version lasting end, unknown when 0, of a
+// title listed as lasting listed, and sorts them by start. No segment
+// passes the version's end: one starting at or after it is left out, and
+// the others end at the latest there.
+//
+// jellyfin-web shows no skip button for credits ending at or after the
+// listed runtime when a next item is queued: its video page shows its "Up
+// Next" card instead, but only for credits ending at or after the version's
+// own length. Credits running to the end of a version that the listed
+// runtime does not fall short of thus end creditsLead before the end, so
+// that jellyfin-web offers to skip them and skipping still ends the
+// version; the others end exactly at the end, so that it shows its card.
+// Segments fitted once are fitted the same again.
+func fitSegments(segments []mediasegments.Segment, end, listed time.Duration) []mediasegments.Segment {
+	if end > 0 {
+		segments = slices.DeleteFunc(segments, func(s mediasegments.Segment) bool { return s.Start >= end })
+		for i := range segments {
+			segment := &segments[i]
 			segment.End = min(segment.End, end)
 			if segment.Type != mediasegments.Outro || end-segment.End > creditsAtEnd {
 				continue
@@ -260,8 +270,8 @@ func versionSegments(segments []mediasegments.Segment, analysis media.Analysis, 
 			}
 		}
 	}
-	slices.SortStableFunc(shaped, func(a, b mediasegments.Segment) int { return cmp.Compare(a.Start, b.Start) })
-	return shaped
+	slices.SortStableFunc(segments, func(a, b mediasegments.Segment) int { return cmp.Compare(a.Start, b.Start) })
+	return segments
 }
 
 // chapterSegments are the segments a version's chapters name (see

@@ -318,9 +318,9 @@ func serve(ctx context.Context) error {
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(accounts.SegmentSources), version, logger, store.Settings)
-	// Local episodes played without an intro have one looked for in their
-	// season's audio, a season at a time, read through the loopback
-	// interface.
+	// Local episodes played without an intro or credits have them looked
+	// for in their season's audio, a season at a time, read through the
+	// loopback interface.
 	audioSegments := audiosegments.New(audiosegments.Options{DB: pool, FFmpeg: cfg.FFmpeg, FFprobe: cfg.FFprobe, Files: folders,
 		Settings: store.Settings, Logger: logger})
 	defer audioSegments.Close()

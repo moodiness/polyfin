@@ -68,9 +68,9 @@ type Options struct {
 	// Segments finds the parts of titles apps offer to skip; nil finds
 	// none.
 	Segments *mediasegments.Service
-	// AudioSegments finds the intros of local episodes in their audio,
-	// where neither their chapters nor the databases give one; nil finds
-	// none.
+	// AudioSegments finds the intros and the credits of local episodes in
+	// their audio, where neither their chapters nor the databases give
+	// them; nil finds none.
 	AudioSegments *audiosegments.Service
 	// RemuxDB describes the versions not analyzed yet; nil describes none.
 	RemuxDB *remuxdb.Service

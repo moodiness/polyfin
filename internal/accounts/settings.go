@@ -826,10 +826,10 @@ type Settings struct {
 	// the first start that read it (see AdoptEnvironment).
 	SegmentOrder      []string
 	SegmentSourcesOff []string
-	// AudioIntros finds the intros of the episodes of local folders in
-	// their audio, where neither their chapters nor the segment databases
-	// give one (see package audiosegments). It counts only with
-	// SkipButtons on.
+	// AudioIntros finds the intros and the credits of the episodes of
+	// local folders in their audio, where neither their chapters nor the
+	// segment databases give them (see package audiosegments). It counts
+	// only with SkipButtons on.
 	AudioIntros bool
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.

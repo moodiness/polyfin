@@ -1,22 +1,27 @@
-// Package audiosegments finds the intros of the episodes of local folders
-// in their audio, where neither their chapters nor the segment databases
-// give one: an intro is the stretch of audio the episodes of a season
-// share near their start.
+// Package audiosegments finds the intros and the credits of the episodes
+// of local folders in their audio, where neither their chapters nor the
+// segment databases give them: an intro is the stretch of audio the
+// episodes of a season share near their start, credits the stretch they
+// share near their end.
 //
-// When an episode of a local folder plays without an intro, its season is
-// compared in the background, one season at a time: the start of each of
-// its files, its first quarter and maxListened at most, is decoded by
+// When an episode of a local folder plays without an intro or credits,
+// its season is compared in the background, one season at a time: the
+// start of each of its files, its first quarter and maxListened at most,
+// and its end, its last quarter and maxListened at most, are decoded by
 // FFmpeg, at the lowest priority, to mono samples Polyfin fingerprints
 // itself (see fingerprint), so that any build of FFmpeg serves. Each file
 // is then compared with each other file of the season but those of the
-// same episodes: the longest stretch two files share, from shortestIntro
-// to longestIntro, is each one's intro (see shared), the longest of those
-// a file shares with any other.
+// same episodes: the longest stretch two files share at their start, from
+// shortestIntro to longestIntro, is each one's intro, and the longest they
+// share at their end, from shortestCredits to longestCredits, each one's
+// credits (see shared), the longest of those a file shares with any
+// other. Credits end where the stretch shared ends, so that a scene after
+// them is not skipped.
 //
-// Fingerprints and the intros found are kept in the database by file, its
-// path, size and modification time: a file is read once, and again only
-// when it changes. A season is compared again when one of its episodes
-// plays once its files changed, as when an episode is added.
+// Fingerprints and the segments found are kept in the database by file,
+// its path, size and modification time: a file is read once, and again
+// only when it changes. A season is compared again when one of its
+// episodes plays once its files changed, as when an episode is added.
 package audiosegments
 
 import (
@@ -38,13 +43,17 @@ import (
 )
 
 const (
-	// maxListened bounds the start of an episode fingerprinted, else its
-	// first quarter: intros come within minutes of the start.
+	// maxListened bounds the start and the end of an episode
+	// fingerprinted, else its first and last quarters: intros come within
+	// minutes of the start, credits within minutes of the end.
 	maxListened = 10 * time.Minute
 	// An intro lasts from shortestIntro to longestIntro: less is a sound
 	// effect or a jingle, more is no intro.
 	shortestIntro = 15 * time.Second
 	longestIntro  = 2 * time.Minute
+	// Credits last from shortestCredits to longestCredits.
+	shortestCredits = 15 * time.Second
+	longestCredits  = 3 * time.Minute
 	// queueLength bounds the seasons waiting to be compared; one left out
 	// is queued again by the next play of one of its episodes.
 	queueLength = 16
@@ -73,6 +82,20 @@ var intros = look{
 	longest:  longestIntro,
 }
 
+// credits looks for credits at the end of the files.
+var credits = look{
+	kind: mediasegments.Outro,
+	part: "end",
+	listened: func(length time.Duration) (time.Duration, time.Duration) {
+		return length - min(length/4, maxListened), length
+	},
+	shortest: shortestCredits,
+	longest:  longestCredits,
+}
+
+// looks are what the comparison of a season looks for, in this order.
+var looks = []look{intros, credits}
+
 // Files finds the files of local episodes and their seasons.
 type Files interface {
 	// EpisodeFile returns the file a version's address names, if it is the
@@ -95,7 +118,7 @@ type Options struct {
 }
 
 // Service compares the seasons of the local episodes played, one at a
-// time, and gives the intros found.
+// time, and gives the intros and the credits found.
 type Service struct {
 	Options
 	queue  chan localfiles.EpisodeFile
@@ -126,36 +149,44 @@ func (s *Service) on() bool {
 	return settings.SkipButtons && settings.AudioIntros
 }
 
-// Intro returns the intro found in the audio of the file a version's
-// address names, if the file has not changed since and the settings turn
-// the search on.
-func (s *Service) Intro(ctx context.Context, address string) (mediasegments.Segment, bool) {
+// Segments returns the segments found in the audio of the file a version's
+// address names, its intro and its credits, those found, if the file has
+// not changed since and the settings turn the search on.
+func (s *Service) Segments(ctx context.Context, address string) []mediasegments.Segment {
 	if !s.on() {
-		return mediasegments.Segment{}, false
+		return nil
 	}
 	file, ok, err := s.Files.EpisodeFile(ctx, address)
 	if err != nil {
 		s.Logger.Warn("The file of a local episode could not be read from the database", "error", err)
 	}
 	if !ok {
-		return mediasegments.Segment{}, false
+		return nil
 	}
-	return s.found(ctx, file, intros)
-}
-
-// found returns the segment found in a file by the comparison of its
-// season, as long as the file has not changed.
-func (s *Service) found(ctx context.Context, file localfiles.EpisodeFile, l look) (mediasegments.Segment, bool) {
-	var start, end *int64
-	err := s.DB.QueryRow(ctx, `SELECT start_ms, end_ms FROM audio_segments WHERE path = $1 AND type = $2 AND size = $3 AND modified = $4`,
-		file.Path, string(l.kind), file.Size, file.Modified).Scan(&start, &end)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		s.Logger.Warn("A segment found in a local episode's audio could not be read", "error", err)
+	rows, err := s.DB.Query(ctx, `SELECT type, start_ms, end_ms FROM audio_segments
+		WHERE path = $1 AND size = $2 AND modified = $3 AND start_ms IS NOT NULL ORDER BY start_ms`,
+		file.Path, file.Size, file.Modified)
+	if err != nil {
+		s.Logger.Warn("The segments found in a local episode's audio could not be read", "error", err)
+		return nil
 	}
-	if err != nil || start == nil {
-		return mediasegments.Segment{}, false
+	var segments []mediasegments.Segment
+	for rows.Next() {
+		var kind string
+		var start, end int64
+		if err := rows.Scan(&kind, &start, &end); err != nil {
+			s.Logger.Warn("The segments found in a local episode's audio could not be read", "error", err)
+			rows.Close()
+			return nil
+		}
+		segments = append(segments, mediasegments.Segment{Type: mediasegments.Type(kind),
+			Start: time.Duration(start) * time.Millisecond, End: time.Duration(end) * time.Millisecond})
 	}
-	return mediasegments.Segment{Type: l.kind, Start: time.Duration(*start) * time.Millisecond, End: time.Duration(*end) * time.Millisecond}, true
+	if err := rows.Err(); err != nil {
+		s.Logger.Warn("The segments found in a local episode's audio could not be read", "error", err)
+		return nil
+	}
+	return segments
 }
 
 // Reads reports whether the search reads the file a version's address
@@ -174,9 +205,9 @@ func (s *Service) Reads(ctx context.Context, address string) bool {
 
 // Played has the season of the file a version's address names compared
 // in the background, once the others queued before it are, unless it was
-// compared with the files the season has now, or the settings turn the
-// search off. It is for a version played without an intro from its
-// chapters or a segment database.
+// compared for every look with the files the season has now, or the
+// settings turn the search off. It is for a version played without an
+// intro or credits from its chapters or a segment database.
 func (s *Service) Played(ctx context.Context, address string) {
 	if !s.on() {
 		return
@@ -193,14 +224,18 @@ func (s *Service) Played(ctx context.Context, address string) {
 		s.Logger.Warn("The files of a local season could not be listed", "error", err)
 		return
 	}
-	var compared string
-	err = s.DB.QueryRow(ctx, `SELECT season FROM audio_segments WHERE path = $1 AND type = $2 AND size = $3 AND modified = $4`,
-		file.Path, string(intros.kind), file.Size, file.Modified).Scan(&compared)
-	if err == nil && compared == seasonKey(files) {
+	kinds := make([]string, len(looks))
+	for i, l := range looks {
+		kinds[i] = string(l.kind)
+	}
+	var compared int
+	err = s.DB.QueryRow(ctx, `SELECT count(*) FROM audio_segments WHERE path = $1 AND type = ANY($2) AND size = $3 AND modified = $4 AND season = $5`,
+		file.Path, kinds, file.Size, file.Modified, seasonKey(files)).Scan(&compared)
+	if err != nil {
+		s.Logger.Warn("A segment found in a local episode's audio could not be read", "error", err)
 		return
 	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		s.Logger.Warn("A segment found in a local episode's audio could not be read", "error", err)
+	if compared == len(looks) {
 		return
 	}
 	key := file.Folder.String() + "|" + file.Title + "|" + strconv.Itoa(file.Season)
@@ -224,9 +259,12 @@ func (s *Service) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case file := <-s.queue:
-			if s.on() {
-				if err := s.compare(ctx, file, intros); err != nil && ctx.Err() == nil {
-					s.Logger.Warn("The audio of a local season could not be compared", "error", err)
+			for _, l := range looks {
+				if !s.on() || ctx.Err() != nil {
+					break
+				}
+				if err := s.compare(ctx, file, l); err != nil && ctx.Err() == nil {
+					s.Logger.Warn("The audio of a local season could not be compared", "error", err, "type", string(l.kind))
 				}
 			}
 			s.mu.Lock()

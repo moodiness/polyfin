@@ -63,6 +63,48 @@ func makeEpisode(t *testing.T, ffmpeg, dir, name, intro string, at time.Duration
 	return file
 }
 
+// creditsLength is the length of the credits the episodes share, and
+// endingLength that of the episodes ending with them: their last quarter,
+// 75 seconds, holds the credits and a scene after them.
+const (
+	creditsLength = 60 * time.Second
+	endingLength  = 300 * time.Second
+)
+
+// makeCredits writes, in dir, 60-second credits: a melody over a soft
+// noise, unlike the intro's.
+func makeCredits(t *testing.T, ffmpeg, dir string) string {
+	t.Helper()
+	credits := filepath.Join(dir, "credits.wav")
+	run(t, ffmpeg, "-f", "lavfi", "-i",
+		"aevalsrc='0.35*sin(2*PI*t*(220+55*floor(mod(t*1.5,6))))+0.15*sin(2*PI*t*(660+90*floor(mod(t*2.5,3))))':s=22050:d=60",
+		"-f", "lavfi", "-i", "anoisesrc=color=white:seed=9:a=0.05:d=60:r=22050",
+		"-filter_complex", "[0][1]amix=inputs=2:normalize=0", credits)
+	return credits
+}
+
+// makeEnding writes, in dir, a 5-minute episode named name, of noise made
+// from seed, ending with the credits when credits is not empty, followed
+// by a scene lasting scene.
+func makeEnding(t *testing.T, ffmpeg, dir, name, credits string, scene time.Duration, seed int) string {
+	t.Helper()
+	file := filepath.Join(dir, name)
+	if credits == "" {
+		run(t, ffmpeg, "-f", "lavfi", "-i", fmt.Sprintf("anoisesrc=color=pink:seed=%d:a=0.2:d=%s:r=22050", seed, seconds(endingLength)),
+			"-c:a", "aac", file)
+		return file
+	}
+	args := []string{"-f", "lavfi", "-i", fmt.Sprintf("anoisesrc=color=brown:seed=%d:a=0.3:d=%s:r=22050", seed, seconds(endingLength-creditsLength-scene)),
+		"-i", credits}
+	parts := "[0][1]concat=n=2:v=0:a=1"
+	if scene > 0 {
+		args = append(args, "-f", "lavfi", "-i", fmt.Sprintf("anoisesrc=color=pink:seed=%d:a=0.2:d=%s:r=22050", seed+100, seconds(scene)))
+		parts = "[0][1][2]concat=n=3:v=0:a=1"
+	}
+	run(t, ffmpeg, append(args, "-filter_complex", parts, "-c:a", "aac", file)...)
+	return file
+}
+
 func run(t *testing.T, ffmpeg string, args ...string) {
 	t.Helper()
 	out, err := exec.Command(ffmpeg, append([]string{"-v", "error", "-y"}, args...)...).CombinedOutput()
@@ -146,16 +188,32 @@ func newService(t *testing.T, files Files) (*Service, *settings) {
 	return s, current
 }
 
-// compareSeason compares the season of the file at path, as its play would
-// in the background.
-func compareSeason(t *testing.T, s *Service, files *season, path string) {
+// compareSeason compares the season of the file at path for what l looks
+// for, as its play would in the background.
+func compareSeason(t *testing.T, s *Service, files *season, path string, l look) {
 	t.Helper()
 	file, ok, _ := files.EpisodeFile(t.Context(), path)
 	if !ok {
 		t.Fatalf("no file %s", path)
 	}
-	if err := s.compare(t.Context(), file, intros); err != nil {
+	if err := s.compare(t.Context(), file, l); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// checkSegment checks the segment of type kind found in the file at path
+// runs from at for length, to the second; none for at below 0.
+func checkSegment(t *testing.T, s *Service, path string, kind mediasegments.Type, at, length time.Duration) {
+	t.Helper()
+	found := slices.DeleteFunc(s.Segments(t.Context(), path), func(segment mediasegments.Segment) bool { return segment.Type != kind })
+	switch {
+	case at < 0 && len(found) > 0:
+		t.Errorf("%s: %s %v", filepath.Base(path), kind, found)
+	case at < 0:
+	case len(found) != 1:
+		t.Errorf("%s: %v, want one %s at %v", filepath.Base(path), found, kind, at)
+	case (found[0].Start-at).Abs() > time.Second/2 || (found[0].End-at-length).Abs() > time.Second/2:
+		t.Errorf("%s: %s %v to %v, want %v to %v", filepath.Base(path), kind, found[0].Start, found[0].End, at, at+length)
 	}
 }
 
@@ -163,16 +221,7 @@ func compareSeason(t *testing.T, s *Service, files *season, path string) {
 // second; none for at below 0.
 func checkIntro(t *testing.T, s *Service, path string, at time.Duration) {
 	t.Helper()
-	intro, ok := s.Intro(t.Context(), path)
-	switch {
-	case at < 0 && ok:
-		t.Errorf("%s: intro %v", filepath.Base(path), intro)
-	case at < 0:
-	case !ok:
-		t.Errorf("%s: no intro, want one at %v", filepath.Base(path), at)
-	case intro.Type != mediasegments.Intro || (intro.Start-at).Abs() > time.Second/2 || (intro.End-at-introLength).Abs() > time.Second/2:
-		t.Errorf("%s: intro %v to %v, want %v to %v", filepath.Base(path), intro.Start, intro.End, at, at+introLength)
-	}
+	checkSegment(t, s, path, mediasegments.Intro, at, introLength)
 }
 
 // Episodes sharing an intro at different times are given it, to the
@@ -198,9 +247,34 @@ func TestEpisodesSharingAnIntroAreGivenIt(t *testing.T) {
 	files.add(t, unrelated, 4)
 	starts[unrelated] = -1
 
-	compareSeason(t, s, files, filepath.Join(dir, "S01E02.mka"))
+	compareSeason(t, s, files, filepath.Join(dir, "S01E02.mka"), intros)
 	for path, at := range starts {
 		checkIntro(t, s, path, at)
+	}
+}
+
+// Episodes ending with the same credits are given them, to the second,
+// ending where the credits end: the scene after them in some is left out.
+// One sharing no end gets none.
+func TestEpisodesSharingCreditsAreGivenThem(t *testing.T) {
+	t.Parallel()
+	files := &season{}
+	s, _ := newService(t, files)
+	dir := t.TempDir()
+	music := makeCredits(t, s.FFmpeg, dir)
+	starts := map[string]time.Duration{}
+	for i, scene := range []time.Duration{0, 12500 * time.Millisecond, 5 * time.Second} {
+		path := makeEnding(t, s.FFmpeg, dir, fmt.Sprintf("S01E0%d.mka", i+1), music, scene, i+1)
+		files.add(t, path, i+1)
+		starts[path] = endingLength - creditsLength - scene
+	}
+	unrelated := makeEnding(t, s.FFmpeg, dir, "S01E04.mka", "", 0, 4)
+	files.add(t, unrelated, 4)
+	starts[unrelated] = -1
+
+	compareSeason(t, s, files, unrelated, credits)
+	for path, at := range starts {
+		checkSegment(t, s, path, mediasegments.Outro, at, creditsLength)
 	}
 }
 
@@ -217,20 +291,20 @@ func TestFilesAreReadAgainOnlyOnceTheyChange(t *testing.T) {
 	second := makeEpisode(t, s.FFmpeg, dir, "S01E02.mka", intro, 15*time.Second, 2)
 	files.add(t, first, 1)
 	files.add(t, second, 2)
-	compareSeason(t, s, files, first)
+	compareSeason(t, s, files, first, intros)
 	checkIntro(t, s, second, 15*time.Second)
 
 	// Its audio replaced, the file still looks the same: what was read
 	// of it holds.
 	makeEpisode(t, s.FFmpeg, dir, "S01E02.mka", "", 0, 5)
-	compareSeason(t, s, files, first)
+	compareSeason(t, s, files, first, intros)
 	checkIntro(t, s, first, 6*time.Second)
 	checkIntro(t, s, second, 15*time.Second)
 
 	// Once it looks changed, its intro is gone, and it is read again.
 	files.touch(second)
 	checkIntro(t, s, second, -1)
-	compareSeason(t, s, files, first)
+	compareSeason(t, s, files, first, intros)
 	checkIntro(t, s, first, -1)
 	checkIntro(t, s, second, -1)
 }
@@ -247,7 +321,7 @@ func TestSettingsTurnAudioIntrosOff(t *testing.T) {
 	second := makeEpisode(t, s.FFmpeg, dir, "S01E02.mka", intro, 15*time.Second, 2)
 	files.add(t, first, 1)
 	files.add(t, second, 2)
-	compareSeason(t, s, files, first)
+	compareSeason(t, s, files, first, intros)
 
 	current.set(func(s *accounts.Settings) { s.AudioIntros = false })
 	checkIntro(t, s, first, -1)

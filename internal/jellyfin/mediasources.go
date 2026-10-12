@@ -275,11 +275,11 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	// the version says it has some: movies and episodes may, while the skip
 	// buttons are on and a segment database is asked, or the version's own
 	// chapters name an intro, a recap, a preview or credits (see
-	// versionSegments), or an intro was found in the audio of an episode's
-	// local file (see audioIntro).
+	// versionSegments), or an intro or credits were found in the audio of
+	// an episode's local file (see audioSegments).
 	source.HasSegments = (p.item.Kind == library.KindMovie || p.item.Kind == library.KindEpisode) &&
 		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || known && len(chapterSegments(analysis)) > 0 ||
-		p.item.Kind == library.KindEpisode && h.foundIntro(r.Context(), version))
+		p.item.Kind == library.KindEpisode && h.foundInAudio(r.Context(), version))
 	size, runtime := version.Size, version.Runtime
 	if known {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(version), language)
