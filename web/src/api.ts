@@ -189,7 +189,7 @@ export type Settings = {
   segmentOrder: SegmentSource[]
   /** The skip marker sources never asked, wherever they are in the order. */
   segmentSourcesOff: SegmentSource[]
-  /** Whether local episodes without an intro have one looked for in their season's audio; needs skipButtons. */
+  /** Whether local episodes without an intro or credits have them looked for in their season's audio; needs skipButtons. */
   audioIntros: boolean
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean

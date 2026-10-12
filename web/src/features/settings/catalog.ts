@@ -357,7 +357,7 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'audio-intros',
     label: (t) => s(t).audioIntros,
     help: (t) => s(t).audioIntrosHelp,
-    keywords: ['intro', 'audio', 'fingerprint', 'local'],
+    keywords: ['intro', 'credits', 'audio', 'fingerprint', 'local'],
   },
   {
     section: 'content',
