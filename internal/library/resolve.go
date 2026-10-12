@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -100,6 +101,10 @@ var (
 	conventionalVideo = regexp.MustCompile(`^(.+):(\d+):(\d+)$`)
 )
 
+// describedFetches bounds the titles Resolve asks the addons to describe
+// at a time.
+const describedFetches = 4
+
 // Resolve finds the items each ref designates, in order: the titles
 // Polyfin listed under one of the ref's identifiers (a title listed by
 // several catalogs, under several identifiers, gives several items), else
@@ -114,15 +119,27 @@ var (
 // entry ("kitsu:<id>:<episode>"), and only once listed. A ref nothing
 // designates gets no target.
 //
-// Nothing is asked of the addons. The items Resolve names that Polyfin
-// has no record of, as a title no catalog listed, are recorded as the
-// addons would name them: a movie or series by its IMDb identifier and the
-// ref's name, and an episode with its season. The users' data of them then
-// shows in their lists at once, and the addons describe them when asked.
-// A record already kept is left as it is, and a later listing replaces
-// these with full ones.
+// A ref Polyfin listed nothing under, which has no IMDb identifier but a
+// TMDB one, or for a series a TVDB one, is the title the server's
+// metadata addons describe as "tmdb:<id>", else "tvdb:<id>", when one of
+// them does (see describeUnlisted): it is found by the identifiers the
+// description gives too, else named by its IMDb identifier, else by the
+// one asked, an episode then by the description's video of its season and
+// number. The addons are asked for nothing else.
+//
+// The items Resolve names that Polyfin has no record of, as a title no
+// catalog listed, are recorded as the addons would name them: a movie or
+// series by its identifier and the ref's name, or the description's, and
+// an episode with its season. The users' data of them then shows in their
+// lists at once, and the addons describe them when asked. A record
+// already kept is left as it is, and a later listing replaces these with
+// full ones.
 func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget, error) {
 	titles, err := s.knownTitles(ctx, refs)
+	if err != nil {
+		return nil, err
+	}
+	refs, titles, described, err := s.describeUnlisted(ctx, refs, titles)
 	if err != nil {
 		return nil, err
 	}
@@ -138,26 +155,38 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 			seriesIDs = append(seriesIDs, id)
 		}
 	}
+	runtimes := map[string]time.Duration{}
+	for _, title := range titles {
+		if title.kind == KindSeries {
+			runtimes[title.stremioID] = title.runtime
+		}
+	}
+	// The videos the descriptions give of the series recorded under the
+	// identifier asked.
+	videos := map[string][]stremio.Video{}
 	for i, ref := range refs {
 		kind := ref.kind()
-		animeIDs := ref.Anime.ids()
-		var found, anime []knownTitle
-		for _, title := range titles {
-			switch {
-			case title.kind != kind:
-			case slices.Contains(animeIDs, title.stremioID):
-				anime = append(anime, title)
-			// An anime catalog numbers the episodes of each entry apart:
-			// another entry's are not those of the series' seasons.
-			case len(animeIDs) > 0 && ref.Episode && animeNamed(title.stremioID):
-			case title.matches(ref):
-				found = append(found, title)
-			}
-		}
+		found, anime := ref.listedAmong(titles)
 		// An episode numbered absolutely is placed among those listed only.
-		if len(found) == 0 && imdbID.MatchString(ref.IMDb) && !(ref.Episode && ref.Absolute) {
-			found = append(found, knownTitle{kind: kind, stremioID: ref.IMDb})
-			unlisted = append(unlisted, unlistedTitle(kind, ref))
+		if len(found) == 0 && !(ref.Episode && ref.Absolute) {
+			var title knownTitle
+			switch {
+			case imdbID.MatchString(ref.IMDb):
+				title = knownTitle{kind: kind, stremioID: ref.IMDb}
+			case described[i] != nil:
+				title = knownTitle{kind: kind, stremioID: described[i].id}
+				videos[title.stremioID] = described[i].meta.Videos
+			}
+			if title.stremioID != "" {
+				if described[i] != nil {
+					title.runtime = parseRuntime(string(described[i].meta.Runtime))
+					if kind == KindSeries {
+						runtimes[title.stremioID] = title.runtime
+					}
+				}
+				found = append(found, title)
+				unlisted = append(unlisted, unlistedTitle(kind, title.stremioID, ref))
+			}
 		}
 		for _, title := range found {
 			if !ref.Episode {
@@ -184,12 +213,6 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	if err != nil {
 		return nil, err
 	}
-	runtimes := map[string]time.Duration{}
-	for _, title := range titles {
-		if title.kind == KindSeries {
-			runtimes[title.stremioID] = title.runtime
-		}
-	}
 	for i, ref := range refs {
 		for _, series := range seriesOf[i] {
 			episodes := known[series]
@@ -208,19 +231,28 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 				if episode.runtime > 0 {
 					target.Runtime = episode.runtime
 				}
+				result[i] = append(result[i], target)
+				continue
+			}
+			var videoID string
+			if j := slices.IndexFunc(videos[series], func(v stremio.Video) bool {
+				return v.ID != "" && int(v.Season) == season && v.EpisodeNumber() == number
+			}); j >= 0 {
+				videoID = videos[series][j].ID
+				target.Runtime = cmp.Or(parseRuntime(string(videos[series][j].Runtime)), target.Runtime)
 			} else if imdbID.MatchString(series) || len(episodes) > 0 && episodes.conventional(series) {
-				videoID := series + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(number)
-				target.ID = itemID(episodeKey(videoID))
-				// Recorded as Episodes records the episodes of a series.
-				video := &stremio.Video{ID: videoID, Season: stremio.Number(season), Episode: stremio.Number(number)}
-				unlisted = append(unlisted,
-					record{ID: target.Season, Key: seasonKey(series, season), Kind: KindSeason, Parent: new(target.Series),
-						SeriesID: series, Season: season},
-					record{ID: target.ID, Key: episodeKey(videoID), Kind: KindEpisode, Parent: new(target.Season), SeriesID: series,
-						Season: season, Video: video})
+				videoID = series + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(number)
 			} else {
 				continue
 			}
+			target.ID = itemID(episodeKey(videoID))
+			// Recorded as Episodes records the episodes of a series.
+			video := &stremio.Video{ID: videoID, Season: stremio.Number(season), Episode: stremio.Number(number)}
+			unlisted = append(unlisted,
+				record{ID: target.Season, Key: seasonKey(series, season), Kind: KindSeason, Parent: new(target.Series),
+					SeriesID: series, Season: season},
+				record{ID: target.ID, Key: episodeKey(videoID), Kind: KindEpisode, Parent: new(target.Season), SeriesID: series,
+					Season: season, Video: video})
 			result[i] = append(result[i], target)
 		}
 		for _, series := range animeOf[i] {
@@ -236,18 +268,160 @@ func (s *Service) Resolve(ctx context.Context, refs []TitleRef) ([][]TitleTarget
 	return result, s.saveNew(ctx, unlisted)
 }
 
+// listedAmong finds among titles the movies or series r names: found by
+// one of its identifiers, and anime, those an anime catalog listed under
+// its AnimeRef.
+func (r TitleRef) listedAmong(titles []knownTitle) (found, anime []knownTitle) {
+	kind := r.kind()
+	animeIDs := r.Anime.ids()
+	for _, title := range titles {
+		switch {
+		case title.kind != kind:
+		case slices.Contains(animeIDs, title.stremioID):
+			anime = append(anime, title)
+		// An anime catalog numbers the episodes of each entry apart:
+		// another entry's are not those of the series' seasons.
+		case len(animeIDs) > 0 && r.Episode && animeNamed(title.stremioID):
+		case title.matches(r):
+			found = append(found, title)
+		}
+	}
+	return found, anime
+}
+
+// describedID is the Stremio identifier the addons are asked to describe
+// the title of r by when Polyfin listed nothing under it: "tmdb:<id>",
+// else for a series "tvdb:<id>"; empty for a ref with an IMDb identifier,
+// or neither.
+func (r TitleRef) describedID() string {
+	switch {
+	case r.IMDb != "":
+		return ""
+	case r.TMDB > 0:
+		return "tmdb:" + strconv.Itoa(r.TMDB)
+	case r.TVDB > 0 && r.kind() == KindSeries:
+		return "tvdb:" + strconv.Itoa(r.TVDB)
+	}
+	return ""
+}
+
+// askedTitle is a movie or series the addons are asked to describe, by
+// its Stremio identifier.
+type askedTitle struct {
+	kind Kind
+	id   string
+}
+
+// description is an addon's description of a title, asked by id.
+type description struct {
+	id   string
+	meta stremio.Meta
+}
+
+// describeUnlisted asks the server's metadata addons to describe, as
+// TitleMeta does, the titles of the refs titles has none of, by their
+// describedID: each title once, a few at a time, from the kept
+// descriptions when they are (see keptMeta). It returns the refs with the
+// identifiers the descriptions give, IMDb, TMDB and, for a series, TVDB,
+// and the description's name, titles with those Polyfin listed under
+// them, and the description of each ref, nil for the refs not described.
+// An addon that fails leaves its refs as they are.
+func (s *Service) describeUnlisted(ctx context.Context, refs []TitleRef, titles []knownTitle) ([]TitleRef, []knownTitle, []*description, error) {
+	var asked []askedTitle
+	// The title each ref asks for, by its place in asked, -1 for none.
+	asks := make([]int, len(refs))
+	for i, ref := range refs {
+		asks[i] = -1
+		id := ref.describedID()
+		if id == "" {
+			continue
+		}
+		if found, anime := ref.listedAmong(titles); len(found) > 0 || len(anime) > 0 {
+			continue
+		}
+		title := askedTitle{ref.kind(), id}
+		asks[i] = slices.Index(asked, title)
+		if asks[i] < 0 {
+			asks[i], asked = len(asked), append(asked, title)
+		}
+	}
+	described := make([]*description, len(refs))
+	if len(asked) == 0 {
+		return refs, titles, described, nil
+	}
+	// A view without a user is the server's addons'.
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	descriptions := make([]*description, len(asked))
+	var group errgroup.Group
+	group.SetLimit(describedFetches)
+	for j, title := range asked {
+		group.Go(func() error {
+			if meta, ok := s.serverMeta(ctx, v, string(title.kind), title.id); ok {
+				descriptions[j] = &description{id: title.id, meta: meta}
+			}
+			return nil
+		})
+	}
+	_ = group.Wait()
+	refs = slices.Clone(refs)
+	var completed []TitleRef
+	for i, j := range asks {
+		if j < 0 || descriptions[j] == nil {
+			continue
+		}
+		meta, ref := descriptions[j].meta, &refs[i]
+		described[i] = descriptions[j]
+		ref.Name = cmp.Or(meta.Name, ref.Name)
+		if imdbID.MatchString(meta.ImdbID) {
+			ref.IMDb = meta.ImdbID
+		} else if imdbID.MatchString(meta.ID) {
+			ref.IMDb = meta.ID
+		}
+		if tmdb := describedNumber(meta.TmdbID); tmdb > 0 && ref.TMDB == 0 {
+			ref.TMDB = tmdb
+		}
+		if tvdb := describedNumber(meta.TvdbID); tvdb > 0 && ref.TVDB == 0 && ref.kind() == KindSeries {
+			ref.TVDB = tvdb
+		}
+		completed = append(completed, *ref)
+	}
+	more, err := s.knownTitles(ctx, completed)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, title := range more {
+		if !slices.ContainsFunc(titles, func(t knownTitle) bool { return t.kind == title.kind && t.stremioID == title.stremioID }) {
+			titles = append(titles, title)
+		}
+	}
+	return refs, titles, described, nil
+}
+
+// describedNumber reads an identifier a description gives as a number,
+// zero when it gives none.
+func describedNumber(id stremio.Text) int {
+	n, err := strconv.Atoi(strings.TrimSpace(string(id)))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
 // unlistedTitle is the record of the movie or series of kind that ref
-// names by its IMDb identifier, which no catalog listed: what ref tells of
-// it, which the addons complete when asked to describe it.
-func unlistedTitle(kind Kind, ref TitleRef) record {
-	meta := &stremio.Meta{ID: ref.IMDb, Type: string(kind), Name: ref.Name, ImdbID: ref.IMDb}
+// names, by the Stremio identifier id, which no catalog listed: what ref
+// tells of it, which the addons complete when asked to describe it.
+func unlistedTitle(kind Kind, id string, ref TitleRef) record {
+	meta := &stremio.Meta{ID: id, Type: string(kind), Name: ref.Name, ImdbID: ref.IMDb}
 	if ref.TMDB > 0 {
 		meta.TmdbID = stremio.Text(strconv.Itoa(ref.TMDB))
 	}
 	if ref.TVDB > 0 && kind == KindSeries {
 		meta.TvdbID = stremio.Text(strconv.Itoa(ref.TVDB))
 	}
-	return record{ID: itemID(titleKey(kind, ref.IMDb)), Key: titleKey(kind, ref.IMDb), Kind: kind, Meta: meta}
+	return record{ID: itemID(titleKey(kind, id)), Key: titleKey(kind, id), Kind: kind, Meta: meta}
 }
 
 // knownTitle is a movie or series Polyfin listed.

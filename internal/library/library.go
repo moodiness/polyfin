@@ -1472,6 +1472,12 @@ func (s *Service) TitleMeta(ctx context.Context, metaType, id string) (stremio.M
 	if err != nil {
 		return stremio.Meta{}, false
 	}
+	return s.serverMeta(ctx, v, metaType, id)
+}
+
+// serverMeta returns the description the addons of v, the server's view,
+// give of a title, as TitleMeta does.
+func (s *Service) serverMeta(ctx context.Context, v view, metaType, id string) (stremio.Meta, bool) {
 	for _, candidate := range v.addons {
 		if own(candidate.addon) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
 			continue

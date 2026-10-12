@@ -35,6 +35,8 @@ type fakeAddon struct {
 	short map[int]int
 	// metaGate, when set, holds every meta request until it is closed.
 	metaGate chan struct{}
+	// metaFails, when set, answers every meta request with a server error.
+	metaFails bool
 	// catalogGate, when set, holds every catalog request until it is
 	// closed, and gated, when set, is told of each request it holds; hold
 	// holds them until enough of them wait (see holdCatalogs).
@@ -126,6 +128,10 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		id, _ := url.PathUnescape(parts[2])
+		if a.metaFails {
+			http.Error(w, "failing", http.StatusInternalServerError)
+			return
+		}
 		a.mu.Lock()
 		meta, ok := a.metas[parts[1]+"/"+id]
 		a.mu.Unlock()
