@@ -9,15 +9,15 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// summaryHTML is the HTML part of a weekly summary's email, laid out as
-// the other emails (see emailHTML): its week and figures, then a list for
-// each part of it, each title linking to its page.
+// summaryHTML is the HTML part of a summary's email, laid out as the other
+// emails (see emailHTML): its period and figures, then a list for each
+// part of it, each title linking to its page.
 var summaryHTML = template.Must(template.New("summary").Parse(`<!DOCTYPE html>
 <html lang="{{.Language}}">
 <head><meta charset="utf-8"><title>{{.Title}}</title></head>
 <body style="font-family: system-ui, sans-serif; color: #1f2328;">
 <h1 style="font-size: 18px;">{{.Title}}</h1>
-<p>{{.Week}}<br><strong>{{.Played}}</strong></p>
+<p>{{.Period}}<br><strong>{{.Played}}</strong></p>
 {{range .Sections}}<h2 style="font-size: 15px; margin: 20px 0 6px;">{{.Heading}}</h2>
 <ul style="margin: 0; padding-left: 20px;">
 {{range .Items}}<li>{{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{if .Detail}} <span style="color: #6b7280;">· {{.Detail}}</span>{{end}}</li>
@@ -43,9 +43,10 @@ type summaryItem struct {
 	Name, URL, Detail string
 }
 
-// summaryEmail writes the HTML of ev's weekly summary to page, and returns
-// its plain text, without footer: the week, the figures, and its parts as
-// lists, with the address of each title when the public address is set.
+// summaryEmail writes the HTML of ev's summary, of a week, a month or a
+// year, to page, and returns its plain text, without footer: the period,
+// the figures, and its parts as lists, with the address of each title
+// when the public address is set.
 func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, footer string) (string, error) {
 	sum := *ev.Summary
 	user := sum.Scope == ScopeUser
@@ -67,6 +68,10 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 	} else {
 		titles(s.phrase("Most watched movies", "Films les plus regardés"), sum.Movies)
 		titles(s.phrase("Most watched series", "Séries les plus regardées"), sum.Series)
+	}
+	if sum.TopMonth != nil {
+		sections = append(sections, summarySection{Heading: s.phrase("Most watched month", "Mois le plus regardé"),
+			Items: []summaryItem{{Name: s.topMonthText(*sum.TopMonth, true), Detail: s.playsText(sum.TopMonth.Plays)}}})
 	}
 	if sum.NewEpisodes > 0 {
 		section := summarySection{Heading: s.episodesHeading(sum)}
@@ -126,13 +131,13 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 		url = *ev.URL
 	}
 	open := s.phrase("Open the statistics", "Ouvrir les statistiques")
-	if err := summaryHTML.Execute(page, map[string]any{"Language": language, "Title": ev.Title, "Week": s.weekLine(sum),
+	if err := summaryHTML.Execute(page, map[string]any{"Language": language, "Title": ev.Title, "Period": s.periodLine(ev.Type, sum),
 		"Played": s.playedLine(sum), "Sections": sections, "URL": url, "Open": open, "Footer": footer}); err != nil {
 		return "", err
 	}
 
 	var text strings.Builder
-	text.WriteString(s.weekLine(sum) + "\n" + s.playedLine(sum) + "\n")
+	text.WriteString(s.periodLine(ev.Type, sum) + "\n" + s.playedLine(sum) + "\n")
 	for _, section := range sections {
 		text.WriteString("\n" + section.Heading + "\n")
 		for _, item := range section.Items {

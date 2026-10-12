@@ -31,14 +31,14 @@ const (
 // an episode of or marked favorite, as the Upcoming row does, for episodes
 // that became available since the last look, and tells them: to the
 // user's targets, and once to the server's, whoever follows the series.
-// Each is kept for the weekly summary too. Only the users who have a
-// target for new episodes or the weekly summary, or all of them when the
-// server has one or an administrator one for the weekly summary, are
-// looked at. A series seen for the first time has the episodes it already
-// has recorded without a message; episodes released more than a week ago,
-// or without a release date, are never told of. The descriptions of the
-// series are those the library keeps, which it refreshes in the background
-// when they are old.
+// Each is kept for the weekly summary and the month in review too. Only
+// the users who have a target for new episodes or either summary, or all
+// of them when the server has one or an administrator one for a summary,
+// are looked at. A series seen for the first time has the episodes it
+// already has recorded without a message; episodes released more than a
+// week ago, or without a release date, are never told of. The
+// descriptions of the series are those the library keeps, which it
+// refreshes in the background when they are old.
 func (s *Service) CheckEpisodes(ctx context.Context) {
 	s.episodesMu.Lock()
 	defer s.episodesMu.Unlock()
@@ -50,13 +50,14 @@ func (s *Service) CheckEpisodes(ctx context.Context) {
 	}
 	// server: the server's targets are told of new episodes; everyone:
 	// every user is looked at, for the server's targets or the server's
-	// weekly summary; personal: the users looked at for their own targets,
-	// and told: those whose targets are told of new episodes.
+	// weekly summary or month in review; personal: the users looked at for
+	// their own targets, and told: those whose targets are told of new
+	// episodes.
 	server, everyone := false, false
 	personal, told := map[accounts.ID]bool{}, map[accounts.ID]bool{}
 	s.mu.Lock()
 	for _, t := range s.targets {
-		episodes, summary := t.wants(NewEpisode), t.wants(WeeklySummary)
+		episodes, summary := t.wants(NewEpisode), t.wants(WeeklySummary) || t.wants(MonthlySummary)
 		switch {
 		case !episodes && !summary:
 		case t.owner == nil:

@@ -2,16 +2,16 @@
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
 // solved, a user who joined through an invite, a new version of Polyfin, a
-// playback that started, paused, resumed or stopped, and once a week a
-// summary of the week. Messages go to targets: generic webhooks, which
-// receive a versioned JSON event (see Event); Discord webhooks, ntfy
-// topics, Telegram chats, Gotify servers and Pushover users, which receive
+// playback that started, paused, resumed or stopped, once a week a summary
+// of the week, and once a month and once a year a review of the month and
+// of the year. Messages go to targets: generic webhooks, which receive a
+// versioned JSON event (see Event); Discord webhooks, ntfy topics,
+// Telegram chats, Gotify servers and Pushover users, which receive
 // messages formatted for them; and email addresses, through the SMTP server
 // of the settings. Administrators add the server's targets, which receive
 // the events of every user; each user adds their own, which receive their
 // own events, and the health, joining and new version events and the
-// server's weekly summary for
-// administrators.
+// server's summaries for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -78,8 +78,11 @@ const (
 	PlaybackResumed = "playback_resumed"
 	PlaybackStopped = "playback_stopped"
 	// WeeklySummary tells the server's week to the server's targets and
-	// administrators' own, and each user's week to theirs (see summary.go).
-	WeeklySummary = "weekly_summary"
+	// administrators' own, and each user's week to theirs (see summary.go);
+	// MonthlySummary their month, and YearlySummary their year.
+	WeeklySummary  = "weekly_summary"
+	MonthlySummary = "monthly_summary"
+	YearlySummary  = "yearly_summary"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -87,7 +90,7 @@ const (
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
-	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary}
+	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user
@@ -189,10 +192,11 @@ type UserData interface {
 	Favorites(ctx context.Context, user accounts.ID) ([]userdata.Entry, error)
 }
 
-// History sums the playbacks of a week for the weekly summary;
-// plays.History is one.
+// History sums the playbacks of a week, a month or a year for the
+// summaries; plays.History is one.
 type History interface {
 	Summary(ctx context.Context, f plays.Filter, top int) (plays.Summary, error)
+	Totals(ctx context.Context, f plays.Filter, bounds []time.Time) ([]plays.Total, error)
 }
 
 // LocalFiles lists the titles files were added for to the local folders,
@@ -237,12 +241,12 @@ type Options struct {
 	// Problems finds what System › Health shows as needing attention; nil
 	// sends no health event.
 	Problems func(context.Context) ([]Problem, error)
-	// History and LocalFiles tell the weekly summary what was played and
-	// what was added to the local folders; nil tells nothing of it.
+	// History and LocalFiles tell the summaries what was played and what
+	// was added to the local folders; nil tells nothing of it.
 	History    History
 	LocalFiles LocalFiles
-	// Zone is the server's time zone, which the weekly summary's day and
-	// hour are in; nil for the local one.
+	// Zone is the server's time zone, which the summaries' days and hour
+	// are in; nil for the local one.
 	Zone   *time.Location
 	Logger *slog.Logger
 }
@@ -265,8 +269,8 @@ type timing struct {
 	// solved once as many no longer did.
 	healthEvery   time.Duration
 	healthConfirm int
-	// summaryFirst is how long after start the weekly summary is first
-	// looked at, due or not, and summaryEvery how often after that.
+	// summaryFirst is how long after start the summaries are first looked
+	// at, due or not, and summaryEvery how often after that.
 	summaryFirst, summaryEvery time.Duration
 }
 
@@ -345,11 +349,11 @@ type Service struct {
 	// health are the problems found, by key (see health.go).
 	health map[string]*healthState
 	// episodesMu and healthMu serialize the looks at the series, and at
-	// the problems; summaryMu the weekly summaries, and guards
-	// summarySent, the end of the last week sent as last read, zero
+	// the problems; summaryMu the summaries, and guards summarySent, the
+	// last week, month and year sent as last read, by event, absent
 	// before.
 	episodesMu, healthMu, summaryMu sync.Mutex
-	summarySent                     time.Time
+	summarySent                     map[string]time.Time
 }
 
 // New returns a service keeping targets in the database of options. Run
@@ -387,11 +391,12 @@ func New(options Options) *Service {
 		targets:     map[accounts.ID]target{},
 		admins:      map[accounts.ID]bool{},
 		lanes:       map[accounts.ID]*lane{},
+		summarySent: map[string]time.Time{},
 	}
 }
 
 // Run reads the targets, then looks at the series users follow, at the
-// health problems and at whether the weekly summary is due, each on its
+// health problems and at whether a summary is due, each on its
 // own schedule, until ctx ends; it then stops sending and waits for the
 // sends under way.
 func (s *Service) Run(ctx context.Context) {

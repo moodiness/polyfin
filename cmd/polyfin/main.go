@@ -433,13 +433,14 @@ func serve(ctx context.Context) error {
 		Plays:          history,
 	}
 	// Notifications tell of new episodes, ended recordings, the problems
-	// System › Health finds, and once a week what happened that week.
+	// System › Health finds, and once a week, a month and a year what
+	// happened in it.
 	notifier = notifications.New(notifications.Options{DB: pool, Accounts: store, Library: lib, UserData: userData, Secrets: box,
 		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), History: history,
 		LocalFiles: folders, Logger: logger})
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
-	registerWeeklySummaryTask(registry, notifier)
+	registerSummaryTasks(registry, notifier)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -664,10 +665,14 @@ func registerPlaybackHistoryTask(registry *tasks.Registry, history *plays.Histor
 	})
 }
 
-// registerWeeklySummaryTask registers the weekly summary, by hand only:
-// its schedule is the day and hour of Settings › Notifications, which the
-// notifications follow themselves (see notifications.Service.CheckSummary).
-func registerWeeklySummaryTask(registry *tasks.Registry, notifier *notifications.Service) {
+// registerSummaryTasks registers the weekly summary and the month and year
+// in review, by hand only: their schedule is the day and hour of Settings ›
+// Notifications, which the notifications follow themselves (see
+// notifications.Service.CheckSummary).
+func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Service) {
+	send := func(event string) func(context.Context) error {
+		return func(ctx context.Context) error { return notifier.SendSummary(ctx, event) }
+	}
 	registry.Register(tasks.Task{
 		Key:      "SendWeeklySummary",
 		Category: tasks.CategoryMaintenance,
@@ -675,7 +680,25 @@ func registerWeeklySummaryTask(registry *tasks.Registry, notifier *notifications
 			"en": {Name: "Send the weekly summary", Description: "Sends the summary of the last 7 days now to every notification target that chose it. Every week, it is sent on its own at the day and hour set under Settings › Notifications."},
 			"fr": {Name: "Envoyer le résumé de la semaine", Description: "Envoie tout de suite le résumé des 7 derniers jours à toutes les cibles de notification qui l’ont choisi. Chaque semaine, il est envoyé de lui-même au jour et à l’heure choisis dans Paramètres › Notifications."},
 		},
-		Run: notifier.SendSummary,
+		Run: send(notifications.WeeklySummary),
+	})
+	registry.Register(tasks.Task{
+		Key:      "SendMonthlySummary",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Send the month in review", Description: "Sends the review of the last month now to every notification target that chose it. Every month, it is sent on its own on the 1st, at the hour of the weekly summary."},
+			"fr": {Name: "Envoyer le bilan du mois", Description: "Envoie tout de suite le bilan du mois dernier à toutes les cibles de notification qui l’ont choisi. Chaque mois, il est envoyé de lui-même le 1er, à l’heure du résumé de la semaine."},
+		},
+		Run: send(notifications.MonthlySummary),
+	})
+	registry.Register(tasks.Task{
+		Key:      "SendYearlySummary",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Send the year in review", Description: "Sends the review of the last year now to every notification target that chose it. Every year, it is sent on its own on January 1st, at the hour of the weekly summary."},
+			"fr": {Name: "Envoyer le bilan de l’année", Description: "Envoie tout de suite le bilan de l’année dernière à toutes les cibles de notification qui l’ont choisi. Chaque année, il est envoyé de lui-même le 1er janvier, à l’heure du résumé de la semaine."},
+		},
+		Run: send(notifications.YearlySummary),
 	})
 }
 

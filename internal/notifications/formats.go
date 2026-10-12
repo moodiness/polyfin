@@ -27,6 +27,8 @@ var discordColors = map[string]int{
 	PlaybackResumed:   0x14b8a6,
 	PlaybackStopped:   0x64748b,
 	WeeklySummary:     0x6366f1,
+	MonthlySummary:    0x6366f1,
+	YearlySummary:     0x6366f1,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -101,6 +103,8 @@ var ntfyTags = map[string][]string{
 	PlaybackPaused:    {"pause_button"},
 	PlaybackResumed:   {"arrow_forward"},
 	PlaybackStopped:   {"stop_button"},
+	MonthlySummary:    {"bar_chart"},
+	YearlySummary:     {"bar_chart"},
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its

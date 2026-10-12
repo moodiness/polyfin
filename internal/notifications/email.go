@@ -199,7 +199,7 @@ var emailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 
 // emailMessage writes ev as an email to the target t, in the server
 // language: its title as the subject, its message and link in plain text
-// and in HTML, or a weekly summary whole (see summaryEmail).
+// and in HTML, or a summary whole (see summaryEmail).
 func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) ([]byte, error) {
 	from := mail.Address{Name: settings.SMTPFromName, Address: settings.SMTPFrom}
 	if from.Name == "" {

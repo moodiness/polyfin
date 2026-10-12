@@ -142,7 +142,7 @@ func TestWeeklySummaryOfTheServerAndOfEachUser(t *testing.T) {
 	h.CheckHealth(ctx)
 	h.CheckHealth(ctx)
 
-	if err := h.SendSummary(ctx); err != nil {
+	if err := h.SendSummary(ctx, WeeklySummary); err != nil {
 		t.Fatal(err)
 	}
 	server := h.targets.wait(t, "/server", 1)[0]
@@ -227,7 +227,7 @@ func TestWeeklySummaryWithNothingToTell(t *testing.T) {
 	h.add(t, nil, h.webhook("/server", WeeklySummary))
 	h.add(t, &h.admin, h.webhook("/admin", WeeklySummary))
 	h.add(t, &h.member, h.webhook("/member", WeeklySummary))
-	if err := h.SendSummary(t.Context()); err != nil {
+	if err := h.SendSummary(t.Context(), WeeklySummary); err != nil {
 		t.Fatal(err)
 	}
 	h.idle(t)
@@ -239,7 +239,7 @@ func TestWeeklySummaryWithNothingToTell(t *testing.T) {
 	*h.problems = []Problem{{Key: "database", Severity: SeverityError, Text: "The database does not answer."}}
 	h.CheckHealth(t.Context())
 	h.CheckHealth(t.Context())
-	if err := h.SendSummary(t.Context()); err != nil {
+	if err := h.SendSummary(t.Context(), WeeklySummary); err != nil {
 		t.Fatal(err)
 	}
 	h.targets.wait(t, "/server", 1)
@@ -407,7 +407,7 @@ func TestWeeklySummarySentNow(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if err := h.SendSummary(ctx); err != nil {
+		if err := h.SendSummary(ctx, WeeklySummary); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -439,7 +439,7 @@ func TestWeeklySummaryFormats(t *testing.T) {
 		Events: []string{WeeklySummary}})
 	h.chatServices(t, WeeklySummary)
 	h.play(t, h.member, accounts.ID{0x61}, "Harbour Lights", nil, "", time.Now().Add(-time.Hour), 2*time.Hour)
-	if err := h.SendSummary(t.Context()); err != nil {
+	if err := h.SendSummary(t.Context(), WeeklySummary); err != nil {
 		t.Fatal(err)
 	}
 	link := "https://media.example.org/admin/system/statistics"
@@ -517,7 +517,7 @@ func TestWeeklySummaryEmail(t *testing.T) {
 	*h.problems = []Problem{{Key: "backup", Severity: SeverityError, Text: "La dernière sauvegarde a échoué.", Page: "/system/health#backups"}}
 	h.CheckHealth(t.Context())
 	h.CheckHealth(t.Context())
-	if err := h.SendSummary(t.Context()); err != nil {
+	if err := h.SendSummary(t.Context(), WeeklySummary); err != nil {
 		t.Fatal(err)
 	}
 	subject, parts := mailParts(t, sink.wait(1)[0].data)

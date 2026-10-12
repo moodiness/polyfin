@@ -18,35 +18,51 @@ import (
 	"github.com/moodiness/polyfin/internal/plays"
 )
 
-// The bounds of the lists of a weekly summary: the movies and series of
-// the server's week, and of a user's, the new episodes, the titles added
-// to the local folders, and the users who joined and the problems found.
+// The bounds of the lists of a summary: the movies and series of the
+// server's week or month, of a user's, and of a year, the new episodes,
+// the titles added to the local folders, and the users who joined and the
+// problems found.
 const (
 	summaryServerTop = 5
 	summaryUserTop   = 10
+	summaryYearTop   = 10
 	summaryEpisodes  = 20
 	summaryAdded     = 10
 	summaryList      = 50
 )
 
-// The scopes of a weekly summary.
+// The scopes of a summary.
 const (
-	// ScopeServer is the server's week, which the server's targets and
-	// administrators' own receive.
+	// ScopeServer is the server's week, month or year, which the server's
+	// targets and administrators' own receive.
 	ScopeServer = "server"
-	// ScopeUser is a user's week, which their own targets receive.
+	// ScopeUser is a user's, which their own targets receive.
 	ScopeUser = "user"
 )
 
-// SummaryJSON is a weekly summary, from Start until before End: the
-// server's (Scope "server") or a user's (Scope "user"). Plays counts the
-// videos played and Played how long they played, in seconds; Movies and
-// Series are those played longest, the first five for the server, ten for
-// a user. NewEpisodes counts the new episodes of the series followed, the
-// first twenty of which are in Episodes. The server's summary also tells
-// the Users who joined through an invite, the titles Added to the local
-// folders, AddedFiles counting their files, and the Problems System ›
-// Health found; a user's leaves them empty.
+// summaryEvents are the summaries, in the order they are looked at: the
+// weekly summary, and the month and year in review.
+var summaryEvents = []string{WeeklySummary, MonthlySummary, YearlySummary}
+
+// summaryColumns are the columns of notification_summary that keep the
+// last week, month and year sent: the end of the week, and the first day
+// of the month and of the year.
+var summaryColumns = map[string]string{WeeklySummary: "week_end", MonthlySummary: "month_sent", YearlySummary: "year_sent"}
+
+// summaryNames name the summaries in the log.
+var summaryNames = map[string]string{WeeklySummary: "weekly summary", MonthlySummary: "month in review", YearlySummary: "year in review"}
+
+// SummaryJSON is a summary of a week, a month or a year, from Start until
+// before End: the server's (Scope "server") or a user's (Scope "user").
+// Plays counts the videos played and Played how long they played, in
+// seconds; Movies and Series are those played longest, the first five for
+// the server's week or month, ten for a user and for a year. NewEpisodes
+// counts the new episodes of the series followed, the first twenty of
+// which are in Episodes; a year leaves them out. The server's summary also
+// tells the Users who joined through an invite, the titles Added to the
+// local folders, AddedFiles counting their files, and, but for a year, the
+// Problems System › Health found; a user's leaves them empty. A year tells
+// its TopMonth, the month played longest in.
 type SummaryJSON struct {
 	Scope       string               `json:"scope"`
 	Start       time.Time            `json:"start"`
@@ -61,6 +77,16 @@ type SummaryJSON struct {
 	AddedFiles  int                  `json:"addedFiles"`
 	Added       []AddedJSON          `json:"added"`
 	Problems    []FoundProblemJSON   `json:"problems"`
+	TopMonth    *SummaryMonthJSON    `json:"topMonth,omitempty"`
+}
+
+// SummaryMonthJSON is a month of a year in review, as YYYY-MM in the
+// server's time zone, with how many videos played in it and how long, in
+// seconds.
+type SummaryMonthJSON struct {
+	Month  string `json:"month"`
+	Plays  int    `json:"plays"`
+	Played int64  `json:"played"`
 }
 
 // SummaryTitleJSON is a movie or a series played: its item as Jellyfin
@@ -137,43 +163,110 @@ func weekBefore(end time.Time, zone *time.Location) time.Time {
 	return time.Date(local.Year(), local.Month(), local.Day()-7, local.Hour(), local.Minute(), local.Second(), local.Nanosecond(), zone)
 }
 
+// review is the month, or for YearlySummary the year, that ends on the 1st
+// of month at 0:00 in zone.
+func review(event string, year int, month time.Month, zone *time.Location) (start, end time.Time) {
+	end = time.Date(year, month, 1, 0, 0, 0, 0, zone)
+	if event == YearlySummary {
+		return time.Date(year-1, month, 1, 0, 0, 0, 0, zone), end
+	}
+	return time.Date(year, month-1, 1, 0, 0, 0, 0, zone), end
+}
+
+// reviewDue is the month, or for YearlySummary the year, whose review is
+// due at now: the last one whose review's day came, the 1st of the month
+// after it, or of January, at hour in zone. ok is false once the month
+// that day is in ended: a review is sent within it only.
+func reviewDue(event string, now time.Time, zone *time.Location, hour int) (start, end time.Time, ok bool) {
+	local := now.In(zone)
+	year, month := local.Year(), local.Month()
+	if event == YearlySummary {
+		month = time.January
+	}
+	if time.Date(year, month, 1, hour, 0, 0, 0, zone).After(now) {
+		if event == YearlySummary {
+			year--
+		} else {
+			month--
+		}
+	}
+	start, end = review(event, year, month, zone)
+	return start, end, now.Before(time.Date(year, month+1, 1, 0, 0, 0, 0, zone))
+}
+
+// reviewLast is the last month, or for YearlySummary the last year, that
+// ended at now in zone.
+func reviewLast(event string, now time.Time, zone *time.Location) (start, end time.Time) {
+	local := now.In(zone)
+	month := local.Month()
+	if event == YearlySummary {
+		month = time.January
+	}
+	return review(event, local.Year(), month, zone)
+}
+
+// due is the last week, month or year whose summary of event is due at
+// now, by the settings, from start until before end, and key, which names
+// it in notification_summary: the end of a week, the first day of a month
+// or a year. ok is false while none may be sent.
+func (s *Service) due(event string, now time.Time) (start, end, key time.Time, ok bool) {
+	settings := s.accounts.Settings()
+	if event == WeeklySummary {
+		end = summaryDue(now, s.zone, settings.WeeklySummaryDay, settings.WeeklySummaryHour)
+		return weekBefore(end, s.zone), end, end, true
+	}
+	start, end, ok = reviewDue(event, now, s.zone, settings.WeeklySummaryHour)
+	return start, end, time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC), ok
+}
+
 // summaryMessage is a summary to send, and to which targets.
 type summaryMessage struct {
 	event     Event
 	recipient func(target) bool
 }
 
-// CheckSummary sends the weekly summary when it is due: once the day and
-// hour of the settings came, in the server's time zone, for the week
-// before, unless it was sent for that week already. The end of the last
-// week sent is kept in the database: a restart does not send it again,
-// and a server that was off at the hour sends it when it starts again.
-// A summary that cannot be made is tried again at the next check.
+// CheckSummary sends each summary when it is due, in the server's time
+// zone: the weekly summary once the day and hour of the settings came, for
+// the week before; the month in review on the 1st of each month at that
+// hour, for the month before; the year in review on the 1st of January at
+// that hour, for the year before. Each is sent once: the last week, month
+// and year sent are kept in the database, so that a restart does not send
+// them again, and a server that was off at the hour sends them when it
+// starts again, a month or year in review within the month it was due in
+// only. A summary that cannot be made is tried again at the next check.
 func (s *Service) CheckSummary(ctx context.Context) {
 	s.summaryMu.Lock()
 	defer s.summaryMu.Unlock()
-	settings := s.accounts.Settings()
-	end := summaryDue(s.now(), s.zone, settings.WeeklySummaryDay, settings.WeeklySummaryHour)
-	if !end.After(s.summarySent) {
+	for _, event := range summaryEvents {
+		s.checkSummary(ctx, event)
+	}
+}
+
+// checkSummary sends the summary of event when it is due (see
+// CheckSummary).
+func (s *Service) checkSummary(ctx context.Context, event string) {
+	start, end, key, ok := s.due(event, s.now())
+	if !ok || !key.After(s.summarySent[event]) {
 		return
 	}
+	column := summaryColumns[event]
 	var messages []summaryMessage
 	sent := false
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var last time.Time
-		err := tx.QueryRow(ctx, "SELECT week_end FROM notification_summary FOR UPDATE").Scan(&last)
+		err := tx.QueryRow(ctx, "SELECT "+column+" FROM notification_summary FOR UPDATE").Scan(&last)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if !end.After(last) {
-			s.summarySent = last
+		if !key.After(last) {
+			s.summarySent[event] = last
 			return nil
 		}
-		if messages, err = s.summaries(ctx, weekBefore(end, s.zone), end); err != nil {
+		if messages, err = s.summaries(ctx, event, start, end); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO notification_summary (week_end) VALUES ($1)
-			ON CONFLICT (singleton) DO UPDATE SET week_end = excluded.week_end`, end); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO notification_summary ("+column+") VALUES ($1) "+
+			"ON CONFLICT (singleton) DO UPDATE SET "+column+" = excluded."+column, key); err != nil {
 			return err
 		}
 		sent = true
@@ -181,58 +274,76 @@ func (s *Service) CheckSummary(ctx context.Context) {
 	})
 	if err != nil {
 		if ctx.Err() == nil {
-			s.logger.Warn("The weekly summary could not be made", "error", err)
+			s.logger.Warn("The "+summaryNames[event]+" could not be made", "error", err)
 		}
 		return
 	}
 	if !sent {
 		return
 	}
-	s.summarySent = end
+	s.summarySent[event] = key
 	for _, m := range messages {
 		s.dispatch(m.event, m.recipient)
 	}
-	s.logger.Info("The weekly summary was sent", "week_end", end.Format(time.RFC3339), "summaries", len(messages))
+	s.logger.Info("The "+summaryNames[event]+" was sent", "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339),
+		"summaries", len(messages))
 	s.pruneSummary(ctx)
 }
 
-// SendSummary sends the summary of the last seven days now, to every
-// target that chose it: System › Schedule's task runs it. The week the
-// schedule sends next stays as it is.
-func (s *Service) SendSummary(ctx context.Context) error {
+// SendSummary sends the summary of event now, to every target that chose
+// it: for the weekly summary the last seven days, for the month and year
+// in review the last month and year that ended. System › Schedule's tasks
+// run it. What the schedule sends next stays as it is.
+func (s *Service) SendSummary(ctx context.Context, event string) error {
 	s.summaryMu.Lock()
 	defer s.summaryMu.Unlock()
-	end := s.now()
-	messages, err := s.summaries(ctx, weekBefore(end, s.zone), end)
+	now := s.now()
+	start, end := weekBefore(now, s.zone), now
+	if event != WeeklySummary {
+		start, end = reviewLast(event, now, s.zone)
+	}
+	messages, err := s.summaries(ctx, event, start, end)
 	if err != nil {
 		return err
 	}
 	for _, m := range messages {
 		s.dispatch(m.event, m.recipient)
 	}
-	s.logger.Info("The weekly summary was sent by hand", "summaries", len(messages))
+	s.logger.Info("The "+summaryNames[event]+" was sent by hand", "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339),
+		"summaries", len(messages))
 	return nil
 }
 
-// pruneSummary forgets what the summaries keep once older than keepSeen.
+// How long the summaries keep what they tell: the new episodes and the
+// problems found past a month and the month that follows it, the users
+// who joined past a year and the month that follows it.
+const (
+	keepFound  = 70 * 24 * time.Hour
+	keepJoined = 400 * 24 * time.Hour
+)
+
+// pruneSummary forgets what the summaries keep once older than they need.
 func (s *Service) pruneSummary(ctx context.Context) {
-	old := s.now().Add(-keepSeen)
-	for _, query := range []string{
-		"DELETE FROM notification_found_episodes WHERE found_at < $1",
-		"DELETE FROM notification_joins WHERE joined_at < $1",
-		"DELETE FROM notification_health_found WHERE found_at < $1",
+	now := s.now()
+	for _, prune := range []struct {
+		query string
+		keep  time.Duration
+	}{
+		{"DELETE FROM notification_found_episodes WHERE found_at < $1", keepFound},
+		{"DELETE FROM notification_joins WHERE joined_at < $1", keepJoined},
+		{"DELETE FROM notification_health_found WHERE found_at < $1", keepFound},
 	} {
-		if _, err := s.db.Exec(ctx, query, old); err != nil && ctx.Err() == nil {
-			s.logger.Warn("Old weekly summary records could not be deleted", "error", err)
+		if _, err := s.db.Exec(ctx, prune.query, now.Add(-prune.keep)); err != nil && ctx.Err() == nil {
+			s.logger.Warn("Old summary records could not be deleted", "error", err)
 		}
 	}
 }
 
-// summaries makes the summaries of the week from start until before end:
-// the server's, for the server's targets and administrators' own that
-// chose it, and each other user's, for their own; none for a recipient
-// with nothing to tell.
-func (s *Service) summaries(ctx context.Context, start, end time.Time) ([]summaryMessage, error) {
+// summaries makes the summaries of event for the week, month or year from
+// start until before end: the server's, for the server's targets and
+// administrators' own that chose it, and each other user's, for their
+// own; none for a recipient with nothing to tell.
+func (s *Service) summaries(ctx context.Context, event string, start, end time.Time) ([]summaryMessage, error) {
 	if err := s.reload(ctx); err != nil {
 		return nil, err
 	}
@@ -241,7 +352,7 @@ func (s *Service) summaries(ctx context.Context, start, end time.Time) ([]summar
 	s.mu.Lock()
 	for _, t := range s.targets {
 		switch {
-		case !t.wants(WeeklySummary):
+		case !t.wants(event):
 		case t.owner == nil || s.admins[*t.owner]:
 			server = true
 		default:
@@ -251,12 +362,12 @@ func (s *Service) summaries(ctx context.Context, start, end time.Time) ([]summar
 	s.mu.Unlock()
 	var messages []summaryMessage
 	if server {
-		sum, err := s.serverSummary(ctx, start, end)
+		sum, err := s.serverSummary(ctx, event, start, end)
 		if err != nil {
 			return nil, err
 		}
 		if !sum.empty() {
-			messages = append(messages, summaryMessage{event: s.summaryEvent(nil, sum),
+			messages = append(messages, summaryMessage{event: s.summaryEvent(event, nil, sum),
 				recipient: func(t target) bool { return t.owner == nil || s.admins[*t.owner] }})
 		}
 	}
@@ -271,26 +382,36 @@ func (s *Service) summaries(ctx context.Context, start, end time.Time) ([]summar
 		if !personal[user.ID] || user.IsDisabled || user.IsAdministrator {
 			continue
 		}
-		sum, err := s.userSummary(ctx, user, start, end)
+		sum, err := s.userSummary(ctx, event, user, start, end)
 		if err != nil {
 			return nil, err
 		}
 		if !sum.empty() {
 			id := user.ID
-			messages = append(messages, summaryMessage{event: s.summaryEvent(&user, sum),
+			messages = append(messages, summaryMessage{event: s.summaryEvent(event, &user, sum),
 				recipient: func(t target) bool { return t.owner != nil && *t.owner == id && !s.admins[id] }})
 		}
 	}
 	return messages, nil
 }
 
-// serverSummary is the server's week.
-func (s *Service) serverSummary(ctx context.Context, start, end time.Time) (SummaryJSON, error) {
+// serverSummary is the server's week, month or year, as event tells it: a
+// year tells neither the new episodes nor the problems found, but the
+// month played longest in.
+func (s *Service) serverSummary(ctx context.Context, event string, start, end time.Time) (SummaryJSON, error) {
 	sum := newSummary(ScopeServer, start, end)
-	if err := s.summarizePlays(ctx, &sum, plays.Filter{Since: start, Until: end}, summaryServerTop); err != nil {
+	f, top := plays.Filter{Since: start, Until: end}, summaryServerTop
+	if event == YearlySummary {
+		top = summaryYearTop
+	}
+	if err := s.summarizePlays(ctx, &sum, f, top); err != nil {
 		return sum, err
 	}
-	if err := s.summarizeEpisodes(ctx, &sum, nil); err != nil {
+	if event == YearlySummary {
+		if err := s.summarizeTopMonth(ctx, &sum, f); err != nil {
+			return sum, err
+		}
+	} else if err := s.summarizeEpisodes(ctx, &sum, nil); err != nil {
 		return sum, err
 	}
 	rows, err := s.db.Query(ctx, `SELECT j.user_id, u.name, j.joined_at, c.id, c.name
@@ -334,6 +455,9 @@ func (s *Service) serverSummary(ctx context.Context, start, end time.Time) (Summ
 			sum.Added = append(sum.Added, AddedJSON{Name: a.Name, Kind: kind, Files: a.Files})
 		}
 	}
+	if event == YearlySummary {
+		return sum, nil
+	}
 	rows, err = s.db.Query(ctx, `SELECT key, severity, text, page, found_at FROM notification_health_found
 		WHERE found_at >= $1 AND found_at < $2 ORDER BY found_at, id LIMIT $3`, start, end, summaryList)
 	if err != nil {
@@ -348,11 +472,16 @@ func (s *Service) serverSummary(ctx context.Context, start, end time.Time) (Summ
 	return sum, err
 }
 
-// userSummary is user's week.
-func (s *Service) userSummary(ctx context.Context, user accounts.User, start, end time.Time) (SummaryJSON, error) {
+// userSummary is user's week, month or year, as event tells it: a year
+// tells the month played longest in rather than the new episodes.
+func (s *Service) userSummary(ctx context.Context, event string, user accounts.User, start, end time.Time) (SummaryJSON, error) {
 	sum := newSummary(ScopeUser, start, end)
-	if err := s.summarizePlays(ctx, &sum, plays.Filter{User: &user.ID, Since: start, Until: end}, summaryUserTop); err != nil {
+	f := plays.Filter{User: &user.ID, Since: start, Until: end}
+	if err := s.summarizePlays(ctx, &sum, f, summaryUserTop); err != nil {
 		return sum, err
+	}
+	if event == YearlySummary {
+		return sum, s.summarizeTopMonth(ctx, &sum, f)
 	}
 	return sum, s.summarizeEpisodes(ctx, &sum, &user.ID)
 }
@@ -386,8 +515,37 @@ func (s *Service) summarizePlays(ctx context.Context, sum *SummaryJSON, f plays.
 	return nil
 }
 
-// summarizeEpisodes adds to sum the new episodes found in its week: for
-// user, or for anyone when nil, each once.
+// summarizeTopMonth adds to sum, a year, the month the playbacks f selects
+// played longest in, by the server's time zone: on a tie, the one with
+// the most playbacks, then the earliest.
+func (s *Service) summarizeTopMonth(ctx context.Context, sum *SummaryJSON, f plays.Filter) error {
+	if s.history == nil || sum.Plays == 0 {
+		return nil
+	}
+	start := sum.Start.In(s.zone)
+	bounds := make([]time.Time, 13)
+	for i := range bounds {
+		bounds[i] = time.Date(start.Year(), start.Month()+time.Month(i), 1, 0, 0, 0, 0, s.zone)
+	}
+	totals, err := s.history.Totals(ctx, f, bounds)
+	if err != nil {
+		return err
+	}
+	best := -1
+	for i, t := range totals {
+		if t.Plays > 0 && (best < 0 || t.Played > totals[best].Played || t.Played == totals[best].Played && t.Plays > totals[best].Plays) {
+			best = i
+		}
+	}
+	if best >= 0 {
+		sum.TopMonth = &SummaryMonthJSON{Month: bounds[best].Format("2006-01"), Plays: totals[best].Plays,
+			Played: int64(totals[best].Played.Seconds())}
+	}
+	return nil
+}
+
+// summarizeEpisodes adds to sum the new episodes found in its week or
+// month: for user, or for anyone when nil, each once.
 func (s *Service) summarizeEpisodes(ctx context.Context, sum *SummaryJSON, user *accounts.ID) error {
 	rows, err := s.db.Query(ctx, `SELECT DISTINCT ON (episode_id) episode_id, series_id, series_name, name, season, number
 		FROM notification_found_episodes WHERE found_at >= $1 AND found_at < $2 AND ($3::uuid IS NULL OR user_id = $3)
@@ -414,21 +572,39 @@ func (s *Service) summarizeEpisodes(ctx context.Context, sum *SummaryJSON, user 
 	return nil
 }
 
-// summaryEvent tells sum: the server's week when user is nil, user's
-// otherwise. Its message is short, with the key figures, for the kinds
-// that show a text; an email tells it whole (see summaryEmail).
-func (s *Service) summaryEvent(user *accounts.User, sum SummaryJSON) Event {
-	ev := s.newEvent(WeeklySummary)
+// summaryEvent tells sum, the week, month or year of event: the server's
+// when user is nil, user's otherwise. Its message is short, with the key
+// figures, for the kinds that show a text; an email tells it whole (see
+// summaryEmail).
+func (s *Service) summaryEvent(event string, user *accounts.User, sum SummaryJSON) Event {
+	ev := s.newEvent(event)
 	ev.Summary = &sum
 	if user != nil {
 		ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
-		ev.Title = s.phrase("Your week on %s", "Votre semaine sur %s", ev.Server.Name)
+		switch event {
+		case MonthlySummary:
+			ev.Title = s.phrase("Your month on %s", "Votre mois sur %s", ev.Server.Name)
+		case YearlySummary:
+			ev.Title = s.phrase("Your year on %s", "Votre année sur %s", ev.Server.Name)
+		default:
+			ev.Title = s.phrase("Your week on %s", "Votre semaine sur %s", ev.Server.Name)
+		}
 		ev.URL = s.adminLink("/me/account#statistics")
 	} else {
-		ev.Title = s.phrase("The week on %s", "La semaine sur %s", ev.Server.Name)
+		switch event {
+		case MonthlySummary:
+			ev.Title = s.phrase("The month on %s", "Le mois sur %s", ev.Server.Name)
+		case YearlySummary:
+			ev.Title = s.phrase("The year on %s", "L’année sur %s", ev.Server.Name)
+		default:
+			ev.Title = s.phrase("The week on %s", "La semaine sur %s", ev.Server.Name)
+		}
 		ev.URL = s.adminLink("/system/statistics")
 	}
-	lines := []string{s.weekLine(sum), s.playedLine(sum)}
+	lines := []string{s.periodLine(event, sum), s.playedLine(sum)}
+	if sum.TopMonth != nil {
+		lines = append(lines, s.phrase("Most watched month: %s.", "Mois le plus regardé : %s.", s.topMonthText(*sum.TopMonth, false)))
+	}
 	if len(sum.Movies) > 0 {
 		lines = append(lines, s.phrase("Movies: %s.", "Films : %s.", titleNames(sum.Movies, summaryServerTop)))
 	}
@@ -466,6 +642,44 @@ func titleNames(titles []SummaryTitleJSON, n int) string {
 		names = append(names, t.Name)
 	}
 	return strings.Join(names, ", ")
+}
+
+// periodLine names the week, month or year of sum, as event tells it, in
+// the server's time zone.
+func (s *Service) periodLine(event string, sum SummaryJSON) string {
+	start := sum.Start.In(s.zone)
+	french := s.accounts.Settings().Language == "fr"
+	switch event {
+	case MonthlySummary:
+		if french {
+			name := frenchMonths[start.Month()-1]
+			if strings.IndexByte("aeiou", name[0]) >= 0 {
+				return fmt.Sprintf("Mois d’%s %d.", name, start.Year())
+			}
+			return fmt.Sprintf("Mois de %s %d.", name, start.Year())
+		}
+		return fmt.Sprintf("Month of %s %d.", start.Month(), start.Year())
+	case YearlySummary:
+		return s.phrase("Year %d.", "Année %d.", start.Year())
+	}
+	return s.weekLine(sum)
+}
+
+// topMonthText names the month of a year played longest in, with how
+// long, and with its year when withYear.
+func (s *Service) topMonthText(m SummaryMonthJSON, withYear bool) string {
+	month, err := time.Parse("2006-01", m.Month)
+	if err != nil {
+		return m.Month
+	}
+	name := month.Month().String()
+	if s.accounts.Settings().Language == "fr" {
+		name = frenchMonths[month.Month()-1]
+	}
+	if withYear {
+		name += " " + strconv.Itoa(month.Year())
+	}
+	return name + ", " + s.duration(m.Played)
 }
 
 // weekLine names the week of sum, by its days in the server's time zone.

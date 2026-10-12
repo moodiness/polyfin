@@ -38,7 +38,7 @@ type Event struct {
 	URL *string `json:"url"`
 	// User is the user the event is about, null for health events, new
 	// versions, new episodes sent to the server's targets, which are told
-	// once whoever follows the series, and the server's weekly summary.
+	// once whoever follows the series, and the server's summaries.
 	User *UserJSON `json:"user"`
 	// One of these is set, by Type.
 	Episode   *EpisodeJSON   `json:"episode,omitempty"`
