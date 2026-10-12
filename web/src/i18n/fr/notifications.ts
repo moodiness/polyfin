@@ -103,6 +103,8 @@ const notifications: typeof en = {
       monthly_summary: 'Bilan du mois',
       yearly_summary: 'Bilan de l’année',
       connection_stopped: 'Connexion arrêtée',
+      account_blocked: 'Compte bloqué',
+      new_device: 'Connexion depuis un nouvel appareil',
     },
     eventHelp: {
       new_episode:
@@ -130,6 +132,10 @@ const notifications: typeof en = {
         'Le 1er janvier, à l’heure du résumé de la semaine : les heures regardées, les dix films et les dix séries les plus regardés et le mois le plus regardé de l’année écoulée. Les cibles du serveur et des administrateurs reçoivent l’année du serveur, avec les utilisateurs arrivés et les fichiers ajoutés aux dossiers locaux ; les autres reçoivent la leur. Rien n’est envoyé pour une année sans rien à dire.',
       connection_stopped:
         'Une connexion à une appli ou un service de suivi a refusé ce que Polyfin gardait, et s’est arrêté : une fois par arrêt, avec ce qu’il faut faire pour le reconnecter.',
+      account_blocked:
+        'Des mots de passe erronés ont bloqué un compte pour un moment : une fois par blocage, avec jusqu’à quand, l’adresse et l’appli de la dernière tentative. Les cibles du serveur et des administrateurs apprennent ceux de tous les comptes, les autres ceux de leur compte.',
+      new_device:
+        'Votre compte s’est connecté depuis une appli Jellyfin ou le client web sur un appareil qu’il n’avait jamais utilisé, avec l’appli, l’appareil et l’adresse. Le premier appareil d’un compte n’est pas signalé.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

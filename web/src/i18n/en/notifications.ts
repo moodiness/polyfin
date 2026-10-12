@@ -99,6 +99,8 @@ const notifications = {
       monthly_summary: 'Month in review',
       yearly_summary: 'Year in review',
       connection_stopped: 'Connection stopped',
+      account_blocked: 'Account blocked',
+      new_device: 'Sign-in on a new device',
     },
     eventHelp: {
       new_episode:
@@ -123,6 +125,10 @@ const notifications = {
         'On January 1st, at the hour of the weekly summary: the hours watched, the ten movies and ten series played longest and the month with the most hours of the year that ended. The server’s and administrators’ targets get the server’s year, with the users who joined and the files added to local folders; others get their own. Nothing is sent for a year with nothing to tell.',
       connection_stopped:
         'An app connection or a tracking service refused what Polyfin kept, and stopped: once per stop, with what to do to connect it again.',
+      account_blocked:
+        'Wrong passwords blocked an account for a while: once per block, with until when and the address and app of the last attempt. The server’s and administrators’ targets hear of every account, the others of their own.',
+      new_device:
+        'Your account signed in from a Jellyfin app or the web client on a device it never used, with the app, the device and the address. An account’s first device is not told.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

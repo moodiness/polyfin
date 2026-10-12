@@ -1226,6 +1226,8 @@ export type NotificationEvent =
   | 'monthly_summary'
   | 'yearly_summary'
   | 'connection_stopped'
+  | 'account_blocked'
+  | 'new_device'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
