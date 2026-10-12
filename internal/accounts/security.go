@@ -19,21 +19,38 @@ func (user User) Blocked(now time.Time) bool {
 	return user.BlockedUntil != nil && now.Before(*user.BlockedUntil)
 }
 
+// BlockError is the wrong password that blocked an account: Authenticate
+// returns it, as ErrInvalidCredentials, for the wrong password that made
+// Settings.LoginAttempts in a row, once per block. User is the account,
+// blocked until its BlockedUntil.
+type BlockError struct {
+	User User
+}
+
+func (e *BlockError) Error() string { return "account blocked: " + ErrInvalidCredentials.Error() }
+
+func (e *BlockError) Unwrap() error { return ErrInvalidCredentials }
+
 // countWrongPassword counts one more wrong password for user, and blocks
-// the account until now plus LoginBlock when it makes limit in a row. The
-// first wrong password after a block ended counts as the first again. The
-// count is read and written in one statement, so that wrong passwords sent
-// at once all count.
-func (s *Store) countWrongPassword(ctx context.Context, user ID, limit int, now time.Time) error {
+// the account until now plus LoginBlock when it makes limit in a row,
+// which it reports with the account. The first wrong password after a
+// block ended counts as the first again. The count is read and written in
+// one statement, so that wrong passwords sent at once all count, and only
+// one of them blocks.
+func (s *Store) countWrongPassword(ctx context.Context, user ID, limit int, now time.Time) (User, bool, error) {
 	defer s.forgetSignIns()
-	_, err := s.db.Exec(ctx, `UPDATE users SET
+	until := now.Add(LoginBlock)
+	var updated User
+	var blocked bool
+	err := s.db.QueryRow(ctx, `UPDATE users SET
 			invalid_login_attempts = CASE WHEN blocked_until <= $2 THEN 1 ELSE invalid_login_attempts + 1 END,
 			blocked_until = CASE
 				WHEN blocked_until > $2 THEN blocked_until
 				WHEN (CASE WHEN blocked_until <= $2 THEN 1 ELSE invalid_login_attempts + 1 END) >= $3 THEN $4
 			END
-		WHERE id = $1`, user, now, limit, now.Add(LoginBlock))
-	return err
+		WHERE id = $1 RETURNING blocked_until IS NOT DISTINCT FROM $4, `+userColumns, user, now, limit, until).
+		Scan(append([]any{&blocked}, updated.fields()...)...)
+	return updated, blocked, err
 }
 
 // Unblock ends the block of an account for wrong passwords and starts their

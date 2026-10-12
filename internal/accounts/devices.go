@@ -44,6 +44,9 @@ type Device struct {
 	Capabilities   Capabilities
 	CreatedAt      time.Time
 	LastActivityAt time.Time
+	// Unfamiliar is set by SignInDevice only: the account signed in from
+	// other device identifiers before, never from this one.
+	Unfamiliar bool
 }
 
 const deviceColumns = "d.id, d.user_id, d.device_id, d.device_name, d.client, d.client_version, d.remote_address, d.capabilities, d.created_at, d.last_activity_at"
@@ -68,7 +71,10 @@ func scanDevice(row pgx.Row, extra ...any) (Device, error) {
 
 // SignInDevice issues an access token for a user on a device. Signing in
 // again from the same device replaces the previous token, as Jellyfin does,
-// and resets the capabilities the app reported.
+// and resets the capabilities the app reported. The device identifiers an
+// account signed in from are kept after their devices sign out, so that
+// the device comes back Unfamiliar when the account never used it, unless
+// it is the account's first.
 func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (string, Device, error) {
 	// The device's previous token, if any, stops working.
 	defer s.forgetSignIns()
@@ -92,6 +98,16 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 		if err != nil {
 			return err
 		}
+		// A device seen for the first time inserts its row, which another
+		// sign-in from it at once waits for, and finds seen.
+		var first, others bool
+		if err := tx.QueryRow(ctx, `WITH others AS (SELECT EXISTS (SELECT 1 FROM seen_devices WHERE user_id = $1 AND device_id <> $2) AS seen)
+			INSERT INTO seen_devices AS s (user_id, device_id) VALUES ($1, $2)
+			ON CONFLICT (user_id, device_id) DO UPDATE SET last_seen_at = now()
+			RETURNING s.xmax = 0, (SELECT seen FROM others)`, user, info.DeviceID).Scan(&first, &others); err != nil {
+			return err
+		}
+		device.Unfamiliar = first && others
 		_, err = tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = now() WHERE id = $1", user)
 		return err
 	})

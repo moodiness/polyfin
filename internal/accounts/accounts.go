@@ -427,7 +427,8 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 // While Settings.LoginAttempts is set, that many wrong passwords in a row
 // block the account for LoginBlock: every sign-in is then refused as a
 // wrong password is, the right password included, and a sign-in, a new
-// password or Unblock starts the count again. Jellyfin disables the account
+// password or Unblock starts the count again. The wrong password that
+// blocks the account is a *BlockError. Jellyfin disables the account
 // instead, until an administrator enables it again; Polyfin only blocks it
 // for a while, so that the last administrator can never be locked out for
 // good.
@@ -456,8 +457,12 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 	}
 	if !ok {
 		if limit > 0 {
-			if err := s.countWrongPassword(ctx, user.ID, limit, now); err != nil {
+			counted, blocked, err := s.countWrongPassword(ctx, user.ID, limit, now)
+			if err != nil {
 				return User{}, err
+			}
+			if blocked {
+				return User{}, &BlockError{User: counted}
 			}
 		}
 		return User{}, ErrInvalidCredentials
