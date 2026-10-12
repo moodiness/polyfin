@@ -353,14 +353,26 @@ func (s *Service) failed(ctx context.Context, key laneKey, status int) {
 }
 
 // refusedToken records that the service of key refused the user's token or
-// key: nothing more is sent until they connect again.
+// key: nothing more is sent until they connect again. The connection
+// stopping is told once, as it stops.
 func (s *Service) refusedToken(ctx context.Context, key laneKey) {
+	var stopped bool
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var was *string
+		err := tx.QueryRow(ctx, "SELECT problem FROM tracking_connections WHERE user_id = $1 AND service = $2 FOR UPDATE",
+			key.user, key.service).Scan(&was)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		stopped = was == nil || *was != ProblemReconnect
 		if _, err := tx.Exec(ctx, "UPDATE tracking_connections SET problem = 'reconnect' WHERE user_id = $1 AND service = $2",
 			key.user, key.service); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "DELETE FROM tracking_events WHERE user_id = $1 AND service = $2", key.user, key.service)
+		_, err = tx.Exec(ctx, "DELETE FROM tracking_events WHERE user_id = $1 AND service = $2", key.user, key.service)
 		return err
 	})
 	if err != nil {
@@ -368,8 +380,14 @@ func (s *Service) refusedToken(ctx context.Context, key laneKey) {
 		return
 	}
 	s.clearLane(key)
+	if !stopped {
+		return
+	}
 	s.logger.Info("A tracking service refused the user's token or key: nothing is sent until they connect it again",
 		"user_id", key.user.String(), "service", key.service)
+	if s.stopped != nil {
+		s.stopped(key.user, key.service)
+	}
 }
 
 // resumeQueued starts sending what an earlier run left queued.

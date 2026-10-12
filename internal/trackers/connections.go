@@ -161,6 +161,28 @@ func (s *Service) Statuses(ctx context.Context, user accounts.ID) ([]Status, err
 	return statuses, nil
 }
 
+// StoppedConnection is a connection its service stopped by refusing the
+// user's token or key, by its user and service.
+type StoppedConnection struct {
+	User     accounts.ID
+	UserName string
+	Service  string
+}
+
+// Stopped lists the connections their services stopped, by user name,
+// then service, for System › Health.
+func (s *Service) Stopped(ctx context.Context) ([]StoppedConnection, error) {
+	rows, err := s.db.Query(ctx, `SELECT c.user_id, u.name, c.service FROM tracking_connections c JOIN users u ON u.id = c.user_id
+		WHERE c.problem = 'reconnect' ORDER BY lower(u.name), c.service`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (StoppedConnection, error) {
+		var c StoppedConnection
+		return c, row.Scan(&c.User, &c.UserName, &c.Service)
+	})
+}
+
 func (s *Service) status(ctx context.Context, user accounts.ID, service string) (Status, error) {
 	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), Music: Music(service),
 		Available: Available(service, s.settings())}

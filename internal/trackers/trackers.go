@@ -169,6 +169,9 @@ type Options struct {
 	// history, and the titles anime addons name, are found and sent by it.
 	// Nil leaves them out.
 	Anime *anime.Service
+	// Stopped is told once each time a service refuses a user's token or
+	// key, as the connection moves to Connect again; nil tells no one.
+	Stopped func(user accounts.ID, service string)
 }
 
 // timing is how long the service waits for what. Tests shorten it.
@@ -287,6 +290,8 @@ type Service struct {
 	publicMetaDBIMDb map[string]string
 	// anime maps anime between identifiers and numberings.
 	anime *anime.Service
+	// stopped is told as a connection stops (see Options.Stopped).
+	stopped func(user accounts.ID, service string)
 }
 
 // New returns a service keeping connections and queued changes in the
@@ -325,6 +330,7 @@ func New(options Options) *Service {
 
 		publicMetaDBIMDb: map[string]string{},
 		anime:            options.Anime,
+		stopped:          options.Stopped,
 	}
 }
 

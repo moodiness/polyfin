@@ -179,6 +179,32 @@ type harness struct {
 	store *accounts.Store
 	f     *fakes
 	log   *lockedBuffer
+	stops *stopLog
+}
+
+// stopLog records the connections told stopped, as "user service".
+type stopLog struct {
+	mu   sync.Mutex
+	told []string
+}
+
+func (l *stopLog) add(user accounts.ID, service string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.told = append(l.told, user.String()+" "+service)
+}
+
+// of counts the stops told of user's connection to service, and all counts
+// every stop told.
+func (l *stopLog) of(user accounts.ID, service string) (n, all int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, told := range l.told {
+		if told == user.String()+" "+service {
+			n++
+		}
+	}
+	return n, len(l.told)
 }
 
 // newHarness is a service on a fresh database, sending to fakes with
@@ -200,8 +226,10 @@ func newHarness(t *testing.T) harness {
 	f := newFakes(t)
 	log := &lockedBuffer{}
 	s := newService(pool, store, f, log)
+	stops := &stopLog{}
+	s.stopped = stops.add
 	t.Cleanup(s.Close)
-	return harness{Service: s, store: store, f: f, log: log}
+	return harness{Service: s, store: store, f: f, log: log, stops: stops}
 }
 
 // newService is a service on pool sending to f, logging to log, at a fixed

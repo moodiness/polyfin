@@ -581,6 +581,9 @@ func TestAnImportWithARefusedTokenAsksToReconnect(t *testing.T) {
 	if status := h.status(t, user, MDBList); status.Problem != ProblemReconnect {
 		t.Errorf("connection: %+v", status)
 	}
+	if n, all := h.stops.of(user, MDBList); n != 1 || all != 1 {
+		t.Errorf("told %d stops of MDBList, %d in all", n, all)
+	}
 	// No import is due while the connection waits.
 	h.now = func() time.Time { return clockStart.Add(7 * time.Hour) }
 	h.importDue()

@@ -298,6 +298,11 @@ func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
 		t.Errorf("Simkl: %+v", status)
 	}
 	h.idle(t)
+	// Each refusal is told once, as the connection stops.
+	trakt, _ := h.stops.of(user, Trakt)
+	if mdblist, all := h.stops.of(user, MDBList); trakt != 1 || mdblist != 1 || all != 2 {
+		t.Errorf("told %d stops of Trakt, %d of MDBList, %d in all", trakt, mdblist, all)
+	}
 
 	// Nothing more goes to them until the user connects again.
 	h.Playback(user, play(Stopped, episode, 90, false, false))
@@ -309,6 +314,12 @@ func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
 		len(h.f.sent("trakt", "/sync/history")) != 0 || len(h.f.sent("mdblist", "/sync/watched")) != 0 {
 		t.Errorf("sent after the refusal: %d to Trakt", n)
 	}
+	// A refusal recorded again for a stopped connection, as an import
+	// running meanwhile ends refused, is not told again.
+	h.refusedToken(t.Context(), laneKey{user, Trakt})
+	if _, all := h.stops.of(user, Trakt); all != 2 {
+		t.Errorf("%d stops told after a second refusal", all)
+	}
 	h.f.reply("GET", "/mdblist/user", http.StatusOK, `{"username":"frank"}`)
 	h.f.reply("POST", "/mdblist/scrobble/stop", http.StatusOK, `{"action":"scrobble"}`)
 	if status, err := h.ConnectKey(t.Context(), user, MDBList, "mdblist-frank-2"); err != nil || status.Problem != "" {
@@ -317,6 +328,15 @@ func TestARefusedTokenAsksTheUserToReconnect(t *testing.T) {
 	h.Playback(user, play(Stopped, finale, 90, false, false))
 	if stops := h.f.wait(t, 2, "mdblist", "/scrobble/stop"); stops[1].query.Get("apikey") != "mdblist-frank-2" {
 		t.Errorf("sent with %v", stops[1].query)
+	}
+	h.idle(t)
+	// Connected again, then refused again: told again.
+	h.f.reply("POST", "/mdblist/scrobble/stop", http.StatusUnauthorized, `{"error":"Invalid API key"}`)
+	h.Playback(user, play(Stopped, movie, 90, false, false))
+	eventually(t, "MDBList asking to reconnect again", func() bool { return h.status(t, user, MDBList).Problem == ProblemReconnect })
+	h.idle(t)
+	if mdblist, all := h.stops.of(user, MDBList); mdblist != 2 || all != 3 {
+		t.Errorf("told %d stops of MDBList, %d in all", mdblist, all)
 	}
 }
 
@@ -358,6 +378,11 @@ func TestChangesAreRetriedAfterAnOutage(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if n := len(h.f.sent("mdblist", "/sync/watched/remove")); n != 1 {
 		t.Errorf("sent %d times within the hour asked", n)
+	}
+	// A service that fails or asks to wait is not stopped, and nothing is
+	// told of it.
+	if _, all := h.stops.of(user, MDBList); all != 0 {
+		t.Errorf("%d stops told", all)
 	}
 }
 
