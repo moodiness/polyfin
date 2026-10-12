@@ -27,10 +27,12 @@ type trackingServiceJSON struct {
 	Problem     *string           `json:"problem"`
 	Code        *trackingCodeJSON `json:"code"`
 	// ImportHistory tells that the service's watch history is imported;
-	// Importing, that an import runs now; LastImport, how the last went.
+	// Importing, that an import runs now; LastImport, how the last went;
+	// NextImportAt, when the next runs, null while none is planned.
 	ImportHistory bool                `json:"importHistory"`
 	Importing     bool                `json:"importing"`
 	LastImport    *trackingImportJSON `json:"lastImport"`
+	NextImport    *time.Time          `json:"nextImportAt"`
 }
 
 // trackingImportJSON is how the last import of a watch history went.
@@ -69,7 +71,7 @@ func newTrackingServiceJSON(status trackers.Status) trackingServiceJSON {
 		result.Code = &trackingCodeJSON{UserCode: status.Code.UserCode, VerificationURL: status.Code.VerificationURL,
 			ExpiresAt: status.Code.ExpiresAt.UTC().Truncate(time.Second)}
 	}
-	result.ImportHistory, result.Importing = status.ImportHistory, status.Importing
+	result.ImportHistory, result.Importing, result.NextImport = status.ImportHistory, status.Importing, utcSeconds(status.NextImport)
 	if last := status.LastImport; last != nil {
 		result.LastImport = &trackingImportJSON{At: last.At.UTC().Truncate(time.Second), Played: last.Played, Resumed: last.Resumed,
 			Unmapped: last.Unmapped}
@@ -88,7 +90,8 @@ func utcSeconds(t *time.Time) *time.Time {
 	return new(t.UTC().Truncate(time.Second))
 }
 
-// ownTracking lists the signed-in user's tracking services.
+// ownTracking lists the signed-in user's tracking services, with how often,
+// in minutes, their watch histories are imported.
 func (h *handler) ownTracking(w http.ResponseWriter, r *http.Request) {
 	if h.Trackers == nil {
 		writeError(w, http.StatusNotFound, "not_found")
@@ -100,8 +103,9 @@ func (h *handler) ownTracking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := struct {
-		Services []trackingServiceJSON `json:"services"`
-	}{Services: make([]trackingServiceJSON, 0, len(statuses))}
+		Services           []trackingServiceJSON `json:"services"`
+		ImportEveryMinutes int                   `json:"importEveryMinutes"`
+	}{Services: make([]trackingServiceJSON, 0, len(statuses)), ImportEveryMinutes: h.Accounts.Settings().ImportEveryMinutes}
 	for _, status := range statuses {
 		result.Services = append(result.Services, newTrackingServiceJSON(status))
 	}

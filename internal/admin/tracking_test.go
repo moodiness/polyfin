@@ -90,13 +90,13 @@ func TestOwnTrackingFollowsTheContract(t *testing.T) {
 	}
 
 	status, body, _ := member.call(http.MethodGet, "/account/tracking", nil)
-	want := `{"services":[
-		{"service":"trakt","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"simkl","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"mdblist","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"publicmetadb","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"lastfm","connection":"signin","music":true,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null},
-		{"service":"listenbrainz","connection":"key","music":true,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null}]}`
+	want := `{"importEveryMinutes":360,"services":[
+		{"service":"trakt","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
+		{"service":"simkl","connection":"code","music":false,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
+		{"service":"mdblist","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
+		{"service":"publicmetadb","connection":"key","music":false,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
+		{"service":"lastfm","connection":"signin","music":true,"available":false,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null},
+		{"service":"listenbrainz","connection":"key","music":true,"available":true,"connected":false,"account":null,"connectedAt":null,"lastSentAt":null,"problem":null,"code":null,"importHistory":false,"importing":false,"lastImport":null,"nextImportAt":null}]}`
 	var expected map[string]any
 	_ = json.Unmarshal([]byte(want), &expected)
 	if encoded, _ := json.Marshal(body); status != http.StatusOK || string(encoded) != mustCompact(t, expected) {

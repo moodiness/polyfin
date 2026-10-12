@@ -50,7 +50,9 @@ type importRun struct {
 	cancel context.CancelFunc
 }
 
-// importStatus completes status with the import of its service.
+// importStatus completes status with the import of its service, and when
+// the next one runs: the last import plus the interval the settings give,
+// while the import is on and the connection works.
 func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status) error {
 	var last *time.Time
 	var result ImportResult
@@ -69,6 +71,10 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 			result.Problem = *problem
 		}
 		status.LastImport = &result
+		if status.ImportHistory && status.Available && status.Problem != ProblemReconnect {
+			next := last.Add(s.settings().ImportEvery())
+			status.NextImport = &next
+		}
 	}
 	s.mu.Lock()
 	_, status.Importing = s.importing[key]
@@ -77,8 +83,8 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 }
 
 // SetImport turns the import of user's watch history from service on or
-// off. Turned on, it imports at once, then every 6 hours. The music
-// services have no watch history: ErrUnknownService.
+// off. Turned on, it imports at once, then as often as the settings say.
+// The music services have no watch history: ErrUnknownService.
 func (s *Service) SetImport(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
 	if !imports(service) {
 		return Status{}, ErrUnknownService
@@ -180,15 +186,17 @@ func (s *Service) forgetImport(ctx context.Context, key laneKey) error {
 }
 
 // importDue starts the imports due: turned on, of a connection that works,
-// and not run for importEvery.
+// and not run for the interval the settings give. A new interval applies
+// at once, to every import.
 func (s *Service) importDue() {
 	if s.titles == nil || s.userData == nil {
 		return
 	}
+	settings := s.settings()
 	rows, err := s.db.Query(s.ctx, `SELECT i.user_id, i.service FROM tracking_imports i
 		JOIN tracking_connections c ON c.user_id = i.user_id AND c.service = i.service
 		WHERE i.enabled AND c.problem IS DISTINCT FROM 'reconnect' AND (i.last_import_at IS NULL OR i.last_import_at <= $1)`,
-		s.now().Add(-s.timing.importEvery))
+		s.now().Add(-settings.ImportEvery()))
 	if err != nil {
 		s.logger.Warn("The watch history imports due could not be read", "error", err)
 		return
@@ -201,7 +209,6 @@ func (s *Service) importDue() {
 		s.logger.Warn("The watch history imports due could not be read", "error", err)
 		return
 	}
-	settings := s.settings()
 	for _, key := range due {
 		if Available(key.service, settings) {
 			s.startImport(key)

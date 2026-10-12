@@ -131,10 +131,12 @@ type Status struct {
 	Code *Code
 	// ImportHistory tells that the service's watch history is imported
 	// into Polyfin; Importing, that an import runs now; LastImport, how
-	// the last one went, nil before the first.
+	// the last one went, nil before the first; NextImport, when the next
+	// one runs, nil while none is planned.
 	ImportHistory bool
 	Importing     bool
 	LastImport    *ImportResult
+	NextImport    *time.Time
 }
 
 // Code is a code waiting for a user to enter it on a service's site, or,

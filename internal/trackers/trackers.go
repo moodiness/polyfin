@@ -204,9 +204,10 @@ type timing struct {
 	signInPoll int
 	// request bounds each request.
 	request time.Duration
-	// importEvery is how long after an import of a watch history the
-	// next one runs, imports being looked for every importCheck.
-	importEvery, importCheck time.Duration
+	// importCheck is how often the imports of watch histories due are
+	// looked for: often enough for the shortest interval the settings
+	// offer (see accounts.Settings.ImportEveryMinutes).
+	importCheck time.Duration
 	// importGaps are the least time between two requests of an import to
 	// a service, which reads at most for importMaxWait when the service
 	// asks it to wait; it tries a failed request importRetries times more.
@@ -230,8 +231,7 @@ var defaultTiming = timing{
 	signInTime:       15 * time.Minute,
 	signInPoll:       5,
 	request:          15 * time.Second,
-	importEvery:      6 * time.Hour,
-	importCheck:      10 * time.Minute,
+	importCheck:      time.Minute,
 	// Trakt reads 1,000 pages (500 per its latest docs) every 5 minutes,
 	// Simkl 10 a second, MDBList counts a daily allowance.
 	importGaps:    map[string]time.Duration{Trakt: time.Second, Simkl: 500 * time.Millisecond, MDBList: 500 * time.Millisecond},

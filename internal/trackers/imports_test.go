@@ -362,7 +362,7 @@ func TestImportsOfSeveralServicesAddUp(t *testing.T) {
 	h.noWrites(t)
 }
 
-func TestImportsRunEverySixHoursAndOnDemand(t *testing.T) {
+func TestImportsRunAtTheIntervalSetAndOnDemand(t *testing.T) {
 	h := newHarness(t)
 	user := h.user(t, "erin")
 	h.connected(t, user, MDBList, "mdblist-erin")
@@ -402,12 +402,43 @@ func TestImportsRunEverySixHoursAndOnDemand(t *testing.T) {
 	if n := activities.Load(); n != 3 {
 		t.Errorf("after import now: %d", n)
 	}
-	// Turned off, nothing is due.
-	if status, err := h.SetImport(t.Context(), user, MDBList, false); err != nil || status.ImportHistory {
+	if status := h.status(t, user, MDBList); status.NextImport == nil || !status.NextImport.Equal(clockStart.Add(12*time.Hour)) {
+		t.Errorf("next import at 6 hours: %+v", status.NextImport)
+	}
+	// A shorter interval brings the import due forward, and the next one
+	// follows it.
+	setInterval := func(minutes int) {
+		settings := h.store.Settings()
+		settings.ImportEveryMinutes = minutes
+		if _, err := h.store.UpdateSettings(t.Context(), settings); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setInterval(15)
+	if status := h.status(t, user, MDBList); status.NextImport == nil || !status.NextImport.Equal(clockStart.Add(6*time.Hour+15*time.Minute)) {
+		t.Errorf("next import at 15 minutes: %+v", status.NextImport)
+	}
+	due(11 * time.Hour)
+	if n := activities.Load(); n != 4 {
+		t.Errorf("not brought forward: %d", n)
+	}
+	due(11*time.Hour + 14*time.Minute)
+	if n := activities.Load(); n != 4 {
+		t.Errorf("imported again within 15 minutes: %d", n)
+	}
+	due(11*time.Hour + 15*time.Minute)
+	if n := activities.Load(); n != 5 {
+		t.Errorf("not imported after 15 minutes: %d", n)
+	}
+	if status := h.status(t, user, MDBList); status.NextImport == nil || !status.NextImport.Equal(clockStart.Add(11*time.Hour+30*time.Minute)) {
+		t.Errorf("next import after the import at 15 minutes: %+v", status.NextImport)
+	}
+	// Turned off, nothing is due, nor planned.
+	if status, err := h.SetImport(t.Context(), user, MDBList, false); err != nil || status.ImportHistory || status.NextImport != nil {
 		t.Fatalf("off: %+v %v", status, err)
 	}
 	due(48 * time.Hour)
-	if n := activities.Load(); n != 3 {
+	if n := activities.Load(); n != 5 {
 		t.Errorf("imported while off: %d", n)
 	}
 	// Disconnecting forgets the import: the next connection starts off.
