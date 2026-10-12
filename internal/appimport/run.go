@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // run is an import running.
@@ -23,6 +24,9 @@ type run struct {
 	addons   []Addon
 	// connection is the connection the import makes, nil for none.
 	connection *newConnection
+	// list is the watchlist the library goes to: the connection's, which
+	// the import replaces, or watchlist.Import, which it adds to.
+	list string
 }
 
 // update changes the status of the import.
@@ -61,7 +65,7 @@ func (r *run) run(ctx context.Context) {
 			problem = ProblemInternal
 		}
 		r.s.record(r.connection.key, connectedAt, ConnectionImport{Read: counts.Read, Played: counts.Played, Resumed: counts.Resumed,
-			Favorites: counts.Favorites, Unmatched: counts.UnmatchedCount, Problem: problem})
+			Watchlist: counts.Watchlist, Unmatched: counts.UnmatchedCount, Problem: problem})
 	}
 	r.update(func(s *Status) {
 		s.State = StateDone
@@ -110,9 +114,10 @@ func counts(found []library.TitleTarget, t library.TitleTarget) bool {
 }
 
 // merge finds the titles of the entries and adds them to the user's data:
-// played marks, then resume points of the titles still unplayed, then
-// favorites. It reports the entries it did not find, and those found
-// that the source could not read whole.
+// played marks, then resume points of the titles still unplayed, then the
+// library to the watchlist, a movie or a series, never an episode. It
+// reports the entries it did not find, and those found that the source
+// could not read whole.
 func (r *run) merge(ctx context.Context) error {
 	refs := make([]library.TitleRef, 0, len(r.entries))
 	// of is the index in refs of each entry's title, -1 for one without
@@ -144,8 +149,9 @@ func (r *run) merge(ctx context.Context) error {
 	var noMatch []Unmatched
 	marks := map[accounts.ID]*mark{}
 	points := map[accounts.ID]*point{}
-	favorites := map[accounts.ID]userdata.Item{}
-	var markOrder, pointOrder, favoriteOrder []accounts.ID
+	var titles []watchlist.Title
+	listed := map[accounts.ID]bool{}
+	var markOrder, pointOrder []accounts.ID
 	for i, e := range r.entries {
 		if of[i] < 0 {
 			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: ReasonOtherIdentifier})
@@ -185,9 +191,15 @@ func (r *run) merge(ctx context.Context) error {
 				points[t.ID] = &point{item: item, counts: counts(found, t),
 					ImportedResume: userdata.ImportedResume{Position: e.Resume.Position, Runtime: runtime, At: e.Resume.At}}
 			}
-			if _, listed := favorites[t.ID]; e.Favorite && !listed {
-				favorites[t.ID] = item
-				favoriteOrder = append(favoriteOrder, t.ID)
+			// An episode counts for its series; a title an anime catalog
+			// lists, only when nothing else was found.
+			id := t.ID
+			if t.Series != (accounts.ID{}) {
+				id = t.Series
+			}
+			if e.Watchlist && counts(found, t) && !listed[id] {
+				listed[id] = true
+				titles = append(titles, watchlist.Title{ID: id, AddedAt: e.AddedAt})
 			}
 		}
 	}
@@ -225,13 +237,15 @@ func (r *run) merge(ctx context.Context) error {
 		}); err != nil {
 		return err
 	}
-	return r.change(ctx, favoriteOrder, func(id accounts.ID) userdata.Item { return favorites[id] },
-		func(_ accounts.ID, d *userdata.Data, s *Status) {
-			if !d.Favorite {
-				d.Favorite = true
-				s.Favorites++
-			}
-		})
+	if r.s.watchlist == nil {
+		return nil
+	}
+	added, err := r.s.watchlist.Save(ctx, r.user.ID, r.list, titles, r.list != watchlist.Import)
+	if err != nil {
+		return err
+	}
+	r.update(func(s *Status) { s.Watchlist += added })
+	return nil
 }
 
 // change applies change to the data the user keeps of the items ids name,
@@ -254,7 +268,6 @@ func (r *run) change(ctx context.Context, ids []accounts.ID, itemOf func(account
 		r.update(func(s *Status) {
 			s.Played += counted.Played
 			s.Resumed += counted.Resumed
-			s.Favorites += counted.Favorites
 		})
 	}
 	return nil

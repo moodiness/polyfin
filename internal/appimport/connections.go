@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // A user who stays connected to an app has the account imported again as
@@ -22,7 +23,8 @@ import (
 // logged. One connection per app per user; a new one replaces it. When the
 // app refuses what is kept, the connection stops until the user signs in
 // again. Disconnecting forgets it, signing out first the session Polyfin
-// opened.
+// opened, and takes off the watchlist the titles its imports alone put
+// there.
 //
 // A member's connections are imported while the setting that lets users
 // import their watch history allows it; an administrator's always.
@@ -152,9 +154,9 @@ type ConnectionImport struct {
 	// At is when it ended.
 	At time.Time
 	// Read counts the entries of the profile, Played the titles marked
-	// played that were not, Resumed the resume points set, Favorites the
-	// titles made favorites, and Unmatched the titles not found.
-	Read, Played, Resumed, Favorites, Unmatched int
+	// played that were not, Resumed the resume points set, Watchlist the
+	// titles added to the watchlist, and Unmatched the titles not found.
+	Read, Played, Resumed, Watchlist, Unmatched int
 	// Problem is empty, or what kept the import from reading the account
 	// (see ProblemUnreachable), or ProblemInternal.
 	Problem string
@@ -254,7 +256,7 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 
 // connectionColumns are what a connection's status reads.
 const connectionColumns = `c.app, c.sign_in, c.owned, c.account, c.connected_at, c.connected_by, coalesce(b.name, ''),
-	coalesce(c.problem, ''), c.last_import_at, c.read, c.played, c.resumed, c.favorites, c.unmatched, coalesce(c.last_problem, '')`
+	coalesce(c.problem, ''), c.last_import_at, c.read, c.played, c.resumed, c.watchlist, c.unmatched, coalesce(c.last_problem, '')`
 
 // storedConnection is a connection as the database holds it, its sign-in
 // opened.
@@ -273,7 +275,7 @@ func (s *Service) scanConnection(row pgx.Row) (storedConnection, error) {
 	var last *time.Time
 	var result ConnectionImport
 	if err := row.Scan(&c.App, &stored, &owned, &c.Account, &c.ConnectedAt, &by, &c.ConnectedByName, &c.Problem, &last, &result.Read,
-		&result.Played, &result.Resumed, &result.Favorites, &result.Unmatched, &result.Problem); err != nil {
+		&result.Played, &result.Resumed, &result.Watchlist, &result.Unmatched, &result.Problem); err != nil {
 		return c, err
 	}
 	if by != nil {
@@ -415,7 +417,8 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.User, app string)
 
 // Disconnect forgets user's connection to app, stopping its import, after
 // signing out the session Polyfin opened. A key the user pasted is only
-// forgotten. Disconnecting an app not connected does nothing.
+// forgotten. The titles its library alone put on the watchlist leave it.
+// Disconnecting an app not connected does nothing.
 func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) error {
 	if s.db == nil {
 		return nil
@@ -443,6 +446,9 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 		}
 	}
 	s.logger.Info("A user disconnected an app", "user_id", user.String(), "app", app)
+	if s.watchlist != nil {
+		return s.watchlist.Drop(ctx, user, watchlist.Connection(app))
+	}
 	return nil
 }
 
@@ -615,7 +621,7 @@ func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 	}
 	if profile != nil {
 		status := &Status{App: key.app, Profile: profile.Name, User: key.user, State: StateRunning, Read: len(profile.Entries)}
-		r := &run{s: s, status: status, user: accounts.User{ID: key.user}, entries: profile.Entries}
+		r := &run{s: s, status: status, user: accounts.User{ID: key.user}, entries: profile.Entries, list: watchlist.Connection(key.app)}
 		if err := r.merge(ctx); err != nil {
 			if ctx.Err() != nil {
 				return
@@ -624,8 +630,8 @@ func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 			result.Problem = ProblemInternal
 		}
 		s.mu.Lock()
-		result.Read, result.Played, result.Resumed, result.Favorites, result.Unmatched = status.Read, status.Played, status.Resumed,
-			status.Favorites, status.UnmatchedCount
+		result.Read, result.Played, result.Resumed, result.Watchlist, result.Unmatched = status.Read, status.Played, status.Resumed,
+			status.Watchlist, status.UnmatchedCount
 		s.mu.Unlock()
 	}
 	s.record(key, c.ConnectedAt, result)
@@ -676,12 +682,12 @@ func (s *Service) record(key connectionKey, connectedAt time.Time, result Connec
 	// The connection as it was before, old, tells whether this import
 	// stops it.
 	var stopped bool
-	err := s.db.QueryRow(ctx, `UPDATE app_connections c SET last_import_at = $4, read = $5, played = $6, resumed = $7, favorites = $8,
+	err := s.db.QueryRow(ctx, `UPDATE app_connections c SET last_import_at = $4, read = $5, played = $6, resumed = $7, watchlist = $8,
 			unmatched = $9, last_problem = $10, problem = CASE WHEN $10 = 'sign_in_refused' THEN 'sign_in_refused' ELSE c.problem END
 		FROM app_connections old
 		WHERE c.user_id = $1 AND c.app = $2 AND c.connected_at = $3 AND old.user_id = c.user_id AND old.app = c.app
 		RETURNING old.problem IS NULL AND c.problem IS NOT NULL`, key.user, key.app, connectedAt, result.At, result.Read, result.Played,
-		result.Resumed, result.Favorites, result.Unmatched, problem).Scan(&stopped)
+		result.Resumed, result.Watchlist, result.Unmatched, problem).Scan(&stopped)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.logger.Warn("An app connection's import could not be recorded", "app", key.app, "error", err)
 	}

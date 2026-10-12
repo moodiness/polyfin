@@ -58,6 +58,7 @@ import (
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 	webui "github.com/moodiness/polyfin/web"
 )
 
@@ -346,17 +347,19 @@ func serve(ctx context.Context) error {
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'
-	// addons become their users' own. A series of Stremio's tells its
-	// episodes watched by their places in the list its metadata addons
-	// give, which the server's addons give again. The users who stay
-	// connected keep what reads their accounts again, sealed; a connection
-	// its app stops is told to the notifications.
+	// addons become their users' own, and their libraries go on their
+	// watchlists. A series of Stremio's tells its episodes watched by
+	// their places in the list its metadata addons give, which the
+	// server's addons give again. The users who stay connected keep what
+	// reads their accounts again, sealed; a connection its app stops is
+	// told to the notifications.
 	fromNuvio := nuvio.New(nuvio.Options{Anime: animeMapping, Version: version})
 	fromStremio := stremioimport.New(stremioimport.Options{Anime: animeMapping, Metas: lib, Version: version})
 	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
 		Activity: activityLog, Logger: logger, DB: pool, Secrets: box,
-		Sources: map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
-		Stopped: func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) }})
+		Sources:   map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
+		Stopped:   func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) },
+		Watchlist: watchlist.New(pool)})
 	defer fromApps.Close()
 	// Deleting a user signs out, in the background, the sessions Polyfin
 	// opened for them at apps and tracking services.

@@ -51,12 +51,14 @@ func (d *date) UnmarshalJSON(data []byte) error {
 // item is a title of the account's library, as Stremio's apps keep it.
 // Removed is false for a title in the user's library; Temp is set for one
 // played without being added to it: its history, and Continue Watching.
+// Created is when Stremio first kept the title.
 type item struct {
 	ID      string `json:"_id"`
 	Type    string `json:"type"`
 	Name    string `json:"name"`
 	Removed bool   `json:"removed"`
 	Temp    bool   `json:"temp"`
+	Created date   `json:"_ctime"`
 	Changed date   `json:"_mtime"`
 	State   struct {
 		LastWatched date `json:"lastWatched"`
@@ -145,7 +147,8 @@ func (b *builder) entry(id, name, kind string, season, episode int) *appimport.E
 //     apps did (see watched); else the series is reported;
 //   - the video played last of a title in Continue Watching, the movie or
 //     an episode, has its resume point;
-//   - the titles of the user's library are favorites;
+//   - the titles of the user's library go on the watchlist, from the date
+//     Stremio first kept them;
 //   - the addons the user installed, Stremio's own left out, are offered.
 func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage) appimport.Account {
 	list := items(raw)
@@ -153,7 +156,11 @@ func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage
 	b := &builder{r: r, entries: map[key]*appimport.Entry{}}
 	for _, it := range list {
 		name := strings.TrimSpace(it.Name)
-		favorite := !it.Removed && !it.Temp
+		listed := !it.Removed && !it.Temp
+		var addedAt *time.Time
+		if listed && !it.Created.IsZero() {
+			addedAt = &it.Created.Time
+		}
 		at := it.State.LastWatched.Time
 		if at.IsZero() {
 			at = it.Changed.Time
@@ -170,11 +177,11 @@ func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage
 
 		if it.Type == "movie" {
 			played := it.State.TimesWatched > 0 || it.State.FlaggedWatched > 0
-			if !played && resume == nil && !favorite {
+			if !played && resume == nil && !listed {
 				continue
 			}
 			e := b.entry(it.ID, name, "movie", 0, 0)
-			e.Favorite, e.Resume = favorite, resume
+			e.Watchlist, e.AddedAt, e.Resume = listed, addedAt, resume
 			if played {
 				e.Played, e.PlayedAt, e.Plays = true, playedAt, int(max(it.State.TimesWatched, 0))
 			}
@@ -186,13 +193,15 @@ func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage
 		if _, identified := appimport.TitleRef(r.anime, it.ID, false, 0, 0); !identified {
 			// Polyfin finds no title by this identifier: one entry tells it,
 			// whatever the profile holds of the series.
-			if favorite || watchedSome || resume != nil {
-				b.entry(it.ID, name, "series", 0, 0).Favorite = favorite
+			if listed || watchedSome || resume != nil {
+				e := b.entry(it.ID, name, "series", 0, 0)
+				e.Watchlist, e.AddedAt = listed, addedAt
 			}
 			continue
 		}
-		if favorite {
-			b.entry(it.ID, name, "series", 0, 0).Favorite = true
+		if listed {
+			e := b.entry(it.ID, name, "series", 0, 0)
+			e.Watchlist, e.AddedAt = true, addedAt
 		}
 		videos := lists[it.ID]
 		if watchedSome {

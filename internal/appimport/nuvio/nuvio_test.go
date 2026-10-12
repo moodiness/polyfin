@@ -66,7 +66,8 @@ func TestAnAccountIsReadSignedInThenSignedOut(t *testing.T) {
 	}
 	want := map[string]func(appimport.Entry) bool{
 		"tt0000001": func(e appimport.Entry) bool {
-			return e.Played && e.PlayedAt.Equal(at("2026-09-01T20:00:00Z")) && e.Favorite && e.Resume == nil &&
+			return e.Played && e.PlayedAt.Equal(at("2026-09-01T20:00:00Z")) && e.Watchlist && e.AddedAt != nil &&
+				e.AddedAt.Equal(at("2026-08-02T20:00:00Z")) && e.Resume == nil &&
 				e.Title == library.TitleRef{IMDb: "tt0000001"} && e.Label.Name == "First movie"
 		},
 		// Dated as older apps dated it.
@@ -84,7 +85,8 @@ func TestAnAccountIsReadSignedInThenSignedOut(t *testing.T) {
 			return e.Resume != nil && e.Title == library.TitleRef{Episode: true, IMDb: "tt0100", Season: 2, Number: 1}
 		},
 		"tt0100": func(e appimport.Entry) bool {
-			return e.Favorite && !e.Played && e.Title == library.TitleRef{Series: true, IMDb: "tt0100"} && e.Label.Kind == "series"
+			return e.Watchlist && e.AddedAt != nil && e.AddedAt.Equal(at("2026-08-01T20:00:00Z")) && !e.Played &&
+				e.Title == library.TitleRef{Series: true, IMDb: "tt0100"} && e.Label.Kind == "series"
 		},
 		"tmdb:999999": func(e appimport.Entry) bool { return e.Played && e.Title == library.TitleRef{TMDB: 999999} },
 		"custom:1": func(e appimport.Entry) bool {

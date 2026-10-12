@@ -176,27 +176,30 @@ func TestTheLibraryIsReadAsStremiosAppsReadIt(t *testing.T) {
 	}
 	playedAt := func(e appimport.Entry, when string) bool { return e.PlayedAt != nil && e.PlayedAt.Equal(at(when)) }
 
-	// In the library, watched twice: played, a favorite; the older copy
-	// of it is left out.
-	if e := entry("tt0000001", "movie", 0, 0); !e.Played || e.Plays != 2 || !playedAt(e, "2026-09-01T20:00:00Z") || !e.Favorite ||
-		e.Resume != nil || e.Title.IMDb != "tt0000001" || e.Label.Name != "First movie" {
+	// In the library, watched twice: played, on the watchlist from when
+	// Stremio first kept it; the older copy of it is left out.
+	if e := entry("tt0000001", "movie", 0, 0); !e.Played || e.Plays != 2 || !playedAt(e, "2026-09-01T20:00:00Z") || !e.Watchlist ||
+		e.AddedAt == nil || !e.AddedAt.Equal(at("2026-08-01T20:00:00Z")) || e.Resume != nil || e.Title.IMDb != "tt0000001" ||
+		e.Label.Name != "First movie" {
 		t.Errorf("first movie: %+v", e)
 	}
-	// Played without being added: in Continue Watching, not a favorite.
-	if e := entry("tt0000002", "movie", 0, 0); e.Played || e.Favorite || e.Resume == nil || e.Resume.Position != 30*time.Minute ||
+	// Played without being added: in Continue Watching, not on the
+	// watchlist.
+	if e := entry("tt0000002", "movie", 0, 0); e.Played || e.Watchlist || e.Resume == nil || e.Resume.Position != 30*time.Minute ||
 		e.Resume.Runtime != 100*time.Minute || !e.Resume.At.Equal(at("2026-10-01T20:00:00Z")) {
 		t.Errorf("second movie: %+v", e)
 	}
 	// Removed from the library: watched most of the way, played at its
 	// last change; its resume point no longer shows.
-	if e := entry("tt0000003", "movie", 0, 0); !e.Played || e.Plays != 0 || !playedAt(e, "2026-09-02T20:00:00Z") || e.Favorite || e.Resume != nil {
+	if e := entry("tt0000003", "movie", 0, 0); !e.Played || e.Plays != 0 || !playedAt(e, "2026-09-02T20:00:00Z") || e.Watchlist || e.Resume != nil {
 		t.Errorf("removed movie: %+v", e)
 	}
-	if e := entry("tt0100", "series", 0, 0); !e.Favorite || e.Played || e.Problem != "" || !e.Title.Series || e.Title.IMDb != "tt0100" {
+	if e := entry("tt0100", "series", 0, 0); !e.Watchlist || e.AddedAt != nil || e.Played || e.Problem != "" || !e.Title.Series ||
+		e.Title.IMDb != "tt0100" {
 		t.Errorf("series: %+v", e)
 	}
 	for episode := 1; episode <= 3; episode++ {
-		if e := entry("tt0100", "episode", 1, episode); !e.Played || !playedAt(e, "2026-09-04T20:00:00Z") || e.Favorite || e.Resume != nil ||
+		if e := entry("tt0100", "episode", 1, episode); !e.Played || !playedAt(e, "2026-09-04T20:00:00Z") || e.Watchlist || e.Resume != nil ||
 			!e.Title.Episode || e.Title.Season != 1 || e.Title.Number != episode {
 			t.Errorf("S1E%d: %+v", episode, e)
 		}
@@ -206,10 +209,10 @@ func TestTheLibraryIsReadAsStremiosAppsReadIt(t *testing.T) {
 		t.Errorf("S2E1: %+v", e)
 	}
 	// Watched against an episode Polyfin's addons do not list: reported.
-	if e := entry("tt0200", "series", 0, 0); e.Problem != appimport.ReasonEpisodeList || e.Played || e.Favorite {
+	if e := entry("tt0200", "series", 0, 0); e.Problem != appimport.ReasonEpisodeList || e.Played || e.Watchlist {
 		t.Errorf("unlisted series: %+v", e)
 	}
-	if e := entry("custom:1", "series", 0, 0); appimport.Identified(e.Title) || !e.Favorite {
+	if e := entry("custom:1", "series", 0, 0); appimport.Identified(e.Title) || !e.Watchlist {
 		t.Errorf("home video: %+v", e)
 	}
 	if e := entry("tmdb:999999", "movie", 0, 0); !e.Played || e.Title.TMDB != 999999 {
@@ -230,13 +233,13 @@ func TestTheLibraryIsReadAsStremiosAppsReadIt(t *testing.T) {
 }
 
 // Each combination of removed and temp, of a movie watched once and
-// stopped again: a favorite in the library only, a resume point in
+// stopped again: on the watchlist in the library only, a resume point in
 // Continue Watching only, played in all.
 func TestRemovedAndTempTellTheLibraryAndContinueWatching(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		removed, temp      bool
-		favorite, resuming bool
+		removed, temp       bool
+		watchlist, resuming bool
 	}{
 		{false, false, true, true},
 		{true, true, false, true},
@@ -259,7 +262,7 @@ func TestRemovedAndTempTellTheLibraryAndContinueWatching(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := account.Profiles[0].Entries
-		if len(got) != 1 || !got[0].Played || got[0].Favorite != c.favorite || (got[0].Resume != nil) != c.resuming {
+		if len(got) != 1 || !got[0].Played || got[0].Watchlist != c.watchlist || (got[0].Resume != nil) != c.resuming {
 			t.Errorf("removed %v, temp %v: %+v", c.removed, c.temp, got)
 		}
 	}
@@ -397,7 +400,7 @@ func TestAccountEpisodesFollowTheirAnchor(t *testing.T) {
 	if !slices.Equal(played, []int{1, 2, 3, 4, 5}) || len(byLabel) != 6 {
 		t.Errorf("shifted: %v %+v", played, byLabel)
 	}
-	if e := byLabel[appimport.Label{ID: "tt0300", Kind: "series"}]; e.Problem != appimport.ReasonEpisodeList || !e.Favorite {
+	if e := byLabel[appimport.Label{ID: "tt0300", Kind: "series"}]; e.Problem != appimport.ReasonEpisodeList || !e.Watchlist {
 		t.Errorf("gone: %+v", e)
 	}
 }

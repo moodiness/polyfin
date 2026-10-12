@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 type harness struct {
@@ -28,6 +29,8 @@ type harness struct {
 	lib    *library.Service
 	data   *userdata.Store
 	addons *addons.Store
+	// watchlist holds the users' watchlists the imports fill.
+	watchlist *watchlist.Store
 	// personalAddons is the server's switch of users' own addons.
 	personalAddons *atomic.Bool
 }
@@ -46,6 +49,7 @@ func newHarness(t *testing.T, configure ...func(*Options)) harness {
 	addonStore := addons.New(pool, client)
 	lib := library.New(pool, addonStore, client, logger, store.Settings)
 	data := userdata.New(pool)
+	lists := watchlist.New(pool)
 	personalAddons := &atomic.Bool{}
 	personalAddons.Store(true)
 	settings := func() accounts.Settings {
@@ -53,13 +57,14 @@ func newHarness(t *testing.T, configure ...func(*Options)) harness {
 		s.PersonalAddons = personalAddons.Load()
 		return s
 	}
-	options := Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger, DB: pool}
+	options := Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger, DB: pool, Watchlist: lists}
 	for _, c := range configure {
 		c(&options)
 	}
 	s := New(options)
 	t.Cleanup(s.Close)
-	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, addons: addonStore, personalAddons: personalAddons}
+	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, addons: addonStore, watchlist: lists,
+		personalAddons: personalAddons}
 }
 
 func (h harness) user(t *testing.T, name string, administrator bool) accounts.User {
@@ -99,6 +104,17 @@ func (h harness) dataOf(t *testing.T, user accounts.ID, ref library.TitleRef) us
 		t.Fatal(err)
 	}
 	return got[id]
+}
+
+// watchlistOf lists user's watchlist as the Watchlist view does: the
+// titles not started, the latest added first.
+func (h harness) watchlistOf(t *testing.T, user accounts.ID) []accounts.ID {
+	t.Helper()
+	ids, err := h.watchlist.Titles(t.Context(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
 }
 
 // imported holds account for by, imports choice of it into user's
@@ -157,6 +173,7 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 
 	byIMDb, byTMDB := ref(t, "tt0000001", true, 0, 0), ref(t, "tmdb:550", true, 0, 0)
 	resumed, newerHere, nearlyDone := ref(t, "tt0000002", true, 0, 0), ref(t, "tt0000003", true, 0, 0), ref(t, "tt0000004", true, 0, 0)
+	listed := ref(t, "tt0000005", true, 0, 0)
 	episode, series := ref(t, "tt0100", false, 1, 2), ref(t, "tt0100", false, 0, 0)
 	animeEpisode := ref(t, "kitsu:12", false, 1, 3)
 
@@ -178,7 +195,7 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 	}
 	entries := []Entry{
 		{Title: byIMDb, Played: true, PlayedAt: new(at("2026-09-01T20:00:00Z")), Plays: 3},
-		{Title: byTMDB, Played: true, PlayedAt: new(at("2026-09-02T20:00:00Z")), Plays: 2, Favorite: true},
+		{Title: byTMDB, Played: true, PlayedAt: new(at("2026-09-02T20:00:00Z")), Plays: 2, Watchlist: true},
 		{Title: episode, Played: true, PlayedAt: new(at("2026-09-04T20:00:00Z"))},
 		{Title: animeEpisode, Played: true},
 		{Title: resumed, Resume: resume(30*time.Minute, 100*time.Minute, "2026-10-01T20:00:00Z")},
@@ -186,10 +203,12 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		// Past the played threshold: played.
 		{Title: nearlyDone, Resume: resume(95*time.Minute, 100*time.Minute, "2026-10-02T20:00:00Z")},
 		// A series whose episodes played the source could not read: it
-		// is reported, and a favorite still.
-		{Title: series, Label: Label{ID: "tt0100", Name: "Series", Kind: "series"}, Favorite: true, Problem: ReasonEpisodeList},
+		// is reported, and on the watchlist still.
+		{Title: series, Label: Label{ID: "tt0100", Name: "Series", Kind: "series"}, Watchlist: true, Problem: ReasonEpisodeList},
+		// In the library only.
+		{Title: listed, Watchlist: true},
 		{Title: library.TitleRef{}, Label: Label{ID: "local:home-video", Name: "Holiday", Kind: "movie"}, Played: true},
-		{Title: ref(t, "tmdb:999999", true, 0, 0), Label: Label{ID: "tmdb:999999", Name: "Unknown", Kind: "movie"}, Favorite: true},
+		{Title: ref(t, "tmdb:999999", true, 0, 0), Label: Label{ID: "tmdb:999999", Name: "Unknown", Kind: "movie"}, Watchlist: true},
 	}
 	account := Account{App: "test", Profiles: []Profile{{ID: "1", Name: "Main", Entries: entries}}}
 
@@ -198,8 +217,10 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		t.Fatalf("%+v", status)
 	}
 	// Newly played: by TMDB, the episode, the anime's episode, and the
-	// movie past the threshold; the movie by IMDb was played already.
-	if status.Read != 10 || status.Played != 4 || status.Resumed != 1 || status.Favorites != 2 || status.UnmatchedCount != 3 {
+	// movie past the threshold; the movie by IMDb was played already. Of
+	// the library, the movie played and the series started are not added
+	// to the Watchlist view.
+	if status.Read != 11 || status.Played != 4 || status.Resumed != 1 || status.Watchlist != 1 || status.UnmatchedCount != 3 {
 		t.Errorf("counts: %+v", status)
 	}
 	reasons := map[string]string{}
@@ -221,7 +242,7 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		return d.Played && d.PlayCount == 5 && d.LastPlayed.Equal(at("2026-09-10T20:00:00Z"))
 	})
 	check("by TMDB", byTMDB, func(d userdata.Data) bool {
-		return d.Played && d.PlayCount == 2 && d.LastPlayed.Equal(at("2026-09-02T20:00:00Z")) && d.Favorite
+		return d.Played && d.PlayCount == 2 && d.LastPlayed.Equal(at("2026-09-02T20:00:00Z")) && !d.Favorite
 	})
 	check("episode", episode, func(d userdata.Data) bool { return d.Played && d.LastPlayed.Equal(at("2026-09-04T20:00:00Z")) })
 	check("anime episode", animeEpisode, func(d userdata.Data) bool { return d.Played && d.LastPlayed == nil })
@@ -230,7 +251,13 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 	})
 	check("newer here", newerHere, func(d userdata.Data) bool { return d.Position == 50*time.Minute })
 	check("nearly done", nearlyDone, func(d userdata.Data) bool { return d.Played && d.Position == 0 })
-	check("favorite series", series, func(d userdata.Data) bool { return d.Favorite })
+	// The library sets no favorite: it goes on the watchlist, where the
+	// titles started are left out.
+	check("series of the library", series, func(d userdata.Data) bool { return !d.Favorite })
+	check("movie of the library", listed, func(d userdata.Data) bool { return !d.Favorite })
+	if got := h.watchlistOf(t, alice.ID); len(got) != 1 || got[0] != h.idOf(t, listed).ID {
+		t.Errorf("watchlist: %v", got)
+	}
 
 	// Watched on in Polyfin since, then imported again: nothing is added
 	// twice, and Polyfin's newer resume point stays.
@@ -240,7 +267,7 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := h.imported(t, alice, alice, account, Choice{Profile: "1"})
-	if again.Played != 0 || again.Resumed != 0 || again.Favorites != 0 || again.UnmatchedCount != 3 {
+	if again.Played != 0 || again.Resumed != 0 || again.Watchlist != 0 || again.UnmatchedCount != 3 {
 		t.Errorf("again: %+v", again)
 	}
 	check("resumed, after", resumed, func(d userdata.Data) bool { return d.Position == 60*time.Minute })

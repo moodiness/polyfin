@@ -510,6 +510,7 @@ type data struct {
 		ContentID   string `json:"content_id"`
 		ContentType string `json:"content_type"`
 		Name        string `json:"name"`
+		AddedAt     number `json:"added_at"`
 	} `json:"library_items"`
 	Progress []struct {
 		Profile     number `json:"profile_id"`
@@ -617,7 +618,11 @@ func (r *Reader) account(d data) appimport.Account {
 		if !ok {
 			continue
 		}
-		entry(k, kind, l.Name).Favorite = true
+		e := entry(k, kind, l.Name)
+		e.Watchlist = true
+		if l.AddedAt.value > 0 {
+			e.AddedAt = new(time.UnixMilli(l.AddedAt.value).UTC())
+		}
 	}
 	for _, k := range order {
 		if i, known := profiles[k.profile]; known {

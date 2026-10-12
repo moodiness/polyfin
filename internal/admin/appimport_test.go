@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
@@ -17,29 +18,48 @@ import (
 	"github.com/moodiness/polyfin/internal/appimport/stremio/stremiotest"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // appImportAPI serves the admin API with imports from apps, the Stremio
 // accounts on a fake Stremio, and returns the library, the user data and
-// the addons they write to, and the fake.
-func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *addons.Store, *stremiotest.Fake) {
+// the addons they write to, the fake, and the watchlists.
+func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *addons.Store, *stremiotest.Fake, *watchlist.Store) {
 	t.Helper()
 	var lib *library.Service
 	var data *userdata.Store
 	var installed *addons.Store
+	var lists *watchlist.Store
 	fake := stremiotest.New(t)
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
-		data, installed = userdata.New(deps.pool), deps.addons
+		data, installed, lists = userdata.New(deps.pool), deps.addons, watchlist.New(deps.pool)
 		o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data, Addons: deps.addons,
-			Logger: logger})
+			Logger: logger, Watchlist: lists})
 		t.Cleanup(o.AppImport.Close)
 		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
 		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: fake.API,
 			Link: fake.Link})
 	})
-	return api, lib, data, installed, fake
+	return api, lib, data, installed, fake, lists
+}
+
+// planned is the only title of user's watchlist, the movie imdb, as the
+// Watchlist view lists it, and they have no favorite: an app import puts
+// its library on the watchlist only.
+func planned(t *testing.T, lib *library.Service, data *userdata.Store, lists *watchlist.Store, user accounts.ID, imdb string) {
+	t.Helper()
+	found, err := lib.Resolve(t.Context(), []library.TitleRef{{IMDb: imdb}})
+	if err != nil || len(found[0]) == 0 {
+		t.Fatalf("%s: %v %v", imdb, found, err)
+	}
+	if got, err := lists.Titles(t.Context(), user); err != nil || len(got) != 1 || got[0] != found[0][0].ID {
+		t.Errorf("watchlist: %v %v", got, err)
+	}
+	if favorites, err := data.Favorites(t.Context(), user); err != nil || len(favorites) != 0 {
+		t.Errorf("favorites: %+v %v", favorites, err)
+	}
 }
 
 // appImportDone waits for the import into the account path reads to end,
@@ -64,12 +84,18 @@ func appImportDone(t *testing.T, b browser, path string) map[string]any {
 
 func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	t.Parallel()
-	api, lib, data, _, _ := appImportAPI(t)
+	api, lib, data, _, _, lists := appImportAPI(t)
 	backend := nuviotest.New(t)
 	addon := localAddon(t)
 	backend.Set(func(b *nuviotest.Backend) {
 		b.Email, b.Password = "bob@example.com", "bob's password"
-		b.Backup = nuviotest.Backup(1, nuviotest.Sample(addon, "https://second.example/u/other-secret"))
+		// A movie in the library only, besides the sample's two, which
+		// are watched.
+		sample := nuviotest.Sample(addon, "https://second.example/u/other-secret")
+		sample["library_items"] = append(sample["library_items"].([]map[string]any), map[string]any{"profile_id": 1,
+			"content_id": "tt0000005", "content_type": "movie", "name": "Planned",
+			"added_at": time.Date(2026, 8, 3, 20, 0, 0, 0, time.UTC).UnixMilli()})
+		b.Backup = nuviotest.Backup(1, sample)
 	})
 	bob, carol := api.signedIn("bob", false), api.signedIn("carol", false)
 	signIn := map[string]any{"backend": backend.URL, "email": "bob@example.com", "password": "wrong"}
@@ -89,8 +115,8 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 		t.Fatalf("Bob's account: %d %v", status, read)
 	}
 	main := profiles[0].(map[string]any)
-	if main["id"] != "1" || main["name"] != "Main" || main["entries"] != 8.0 || main["played"] != 4.0 || main["resumes"] != 3.0 ||
-		main["library"] != 2.0 || profiles[1].(map[string]any)["name"] != "Kids" {
+	if main["id"] != "1" || main["name"] != "Main" || main["entries"] != 9.0 || main["played"] != 4.0 || main["resumes"] != 3.0 ||
+		main["library"] != 3.0 || profiles[1].(map[string]any)["name"] != "Kids" {
 		t.Errorf("profiles: %v", profiles)
 	}
 	if addonsOffered := main["addons"].([]any); len(addonsOffered) != 2 || addonsOffered[0].(map[string]any)["name"] != "First" ||
@@ -113,9 +139,10 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	}
 	done := appImportDone(t, bob, "/account/app-import")
 	// Played: the first movie, and S1E2; resumed: the second movie, S1E3
-	// and S2E1; favorites: the first movie and the series; not matched:
-	// one not found, one of another identifier.
-	if done["read"] != 8.0 || done["played"] != 2.0 || done["resumed"] != 3.0 || done["favorites"] != 2.0 || done["unmatchedCount"] != 2.0 ||
+	// and S2E1; on the watchlist: the first movie and the series, which
+	// are started, and the movie in the library only, which is added;
+	// not matched: one not found, one of another identifier.
+	if done["read"] != 9.0 || done["played"] != 2.0 || done["resumed"] != 3.0 || done["watchlist"] != 1.0 || done["unmatchedCount"] != 2.0 ||
 		done["app"] != "nuvio" || done["user"].(map[string]any)["name"] != "bob" || done["startedBy"].(map[string]any)["name"] != "bob" {
 		t.Errorf("Bob's result: %v", done)
 	}
@@ -131,6 +158,7 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	if !playedMovie(t, lib, data, bobID, "tt0000001") || playedMovie(t, lib, data, bobID, "tt0000009") {
 		t.Error("Bob's movies")
 	}
+	planned(t, lib, data, lists, bobID, "tt0000005")
 	if backend.Open() != 0 {
 		t.Error("a Nuvio session is still open")
 	}
@@ -148,7 +176,7 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 
 func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	t.Parallel()
-	api, _, _, installed, _ := appImportAPI(t)
+	api, _, _, installed, _, _ := appImportAPI(t)
 	backend := nuviotest.New(t)
 	addon := localAddon(t)
 	backend.Set(func(b *nuviotest.Backend) {
@@ -251,8 +279,13 @@ func noStremioSecret(t *testing.T, answer map[string]any) {
 
 func TestUsersImportTheirStremioAccount(t *testing.T) {
 	t.Parallel()
-	api, lib, data, _, fake := appImportAPI(t)
+	api, lib, data, _, fake, lists := appImportAPI(t)
 	pasted := stremioSample(fake, localAddon(t))
+	// A movie in the library only, besides the sample's titles.
+	fake.Set(func(f *stremiotest.Fake) {
+		f.Library = append(stremiotest.Sample(), map[string]any{"_id": "tt0000005", "type": "movie", "name": "Planned", "removed": false,
+			"temp": false, "_ctime": "2026-08-03T20:00:00.000Z", "_mtime": "2026-08-03T20:00:00.000Z", "state": map[string]any{}})
+	})
 	bob, carol := api.signedIn("bob", false), api.signedIn("carol", false)
 
 	// The link code first: Bob opens the link, and the page waits.
@@ -278,8 +311,8 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 	}
 	noStremioSecret(t, read)
 	profile := profiles[0].(map[string]any)
-	if profile["id"] != "1" || profile["name"] != "" || profile["entries"] != 11.0 || profile["played"] != 6.0 || profile["resumes"] != 2.0 ||
-		profile["library"] != 3.0 {
+	if profile["id"] != "1" || profile["name"] != "" || profile["entries"] != 12.0 || profile["played"] != 6.0 || profile["resumes"] != 2.0 ||
+		profile["library"] != 4.0 {
 		t.Errorf("profile: %v", profile)
 	}
 	if offered := profile["addons"].([]any); len(offered) != 2 || offered[0].(map[string]any)["name"] != "First" ||
@@ -329,10 +362,11 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 	}
 	done := appImportDone(t, bob, "/account/app-import")
 	// Played: the first and the removed movie, and S1E1 to S1E3; resumed:
-	// the second movie and S2E1; favorites: the first movie and the
-	// series; reported: the series watched against an episode Polyfin's
+	// the second movie and S2E1; on the watchlist: the first movie and the
+	// series, which are started, and the movie in the library only, which
+	// is added; reported: the series watched against an episode Polyfin's
 	// addons do not list, one of another identifier, one not found.
-	if done["read"] != 11.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["favorites"] != 2.0 || done["unmatchedCount"] != 3.0 {
+	if done["read"] != 12.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["watchlist"] != 1.0 || done["unmatchedCount"] != 3.0 {
 		t.Errorf("Bob's result: %v", done)
 	}
 	reasons := map[string]string{}
@@ -348,11 +382,12 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 		playedMovie(t, lib, data, bobID, "tt0000002") {
 		t.Error("Bob's movies")
 	}
+	planned(t, lib, data, lists, bobID, "tt0000005")
 }
 
 func TestStremioImportsFollowTheirPermissions(t *testing.T) {
 	t.Parallel()
-	api, _, _, _, fake := appImportAPI(t)
+	api, _, _, _, fake, _ := appImportAPI(t)
 	pasted := stremioSample(fake, localAddon(t))
 	admin, bob := api.signedIn("root", true), api.signedIn("bob", false)
 	userPath := "/users/" + api.userID("bob").String() + "/app-import"

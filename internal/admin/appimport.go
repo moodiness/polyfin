@@ -471,7 +471,7 @@ func newAppAccountJSON(key string, account appimport.Account) appAccountJSON {
 			if e.Resume != nil {
 				profile.Resumes++
 			}
-			if e.Favorite {
+			if e.Watchlist {
 				profile.Library++
 			}
 		}
@@ -503,7 +503,7 @@ type appImportJSON struct {
 	Read           int                     `json:"read"`
 	Played         int                     `json:"played"`
 	Resumed        int                     `json:"resumed"`
-	Favorites      int                     `json:"favorites"`
+	Watchlist      int                     `json:"watchlist"`
 	UnmatchedCount int                     `json:"unmatchedCount"`
 	Unmatched      []appUnmatchedJSON      `json:"unmatched"`
 	Addons         []appAddonInstalledJSON `json:"addons"`
@@ -535,7 +535,7 @@ func newAppImportJSON(status *appimport.Status) *appImportJSON {
 	}
 	result := &appImportJSON{ID: status.ID, App: status.App, Profile: status.Profile, State: status.State, Problem: optional(status.Problem),
 		StartedAt: status.StartedAt.UTC().Truncate(time.Second), EndedAt: utcSeconds(status.EndedAt), Read: status.Read,
-		Played: status.Played, Resumed: status.Resumed, Favorites: status.Favorites, UnmatchedCount: status.UnmatchedCount,
+		Played: status.Played, Resumed: status.Resumed, Watchlist: status.Watchlist, UnmatchedCount: status.UnmatchedCount,
 		Unmatched: make([]appUnmatchedJSON, 0, len(status.Unmatched)), Addons: make([]appAddonInstalledJSON, 0, len(status.Addons))}
 	result.User.ID, result.User.Name = status.User.String(), status.UserName
 	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
@@ -579,7 +579,7 @@ type appConnectionImportJSON struct {
 	Read      int       `json:"read"`
 	Played    int       `json:"played"`
 	Resumed   int       `json:"resumed"`
-	Favorites int       `json:"favorites"`
+	Watchlist int       `json:"watchlist"`
 	Unmatched int       `json:"unmatched"`
 	Problem   *string   `json:"problem"`
 }
@@ -595,7 +595,7 @@ func newAppConnectionJSON(c appimport.Connection) appConnectionJSON {
 	}
 	if last := c.LastImport; last != nil {
 		result.LastImport = &appConnectionImportJSON{At: last.At.UTC().Truncate(time.Second), Read: last.Read, Played: last.Played,
-			Resumed: last.Resumed, Favorites: last.Favorites, Unmatched: last.Unmatched, Problem: optional(last.Problem)}
+			Resumed: last.Resumed, Watchlist: last.Watchlist, Unmatched: last.Unmatched, Problem: optional(last.Problem)}
 	}
 	return result
 }

@@ -1,8 +1,8 @@
 // Package appimport imports the watch data of a user's account on a media
 // app built on Stremio addons into their Polyfin account: the movies and
-// episodes they played, their resume points, their library, which becomes
-// favorites, and, when they choose them, the app's addons, which become
-// their own addons.
+// episodes they played, their resume points, their library, which goes on
+// their watchlist (see package watchlist), and, when they choose them,
+// the app's addons, which become their own addons.
 //
 // Each app is read by a source of its own, which signs in to the account
 // the app's way and reads it whole (see packages nuvio and stremio): it
@@ -18,7 +18,10 @@
 // TitleRef), as the watch histories of tracking services and other servers
 // are, and merge the same way: Polyfin's data is only added to, never
 // taken back, and a newer resume point of Polyfin's stays. Running an
-// import again adds nothing twice.
+// import again adds nothing twice. The library is the watchlist of the
+// app's connection, which each of its imports replaces, or, for a one-off
+// import, adds to the titles earlier ones brought. Favorites stay the
+// user's own: an import sets none.
 //
 // One import into a user's account runs at a time. It and the last one's
 // result are kept in memory: an import cut by a restart is lost and is
@@ -44,6 +47,7 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // The ways asking for an import fails before it starts.
@@ -115,8 +119,11 @@ type Entry struct {
 	Plays    int
 	// Resume is the title's resume point, nil when it has none.
 	Resume *Resume
-	// Favorite is set for a title of the app's library.
-	Favorite bool
+	// Watchlist is set for a title of the app's library, which goes on
+	// the user's watchlist; AddedAt is when it was added to the library,
+	// nil when the app does not tell.
+	Watchlist bool
+	AddedAt   *time.Time
 	// Problem names why the source could not read part of what the
 	// profile holds of the title, empty when it read it all: the entry
 	// is listed among the unmatched with this reason, once its title is
@@ -181,6 +188,9 @@ type Options struct {
 	// Stopped is told once each time a connection stops, as its app
 	// refuses the sign-in kept; nil tells no one.
 	Stopped func(user accounts.ID, app string)
+	// Watchlist keeps the titles of the apps' libraries, on the users'
+	// watchlists; nil keeps none.
+	Watchlist *watchlist.Store
 }
 
 // Service holds the accounts read until the user chooses what to import,
@@ -216,6 +226,8 @@ type Service struct {
 	imports map[accounts.ID]*Status
 	// connecting are the imports of connections running.
 	connecting map[connectionKey]*connectionRun
+	// watchlist keeps the titles of the apps' libraries.
+	watchlist *watchlist.Store
 }
 
 // held is an account read, and the key that names it to its reader.
@@ -233,7 +245,8 @@ func New(options Options) *Service {
 		activity: options.Activity, logger: options.Logger, db: options.DB, box: options.Secrets, sources: options.Sources, now: time.Now,
 		stopped: options.Stopped,
 		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, signOuts: signOuts, cancelSignOuts: cancelSignOuts,
-		closeWait: closeWait, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}, connecting: map[connectionKey]*connectionRun{}}
+		closeWait: closeWait, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}, connecting: map[connectionKey]*connectionRun{},
+		watchlist: options.Watchlist}
 }
 
 // closeWait is how long Close waits, at most, for the sessions being
@@ -374,8 +387,9 @@ type Status struct {
 	EndedAt   *time.Time
 	// Read counts the entries of the profile. Played counts the titles
 	// marked played that were not, Resumed the resume points set, and
-	// Favorites the titles made favorites.
-	Read, Played, Resumed, Favorites int
+	// Watchlist the titles the import added to the user's watchlist that
+	// were not on it, nor started.
+	Read, Played, Resumed, Watchlist int
 	// Unmatched lists the first titles not found, UnmatchedCount counts
 	// them all.
 	Unmatched      []Unmatched
@@ -476,7 +490,7 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 		status.Addons = append(status.Addons, AddonStatus{Name: a.Name, Address: stremio.RedactManifestURL(a.ManifestURL)})
 	}
 	s.imports[user.ID] = status
-	r := &run{s: s, status: status, by: by, user: user, entries: profile.Entries, addons: chosen}
+	r := &run{s: s, status: status, by: by, user: user, entries: profile.Entries, addons: chosen, list: watchlist.Import}
 	if signIn := h.account.SignIn; signIn != nil {
 		if s.db == nil {
 			s.release(signIn, h.account.App)
@@ -485,6 +499,7 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 			kept.Profile = profile.ID
 			r.connection = &newConnection{key: connectionKey{user.ID, h.account.App}, signIn: kept, account: h.account.Name, by: by.ID}
 			r.connection.run = s.claim(r.connection.key, nil)
+			r.list = watchlist.Connection(h.account.App)
 		}
 	}
 	s.wg.Add(1)
