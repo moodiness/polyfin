@@ -1536,7 +1536,7 @@ export const startOwnImport = async (body: {
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
 
 /** An app whose accounts Polyfin imports. */
-export type AppKind = 'nuvio'
+export type AppKind = 'nuvio' | 'stremio'
 
 /** An addon a profile of an app offers to install, by its index; its address is redacted. */
 export type AppAddon = { index: number; name: string; address: string }
@@ -1558,14 +1558,17 @@ export type AppProfile = {
 /** An app account read: the server holds it a few minutes under `key`, while a profile is chosen. */
 export type AppAccount = { key: string; app: AppKind; profiles: AppProfile[] }
 
-/** A title of the app no Polyfin title matched, by its identifier in the app. */
+/**
+ * A title of the app no Polyfin title matched, by its identifier in the app, or a series whose
+ * episodes played could not be read (`episode_list`).
+ */
 export type AppUnmatched = {
   id: string
   name: string
   type: 'movie' | 'series' | 'episode'
   season: number | null
   episode: number | null
-  reason: 'other_identifier' | 'not_found'
+  reason: 'other_identifier' | 'not_found' | 'episode_list'
 }
 
 /** An addon an import installs as the user's own, and why it was not. */
@@ -1609,6 +1612,40 @@ export type AppImportStatus = {
 /** What signs in to a Nuvio account; the password is used for this sign-in only. */
 export type NuvioSignIn = { backend: string; email: string; password: string }
 
+/** A Stremio link code: the user opens `link` where they are signed in to Stremio, and approves `code`. */
+export type StremioLink = { code: string; link: string }
+
+/** A Stremio link code polled: the account read once the code is approved, else pending. */
+export type StremioLinkPoll = AppAccount | { pending: true }
+
+/** What signs in to a Stremio account; the password is used for this sign-in only. */
+export type StremioSignIn = { email: string; password: string }
+
+/**
+ * How each app's account is read, for the Polyfin account it is imported into. Passwords and auth
+ * keys are used for the sign-in only.
+ */
+export type AppReaders = {
+  nuvio: (body: NuvioSignIn) => Promise<AppAccount>
+  stremio: {
+    startLink: () => Promise<StremioLink>
+    pollLink: () => Promise<StremioLinkPoll>
+    password: (body: StremioSignIn) => Promise<AppAccount>
+    key: (key: string) => Promise<AppAccount>
+  }
+}
+
+/** The readers of the app import routes under `base`. */
+const appReaders = (base: string): AppReaders => ({
+  nuvio: (body) => request<AppAccount>('POST', `${base}/nuvio`, body),
+  stremio: {
+    startLink: () => request<StremioLink>('POST', `${base}/stremio/link`),
+    pollLink: () => request<StremioLinkPoll>('POST', `${base}/stremio/link/poll`),
+    password: (body) => request<AppAccount>('POST', `${base}/stremio/password`, body),
+    key: (key) => request<AppAccount>('POST', `${base}/stremio/key`, { key }),
+  },
+})
+
 /** The profile to import of an account read, and the indexes of its addons to install. */
 export type AppImportChoice = { key: string; profile: string; addons: number[] }
 
@@ -1625,9 +1662,8 @@ export type OwnAppImport = {
 export const fetchOwnAppImport = (signal?: AbortSignal) =>
   request<OwnAppImport>('GET', '/account/app-import', undefined, signal)
 
-/** Signs in to the user's Nuvio account and reads it, then signs out. */
-export const readOwnNuvio = (body: NuvioSignIn) =>
-  request<AppAccount>('POST', '/account/app-import/nuvio', body)
+/** Reads the user's own app accounts: each signs in, reads the account, and signs out. */
+export const ownAppReaders = appReaders('/account/app-import')
 
 /** Imports the chosen profile of the account read into the user's account, in the background. */
 export const startOwnAppImport = async (body: AppImportChoice) =>
@@ -1639,8 +1675,8 @@ export type UserAppImport = { addonsAllowed: boolean; import: AppImportStatus | 
 export const fetchUserAppImport = (id: string, signal?: AbortSignal) =>
   request<UserAppImport>('GET', `/users/${seg(id)}/app-import`, undefined, signal)
 
-export const readUserNuvio = (id: string, body: NuvioSignIn) =>
-  request<AppAccount>('POST', `/users/${seg(id)}/app-import/nuvio`, body)
+/** Reads app accounts for an administrator, to import into the user's account. */
+export const userAppReaders = (id: string) => appReaders(`/users/${seg(id)}/app-import`)
 
 export const startUserAppImport = async (id: string, body: AppImportChoice) =>
   (await request<{ import: AppImportStatus }>('POST', `/users/${seg(id)}/app-import`, body)).import

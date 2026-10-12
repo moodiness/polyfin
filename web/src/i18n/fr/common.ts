@@ -321,6 +321,13 @@ const common: typeof en = {
       'Nuvio demande d’attendre avant de se reconnecter. Réessayez dans quelques minutes.',
     nuvio_backup_unsupported:
       'Nuvio a donné les données du compte sous une forme que cette version de Polyfin ne lit pas. Polyfin lit la version 1 de la sauvegarde de compte de Nuvio.',
+    stremio_sign_in_refused: 'Stremio a refusé cet e-mail ou ce mot de passe.',
+    stremio_key_refused:
+      'Stremio a refusé cette clé d’authentification. Recopiez-la depuis l’appli web de Stremio, connectée à votre compte.',
+    stremio_link_expired: 'Le code de liaison a expiré, ou il a déjà servi. Demandez-en un autre.',
+    stremio_unreachable: 'Stremio n’a pas répondu. Réessayez plus tard.',
+    stremio_unexpected:
+      'Stremio a répondu d’une manière que cette version de Polyfin ne lit pas. Réessayez plus tard.',
     app_import_expired:
       'Ce qui a été lu du compte n’est plus gardé, après quelques minutes. Reconnectez-vous.',
     app_import_running: 'Une importation dans ce compte est en cours. Attendez qu’elle se termine.',

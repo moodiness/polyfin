@@ -13,11 +13,11 @@ import {
   fetchMyDevices,
   fetchOwnAppImport,
   fetchOwnImport,
+  ownAppReaders,
   queryClient,
   queryKeys,
   signOutMyDevice,
   startOwnAppImport,
-  readOwnNuvio,
   type OwnAppImport,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -157,7 +157,7 @@ export default function AccountRoute() {
           <AppImport
             current={ownAppImport.data?.import ?? null}
             addonsAllowed={ownAppImport.data?.addonsAllowed === true}
-            readNuvio={readOwnNuvio}
+            readers={ownAppReaders}
             start={startOwnAppImport}
             onStarted={(started) =>
               queryClient.setQueryData<OwnAppImport>(

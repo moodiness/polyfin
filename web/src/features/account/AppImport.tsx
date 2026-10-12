@@ -1,24 +1,29 @@
-import { ArrowSquareInIcon, SignInIcon } from '@phosphor-icons/react'
+import { ArrowSquareInIcon, ArrowSquareOutIcon, KeyIcon, SignInIcon } from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useEffectEvent, useState, type FormEvent } from 'react'
 import {
   ApiError,
   type AppAccount,
   type AppImportChoice,
   type AppImportStatus,
+  type AppKind,
+  type AppReaders,
   type NuvioSignIn,
+  type StremioLink,
 } from '@/api'
 import { errorMessage, formatEpisode } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Button,
   Checkbox,
+  ExternalButtonLink,
   Field,
   Modal,
   Notice,
   Panel,
   PanelFooter,
   RelativeTime,
+  Segmented,
   Select,
   StatusPill,
   Table,
@@ -33,16 +38,20 @@ const importTones: Record<AppImportStatus['state'], StatusTone> = {
   failed: 'danger',
 }
 
+/** The apps imported from, in the order offered. */
+const apps: readonly AppKind[] = ['nuvio', 'stremio']
+
 /**
  * The import of an app account's watch data into a Polyfin account: the user's own, under My
  * account, or a user's, for an administrator. `current` is the import running into that account,
- * else the last one. The app's own sign-in form reads the account, whose profile is then chosen
- * with its addons: the server holds what it read a few minutes only.
+ * else the last one. The app chosen signs in with a form of its own, through `readers`, and the
+ * account read then has its profile chosen with its addons: the server holds what it read a few
+ * minutes only.
  */
 export default function AppImport({
   current,
   addonsAllowed,
-  readNuvio,
+  readers,
   start,
   onStarted,
   own,
@@ -50,7 +59,7 @@ export default function AppImport({
   current: AppImportStatus | null
   /** Whether the account's user may add their own addons: the app's are offered only then. */
   addonsAllowed: boolean
-  readNuvio: (body: NuvioSignIn) => Promise<AppAccount>
+  readers: AppReaders
   start: (body: AppImportChoice) => Promise<AppImportStatus>
   onStarted: (started: AppImportStatus) => void
   /** The user's own account, under My account. */
@@ -59,6 +68,7 @@ export default function AppImport({
   const { t } = useI18n()
   const text = t.account.appImport
   const toast = useToast()
+  const [app, setApp] = useState<AppKind>('nuvio')
   const [account, setAccount] = useState<AppAccount | null>(null)
   const [profile, setProfile] = useState('')
   const [addons, setAddons] = useState<number[]>([])
@@ -76,24 +86,50 @@ export default function AppImport({
   })
   const running = current?.state === 'running'
   const chosen = account?.profiles.find((p) => p.id === profile)
+  const notice = begin.isError ? errorMessage(t, begin.error) : undefined
+
+  function read(read: AppAccount) {
+    begin.reset()
+    setAccount(read)
+    setProfile(read.profiles[0]?.id ?? '')
+    setAddons([])
+  }
 
   return (
     <div className="flex flex-col gap-6">
       {current !== null && <AppImportProgress current={current} own={own} />}
       {!running && account === null && (
-        <NuvioSignInForm
-          read={readNuvio}
-          onRead={(read) => {
-            begin.reset()
-            setAccount(read)
-            setProfile(read.profiles[0]?.id ?? '')
-            setAddons([])
-          }}
-          notice={begin.isError ? errorMessage(t, begin.error) : undefined}
-        />
+        <Panel as="div" flush>
+          <div className="flex max-w-lg flex-col gap-2 px-6 pt-6 max-sm:px-4">
+            <span aria-hidden className="text-control font-medium text-ink">
+              {text.app}
+            </span>
+            <Segmented
+              label={text.app}
+              value={app}
+              options={apps.map((value) => ({ value, label: text.apps[value] }))}
+              onChange={(value) => {
+                begin.reset()
+                setApp(value)
+              }}
+              className="self-start"
+            />
+          </div>
+          {app === 'nuvio' ? (
+            <NuvioSignInForm read={readers.nuvio} onRead={read} notice={notice} />
+          ) : (
+            <StremioSignIn readers={readers.stremio} onRead={read} notice={notice} />
+          )}
+        </Panel>
       )}
       {!running && account !== null && (
-        <Panel as="div" flush title={text.chooseTitle} titleAs="h3" description={text.chooseHelp}>
+        <Panel
+          as="div"
+          flush
+          title={text.chooseTitle}
+          titleAs="h3"
+          description={text.chooseHelp[account.app]}
+        >
           <div className="flex max-w-lg flex-col gap-5 px-6 py-6 max-sm:px-4">
             <Field
               label={text.profile}
@@ -107,7 +143,12 @@ export default function AppImport({
                 value={profile}
                 options={account.profiles.map((p) => ({
                   value: p.id,
-                  label: p.name === '' ? text.profileNumber(p.id) : p.name,
+                  label:
+                    p.name !== ''
+                      ? p.name
+                      : account.profiles.length === 1
+                        ? text.wholeAccount
+                        : text.profileNumber(p.id),
                 }))}
                 onValue={(value) => {
                   begin.reset()
@@ -228,60 +269,371 @@ function NuvioSignInForm({
   }
 
   return (
-    <Panel as="div" flush>
-      <form onSubmit={submit} noValidate>
-        <div className="flex max-w-lg flex-col gap-5 px-6 py-6 max-sm:px-4">
-          <Field label={text.backend} help={text.backendHelp} error={backendError}>
-            <TextInput
-              type="url"
-              inputMode="url"
-              value={backend}
-              onValue={(value) => change(() => setBackend(value))}
-              placeholder="https://api.nuvio.tv"
-              autoComplete="off"
-              spellCheck={false}
-              mono
-            />
-          </Field>
-          <Field label={text.email}>
-            <TextInput
-              type="email"
-              value={email}
-              onValue={(value) => change(() => setEmail(value))}
-              autoComplete="off"
-              spellCheck={false}
-              required
-            />
-          </Field>
-          <Field label={text.password} help={text.passwordHelp} error={passwordError}>
-            <TextInput
-              type="password"
-              revealable
-              value={password}
-              onValue={(value) => change(() => setPassword(value))}
-              autoComplete="off"
-              required
-            />
-          </Field>
-          {otherError && (
-            <Notice tone="danger" live>
-              {otherError}
-            </Notice>
-          )}
-        </div>
-        <PanelFooter>
+    <form onSubmit={submit} noValidate>
+      <div className="flex max-w-lg flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+        <Field label={text.backend} help={text.backendHelp} error={backendError}>
+          <TextInput
+            type="url"
+            inputMode="url"
+            value={backend}
+            onValue={(value) => change(() => setBackend(value))}
+            placeholder="https://api.nuvio.tv"
+            autoComplete="off"
+            spellCheck={false}
+            mono
+          />
+        </Field>
+        <Field label={text.email}>
+          <TextInput
+            type="email"
+            value={email}
+            onValue={(value) => change(() => setEmail(value))}
+            autoComplete="off"
+            spellCheck={false}
+            required
+          />
+        </Field>
+        <Field label={text.password} help={text.passwordHelp} error={passwordError}>
+          <TextInput
+            type="password"
+            revealable
+            value={password}
+            onValue={(value) => change(() => setPassword(value))}
+            autoComplete="off"
+            required
+          />
+        </Field>
+        {otherError && (
+          <Notice tone="danger" live>
+            {otherError}
+          </Notice>
+        )}
+      </div>
+      <PanelFooter>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={SignInIcon}
+          loading={signIn.isPending}
+          disabled={email.trim() === '' || password === ''}
+        >
+          {signIn.isPending ? text.signingIn : text.signIn}
+        </Button>
+      </PanelFooter>
+    </form>
+  )
+}
+
+/** The ways to sign in to Stremio, in the order offered: the link code works for every account. */
+type StremioWay = 'link' | 'password' | 'key'
+const stremioWays: readonly StremioWay[] = ['link', 'password', 'key']
+
+/** How often a Stremio link code is asked about while the user approves it. */
+const linkPollMs = 3000
+
+/**
+ * Signs in to a Stremio account one of three ways, and hands the account read to `onRead`. The
+ * password and the auth key only live in their form's state; the server never answers a key back.
+ */
+function StremioSignIn({
+  readers,
+  onRead,
+  notice,
+}: {
+  readers: AppReaders['stremio']
+  onRead: (account: AppAccount) => void
+  notice: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport.stremio
+  const [way, setWay] = useState<StremioWay>('link')
+
+  return (
+    <>
+      <div className="flex max-w-lg flex-col gap-2 px-6 pt-5 max-sm:px-4">
+        <span aria-hidden className="text-control font-medium text-ink">
+          {text.way}
+        </span>
+        <Segmented
+          label={text.way}
+          value={way}
+          options={stremioWays.map((value) => ({ value, label: text.ways[value] }))}
+          onChange={setWay}
+          className="self-start"
+        />
+      </div>
+      {way === 'link' ? (
+        <StremioLinkForm readers={readers} onRead={onRead} notice={notice} />
+      ) : way === 'password' ? (
+        <StremioPasswordForm read={readers.password} onRead={onRead} notice={notice} />
+      ) : (
+        <StremioKeyForm read={readers.key} onRead={onRead} notice={notice} />
+      )}
+    </>
+  )
+}
+
+/**
+ * Asks Stremio for a link code, shows it with the link to approve it at, and asks the server every
+ * few seconds whether it is approved, until the account is read or the code expires.
+ */
+function StremioLinkForm({
+  readers,
+  onRead,
+  notice,
+}: {
+  readers: AppReaders['stremio']
+  onRead: (account: AppAccount) => void
+  notice: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport.stremio
+  const [link, setLink] = useState<StremioLink | null>(null)
+  const [failure, setFailure] = useState<unknown>(null)
+  const ask = useMutation({
+    mutationFn: readers.startLink,
+    onSuccess: (created) => {
+      setFailure(null)
+      setLink(created)
+    },
+  })
+  const poll = useEffectEvent(() => readers.pollLink())
+  const received = useEffectEvent((account: AppAccount) => onRead(account))
+
+  useEffect(() => {
+    if (link === null) return
+    let stopped = false
+    let timer = 0
+    const next = () => {
+      timer = window.setTimeout(() => void once(), linkPollMs)
+    }
+    const once = async () => {
+      try {
+        const polled = await poll()
+        if (stopped) return
+        if ('pending' in polled) next()
+        else received(polled)
+      } catch (error) {
+        if (stopped) return
+        setLink(null)
+        setFailure(error)
+      }
+    }
+    next()
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+    }
+  }, [link])
+
+  const error = ask.isError
+    ? errorMessage(t, ask.error)
+    : failure !== null
+      ? errorMessage(t, failure)
+      : notice
+
+  return (
+    <>
+      <div className="flex max-w-lg flex-col gap-4 px-6 pt-5 pb-6 max-sm:px-4">
+        {link === null ? (
+          <p className="text-small text-ink-3">{text.linkHelp}</p>
+        ) : (
+          <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
+            <p className="text-control text-ink">{text.approve}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p
+                aria-label={text.codeLabel}
+                className="rounded-field border border-accent/50 bg-s2 px-5 py-2 font-mono text-[26px] font-semibold tracking-[0.2em] text-ink select-all"
+              >
+                {link.code}
+              </p>
+              <ExternalButtonLink
+                variant="primary"
+                href={link.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                iconEnd={ArrowSquareOutIcon}
+              >
+                {text.openLink}
+              </ExternalButtonLink>
+            </div>
+            <p role="status" className="text-small text-ink-3">
+              {text.waiting}
+            </p>
+          </div>
+        )}
+        {link === null && error && (
+          <Notice tone="danger" live>
+            {error}
+          </Notice>
+        )}
+      </div>
+      <PanelFooter>
+        {link === null ? (
           <Button
-            type="submit"
             variant="primary"
             icon={SignInIcon}
-            loading={signIn.isPending}
-            disabled={email.trim() === '' || password === ''}
+            loading={ask.isPending}
+            onClick={() => {
+              setFailure(null)
+              ask.mutate()
+            }}
           >
-            {signIn.isPending ? text.signingIn : text.signIn}
+            {ask.isPending ? text.gettingCode : text.getCode}
           </Button>
-        </PanelFooter>
-      </form>
-    </Panel>
+        ) : (
+          <Button onClick={() => setLink(null)}>{text.cancel}</Button>
+        )}
+      </PanelFooter>
+    </>
+  )
+}
+
+/** Signs in to Stremio with the account's email and password, then reads it and signs out. */
+function StremioPasswordForm({
+  read,
+  onRead,
+  notice,
+}: {
+  read: AppReaders['stremio']['password']
+  onRead: (account: AppAccount) => void
+  notice: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport.stremio
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const signIn = useMutation({
+    mutationFn: read,
+    onSuccess: (account) => {
+      setPassword('')
+      onRead(account)
+    },
+  })
+
+  const refused =
+    signIn.error instanceof ApiError && signIn.error.code === 'stremio_sign_in_refused'
+  const message = signIn.isError ? errorMessage(t, signIn.error) : undefined
+
+  function change(apply: () => void) {
+    signIn.reset()
+    apply()
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    signIn.mutate({ email: email.trim(), password })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <div className="flex max-w-lg flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+        <Field label={text.email}>
+          <TextInput
+            type="email"
+            value={email}
+            onValue={(value) => change(() => setEmail(value))}
+            autoComplete="off"
+            spellCheck={false}
+            required
+          />
+        </Field>
+        <Field label={text.password} help={text.passwordHelp} error={refused ? message : undefined}>
+          <TextInput
+            type="password"
+            revealable
+            value={password}
+            onValue={(value) => change(() => setPassword(value))}
+            autoComplete="off"
+            required
+          />
+        </Field>
+        {(refused ? undefined : (message ?? notice)) && (
+          <Notice tone="danger" live>
+            {message ?? notice}
+          </Notice>
+        )}
+      </div>
+      <PanelFooter>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={SignInIcon}
+          loading={signIn.isPending}
+          disabled={email.trim() === '' || password === ''}
+        >
+          {signIn.isPending ? text.signingIn : text.signIn}
+        </Button>
+      </PanelFooter>
+    </form>
+  )
+}
+
+/** Reads the Stremio account with the auth key the user pasted, which is never signed out. */
+function StremioKeyForm({
+  read,
+  onRead,
+  notice,
+}: {
+  read: AppReaders['stremio']['key']
+  onRead: (account: AppAccount) => void
+  notice: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport.stremio
+  const [key, setKey] = useState('')
+  const reading = useMutation({
+    mutationFn: read,
+    onSuccess: (account) => {
+      setKey('')
+      onRead(account)
+    },
+  })
+
+  const refused = reading.error instanceof ApiError && reading.error.code === 'stremio_key_refused'
+  const message = reading.isError ? errorMessage(t, reading.error) : undefined
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    reading.mutate(key.trim())
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <div className="flex max-w-lg flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+        <Field label={text.key} help={text.keyHelp} error={refused ? message : undefined}>
+          <TextInput
+            type="password"
+            revealable
+            value={key}
+            onValue={(value) => {
+              reading.reset()
+              setKey(value)
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            required
+          />
+        </Field>
+        {(refused ? undefined : (message ?? notice)) && (
+          <Notice tone="danger" live>
+            {message ?? notice}
+          </Notice>
+        )}
+      </div>
+      <PanelFooter>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={KeyIcon}
+          loading={reading.isPending}
+          disabled={key.trim() === ''}
+        >
+          {reading.isPending ? text.reading : text.readKey}
+        </Button>
+      </PanelFooter>
+    </form>
   )
 }
 

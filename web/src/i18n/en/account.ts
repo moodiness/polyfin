@@ -33,7 +33,8 @@ const account = {
     appImport: {
       description:
         'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library as favorites, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
-      apps: { nuvio: 'Nuvio' },
+      app: 'App',
+      apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Nuvio backend',
       backendHelp:
         'Leave it empty for Nuvio’s own. A self-hosted backend works too, at its address, on the local network as well.',
@@ -44,8 +45,13 @@ const account = {
       signIn: 'Sign in to Nuvio',
       signingIn: 'Signing in…',
       chooseTitle: 'Choose what to import',
-      chooseHelp:
-        'Nuvio keeps a history for each profile: choose the one to import. Polyfin keeps what it read for a few minutes only.',
+      chooseHelp: {
+        nuvio:
+          'Nuvio keeps a history for each profile: choose the one to import. Polyfin keeps what it read for a few minutes only.',
+        stremio:
+          'Stremio keeps one history for the whole account. Polyfin keeps what it read for a few minutes only.',
+      },
+      wholeAccount: 'The whole account',
       profile: 'Profile',
       profileNumber: (id: string) => `Profile ${id}`,
       profileCounts: (played: number, resumes: number, library: number) =>
@@ -62,7 +68,8 @@ const account = {
       currentTitle: 'Import in progress',
       lastTitle: 'Last import',
       ownLastTitle: 'Your last import',
-      from: (app: string, profile: string) => `From ${app}, profile ${profile}`,
+      from: (app: string, profile: string) =>
+        profile === '' ? `From ${app}` : `From ${app}, profile ${profile}`,
       startedLabel: 'Started',
       endedLabel: 'Ended',
       startedBy: (name: string) => `Started by ${name}`,
@@ -78,13 +85,14 @@ const account = {
         count === 1 ? '1 title not found' : `${count} titles not found`,
       unmatchedTitle: 'Titles not found',
       unmatchedHelp:
-        'These titles were not imported: the app names them by an identifier Polyfin does not match, or no Polyfin title has it.',
+        'These titles were not imported: the app names them by an identifier Polyfin does not match, or no Polyfin title has it. For a series, the app may also tell the episodes watched by their place in a list of episodes that Polyfin’s addons list otherwise.',
       titleColumn: 'Title',
       kindColumn: 'Kind',
       reasonColumn: 'Reason',
       reasons: {
         other_identifier: 'Not an IMDb, TMDB or Kitsu identifier',
         not_found: 'Not in Polyfin',
+        episode_list: 'Its episodes do not match Polyfin’s list: none was marked played',
       },
       addonInstalled: 'added',
       addonWaiting: 'waiting',
@@ -97,6 +105,32 @@ const account = {
         unreachable: 'not added: the addon did not answer',
         invalid_manifest: 'not added: not an addon',
         internal: 'not added: Polyfin ran into an error',
+      },
+      stremio: {
+        way: 'Sign in with',
+        ways: { link: 'A link code', password: 'Email and password', key: 'An auth key' },
+        linkHelp:
+          'Polyfin asks Stremio for a code, as Stremio’s TV apps do. You approve it in a browser where you are signed in to Stremio: this works however your account signs in, Facebook and Apple included, and Polyfin never sees your password.',
+        getCode: 'Get a link code',
+        gettingCode: 'Asking Stremio…',
+        codeLabel: 'Link code',
+        approve:
+          'Open the link in a browser where you are signed in to Stremio, check that it shows this code, and approve it.',
+        openLink: 'Open the link',
+        waiting:
+          'Waiting for your approval. The code lasts 5 minutes; once you approve it, Polyfin reads the account, then signs out.',
+        cancel: 'Cancel',
+        email: 'Email',
+        password: 'Password',
+        passwordHelp:
+          'Used to read the account only, and never kept. Polyfin signs in as Stremio’s apps do, reads the account, then signs out. An account made with Facebook or Apple has no password: use a link code.',
+        signIn: 'Sign in to Stremio',
+        signingIn: 'Signing in…',
+        key: 'Auth key',
+        keyHelp:
+          'The key Stremio’s web app keeps once you sign in: in your browser’s console there, JSON.parse(localStorage.getItem("profile")).auth.key gives it. Used to read the account only, and never kept. Polyfin does not sign it out, which would sign your browser out.',
+        readKey: 'Read the account',
+        reading: 'Reading…',
       },
     },
     statisticsHelp:

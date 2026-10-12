@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   fetchUserAppImport,
   fetchUsers,
   queryClient,
   queryKeys,
-  readUserNuvio,
   startUserAppImport,
+  userAppReaders,
   type UserAppImport,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -20,8 +20,8 @@ const importPollMs = 2000
 
 /**
  * `/users/app-import`: imports a user's watch data from their account on an app built on addons,
- * into the Polyfin account chosen, as the user does under My account. The app's password only
- * lives in the form's state.
+ * into the Polyfin account chosen, as the user does under My account. The app's password or auth
+ * key only lives in the form's state.
  */
 export default function AppImportRoute() {
   const { t } = useI18n()
@@ -36,6 +36,7 @@ export default function AppImportRoute() {
     refetchInterval: (query) =>
       query.state.data?.import?.state === 'running' ? importPollMs : false,
   })
+  const readers = useMemo(() => userAppReaders(userId), [userId])
 
   return (
     <PageLayout
@@ -74,7 +75,7 @@ export default function AppImportRoute() {
               key={userId}
               current={status.data.import}
               addonsAllowed={status.data.addonsAllowed}
-              readNuvio={(body) => readUserNuvio(userId, body)}
+              readers={readers}
               start={(body) => startUserAppImport(userId, body)}
               onStarted={(started) =>
                 queryClient.setQueryData<UserAppImport>(
