@@ -1213,6 +1213,8 @@ export type NotificationEvent =
   | 'playback_resumed'
   | 'playback_stopped'
   | 'weekly_summary'
+  | 'monthly_summary'
+  | 'yearly_summary'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is

@@ -111,7 +111,7 @@ const settings: typeof en = {
     weeklySummaryDayHelp: (day: string) => `${day} par défaut.`,
     weeklySummaryHour: 'Envoyer le résumé de la semaine à',
     weeklySummaryHourHelp: (hour: string) =>
-      `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
+      `Dans le fuseau horaire du serveur. Les bilans du mois et de l’année sont aussi envoyés à cette heure, le 1er. ${hour} par défaut.`,
     maxConversions: 'Conversions vidéo en même temps (0 = pas de limite)',
     maxConversionsHelp: (r: RangeText) =>
       `Convertir l’image est le travail le plus lourd du serveur. Quand ce nombre de lectures avec image convertie est atteint (sous-titres incrustés dans l’image compris), une nouvelle lecture prend une version qui n’a pas besoin de conversion, ou ne démarre pas. Les lectures en cours ne sont jamais coupées. La TV en direct garde aussi ses propres limites : 4 chaînes par utilisateur et 16 pour le serveur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,

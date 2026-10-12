@@ -297,10 +297,12 @@ function TargetModal({
   // Tokens and keys: undefined keeps the saved one.
   const [token, setToken] = useState<string | undefined>(undefined)
   const [userKey, setUserKey] = useState<string | undefined>(undefined)
-  // A new target hears of everything but playbacks, a message each time anyone plays: those
-  // are chosen on purpose.
+  // A new target hears of everything but playbacks, a message each time anyone plays, and the
+  // month in review, which comes beside the weekly summary or in its place: those are chosen on
+  // purpose.
   const [chosen, setChosen] = useState<NotificationEvent[]>(
-    target?.events ?? events.filter((event) => !event.startsWith('playback_')),
+    target?.events ??
+      events.filter((event) => !event.startsWith('playback_') && event !== 'monthly_summary'),
   )
   const [enabled, setEnabled] = useState(target?.enabled ?? true)
 

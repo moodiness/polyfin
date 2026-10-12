@@ -100,6 +100,8 @@ const notifications: typeof en = {
       playback_resumed: 'Lecture reprise',
       playback_stopped: 'Lecture arrêtée',
       weekly_summary: 'Résumé de la semaine',
+      monthly_summary: 'Bilan du mois',
+      yearly_summary: 'Bilan de l’année',
     },
     eventHelp: {
       new_episode:
@@ -121,6 +123,10 @@ const notifications: typeof en = {
         'Une lecture s’arrête, ou son appli a cessé de la signaler depuis cinq minutes.',
       weekly_summary:
         'Une fois par semaine, au jour et à l’heure choisis pour le serveur : les heures regardées, les titres et les nouveaux épisodes de la semaine. Les cibles du serveur et des administrateurs reçoivent la semaine du serveur, avec les utilisateurs arrivés, les fichiers ajoutés aux dossiers locaux et les problèmes détectés ; les autres reçoivent la leur. Rien n’est envoyé pour une semaine sans rien à dire.',
+      monthly_summary:
+        'Le 1er de chaque mois, à l’heure du résumé de la semaine : le contenu du résumé de la semaine sur le mois écoulé. Rien n’est envoyé pour un mois sans rien à dire.',
+      yearly_summary:
+        'Le 1er janvier, à l’heure du résumé de la semaine : les heures regardées, les dix films et les dix séries les plus regardés et le mois le plus regardé de l’année écoulée. Les cibles du serveur et des administrateurs reçoivent l’année du serveur, avec les utilisateurs arrivés et les fichiers ajoutés aux dossiers locaux ; les autres reçoivent la leur. Rien n’est envoyé pour une année sans rien à dire.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

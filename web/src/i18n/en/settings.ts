@@ -106,7 +106,8 @@ const settings = {
     weeklySummaryDay: 'Send the weekly summary on',
     weeklySummaryDayHelp: (day: string) => `${day} by default.`,
     weeklySummaryHour: 'Send the weekly summary at',
-    weeklySummaryHourHelp: (hour: string) => `In the server’s time zone. ${hour} by default.`,
+    weeklySummaryHourHelp: (hour: string) =>
+      `In the server’s time zone. The month and year in review are sent at this hour too, on the 1st. ${hour} by default.`,
     maxConversions: 'Video conversions at once (0 = no limit)',
     maxConversionsHelp: (r: RangeText) =>
       `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,

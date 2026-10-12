@@ -96,6 +96,8 @@ const notifications = {
       playback_resumed: 'Playback resumed',
       playback_stopped: 'Playback stopped',
       weekly_summary: 'Weekly summary',
+      monthly_summary: 'Month in review',
+      yearly_summary: 'Year in review',
     },
     eventHelp: {
       new_episode:
@@ -114,6 +116,10 @@ const notifications = {
       playback_stopped: 'A playback stops, or its app stopped reporting it for five minutes.',
       weekly_summary:
         'Once a week, at the day and hour the server sets: the hours watched, the titles and the new episodes of the week. The server’s and administrators’ targets get the server’s week, with the users who joined, the files added to local folders and the problems found; others get their own. Nothing is sent for a week with nothing to tell.',
+      monthly_summary:
+        'On the 1st of each month, at the hour of the weekly summary: the weekly summary’s content over the month that ended. Nothing is sent for a month with nothing to tell.',
+      yearly_summary:
+        'On January 1st, at the hour of the weekly summary: the hours watched, the ten movies and ten series played longest and the month with the most hours of the year that ended. The server’s and administrators’ targets get the server’s year, with the users who joined and the files added to local folders; others get their own. Nothing is sent for a year with nothing to tell.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',
