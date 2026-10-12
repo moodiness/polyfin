@@ -331,6 +331,9 @@ const common: typeof en = {
     app_import_expired:
       'Ce qui a été lu du compte n’est plus gardé, après quelques minutes. Reconnectez-vous.',
     app_import_running: 'Une importation dans ce compte est en cours. Attendez qu’elle se termine.',
+    app_not_connected: 'Cette appli n’est plus connectée au compte.',
+    app_connection_stopped:
+      'L’appli a refusé la connexion que Polyfin gardait. Reconnectez-vous, avec « Rester connecté » coché.',
   },
   status: {
     title: 'État du serveur',

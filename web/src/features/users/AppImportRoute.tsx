@@ -6,11 +6,12 @@ import {
   queryClient,
   queryKeys,
   startUserAppImport,
+  userAppConnections,
   userAppReaders,
   type UserAppImport,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
-import AppImport from '@/features/account/AppImport'
+import AppImport, { AppConnections } from '@/features/account/AppImport'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import { Field, InlineError, Panel, Select, SkeletonRows } from '@/ui'
@@ -34,9 +35,13 @@ export default function AppImportRoute() {
     queryFn: ({ signal }) => fetchUserAppImport(userId, signal),
     enabled: userId !== '',
     refetchInterval: (query) =>
-      query.state.data?.import?.state === 'running' ? importPollMs : false,
+      query.state.data?.import?.state === 'running' ||
+      query.state.data?.connections.some((c) => c.importing)
+        ? importPollMs
+        : false,
   })
   const readers = useMemo(() => userAppReaders(userId), [userId])
+  const connectionActions = useMemo(() => userAppConnections(userId), [userId])
 
   return (
     <PageLayout
@@ -70,21 +75,31 @@ export default function AppImportRoute() {
           ) : status.data === undefined ? (
             <SkeletonRows rows={2} boxed label={t.common.loading} />
           ) : (
-            // A new form for each user: what was read of one account is never imported into another.
-            <AppImport
-              key={userId}
-              current={status.data.import}
-              addonsAllowed={status.data.addonsAllowed}
-              readers={readers}
-              start={(body) => startUserAppImport(userId, body)}
-              onStarted={(started) =>
-                queryClient.setQueryData<UserAppImport>(
-                  queryKeys.userAppImport(userId),
-                  (data) => data && { ...data, import: started },
-                )
-              }
-              own={false}
-            />
+            <>
+              <AppConnections
+                connections={status.data.connections}
+                actions={connectionActions}
+                onChanged={() =>
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.userAppImport(userId) })
+                }
+                own={false}
+              />
+              {/* A new form for each user: what was read of one account is never imported into another. */}
+              <AppImport
+                key={userId}
+                current={status.data.import}
+                addonsAllowed={status.data.addonsAllowed}
+                readers={readers}
+                start={(body) => startUserAppImport(userId, body)}
+                onStarted={(started) =>
+                  queryClient.setQueryData<UserAppImport>(
+                    queryKeys.userAppImport(userId),
+                    (data) => data && { ...data, import: started },
+                  )
+                }
+                own={false}
+              />
+            </>
           )}
         </div>
       )}

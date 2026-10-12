@@ -307,6 +307,9 @@ const common = {
     app_import_expired:
       'What was read of the account is no longer kept, after a few minutes. Sign in again.',
     app_import_running: 'An import into this account is running. Wait for it to end.',
+    app_not_connected: 'This app is not connected to the account any longer.',
+    app_connection_stopped:
+      'The app refused the sign-in Polyfin kept. Sign in again, with Stay connected ticked.',
   },
   status: {
     title: 'Server status',

@@ -1555,8 +1555,16 @@ export type AppProfile = {
   addons: AppAddon[]
 }
 
-/** An app account read: the server holds it a few minutes under `key`, while a profile is chosen. */
-export type AppAccount = { key: string; app: AppKind; profiles: AppProfile[] }
+/**
+ * An app account read: the server holds it a few minutes under `key`, while a profile is chosen.
+ * `stayConnected` tells it was read to stay connected: importing it keeps the connection.
+ */
+export type AppAccount = {
+  key: string
+  app: AppKind
+  stayConnected: boolean
+  profiles: AppProfile[]
+}
 
 /**
  * A title of the app no Polyfin title matched, by its identifier in the app, or a series whose
@@ -1609,8 +1617,16 @@ export type AppImportStatus = {
   addons: AppAddonInstalled[]
 }
 
-/** What signs in to a Nuvio account; the password is used for this sign-in only. */
-export type NuvioSignIn = { backend: string; email: string; password: string }
+/**
+ * What signs in to a Nuvio account; the password is used for this sign-in only. With
+ * `stayConnected`, the server keeps the session, never the password.
+ */
+export type NuvioSignIn = {
+  backend: string
+  email: string
+  password: string
+  stayConnected: boolean
+}
 
 /** A Stremio link code: the user opens `link` where they are signed in to Stremio, and approves `code`. */
 export type StremioLink = { code: string; link: string }
@@ -1618,20 +1634,24 @@ export type StremioLink = { code: string; link: string }
 /** A Stremio link code polled: the account read once the code is approved, else pending. */
 export type StremioLinkPoll = AppAccount | { pending: true }
 
-/** What signs in to a Stremio account; the password is used for this sign-in only. */
-export type StremioSignIn = { email: string; password: string }
+/**
+ * What signs in to a Stremio account; the password is used for this sign-in only. With
+ * `stayConnected`, the server keeps the auth key the sign-in gives, never the password.
+ */
+export type StremioSignIn = { email: string; password: string; stayConnected: boolean }
 
 /**
- * How each app's account is read, for the Polyfin account it is imported into. Passwords and auth
- * keys are used for the sign-in only.
+ * How each app's account is read, for the Polyfin account it is imported into. Passwords are used
+ * for the sign-in only; the auth keys and sessions apps give are kept by the server, never answered,
+ * when `stayConnected` asks for it.
  */
 export type AppReaders = {
   nuvio: (body: NuvioSignIn) => Promise<AppAccount>
   stremio: {
     startLink: () => Promise<StremioLink>
-    pollLink: () => Promise<StremioLinkPoll>
+    pollLink: (stayConnected: boolean) => Promise<StremioLinkPoll>
     password: (body: StremioSignIn) => Promise<AppAccount>
-    key: (key: string) => Promise<AppAccount>
+    key: (key: string, stayConnected: boolean) => Promise<AppAccount>
   }
 }
 
@@ -1640,23 +1660,81 @@ const appReaders = (base: string): AppReaders => ({
   nuvio: (body) => request<AppAccount>('POST', `${base}/nuvio`, body),
   stremio: {
     startLink: () => request<StremioLink>('POST', `${base}/stremio/link`),
-    pollLink: () => request<StremioLinkPoll>('POST', `${base}/stremio/link/poll`),
+    pollLink: (stayConnected) =>
+      request<StremioLinkPoll>('POST', `${base}/stremio/link/poll`, { stayConnected }),
     password: (body) => request<AppAccount>('POST', `${base}/stremio/password`, body),
-    key: (key) => request<AppAccount>('POST', `${base}/stremio/key`, { key }),
+    key: (key, stayConnected) =>
+      request<AppAccount>('POST', `${base}/stremio/key`, { key, stayConnected }),
   },
+})
+
+/**
+ * How an import of a connection went: when it ended, what it read and added, the titles it did not
+ * find, and what kept it from reading the account.
+ */
+export type AppConnectionImport = {
+  at: string
+  read: number
+  played: number
+  resumed: number
+  favorites: number
+  unmatched: number
+  problem:
+    | 'unreachable'
+    | 'rate_limited'
+    | 'unexpected'
+    | 'profile_missing'
+    | 'sign_in_refused'
+    | 'internal'
+    | null
+}
+
+/**
+ * A user's connection to an app, imported every 6 hours: the account as the app names it, who
+ * connected it, `problem` once the app refused the sign-in kept (the user signs in again), `paused`
+ * while the server does not let the user import, the last import and when the next one runs.
+ */
+export type AppConnection = {
+  app: AppKind
+  account: string | null
+  connectedAt: string
+  connectedBy: { id: string; name: string } | null
+  problem: 'sign_in_refused' | null
+  paused: boolean
+  importing: boolean
+  lastImport: AppConnectionImport | null
+  nextImportAt: string | null
+}
+
+/** Imports a connection at once, or disconnects it, for the account the routes under `base` name. */
+export type AppConnectionActions = {
+  importNow: (app: AppKind) => Promise<AppConnection>
+  disconnect: (app: AppKind) => Promise<void>
+}
+
+const appConnectionActions = (base: string): AppConnectionActions => ({
+  importNow: async (app) =>
+    (
+      await request<{ connection: AppConnection }>(
+        'POST',
+        `${base}/app-connections/${seg(app)}/import`,
+      )
+    ).connection,
+  disconnect: (app) => request<void>('DELETE', `${base}/app-connections/${seg(app)}`),
 })
 
 /** The profile to import of an account read, and the indexes of its addons to install. */
 export type AppImportChoice = { key: string; profile: string; addons: number[] }
 
 /**
- * Whether the signed-in user may import from an app, whether they may add their own addons, and
- * the import into their account running, else their last one, else null.
+ * Whether the signed-in user may import from an app, whether they may add their own addons, the
+ * import into their account running, else their last one, else null, and their connections.
  */
 export type OwnAppImport = {
   enabled: boolean
   addonsAllowed: boolean
   import: AppImportStatus | null
+  connections: AppConnection[]
 }
 
 export const fetchOwnAppImport = (signal?: AbortSignal) =>
@@ -1665,18 +1743,31 @@ export const fetchOwnAppImport = (signal?: AbortSignal) =>
 /** Reads the user's own app accounts: each signs in, reads the account, and signs out. */
 export const ownAppReaders = appReaders('/account/app-import')
 
+/** The user's own connections to apps. */
+export const ownAppConnections = appConnectionActions('/account')
+
 /** Imports the chosen profile of the account read into the user's account, in the background. */
 export const startOwnAppImport = async (body: AppImportChoice) =>
   (await request<{ import: AppImportStatus }>('POST', '/account/app-import', body)).import
 
-/** For an administrator: whether a user may add their own addons, and the import into their account. */
-export type UserAppImport = { addonsAllowed: boolean; import: AppImportStatus | null }
+/**
+ * For an administrator: whether a user may add their own addons, the import into their account,
+ * and their connections.
+ */
+export type UserAppImport = {
+  addonsAllowed: boolean
+  import: AppImportStatus | null
+  connections: AppConnection[]
+}
 
 export const fetchUserAppImport = (id: string, signal?: AbortSignal) =>
   request<UserAppImport>('GET', `/users/${seg(id)}/app-import`, undefined, signal)
 
 /** Reads app accounts for an administrator, to import into the user's account. */
 export const userAppReaders = (id: string) => appReaders(`/users/${seg(id)}/app-import`)
+
+/** A user's connections to apps, for an administrator. */
+export const userAppConnections = (id: string) => appConnectionActions(`/users/${seg(id)}`)
 
 export const startUserAppImport = async (id: string, body: AppImportChoice) =>
   (await request<{ import: AppImportStatus }>('POST', `/users/${seg(id)}/app-import`, body)).import
@@ -2289,12 +2380,13 @@ export type Health = {
 
 /**
  * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting (the SMTP password is one,
- * though it is never read again), a user's connection, or a notification target, by its name, of a
- * user or of the server (`user` null).
+ * though it is never read again), a user's tracking connection, a user's connection to an app, or a
+ * notification target, by its name, of a user or of the server (`user` null).
  */
 export type UnreadableSecret = {
   setting: ServerSecretName | 'smtpPassword' | null
   service: TrackingServiceName | null
+  app: AppKind | null
   target: string | null
   user: string | null
   /** A network share's password, by its folder's name. */

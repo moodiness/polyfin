@@ -37,7 +37,8 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
 
 /**
  * The name of a stored secret the key cannot decrypt: a server setting, a network share's
- * password, a user's connection, or a notification target of a user or of the server.
+ * password, a user's tracking or app connection, or a notification target of a user or of the
+ * server.
  */
 export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
@@ -47,6 +48,9 @@ export function unreadableName(t: Messages, secret: UnreadableSecret): string {
     return secret.user === null
       ? text.serverTargetOf(secret.target)
       : text.targetOf(secret.target, secret.user)
+  }
+  if (secret.app !== null) {
+    return text.connectionOf(t.account.appImport.apps[secret.app], secret.user ?? '')
   }
   return text.connectionOf(serviceNames[secret.service ?? 'trakt'], secret.user ?? '')
 }

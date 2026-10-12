@@ -13,6 +13,7 @@ import {
   fetchMyDevices,
   fetchOwnAppImport,
   fetchOwnImport,
+  ownAppConnections,
   ownAppReaders,
   queryClient,
   queryKeys,
@@ -27,7 +28,7 @@ import NotificationTargets from '@/features/notifications/NotificationTargets'
 import StatisticsView from '@/features/statistics/StatisticsView'
 import { useI18n } from '@/i18n'
 import { SectionNav } from '@/ui'
-import AppImport from './AppImport'
+import AppImport, { AppConnections } from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
@@ -67,11 +68,16 @@ export default function AccountRoute() {
     queryKey: queryKeys.ownAppImport,
     queryFn: ({ signal }) => fetchOwnAppImport(signal),
     refetchInterval: (query) =>
-      query.state.data?.import?.state === 'running' ? ownImportPollMs : false,
+      query.state.data?.import?.state === 'running' ||
+      query.state.data?.connections.some((c) => c.importing)
+        ? ownImportPollMs
+        : false,
   })
-  // Shown once the server says the setting allows it.
+  // Shown once the server says the setting allows it; the apps connected, while any is, to
+  // disconnect them.
   const importing = ownImport.data?.enabled === true
   const importingFromApps = ownAppImport.data?.enabled === true
+  const appConnections = ownAppImport.data?.connections ?? []
 
   return (
     <PageLayout
@@ -109,7 +115,7 @@ export default function AccountRoute() {
                   },
                 ]
               : []),
-            ...(importingFromApps
+            ...(importingFromApps || appConnections.length > 0
               ? [
                   {
                     id: 'app-import' as const,
@@ -148,25 +154,37 @@ export default function AccountRoute() {
           <ServerImport current={ownImport.data?.import ?? null} />
         </AccountSection>
       )}
-      {importingFromApps && (
+      {(importingFromApps || appConnections.length > 0) && (
         <AccountSection
           id="app-import"
           title={text.sections.appImport}
           help={text.appImport.description}
         >
-          <AppImport
-            current={ownAppImport.data?.import ?? null}
-            addonsAllowed={ownAppImport.data?.addonsAllowed === true}
-            readers={ownAppReaders}
-            start={startOwnAppImport}
-            onStarted={(started) =>
-              queryClient.setQueryData<OwnAppImport>(
-                queryKeys.ownAppImport,
-                (data) => data && { ...data, import: started },
-              )
-            }
-            own
-          />
+          <div className="flex flex-col gap-6">
+            <AppConnections
+              connections={appConnections}
+              actions={ownAppConnections}
+              onChanged={() =>
+                void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
+              }
+              own
+            />
+            {importingFromApps && (
+              <AppImport
+                current={ownAppImport.data?.import ?? null}
+                addonsAllowed={ownAppImport.data?.addonsAllowed === true}
+                readers={ownAppReaders}
+                start={startOwnAppImport}
+                onStarted={(started) =>
+                  queryClient.setQueryData<OwnAppImport>(
+                    queryKeys.ownAppImport,
+                    (data) => data && { ...data, import: started },
+                  )
+                }
+                own
+              />
+            )}
+          </div>
         </AccountSection>
       )}
       <AccountSection

@@ -1,9 +1,18 @@
-import { ArrowSquareInIcon, ArrowSquareOutIcon, KeyIcon, SignInIcon } from '@phosphor-icons/react'
+import {
+  ArrowSquareInIcon,
+  ArrowSquareOutIcon,
+  ClockCounterClockwiseIcon,
+  DownloadSimpleIcon,
+  KeyIcon,
+  SignInIcon,
+} from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useEffectEvent, useState, type FormEvent } from 'react'
 import {
   ApiError,
   type AppAccount,
+  type AppConnection,
+  type AppConnectionActions,
   type AppImportChoice,
   type AppImportStatus,
   type AppKind,
@@ -11,11 +20,12 @@ import {
   type NuvioSignIn,
   type StremioLink,
 } from '@/api'
-import { errorMessage, formatEpisode } from '@/format'
+import { dateTime, errorMessage, formatEpisode } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Button,
   Checkbox,
+  ConfirmDialog,
   ExternalButtonLink,
   Field,
   Modal,
@@ -69,6 +79,7 @@ export default function AppImport({
   const text = t.account.appImport
   const toast = useToast()
   const [app, setApp] = useState<AppKind>('nuvio')
+  const [stayConnected, setStayConnected] = useState(false)
   const [account, setAccount] = useState<AppAccount | null>(null)
   const [profile, setProfile] = useState('')
   const [addons, setAddons] = useState<number[]>([])
@@ -114,11 +125,28 @@ export default function AppImport({
               }}
               className="self-start"
             />
+            <Checkbox
+              checked={stayConnected}
+              onChange={setStayConnected}
+              label={text.stayConnected}
+              help={text.stayConnectedHelp[app]}
+              className="mt-3"
+            />
           </div>
           {app === 'nuvio' ? (
-            <NuvioSignInForm read={readers.nuvio} onRead={read} notice={notice} />
+            <NuvioSignInForm
+              read={readers.nuvio}
+              onRead={read}
+              notice={notice}
+              stayConnected={stayConnected}
+            />
           ) : (
-            <StremioSignIn readers={readers.stremio} onRead={read} notice={notice} />
+            <StremioSignIn
+              readers={readers.stremio}
+              onRead={read}
+              notice={notice}
+              stayConnected={stayConnected}
+            />
           )}
         </Panel>
       )}
@@ -186,6 +214,7 @@ export default function AppImport({
                 )}
               </div>
             )}
+            {account.stayConnected && <Notice tone="info">{text.staysConnected}</Notice>}
             {begin.isError && (
               <Notice tone="danger" live>
                 {errorMessage(t, begin.error)}
@@ -224,16 +253,19 @@ const accountCodes = ['nuvio_sign_in_refused']
 /**
  * Signs in to a Nuvio account, on Nuvio's own backend or a self-hosted one, and hands the account
  * read to `onRead`. Each app signs in its own way, with a form of its own. The password only
- * lives in this form's state. `notice` is what went wrong with the last import's start.
+ * lives in this form's state. `notice` is what went wrong with the last import's start;
+ * `stayConnected` asks the server to keep the session.
  */
 function NuvioSignInForm({
   read,
   onRead,
   notice,
+  stayConnected,
 }: {
   read: (body: NuvioSignIn) => Promise<AppAccount>
   onRead: (account: AppAccount) => void
   notice: string | undefined
+  stayConnected: boolean
 }) {
   const { t } = useI18n()
   const text = t.account.appImport
@@ -265,7 +297,7 @@ function NuvioSignInForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    signIn.mutate({ backend: backend.trim(), email: email.trim(), password })
+    signIn.mutate({ backend: backend.trim(), email: email.trim(), password, stayConnected })
   }
 
   return (
@@ -333,16 +365,19 @@ const linkPollMs = 3000
 
 /**
  * Signs in to a Stremio account one of three ways, and hands the account read to `onRead`. The
- * password and the auth key only live in their form's state; the server never answers a key back.
+ * password and the auth key only live in their form's state; the server never answers a key back,
+ * and keeps it only when `stayConnected` asks for it.
  */
 function StremioSignIn({
   readers,
   onRead,
   notice,
+  stayConnected,
 }: {
   readers: AppReaders['stremio']
   onRead: (account: AppAccount) => void
   notice: string | undefined
+  stayConnected: boolean
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -363,11 +398,26 @@ function StremioSignIn({
         />
       </div>
       {way === 'link' ? (
-        <StremioLinkForm readers={readers} onRead={onRead} notice={notice} />
+        <StremioLinkForm
+          readers={readers}
+          onRead={onRead}
+          notice={notice}
+          stayConnected={stayConnected}
+        />
       ) : way === 'password' ? (
-        <StremioPasswordForm read={readers.password} onRead={onRead} notice={notice} />
+        <StremioPasswordForm
+          read={readers.password}
+          onRead={onRead}
+          notice={notice}
+          stayConnected={stayConnected}
+        />
       ) : (
-        <StremioKeyForm read={readers.key} onRead={onRead} notice={notice} />
+        <StremioKeyForm
+          read={readers.key}
+          onRead={onRead}
+          notice={notice}
+          stayConnected={stayConnected}
+        />
       )}
     </>
   )
@@ -381,10 +431,12 @@ function StremioLinkForm({
   readers,
   onRead,
   notice,
+  stayConnected,
 }: {
   readers: AppReaders['stremio']
   onRead: (account: AppAccount) => void
   notice: string | undefined
+  stayConnected: boolean
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -397,7 +449,7 @@ function StremioLinkForm({
       setLink(created)
     },
   })
-  const poll = useEffectEvent(() => readers.pollLink())
+  const poll = useEffectEvent(() => readers.pollLink(stayConnected))
   const received = useEffectEvent((account: AppAccount) => onRead(account))
 
   useEffect(() => {
@@ -489,15 +541,20 @@ function StremioLinkForm({
   )
 }
 
-/** Signs in to Stremio with the account's email and password, then reads it and signs out. */
+/**
+ * Signs in to Stremio with the account's email and password, then reads it and signs out, unless
+ * `stayConnected` asks the server to keep the session.
+ */
 function StremioPasswordForm({
   read,
   onRead,
   notice,
+  stayConnected,
 }: {
   read: AppReaders['stremio']['password']
   onRead: (account: AppAccount) => void
   notice: string | undefined
+  stayConnected: boolean
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -522,7 +579,7 @@ function StremioPasswordForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    signIn.mutate({ email: email.trim(), password })
+    signIn.mutate({ email: email.trim(), password, stayConnected })
   }
 
   return (
@@ -569,21 +626,26 @@ function StremioPasswordForm({
   )
 }
 
-/** Reads the Stremio account with the auth key the user pasted, which is never signed out. */
+/**
+ * Reads the Stremio account with the auth key the user pasted, which is never signed out, and kept
+ * only when `stayConnected` asks for it.
+ */
 function StremioKeyForm({
   read,
   onRead,
   notice,
+  stayConnected,
 }: {
   read: AppReaders['stremio']['key']
   onRead: (account: AppAccount) => void
   notice: string | undefined
+  stayConnected: boolean
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
   const [key, setKey] = useState('')
   const reading = useMutation({
-    mutationFn: read,
+    mutationFn: (pasted: string) => read(pasted, stayConnected),
     onSuccess: (account) => {
       setKey('')
       onRead(account)
@@ -751,5 +813,174 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
         </Modal>
       </div>
     </Panel>
+  )
+}
+
+/**
+ * A user's connections to apps, imported every 6 hours: under My account, the user's own, or a
+ * user's, for an administrator. Each shows its account, its last and next import, and why it stopped
+ * or is paused, with Import now and Disconnect. `own` is the user's own account, where a paused
+ * connection cannot be imported. `onChanged` tells that the connections changed.
+ */
+export function AppConnections({
+  connections,
+  actions,
+  onChanged,
+  own,
+}: {
+  connections: AppConnection[]
+  actions: AppConnectionActions
+  onChanged: () => void
+  own: boolean
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport.connections
+  if (connections.length === 0) return null
+  return (
+    <Panel title={text.title} titleAs="h3" description={text.help} flush>
+      <ul>
+        {connections.map((connection) => (
+          <AppConnectionRow
+            key={connection.app}
+            connection={connection}
+            actions={actions}
+            onChanged={onChanged}
+            own={own}
+          />
+        ))}
+      </ul>
+    </Panel>
+  )
+}
+
+function AppConnectionRow({
+  connection,
+  actions,
+  onChanged,
+  own,
+}: {
+  connection: AppConnection
+  actions: AppConnectionActions
+  onChanged: () => void
+  own: boolean
+}) {
+  const { language, t } = useI18n()
+  const text = t.account.appImport.connections
+  const toast = useToast()
+  const name = t.account.appImport.apps[connection.app]
+  const [confirming, setConfirming] = useState(false)
+  const importNow = useMutation({
+    mutationFn: () => actions.importNow(connection.app),
+    onSettled: onChanged,
+  })
+  const disconnect = useMutation({
+    mutationFn: () => actions.disconnect(connection.app),
+    onSuccess: () => {
+      setConfirming(false)
+      toast(text.disconnected(name))
+      onChanged()
+    },
+  })
+  const stopped = connection.problem !== null
+  const last = connection.lastImport
+  const status: { tone: StatusTone; label: string } = stopped
+    ? { tone: 'danger', label: text.status.stopped }
+    : connection.importing
+      ? { tone: 'live', label: text.status.importing }
+      : connection.paused
+        ? { tone: 'muted', label: text.status.paused }
+        : { tone: 'ok', label: text.status.connected }
+
+  return (
+    <li className="flex flex-col gap-3 px-6 py-5 max-sm:px-4 [&+&]:border-t [&+&]:border-line">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{name}</h4>
+          <p className="text-control text-ink-2">
+            {connection.account !== null ? (
+              <>
+                {text.connectedAs}
+                <span className="font-mono text-ink">{connection.account}</span>
+              </>
+            ) : (
+              text.connected
+            )}
+            {text.connectedOn(dateTime(connection.connectedAt, language))}
+            {connection.connectedBy !== null && text.connectedBy(connection.connectedBy.name)}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
+          <Button variant="ghost" onClick={() => setConfirming(true)}>
+            {text.disconnect}
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-row border border-line bg-bg px-[18px] py-3 max-sm:flex-col max-sm:items-start max-sm:p-3.5">
+        <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
+          <ClockCounterClockwiseIcon
+            size={16}
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-ink-3"
+          />
+          <span>
+            {last === null ? (
+              text.never
+            ) : (
+              <>
+                {text.lastImport}
+                <RelativeTime iso={last.at} />
+                {text.colon}
+                {t.account.appImport.counts(last.read, last.played, last.resumed, last.favorites)}
+              </>
+            )}
+            {connection.nextImportAt !== null && !connection.importing && (
+              <>
+                {' '}
+                {text.nextImport}
+                <RelativeTime iso={connection.nextImportAt} />.
+              </>
+            )}
+          </span>
+        </p>
+        <Button
+          icon={DownloadSimpleIcon}
+          loading={importNow.isPending || connection.importing}
+          disabled={stopped || (own && connection.paused)}
+          onClick={() => importNow.mutate()}
+          className="shrink-0"
+        >
+          {connection.importing ? text.importing : text.importNow}
+        </Button>
+      </div>
+      {stopped ? (
+        <Notice tone="danger">{text.stopped(name)}</Notice>
+      ) : (
+        connection.paused && <Notice tone="warn">{text.paused}</Notice>
+      )}
+      {!stopped && !connection.importing && last?.problem && (
+        <Notice tone="warn">{text.problems[last.problem](name)}</Notice>
+      )}
+      {importNow.isError && (
+        <Notice tone="danger" live>
+          {errorMessage(t, importNow.error)}
+        </Notice>
+      )}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => {
+          setConfirming(false)
+          disconnect.reset()
+        }}
+        onConfirm={() => disconnect.mutate()}
+        title={text.disconnectTitle(name)}
+        confirmLabel={text.disconnect}
+        tone="danger"
+        busy={disconnect.isPending}
+        error={disconnect.isError ? errorMessage(t, disconnect.error) : undefined}
+      >
+        {text.disconnectBody(name)}
+      </ConfirmDialog>
+    </li>
   )
 }

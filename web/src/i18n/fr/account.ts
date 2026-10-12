@@ -42,7 +42,7 @@ const account: typeof en = {
       email: 'E-mail',
       password: 'Mot de passe',
       passwordHelp:
-        'Il sert seulement à lire le compte, et n’est jamais gardé. Polyfin se connecte comme les applis Nuvio, lit le compte, puis se déconnecte.',
+        'Il sert seulement à lire le compte, et n’est jamais gardé. Polyfin se connecte comme les applis Nuvio, lit le compte, puis se déconnecte, sauf si vous restez connecté.',
       signIn: 'Se connecter à Nuvio',
       signingIn: 'Connexion…',
       chooseTitle: 'Choisir quoi importer',
@@ -52,6 +52,15 @@ const account: typeof en = {
         stremio:
           'Stremio garde un seul historique pour tout le compte. Polyfin garde ce qu’il a lu quelques minutes seulement.',
       },
+      stayConnected: 'Rester connecté',
+      stayConnectedHelp: {
+        nuvio:
+          'Polyfin garde la session, chiffrée, jamais votre mot de passe, et importe de nouveau le profil choisi toutes les 6 heures. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment.',
+        stremio:
+          'Polyfin garde la clé d’authentification, chiffrée, et importe de nouveau le compte toutes les 6 heures. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment. Les conditions de Stremio interdisent d’extraire ses données par des moyens automatisés : lire votre compte toutes les quelques heures rend cette zone grise plus marquée qu’une importation ponctuelle.',
+      },
+      staysConnected:
+        'Vous restez connecté : ce profil est importé de nouveau toutes les 6 heures, de la même façon. Les addons ne sont installés que maintenant.',
       wholeAccount: 'Tout le compte',
       profile: 'Profil',
       profileNumber: (id: string) => `Profil ${id}`,
@@ -125,19 +134,61 @@ const account: typeof en = {
           'Ouvrez le lien dans un navigateur connecté à Stremio, vérifiez qu’il affiche ce code, et approuvez-le.',
         openLink: 'Ouvrir le lien',
         waiting:
-          'En attente de votre approbation. Le code dure 5 minutes ; une fois approuvé, Polyfin lit le compte, puis se déconnecte.',
+          'En attente de votre approbation. Le code dure 5 minutes ; une fois approuvé, Polyfin lit le compte, puis se déconnecte, sauf si vous restez connecté.',
         cancel: 'Annuler',
         email: 'E-mail',
         password: 'Mot de passe',
         passwordHelp:
-          'Il sert seulement à lire le compte, et n’est jamais gardé. Polyfin se connecte comme les applis Stremio, lit le compte, puis se déconnecte. Un compte créé avec Facebook ou Apple n’a pas de mot de passe : utilisez un code de liaison.',
+          'Il sert seulement à lire le compte, et n’est jamais gardé. Polyfin se connecte comme les applis Stremio, lit le compte, puis se déconnecte, sauf si vous restez connecté. Un compte créé avec Facebook ou Apple n’a pas de mot de passe : utilisez un code de liaison.',
         signIn: 'Se connecter à Stremio',
         signingIn: 'Connexion…',
         key: 'Clé d’authentification',
         keyHelp:
-          'La clé que l’appli web de Stremio garde une fois connectée : dans la console de votre navigateur, sur cette appli, JSON.parse(localStorage.getItem("profile")).auth.key la donne. Elle sert seulement à lire le compte, et n’est jamais gardée. Polyfin ne la déconnecte pas, ce qui déconnecterait votre navigateur.',
+          'La clé que l’appli web de Stremio garde une fois connectée : dans la console de votre navigateur, sur cette appli, JSON.parse(localStorage.getItem("profile")).auth.key la donne. Elle sert à lire le compte, et n’est gardée que si vous restez connecté. Polyfin ne la déconnecte jamais, ce qui déconnecterait votre navigateur.',
         readKey: 'Lire le compte',
         reading: 'Lecture…',
+      },
+      connections: {
+        title: 'Applis connectées',
+        help: 'Importées toutes les 6 heures, comme lors de la première importation : le même profil, sans leurs addons. Polyfin ne fait que les lire.',
+        connectedAs: 'Connecté en tant que ',
+        connected: 'Connecté',
+        connectedOn: (date: string) => ` depuis le ${date}`,
+        connectedBy: (name: string) => ` par ${name}`,
+        status: {
+          connected: 'Connecté',
+          importing: 'Importation',
+          paused: 'En pause',
+          stopped: 'À reconnecter',
+        },
+        never: 'Pas encore importé.',
+        lastImport: 'Dernière importation ',
+        colon: ' : ',
+        nextImport: 'Prochaine importation ',
+        paused:
+          'Le serveur ne permet plus aux utilisateurs d’importer leur historique : cette connexion est en pause jusqu’à ce qu’il le permette.',
+        stopped: (app: string) =>
+          `${app} a refusé la connexion que Polyfin gardait : rien n’est importé tant que vous ne vous reconnectez pas ci-dessous, avec « Rester connecté » coché. Se déconnecter l’oublie.`,
+        problems: {
+          unreachable: (app: string) =>
+            `${app} n’a pas répondu lors de la dernière importation. La prochaine réessaie.`,
+          rate_limited: (app: string) =>
+            `${app} a demandé à Polyfin d’attendre lors de la dernière importation. La prochaine réessaie.`,
+          unexpected: (app: string) =>
+            `${app} a répondu à la dernière importation d’une manière que cette version de Polyfin ne lit pas. La prochaine réessaie.`,
+          profile_missing: (app: string) =>
+            `Le profil importé n’est plus dans le compte ${app}. Reconnectez-vous pour en choisir un autre.`,
+          sign_in_refused: (app: string) => `${app} a refusé la connexion que Polyfin gardait.`,
+          internal: () =>
+            'Polyfin a rencontré une erreur pendant la dernière importation : le journal du serveur en dit plus. La prochaine réessaie.',
+        },
+        importNow: 'Importer maintenant',
+        importing: 'Importation…',
+        disconnect: 'Déconnecter',
+        disconnectTitle: (app: string) => `Déconnecter ${app} ?`,
+        disconnectBody: (app: string) =>
+          `Polyfin arrête d’importer ce compte ${app} et oublie ce qu’il gardait pour le lire, après avoir fermé la session qu’il avait ouverte. Une clé d’authentification que vous avez collée est seulement oubliée. Ce qui a été importé reste.`,
+        disconnected: (app: string) => `${app} déconnecté.`,
       },
     },
     statisticsHelp:

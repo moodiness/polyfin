@@ -41,7 +41,7 @@ const account = {
       email: 'Email',
       password: 'Password',
       passwordHelp:
-        'Used to read the account only, and never kept. Polyfin signs in as Nuvio’s apps do, reads the account, then signs out.',
+        'Used to read the account only, and never kept. Polyfin signs in as Nuvio’s apps do, reads the account, then signs out, unless you stay connected.',
       signIn: 'Sign in to Nuvio',
       signingIn: 'Signing in…',
       chooseTitle: 'Choose what to import',
@@ -51,6 +51,15 @@ const account = {
         stremio:
           'Stremio keeps one history for the whole account. Polyfin keeps what it read for a few minutes only.',
       },
+      stayConnected: 'Stay connected',
+      stayConnectedHelp: {
+        nuvio:
+          'Polyfin keeps the session, encrypted, never your password, and imports the profile you choose again every 6 hours. It only reads the account. You can disconnect at any time.',
+        stremio:
+          'Polyfin keeps the auth key, encrypted, and imports the account again every 6 hours. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account every few hours makes that grey area more pronounced than a one-off import.',
+      },
+      staysConnected:
+        'You stay connected: this profile is imported again every 6 hours, the same way. Addons are installed now only.',
       wholeAccount: 'The whole account',
       profile: 'Profile',
       profileNumber: (id: string) => `Profile ${id}`,
@@ -118,19 +127,61 @@ const account = {
           'Open the link in a browser where you are signed in to Stremio, check that it shows this code, and approve it.',
         openLink: 'Open the link',
         waiting:
-          'Waiting for your approval. The code lasts 5 minutes; once you approve it, Polyfin reads the account, then signs out.',
+          'Waiting for your approval. The code lasts 5 minutes; once you approve it, Polyfin reads the account, then signs out, unless you stay connected.',
         cancel: 'Cancel',
         email: 'Email',
         password: 'Password',
         passwordHelp:
-          'Used to read the account only, and never kept. Polyfin signs in as Stremio’s apps do, reads the account, then signs out. An account made with Facebook or Apple has no password: use a link code.',
+          'Used to read the account only, and never kept. Polyfin signs in as Stremio’s apps do, reads the account, then signs out, unless you stay connected. An account made with Facebook or Apple has no password: use a link code.',
         signIn: 'Sign in to Stremio',
         signingIn: 'Signing in…',
         key: 'Auth key',
         keyHelp:
-          'The key Stremio’s web app keeps once you sign in: in your browser’s console there, JSON.parse(localStorage.getItem("profile")).auth.key gives it. Used to read the account only, and never kept. Polyfin does not sign it out, which would sign your browser out.',
+          'The key Stremio’s web app keeps once you sign in: in your browser’s console there, JSON.parse(localStorage.getItem("profile")).auth.key gives it. Used to read the account, and kept only if you stay connected. Polyfin never signs it out, which would sign your browser out.',
         readKey: 'Read the account',
         reading: 'Reading…',
+      },
+      connections: {
+        title: 'Connected apps',
+        help: 'Imported every 6 hours, the way they were first imported: the same profile, without their addons. Polyfin only reads them.',
+        connectedAs: 'Connected as ',
+        connected: 'Connected',
+        connectedOn: (date: string) => ` since ${date}`,
+        connectedBy: (name: string) => ` by ${name}`,
+        status: {
+          connected: 'Connected',
+          importing: 'Importing',
+          paused: 'Paused',
+          stopped: 'Sign in again',
+        },
+        never: 'Not imported yet.',
+        lastImport: 'Last import ',
+        colon: ': ',
+        nextImport: 'Next import ',
+        paused:
+          'The server no longer lets users import their watch history: this connection is paused until it does.',
+        stopped: (app: string) =>
+          `${app} refused the sign-in Polyfin kept: nothing is imported until you sign in again below, with Stay connected ticked. Disconnecting forgets it.`,
+        problems: {
+          unreachable: (app: string) =>
+            `${app} did not answer at the last import. The next one tries again.`,
+          rate_limited: (app: string) =>
+            `${app} asked Polyfin to wait at the last import. The next one tries again.`,
+          unexpected: (app: string) =>
+            `${app} answered the last import in a way this version of Polyfin does not read. The next one tries again.`,
+          profile_missing: (app: string) =>
+            `The profile imported is no longer in the ${app} account. Sign in again to choose another.`,
+          sign_in_refused: (app: string) => `${app} refused the sign-in Polyfin kept.`,
+          internal: () =>
+            'Polyfin ran into an error during the last import: the server log tells more. The next one tries again.',
+        },
+        importNow: 'Import now',
+        importing: 'Importing…',
+        disconnect: 'Disconnect',
+        disconnectTitle: (app: string) => `Disconnect ${app}?`,
+        disconnectBody: (app: string) =>
+          `Polyfin stops importing this ${app} account and forgets what it kept to read it, after signing out the session it opened. An auth key you pasted is only forgotten. What was imported stays.`,
+        disconnected: (app: string) => `${app} disconnected.`,
       },
     },
     statisticsHelp:
