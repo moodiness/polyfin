@@ -1,6 +1,6 @@
 # Local folders
 
-Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it. A folder may also hold music: see [Music folders](#music-folders).
+Polyfin serves your own video files beside what addons and IPTV sources provide. An administrator declares folders mounted in Polyfin's container, or network shares Polyfin reads itself; each file is matched to a title and becomes one more version of it, next to the addons' streams, with the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library apps see, listing the titles found in it. A folder may also hold music, see [Music folders](#music-folders), or videos no metadata addon knows, see [Home videos](#home-videos).
 
 Folders on a NAS or another computer can be mounted on the host and declared as local folders, or read by Polyfin over SMB or WebDAV, with no mount: see [network shares](#network-shares).
 
@@ -436,15 +436,55 @@ The tracks a scan first finds count among the files added of the [weekly summary
 - The artists views list album artists; an artist credited only on songs is reached from those songs and from search.
 - Lyrics are read from `.lrc` files and tags, not from `.txt` files.
 
+## Home videos
+
+A folder or share added as holding **Home videos** (fr « Vidéos personnelles ») lists videos no metadata addon knows: recordings of a family, a concert or a school play. Each video is a title of its own, which the folder names, dates and plays itself: nothing is sent to the metadata addons, and nothing is ever unmatched. What a folder holds is chosen when it is added and cannot change.
+
+```
+/media/family/Beach.mp4
+/media/family/School play 2018/play.mp4
+/media/family/School play 2018/play.nfo
+/media/family/Trip/day 1.mov
+/media/family/Trip/day 2.mov
+/media/family/Trip/day 2-poster.jpg
+```
+
+### Titles
+
+- A video alone in a folder of its own, with its side files, is one title named after the folder (`School play 2018`). Several videos in one folder are as many titles, each named after its file without its extension (`day 1`, `day 2`); so is a video at the folder's top (`Beach`). Names are kept as written: no year or quality is read out of them.
+- A title's NFO file is the video's own (`play.nfo`), else `movie.nfo` in the video's own folder. Its `<title>` names the title, its `<plot>` describes it, and its date is its `<premiered>`, else `<aired>`, else `<releasedate>`.
+- Without a date in its NFO file, a title is dated by the creation time its video tells, as phones and cameras write it (`creation_time`, or the time Apple's devices write with its time zone), else by its file's modification time. A creation time before 1971, from a clock never set, is not believed. An NFO file that gives a `<year>` alone keeps the video's own date when it is of that year, and is the 1st of January of it otherwise.
+- Its artwork is the images beside it, with the names a movie's take (see [Artwork](#artwork)): `day 2-poster.jpg`, or `poster.jpg` in its own folder. Without a poster, it shows a frame of the video, taken a tenth into it as Jellyfin takes one, at most 640 pixels wide as chapter images are, kept with the scan and made again when the video changes.
+- Subtitle files beside a video are offered with it, as for any local file. Discs and disc images are left out, as in a shows folder.
+
+A title's identifier comes from its folder and its path in it: it stays through scans and restarts. A video renamed or moved is another title: what users did with the former one, its watch state, resume point, favorites and collections, stays with it and no longer shows.
+
+### In apps
+
+The folder is a library of Jellyfin's `homevideos` type, its titles `Video` items, as Jellyfin's home videos are: jellyfin-web shows it with its Folders and Videos views, newest recording first in the Folders view. Search, watch state, resume points, Continue Watching, collections, the libraries a user sees, allowed hours and downloads work as for other titles, and the videos play, seek and show their scrubbing thumbnails as other local files do.
+
+Parental control judges them as Jellyfin judges its videos: unrated, of the **Other** kind. A user blocking unrated **Other** items sees none of them; a highest rating alone hides none.
+
+Tracking services and scrobbling never hear of them: they have no identifier a service knows. The [weekly summary](notifications.md#weekly-summary) counts the videos a scan first finds among the files added, as videos, never as movies.
+
+The folder's page counts its videos, and how many are dated by an NFO file, by their recording and by their file. It has no unmatched files and no links.
+
+### Limits
+
+- Polyfin reads no other field of NFO files, such as people, tags or ratings, and does not write them.
+- A video is one title: several files of one recording are not joined, and a folder holding several videos is no title of its own.
+- A frame is made once per video as it is; one that cannot be made (an unreadable video) is tried again only once the video changes.
+
 ## Compared with Jellyfin
 
 - Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file adds a version, and its artwork when the folder holds some.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and watches the network shares it reads itself by listing them again every few minutes.
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
-- Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
+- Both read the identifiers of NFO files; Polyfin reads nothing else of them for movies and shows, neither names, plots nor artwork, and only the title, plot and date for home videos.
 - Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
 - Both read the artwork beside movies and shows, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor episodes' images, and shows the addons' artwork of the types a folder has none of.
 - Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
+- Both list home videos as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it. Polyfin dates them by the recording's creation time as well, lists no photos nor photo albums in such a library, and makes a video alone in its folder a title named after the folder.
 
 ## For app developers
 
@@ -467,3 +507,5 @@ An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`
 Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A share's files are served the same way.
 
 A title's local artwork is one of its images like the addons': its `ImageTags`, `BackdropImageTags` and `/Items/{id}/Images` list it by tags that change when the image's size or modification time changes, and `/Items/{id}/Images/{type}` serves it, resized as apps ask, from the folder or the share. Besides `Primary`, `Backdrop`, `Logo`, `Thumb` and `Banner`, a local image may be an `Art` or a `Disc` image. No path of the server's shows: `/Items/{id}/Images` gives no `Path`.
+
+A home videos folder's `kind` is `homevideos` in the admin API, added with `"kind": "homevideos"`; it takes no `useArtwork`, its artwork always showing. Its `files` and `matched` count its videos, `unmatched` is 0, and `datedBy` counts them by where their dates come from: `{"nfo", "created", "file"}` (zero for other folders). Its unmatched list is empty, and its `titles` and `links` routes answer 404. Through the Jellyfin API, its library's `CollectionType` is `homevideos`, and its titles have `Type` and `MediaType` `Video`, `PremiereDate` and `ProductionYear` from their date, `Overview` from their NFO file's plot, no `ProviderIds`, and a `Primary` image, the poster beside them or a frame; they answer `IncludeItemTypes=Video`, never `Movie`. In the playback history and the statistics, their `kind` is `video`.
