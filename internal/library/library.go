@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 const (
@@ -110,6 +111,9 @@ type Service struct {
 	iptv IPTV
 	// local answers for Polyfin's own local folders (see UseLocal).
 	local Local
+	// watchlist holds the users' watchlists, which the Watchlist view
+	// lists (see watchlist.go).
+	watchlist *watchlist.Store
 
 	// music asks Eclipse addons for their resources, which musicCache
 	// keeps (see musicCaches).
@@ -220,6 +224,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
 		music:          eclipse.NewClient(client),
+		watchlist:      watchlist.New(db),
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
@@ -912,6 +917,9 @@ func (s *Service) children(ctx context.Context, user accounts.User, parent accou
 		folders, err := s.replayFolders(ctx, v)
 		return slicePage(folders, start, count), err
 	}
+	if parent == WatchlistViewID {
+		return s.watchlistChildren(ctx, v, start, count, first)
+	}
 	r, err := s.load(ctx, parent)
 	if err != nil {
 		return Page{}, err
@@ -1293,7 +1301,7 @@ func whole(ctx context.Context) bool {
 // home row waits for it. What it did not wait for is read on in the
 // background, to the end, for the next listing (see readRest).
 func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string) (Page, error) {
-	most, replay, err := s.listingLimit(ctx, user, parent)
+	most, atOnce, err := s.listingLimit(ctx, user, parent)
 	if err != nil {
 		return Page{}, err
 	}
@@ -1302,9 +1310,9 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	if most <= count {
 		return s.Children(ctx, user, parent, start, count, genre)
 	}
-	// The Replay view and its folders ask no addon: they are listed whole
-	// at once.
-	if replay {
+	// The Replay view and its folders, and the Watchlist view, read no
+	// catalog: they are listed whole at once.
+	if atOnce {
 		return s.Children(ctx, user, parent, start, most, genre)
 	}
 	// From the start, a kept listing that wants no more is the whole
@@ -1376,15 +1384,16 @@ func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (
 // listingLimit is how many items a listing of parent that asks for no
 // limit gets: WholeListing, or the maximum of the library the library or
 // collection parent belongs to when lower; 0 for any other parent but the
-// Replay view and its folders, which get WholeListing, replay set.
-func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (most int, replay bool, err error) {
+// Replay view and its folders, and the Watchlist view, which get
+// WholeListing, atOnce set.
+func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (most int, atOnce bool, err error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return 0, false, err
 	}
 	if l, ok := v.library(parent); ok {
 		most = l.maxItems
-	} else if parent == ReplayViewID {
+	} else if parent == ReplayViewID || parent == WatchlistViewID {
 		return WholeListing, true, nil
 	} else {
 		r, err := s.load(ctx, parent)
@@ -1591,6 +1600,12 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 	if err != nil {
 		return nil, err
 	}
+	items, err := s.itemsOf(ctx, v, ids, kinds)
+	return s.overridden(items), err
+}
+
+// itemsOf is ItemsOf in v, without administrators' edits.
+func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds []Kind) ([]Item, error) {
 	// The records are read together; libraries and identifiers without
 	// one are described one by one.
 	records, err := s.loadAll(ctx, ids)
@@ -1645,7 +1660,7 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 			items = append(items, *item)
 		}
 	}
-	return s.overridden(items), nil
+	return items, nil
 }
 
 // goneVideos are the items of records that are home videos no folder
@@ -1693,6 +1708,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	}
 	if id == ReplayViewID {
 		return s.replayView(ctx, v)
+	}
+	if id == WatchlistViewID {
+		return s.watchlistView(ctx, v)
 	}
 	r, err := s.load(ctx, id)
 	if errors.Is(err, ErrNotFound) {

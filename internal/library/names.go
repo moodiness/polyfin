@@ -23,15 +23,19 @@ type words struct {
 	myMusic string
 	// replay names the Replay view (see ReplayViewID).
 	replay string
+	// watchlist names the Watchlist view (see WatchlistViewID).
+	watchlist string
 }
 
 var vocabulary = map[string]words{
 	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", collections: "Collections",
-		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay"},
+		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay",
+		watchlist: "Watchlist"},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", collections: "Collections",
-		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay"},
+		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
+		watchlist: "À regarder"},
 }
 
 // vocabularyOf returns the words of a server language, English when the

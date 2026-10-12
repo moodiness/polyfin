@@ -212,8 +212,8 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 }
 
 // userViews describes the views user sees, in the order apps list them:
-// their libraries and Polyfin's Live TV, Replay, Playlists and Collections
-// views, those they hide included when includeHidden is set.
+// their libraries and Polyfin's Live TV, Replay, Playlists, Collections
+// and Watchlist views, those they hide included when includeHidden is set.
 func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden bool) ([]BaseItemDto, error) {
 	items, err := h.libraryViews(r, user)
 	if err == nil {
@@ -227,6 +227,9 @@ func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden b
 	}
 	if err == nil {
 		items, err = h.addCollectionsView(r, user, items)
+	}
+	if err == nil {
+		items, err = h.addWatchlistView(r, user, items)
 	}
 	if err != nil {
 		return nil, err
@@ -250,8 +253,8 @@ type MenuView struct {
 
 // menuViews answers /Polyfin/UserViews: the views /UserViews lists the
 // caller, in the same order, each with whether the web player's menus
-// leave it out. Polyfin's own Live TV, Replay, Playlists and Collections
-// views never are.
+// leave it out. Polyfin's own Live TV, Replay, Playlists, Collections and
+// Watchlist views never are.
 func (h *Handler) menuViews(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	views, err := h.userViews(r, user, false)
@@ -471,8 +474,10 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	// Titles listed whole are sorted as asked, as Jellyfin sorts them: a
 	// saga's movies by premiere date. A listing in pages keeps its catalogs'
-	// order, which pages sorted one by one would mix up.
-	if titlesThrough(r) && start <= 0 && !page.More && len(page.Items) == page.Total && len(listQuery(r, "sortBy")) > 0 {
+	// order, which pages sorted one by one would mix up, and the Watchlist
+	// view its own, the latest added first, whatever the app asks.
+	if titlesThrough(r) && parent != library.WatchlistViewID && start <= 0 && !page.More && len(page.Items) == page.Total &&
+		len(listQuery(r, "sortBy")) > 0 {
 		state, err := h.userState(r.Context(), user, page.Items)
 		if err != nil {
 			h.internalError(w, r, err)
