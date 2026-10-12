@@ -1,0 +1,393 @@
+// Package appimport imports the watch data of a user's account on a media
+// app built on Stremio addons into their Polyfin account: the movies and
+// episodes they played, their resume points, their library, which becomes
+// favorites, and, when they choose them, the app's addons, which become
+// their own addons.
+//
+// Each app is read by a source of its own, which signs in to the account
+// the app's way and reads it whole (see package nuvio): it hands the
+// account over as an Account, normalized, with its profiles. The service
+// holds it in memory for a few minutes, while the user chooses the profile
+// to import and its addons (see Service.Hold), then imports that profile
+// in the background (see Service.Start). Nothing the source signed in with
+// is kept.
+//
+// Titles are found by the identifiers the source names them by (see
+// TitleRef), as the watch histories of tracking services and other servers
+// are, and merge the same way: Polyfin's data is only added to, never
+// taken back, and a newer resume point of Polyfin's stays. Running an
+// import again adds nothing twice.
+//
+// One import into a user's account runs at a time. It and the last one's
+// result are kept in memory: an import cut by a restart is lost and is
+// started again.
+package appimport
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"log/slog"
+	"slices"
+	"sync"
+	"time"
+
+	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/activity"
+	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/userdata"
+)
+
+// The ways asking for an import fails before it starts.
+var (
+	// ErrRunning reports an import into an account where one runs.
+	ErrRunning = errors.New("an import into this account is running")
+	// ErrExpired reports an account read that is no longer held: it was
+	// dropped after holdFor, imported already, replaced by another read,
+	// or read by another user.
+	ErrExpired = errors.New("the account read is no longer held: sign in again")
+	// ErrUnknownProfile reports a profile the account does not have.
+	ErrUnknownProfile = errors.New("the account has no such profile")
+	// ErrUnknownAddon reports an addon the profile does not have.
+	ErrUnknownAddon = errors.New("the profile has no such addon")
+	// ErrAddonsNotAllowed reports addons chosen for a user who may not add
+	// their own (see accounts.Settings.PersonalAddonsAllowed).
+	ErrAddonsNotAllowed = errors.New("the user may not add their own addons")
+)
+
+// holdFor is how long an account read is held while the user chooses what
+// to import, at most.
+const holdFor = 5 * time.Minute
+
+// batch is how many items an import resolves and writes at a time.
+const batch = 500
+
+// maxUnmatched bounds the unmatched titles an import lists; the count goes
+// on.
+const maxUnmatched = 500
+
+// Account is an app account a source signed in to and read.
+type Account struct {
+	// App names the app: "nuvio".
+	App string
+	// Profiles are the account's, in the app's order; an app without
+	// profiles has one.
+	Profiles []Profile
+}
+
+// Profile is one of an account's profiles, and what it holds.
+type Profile struct {
+	// ID identifies the profile in the account; Name is how the app
+	// names it to the user.
+	ID, Name string
+	Entries  []Entry
+	Addons   []Addon
+}
+
+// Entry is a title of a profile: a movie, a series, or an episode, and
+// what the profile holds of it. A source gives one entry per title.
+type Entry struct {
+	// Title names the title by the identifiers Polyfin finds titles by.
+	// A Title without any (see Identified) counts as unmatched, with
+	// ReasonOtherIdentifier.
+	Title library.TitleRef
+	// Label describes the entry in the report, when it is not matched.
+	Label Label
+	// Played marks the title played: at PlayedAt when the app tells when,
+	// Plays times when it counts them (zero when it does not).
+	Played   bool
+	PlayedAt *time.Time
+	Plays    int
+	// Resume is the title's resume point, nil when it has none.
+	Resume *Resume
+	// Favorite is set for a title of the app's library.
+	Favorite bool
+}
+
+// Resume is a resume point: at Position of Runtime, set at At. Runtime is
+// zero when the app does not tell it: the title's, as its addons tell it,
+// is used.
+type Resume struct {
+	Position, Runtime time.Duration
+	At                time.Time
+}
+
+// Label describes an entry to the user: its ID as the app names it, its
+// Name, empty when the app gives none, its Kind ("movie", "series" or
+// "episode"), and for an episode its Season and Episode numbers.
+type Label struct {
+	ID, Name, Kind  string
+	Season, Episode int
+}
+
+// Addon is an addon of a profile: its Name, and the address of its
+// manifest, which may hold the user's settings and keys, and is never
+// logged nor shown in full.
+type Addon struct {
+	Name, ManifestURL string
+}
+
+// Titles finds the items of titles named by other services' identifiers
+// (see library.Service.Resolve).
+type Titles interface {
+	Resolve(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, error)
+}
+
+// Installer installs addons (see addons.Store.Install).
+type Installer interface {
+	Install(ctx context.Context, scope addons.Scope, rawURL string, confined bool) (addons.Addon, error)
+}
+
+// Options are the dependencies of the service.
+type Options struct {
+	// Settings give the thresholds resume points are kept and titles
+	// played at, and whether users may add their own addons.
+	Settings func() accounts.Settings
+	Titles   Titles
+	UserData *userdata.Store
+	Addons   Installer
+	// Activity records the addons installed; nil records nothing.
+	Activity *activity.Store
+	Logger   *slog.Logger
+}
+
+// Service holds the accounts read until the user chooses what to import,
+// and imports them, one import into an account at a time.
+type Service struct {
+	settings func() accounts.Settings
+	titles   Titles
+	userData *userdata.Store
+	addons   Installer
+	activity *activity.Store
+	logger   *slog.Logger
+	now      func() time.Time
+	holdFor  time.Duration
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+
+	mu sync.Mutex
+	// held are the accounts read, by the user who read them: one each.
+	held map[accounts.ID]*held
+	// imports are the import running into each account, else its last.
+	imports map[accounts.ID]*Status
+}
+
+// held is an account read, and the key that names it to its reader.
+type held struct {
+	key     string
+	account Account
+	timer   *time.Timer
+}
+
+// New returns a service importing with options.
+func New(options Options) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Service{settings: options.Settings, titles: options.Titles, userData: options.UserData, addons: options.Addons,
+		activity: options.Activity, logger: options.Logger, now: time.Now, holdFor: holdFor, ctx: ctx, cancel: cancel,
+		held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}}
+}
+
+// Close drops the accounts held, stops the imports running and waits for
+// them to end.
+func (s *Service) Close() {
+	s.mu.Lock()
+	for by, h := range s.held {
+		h.timer.Stop()
+		delete(s.held, by)
+	}
+	s.mu.Unlock()
+	s.cancel()
+	s.wg.Wait()
+}
+
+// Hold keeps account, which by read, while they choose what to import,
+// for a few minutes at most, and returns the key that names it. It drops
+// the account by held before.
+func (s *Service) Hold(by accounts.ID, account Account) string {
+	var key [24]byte
+	_, _ = rand.Read(key[:])
+	h := &held{key: base64.RawURLEncoding.EncodeToString(key[:]), account: account}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if previous := s.held[by]; previous != nil {
+		previous.timer.Stop()
+	}
+	s.held[by] = h
+	h.timer = time.AfterFunc(s.holdFor, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.held[by] == h {
+			delete(s.held, by)
+		}
+	})
+	return h.key
+}
+
+// The states of an import.
+const (
+	StateRunning = "running"
+	StateDone    = "done"
+	// StateFailed is an import Polyfin's database failed.
+	StateFailed = "failed"
+)
+
+// ProblemInternal is what fails an import: Polyfin's database.
+const ProblemInternal = "internal"
+
+// The reasons a title is not matched: the app names it by an identifier
+// Polyfin does not find titles by, or no Polyfin title has its
+// identifiers.
+const (
+	ReasonOtherIdentifier = "other_identifier"
+	ReasonNotFound        = "not_found"
+)
+
+// The reasons a chosen addon is not installed: the user may no longer add
+// their own addons; it is installed already; its address is not one of a
+// manifest, or is on a local network, which only administrators reach; it
+// did not answer, or not with a manifest; or Polyfin's database failed.
+const (
+	AddonNotAllowed     = "not_allowed"
+	AddonExists         = "exists"
+	AddonInvalidAddress = "invalid_address"
+	AddonPrivateNetwork = "private_network"
+	AddonUnreachable    = "unreachable"
+	AddonInvalid        = "invalid_manifest"
+	AddonInternal       = "internal"
+)
+
+// Status is how an import goes, or went.
+type Status struct {
+	ID string
+	// App and Profile name the app and the profile imported.
+	App, Profile string
+	// User is the account imported into, UserName its name then.
+	User     accounts.ID
+	UserName string
+	// StartedBy is the user who started the import, StartedByName their
+	// name then: the account's user, or an administrator.
+	StartedBy     accounts.ID
+	StartedByName string
+	State         string
+	// Problem is what ended an import that failed.
+	Problem   string
+	StartedAt time.Time
+	EndedAt   *time.Time
+	// Read counts the entries of the profile. Played counts the titles
+	// marked played that were not, Resumed the resume points set, and
+	// Favorites the titles made favorites.
+	Read, Played, Resumed, Favorites int
+	// Unmatched lists the first titles not found, UnmatchedCount counts
+	// them all.
+	Unmatched      []Unmatched
+	UnmatchedCount int
+	// Addons are the addons chosen, in order, and how their installation
+	// went.
+	Addons []AddonStatus
+}
+
+// Unmatched is an entry no Polyfin title matched, and why.
+type Unmatched struct {
+	Label
+	Reason string
+}
+
+// AddonStatus is an addon an import installs: its name, the address of its
+// manifest, redacted, whether it was installed, and why not.
+type AddonStatus struct {
+	Name, Address string
+	Installed     bool
+	Problem       string
+}
+
+// clone copies s, so that what the import changes later does not show.
+func (s *Status) clone() *Status {
+	c := *s
+	c.Unmatched = slices.Clone(s.Unmatched)
+	c.Addons = slices.Clone(s.Addons)
+	return &c
+}
+
+// Current returns the import running into user's account, else the last
+// one, nil when none ran since Polyfin started.
+func (s *Service) Current(user accounts.ID) *Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.imports[user] == nil {
+		return nil
+	}
+	return s.imports[user].clone()
+}
+
+// Choice is what is imported of an account held: the ID of one of its
+// profiles, and the indexes of the addons of that profile to install.
+type Choice struct {
+	Profile string
+	Addons  []int
+}
+
+// Start imports, in the background, the profile choice names of the
+// account by holds under key, into user's account: by themselves, or an
+// administrator. The addons chosen are installed as user's own, which
+// needs them to be allowed; only an administrator's import reaches
+// addresses on local networks. Start stops holding the account, and
+// returns the import. It fails with ErrExpired, ErrUnknownProfile,
+// ErrUnknownAddon, ErrAddonsNotAllowed, or ErrRunning while an import into
+// user's account runs, holding the account still but for ErrExpired.
+func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Status, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h := s.held[by.ID]
+	if h == nil || key == "" || h.key != key {
+		return nil, ErrExpired
+	}
+	i := slices.IndexFunc(h.account.Profiles, func(p Profile) bool { return p.ID == choice.Profile })
+	if i < 0 {
+		return nil, ErrUnknownProfile
+	}
+	profile := h.account.Profiles[i]
+	chosen := make([]Addon, 0, len(choice.Addons))
+	for _, a := range choice.Addons {
+		if a < 0 || a >= len(profile.Addons) || slices.Contains(choice.Addons[:len(chosen)], a) {
+			return nil, ErrUnknownAddon
+		}
+		chosen = append(chosen, profile.Addons[a])
+	}
+	if len(chosen) > 0 && !s.settings().PersonalAddonsAllowed(user) {
+		return nil, ErrAddonsNotAllowed
+	}
+	if current := s.imports[user.ID]; current != nil && current.State == StateRunning {
+		return nil, ErrRunning
+	}
+	if s.ctx.Err() != nil {
+		return nil, s.ctx.Err()
+	}
+	// The account is dropped: what is imported of it goes with the run.
+	h.timer.Stop()
+	delete(s.held, by.ID)
+	status := &Status{ID: newID(), App: h.account.App, Profile: profile.Name, User: user.ID, UserName: user.Name, StartedBy: by.ID,
+		StartedByName: by.Name, State: StateRunning, StartedAt: s.now().UTC(), Read: len(profile.Entries),
+		Addons: make([]AddonStatus, 0, len(chosen))}
+	for _, a := range chosen {
+		status.Addons = append(status.Addons, AddonStatus{Name: a.Name, Address: stremio.RedactManifestURL(a.ManifestURL)})
+	}
+	s.imports[user.ID] = status
+	r := &run{s: s, status: status, by: by, user: user, entries: profile.Entries, addons: chosen}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		r.run(s.ctx)
+	}()
+	return status.clone(), nil
+}
+
+// newID returns a random identifier for an import.
+func newID() string {
+	var id accounts.ID
+	_, _ = rand.Read(id[:])
+	return id.String()
+}
