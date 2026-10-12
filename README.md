@@ -68,6 +68,7 @@ docker compose up -d
 - building the image from source;
 - the Unraid template;
 - giving the container a GPU;
+- the health check, and monitoring addresses;
 - daily database backups.
 
 ## Documentation

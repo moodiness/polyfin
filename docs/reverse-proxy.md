@@ -111,3 +111,5 @@ volumes:
 2. Under **Settings › Notifications**, set **Public address** to `https://media.example.org`.
 
 Traefik passes WebSockets and sets `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Real-Ip` by itself. In apps, the server's address is `https://media.example.org`.
+
+Traefik routes to Polyfin only once its container is healthy, which it becomes within seconds of starting (see [Behind Traefik](installation.md#behind-traefik)).

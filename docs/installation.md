@@ -118,6 +118,38 @@ For Jellyfin apps to find Polyfin on the local network by themselves, set the co
 
 Containers made from an older template keep working: the variables they set, such as `POLYFIN_CACHE_SIZE` or `POLYFIN_BACKUP_DIR`, are copied into the settings at their first start with a version that made them settings. You can remove them from the container afterwards.
 
+## Health check
+
+The image tells Docker whether Polyfin answers. Every 30 seconds, Docker runs `polyfin healthcheck` in the container, which asks Polyfin for `/healthz` at the address `POLYFIN_LISTEN` gives (`127.0.0.1` when it names no host, or `0.0.0.0` or `::`): the check fails when Polyfin does not answer 200 within 3 seconds. After 3 failures in a row, the container is unhealthy. `docker ps`, and Unraid's **Docker** page, show its health: starting, healthy or unhealthy.
+
+While Polyfin starts, for up to 2 minutes, Docker checks every 2 seconds, and failures do not count yet: the container turns healthy within 2 seconds of Polyfin answering. This needs Docker 25 or later; an older Docker checks every 30 seconds from the start.
+
+What it checks is that Polyfin's process serves. Polyfin answers once it has reached PostgreSQL and created its tables, so the health stays starting while it waits for the database, and turns unhealthy when it still waits 3 checks after those 2 minutes. Once started, Polyfin keeps answering while PostgreSQL is away: a database briefly unreachable shows under **System › Health**, and leaves the container healthy, as restarting Polyfin or leaving it out of a proxy would not bring the database back.
+
+Docker itself does not restart an unhealthy container: `restart: unless-stopped` only restarts a container whose process has ended. Swarm services, and tools that watch containers' health, do restart it.
+
+### Behind Traefik
+
+Traefik's Docker provider leaves out containers whose health is starting or unhealthy: until Polyfin is healthy, Traefik has no route to it, and answers 404 at its address. Checking every 2 seconds while Polyfin starts keeps that to about 2 seconds after each start; with Docker before 25, it can last 30 seconds. Traefik's `allowEmptyServices` option keeps the route, which then answers 503 while the container is not healthy. See [Reverse proxy](reverse-proxy.md).
+
+### Turn it off
+
+With `docker run`, add `--no-healthcheck`; on Unraid, add it to the container's extra parameters, in the advanced view of its template. In Compose, add this to the `polyfin` service:
+
+```yaml
+    healthcheck:
+      disable: true
+```
+
+### Monitoring
+
+Polyfin answers two addresses, without signing in, for monitoring tools:
+
+- `/healthz` answers 200 while Polyfin's process serves, PostgreSQL reachable or not. The health check asks it.
+- `/readyz` answers 200 when PostgreSQL is reachable too, and 503 when it is not.
+
+Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503.
+
 ## GPU
 
 To convert video on a GPU, give the container access to it. See [Transcoding](transcoding.md) for NVIDIA, AMD and Intel GPUs.
