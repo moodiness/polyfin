@@ -245,7 +245,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 			items, records = append(items, item), append(records, rec)
 		}
 	}
-	for _, item := range s.creditedTitles(v, credited, kinds) {
+	for _, item := range s.creditedTitles(ctx, v, credited, kinds) {
 		if !seen[item.ID] {
 			items = append(items, item)
 		}
@@ -259,17 +259,18 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 
 // creditedTitles describes, by name, the titles of the given kinds among a
 // person's credited ones (see person), from what was stored when they were
-// listed, with the complete description when it is still cached:
-// describing each title anew would cost a request per title. A title keeps
-// its folder only when it came from one of the user's addons.
-func (s *Service) creditedTitles(v view, credited []record, kinds []Kind) []Item {
+// listed, with the complete description when it is still cached (see
+// describedMeta): describing each title anew would cost a request per
+// title. A title keeps its folder only when it came from one of the user's
+// addons.
+func (s *Service) creditedTitles(ctx context.Context, v view, credited []record, kinds []Kind) []Item {
 	var items []Item
 	for _, r := range credited {
 		if !slices.Contains(kinds, r.Kind) {
 			continue
 		}
 		meta := *r.Meta
-		if full, ok := s.cachedMeta(r); ok {
+		if full, _, ok := s.describedMeta(ctx, v, r, false); ok {
 			meta = full
 		}
 		item := Item{ID: r.ID, Kind: r.Kind, Available: true}

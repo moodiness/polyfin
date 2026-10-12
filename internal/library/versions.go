@@ -127,7 +127,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		return target{item: id, kind: r.Kind, metaType: originEclipse, id: r.Music.ID}, v, nil
 	case (r.Kind == KindMovie || r.Kind == KindVideo) && r.Meta != nil:
 		meta := r.Meta
-		if full, ok := s.cachedMeta(r); ok {
+		if full, _, ok := s.describedMeta(ctx, v, r, false); ok {
 			meta = &full
 		}
 		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil

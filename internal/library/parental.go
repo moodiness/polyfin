@@ -173,7 +173,7 @@ func (v view) rates(r record) bool {
 // genres. A title none of the server's addons describes has no rating,
 // and the genres of its listing. stale is set when the traits kept are old
 // enough to be asked again.
-func (s *Service) knownTraits(v view, r record) (t traits, stale bool) {
+func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, stale bool) {
 	// A home video has no rating nor genres: it is what its folder tells,
 	// and nothing to look up.
 	if r.Kind == KindVideo {
@@ -187,17 +187,13 @@ func (s *Service) knownTraits(v view, r record) (t traits, stale bool) {
 		if r.RatedAt != nil && s.now().Sub(*r.RatedAt) < ratingTTL(*r.Rating) {
 			return kept, false
 		}
-		if v.sharedAddon(r.Addon) {
-			if full, ok := s.cachedMeta(r); ok {
-				return describedTraits(full), false
-			}
+		if full, _, ok := s.describedMeta(ctx, v, r, true); ok {
+			return describedTraits(full), false
 		}
 		return kept, true
 	}
-	if v.sharedAddon(r.Addon) {
-		if full, ok := s.cachedMeta(r); ok {
-			return describedTraits(full), false
-		}
+	if full, _, ok := s.describedMeta(ctx, v, r, true); ok {
+		return describedTraits(full), false
 	}
 	describable := v.rates(r)
 	if v.sharedAddon(r.Addon) && r.Meta != nil {
@@ -270,7 +266,7 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 			allowed[i] = true
 			continue
 		}
-		t, old := s.knownTraits(v, r)
+		t, old := s.knownTraits(ctx, v, r)
 		t = s.overriddenTraits(r.ID, t)
 		if ok, decided := v.verdict(r.Kind, t); decided {
 			allowed[i] = ok

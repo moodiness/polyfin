@@ -112,8 +112,8 @@ func metadataAddon(t *testing.T, asks *int) string {
 			*asks++
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": map[string]any{"id": "tmdb:1000", "type": "movie", "name": "Zeb Quest",
-				"description": "The metadata addon's overview.", "poster": "https://images.example/zeb.jpg", "imdbRating": "7.9",
-				"app_extras": map[string]any{"certification": "PG-13"}}})
+				"description": "The metadata addon's overview.", "poster": "https://images.example/zeb.jpg",
+				"logo": "https://images.example/zeb-logo.png", "imdbRating": "7.9", "app_extras": map[string]any{"certification": "PG-13"}}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -182,6 +182,12 @@ func TestIPTVMoviesAndSeriesInApps(t *testing.T) {
 	if details.Overview == nil || *details.Overview != "The metadata addon's overview." || details.OfficialRating != "PG-13" ||
 		details.ProductionYear == nil || *details.ProductionYear != 2019 {
 		t.Errorf("an enriched movie: %+v", details)
+	}
+	// The metadata addon's logo, which the provider has none of, is served
+	// as the details list it.
+	if url, _, err := s.library.Artwork(t.Context(), mustID(t, zeb), "Logo"); details.ImageTags["Logo"] == "" ||
+		err != nil || url != "https://images.example/zeb-logo.png" {
+		t.Errorf("the enriched movie's logo: %v, %q %v", details.ImageTags, url, err)
 	}
 	s.get(t, "/Users/"+member.ID.String()+"/Items/"+orb, token, &details)
 	if details.Overview == nil || *details.Overview != "The provider's plot of 42" {

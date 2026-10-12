@@ -5,7 +5,6 @@ import (
 	"context"
 	"slices"
 
-	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -16,12 +15,13 @@ import (
 // age rating, the source's own description filling what it lacks. The
 // title's identifiers, name, category and episodes stay the source's,
 // which play; episodes take the addon's artwork and overviews where they
-// have none. Only a request opening the title asks the addon (see
-// iptv.Opening), once, as descriptions are cached; others take what is
-// cached.
-func (s *Service) enrich(ctx context.Context, v view, source installed, meta stremio.Meta, shared bool) stremio.Meta {
+// have none. The addons are asked when ask is set, for a request opening
+// the title (see iptv.Opening), once, as descriptions are cached; else
+// only cached descriptions count. ok reports whether an addon's
+// description completed the source's.
+func (s *Service) enrich(ctx context.Context, v view, source installed, meta stremio.Meta, shared, ask bool) (_ stremio.Meta, ok bool) {
 	if s.iptv == nil || meta.Type != "movie" && meta.Type != "series" || !s.iptv.Enrichment(ctx, source.addon.ID) {
-		return meta
+		return meta, false
 	}
 	var ids []string
 	if meta.ImdbID != "" {
@@ -30,14 +30,13 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 	if meta.TmdbID != "" {
 		ids = append(ids, "tmdb:"+string(meta.TmdbID))
 	}
-	opening := iptv.IsOpening(ctx)
 	for _, id := range ids {
 		for _, candidate := range v.addons {
 			if own(candidate.addon) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
 				continue
 			}
 			var described stremio.Meta
-			if opening {
+			if ask {
 				var err error
 				if described, err = s.meta(ctx, candidate, meta.Type, id); err != nil {
 					s.logger.Debug("An addon could not describe an IPTV title", "addon", candidate.addon.Manifest.Name, "error", err)
@@ -48,10 +47,10 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 			} else {
 				continue
 			}
-			return enriched(meta, described)
+			return enriched(meta, described), true
 		}
 	}
-	return meta
+	return meta, false
 }
 
 // enriched is an IPTV title's description completed by an addon's.

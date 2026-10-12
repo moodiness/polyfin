@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -1369,16 +1370,42 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 }
 
 // describe finds the complete description of a title among the user's
-// addons, the server's only when shared is set, starting with the one that
-// listed it. A local folder comes last, whoever listed the title: it
-// describes its titles from what their files tell, for when no addon does.
-// A description from one of the server's addons gives the rating kept for
-// the title.
+// addons, the server's only when shared is set, in the order describers
+// gives. A description from one of the server's addons gives the rating
+// kept for the title.
 func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (stremio.Meta, bool) {
-	if r.Meta == nil {
-		return stremio.Meta{}, false
+	for _, candidate := range describers(v, r, shared) {
+		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
+		if err == nil {
+			meta := kept.value
+			if candidate.addon.IPTV() {
+				meta, _ = s.enrich(ctx, v, candidate, meta, shared, iptv.IsOpening(ctx))
+			}
+			if candidate.shared && !candidate.addon.Local() {
+				s.learnTraits(ctx, r, meta, kept.at)
+			}
+			return meta, true
+		}
+		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
 	}
-	candidates := slices.Clone(v.addons)
+	return stremio.Meta{}, false
+}
+
+// describers lists the user's addons, the server's only when shared is
+// set, that may describe a title, in the order they are asked: the one
+// that listed it first. A local folder comes last, whoever listed the
+// title: it describes its titles from what their files tell, for when no
+// addon does.
+func describers(v view, r record, shared bool) []installed {
+	if r.Meta == nil {
+		return nil
+	}
+	var candidates []installed
+	for _, candidate := range v.addons {
+		if (!shared || candidate.shared) && serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
+			candidates = append(candidates, candidate)
+		}
+	}
 	if r.Addon != nil {
 		slices.SortStableFunc(candidates, func(a, b installed) int {
 			switch {
@@ -1399,24 +1426,34 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 		}
 		return 1
 	})
-	for _, candidate := range candidates {
-		if shared && !candidate.shared || !serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
-			continue
-		}
-		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
-		if err == nil {
-			meta := kept.value
+	return candidates
+}
+
+// describedMeta returns the complete description describe gives of a
+// title, as far as it is known without asking any addon: that of the
+// first of describers whose description is cached, wherever the title was
+// listed. A local folder or an IPTV source describes its titles from its
+// database, kept nowhere: the one that listed the title gives what its
+// enrichment adds from the cache to its listing, if anything; another
+// local folder gives nothing. It returns the addon that described the
+// title.
+func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bool) (stremio.Meta, installed, bool) {
+	for _, candidate := range describers(v, r, shared) {
+		switch {
+		case !own(candidate.addon):
+			if kept, ok := s.metas.Get(metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}); ok {
+				return kept.value, candidate, true
+			}
+		case r.Addon != nil && candidate.addon.ID == *r.Addon:
 			if candidate.addon.IPTV() {
-				meta = s.enrich(ctx, v, candidate, meta, shared)
+				if meta, ok := s.enrich(ctx, v, candidate, *r.Meta, shared, false); ok {
+					return meta, candidate, true
+				}
 			}
-			if candidate.shared && !candidate.addon.Local() {
-				s.learnTraits(ctx, r, meta, kept.at)
-			}
-			return meta, true
+			return stremio.Meta{}, installed{}, false
 		}
-		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
 	}
-	return stremio.Meta{}, false
+	return stremio.Meta{}, installed{}, false
 }
 
 // TitleMeta returns the description the server's addons give of a title by
@@ -1581,7 +1618,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		// description gives the rating and genres.
 		t := describedTraits(meta)
 		if !described {
-			t, _ = s.knownTraits(v, r)
+			t, _ = s.knownTraits(ctx, v, r)
 		}
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.
@@ -2077,7 +2114,8 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 // confined to public addresses: the artwork an administrator uploaded, else
 // a local folder's (see Local.Artwork), else the addon's (see Uploaded). It
 // needs no user: Jellyfin apps load images without credentials, and
-// artwork URLs carry no secret.
+// artwork URLs carry no secret. A title's image its listing lacks is the
+// one of its description, whichever addon gave it (see artworkView).
 func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
 	if url, ok := s.UploadedArtwork(id, imageType); ok {
 		return url, false, nil
@@ -2125,9 +2163,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		var item Item
 		fromMeta(&item, *r.Meta)
 		images = item.Images
-		if full, ok := s.cachedMeta(r); ok && images.URL(imageType) == "" {
-			fromMeta(&item, full)
-			images = item.Images
+		if images.URL(imageType) == "" {
+			v, err := s.artworkView(ctx, r)
+			if err != nil {
+				return "", false, err
+			}
+			if full, describer, ok := s.describedMeta(ctx, v, r, false); ok {
+				fromMeta(&item, full)
+				images = item.Images
+				confined = confined || describer.confined
+			}
 		}
 	case r.Kind == KindEpisode && r.Video != nil:
 		images.Primary = r.Video.Thumbnail
@@ -2146,7 +2191,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		if err != nil || series.Meta == nil {
 			return "", false, ErrNotFound
 		}
-		images = withLocal(Images{Primary: series.Meta.Poster, Backdrop: series.Meta.Background},
+		// The season's own artwork, and its series', are read from the
+		// series' complete metadata while it is cached, else as their
+		// last listing recorded them: the images apps were given tags
+		// for, without asking the addon again.
+		v, err := s.artworkView(ctx, series)
+		if err != nil {
+			return "", false, err
+		}
+		full, describer, described := s.describedMeta(ctx, v, series, false)
+		images = withLocal(Images{Primary: cmp.Or(full.Poster, series.Meta.Poster), Backdrop: cmp.Or(full.Background, series.Meta.Background)},
 			Images{Primary: local[series.ID].Primary, Backdrop: local[series.ID].Backdrop})
 		// A season shows its series' artwork, local or uploaded, unless it
 		// has its own.
@@ -2155,18 +2209,14 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 				setImage(&images, imageType, url)
 			}
 		}
-		// The season's own artwork is read from its series' complete
-		// metadata while it is cached, else as its last listing recorded
-		// it: the image apps were given its tag for, without asking the
-		// addon again.
 		poster := r.Poster
-		if full, ok := s.cachedMeta(series); ok {
+		if described {
 			poster = seasonPosters(full)[r.Season]
 		}
 		if poster != "" {
 			images.Primary = poster
 		}
-		confined = series.Confined
+		confined = series.Confined || describer.confined
 	}
 	url := images.URL(imageType)
 	if url == "" {
@@ -2175,12 +2225,26 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	return url, confined, nil
 }
 
-// cachedMeta returns the complete metadata of a title if its addon already
-// sent it.
-func (s *Service) cachedMeta(r record) (stremio.Meta, bool) {
-	if r.Addon == nil || r.Meta == nil {
-		return stremio.Meta{}, false
+// artworkView is the view a title's artwork is found with (see
+// describedMeta): image requests come without a user, so the server's
+// addons describe it, after the addon that listed it when that one is a
+// user's own.
+func (s *Service) artworkView(ctx context.Context, r record) (view, error) {
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil || r.Addon == nil {
+		return v, err
 	}
-	kept, ok := s.metas.Get(metaKey{*r.Addon, r.Meta.Type, r.Meta.ID})
-	return kept.value, ok
+	if _, ok := v.addon(*r.Addon); ok {
+		return v, nil
+	}
+	addon, err := s.addons.Find(ctx, *r.Addon)
+	switch {
+	case errors.Is(err, addons.ErrNotFound):
+		return v, nil
+	case err != nil:
+		return view{}, err
+	case addon.Enabled:
+		v.addons = append([]installed{{addon: addon, confined: r.Confined}}, v.addons...)
+	}
+	return v, nil
 }
