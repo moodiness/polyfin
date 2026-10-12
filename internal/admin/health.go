@@ -458,7 +458,7 @@ func (h *handler) sources(w http.ResponseWriter, r *http.Request) {
 			result.Guides = append(result.Guides, ownedGuideJSON{Owner: scope.Owner, libraryJSON: libraryJSON{
 				AddonID: l.AddonID.String(), AddonName: l.AddonName, CatalogType: l.Catalog.Type, CatalogID: l.Catalog.ID,
 				CatalogName: l.Catalog.Name, Name: l.Name, Enabled: l.Enabled, Browsable: l.Catalog.Browsable(), Genres: []string{},
-				Guide: newLibraryGuideJSON(l, refreshHours), Guides: newGuidesJSON(l.Guides, refreshHours)}})
+				Guide: h.newLibraryGuideJSON(l, refreshHours), Guides: h.newGuidesJSON(l.Guides, refreshHours)}})
 		}
 	}
 	writeJSON(w, http.StatusOK, result)

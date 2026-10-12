@@ -317,7 +317,7 @@ func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 		}
 	}
 	status := e.guideOf(addons.Shared(), key)
-	if at, ok := GuideRetry(status.ID); status.Error != guideRateLimited || !ok || !at.Equal(now.Add(time.Hour)) {
+	if at, ok := e.service.GuideRetry(status.ID); status.Error != guideRateLimited || !ok || !at.Equal(now.Add(time.Hour)) {
 		t.Errorf("a rate-limited guide: %q, next try %v %v", status.Error, at, ok)
 	}
 	guide.set(`<tv><channel id="1"><display-name>One</display-name></channel></tv>`, 0)
@@ -326,7 +326,7 @@ func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 		t.Fatal(err)
 	}
 	status = e.guideOf(addons.Shared(), key)
-	if _, ok := GuideRetry(status.ID); status.Error != "" || ok {
+	if _, ok := e.service.GuideRetry(status.ID); status.Error != "" || ok {
 		t.Errorf("after a success: %q, retry known %v", status.Error, ok)
 	}
 }

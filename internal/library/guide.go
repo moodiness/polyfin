@@ -103,7 +103,7 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 			}
 		}
 	}
-	if !sweepDue(s.now()) {
+	if !s.sweepDue(s.now()) {
 		return nil
 	}
 	if deleted, err := s.SweepPrograms(ctx); err != nil {
@@ -129,57 +129,59 @@ func (s *Service) guideRetries(ctx context.Context) (map[accounts.ID]*time.Time,
 		return nil
 	})
 	if err == nil {
-		retriesMu.Lock()
-		knownRetries = map[accounts.ID]time.Time{}
+		s.guides.mu.Lock()
+		s.guides.retries = map[accounts.ID]time.Time{}
 		for id, at := range retries {
-			knownRetries[id] = *at
+			s.guides.retries[id] = *at
 		}
-		retriesMu.Unlock()
+		s.guides.mu.Unlock()
 	}
 	return retries, err
 }
 
-// lastSweep is when past programmes were last deleted.
-var lastSweep struct {
-	sync.Mutex
-	at time.Time
+// guideState is what the refreshes of the guides remember between runs:
+// when each guide whose last download failed is tried again, as known
+// since the guides were last looked for, and when past programmes were
+// last deleted.
+type guideState struct {
+	mu        sync.Mutex
+	retries   map[accounts.ID]time.Time
+	lastSweep time.Time
 }
 
 // sweepDue reports whether past programmes are deleted now, at most every
 // programSweep, and takes the turn.
-func sweepDue(now time.Time) bool {
-	lastSweep.Lock()
-	defer lastSweep.Unlock()
-	if now.Sub(lastSweep.at) < programSweep {
+func (s *Service) sweepDue(now time.Time) bool {
+	s.guides.mu.Lock()
+	defer s.guides.mu.Unlock()
+	if now.Sub(s.guides.lastSweep) < programSweep {
 		return false
 	}
-	lastSweep.at = now
+	s.guides.lastSweep = now
 	return true
 }
 
-var (
-	retriesMu    sync.Mutex
-	knownRetries = map[accounts.ID]time.Time{}
-)
-
 // GuideRetry returns when a guide whose last download failed is tried
 // again, as known since the guides were last looked for.
-func GuideRetry(guide accounts.ID) (time.Time, bool) {
-	retriesMu.Lock()
-	defer retriesMu.Unlock()
-	at, ok := knownRetries[guide]
+func (s *Service) GuideRetry(guide accounts.ID) (time.Time, bool) {
+	s.guides.mu.Lock()
+	defer s.guides.mu.Unlock()
+	at, ok := s.guides.retries[guide]
 	return at, ok
 }
 
 // rememberRetry records a guide's next try, the zero time after a success.
-func rememberRetry(guide accounts.ID, at time.Time) {
-	retriesMu.Lock()
-	defer retriesMu.Unlock()
+func (s *Service) rememberRetry(guide accounts.ID, at time.Time) {
+	s.guides.mu.Lock()
+	defer s.guides.mu.Unlock()
 	if at.IsZero() {
-		delete(knownRetries, guide)
-	} else {
-		knownRetries[guide] = at
+		delete(s.guides.retries, guide)
+		return
 	}
+	if s.guides.retries == nil {
+		s.guides.retries = map[accounts.ID]time.Time{}
+	}
+	s.guides.retries[guide] = at
 }
 
 // RefreshGuide fetches every XMLTV guide of one of the scope's live TV
@@ -279,7 +281,7 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			next := at.Add(iptv.Backoff(failures+1, time.Duration(s.settings().LiveTvRefreshHours)*time.Hour, after))
 			_, err := s.db.Exec(ctx, "UPDATE live_guides SET checked_at = $2, error = $3, failures = failures + 1, next_try_at = $4 WHERE id = $1",
 				g.ID, at, code, next)
-			rememberRetry(g.ID, next)
+			s.rememberRetry(g.ID, next)
 			return nil, err
 		}
 		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -292,7 +294,7 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
-			rememberRetry(g.ID, time.Time{})
+			s.rememberRetry(g.ID, time.Time{})
 			for _, table := range []string{"live_guide_programmes", "live_guide_channels"} {
 				if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE guide_id = $1 AND generation <> $2", g.ID, generation); err != nil {
 					return err

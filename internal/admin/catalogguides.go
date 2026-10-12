@@ -12,8 +12,8 @@ import (
 )
 
 // Guides are what the guide routes ask the library: downloading the
-// XMLTV guides of live TV catalogs and mapping their channels (see
-// library.Service).
+// XMLTV guides of live TV catalogs, mapping their channels, and when a
+// guide whose last download failed is tried again (see library.Service).
 type Guides interface {
 	RefreshGuide(ctx context.Context, scope addons.Scope, key addons.LibraryKey) error
 	CatalogGuides(ctx context.Context, scope addons.Scope, key addons.LibraryKey) (library.CatalogGuides, error)
@@ -23,6 +23,7 @@ type Guides interface {
 	Mappings(ctx context.Context, scope addons.Scope, key addons.LibraryKey, state, q string, offset, limit int) (int, []library.ChannelMapping, error)
 	SetMapping(ctx context.Context, scope addons.Scope, key addons.LibraryKey, channel accounts.ID, guide *accounts.ID, xmltvID *string) (library.ChannelMapping, error)
 	ClearMapping(ctx context.Context, scope addons.Scope, key addons.LibraryKey, channel accounts.ID) (library.ChannelMapping, error)
+	GuideRetry(guide accounts.ID) (time.Time, bool)
 }
 
 type catalogGuidesJSON struct {
@@ -36,7 +37,7 @@ func (h *handler) answerCatalogGuides(w http.ResponseWriter, r *http.Request, gu
 	if h.answerFailure(w, r, err) {
 		return
 	}
-	result := catalogGuidesJSON{Guides: newGuidesJSON(guides.Guides, h.Accounts.Settings().LiveTvRefreshHours), Channels: guides.Channels,
+	result := catalogGuidesJSON{Guides: h.newGuidesJSON(guides.Guides, h.Accounts.Settings().LiveTvRefreshHours), Channels: guides.Channels,
 		Mapped: guides.Mapped, Manual: guides.Manual}
 	if result.Guides == nil {
 		result.Guides = []guideJSON{}

@@ -230,10 +230,12 @@ type guideJSON struct {
 	Error      string     `json:"error"`
 }
 
-func nextGuideFetch(guide addons.Guide, refreshHours int) *time.Time {
+func (h *handler) nextGuideFetch(guide addons.Guide, refreshHours int) *time.Time {
 	// A failed download is tried again sooner (see iptv.Backoff).
-	if at, ok := library.GuideRetry(guide.ID); ok {
-		return &at
+	if h.Guides != nil {
+		if at, ok := h.Guides.GuideRetry(guide.ID); ok {
+			return &at
+		}
 	}
 	if guide.CheckedAt == nil {
 		return nil
@@ -241,26 +243,26 @@ func nextGuideFetch(guide addons.Guide, refreshHours int) *time.Time {
 	return new(guide.CheckedAt.Add(time.Duration(refreshHours) * time.Hour))
 }
 
-func newGuideJSON(guide addons.Guide, refreshHours int) guideJSON {
+func (h *handler) newGuideJSON(guide addons.Guide, refreshHours int) guideJSON {
 	return guideJSON{ID: guide.ID.String(), Position: guide.Position, URL: redactGuideURL(guide.URL), CheckedAt: guide.CheckedAt,
-		FetchedAt: guide.FetchedAt, NextAt: nextGuideFetch(guide, refreshHours), Channels: guide.Channels, Programmes: guide.Programmes,
+		FetchedAt: guide.FetchedAt, NextAt: h.nextGuideFetch(guide, refreshHours), Channels: guide.Channels, Programmes: guide.Programmes,
 		Error: guide.Error}
 }
 
-func newGuidesJSON(guides []addons.Guide, refreshHours int) []guideJSON {
+func (h *handler) newGuidesJSON(guides []addons.Guide, refreshHours int) []guideJSON {
 	if guides == nil {
 		return nil
 	}
 	result := make([]guideJSON, 0, len(guides))
 	for _, g := range guides {
-		result = append(result, newGuideJSON(g, refreshHours))
+		result = append(result, h.newGuideJSON(g, refreshHours))
 	}
 	return result
 }
 
 // newLibraryGuideJSON describes a library's first guide, nil for a library
 // that is not an enabled live TV catalog.
-func newLibraryGuideJSON(l addons.Library, refreshHours int) *libraryGuideJSON {
+func (h *handler) newLibraryGuideJSON(l addons.Library, refreshHours int) *libraryGuideJSON {
 	if l.Guides == nil {
 		return nil
 	}
@@ -268,7 +270,7 @@ func newLibraryGuideJSON(l addons.Library, refreshHours int) *libraryGuideJSON {
 	if len(l.Guides) > 0 {
 		first := l.Guides[0]
 		result.URL, result.CheckedAt, result.FetchedAt, result.Error = redactGuideURL(first.URL), first.CheckedAt, first.FetchedAt, first.Error
-		result.NextAt = nextGuideFetch(first, refreshHours)
+		result.NextAt = h.nextGuideFetch(first, refreshHours)
 	}
 	return result
 }
@@ -343,8 +345,8 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			Filterable:  l.Filterable,
 			HideInMenus: l.HideInMenus,
 			Image:       l.Image,
-			Guide:       newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
-			Guides:      newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
+			Guide:       h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
+			Guides:      h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
 		}
 		if l.Filterable {
 			entry.Genres = append(entry.Genres, addons.GenreChoices(l.Catalog)...)

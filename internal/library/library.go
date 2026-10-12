@@ -102,6 +102,9 @@ type Service struct {
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
+	// guides is what the refreshes of the guides remember between runs
+	// (see guideState).
+	guides guideState
 	// iptv answers for Polyfin's own IPTV sources (see UseIPTV).
 	iptv IPTV
 	// local answers for Polyfin's own local folders (see UseLocal).
