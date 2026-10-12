@@ -3,14 +3,18 @@ package localfiles
 import (
 	"bytes"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -122,8 +126,7 @@ func (e env) homeTitles(id accounts.ID) map[string]stremio.Meta {
 // A home videos folder lists each video as a title of its own, named,
 // dated and described by its NFO file, its recording and its file, with
 // the poster beside it or a frame of it; nothing is asked of the metadata
-// addons, nothing is unmatched, and identifiers stay through scans until a
-// file is renamed.
+// addons, nothing is unmatched, and identifiers stay through scans.
 func TestHomeVideosFolders(t *testing.T) {
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
@@ -162,7 +165,8 @@ func TestHomeVideosFolders(t *testing.T) {
 	}
 	for name, w := range want {
 		meta := titles[name]
-		if meta.ID != videoID(addon.ID, w.path) || meta.Type != library.VideoType || meta.Released != w.released || meta.Description != w.plot {
+		if !strings.HasPrefix(meta.ID, library.VideoIDPrefix) || meta.Type != library.VideoType || meta.Released != w.released ||
+			meta.Description != w.plot {
 			t.Errorf("%s: %+v", name, meta)
 		}
 	}
@@ -245,17 +249,185 @@ func TestHomeVideosFolders(t *testing.T) {
 	if e.service.Artwork()[library.TitleItemID(library.KindVideo, titles["day 1"].ID)].Primary != frame {
 		t.Error("the frame was made again")
 	}
+}
 
-	// Renamed, a video is another title.
-	if err := os.Rename(filepath.Join(dir, "Beach.mp4"), filepath.Join(dir, "Beach day.mp4")); err != nil {
+// videoBytes makes a file of size bytes at path, its folders too, of seed
+// but its last byte, last.
+func videoBytes(t *testing.T, path string, size int, seed, last byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+	data := bytes.Repeat([]byte{seed}, size)
+	data[size-1] = last
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	renamed := e.homeTitles(addon.ID)
-	if _, ok := renamed["Beach"]; ok || renamed["Beach day"].ID != videoID(addon.ID, "Beach day.mp4") ||
-		renamed["Beach day"].Released != "2015-07-04T10:00:00Z" {
-		t.Errorf("renamed: %+v", renamed)
+}
+
+// A home video keeps its identifier renamed, moved into a subfolder, its
+// folder renamed, moved into another home videos folder, a share, scanned
+// before or after the folder it left, or back within 30 days, or its
+// folder given another address; a video found before fingerprints were
+// kept too, once a scan read it. A copy is a title of its own, even once
+// its original goes, and so are videos when several gone or found have
+// the same contents, or a video of another's size whose end differs. A
+// video recognized is not counted as added again.
+func TestHomeVideosFollowTheirFiles(t *testing.T) {
+	e := newEnv(t)
+	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.service.box = box
+	dir, nas := t.TempDir(), t.TempDir()
+	other := filepath.Join(nas, "concerts")
+	if err := os.Mkdir(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	server := serveWebDAV(t, nas, "reader", "pass phrase")
+	const big = 3 << 20
+	for rel, seed := range map[string]byte{"Beach.mp4": 1, "Party.mp4": 2, "Trip/day 1.mp4": 3, "Trip/day 2.mp4": 4, "Concert.mp4": 5,
+		"Twin.mp4": 6, "Twin copy.mp4": 6, "Old.mp4": 7} {
+		videoBytes(t, filepath.Join(dir, rel), big, seed, seed)
+	}
+	videoBytes(t, filepath.Join(dir, "Clip.mp4"), big, 8, 1)
+	videoBytes(t, filepath.Join(dir, "Small.mp4"), 1000, 9, 9)
+	family, err := e.service.Add(t.Context(), NewFolder{Name: "Family", Path: dir, Kind: KindHomeVideos})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(family.ID)
+	second, err := e.service.Add(t.Context(), NewFolder{Name: "Concerts", Path: server.URL + "/concerts/", Kind: KindHomeVideos, User: "reader",
+		Password: "pass phrase"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(second.ID)
+	before := e.files(family.ID)
+	scan := func(ids ...accounts.ID) {
+		t.Helper()
+		for _, id := range ids {
+			if err := e.service.Scan(t.Context(), id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	move := func(from, to string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(from, to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A video found before fingerprints were kept.
+	if _, err := e.pool.Exec(t.Context(), "UPDATE local_videos SET fingerprint = NULL WHERE path = 'Old.mp4'"); err != nil {
+		t.Fatal(err)
+	}
+	scan(family.ID)
+	added := time.Now()
+
+	move(filepath.Join(dir, "Beach.mp4"), filepath.Join(dir, "Beach day.mp4"))
+	move(filepath.Join(dir, "Party.mp4"), filepath.Join(dir, "2019/Party.mp4"))
+	move(filepath.Join(dir, "Trip"), filepath.Join(dir, "Summer trip"))
+	move(filepath.Join(dir, "Concert.mp4"), filepath.Join(other, "Concert.mp4"))
+	move(filepath.Join(dir, "Old.mp4"), filepath.Join(dir, "Old days.mp4"))
+	move(filepath.Join(dir, "Small.mp4"), filepath.Join(dir, "Small one.mp4"))
+	move(filepath.Join(dir, "Twin.mp4"), filepath.Join(dir, "Twin again.mp4"))
+	if err := os.Remove(filepath.Join(dir, "Twin copy.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "Clip.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	videoBytes(t, filepath.Join(dir, "Clip edit.mp4"), big, 8, 2)
+	scan(family.ID, second.ID)
+	after, moved := e.files(family.ID), e.files(second.ID)
+	for from, to := range map[string]string{"Beach.mp4": "Beach day.mp4", "Party.mp4": "2019/Party.mp4", "Trip/day 1.mp4": "Summer trip/day 1.mp4",
+		"Trip/day 2.mp4": "Summer trip/day 2.mp4", "Old.mp4": "Old days.mp4", "Small.mp4": "Small one.mp4"} {
+		if after[to] != before[from] {
+			t.Errorf("%s, now %s: %s, was %s", from, to, after[to], before[from])
+		}
+	}
+	if moved["Concert.mp4"] != before["Concert.mp4"] {
+		t.Errorf("moved into another folder: %s, was %s", moved["Concert.mp4"], before["Concert.mp4"])
+	}
+	for rel, former := range map[string]string{"Twin again.mp4": "Twin.mp4", "Clip edit.mp4": "Clip.mp4"} {
+		if id := after[rel]; !strings.HasPrefix(id, library.VideoIDPrefix) || slices.Contains(slices.Collect(maps.Values(before)), id) {
+			t.Errorf("%s took %s's identifier, or another: %s", rel, former, id)
+		}
+	}
+	// Moved into another folder scanned first, a video is a new title until
+	// the scan of the folder it left gives it its identifier back, with
+	// when it was first found.
+	move(filepath.Join(dir, "Small one.mp4"), filepath.Join(other, "Small one.mp4"))
+	scan(second.ID)
+	if early := e.files(second.ID)["Small one.mp4"]; early == "" || early == before["Small.mp4"] {
+		t.Errorf("found first: %s", early)
+	}
+	scan(family.ID)
+	if late := e.files(second.ID)["Small one.mp4"]; late != before["Small.mp4"] {
+		t.Errorf("moved into a folder scanned first: %s, was %s", late, before["Small.mp4"])
+	}
+	if titles, total, err := e.service.Added(t.Context(), added, time.Now().Add(time.Minute), 10); err != nil || total != 2 {
+		t.Errorf("added: %+v %d %v", titles, total, err)
+	}
+
+	// A copy is a title of its own, its original still there; so are a
+	// video renamed and its copy found together.
+	data, err := os.ReadFile(filepath.Join(dir, "Beach day.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Beach copy.mp4"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	move(filepath.Join(dir, "Old days.mp4"), filepath.Join(dir, "Older days.mp4"))
+	if err := os.WriteFile(filepath.Join(dir, "Old copy.mp4"), bytes.Repeat([]byte{7}, big), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan(family.ID)
+	copied := e.files(family.ID)
+	if copied["Beach day.mp4"] != before["Beach.mp4"] || copied["Beach copy.mp4"] == before["Beach.mp4"] ||
+		copied["Older days.mp4"] == before["Old.mp4"] || copied["Old copy.mp4"] == before["Old.mp4"] {
+		t.Errorf("copies: %v", copied)
+	}
+
+	// Gone 30 days, a video is forgotten.
+	away := t.TempDir()
+	move(filepath.Join(dir, "Summer trip"), filepath.Join(away, "Summer trip"))
+	scan(family.ID)
+	if _, err := e.pool.Exec(t.Context(), "UPDATE local_videos_gone SET gone_at = now() - CASE WHEN video_id = $1 THEN interval '31 days' ELSE interval '29 days' END",
+		before["Trip/day 1.mp4"]); err != nil {
+		t.Fatal(err)
+	}
+	move(filepath.Join(away, "Summer trip"), filepath.Join(dir, "Summer trip"))
+	scan(family.ID)
+	back := e.files(family.ID)
+	if back["Summer trip/day 1.mp4"] == before["Trip/day 1.mp4"] || back["Summer trip/day 2.mp4"] != before["Trip/day 2.mp4"] {
+		t.Errorf("back after 31 and 29 days: %v", back)
+	}
+
+	// Given another address, the share keeps its videos' identifiers.
+	elsewhere := server.URL + "/live/"
+	move(other, filepath.Join(nas, "live"))
+	if _, err := e.service.Update(t.Context(), second.ID, Changes{Path: &elsewhere}); err != nil {
+		t.Fatal(err)
+	}
+	e.idle(second.ID)
+	if again := e.files(second.ID); again["Concert.mp4"] != before["Concert.mp4"] || again["Small one.mp4"] != before["Small.mp4"] {
+		t.Errorf("another path: %v", again)
+	}
+
+	// A copy found before the last scan of its original's folder is no
+	// move: it keeps its own identifier when the original goes.
+	if err := os.Remove(filepath.Join(dir, "Beach day.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	scan(family.ID)
+	if kept := e.files(family.ID)["Beach copy.mp4"]; kept != copied["Beach copy.mp4"] {
+		t.Errorf("an older copy: %s, was %s", kept, copied["Beach copy.mp4"])
 	}
 }

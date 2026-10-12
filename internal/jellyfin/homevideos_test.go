@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -186,5 +187,172 @@ func TestHomeVideosInJellyfinApps(t *testing.T) {
 	var none QueryResult
 	if status := s.get(t, "/Items?ParentId="+library, token, &none); status != http.StatusUnauthorized {
 		t.Errorf("a hidden library: %d %+v", status, none.Items)
+	}
+}
+
+// A home video renamed, moved into a subfolder, whose folder is renamed,
+// or moved into another home videos folder, scanned before or after the
+// folder it left, is the same item of Jellyfin apps, with its watch state
+// and resume point; a copy is another item. A video found first in the
+// folder it went to, and made a favorite there before the folder it left
+// is scanned, stays the new item.
+func TestHomeVideosFollowedInJellyfinApps(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, o.Logger, o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
+		folders.UseTools(ffprobe, ffmpeg)
+	})
+	tr := trackingOn(t, s)
+	family, concerts := t.TempDir(), t.TempDir()
+	// Videos of their own contents, those past six minutes resumable.
+	for rel, seconds := range map[string]int{"Beach.mp4": 2, "Party.mp4": 360, "Trip/day 1.mp4": 3, "Trip/day 2.mp4": 361, "Concert.mp4": 4} {
+		path := filepath.Join(family, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration="+strconv.Itoa(seconds)+":size=64x48:rate=1",
+			"-c:v", "mpeg4", path).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	// Scanned in this order: the folder a video left first, then the one it
+	// went to.
+	var scanned []accounts.ID
+	for _, folder := range []localfiles.NewFolder{{Name: "Family", Path: family}, {Name: "Concerts", Path: concerts}} {
+		folder.Kind = localfiles.KindHomeVideos
+		addon, err := folders.Add(t.Context(), folder)
+		if err != nil {
+			t.Fatal(err)
+		}
+		scanned = append(scanned, addon.ID)
+	}
+	scan := func() {
+		t.Helper()
+		for _, id := range scanned {
+			if err := folders.Scan(t.Context(), id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// The videos of both libraries, by name.
+	videos := func() map[string]string {
+		t.Helper()
+		var views QueryResult
+		s.get(t, "/UserViews", tr.token, &views)
+		ids := map[string]string{}
+		for _, view := range views.Items {
+			if view.CollectionType != "homevideos" {
+				continue
+			}
+			var page QueryResult
+			s.get(t, "/Items?ParentId="+view.Id+"&Recursive=true&IncludeItemTypes=Video", tr.token, &page)
+			for _, item := range page.Items {
+				ids[item.Name] = item.Id
+			}
+		}
+		return ids
+	}
+	scan()
+	before := videos()
+	for _, name := range []string{"Beach", "day 1", "Concert"} {
+		tr.mark(t, http.MethodPost, "/UserPlayedItems/"+before[name])
+	}
+	for _, name := range []string{"Party", "day 2"} {
+		source := s.playbackInfo(t, "tv", tr.token, before[name], nil).MediaSources[0].Id
+		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": before[name], "MediaSourceId": source, "PositionTicks": 0})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": before[name], "MediaSourceId": source, "PositionTicks": 1_800_000_000})
+	}
+
+	for from, to := range map[string]string{"Beach.mp4": "Beach day.mp4", "Party.mp4": "2019/Party.mp4", "Trip": "Summer trip",
+		"Concert.mp4": filepath.Join(concerts, "Concert.mp4")} {
+		if !filepath.IsAbs(to) {
+			to = filepath.Join(family, to)
+		}
+		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(family, from), to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scan()
+	after := videos()
+	// A video alone in its folder is named after it.
+	for now, was := range map[string]string{"Beach day": "Beach", "2019": "Party", "day 1": "day 1", "day 2": "day 2", "Concert": "Concert"} {
+		if after[now] != before[was] {
+			t.Errorf("%s, now %s: %s, was %s", was, now, after[now], before[was])
+		}
+	}
+	for _, name := range []string{"Beach day", "day 1", "Concert"} {
+		if data := tr.userData(t, after[name]); !data.Played {
+			t.Errorf("%s: %+v", name, data)
+		}
+	}
+	var resume QueryResult
+	s.get(t, "/UserItems/Resume?MediaTypes=Video", tr.token, &resume)
+	var resumed []string
+	for _, item := range resume.Items {
+		if item.UserData.PlaybackPositionTicks == 1_800_000_000 {
+			resumed = append(resumed, item.Name)
+		}
+	}
+	slices.Sort(resumed)
+	if !slices.Equal(resumed, []string{"2019", "day 2"}) {
+		t.Errorf("resume: %+v", resume.Items)
+	}
+
+	// A copy, its original still there.
+	data, err := os.ReadFile(filepath.Join(family, "Beach day.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(family, "Beach copy.mp4"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan()
+	copied := videos()
+	if copied["Beach day"] != before["Beach"] || copied["Beach copy"] == "" || copied["Beach copy"] == before["Beach"] ||
+		tr.userData(t, copied["Beach copy"]).Played {
+		t.Errorf("a copy: %+v", copied)
+	}
+
+	// Moved between the libraries, the folder they went to scanned first.
+	for from, to := range map[string]string{filepath.Join(family, "2019/Party.mp4"): filepath.Join(concerts, "Party.mp4"),
+		filepath.Join(family, "Summer trip/day 1.mp4"): filepath.Join(concerts, "day 1.mp4"),
+		filepath.Join(family, "Summer trip/day 2.mp4"): filepath.Join(concerts, "day 2.mp4"),
+		filepath.Join(concerts, "Concert.mp4"):         filepath.Join(family, "Concert.mp4")} {
+		if err := os.Rename(from, to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := folders.Scan(t.Context(), scanned[1]); err != nil {
+		t.Fatal(err)
+	}
+	early := videos()
+	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+early["day 2"])
+	if err := folders.Scan(t.Context(), scanned[0]); err != nil {
+		t.Fatal(err)
+	}
+	late := videos()
+	for _, name := range []string{"Party", "day 1", "Concert"} {
+		if late[name] != before[name] {
+			t.Errorf("%s, scanned first where it went: %s, was %s", name, late[name], before[name])
+		}
+	}
+	if !tr.userData(t, late["day 1"]).Played || !tr.userData(t, late["Concert"]).Played ||
+		tr.userData(t, late["Party"]).PlaybackPositionTicks != 1_800_000_000 {
+		t.Errorf("their state: %+v %+v %+v", tr.userData(t, late["day 1"]), tr.userData(t, late["Concert"]), tr.userData(t, late["Party"]))
+	}
+	if data := tr.userData(t, late["day 2"]); late["day 2"] != early["day 2"] || late["day 2"] == before["day 2"] || !data.IsFavorite {
+		t.Errorf("a favorite meanwhile: %s %+v, was %s", late["day 2"], data, before["day 2"])
 	}
 }
