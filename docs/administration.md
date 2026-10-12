@@ -61,6 +61,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 
 - **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses.
 - **IPTV sources** and **Programme guides**.
+- **Network shares**, when there are some: whether each is **Notified** of its changes by its server, **Polled** by listing its folders again every 2 minutes, or **Not watched**, and why (see [Local folders](local-folders.md#watching-for-changes)).
 - Under **Server**:
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
