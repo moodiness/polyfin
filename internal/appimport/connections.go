@@ -356,6 +356,30 @@ func (s *Service) Connections(ctx context.Context, user accounts.User) ([]Connec
 	return connections, rows.Err()
 }
 
+// StoppedConnection is a connection its app stopped, by its user and app.
+type StoppedConnection struct {
+	User     accounts.ID
+	UserName string
+	App      string
+}
+
+// Stopped lists the connections their apps stopped, by user name, then
+// app, for System › Health.
+func (s *Service) Stopped(ctx context.Context) ([]StoppedConnection, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT c.user_id, u.name, c.app FROM app_connections c JOIN users u ON u.id = c.user_id
+		WHERE c.problem IS NOT NULL ORDER BY lower(u.name), c.app`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (StoppedConnection, error) {
+		var c StoppedConnection
+		return c, row.Scan(&c.User, &c.UserName, &c.App)
+	})
+}
+
 // connection loads user's connection to app: ErrNotConnected when there
 // is none, or none the key can open.
 func (s *Service) connection(ctx context.Context, user accounts.ID, app string) (storedConnection, error) {
@@ -588,7 +612,8 @@ func (s *Service) renew(key connectionKey, connectedAt time.Time, signIn SignIn,
 }
 
 // record saves how an import of the connection key names, made at
-// connectedAt, went: a sign-in refused stops the connection.
+// connectedAt, went: a sign-in refused stops the connection, which is told
+// once, as it stops.
 func (s *Service) record(key connectionKey, connectedAt time.Time, result ConnectionImport) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -597,14 +622,23 @@ func (s *Service) record(key connectionKey, connectedAt time.Time, result Connec
 	if result.Problem != "" {
 		problem = &result.Problem
 	}
-	if _, err := s.db.Exec(ctx, `UPDATE app_connections SET last_import_at = $4, read = $5, played = $6, resumed = $7, favorites = $8,
-			unmatched = $9, last_problem = $10, problem = CASE WHEN $10 = 'sign_in_refused' THEN 'sign_in_refused' ELSE problem END
-		WHERE user_id = $1 AND app = $2 AND connected_at = $3`, key.user, key.app, connectedAt, result.At, result.Read, result.Played,
-		result.Resumed, result.Favorites, result.Unmatched, problem); err != nil {
+	// The connection as it was before, old, tells whether this import
+	// stops it.
+	var stopped bool
+	err := s.db.QueryRow(ctx, `UPDATE app_connections c SET last_import_at = $4, read = $5, played = $6, resumed = $7, favorites = $8,
+			unmatched = $9, last_problem = $10, problem = CASE WHEN $10 = 'sign_in_refused' THEN 'sign_in_refused' ELSE c.problem END
+		FROM app_connections old
+		WHERE c.user_id = $1 AND c.app = $2 AND c.connected_at = $3 AND old.user_id = c.user_id AND old.app = c.app
+		RETURNING old.problem IS NULL AND c.problem IS NOT NULL`, key.user, key.app, connectedAt, result.At, result.Read, result.Played,
+		result.Resumed, result.Favorites, result.Unmatched, problem).Scan(&stopped)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.logger.Warn("An app connection's import could not be recorded", "app", key.app, "error", err)
 	}
-	if result.Problem == ProblemSignInRefused {
+	if stopped {
 		s.logger.Info("An app refused the sign-in of a connection: it stops until the user signs in again", "user_id", key.user.String(),
 			"app", key.app)
+		if s.stopped != nil {
+			s.stopped(key.user, key.app)
+		}
 	}
 }

@@ -21,10 +21,12 @@ import (
 type fakeSource struct {
 	mu sync.Mutex
 	// account is what a read answers; accepted are the secrets the app
-	// takes, and rotate renews the one read with each read.
+	// takes, and rotate renews the one read with each read; fail, when
+	// set, is the error every read fails with.
 	account  Account
 	accepted map[string]bool
 	rotate   bool
+	fail     error
 	// reads are the secrets read with, signedOut those signed out.
 	reads, signedOut []string
 	renewals         int
@@ -34,6 +36,9 @@ func (f *fakeSource) Reread(_ context.Context, signIn SignIn) (Account, SignIn, 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.reads = append(f.reads, signIn.Secret)
+	if f.fail != nil {
+		return Account{}, signIn, f.fail
+	}
 	if !f.accepted[signIn.Secret] {
 		return Account{}, signIn, ErrSignInRefused
 	}
@@ -96,12 +101,31 @@ func (b *lockedBuffer) String() string {
 
 // connectionHarness is a harness keeping connections, sealed, to the fake
 // app "stremio", logging to log, with the setting that lets users import
-// their history in imports.
+// their history in imports, and the stops told in stops.
 type connectionHarness struct {
 	harness
 	source  *fakeSource
 	log     *lockedBuffer
 	imports *atomic.Bool
+	stops   *stops
+}
+
+// stops records the connections told stopped, as "user app".
+type stops struct {
+	mu   sync.Mutex
+	told []string
+}
+
+func (s *stops) add(user accounts.ID, app string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.told = append(s.told, user.String()+" "+app)
+}
+
+func (s *stops) list() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.told)
 }
 
 func newConnectionHarness(t *testing.T) connectionHarness {
@@ -114,6 +138,7 @@ func newConnectionHarness(t *testing.T) connectionHarness {
 	log := &lockedBuffer{}
 	imports := &atomic.Bool{}
 	imports.Store(true)
+	stopped := &stops{}
 	h := newHarness(t, func(o *Options) {
 		settings := o.Settings
 		o.Settings = func() accounts.Settings {
@@ -122,9 +147,9 @@ func newConnectionHarness(t *testing.T) connectionHarness {
 			return s
 		}
 		o.Logger = slog.New(slog.NewTextHandler(log, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		o.Secrets, o.Sources = box, map[string]Source{"stremio": source}
+		o.Secrets, o.Sources, o.Stopped = box, map[string]Source{"stremio": source}, stopped.add
 	})
-	return connectionHarness{harness: h, source: source, log: log, imports: imports}
+	return connectionHarness{harness: h, source: source, log: log, imports: imports, stops: stopped}
 }
 
 // connected holds account, read to stay connected with signIn, for by,
@@ -458,5 +483,54 @@ func TestTheNextImportFollowsTheSetting(t *testing.T) {
 	h.idle(t)
 	if n := h.source.readsWith("alice's"); n != 1 {
 		t.Errorf("read within 3 hours: %d reads", n)
+	}
+}
+
+func TestAStoppedConnectionIsToldOnce(t *testing.T) {
+	t.Parallel()
+	h := newConnectionHarness(t)
+	alice := h.user(t, "alice", false)
+	account := Account{Profiles: []Profile{{ID: "1"}}}
+	h.source.set(func(f *fakeSource) { f.account, f.accepted["first"] = account, true })
+	h.connected(t, alice, alice, account, SignIn{Secret: "first", Owned: true}, Choice{Profile: "1"})
+
+	// An app that does not answer, or asks to wait, is tried again at the
+	// next import: nothing is told.
+	for _, failure := range []error{ErrAppUnreachable, ErrAppRateLimited} {
+		h.source.set(func(f *fakeSource) { f.fail = failure })
+		if c := h.importedNow(t, alice); c.Problem != "" || c.LastImport.Problem == "" {
+			t.Errorf("%v: %+v %+v", failure, c, c.LastImport)
+		}
+	}
+	if told := h.stops.list(); len(told) != 0 {
+		t.Errorf("told %v", told)
+	}
+
+	// The app refuses the sign-in: the stop is told once, as it stops.
+	h.source.set(func(f *fakeSource) {
+		f.fail = nil
+		clear(f.accepted)
+	})
+	c := h.importedNow(t, alice)
+	want := []string{alice.ID.String() + " stremio"}
+	if told := h.stops.list(); c.Problem != ProblemSignInRefused || !slices.Equal(told, want) {
+		t.Errorf("stopped: %+v, told %v", c, told)
+	}
+	// A refusal recorded again, as by an import that ran meanwhile, tells
+	// nothing more.
+	h.record(connectionKey{alice.ID, "stremio"}, c.ConnectedAt, ConnectionImport{Problem: ProblemSignInRefused})
+	if told := h.stops.list(); !slices.Equal(told, want) {
+		t.Errorf("refused again: told %v", told)
+	}
+
+	// Signed in again, then refused again: told again.
+	h.source.set(func(f *fakeSource) { f.accepted["second"] = true })
+	if c := h.connected(t, alice, alice, account, SignIn{Secret: "second", Owned: true}, Choice{Profile: "1"}); c.Problem != "" {
+		t.Fatalf("signed in again: %+v", c)
+	}
+	h.source.set(func(f *fakeSource) { clear(f.accepted) })
+	h.importedNow(t, alice)
+	if told := h.stops.list(); !slices.Equal(told, append(want, want...)) {
+		t.Errorf("refused after signing in again: told %v", told)
 	}
 }

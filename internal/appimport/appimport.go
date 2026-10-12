@@ -178,6 +178,9 @@ type Options struct {
 	// Sources read the accounts of the connections again, and sign them
 	// out, by app.
 	Sources map[string]Source
+	// Stopped is told once each time a connection stops, as its app
+	// refuses the sign-in kept; nil tells no one.
+	Stopped func(user accounts.ID, app string)
 }
 
 // Service holds the accounts read until the user chooses what to import,
@@ -192,6 +195,7 @@ type Service struct {
 	db       *pgxpool.Pool
 	box      *secrets.Box
 	sources  map[string]Source
+	stopped  func(user accounts.ID, app string)
 	now      func() time.Time
 	holdFor  time.Duration
 	timing   timing
@@ -221,6 +225,7 @@ func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{settings: options.Settings, titles: options.Titles, userData: options.UserData, addons: options.Addons,
 		activity: options.Activity, logger: options.Logger, db: options.DB, box: options.Secrets, sources: options.Sources, now: time.Now,
+		stopped: options.Stopped,
 		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{},
 		connecting: map[connectionKey]*connectionRun{}}
 }
