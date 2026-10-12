@@ -22,11 +22,13 @@ import (
 const testEvery = 20 * time.Millisecond
 
 // fakeShares is the shareSource of a share a test serves: its reader, and
-// the prints of its last scan, which rescan makes as a scan does.
+// the prints of its last scan, which rescan makes as a scan does. read,
+// when set, is told of each read of the reader, unless it holds one.
 type fakeShares struct {
 	t     *testing.T
 	kind  string
 	reads atomic.Int32
+	read  chan struct{}
 
 	mu      sync.Mutex
 	r       remote
@@ -37,6 +39,12 @@ type fakeShares struct {
 
 func (f *fakeShares) shareReader(context.Context, accounts.ID, string) (remote, string, error) {
 	f.reads.Add(1)
+	if f.read != nil {
+		select {
+		case f.read <- struct{}{}:
+		default:
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.r, f.kind, nil
@@ -237,7 +245,7 @@ func TestShareWatchRoundsAreBounded(t *testing.T) {
 	shares.use(counted)
 	wt.w.lists = 3
 	wt.w.polled = make(chan sharePolled, 8)
-	p := &sharePoll{id: id}
+	p := newSharePoll(id, "")
 
 	// The last of the seven folders changes: each round lists the root
 	// and two folders, so the fourth one lists it.
@@ -271,7 +279,7 @@ func TestShareWatchDropsStalePolls(t *testing.T) {
 	wt, shares, address := newShareWatchTest(t, dir, oneShare(id))
 	wt.w.polls[id] = &polling{address: address, cancel: func() {}}
 	wt.w.polled = make(chan sharePolled, 1)
-	p := &sharePoll{id: id, address: address}
+	p := newSharePoll(id, address)
 	poll := func() sharePolled {
 		t.Helper()
 		wt.w.round(t.Context(), p)

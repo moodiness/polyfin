@@ -125,20 +125,24 @@ type watcher struct {
 	spawn func(func())
 
 	quiet, check, retry time.Duration
-	// every, gap and lists pace the polls of the shares (see shareEvery).
-	every, gap time.Duration
-	lists      int
+	// every, notifiedEvery, rearm, gap and lists pace the polls and the
+	// watches of the shares (see shareEvery).
+	every, notifiedEvery, rearm, gap time.Duration
+	lists                            int
 
 	kicks chan struct{}
 	due   chan accounts.ID
 	done  chan accounts.ID
-	// polled are the shares a poll found changed.
-	polled chan sharePolled
+	// polled are the shares a poll found changed, notified those whose
+	// server told of a change.
+	polled   chan sharePolled
+	notified chan accounts.ID
 
 	mu sync.Mutex
 	// unwatched are why the folders to watch that could not be are not,
-	// by folder.
-	unwatched map[accounts.ID]string
+	// by folder; shareWatches how the shares are watched.
+	unwatched    map[accounts.ID]string
+	shareWatches map[accounts.ID]shareWatchState
 
 	// What follows belongs to the loop. files is nil while nothing is
 	// watched; dirs are the folders watched, by path, with their folder;
@@ -157,10 +161,12 @@ type watcher struct {
 func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.Context) ([]watchFolder, error), scan func(context.Context, accounts.ID),
 	open func() (fileWatcher, error), shares shareSource, spawn func(func())) *watcher {
 	return &watcher{ctx: ctx, logger: logger, folders: folders, scan: scan, open: open, shares: shares, spawn: spawn,
-		quiet: watchQuiet, check: watchCheck, retry: watchRetry, every: shareEvery, gap: shareGap, lists: shareLists,
+		quiet: watchQuiet, check: watchCheck, retry: watchRetry, every: shareEvery, notifiedEvery: shareNotifiedEvery, rearm: shareRearm,
+		gap: shareGap, lists: shareLists,
 		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan sharePolled),
-		unwatched: map[accounts.ID]string{}, watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{},
-		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
+		notified: make(chan accounts.ID), unwatched: map[accounts.ID]string{}, shareWatches: map[accounts.ID]shareWatchState{},
+		watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{}, changed: map[accounts.ID]time.Time{},
+		scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
 }
 
 // run watches the folders until the watch ends.
@@ -194,6 +200,10 @@ func (w *watcher) loop() {
 				continue
 			}
 			w.event(event)
+		case id := <-w.notified:
+			if w.polls[id] != nil {
+				w.change(id)
+			}
 		case err, ok := <-failures:
 			if !ok {
 				w.close()

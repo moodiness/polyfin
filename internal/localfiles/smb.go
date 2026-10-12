@@ -191,37 +191,44 @@ func smbError(err error) error {
 func (c *smbShare) list(ctx context.Context, rel string) ([]remoteEntry, error) {
 	var entries []remoteEntry
 	err := c.do(ctx, func(share *smb2.Share, _ context.Context) error {
-		entries = nil
-		dir, err := share.Open(c.path(rel))
-		if err != nil {
-			return err
-		}
-		defer dir.Close()
-		if info, err := dir.Stat(); err != nil {
-			return err
-		} else if !info.IsDir() {
-			return errIsFile
-		}
-		for {
-			infos, err := dir.Readdir(256)
-			for _, info := range infos {
-				switch name := info.Name(); {
-				case name == "." || name == "..":
-				case info.IsDir():
-					entries = append(entries, remoteEntry{name: name, folder: true})
-				case info.Mode().IsRegular():
-					entries = append(entries, remoteEntry{name: name, size: info.Size(), modified: info.ModTime()})
-				}
-			}
-			if errors.Is(err, io.EOF) || err == nil && len(infos) == 0 {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-		}
+		var err error
+		entries, err = listIn(share, c.path(rel))
+		return err
 	})
 	return entries, err
+}
+
+// listIn lists the folder at path in share: errIsFile when it is a file.
+func listIn(share *smb2.Share, path string) ([]remoteEntry, error) {
+	dir, err := share.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	if info, err := dir.Stat(); err != nil {
+		return nil, err
+	} else if !info.IsDir() {
+		return nil, errIsFile
+	}
+	var entries []remoteEntry
+	for {
+		infos, err := dir.Readdir(256)
+		for _, info := range infos {
+			switch name := info.Name(); {
+			case name == "." || name == "..":
+			case info.IsDir():
+				entries = append(entries, remoteEntry{name: name, folder: true})
+			case info.Mode().IsRegular():
+				entries = append(entries, remoteEntry{name: name, size: info.Size(), modified: info.ModTime()})
+			}
+		}
+		if errors.Is(err, io.EOF) || err == nil && len(infos) == 0 {
+			return entries, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 }
 
 func (c *smbShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, time.Time, error) {

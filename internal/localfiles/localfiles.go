@@ -11,8 +11,9 @@
 // administrator asks. They are also watched for changes, unless
 // Settings.WatchLocalFolders is off: the folders in the container through
 // the system's notifications, each scanned again a few seconds after its
-// files stop changing, and network shares by listing their folders again
-// every few minutes (see sharewatch.go). A scan reads only what changed since
+// files stop changing, SMB shares through their servers' notifications
+// too, and network shares by listing their folders again every few
+// minutes (see sharewatch.go and sharenotify.go). A scan reads only what changed since
 // the last one, by path, size and modification time; each new file is
 // matched to a title by the identifiers its name gives, else by those its
 // NFO file gives (see readNFO), else by its name and year through the
@@ -271,6 +272,16 @@ type Folder struct {
 	// UseArtwork tells whether the titles of a movies or shows folder
 	// show the artwork beside their files (see Artwork).
 	UseArtwork bool
+	// ShareWatch tells how a share is watched: "notified" when its server
+	// tells of its changes, "polled" when its folders are listed again
+	// every few minutes; empty for a folder in the container, or a share
+	// not watched. Polled tells why a share is: "webdav" for a WebDAV
+	// folder, "unsupported" when the SMB server does not tell of changes,
+	// "silent" when it did not tell of one a listing found, "failed" while
+	// its watch is set up again; empty while it is set up. A notified
+	// share's Polled is "partial" once its server missed a change in one of
+	// its folders: it is also polled.
+	ShareWatch, Polled string
 	// Albums and Artists count a music folder's albums and their artists;
 	// its Files are its tracks, Matched those with a title and an album.
 	Albums, Artists int
@@ -507,6 +518,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	_, f.Scanning = s.running[id]
 	s.mu.Unlock()
 	f.Unwatched = s.watch.reason(id)
+	f.ShareWatch, f.Polled = s.watch.shareWatch(id)
 	return f, nil
 }
 
