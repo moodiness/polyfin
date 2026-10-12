@@ -77,6 +77,11 @@ func (p Plan) Searched() Plan {
 	return p
 }
 
+// IsSearched reports whether FFmpeg seeks in the plan's version by
+// searching its timestamps (see Searched): only then does a lookback
+// apply (see Remux.Lookback).
+func (p Plan) IsSearched() bool { return p.searched }
+
 // NewPlan cuts a version lasting duration into segments starting on its
 // keyframes: the first ends on the first keyframe at least firstDuration
 // in, each next one on the first keyframe at least targetDuration after

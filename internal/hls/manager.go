@@ -112,6 +112,13 @@ type Remux struct {
 	// and the requests waiting for it get Failure's error. Nil never fails.
 	Failed  <-chan struct{}
 	Failure func() error
+	// Lookback is how far before a segment's start FFmpeg starts reading
+	// a searched version from the encoding's first seek on, as an earlier
+	// encoding of the same file learned it (see encoding.lookback); zero
+	// for none. Learned, when set, is told of each longer distance this
+	// encoding learns, on a goroutine of its own, so as to keep it.
+	Lookback time.Duration
+	Learned  func(time.Duration)
 }
 
 // VideoEncoding is what a job converts the video to: 8-bit, progressive,
@@ -737,8 +744,8 @@ type encoding struct {
 	// Remux.Failed).
 	failure error
 	// lookback is how far before a segment's start FFmpeg starts reading a
-	// searched version, 0 until a job landed past its first segment's start
-	// (see Plan.seekTime and searchFurther).
+	// searched version: Remux.Lookback until a job landed past its first
+	// segment's start (see Plan.seekTime and searchFurther).
 	lookback time.Duration
 }
 
@@ -754,7 +761,7 @@ func (e *encoding) open(ctx context.Context, open Opener) {
 		e.err = err
 		return
 	}
-	e.remux, e.release = remux, release
+	e.remux, e.release, e.lookback = remux, release, remux.Lookback
 	e.ready = make([]bool, remux.Plan.Len())
 	if remux.Failed != nil {
 		go e.watchInput()
@@ -1223,8 +1230,8 @@ func (e *encoding) cover(from, to time.Duration) {
 // time it was asked and the segment's start: it is asked again as much
 // further back as it went on past that time, at least twice as far back,
 // until it lands on or before the segment or reads the version from its
-// start. The encoding's later jobs start as far back. The caller holds
-// e.mu.
+// start. The encoding's later jobs start as far back, and Remux.Learned
+// is told. The caller holds e.mu.
 func (e *encoding) searchFurther(j *job, at time.Duration) bool {
 	plan := e.remux.Plan
 	if !plan.searched || j.start == 0 || at <= plan.Start(j.start)+tolerance {
@@ -1237,6 +1244,9 @@ func (e *encoding) searchFurther(j *job, at time.Duration) bool {
 	e.lookback = plan.Start(j.start) - from + at - from
 	e.m.logger.Debug("FFmpeg landed past a segment's start: searching further back", "segment", j.start, "asked", from, "landed", at,
 		"lookback", e.lookback)
+	if learned := e.remux.Learned; learned != nil {
+		go learned(e.lookback)
+	}
 	e.start(j.start)
 	return true
 }

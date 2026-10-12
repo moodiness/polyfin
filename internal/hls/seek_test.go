@@ -130,3 +130,76 @@ func TestSearchedSegmentsHoldTheFramesReadInOrder(t *testing.T) {
 		})
 	}
 }
+
+// A playback of a file whose keyframes are 10 seconds apart learns, at
+// its first seek, how far back FFmpeg must start; a later playback that
+// starts with that lookback, as kept by the file, seeks with a single
+// FFmpeg start, to that segment and to others.
+func TestSeeksStartWithTheLookbackLearned(t *testing.T) {
+	ffmpeg, ffprobe := tools(t)
+	input, video, audio := unindexedSource(t, ffmpeg, ffprobe, "long.ts", "-c:v", "libx264", "-preset", "veryfast", "-bf", "3", "-g", "240",
+		"-keyint_min", "240", "-sc_threshold", "0", "-c:a", "aac")
+	// FFmpeg, through a script that writes down each command line.
+	dir := t.TempDir()
+	runs, wrapper := filepath.Join(dir, "runs"), filepath.Join(dir, "ffmpeg")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\necho \"$*\" >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager(wrapper, t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if !slices.Contains(m.Encoders(), "libx264") {
+		t.Skip("FFmpeg has no libx264")
+	}
+	plan := NewGridPlan(30 * time.Second).Searched()
+	learned := make(chan time.Duration, 8)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	// starts reads segment n first in a new play session that starts with
+	// lookback, and returns how many times FFmpeg started on the file.
+	starts := func(session string, lookback time.Duration, n int) int {
+		t.Helper()
+		count := func() int {
+			data, _ := os.ReadFile(runs)
+			return strings.Count(string(data), input)
+		}
+		before := count()
+		open := func(context.Context) (Remux, func(), error) {
+			return Remux{Input: input, InputOptions: []string{"-start_at_zero"}, Video: video, Audio: audio, Format: TS, Plan: plan,
+				Encode:   &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 128, Height: 72, Bitrate: 300_000, FrameRate: 24},
+				Lookback: lookback, Learned: func(d time.Duration) { learned <- d }}, func() {}, nil
+		}
+		f, err := m.Segment(ctx, Key{Session: session, Audio: audio, Format: TS}, open, n)
+		if err != nil {
+			t.Fatalf("segment %d in %s: %v", n, session, err)
+		}
+		f.Close()
+		started := count() - before
+		m.Stop(session)
+		return started
+	}
+	// Segment 5 starts at 18 s: FFmpeg, asked for 14.132 s, lands on the
+	// keyframe at 20 s.
+	if n := starts("first", 0, 5); n < 2 {
+		t.Fatalf("the first playback's seek started FFmpeg %d times, want a second start further back", n)
+	}
+	var lookback time.Duration
+	select {
+	case lookback = <-learned:
+	case <-ctx.Done():
+		t.Fatal("the first playback learned no lookback")
+	}
+	for len(learned) > 0 {
+		lookback = max(lookback, <-learned)
+	}
+	for _, n := range []int{5, 7} {
+		if got := starts("next "+strconv.Itoa(n), lookback, n); got != 1 {
+			t.Errorf("a next playback's seek to segment %d, %v back, started FFmpeg %d times, want 1", n, lookback, got)
+		}
+	}
+	if len(learned) > 0 {
+		t.Errorf("the next playbacks learned a lookback of %v", <-learned)
+	}
+}
