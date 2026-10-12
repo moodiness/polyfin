@@ -304,7 +304,7 @@ func (s *session) do(ctx context.Context, method, path string, body []byte) (int
 func (s *session) signOut() {
 	ctx, cancel := context.WithTimeout(context.Background(), s.r.timing.signOut)
 	defer cancel()
-	_, _, _, _ = s.do(ctx, http.MethodPost, "/auth/v1/logout", []byte("{}"))
+	_, _, _, _ = s.do(ctx, http.MethodPost, "/auth/v1/logout?scope=local", []byte("{}"))
 	s.token = ""
 }
 
