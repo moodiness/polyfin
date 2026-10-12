@@ -55,14 +55,18 @@ type Options struct {
 	// a known proxy (see forwarded.Client); nil reads the connection's
 	// address alone.
 	Proxies *forwarded.Proxies
+	// Metrics serves /metrics (see metrics.Handler); nil leaves it to the
+	// Jellyfin API, which answers 404.
+	Metrics http.Handler
 	Logger  *slog.Logger
 }
 
 // New returns the handler serving every Polyfin route. Answers that gain
 // from it go gzip-compressed to clients that accept it (see compress).
-// Every route sees the client Proxies resolves. The Jellyfin API, its
-// WebSocket and the web client answer under jellyfinBase as at the root;
-// the admin app, /healthz and /readyz stay at the root only.
+// Every route sees the client Proxies resolves, and every request is
+// counted in the metrics. The Jellyfin API, its WebSocket and the web
+// client answer under jellyfinBase as at the root; the admin app,
+// /healthz, /readyz and /metrics stay at the root only.
 func New(options Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", rootOnly(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -75,6 +79,9 @@ func New(options Options) http.Handler {
 		}
 		writeText(w, http.StatusOK, "ok")
 	}), options.Jellyfin))
+	if options.Metrics != nil {
+		mux.Handle("GET /metrics", rootOnly(options.Metrics, options.Jellyfin))
+	}
 	// Once Polyfin is set up, its web client is the place to go, as on
 	// Jellyfin; before, or without one, the admin app is.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +113,7 @@ func New(options Options) http.Handler {
 	}
 	mux.Handle("/", options.Jellyfin)
 
-	handler := securityHeaders(compress(mux))
+	handler := countRequests(securityHeaders(compress(mux)))
 	if options.Proxies != nil {
 		handler = options.Proxies.Handler(handler)
 	}

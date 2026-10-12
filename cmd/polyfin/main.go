@@ -40,6 +40,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
@@ -469,6 +470,8 @@ func serve(ctx context.Context) error {
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
+	registerMetrics(addonStore, jellyfinAPI, segments, pool, []metricFolder{{"cache", func() string { return cfg.CacheDir }},
+		{"recordings", recorder.Dir}, {"backups", backups.Dir}})
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database:      pool,
@@ -479,7 +482,11 @@ func serve(ctx context.Context) error {
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().CustomJs },
 			Proxies:       proxies,
-			Logger:        logger,
+			Metrics: metrics.Handler(func() (bool, string) {
+				settings := store.Settings()
+				return settings.Metrics, settings.MetricsToken
+			}),
+			Logger: logger,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
