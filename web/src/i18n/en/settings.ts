@@ -317,7 +317,7 @@ const settings = {
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchLocalFolders: 'Watch folders and shares for changes',
     watchLocalFoldersHelp:
-      'Scans a folder in the container again a few seconds after its files stop changing, so that files added, renamed or removed show within a minute. Network shares are listed again every 2 minutes, a share of many folders over several rounds, and scanned again when a listing changed. System › Health tells which folders or shares cannot be watched, and why.',
+      'Scans a folder in the container again a few seconds after its files stop changing, so that files added, renamed or removed show within a minute. An SMB share is scanned again a few seconds after its server tells of a change. Other shares are listed again every 2 minutes, a share of many folders over several rounds, and scanned again when a listing changed. System › Health tells how each share is watched, and which folders or shares cannot be, and why.',
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',

@@ -2019,6 +2019,21 @@ export type AddonHealth = {
   failures: number
 }
 
+/**
+ * How a network share is watched for changes: `watch` is `notified` when its server tells of
+ * them, `polled` when its folders are listed again every few minutes, with why in `polled`
+ * (`webdav`, `unsupported`, `silent`, `failed`, empty while the watch is set up); empty when it
+ * is not watched, with why in `unwatched` when it should be.
+ */
+export type ShareHealth = {
+  id: string
+  name: string
+  share: Exclude<FolderShare, ''>
+  watch: '' | 'notified' | 'polled'
+  polled: string
+  unwatched: string
+}
+
 export type Health = {
   checkedAt: string
   process: {
@@ -2057,6 +2072,9 @@ export type Health = {
     pausedHosts: { host: string; until: string }[]
   } | null
   addons: AddonHealth[]
+  /** How the enabled network shares are watched for changes; `watchFolders` tells whether they are. */
+  shares: ShareHealth[]
+  watchFolders: boolean
   /** How the stored keys and tokens stand; null when the server could not read them. */
   secrets: {
     /** Whether POLYFIN_SECRET_KEY is set, which encrypts them. */

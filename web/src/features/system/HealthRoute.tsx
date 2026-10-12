@@ -6,6 +6,7 @@ import {
   ArrowSquareOutIcon,
   ArrowsClockwiseIcon,
   CalendarDotsIcon,
+  HardDrivesIcon,
   PuzzlePieceIcon,
   TelevisionSimpleIcon,
   WarningCircleIcon,
@@ -18,6 +19,7 @@ import {
   queryKeys,
   type AddonHealth,
   type Health,
+  type ShareHealth,
   type Sources,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -91,6 +93,7 @@ export default function HealthRoute() {
             <Iptv sources={sources.data} />
             <Guides sources={sources.data} />
           </div>
+          <Shares health={health.data} />
           <Block title={text.serverTitle}>
             <div className="grid items-start gap-5 lg:grid-cols-2">
               <Transcoder health={health.data} />
@@ -481,6 +484,61 @@ function Guides({ sources }: { sources: Sources | undefined }) {
             })}
           </RowList>
         )}
+      </Block>
+    </Anchor>
+  )
+}
+
+function shareState(
+  health: Health,
+  share: ShareHealth,
+  text: Messages['system']['health'],
+): [StatusTone, string, string] {
+  const status = text.shareStatus
+  if (!health.watchFolders) return ['muted', status.unwatched, text.sharesOff]
+  if (share.unwatched !== '') {
+    return [
+      'warn',
+      status.unwatched,
+      text.shareUnwatched[share.unwatched] ?? text.shareUnwatched.failed,
+    ]
+  }
+  if (share.watch === 'notified') {
+    return [
+      'ok',
+      status.notified,
+      share.polled === 'partial' ? text.sharePartial : text.shareNotified,
+    ]
+  }
+  const why = text.sharePolled[share.polled || 'starting'] ?? text.sharePolled.failed
+  const tone = share.polled === 'silent' || share.polled === 'failed' ? 'warn' : 'muted'
+  return [tone, status.polled, why]
+}
+
+function Shares({ health }: { health: Health }) {
+  const { t } = useI18n()
+  const text = t.system.health
+  if (health.shares.length === 0) return null
+  return (
+    <Anchor id="shares">
+      <Block title={text.sharesTitle} count={health.shares.length}>
+        <RowList aria-label={text.sharesTitle}>
+          {health.shares.map((share) => {
+            const [tone, status, why] = shareState(health, share, text)
+            return (
+              <Row
+                key={share.id}
+                to={`/sources/shared/${share.id}`}
+                leading={HardDrivesIcon}
+                title={share.name}
+                titleAside={<Badge>{text.shareKinds[share.share] ?? share.share}</Badge>}
+                meta={<span className="whitespace-normal">{why}</span>}
+                trailing={<StatusPill tone={tone}>{status}</StatusPill>}
+                className="[&_.truncate]:whitespace-normal"
+              />
+            )
+          })}
+        </RowList>
       </Block>
     </Anchor>
   )

@@ -62,6 +62,10 @@ type healthJSON struct {
 	Transcoder *transcoderJSON      `json:"transcoder"`
 	Thumbnails *thumbnailHealthJSON `json:"thumbnails"`
 	Addons     []addonHealthJSON    `json:"addons"`
+	// Shares is how the enabled network shares are watched for changes;
+	// WatchFolders tells whether they are (Settings.WatchLocalFolders).
+	Shares       []shareHealthJSON `json:"shares"`
+	WatchFolders bool              `json:"watchFolders"`
 	// Secrets is how the stored keys and tokens stand, null when unknown.
 	Secrets *secretsHealthJSON `json:"secrets"`
 	// Backup is how the database backups go, null when they are off.
@@ -69,6 +73,20 @@ type healthJSON struct {
 	// Update is the new version of Polyfin out, null when there is none,
 	// or while Check for new versions is off.
 	Update *updateJSON `json:"update"`
+}
+
+// shareHealthJSON is how a network share is watched for changes: Watch is
+// "notified" when its server tells of them, "polled" when its folders are
+// listed again every few minutes, with why in Polled (see
+// localfiles.Folder), empty when it is not watched, with why in
+// Unwatched when it should be.
+type shareHealthJSON struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Share     string `json:"share"`
+	Watch     string `json:"watch"`
+	Polled    string `json:"polled"`
+	Unwatched string `json:"unwatched"`
 }
 
 // updateJSON is a new version of Polyfin, and the address of its release
@@ -183,7 +201,7 @@ var softwareEncoders = []string{"libx264", "libx265", "aac", "libfdk_aac", "ac3"
 // health describes how the server's parts fare, from what they record:
 // nothing is requested outside the server.
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
-	result := healthJSON{CheckedAt: h.now(), Disks: []diskJSON{}, Addons: []addonHealthJSON{}}
+	result := healthJSON{CheckedAt: h.now(), Disks: []diskJSON{}, Addons: []addonHealthJSON{}, Shares: []shareHealthJSON{}}
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	result.Process = processJSON{Version: h.Version, GoVersion: runtime.Version(), StartedAt: h.Health.Started,
@@ -224,6 +242,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings := h.Accounts.Settings()
+	result.WatchFolders = settings.WatchLocalFolders
 	if encoder := h.Health.Encoder; encoder != nil {
 		t := &transcoderJSON{Encoders: []string{}, MaxHeight: settings.MaxConversionHeight, Enabled: settings.Transcoding}
 		if hw := encoder.Hardware(); hw != nil {
@@ -266,6 +285,18 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, addon := range list {
+			if addon.Local() && addon.Enabled && h.Folders != nil {
+				folder, err := h.Folders.Folder(r.Context(), addon.ID)
+				if err != nil {
+					h.internalError(w, r, err)
+					return
+				}
+				if folder.Share != "" {
+					result.Shares = append(result.Shares, shareHealthJSON{ID: addon.ID.String(), Name: addon.Manifest.Name, Share: folder.Share,
+						Watch: folder.ShareWatch, Polled: folder.Polled, Unwatched: folder.Unwatched})
+				}
+				continue
+			}
 			// Eclipse addons' requests count in their health too.
 			if !addon.Stremio() && !addon.Eclipse() {
 				continue

@@ -175,6 +175,35 @@ const system: typeof en = {
       checking: 'Vérification…',
       iptvTitle: 'Sources IPTV',
       guidesTitle: 'Guides des programmes',
+      sharesTitle: 'Partages réseau',
+      shareKinds: { smb: 'SMB', webdav: 'WebDAV' },
+      shareStatus: { notified: 'Notifié', polled: 'Scruté', unwatched: 'Non surveillé' },
+      shareNotified:
+        'Le serveur signale chaque changement à Polyfin : le partage est analysé à nouveau quelques secondes après. Ses dossiers sont aussi listés toutes les 10 minutes, au cas où un changement ne serait pas signalé.',
+      sharePartial:
+        'Le serveur signale à Polyfin les changements faits par le réseau, mais en a manqué un dans un dossier du partage, comme ceux faits sur son propre disque : les dossiers du partage sont aussi listés de nouveau toutes les 2 minutes.',
+      sharePolled: {
+        webdav:
+          'Les serveurs WebDAV ne signalent pas les changements : les dossiers du partage sont listés de nouveau toutes les 2 minutes.',
+        unsupported:
+          'Ce serveur SMB ne signale pas les changements : les dossiers du partage sont listés de nouveau toutes les 2 minutes.',
+        silent:
+          'Ce serveur SMB n’a pas signalé un changement trouvé en listant le partage : ses dossiers sont listés de nouveau toutes les 2 minutes.',
+        failed:
+          'Polyfin ne reçoit plus les notifications du serveur et les redemande sous peu. En attendant, les dossiers du partage sont listés de nouveau toutes les 2 minutes.',
+        starting:
+          'Polyfin demande au serveur de lui signaler les changements. En attendant, les dossiers du partage sont listés de nouveau toutes les 2 minutes.',
+      },
+      shareUnwatched: {
+        unreachable:
+          'Le partage est injoignable. Il est analysé selon sa planification, et de nouveau dès qu’il répond.',
+        refused:
+          'Le partage refuse l’utilisateur ou le mot de passe de Polyfin. Vérifiez-les, et saisissez-les à nouveau.',
+        failed:
+          'Polyfin ne peut pas surveiller ce partage. Il est toujours analysé selon sa planification.',
+      },
+      sharesOff:
+        'La surveillance des changements est désactivée dans les paramètres : les partages ne sont analysés que selon leur planification.',
       transcoderTitle: 'Transcodage',
       gpu: 'GPU',
       noGpu: 'Aucun : la vidéo est convertie par le processeur',

@@ -167,6 +167,33 @@ const system = {
       checking: 'Checking…',
       iptvTitle: 'IPTV sources',
       guidesTitle: 'Programme guides',
+      sharesTitle: 'Network shares',
+      shareKinds: { smb: 'SMB', webdav: 'WebDAV' } as Record<string, string>,
+      shareStatus: { notified: 'Notified', polled: 'Polled', unwatched: 'Not watched' },
+      shareNotified:
+        'The server tells Polyfin of each change: the share is scanned again a few seconds after. Its folders are also listed every 10 minutes, should a change go untold.',
+      sharePartial:
+        'The server tells Polyfin of the changes made through the network, but missed one in a folder of the share, such as one made on the server’s own disk: the share’s folders are also listed again every 2 minutes.',
+      sharePolled: {
+        webdav:
+          'WebDAV servers do not tell of changes: the share’s folders are listed again every 2 minutes.',
+        unsupported:
+          'This SMB server does not tell of changes: the share’s folders are listed again every 2 minutes.',
+        silent:
+          'This SMB server did not tell of a change that a listing found: the share’s folders are listed again every 2 minutes.',
+        failed:
+          'Polyfin lost the server’s notifications, and asks for them again shortly. Meanwhile, the share’s folders are listed again every 2 minutes.',
+        starting:
+          'Polyfin is asking the server to tell of changes. Meanwhile, the share’s folders are listed again every 2 minutes.',
+      } as Record<string, string>,
+      shareUnwatched: {
+        unreachable:
+          'The share cannot be reached. It is scanned on its schedule, and again once it answers.',
+        refused: 'The share refuses Polyfin’s user or password. Check them, and enter them again.',
+        failed: 'Polyfin cannot watch this share. It is still scanned on its schedule.',
+      } as Record<string, string>,
+      sharesOff:
+        'Watching for changes is turned off in the settings: shares are scanned on their schedule only.',
       transcoderTitle: 'Transcoder',
       gpu: 'GPU',
       noGpu: 'None: video is converted on the CPU',
