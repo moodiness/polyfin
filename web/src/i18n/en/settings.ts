@@ -66,6 +66,9 @@ const settings = {
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    syncAddonSubtitles: 'Sync addon subtitles',
+    syncAddonSubtitlesHelp:
+      'Times the addons’ subtitles to the version played, when they run early, late, or faster or slower than it. At a version’s first play, Polyfin finds in the background when it has speech: from a text subtitle inside the file, else from three stretches of its audio, reading at most 300 MB of an addon’s file. From then on, a subtitle that fits clearly better shifted or sped up comes synced, its name ending with “(synced)”.',
     remuxDb: 'Describe versions from RemuxDB',
     remuxDbHelp:
       'Shows the audio, subtitle and video tracks of a version before it is first played, as RemuxDB found them in the same file. When a title’s details open, Polyfin asks RemuxDB, a community database, by the title’s IMDb identifier, and finds the versions by their file names. Playback still analyzes each version.',

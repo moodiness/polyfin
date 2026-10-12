@@ -224,6 +224,8 @@ export type Settings = {
   versionAttempts: number
   /** Prefers the first version an app plays without conversion over the first that plays at all. */
   preferDirectPlay: boolean
+  /** Times the addons' subtitles to the version played, against when it has speech. */
+  syncAddonSubtitles: boolean
   /** Playbacks whose video the server converts at once, 0 for no limit. */
   maxConversions: number
   /** Height converted video is scaled down to at most, 0 to keep the original's. */

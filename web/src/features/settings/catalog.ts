@@ -99,6 +99,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'sync-addon-subtitles',
+    label: (t) => s(t).syncAddonSubtitles,
+    help: (t) => s(t).syncAddonSubtitlesHelp,
+    keywords: ['subtitles', 'sous-titres', 'sync', 'recaler'],
+  },
+  {
+    section: 'playback',
     anchor: 'analysis-timeout',
     label: (t) => s(t).analysisTimeout,
     help: (t, r) => s(t).analysisTimeoutHelp(r('analysisTimeout')),

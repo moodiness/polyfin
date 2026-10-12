@@ -148,6 +148,13 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           checked={form.preferDirectPlay}
           onChange={(preferDirectPlay) => update({ preferDirectPlay })}
         />
+        <SwitchRow
+          anchor="sync-addon-subtitles"
+          label={s.syncAddonSubtitles}
+          help={s.syncAddonSubtitlesHelp}
+          checked={form.syncAddonSubtitles}
+          onChange={(syncAddonSubtitles) => update({ syncAddonSubtitles })}
+        />
         <FieldRow
           anchor="analysis-timeout"
           label={s.analysisTimeout}

@@ -69,6 +69,9 @@ const settings: typeof en = {
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+    syncAddonSubtitles: 'Recaler les sous-titres des addons',
+    syncAddonSubtitlesHelp:
+      'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle : grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par « (recalé) ».',
     remuxDb: 'Décrire les versions grâce à RemuxDB',
     remuxDbHelp:
       'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
