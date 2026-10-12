@@ -131,7 +131,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 		}
 	}
 	for _, l := range collections {
-		grouped, err := s.groupedCatalogs(ctx, v, l)
+		grouped, _, err := s.groupedSources(ctx, v, l, l.catalogSource())
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -139,26 +139,29 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 			s.logger.Warn("A collection library could not be listed", "catalog", l.catalog.ID, "error", err)
 			continue
 		}
-		for _, catalog := range grouped {
-			add(l.addon, catalog, "")
+		for _, src := range grouped {
+			add(l.addon, src.catalog, "")
 		}
 	}
 	return result, nil
 }
 
-// groupedCatalogs lists the catalogs the collections of a collection
-// library group, following the collections within them. A collection
-// groups catalogs of its own addon. Descriptions are cached, so this
-// mostly costs requests the first time; a collection that cannot be
-// described is left out.
-func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]stremio.Catalog, error) {
-	src := l.catalogSource()
-	entries, _, err := s.window(ctx, v, src, 0, v.limit(src))
+// groupedSources lists, each once, the catalogs the collections of a
+// collection library group, as each narrows them, following the
+// collections within them: the library's collections are those its catalog
+// lists as src. A collection groups catalogs of its own addon, listed up to
+// the library's maximum. Descriptions are cached, so this mostly costs
+// requests the first time; a collection that cannot be described is left
+// out. unknown is set when a read that asks no addon does not know every
+// collection of the library (see withKeptOnly).
+func (s *Service) groupedSources(ctx context.Context, v view, l library, src source) (sources []source, unknown bool, err error) {
+	entries, total, err := s.window(ctx, v, src, 0, v.limit(src))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	unknown = keptOnly(ctx) && total > len(entries)
 	described := map[string]bool{}
-	var catalogs []stremio.Catalog
+	seen := map[catalogKey]bool{}
 	for depth := 0; len(entries) > 0 && depth < maxNesting; depth++ {
 		var ids []string
 		for _, entry := range entries {
@@ -182,7 +185,7 @@ func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]str
 		}
 		_ = group.Wait()
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, false, ctx.Err()
 		}
 		entries = nil
 		for _, meta := range metas {
@@ -190,12 +193,14 @@ func (s *Service) groupedCatalogs(ctx context.Context, v view, l library) ([]str
 				continue
 			}
 			for _, ref := range meta.Collection.Sources {
-				if catalog, ok := l.addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok {
-					catalogs = append(catalogs, catalog)
+				key := catalogKey{l.addon.addon.ID, ref.Type, ref.CatalogID, ref.Genre}
+				if catalog, ok := l.addon.addon.Manifest.Catalog(ref.Type, ref.CatalogID); ok && !seen[key] {
+					seen[key] = true
+					sources = append(sources, source{addon: l.addon, catalog: catalog, genre: ref.Genre, first: src.first, max: l.maxItems})
 				}
 			}
 			entries = append(entries, meta.Collection.Items...)
 		}
 	}
-	return catalogs, nil
+	return sources, unknown, nil
 }

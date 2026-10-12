@@ -967,6 +967,9 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		src.genre = genre
 	}
 	count = withinMax(start, count, l.maxItems)
+	if l.catalog.Type == "collection" && titlesThrough(ctx) {
+		return s.collectionLibraryTitles(ctx, v, l, src, start, count)
+	}
 	metas, total, err := s.window(ctx, v, src, start, count)
 	if err != nil {
 		return Page{}, err
@@ -1039,6 +1042,61 @@ func (s *Service) prefetch(ctx context.Context, v view, addon installed, read fu
 		defer func() { <-s.prefetches }()
 		read(ctx)
 	}()
+}
+
+// titlesThroughKey marks the context of a listing of the titles under a
+// folder, through the folders within it (see WithTitlesThrough).
+type titlesThroughKey struct{}
+
+// WithTitlesThrough marks a listing that asks for the titles under a
+// folder at any depth, as Jellyfin lists the movies and series within a
+// library's folders when asked recursively for them: a collection library
+// then lists the titles of its collections rather than its collections
+// (see collectionLibraryTitles). Other folders list as they do.
+func WithTitlesThrough(ctx context.Context) context.Context {
+	return context.WithValue(ctx, titlesThroughKey{}, true)
+}
+
+func titlesThrough(ctx context.Context) bool {
+	marked, _ := ctx.Value(titlesThroughKey{}).(bool)
+	return marked
+}
+
+// collectionLibraryTitles lists the titles of a collection library's
+// collections, those its catalog lists as src: the titles of the catalogs
+// they group, and of those the collections within them group, merged one
+// of each in turn, as a collection lists them (see collectionChildren),
+// up to the library's maximum. A read that asks no addon and does not know
+// every collection tells that more may follow.
+func (s *Service) collectionLibraryTitles(ctx context.Context, v view, l library, src source, start, count int) (Page, error) {
+	sources, unknown, err := s.groupedSources(ctx, v, l, src)
+	if err != nil {
+		return Page{}, err
+	}
+	if len(sources) == 0 {
+		return Page{More: unknown}, nil
+	}
+	titles, total, err := s.merged(ctx, v, sources, start, count)
+	if err != nil {
+		return Page{}, err
+	}
+	if unknown && total <= start+len(titles) {
+		total = start + len(titles) + 1
+	}
+	var items []Item
+	var records []record
+	for _, title := range titles {
+		item, r, err := title.title(l.item.ID)
+		if err != nil {
+			continue
+		}
+		items, records = append(items, item), append(records, r)
+	}
+	result := page(items, start, totalWithinMax(total, l.maxItems))
+	if result.More && !src.first {
+		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, start+count, count) })
+	}
+	return result, s.save(ctx, records)
 }
 
 func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, confined bool) (Item, record) {

@@ -43,6 +43,33 @@ func TestCollectionLibrariesGetHomeRows(t *testing.T) {
 	}
 }
 
+// Asked recursively for its movies and series, as Jellyfin lists those
+// within a library's folders, a collection library lists the titles of its
+// collections, a page of them as asked: some apps make a library's home
+// row so, and showed none for a library of collections. A listing without
+// a limit comes first, before anything of the library was read.
+func TestCollectionLibrariesListTheirTitlesRecursively(t *testing.T) {
+	t.Parallel()
+	s, token, ids := browsing(t)
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"IncludeItemTypes=Movie&Recursive=true", []string{"Movie 0", "Movie 1", "Movie 2"}},
+		{"IncludeItemTypes=Movie,Series&Recursive=true&Limit=8", []string{"Movie 0", "Movie 1", "Movie 2"}},
+		{"IncludeItemTypes=Movie,Series&Recursive=true&StartIndex=0&Limit=2&EnableTotalRecordCount=true", []string{"Movie 0", "Movie 1"}},
+		{"IncludeItemTypes=Movie,Series&Recursive=true&StartIndex=2&Limit=2", []string{"Movie 2"}},
+	} {
+		var listed QueryResult
+		if status := s.get(t, "/Items?ParentId="+ids["Groups"]+"&"+tc.query, token, &listed); status != http.StatusOK {
+			t.Fatalf("%s: %d", tc.query, status)
+		}
+		if got := itemNames(listed.Items); !slices.Equal(got, tc.want) || listed.TotalRecordCount != 3 {
+			t.Errorf("%s: %v of %d, want %v of 3", tc.query, got, listed.TotalRecordCount, tc.want)
+		}
+	}
+}
+
 // Jellyfin lists every BoxSet in a listing of collections across the
 // server, as Strand asks for its shelves: Polyfin lists there the
 // collections of the user's collection libraries, with those made by users,
