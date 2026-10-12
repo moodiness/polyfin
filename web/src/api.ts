@@ -1164,16 +1164,22 @@ export type TrackingService = {
   lastImport: TrackingImport | null
   /** When the next import runs; null while none is planned. */
   nextImportAt: string | null
+  /** The service has a watchlist Polyfin can import: Trakt's watchlist, Simkl's Plan to Watch. */
+  watchlist: boolean
+  /** Whether that watchlist is imported, with the history's imports, into the Watchlist view. */
+  importWatchlist: boolean
 }
 
-/** How an import of a watch history went. */
+/** How an import of a watch history, and of a watchlist, went. */
 export type TrackingImport = {
   at: string
   /** Titles it newly marked played. */
   played: number
   /** Resume points it set. */
   resumed: number
-  /** Titles of the history Polyfin could not identify. */
+  /** Titles it added to the Watchlist view. */
+  watchlist: number
+  /** Titles of the history and the watchlist Polyfin could not identify. */
   unmapped: number
   /** Why the history could not be read whole; what was read is imported all the same. */
   problem: 'reconnect' | 'unreachable' | 'rate_limited' | null
@@ -1193,9 +1199,14 @@ export const connectTracking = (service: TrackingServiceName, key?: string) =>
     key === undefined ? {} : { key },
   )
 
-/** Turns the import of a connected service's watch history on (importing it at once) or off. */
-export const setTrackingImport = (service: TrackingServiceName, importHistory: boolean) =>
-  request<TrackingService>('PATCH', `/account/tracking/${seg(service)}`, { importHistory })
+/**
+ * Turns the import of a connected service's watch history, or of its watchlist, on (importing at
+ * once) or off.
+ */
+export const setTrackingImport = (
+  service: TrackingServiceName,
+  change: { importHistory?: boolean; importWatchlist?: boolean },
+) => request<TrackingService>('PATCH', `/account/tracking/${seg(service)}`, change)
 
 /** Imports a service's watch history at once. */
 export const importTracking = (service: TrackingServiceName) =>
@@ -1637,11 +1648,14 @@ export type AppImportStatus = {
   problem: 'internal' | null
   startedAt: string
   endedAt: string | null
-  /** Titles of the profile; then titles newly marked played, resume points set, new favorites. */
+  /**
+   * Titles of the profile; then titles newly marked played, resume points set, and titles of the
+   * app's library newly added to the Watchlist view.
+   */
   read: number
   played: number
   resumed: number
-  favorites: number
+  watchlist: number
   /** Every title not matched; `unmatched` lists the first 500 only. */
   unmatchedCount: number
   unmatched: AppUnmatched[]
@@ -1708,7 +1722,7 @@ export type AppConnectionImport = {
   read: number
   played: number
   resumed: number
-  favorites: number
+  watchlist: number
   unmatched: number
   problem:
     | 'unreachable'

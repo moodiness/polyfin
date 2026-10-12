@@ -39,7 +39,7 @@ const account = {
     },
     appImport: {
       description:
-        'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library as favorites, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
+        'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library, which goes to your Watchlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
       app: 'App',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Nuvio backend',
@@ -95,8 +95,8 @@ const account = {
       runningHelp:
         'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
       read: (count: number) => (count === 1 ? '1 title read.' : `${count} titles read.`),
-      counts: (read: number, played: number, resumed: number, favorites: number) =>
-        `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}.`,
+      counts: (read: number, played: number, resumed: number, watchlist: number) =>
+        `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${watchlist} added to the Watchlist.`,
       unmatched: (count: number) =>
         count === 1 ? '1 title not found' : `${count} titles not found`,
       unmatchedTitle: 'Titles not found',
@@ -302,6 +302,15 @@ const account = {
             `${name} could not be read whole during the last import. What was read was imported; the next import tries again.`,
           rate_limited: (name: string) =>
             `${name} asked Polyfin to wait during the last import. What was read was imported; the next import tries again.`,
+        },
+        watchlist: {
+          lists: { trakt: 'watchlist', simkl: 'Plan to Watch list' },
+          toggle: (name: string, list: string) => `Import my ${name} ${list}`,
+          toggleHelp: (name: string, list: string) =>
+            `Puts the movies and series of your ${name} ${list} in the Watchlist view of your Jellyfin apps, with each import. A title leaves it once you start it, or once ${name} no longer lists it. Nothing is sent back to ${name}.`,
+          counts: (added: number, unmapped: number) =>
+            `${added} added to the Watchlist, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
+          added: (added: number) => `${added} added to the Watchlist.`,
         },
       },
     },

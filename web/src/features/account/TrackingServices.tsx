@@ -575,9 +575,17 @@ function HistoryImport({
   const labelId = useId()
   const helpId = useId()
   const toggle = useMutation({
-    mutationFn: (on: boolean) => setTrackingImport(service.service, on),
+    mutationFn: (change: { importHistory?: boolean; importWatchlist?: boolean }) =>
+      setTrackingImport(service.service, change),
     onSuccess: store,
   })
+  const watchlistLabelId = useId()
+  const watchlistHelpId = useId()
+  const importing = service.importHistory || service.importWatchlist
+  const list =
+    service.service === 'trakt' || service.service === 'simkl'
+      ? text.watchlist.lists[service.service]
+      : ''
   const now = useMutation({
     mutationFn: () => importTracking(service.service),
     onSuccess: store,
@@ -603,12 +611,35 @@ function HistoryImport({
           describedById={helpId}
           onChange={(on) => {
             now.reset()
-            toggle.mutate(on)
+            toggle.mutate({ importHistory: on })
           }}
           className="mt-0.5"
         />
       </div>
-      {service.importHistory && (
+      {service.watchlist && (
+        <div className="mt-3 flex items-start justify-between gap-6 border-t border-line pt-3 max-sm:gap-4">
+          <div className="min-w-0">
+            <p id={watchlistLabelId} className="text-control font-medium text-ink">
+              {text.watchlist.toggle(name, list)}
+            </p>
+            <p id={watchlistHelpId} className="mt-0.5 text-small text-ink-3">
+              {text.watchlist.toggleHelp(name, list)}
+            </p>
+          </div>
+          <Switch
+            checked={service.importWatchlist}
+            disabled={busy}
+            labelledBy={watchlistLabelId}
+            describedById={watchlistHelpId}
+            onChange={(on) => {
+              now.reset()
+              toggle.mutate({ importWatchlist: on })
+            }}
+            className="mt-0.5"
+          />
+        </div>
+      )}
+      {importing && (
         <div className="mt-3 flex items-center justify-between gap-4 border-t border-line pt-3 max-sm:flex-col max-sm:items-start">
           <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
             <ClockCounterClockwiseIcon
@@ -625,7 +656,12 @@ function HistoryImport({
                 <>
                   {text.lastImport} <Ago iso={last.at} />
                   {text.colon}
-                  {text.counts(last.played, last.resumed, last.unmapped)}
+                  {service.importHistory
+                    ? text.counts(last.played, last.resumed, last.unmapped)
+                    : text.watchlist.counts(last.watchlist, last.unmapped)}
+                  {service.importHistory &&
+                    service.importWatchlist &&
+                    ` ${text.watchlist.added(last.watchlist)}`}
                   {service.nextImportAt !== null && (
                     <>
                       {' '}
@@ -647,7 +683,7 @@ function HistoryImport({
           </Button>
         </div>
       )}
-      {service.importHistory && !service.importing && last?.problem && (
+      {importing && !service.importing && last?.problem && (
         <Notice tone="warn" className="mt-3">
           {text.problem[last.problem](name)}
         </Notice>

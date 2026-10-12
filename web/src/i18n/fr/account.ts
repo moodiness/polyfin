@@ -39,7 +39,7 @@ const account: typeof en = {
     },
     appImport: {
       description:
-        'Reprenez ce que vous avez regardé dans une appli basée sur des addons : les films et épisodes vus avec leurs dates, vos points de reprise, et la bibliothèque de l’appli en favoris, reconnus par IMDb, TMDB ou Kitsu. Ils complètent seulement ce que Polyfin a déjà, et rien n’est écrit dans l’appli.',
+        'Reprenez ce que vous avez regardé dans une appli basée sur des addons : les films et épisodes vus avec leurs dates, vos points de reprise, et la bibliothèque de l’appli, qui va dans « À regarder » de vos applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Ils complètent seulement ce que Polyfin a déjà, et rien n’est écrit dans l’appli.',
       app: 'Appli',
       apps: { nuvio: 'Nuvio', stremio: 'Stremio' },
       backend: 'Serveur Nuvio',
@@ -96,8 +96,8 @@ const account: typeof en = {
       runningHelp:
         'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, elle s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien deux fois.',
       read: (count: number) => (count <= 1 ? `${count} titre lu.` : `${count} titres lus.`),
-      counts: (read: number, played: number, resumed: number, favorites: number) =>
-        `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}.`,
+      counts: (read: number, played: number, resumed: number, watchlist: number) =>
+        `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${watchlist <= 1 ? `${watchlist} ajouté` : `${watchlist} ajoutés`} à « À regarder ».`,
       unmatched: (count: number) =>
         count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
       unmatchedTitle: 'Titres introuvables',
@@ -310,6 +310,16 @@ const account: typeof en = {
             `${name} n’a pas pu être lu entièrement lors de la dernière importation. Ce qui a été lu a été importé ; la prochaine importation réessaie.`,
           rate_limited: (name: string) =>
             `${name} a demandé à Polyfin d’attendre lors de la dernière importation. Ce qui a été lu a été importé ; la prochaine importation réessaie.`,
+        },
+        watchlist: {
+          lists: { trakt: 'watchlist', simkl: 'liste Plan to Watch' },
+          toggle: (name: string, list: string) => `Importer ma ${list} ${name}`,
+          toggleHelp: (name: string, list: string) =>
+            `Place les films et séries de votre ${list} ${name} dans « À regarder » de vos applis Jellyfin, à chaque importation. Un titre en sort dès que vous le commencez, ou dès que ${name} ne le liste plus. Rien n’est renvoyé à ${name}.`,
+          counts: (added: number, unmapped: number) =>
+            `${added <= 1 ? `${added} ajouté` : `${added} ajoutés`} à « À regarder », ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
+          added: (added: number) =>
+            `${added <= 1 ? `${added} ajouté` : `${added} ajoutés`} à « À regarder ».`,
         },
       },
     },

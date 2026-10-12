@@ -743,7 +743,7 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
         <p className="text-body text-ink">
           {running
             ? text.read(current.read)
-            : text.counts(current.read, current.played, current.resumed, current.favorites)}
+            : text.counts(current.read, current.played, current.resumed, current.watchlist)}
         </p>
         {current.unmatchedCount > 0 && (
           <Button
@@ -941,7 +941,7 @@ function AppConnectionRow({
                 {text.lastImport}
                 <RelativeTime iso={last.at} />
                 {text.colon}
-                {t.account.appImport.counts(last.read, last.played, last.resumed, last.favorites)}
+                {t.account.appImport.counts(last.read, last.played, last.resumed, last.watchlist)}
               </>
             )}
             {connection.nextImportAt !== null && !connection.importing && (
