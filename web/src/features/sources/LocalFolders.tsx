@@ -9,7 +9,7 @@ import {
   TelevisionSimpleIcon,
   VideoCameraIcon,
 } from '@phosphor-icons/react'
-import { useId, useState, type FormEvent } from 'react'
+import { Fragment, useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addLocalFolder,
@@ -18,9 +18,11 @@ import {
   linkLocalFile,
   queryClient,
   queryKeys,
+  setLocalEpisodes,
   unlinkLocalFile,
   updateLocalFolder,
   type Addon,
+  type DiscKind,
   type FolderKind,
   type FolderShare,
   type LocalFolder,
@@ -28,7 +30,7 @@ import {
   type UnmatchedFile,
 } from '@/api'
 import { errorMessage, formatBytes } from '@/format'
-import { useI18n } from '@/i18n'
+import { useI18n, type Messages } from '@/i18n'
 import {
   Badge,
   Button,
@@ -406,6 +408,18 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
       void queryClient.invalidateQueries({ queryKey: queryKeys.unmatched(addon.id) })
     },
   })
+  const removeEpisode = useMutation({
+    mutationFn: ({ path }: { path: string; name: string }) =>
+      setLocalEpisodes(addon.id, [{ path, episode: '' }]),
+    onSuccess: (updated, { name }) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.episodeRemoved(name))
+    },
+    onSettled: () => {
+      invalidateScope('shared')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unmatched(addon.id) })
+    },
+  })
 
   return (
     <>
@@ -426,9 +440,21 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
         ) : (
           <>
             <ul className="flex flex-col divide-y divide-line">
-              {unmatched.data.files.map((file) => (
-                <UnmatchedRow key={file.path} addon={addon} folder={folder} file={file} />
-              ))}
+              {unmatched.data.files.map((file, i, files) => {
+                const disc = file.discTitle?.discPath
+                return (
+                  <Fragment key={file.path}>
+                    {disc !== undefined && files[i - 1]?.discTitle?.discPath !== disc && (
+                      <DiscSuggestion
+                        addon={addon}
+                        folder={folder}
+                        titles={files.filter((other) => other.discTitle?.discPath === disc)}
+                      />
+                    )}
+                    <UnmatchedRow addon={addon} folder={folder} file={file} />
+                  </Fragment>
+                )
+              })}
             </ul>
             {unmatched.data.total > unmatched.data.files.length && (
               <p className="mt-3 text-small text-ink-3">
@@ -441,7 +467,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           </>
         )}
       </PanelSection>
-      {folder.links.length > 0 && (
+      {(folder.links.length > 0 || folder.episodes.length > 0) && (
         <PanelSection title={text.linksTitle}>
           <ul className="flex flex-col divide-y divide-line">
             {folder.links.map((link) => (
@@ -461,8 +487,27 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
                 />
               </li>
             ))}
+            {folder.episodes.map((given) => {
+              const name = titleName(given.disc, given.discPath, given.number, folder, text)
+              return (
+                <li key={given.path} className="flex items-center justify-between gap-4 py-2">
+                  <span className="min-w-0">
+                    <span className="block font-mono text-small break-all text-ink-2">{name}</span>
+                    <Badge tone="accent">{given.episode}</Badge>
+                  </span>
+                  <IconButton
+                    label={text.removeEpisodeLabel(name)}
+                    icon={LinkBreakIcon}
+                    size="sm"
+                    disabled={removeEpisode.isPending}
+                    onClick={() => removeEpisode.mutate({ path: given.path, name })}
+                  />
+                </li>
+              )
+            })}
           </ul>
           {unlink.isError && <FieldError>{errorMessage(t, unlink.error)}</FieldError>}
+          {removeEpisode.isError && <FieldError>{errorMessage(t, removeEpisode.error)}</FieldError>}
         </PanelSection>
       )}
     </>
@@ -471,7 +516,8 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
 
 /**
  * One unmatched file: its path, what its name was read as and why it is unmatched, its link form,
- * and the search of its title.
+ * and the search of its title. A title of a show's disc has its episode form instead, and the link
+ * form too while its show is unmatched.
  */
 function UnmatchedRow({
   addon,
@@ -514,11 +560,14 @@ function UnmatchedRow({
           {[
             text.reasons[file.reason] ?? file.reason,
             title !== '' ? text.read(title) : '',
-            file.disc
-              ? text.disc[file.disc](unitName(file.unit, folder, text.discTitle))
-              : file.unit !== file.path
-                ? text.showFolder(file.unit)
-                : '',
+            file.discTitle
+              ? titleName(file.disc, file.discTitle.discPath, file.discTitle.number, folder, text)
+              : file.disc
+                ? text.disc[file.disc](unitName(file.unit, folder, text.discTitle))
+                : file.unit !== file.path
+                  ? text.showFolder(file.unit)
+                  : '',
+            file.discTitle?.length ? text.minutes(Math.round(file.discTitle.length / 60)) : '',
             formatBytes(file.size, language),
           ]
             .filter(Boolean)
@@ -526,7 +575,8 @@ function UnmatchedRow({
         </p>
         {link.isError && <FieldError>{errorMessage(t, link.error)}</FieldError>}
       </div>
-      {folder.kind !== 'music' && (
+      {file.discTitle && <EpisodeForm addon={addon} folder={folder} file={file} />}
+      {folder.kind !== 'music' && (file.discTitle === null || file.reason !== 'disc_episode') && (
         <form onSubmit={submit} noValidate className="flex items-end gap-2">
           <Field label={text.linkLabel(file.path)} hideLabel>
             <TextInput
@@ -575,6 +625,141 @@ function UnmatchedRow({
       )}
     </li>
   )
+}
+
+/**
+ * The episode form of a title of a show's disc: its episodes, typed as a file's name gives them,
+ * the suggested ones shown as its placeholder.
+ */
+function EpisodeForm({
+  addon,
+  folder,
+  file,
+}: {
+  addon: Addon
+  folder: LocalFolder
+  file: UnmatchedFile
+}) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const toast = useToast()
+  const [episode, setEpisode] = useState(file.discTitle?.episode ?? '')
+  const name = file.discTitle
+    ? titleName(file.disc, file.discTitle.discPath, file.discTitle.number, folder, text)
+    : file.path
+  const give = useMutation({
+    mutationFn: (value: string) =>
+      setLocalEpisodes(addon.id, [{ path: file.path, episode: value }]),
+    onSuccess: (updated) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.episodesGiven(1))
+    },
+    onSettled: () => {
+      invalidateScope('shared')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unmatched(addon.id) })
+    },
+  })
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    give.mutate(episode.trim())
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <form onSubmit={submit} noValidate className="flex items-end gap-2">
+        <Field label={text.episodeLabel(name)} hideLabel>
+          <TextInput
+            value={episode}
+            onValue={(value) => {
+              give.reset()
+              setEpisode(value)
+            }}
+            placeholder={file.discTitle?.suggested ?? text.episodePlaceholder}
+            autoComplete="off"
+            spellCheck={false}
+            size="sm"
+            mono
+            className="w-[150px]"
+          />
+        </Field>
+        <Button type="submit" size="sm" loading={give.isPending} disabled={episode.trim() === ''}>
+          {text.giveEpisode}
+        </Button>
+      </form>
+      {give.isError && <FieldError>{errorMessage(t, give.error)}</FieldError>}
+    </div>
+  )
+}
+
+/**
+ * The episodes Polyfin suggests for a show's disc, whose unmatched titles are titles, in order, and
+ * the button that gives them all at once; nothing when none is suggested.
+ */
+function DiscSuggestion({
+  addon,
+  folder,
+  titles,
+}: {
+  addon: Addon
+  folder: LocalFolder
+  titles: UnmatchedFile[]
+}) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const toast = useToast()
+  const suggested = titles.flatMap((file) =>
+    file.discTitle?.suggested ? [{ path: file.path, episode: file.discTitle.suggested }] : [],
+  )
+  const confirm = useMutation({
+    mutationFn: () => setLocalEpisodes(addon.id, suggested),
+    onSuccess: (updated) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.episodesGiven(suggested.length))
+    },
+    onSettled: () => {
+      invalidateScope('shared')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unmatched(addon.id) })
+    },
+  })
+  const first = titles[0]
+  if (suggested.length === 0 || !first?.discTitle) return null
+  const disc = first.disc
+    ? text.disc[first.disc](unitName(first.discTitle.discPath, folder, text.discTitle))
+    : first.discTitle.discPath
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
+      <div className="min-w-0 flex-1 basis-[260px]">
+        <p className="text-small text-ink-2">
+          {text.suggestion(disc, suggested[0].episode, suggested[suggested.length - 1].episode)}
+        </p>
+        {confirm.isError && <FieldError>{errorMessage(t, confirm.error)}</FieldError>}
+      </div>
+      <Button
+        size="sm"
+        variant="primary"
+        loading={confirm.isPending}
+        onClick={() => confirm.mutate()}
+      >
+        {text.confirmSuggestion}
+      </Button>
+    </li>
+  )
+}
+
+/**
+ * A title of a show's disc as the admin app names it: its disc, of kind, and its number, such as
+ * `DVD: Show/Season 1/Disc 2 · title 3`.
+ */
+function titleName(
+  kind: DiscKind | '' | null,
+  discPath: string,
+  number: number,
+  folder: LocalFolder,
+  text: Messages['localFolders'],
+): string {
+  const titled = text.discTitle(unitName(discPath, folder, text.discTitle), number)
+  return kind ? text.disc[kind](titled) : titled
 }
 
 /**

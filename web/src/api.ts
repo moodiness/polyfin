@@ -512,8 +512,26 @@ export type LocalFolder = {
   datedBy: { nfo: number; created: number; file: number }
   /** The files, or shows' folders, linked to an IMDb identifier by hand. */
   links: { unit: string; imdbId: string }[]
+  /** The episodes given by hand to the titles of shows' discs. */
+  episodes: GivenEpisode[]
   /** Whether its titles show the artwork beside their files rather than the addons'. */
   useArtwork: boolean
+}
+
+/** The kind of a disc: a Blu-ray disc's or a DVD's folder, or a disc image. */
+export type DiscKind = 'bluray' | 'dvd' | 'bluray_image' | 'dvd_image'
+
+/**
+ * The episodes given by hand to a title of a show's disc: the title's path, its disc's kind (empty
+ * when the disc is gone), folder or image, and number, and its episodes, such as `S01E05` or
+ * `S01E05-E06`.
+ */
+export type GivenEpisode = {
+  path: string
+  disc: DiscKind | ''
+  discPath: string
+  number: number
+  episode: string
 }
 
 /** A file of a local folder no title was matched to, with why. */
@@ -528,12 +546,30 @@ export type UnmatchedFile = {
   year: number | null
   size: number
   reason:
-    'unreadable_name' | 'not_found' | 'ambiguous' | 'other_year' | 'search_failed' | 'disc_title'
+    | 'unreadable_name'
+    | 'not_found'
+    | 'ambiguous'
+    | 'other_year'
+    | 'search_failed'
+    | 'disc_title'
+    | 'disc_episode'
   /**
    * The kind of disc the file is read as, its unit the disc's folder, or the image itself for a
    * disc image; null for another file.
    */
-  disc: 'bluray' | 'dvd' | 'bluray_image' | 'dvd_image' | null
+  disc: DiscKind | null
+  /**
+   * A title of a show's disc, its unit the show's folder: its disc's folder or image, its number,
+   * how long it plays in seconds, its episodes and those suggested, such as `S01E05`; null for
+   * another file.
+   */
+  discTitle: {
+    discPath: string
+    number: number
+    length: number | null
+    episode: string | null
+    suggested: string | null
+  } | null
 }
 
 export type NewLocalFolder = {
@@ -1597,6 +1633,13 @@ export const unlinkLocalFile = (id: string, path: string) =>
     'DELETE',
     `${scopePath('shared')}/folders/${seg(id)}/links?path=${encodeURIComponent(path)}`,
   )
+
+/**
+ * Gives titles of shows' discs their episodes, such as `S01E05` or `S01E05-E06`, for good; an
+ * empty episode removes those given.
+ */
+export const setLocalEpisodes = (id: string, episodes: { path: string; episode: string }[]) =>
+  request<Addon>('PUT', `${scopePath('shared')}/folders/${seg(id)}/episodes`, { episodes })
 
 /** Replaces the values of an Eclipse addon's settings; the addon receives them on every request. */
 export const saveAddonSettings = (scope: Scope, id: string, values: Record<string, string>) =>

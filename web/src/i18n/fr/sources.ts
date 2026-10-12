@@ -272,7 +272,7 @@ const sources: typeof en = {
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',
     unmatchedTitle: 'Fichiers non associés',
     unmatchedHelp:
-      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque, ou l’un des films d’un disque qui en contient plusieurs.',
+      'Aucun titre n’a été trouvé pour ces fichiers. Renommez-les avec le titre et l’année, ou ajoutez un fichier NFO donnant l’identifiant du titre, puis lancez une analyse ; ou associez-les à l’identifiant IMDb présent dans l’adresse IMDb du titre (tt suivi de chiffres). Une association survit aux analyses ; dans un dossier de séries, elle couvre toute la série, et pour un disque Blu-ray ou un DVD, tout le disque, ou l’un des films d’un disque qui en contient plusieurs. Les titres du disque d’une série prennent leur épisode comme le nom d’un fichier le donne, par exemple S01E05, ou S01E05-E06 pour deux ; les épisodes proposés pour un disque suivent ceux des disques précédents de la saison.',
     noUnmatched: 'Chaque fichier est associé à un titre.',
     leftOutTitle: 'Morceaux laissés de côté',
     leftOutHelp:
@@ -282,6 +282,7 @@ const sources: typeof en = {
     reasons: {
       unreadable_name: 'Son nom ne donne aucun titre, ou aucun numéro d’épisode',
       disc_title: 'Un autre film du disque : associez-le à son titre',
+      disc_episode: 'Un titre du disque d’une série : indiquez son épisode',
       not_found: 'Les addons de métadonnées ne connaissent aucun titre de ce nom',
       ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
       other_year: 'Les titres de ce nom sont d’autres années',
@@ -298,6 +299,17 @@ const sources: typeof en = {
       bluray_image: (unit: string) => `Image Blu-ray : ${unit}`,
       dvd_image: (unit: string) => `Image DVD : ${unit}`,
     },
+    minutes: (minutes: number) => `${minutes} min`,
+    episodeLabel: (title: string) => `Épisode de ${title}`,
+    episodePlaceholder: 'S01E01',
+    giveEpisode: 'Enregistrer',
+    episodesGiven: (count: number) =>
+      count === 1 ? 'Le titre est numéroté.' : `${count} titres sont numérotés.`,
+    suggestion: (disc: string, first: string, last: string) =>
+      first === last
+        ? `Proposé pour ${disc} : ${first}`
+        : `Proposés pour ${disc} : ${first} à ${last}`,
+    confirmSuggestion: 'Utiliser ces épisodes',
     imdbId: 'Identifiant IMDb',
     imdbPlaceholder: 'tt0000000',
     link: 'Associer',
@@ -319,6 +331,9 @@ const sources: typeof en = {
     unlinkLabel: (unit: string) => `Retirer l’association de ${unit}`,
     unlinked: (unit: string) =>
       `L’association de ${unit} a été retirée : il est à nouveau associé d’après son nom ou son fichier NFO.`,
+    removeEpisodeLabel: (title: string) => `Retirer l’épisode de ${title}`,
+    episodeRemoved: (title: string) =>
+      `L’épisode de ${title} a été retiré : le nom de son disque le numérote, ou il est à nouveau proposé.`,
     openPage: 'Ouvrir la page du dossier',
   },
   mySources: {

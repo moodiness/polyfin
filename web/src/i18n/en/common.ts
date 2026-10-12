@@ -225,6 +225,8 @@ const common = {
     invalid_share_user: 'Users are at most 256 characters long, passwords at most 1,024.',
     invalid_folder_kind: 'Choose whether the folder holds movies or shows.',
     invalid_imdb_id: 'An IMDb identifier is tt followed by digits, such as tt0063350.',
+    invalid_episode:
+      'Write the episode as a file’s name gives it, such as S01E05, or S01E05-E06 for two.',
     title_search_failed: 'The metadata addons could not be searched. Try again in a moment.',
     invalid_channel_list:
       'This address did not return a channel list. Check it, and that the account is still valid.',

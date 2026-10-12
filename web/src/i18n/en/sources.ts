@@ -255,7 +255,7 @@ const sources = {
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',
     unmatchedHelp:
-      'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc or a DVD, the whole disc, or one movie of a disc that holds several.',
+      'No title was found for these files. Rename them with the title and year, or add an NFO file giving the title’s identifier, then scan; or link them to the IMDb identifier in the title’s IMDb address (tt followed by digits). A link survives rescans; in a shows folder, it covers the whole show, and for a Blu-ray disc or a DVD, the whole disc, or one movie of a disc that holds several. The titles of a show’s disc take their episode as a file’s name gives it, such as S01E05, or S01E05-E06 for two; the episodes suggested for a disc follow those of the season’s discs before it.',
     noUnmatched: 'Every file is matched to a title.',
     leftOutTitle: 'Tracks left out',
     leftOutHelp:
@@ -265,6 +265,7 @@ const sources = {
     reasons: {
       unreadable_name: 'Its name gives no title, or no episode number',
       disc_title: 'Another movie of the disc: link it to its title',
+      disc_episode: 'A title of a show’s disc: give its episode',
       not_found: 'The metadata addons know no title of this name',
       ambiguous: 'Several titles have this name: add the year to it, or link it',
       other_year: 'Titles of this name are of other years',
@@ -281,6 +282,17 @@ const sources = {
       bluray_image: (unit: string) => `Blu-ray image: ${unit}`,
       dvd_image: (unit: string) => `DVD image: ${unit}`,
     },
+    minutes: (minutes: number) => `${minutes} min`,
+    episodeLabel: (title: string) => `Episode of ${title}`,
+    episodePlaceholder: 'S01E01',
+    giveEpisode: 'Save',
+    episodesGiven: (count: number) =>
+      count === 1 ? 'The title is numbered.' : `${count} titles are numbered.`,
+    suggestion: (disc: string, first: string, last: string) =>
+      first === last
+        ? `Suggested for ${disc}: ${first}`
+        : `Suggested for ${disc}: ${first} to ${last}`,
+    confirmSuggestion: 'Use these episodes',
     imdbId: 'IMDb identifier',
     imdbPlaceholder: 'tt0000000',
     link: 'Link',
@@ -302,6 +314,9 @@ const sources = {
     unlinkLabel: (unit: string) => `Remove the link of ${unit}`,
     unlinked: (unit: string) =>
       `The link of ${unit} was removed: it is matched by its name or NFO file again.`,
+    removeEpisodeLabel: (title: string) => `Remove the episode of ${title}`,
+    episodeRemoved: (title: string) =>
+      `The episode of ${title} was removed: its disc’s name numbers it, or it is suggested again.`,
     openPage: 'Open the folder’s page',
   },
   mySources: {
