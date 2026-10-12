@@ -74,9 +74,10 @@ const (
 const usage = `Usage: polyfin [command]
 
 Commands:
-  serve    Start the server (default)
-  version  Print the version
-  help     Show this help
+  serve        Start the server (default)
+  healthcheck  Exit 0 when the server at POLYFIN_LISTEN answers /healthz within 3 seconds, 1 otherwise
+  version      Print the version
+  help         Show this help
 
 Environment:
   POLYFIN_DATABASE_URL  PostgreSQL URL (required)
@@ -105,6 +106,11 @@ func main() {
 		stop()
 		if err != nil && !interrupted {
 			fmt.Fprintln(os.Stderr, "polyfin:", err)
+			os.Exit(1)
+		}
+	case "healthcheck":
+		if err := healthcheck(os.Getenv, healthcheckTimeout); err != nil {
+			fmt.Fprintln(os.Stderr, "polyfin: healthcheck:", err)
 			os.Exit(1)
 		}
 	case "version":
