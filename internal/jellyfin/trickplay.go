@@ -117,22 +117,28 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 	if settings := h.Accounts.Settings(); !settings.Trickplay && !settings.ChapterImages {
 		return
 	}
-	id, ok := parseGUID(mediaSource)
-	if !ok {
+	version, ok := h.startedVersion(ctx, user, item, mediaSource)
+	// Images are made of keyframes read by ranges through a file's index:
+	// a version that is not one file, a DVD, gets none.
+	if !ok || h.Playback.ReadsInput(version) {
 		return
 	}
-	// With a quality group, the title's own identifier stands for its
-	// first version that fits, as in PlaybackInfo: the others are not read.
+	h.Thumbnails.Queue(version, device)
+}
+
+// startedVersion is the version of item a playback started with, named
+// by the media source it reported. With a quality group, the title's own
+// identifier stands for its first version that fits, as in PlaybackInfo.
+func (h *Handler) startedVersion(ctx context.Context, user accounts.User, item library.Item, mediaSource string) (library.Version, bool) {
+	id, ok := parseGUID(mediaSource)
+	if !ok {
+		return library.Version{}, false
+	}
 	if id == item.ID && user.QualityGroup > 0 {
 		id = h.firstWorkingVersion(ctx, user, item)
 	}
 	version, err := h.Library.Version(ctx, user, item.ID, id)
-	// Images are made of keyframes read by ranges through a file's index:
-	// a version that is not one file, a DVD, gets none.
-	if err != nil || h.Playback.ReadsInput(version) {
-		return
-	}
-	h.Thumbnails.Queue(version, device)
+	return version, err == nil
 }
 
 // playingStale is how long a playback no report came for still counts as

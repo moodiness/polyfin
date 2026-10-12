@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/speech"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -52,4 +53,23 @@ func (t subtitleText) write(format string, start time.Duration) (data []byte, co
 		return subtitles.ASS(cues), "text/x-ssa", true
 	}
 	return nil, "", false
+}
+
+// retimed is t with its times mapped by timing: its cues, and the events
+// of its script. Those ending before the version starts are left out.
+func (t subtitleText) retimed(timing speech.Timing) subtitleText {
+	retimed := subtitleText{cues: timing.Apply(t.cues)}
+	if t.script != nil {
+		script := &subtitles.Script{Header: t.script.Header, Footer: t.script.Footer, Events: make([]subtitles.Event, 0, len(t.script.Events))}
+		for _, event := range t.script.Events {
+			event.Start, event.End = timing.At(event.Start), timing.At(event.End)
+			if event.End <= 0 {
+				continue
+			}
+			event.Start = max(event.Start, 0)
+			script.Events = append(script.Events, event)
+		}
+		retimed.script = script
+	}
+	return retimed
 }

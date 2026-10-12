@@ -340,7 +340,7 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 		var variant hls.Variant
 		if variant, err = h.Playback.Variant(r.Context(), req.remux); err == nil {
 			if strings.EqualFold(query(r, "subtitleMethod"), "Hls") {
-				variant.Subtitles = h.renditions(req, query(r, "subtitleStreamIndex"), r.URL.RawQuery)
+				variant.Subtitles = h.renditions(r.Context(), req, query(r, "subtitleStreamIndex"), r.URL.RawQuery)
 			}
 			err = hls.WriteMaster(w, variant, "main.m3u8?"+r.URL.RawQuery)
 		}
@@ -361,8 +361,13 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 // renditions are the text subtitles a remux offers in HLS, the one the
 // app chose shown by default: the text files and the embedded tracks
 // FFmpeg extracts. The app's player can switch between them.
-func (h *Handler) renditions(req remuxRequest, selected, rawQuery string) []hls.Rendition {
+func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, rawQuery string) []hls.Rendition {
 	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), h.Accounts.Settings().Language)
+	shown, err := strconv.Atoi(selected)
+	if err != nil {
+		shown = -1
+	}
+	h.markSynced(ctx, req.remux.Version.ID, req.files, streams, shown)
 	var renditions []hls.Rendition
 	for _, stream := range streams {
 		if stream.Type != "Subtitle" || !(stream.IsExternal && stream.IsTextSubtitleStream || playback.ExtractableSubtitle(req.analysis, stream.Index-len(req.files))) {
@@ -467,7 +472,7 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	if index < len(req.files) {
 		var text subtitleText
 		if text, err = h.subtitleFile(r.Context(), req.files[index]); err == nil {
-			data = hls.SubtitleSegment(text.cues, plan, n)
+			data = hls.SubtitleSegment(h.syncedSubtitle(r.Context(), req.remux.Version.ID, req.files[index], text).cues, plan, n)
 		}
 	} else {
 		ctx, cancel := context.WithTimeout(r.Context(), segmentWait)

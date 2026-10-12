@@ -710,6 +710,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			stream.IsExternalUrl = new(false)
 		}
 	}
+	h.markSynced(r.Context(), version.ID, versionFiles(p.subtitles, version), source.MediaStreams, decision.SubtitleStreamIndex)
 	for i := range source.MediaAttachments {
 		attachment := &source.MediaAttachments[i]
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
@@ -1035,6 +1036,12 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 			}
 			processingError(w, http.StatusInternalServerError)
 			return
+		}
+		// An addon's subtitle is synced to the version it is served for.
+		if addonSubtitle(files[index]) {
+			if version, ok := h.subtitleVersion(r, item); ok {
+				text = h.syncedSubtitle(r.Context(), version, files[index], text)
+			}
 		}
 	}
 	data, contentType, ok := text.write(format, start)
