@@ -73,6 +73,8 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 
 An address on the local network that sends `X-Forwarded-For` or `X-Real-IP` without being one of the **Known proxies** is a warning, named for an hour after its last such request, with a link to the setting: it is usually a reverse proxy missing from it (see [Known proxies](reverse-proxy.md#known-proxies)).
 
+Local network discovery has two warnings, linked to its settings (see [Local network discovery](#local-network-discovery)): its UDP port is used by another program, such as a Jellyfin server on the same host, or its answers give an address of Polyfin's container, which apps on the local network cannot reach.
+
 Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
 ## New versions
@@ -98,6 +100,21 @@ A development build, whose version is `dev`, asks nothing and never shows a new 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Check for new versions** | **Settings › General** | On | Asks GitHub once a day, and a minute after Polyfin starts, for Polyfin's latest release, and tells administrators about a newer one. Off, GitHub is never asked. |
+
+## Local network discovery
+
+Jellyfin apps look for servers on the local network by broadcasting `who is JellyfinServer?` to UDP port 7359, and Emby apps `who is EmbyServer?`. While **Answer local network discovery** is on, Polyfin answers them with its address, ID and name, and the apps list it among the servers found (see [Finding servers on the local network](jellyfin-compatibility.md#finding-servers-on-the-local-network)). It answers only addresses of the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and the server itself. A port forwarded from the internet therefore gets no answer.
+
+The address in the answers is **Address on the local network**, when set. Otherwise it is the address of the server's network interface that reaches the app, with Polyfin's HTTP port, or the address `POLYFIN_LISTEN` names when it names one. In Docker, it depends on the container's network: see [Let apps find Polyfin on the local network](installation.md#let-apps-find-polyfin-on-the-local-network).
+
+Both settings apply at once, without a restart. Turned off, Polyfin frees the port. When it cannot listen on the port, Polyfin starts anyway, logs it, and **System › Health** shows a warning; turning the setting off ends the warning, and saving the settings tries the port again. In a container, without an address set, **System › Health** also warns when an answer gave an address that is not on the network of the app that asked: the container's own, on Docker's bridge network.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Answer local network discovery** | **Settings › General** | On | Answers the discovery messages Jellyfin and Emby apps broadcast to UDP port 7359. Off, the port is free. |
+| **Address on the local network** | **Settings › General** | Empty | The address announced, such as `http://192.168.1.10:8096`, as Jellyfin's `PublishedServerUrl`. It is also the `LocalAddress` of `/System/Info/Public`. Empty, the address of the interface that reaches the app is announced. |
+
+**For app developers:** `GET /admin/api/health/problems` lists the warning of a port it cannot listen on as `discovery_port`, with `port`, and the warning of a container's address as `discovery_address`, with `address`, the address announced. `/admin/api/settings` holds the settings as `localDiscovery` and `localAddress`; a `PUT` whose address is not an `http` or `https` URL, or has a user, query or fragment, answers 400 `invalid_local_address`. For tests, `POLYFIN_DISCOVERY_PORT` changes the UDP port, which Jellyfin apps never use.
 
 ## Logs
 

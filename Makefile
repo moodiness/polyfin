@@ -31,6 +31,7 @@ check: web
 compose-check:
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml config --quiet
 	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.build.yaml config --quiet
+	POSTGRES_PASSWORD=config-only docker compose --env-file /dev/null -f compose.yaml -f compose.host.yaml config --quiet
 
 # Local tag only: this target never pushes. It also checks that the
 # jellyfin-web source releases attach still matches its checksum.

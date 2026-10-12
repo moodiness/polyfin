@@ -1,0 +1,16 @@
+# Run Polyfin on the host's network, on Linux, so that the discovery
+# messages Jellyfin apps broadcast on the local network reach it:
+#   docker compose -f compose.yaml -f compose.host.yaml up -d
+# PostgreSQL keeps its own network, published on the host's loopback only,
+# where Polyfin reaches it. Polyfin listens on the host's port 8096 for
+# HTTP and 7359 for discovery.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  polyfin:
+    network_mode: host
+    ports: !reset []
+    environment:
+      POLYFIN_DATABASE_URL: postgresql://polyfin:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@127.0.0.1:5432/polyfin

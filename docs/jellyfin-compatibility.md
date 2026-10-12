@@ -158,6 +158,17 @@ Like Jellyfin's own Known proxies setting, **Known proxies**, under **Settings â
 
 **For app developers:** a session's `RemoteEndPoint`, and `IsLocal` and `IsInNetwork` of `/System/Endpoint`, follow the client's address: the one the proxy names for a request from a known proxy, the connection's otherwise.
 
+### Finding servers on the local network
+
+Jellyfin apps that look for servers on the local network list Polyfin, as they list a Jellyfin server with its auto discovery on: its address does not have to be typed. **Answer local network discovery**, under **Settings â€º General**, is on by default, as Jellyfin's is, and **Address on the local network** plays the part of Jellyfin's `PublishedServerUrl`. In Docker, the container's network decides whether the apps' messages reach Polyfin: see [Let apps find Polyfin on the local network](installation.md#let-apps-find-polyfin-on-the-local-network) and [Local network discovery](administration.md#local-network-discovery).
+
+**For app developers:**
+
+- Polyfin listens on UDP port 7359, IPv4 and IPv6. A datagram that holds `who is JellyfinServer?`, in any letter case, as Jellyfin 12.2 reads it, gets one answer, sent to its sender: `{"Address":"http://192.168.1.10:8096","Id":"<server ID>","Name":"<server name>","EndpointAddress":null}`. Polyfin answers Emby's `who is EmbyServer?` the same way, which Jellyfin 12.2 leaves unanswered.
+- `Id` and `Name` are those of `/System/Info/Public`. `Address` is **Address on the local network** when set, as Jellyfin's `PublishedServerUrl`. Otherwise it is `http://`, the address of the server's interface that reaches the sender, and Polyfin's HTTP port.
+- Only senders on the local network are answered: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Jellyfin answers any sender.
+- `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached.
+
 ## Jellyfin features Polyfin does without
 
 These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind is configured:

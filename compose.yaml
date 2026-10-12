@@ -32,6 +32,10 @@ services:
     # Reachable on the LAN: TVs and phones connect to it directly.
     ports:
       - "8096:8096"
+      # Local network discovery. Docker Desktop forwards the broadcasts
+      # Jellyfin apps send here; Docker Engine on Linux does not: use
+      # compose.host.yaml there (see docs/installation.md).
+      - "7359:7359/udp"
     depends_on:
       - postgres
     read_only: true
