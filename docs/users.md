@@ -8,7 +8,7 @@ Polyfin has separate accounts for each user, with Jellyfin authentication and Qu
 
 An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
+Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Stremio or Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
 ## Watch state
 
@@ -189,13 +189,13 @@ Under **My account**, **Import from another server** lets each user bring their 
 
 ## Importing from an app
 
-Apps built on addons, as Polyfin is, keep what their users watched in an account: Nuvio is the first Polyfin imports from. Under **My account**, **Import from an app** lets each user bring theirs over: the movies and episodes they played, their resume points, the app's library, and the app's addons they choose.
+Apps built on addons, as Polyfin is, keep what their users watched in an account: Polyfin imports from Nuvio and Stremio. Under **My account**, **Import from an app** lets each user bring theirs over: the movies and episodes they played, their resume points, the app's library, and the app's addons they choose.
 
-1. Sign in to the app, the way that app signs in (see [Nuvio](#nuvio)). Polyfin reads the account once, then signs out.
-2. **Profile** lists the account's profiles by name, with what each watched, resumed and keeps in its library: choose the one to import. Under **Addons**, tick those to add, if any (see [The app's addons](#the-app-s-addons)).
+1. Choose the **App**, and sign in to it, the way that app signs in (see [Nuvio](#nuvio) and [Stremio](#stremio)). Polyfin reads the account once, then signs out, but for a Stremio key you paste.
+2. **Profile** lists the account's profiles by name, with what each watched, resumed and keeps in its library: choose the one to import. An app without profiles, as Stremio, has one: **The whole account**. Under **Addons**, tick those to add, if any (see [The app's addons](#the-app-s-addons)).
 3. **Import this profile** imports it into the user's account, in the background. The section then shows the import, and its result: what was added, the titles not found, and the addons added.
 
-Polyfin keeps what it read of the account in memory only, while the profile is chosen, and for 5 minutes at most: after that, or after **Sign in again**, it is gone, and the import asks to sign in again (`app_import_expired`). The password is used for that sign-in only: it is never kept, nor logged.
+Polyfin keeps what it read of the account in memory only, while the profile is chosen, and for 5 minutes at most: after that, or after **Sign in again**, it is gone, and the import asks to sign in again (`app_import_expired`). The password, or the key the app gives, is used for that sign-in only: it is never kept, nor logged.
 
 An administrator can run the same import for a user: **Import from an app**, at the top of **Users**, asks **Into the account of** which user, then goes on as the user's import does, with the user's sign-in to the app. **Users may import their watch history from another server or app**, under **Settings › Security**, turns the users' own import off (`server_imports_disabled`), not the administrator's.
 
@@ -214,7 +214,7 @@ An app's library is closer to a watchlist than to favorites: Polyfin has no watc
 
 Apps built on addons name titles by the identifiers of the addons that described them. Polyfin finds them by IMDb (`tt…`) and TMDB (`tmdb:…`) identifiers, as an [imported watch history](tracking.md#importing-your-watch-history) does, and by Kitsu identifiers (`kitsu:…`), through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and its season and episode numbers; an episode of a Kitsu entry by its number in the entry. A title no catalog listed yet shows in the user's lists at once, described by the addons.
 
-A title that cannot be matched is left out, and the import goes on. The result lists these titles with why: **Not an IMDb, TMDB or Kitsu identifier** (an addon's own identifier) or **Not in Polyfin** (no catalog listed it under its identifier).
+A title that cannot be matched is left out, and the import goes on. The result lists these titles with why: **Not an IMDb, TMDB or Kitsu identifier** (an addon's own identifier) or **Not in Polyfin** (no catalog listed it under its identifier). A Stremio series can also be listed with **Its episodes do not match Polyfin's list** (see [Stremio](#stremio)): its episodes watched are not marked played, but the series stays a favorite when it is in the library.
 
 The data merges as the other imports' does (see [How the data merges with Polyfin's](#how-the-data-merges-with-polyfin-s)): played marks, resume points and favorites are only added, a title keeps Polyfin's date when it is later, the more recent of two resume points stays, and the resume points imported follow Polyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)): one past the played threshold marks the title played. Importing again adds nothing twice.
 
@@ -256,6 +256,46 @@ What Nuvio keeps without an account, as a guest, stays on the device. Progress N
 - An administrator's routes are the same under `/admin/api/users/{id}/app-import`, for the user `{id}`.
 - An import names its `app`, `profile`, `user` and `startedBy` (`id` and `name`), `state` (`running`, `done` or `failed`), its counts (`read`, `played`, `resumed`, `favorites`, `unmatchedCount`), `unmatched` (`id`, `name`, `type`, `season`, `episode`, `reason`), and `addons` (`name`, `address`, `installed`, `problem`).
 - Polyfin reads Nuvio's public configuration at `GET {backend}/.well-known/nuvio` for its publishable key, signs in with `POST {backend}/auth/v1/token?grant_type=password`, reads the account with one `POST {backend}/rest/v1/rpc/sync_export_account_backup`, which must answer `format` `nuvio_account_backup` and `version` 1, and signs out with `POST {backend}/auth/v1/logout`. The key goes in the `apikey` header and the session's token in `Authorization: Bearer …`, never in an address. A `429` or `503` answer with `Retry-After` is waited for.
+
+### Stremio
+
+A Stremio account keeps one library for the whole account: for each title, whether it was watched and when last, the resume point of the video played last, and whether it is in the user's library; and the addons the user installed. Polyfin reads it all at once, with the calls Stremio's own apps make.
+
+**Sign in with** offers three ways, the first working for every account:
+
+- **A link code**: **Get a link code** asks Stremio for a code, as Stremio's TV apps sign in, and shows it with **Open the link**. Open the link in a browser where you are signed in to Stremio, check that it shows the code, and approve it. The page asks every few seconds whether it is approved, then reads the account and signs out. A code lasts 5 minutes: past that, ask for another. This works however the account signs in, with Facebook and Apple too, and Polyfin never sees the password.
+- **Email and password**: the account's, as in Stremio's apps. **Sign in to Stremio** signs in, reads the account, and signs out. An account made with Facebook or Apple has no password: use a link code.
+- **An auth key**: the key Stremio's web app keeps once you sign in there, which `JSON.parse(localStorage.getItem("profile")).auth.key` gives in the browser's console on that page. **Read the account** reads it with the key, and does not sign it out: that would sign your browser out too.
+
+The key Polyfin gets, or is given, serves this one read: it stays in memory for the read only, and is never stored, logged, nor sent back to the browser. A wrong email or password, a refused key, and Stremio not answering each say so.
+
+What comes over:
+
+- Watched movies: each movie Stremio counts watched, or saw watched most of the way, with the date it was last watched, else of its last change, and how many times it was.
+- Watched episodes: Stremio keeps those of a series as a row of bits, one per episode, in the order of the series' episode list as the user's app listed it, anchored on the episode watched last. Polyfin reads the row against the series' episodes as the server's addons list them, in the same order (by season, episode, then release date, episodes without numbers first), shifted on the anchor, so that episodes listed since before it still fall in place. Stremio keeps no date per episode: each takes the date the series was last watched.
+- Resume points: one per title, at the video played last, the movie or an episode, with its runtime and date, while the title shows in Continue Watching: in the library, or played without being added. A title removed from the library keeps its watched marks, not its resume point.
+- Library: its movies and series, as favorites. Titles only played, and those removed from the library, are not favorites.
+- Addons: those the user installed. Stremio's own, which come with it, are left out.
+
+Channels, TV channels and other videos do not come over.
+
+The row of bits has its limit: it means something only against the same episode list as the user's app had. When the server's addons do not list the anchor episode at all, none of the series' episodes is marked played, and the result lists the series with **Its episodes do not match Polyfin's list**. When they list other episodes after the anchor, or other specials, the episodes marked can be the wrong ones, and nothing tells it: the server's metadata addons should list series as the user's app did.
+
+Reading a Stremio account has its risks:
+
+- Stremio's account API is not documented. Polyfin calls it as Stremio's own apps do; Stremio may change it, or turn other clients away, without notice.
+- Stremio's General Terms (section 5.4.1) forbid using Stremio for "monitoring, copying or extracting any information from Stremio, including its contents, graphic user interface or Database whether done mechanically or by automated means". A user reading their own account with their own key is a grey zone: nothing says it is allowed.
+- Stremio's own export of an account's data, under its settings, is reported broken: its library repeats one title many times (Stremio/stremio-bugs#614). Polyfin does not read it.
+
+Users who connected Trakt in Stremio can import their history from Trakt as well (see [Tracking services](tracking.md)).
+
+**For app developers:**
+
+- `POST /admin/api/account/app-import/stremio/link` asks for a link code, and answers `code` and `link`, the address to approve it at, never a key. A user waits for one code at a time, for 5 minutes.
+- `POST /admin/api/account/app-import/stremio/link/poll` answers `202` and `pending` until the code is approved, then reads the account, signs out, and answers it as `…/nuvio` does. A code expired, already used, or never asked for is `stremio_link_expired`.
+- `POST /admin/api/account/app-import/stremio/password` takes `email` and `password`, and `POST /admin/api/account/app-import/stremio/key` takes `key`; both answer the account read. A refused email or password is `stremio_sign_in_refused`, a refused key `stremio_key_refused`, Stremio not answering `stremio_unreachable`, and an answer Polyfin does not read `stremio_unexpected`.
+- An unmatched series whose episodes could not be read has the `reason` `episode_list`.
+- Polyfin asks for a link code with `GET https://link.stremio.com/api/v2/create?type=Create` and polls it with `GET https://link.stremio.com/api/v2/read?type=Read&code=…`, signs in with `POST https://api.strem.io/api/login` (`email`, `password`, `facebook` `false`), reads the library with `POST https://api.strem.io/api/datastoreGet` (`collection` `libraryItem`, `ids` `[]`, `all` `true`) and the addons with `POST https://api.strem.io/api/addonCollectionGet` (`update` `true`), and signs out with `POST https://api.strem.io/api/logout` the keys it obtained, never a key pasted. The key goes in each body as `authKey`, never in an address.
 
 ## Invite links
 

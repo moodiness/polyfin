@@ -22,7 +22,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a s
 - **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
 - **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits. Invite links let people create their own account.
 - **Skip buttons:** intros, recaps, credits and previews to skip, from three community databases.
-- **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Nuvio account.
+- **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Stremio or Nuvio account.
 - **Built in:** Jellyfin's own web client at `/web/`, and an admin app at `/admin/`.
 
 ## How it works
