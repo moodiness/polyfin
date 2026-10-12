@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -44,10 +45,11 @@ var segmentTypes = map[string]string{
 // its own identifier or by one of its versions'. Other items have none.
 // The segments come from community databases; one that fails only leaves
 // its segments out. They are then shaped for the version asked, the first
-// for the title's own identifier, once it is analyzed (see
-// versionSegments). With the skip buttons turned off in the settings, no
-// database is asked and every item has none, as on a Jellyfin server
-// without a segment provider.
+// for the title's own identifier, once it is analyzed, and that version's
+// chapters may give its own (see versionSegments). A version not analyzed
+// yet is never analyzed for this. With the skip buttons turned off in the
+// settings, no database is asked and every item has none, as on a Jellyfin
+// server without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -143,10 +145,11 @@ const (
 // version's analysis, as jellyfin-web plays them. listed is the runtime the
 // title is listed with, which jellyfin-web queues it with.
 //
-// The version's own chapters named as an intro or as credits give its
-// intro and credits in place of the databases', which may be timed on
-// another cut. No segment passes the version's end: one starting at or
-// after it is left out, and the others end at the latest there.
+// The version's own chapters named as an intro, a recap, a preview or
+// credits (see chapterSegments) give its segments of those types in place
+// of the databases', which may be timed on another cut. No segment passes
+// the version's end: one starting at or after it is left out, and the
+// others end at the latest there.
 //
 // jellyfin-web shows no skip button for credits ending at or after the
 // listed runtime when a next item is queued: its video page shows its "Up
@@ -156,7 +159,7 @@ const (
 // that jellyfin-web offers to skip them and skipping still ends the
 // version; the others end exactly at the end, so that it shows its card.
 func versionSegments(segments []mediasegments.Segment, analysis media.Analysis, listed time.Duration) []mediasegments.Segment {
-	own := chapterSegments(analysis.Chapters)
+	own := chapterSegments(analysis)
 	shaped := make([]mediasegments.Segment, 0, len(segments)+len(own))
 	for _, segment := range segments {
 		if !slices.ContainsFunc(own, func(o mediasegments.Segment) bool { return o.Type == segment.Type }) {
@@ -183,50 +186,71 @@ func versionSegments(segments []mediasegments.Segment, analysis media.Analysis, 
 	return shaped
 }
 
-// chapterSegments are the intro and credits that chapters name (see
-// chapterKind). Chapters of the same kind in a row make one segment.
-func chapterSegments(chapters []media.Chapter) []mediasegments.Segment {
+// chapterSegments are the segments a version's chapters name (see
+// chapterKind), as Jellyfin's Chapter Segments Provider makes them: each
+// runs from its chapter's start to the next chapter's, the last to the
+// version's end. Chapters of the same kind in a row make one segment.
+func chapterSegments(analysis media.Analysis) []mediasegments.Segment {
+	chapters := analysis.Chapters
 	var segments []mediasegments.Segment
 	var previous mediasegments.Type
-	for _, chapter := range chapters {
+	for i, chapter := range chapters {
+		end := chapter.End
+		if i+1 < len(chapters) {
+			end = chapters[i+1].Start
+		} else if analysis.Duration > 0 {
+			end = analysis.Duration
+		}
 		kind := chapterKind(chapter.Title)
 		switch {
-		case kind == "" || chapter.End <= chapter.Start:
+		case kind == "" || end <= chapter.Start:
 			previous = ""
 		case kind == previous:
 			last := &segments[len(segments)-1]
-			last.End = max(last.End, chapter.End)
+			last.End = max(last.End, end)
 		default:
-			segments = append(segments, mediasegments.Segment{Type: kind, Start: chapter.Start, End: chapter.End})
+			segments = append(segments, mediasegments.Segment{Type: kind, Start: chapter.Start, End: end})
 			previous = kind
 		}
 	}
 	return segments
 }
 
-// Chapter names that mark an intro or credits, as whole words in lower
-// case. "Credits" covers end and closing credits.
-var (
-	introNames   = []string{"intro", "introduction", "opening", "générique de début"}
-	creditsNames = []string{"credits", "ending", "outro", "générique de fin"}
-)
+// chapterNames are the chapter names that mark each type of segment, in
+// the order they are tried, as whole words in lower case and without
+// accents: the default patterns of Jellyfin's Chapter Segments Provider,
+// but its commercial breaks, with their French. "Credits" covers end and
+// closing credits, and "crédits".
+var chapterNames = []struct {
+	kind  mediasegments.Type
+	names []string
+}{
+	{mediasegments.Intro, []string{"intro", "introduction", "opening",
+		"generique de debut", "generique d ouverture", "ouverture"}},
+	{mediasegments.Preview, []string{"preview", "previews", "next time on", "next on", "sneak peek", "next episode",
+		"apercu", "prochainement", "prochain episode", "a suivre"}},
+	{mediasegments.Recap, []string{"recap", "previously", "last time on", "last on",
+		"recapitulatif", "resume", "precedemment", "episode precedent"}},
+	{mediasegments.Outro, []string{"outro", "closing", "credits", "ending",
+		"generique de fin", "generique final"}},
+}
 
-// chapterKind tells the segment a chapter's name marks, Intro or Outro,
-// matching its whole words in any letter case; none for other names, such
-// as "Chapter 2". Intro names win, so that "Opening Credits" is an intro.
-// The short forms OP and ED count only as the whole name (see shortName),
-// as words such as "Ed" in "Ed Wood" are often something else.
+// chapterKind tells the segment a chapter's name marks: Intro, Preview,
+// Recap or Outro, matching its whole words in any letter case, with or
+// without accents; none for other names, such as "Chapter 2". The types are
+// tried in that order, as Jellyfin's plugin tries them, so that "Opening
+// Credits" is an intro. The short forms OP and ED count only as the whole
+// name (see shortName), as words such as "Ed" in "Ed Wood" are often
+// something else.
 func chapterKind(name string) mediasegments.Type {
-	words := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	words := strings.FieldsFunc(iptv.Fold(name), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	text := " " + strings.Join(words, " ") + " "
-	named := func(names []string) bool {
-		return slices.ContainsFunc(names, func(n string) bool { return strings.Contains(text, " "+n+" ") })
-	}
-	switch {
-	case named(introNames) || shortName(words, "op"):
-		return mediasegments.Intro
-	case named(creditsNames) || shortName(words, "ed"):
-		return mediasegments.Outro
+	for _, kind := range chapterNames {
+		if slices.ContainsFunc(kind.names, func(n string) bool { return strings.Contains(text, " "+n+" ") }) ||
+			kind.kind == mediasegments.Intro && shortName(words, "op") ||
+			kind.kind == mediasegments.Outro && shortName(words, "ed") {
+			return kind.kind
+		}
 	}
 	return ""
 }

@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,8 +28,9 @@ import (
 // skipAddon serves a movie with two streams and a series of four episodes,
 // each with four streams, with the identifiers segment databases know
 // titles by. The third episode is listed as 53 minutes long, the fourth as
-// 59.
-func skipAddon(t *testing.T) string {
+// 59. reads counts the requests for the streams' files, which only an
+// analysis or a playback makes.
+func skipAddon(t *testing.T, reads *atomic.Int64) string {
 	t.Helper()
 	var server *httptest.Server
 	movie := stremio.Meta{ID: "tt1234567", Type: "movie", Name: "Movie", Runtime: "2h", TmdbID: "550"}
@@ -59,6 +63,9 @@ func skipAddon(t *testing.T) string {
 				{Name: "Source 1080p", URL: server.URL + "/files/web.mp4"},
 			}})
 		default:
+			if strings.HasPrefix(path, "/files/") {
+				reads.Add(1)
+			}
 			if strings.HasPrefix(path, "/stream/series/tt7654321") {
 				var streams []stremio.Stream
 				for _, cut := range []string{"a", "b", "c", "d"} {
@@ -126,6 +133,7 @@ type skipSetup struct {
 	token, movie, series, episode, third, fourth string
 	user                                         accounts.User
 	databases                                    *segmentDatabases
+	reads                                        *atomic.Int64
 }
 
 // skipping installs the skip addon's catalogs as libraries, asks the fake
@@ -140,7 +148,8 @@ func skipping(t *testing.T, names ...string) skipSetup {
 	}
 	s.handler.Segments = mediasegments.New(s.pool, sources, "test", s.handler.Logger, s.store.Settings)
 	user := s.user("member", nil)
-	addon, err := s.addons.Install(t.Context(), addons.Shared(), skipAddon(t), false)
+	reads := &atomic.Int64{}
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), skipAddon(t, reads), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +159,7 @@ func skipping(t *testing.T, names ...string) skipSetup {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	p := skipSetup{testServer: s, token: s.signIn("member", "tv"), user: user, databases: d}
+	p := skipSetup{testServer: s, token: s.signIn("member", "tv"), user: user, databases: d, reads: reads}
 	var views QueryResult
 	s.get(t, "/UserViews", p.token, &views)
 	for _, view := range views.Items {
@@ -616,11 +625,24 @@ func TestChapterKinds(t *testing.T) {
 		"Intro": mediasegments.Intro, "INTRODUCTION": mediasegments.Intro, "Opening": mediasegments.Intro,
 		"OP": mediasegments.Intro, "op 1": mediasegments.Intro, "Générique de début": mediasegments.Intro,
 		"GÉNÉRIQUE DE DÉBUT": mediasegments.Intro, "Opening Credits": mediasegments.Intro, "Intro (Part 2)": mediasegments.Intro,
-		"Credits": mediasegments.Outro, "End Credits": mediasegments.Outro, "closing credits": mediasegments.Outro,
-		"Ending": mediasegments.Outro, "ED": mediasegments.Outro, "Outro": mediasegments.Outro,
-		"Générique de fin": mediasegments.Outro, "End-Credits": mediasegments.Outro,
+		"Generique de debut": mediasegments.Intro, "Générique d'ouverture": mediasegments.Intro, "Ouverture": mediasegments.Intro,
+		"Recap": mediasegments.Recap, "Previously on Show": mediasegments.Recap, "Last time on Show": mediasegments.Recap,
+		"Last on Show": mediasegments.Recap, "Précédemment": mediasegments.Recap, "PRECEDEMMENT": mediasegments.Recap,
+		"Récap": mediasegments.Recap, "Récapitulatif": mediasegments.Recap, "Résumé": mediasegments.Recap,
+		"Dans l'épisode précédent": mediasegments.Recap, "Preview": mediasegments.Preview,
+		"Next Episode Preview": mediasegments.Preview, "Previews": mediasegments.Preview,
+		"Next time on Show": mediasegments.Preview, "Next on Show": mediasegments.Preview, "Sneak Peek": mediasegments.Preview,
+		"Next Episode": mediasegments.Preview, "Prochain épisode": mediasegments.Preview, "À suivre": mediasegments.Preview,
+		"Aperçu": mediasegments.Preview, "Prochainement": mediasegments.Preview,
+		// Previews come before credits, as in Jellyfin's plugin.
+		"Credits and Preview": mediasegments.Preview, "Credits": mediasegments.Outro,
+		"End Credits": mediasegments.Outro, "closing credits": mediasegments.Outro,
+		"Ending": mediasegments.Outro, "ED": mediasegments.Outro, "Outro": mediasegments.Outro, "Closing": mediasegments.Outro,
+		"Générique de fin": mediasegments.Outro, "End-Credits": mediasegments.Outro, "Crédits": mediasegments.Outro,
+		"Generique de fin": mediasegments.Outro, "Générique final": mediasegments.Outro,
 		"Chapter 2": "", "": "", "Introspection": "", "Opera": "", "Edge": "", "Credited": "",
 		"Generic": "", "Générique": "", "The End": "", "Fin": "", "Openings": "",
+		"Episode": "", "Épisode 3": "", "Previous": "", "Recapture": "", "Resumed": "", "Suivre": "", "Next": "",
 		// The short forms count only as the whole name, maybe numbered.
 		"OP2": mediasegments.Intro, "Op - 1": mediasegments.Intro, "ED2": mediasegments.Outro,
 		"ed 1": mediasegments.Outro, "ED - 2": mediasegments.Outro, "(ED)": mediasegments.Outro,
@@ -630,5 +652,109 @@ func TestChapterKinds(t *testing.T) {
 		if got := chapterKind(name); got != want {
 			t.Errorf("%q: got %q, want %q", name, got, want)
 		}
+	}
+}
+
+// chapteredVideo makes a video of length milliseconds with the FFmpeg of
+// POLYFIN_TEST_FFMPEG, with chapters given by an ffmetadata file, and
+// analyzes it as Polyfin does. It skips the test without FFmpeg.
+func chapteredVideo(t *testing.T, length int64, chapters ...media.Chapter) media.Analysis {
+	t.Helper()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	metadata := ";FFMETADATA1\n"
+	escape := strings.NewReplacer(`\`, `\\`, "=", `\=`, ";", `\;`, "#", `\#`, "\n", "\\\n")
+	for _, c := range chapters {
+		metadata += "[CHAPTER]\nTIMEBASE=1/1000\nSTART=" + strconv.FormatInt(c.Start.Milliseconds(), 10) +
+			"\nEND=" + strconv.FormatInt(c.End.Milliseconds(), 10) + "\ntitle=" + escape.Replace(c.Title) + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(dir, "chapters.txt"), []byte(metadata), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	video := filepath.Join(dir, "video.mkv")
+	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=64x64:rate=24:duration="+strconv.FormatFloat(float64(length)/1000, 'f', 3, 64),
+		"-i", filepath.Join(dir, "chapters.txt"), "-map", "0:v", "-map_chapters", "1",
+		"-c:v", "libx264", "-preset", "veryfast", video).CombinedOutput(); err != nil {
+		t.Fatalf("make the video: %v: %s", err, out)
+	}
+	analysis, err := media.Prober{Path: filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), Timeout: time.Minute}.Probe(t.Context(), video)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(analysis.Chapters) != len(chapters) {
+		t.Fatalf("the video has chapters %+v", analysis.Chapters)
+	}
+	analysis.Remote = true
+	return analysis
+}
+
+// A video whose chapters are named Opening, Episode and Ending gives an
+// intro and credits, at its chapters' times, with no segment database
+// asked, whether apps ask by the title or by the version. Credits this
+// short keep their end at the video's end (see TestCreditsRunningToTheEnd).
+func TestNamedChaptersOfAVideoGiveSegments(t *testing.T) {
+	t.Parallel()
+	p := skipping(t)
+	versions := p.versions(t, p.third)
+	p.storeAnalysis(t, versions[0], chapteredVideo(t, 10_000,
+		chapter("Opening", 0, 2_000), chapter("Episode", 2_000, 8_000), chapter("Ending", 8_000, 10_000)))
+	both := []span{{"Intro", 0, 20_000_000}, {"Outro", 80_000_000, 100_000_000}}
+	for _, test := range []struct {
+		name, path string
+		want       []span
+	}{
+		{"the title", p.third, both},
+		{"the version", versions[0].ID.String(), both},
+		{"intros only", versions[0].ID.String() + "?includeSegmentTypes=Intro", both[:1]},
+		{"credits only", p.third + "?includeSegmentTypes=Outro", both[1:]},
+		{"types it has not", p.third + "?includeSegmentTypes=Recap&includeSegmentTypes=Preview", nil},
+	} {
+		if got := spans(p.segments(t, "/MediaSegments/"+test.path)); !slices.Equal(got, test.want) {
+			t.Errorf("%s: got %v, want %v", test.name, got, test.want)
+		}
+	}
+	if asked := p.databases.requests(); len(asked) != 0 {
+		t.Errorf("asked %v", asked)
+	}
+}
+
+// French chapter names give segments too, with or without accents. Each
+// runs to the next chapter's start, the last to the version's end, as in
+// Jellyfin's Chapter Segments Provider, whatever end the chapter gives.
+// Chapters with other names, and versions not analyzed yet, give none, and
+// asking never analyzes a version.
+func TestChapterSegmentsInFrench(t *testing.T) {
+	t.Parallel()
+	p := skipping(t)
+	versions := p.versions(t, p.third)
+	p.storeAnalysis(t, versions[0], lasting(3_150_000,
+		chapter("Précédemment", 0, 40_000), chapter("Generique de debut", 45_000, 120_000),
+		chapter("Épisode", 120_000, 3_060_000), chapter("Générique de fin", 3_060_000, 3_110_000),
+		chapter("Prochain épisode", 3_120_000, 3_140_000)))
+	p.storeAnalysis(t, versions[1], lasting(3_150_000, chapter("Chapitre 1", 0, 1_500_000), chapter("Chapitre 2", 1_500_000, 3_150_000)))
+	for _, test := range []struct {
+		name, path string
+		want       []span
+	}{
+		{"named chapters", versions[0].ID.String(), []span{spanMS("Recap", 0, 45_000), spanMS("Intro", 45_000, 120_000),
+			spanMS("Outro", 3_060_000, 3_120_000), spanMS("Preview", 3_120_000, 3_150_000)}},
+		{"as jellyfin-web asks", versions[0].ID.String() + "?includeSegmentTypes=Preview&includeSegmentTypes=Recap",
+			[]span{spanMS("Recap", 0, 45_000), spanMS("Preview", 3_120_000, 3_150_000)}},
+		{"other names", versions[1].ID.String(), nil},
+		{"not analyzed", versions[2].ID.String(), nil},
+	} {
+		if got := spans(p.segments(t, "/MediaSegments/"+test.path)); !slices.Equal(got, test.want) {
+			t.Errorf("%s: got %v, want %v", test.name, got, test.want)
+		}
+	}
+	if reads := p.reads.Load(); reads != 0 {
+		t.Errorf("the files were read %d times", reads)
+	}
+	if _, analyzed := p.handler.Playback.Analyzed(t.Context(), versions[2].ID); analyzed {
+		t.Error("the version not analyzed was analyzed")
 	}
 }
