@@ -179,8 +179,8 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		if !titled {
 			base = rel
 		}
-		filename, address := path.Base(rel), s.files+file.String()+strings.ToLower(path.Ext(rel))
-		if disc, folder, ok := discEntry(rel); ok {
+		filename := path.Base(rel)
+		if _, folder, ok := discEntry(rel); ok {
 			label := discLabel(folder, locationName(location))
 			if titled {
 				label += " - title " + strconv.Itoa(number)
@@ -192,19 +192,14 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 				}
 				// The bluray protocol answers an MPEG-TS stream, as a disc's
 				// streams are.
-				filename, address = label+".m2ts", s.inputs+file.String()
-			} else if disc == DiscDVD {
-				address = s.inputs + file.String()
+				filename = label + ".m2ts"
 			}
 		}
-		if imageFile(base) {
-			address = s.inputs + file.String()
-			if titled {
-				ext := path.Ext(base)
-				filename = strings.TrimSuffix(path.Base(base), ext) + " - title " + strconv.Itoa(number) + ext
-			}
+		if imageFile(base) && titled {
+			ext := path.Ext(base)
+			filename = strings.TrimSuffix(path.Base(base), ext) + " - title " + strconv.Itoa(number) + ext
 		}
-		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: address,
+		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: s.address(file, rel),
 			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}, nil
 	})
 	if err != nil || len(files) == 0 {
@@ -229,6 +224,25 @@ func formatSize(size int64) string {
 		return strconv.FormatFloat(float64(size)/1e6, 'f', 0, 64) + " MB"
 	}
 	return strconv.FormatFloat(float64(size)/1e3, 'f', 0, 64) + " KB"
+}
+
+// address is where a file of a folder is read: through the loopback
+// interface as one file, but for a Blu-ray disc's playlist, a DVD and a
+// disc image, whose input FFmpeg reads them through (see Input).
+func (s *Service) address(file accounts.ID, rel string) string {
+	base, _, titled := titleOf(rel)
+	if !titled {
+		base = rel
+	}
+	if disc, _, ok := discEntry(rel); ok {
+		if _, _, playlist := discPlaylist(rel); playlist || disc == DiscDVD {
+			return s.inputs + file.String()
+		}
+	}
+	if imageFile(base) {
+		return s.inputs + file.String()
+	}
+	return s.files + file.String() + strings.ToLower(path.Ext(rel))
 }
 
 // ErrGone reports a file a scan found that is no longer where it was, or
