@@ -324,6 +324,7 @@ type settingsJSON struct {
 	// sent to follow POLYFIN_SEGMENTS, keeps it too.
 	SegmentOrder          []string  `json:"segmentOrder"`
 	SegmentSourcesOff     *[]string `json:"segmentSourcesOff"`
+	AudioIntros           *bool     `json:"audioIntros"`
 	SimilarTitles         *bool     `json:"similarTitles"`
 	Lyrics                *bool     `json:"lyrics"`
 	PlayedPercent         *int      `json:"playedPercent"`
@@ -518,6 +519,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TheIntroDBKeySet:      settings.TheIntroDBKey != "",
 		SegmentOrder:          settings.SegmentOrder,
 		SegmentSourcesOff:     &settings.SegmentSourcesOff,
+		AudioIntros:           &settings.AudioIntros,
 		SimilarTitles:         &settings.SimilarTitles,
 		Lyrics:                &settings.Lyrics,
 		PlayedPercent:         &settings.PlayedPercent,
@@ -1054,6 +1056,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TheIntroDBKey:         theIntroDBKey,
 		SegmentOrder:          segmentOrder,
 		SegmentSourcesOff:     valueOr(body.SegmentSourcesOff, current.SegmentSourcesOff),
+		AudioIntros:           valueOr(body.AudioIntros, current.AudioIntros),
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
