@@ -1,6 +1,6 @@
 # Skip segments
 
-This page covers the buttons that let viewers skip intros, recaps, credits and previews: where Polyfin gets them, and how to set up the databases they come from.
+This page covers the buttons that let viewers skip intros, recaps, credits and previews: where Polyfin gets them, how it finds the intros of local episodes in their audio, and how to set up the databases they come from.
 
 ## How skip buttons work
 
@@ -8,7 +8,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Skip intro and credits buttons** | **Settings › Content** | On | Gives apps the segments to skip. Off, apps get none and no segment database is asked. |
+| **Skip intro and credits buttons** | **Settings › Content** | On | Gives apps the segments to skip. Off, apps get none, no segment database is asked and no episode's audio is read. |
 
 **Compared with Jellyfin:**
 
@@ -17,7 +17,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 **For app developers:**
 
 - Turned off, `/MediaSegments/{id}` lists none.
-- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, or when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
+- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro was found in the audio of an episode's local file (see [Intros found in local episodes' audio](#intros-found-in-local-episodes-audio)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
 - `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
 
 ## The three databases
@@ -54,6 +54,36 @@ A name is tried as an intro, then as a preview, a recap and credits, as the plug
 A chapter's segment runs from its start to the next chapter's start, or to the version's end for the last chapter. Chapters of the same type in a row make one segment.
 
 **Why credits stop early:** jellyfin-web shows no skip button for credits that reach the runtime the title is listed with, when something follows in its queue. Its video page shows its "Up Next" card instead, but only for credits that reach the end of the version it plays. Credits count as running to the end when they end within 2 seconds of it. They stop early only when the listed runtime is at least the version's length, and when they still last 3 seconds, as jellyfin-web ignores shorter segments.
+
+## Intros found in local episodes' audio
+
+An episode in a local folder whose file names no intro in its chapters, of a series or a season the databases do not know, would have no intro to skip. Polyfin finds it in the audio instead: an intro is the stretch of audio the episodes of a season share near their start.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Find intros in local episodes' audio** | **Settings › Content** | On | Compares the audio of the episodes of a local season to find their intro. Off, or with the skip buttons off, no audio is read and the intros found are not given. |
+
+**When:** an episode of a local folder played with no intro from its chapters or a database has its season compared in the background.
+
+- The season's other episodes have their intro at their next play. The episode just played has it from its next play.
+- Only seasons someone watches are read: nothing is read ahead of a play.
+- Seasons are compared one at a time. FFmpeg reads the audio at the lowest priority, so that playback goes first.
+- An episode added to a season already compared is compared with the others the next time one of them is played.
+
+**How:** Polyfin reads the start of each episode of the season, its first quarter and 10 minutes at most. FFmpeg decodes the audio, and Polyfin makes its fingerprint itself, so that any build of FFmpeg serves: FFmpeg's `chromaprint` muxer is an optional part of its builds, missing from some. Polyfin then compares the episodes in pairs: the longest stretch two episodes share, from 15 seconds to 2 minutes, is each one's intro.
+
+- Two files of the same episode, such as two versions, are not compared with each other: they share all their audio.
+- Fingerprints and the intros found are kept in the database by file, with its path, size and modification time. A file is read once, and again only when it changes. A file that changed has no intro until its season is compared again.
+
+**Order:** the audio only fills the gaps. A version's own chapters win, then the databases, then the audio.
+
+**Limits:**
+
+- A season needs two episodes sharing the intro. An episode alone in its season, or the only one with this intro, gets none.
+- An intro whose music changes within a season may be missed, or found only between the episodes that share the same music.
+- Only episodes of local folders read as one file are compared, on the server's disk or on a share. Discs and disc images, which FFmpeg reads through their input, are not, nor are addons' files, whose start would have to be downloaded for every episode.
+- An intro that starts after the first quarter of an episode, or after its first 10 minutes, is not found.
+- Credits are not looked for in the audio.
 
 ## Source order
 
