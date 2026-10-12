@@ -468,8 +468,9 @@ func (h *Handler) themeItems(w http.ResponseWriter, r *http.Request) {
 
 // ImageInfo is Jellyfin's description of one of an item's images. Path,
 // which Jellyfin gives as the file or address the image comes from, is
-// left out: Polyfin's artwork is the addons'. Their size is unknown until
-// downloaded, as Jellyfin reports for remote images.
+// left out: Polyfin's artwork is the addons', or a local folder's, whose
+// paths stay on the server. Their size is unknown until downloaded, as
+// Jellyfin reports for remote images.
 type ImageInfo struct {
 	ImageType  string
 	ImageIndex *int `json:",omitempty"`
@@ -502,7 +503,7 @@ func (h *Handler) itemImages(w http.ResponseWriter, r *http.Request) {
 	dto.ImageTags = map[string]string{}
 	h.setImages(&dto, item)
 	images := []ImageInfo{}
-	for _, imageType := range []string{"Primary", "Logo", "Thumb", "Banner"} {
+	for _, imageType := range []string{"Primary", "Logo", "Thumb", "Banner", "Art", "Disc"} {
 		if tag := dto.ImageTags[imageType]; tag != "" {
 			images = append(images, ImageInfo{ImageType: imageType, ImageTag: tag})
 		}

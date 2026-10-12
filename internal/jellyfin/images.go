@@ -11,6 +11,7 @@ import (
 	_ "image/gif" // registers GIF with image.DecodeConfig
 	"image/jpeg"
 	"image/png"
+	"io"
 	"io/fs"
 	"log/slog"
 	"math"
@@ -32,6 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 )
@@ -441,6 +443,41 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, ipt
 	})
 }
 
+// maxLocalImageBytes bounds a local folder's image, as relayed artwork is
+// bounded: a large backdrop's PNG.
+const maxLocalImageBytes = 32 << 20
+
+// localArtwork returns a local folder's image (see
+// library.LocalArtworkKey), read from its folder or share once for every
+// request that asks for it at once, and kept as relayed artwork is (see
+// imageCache): its URL changes with it. An image no longer in its folder,
+// or that is no image, is not found.
+func (h *Handler) localArtwork(ctx context.Context, target, key string) (artwork, error) {
+	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
+		file, err := h.Library.OpenLocalArtwork(ctx, key)
+		if err != nil {
+			status := http.StatusBadGateway
+			if errors.Is(err, localfiles.ErrGone) || errors.Is(err, library.ErrNotFound) {
+				status = http.StatusNotFound
+			}
+			return artwork{}, downloadError{status, err}
+		}
+		defer file.Close()
+		body, err := io.ReadAll(io.LimitReader(file, maxLocalImageBytes+1))
+		if err != nil {
+			return artwork{}, downloadError{http.StatusBadGateway, err}
+		}
+		contentType := http.DetectContentType(body)
+		switch {
+		case len(body) > maxLocalImageBytes:
+			return artwork{}, downloadError{http.StatusNotFound, errors.New("the image is too large")}
+		case !strings.HasPrefix(contentType, "image/"):
+			return artwork{}, downloadError{http.StatusNotFound, errors.New("the file is no image")}
+		}
+		return artwork{body: body, contentType: contentType}, nil
+	})
+}
+
 // iptvHost reports whether target's host serves an IPTV source or its
 // logos (see library.Service.IPTVHost).
 func (h *Handler) iptvHost(ctx context.Context, target string) bool {
@@ -545,7 +582,8 @@ func resizable(contentType string) bool {
 // image relays an item's artwork. Polyfin downloads it rather than
 // redirecting: some apps (Infuse) do not follow image redirects, and apps
 // may not reach the addresses addons use. Artwork an administrator
-// uploaded comes first, for any item, and is served from the database.
+// uploaded comes first, for any item, and is served from the database; a
+// local folder's comes next, read from the folder (see localArtwork).
 func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	id, err := accounts.ParseID(r.PathValue("itemId"))
 	if err != nil {
@@ -608,7 +646,12 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.images.open(h.imageDir(), h.Logger)
-	image, err := h.fetchArtwork(r.Context(), url, confined, h.iptvHost(r.Context(), url))
+	var image artwork
+	if key, ok := library.LocalArtworkKey(url); ok {
+		image, err = h.localArtwork(r.Context(), url, key)
+	} else {
+		image, err = h.fetchArtwork(r.Context(), url, confined, h.iptvHost(r.Context(), url))
+	}
 	if err != nil {
 		header.Del("ETag")
 		header.Del("Cache-Control")

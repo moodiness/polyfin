@@ -586,6 +586,12 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 	if item.Images.Thumb != "" && item.Kind != library.KindEpisode {
 		dto.ImageTags["Thumb"] = library.ImageTag(item.Images.Thumb)
 	}
+	if item.Images.Art != "" {
+		dto.ImageTags["Art"] = library.ImageTag(item.Images.Art)
+	}
+	if item.Images.Disc != "" {
+		dto.ImageTags["Disc"] = library.ImageTag(item.Images.Disc)
+	}
 	if item.Images.Backdrop != "" {
 		tag := library.ImageTag(item.Images.Backdrop)
 		if item.Kind == library.KindSeason || item.Kind == library.KindEpisode {
