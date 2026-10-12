@@ -36,6 +36,7 @@ const vodPlaylist = "#EXTM3U\n" +
 // numbers in their name; episodes group into series and seasons by name,
 // whatever its case and dressing.
 func TestM3UEntriesAreClassified(t *testing.T) {
+	t.Parallel()
 	var entries []Entry
 	if err := ParseM3U(strings.NewReader(vodPlaylist), func(e Entry) error { entries = append(entries, e); return nil }); err != nil {
 		t.Fatal(err)
@@ -91,6 +92,7 @@ func or(value, fallback string) string {
 // movies and series: the same manifest, and every entry as a channel,
 // movies and episodes included.
 func TestDefaultOptionsKeepTodaysSource(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, vodPlaylist)
 	addon := must(e.service.Add(t.Context(), addons.Shared(), NewSource{Name: "TV", Account: Account{Kind: addons.KindM3U, URL: list.url}}, false))
@@ -154,6 +156,7 @@ func syntheticVOD(t *testing.T, movies, series int) (*syntheticServer, Account) 
 // Live TV catalog away but keep the line-up's edits for when they come
 // back.
 func TestVODLibrariesFollowOptions(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	server, account := syntheticVOD(t, 12, 4)
@@ -272,6 +275,7 @@ func TestVODLibrariesFollowOptions(t *testing.T) {
 // requests to a host are paced; playing builds the provider's file
 // addresses, with the quality the names give.
 func TestXtreamDetailsAreLazyCachedAndPaced(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	server, account := syntheticVOD(t, 250, 3)
@@ -371,6 +375,7 @@ func TestXtreamDetailsAreLazyCachedAndPaced(t *testing.T) {
 // Titles keep their identifiers when lists are downloaded again in
 // another order, and M3U titles when the account's credentials change.
 func TestTitlesKeepIdentifiersAcrossRefreshes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	server, account := syntheticVOD(t, 20, 2)
@@ -431,6 +436,7 @@ func TestTitlesKeepIdentifiersAcrossRefreshes(t *testing.T) {
 // source, sharing one download per list for a few minutes with the source
 // added next.
 func TestVODPreviews(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	server, account := syntheticVOD(t, 30, 5)

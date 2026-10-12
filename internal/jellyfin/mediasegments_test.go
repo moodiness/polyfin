@@ -240,6 +240,7 @@ func spans(result MediaSegmentDtoQueryResult) []span {
 }
 
 func TestMediaSegmentsComeFromTheDatabases(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
 
 	// TheIntroDB's intro and credits win over IntroDB's intro; IntroDB
@@ -322,6 +323,7 @@ func TestMediaSegmentsComeFromTheDatabases(t *testing.T) {
 }
 
 func TestMediaSegmentsCanBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	p := skipping(t)
 	if result := p.segments(t, "/MediaSegments/"+p.movie); len(result.Items) != 0 {
 		t.Errorf("segments %+v", result)
@@ -332,6 +334,7 @@ func TestMediaSegmentsCanBeTurnedOff(t *testing.T) {
 }
 
 func TestSkipButtonsSettingTurnsSegmentsOff(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
 	if !p.store.Settings().SkipButtons {
 		t.Fatal("skip buttons are off by default")
@@ -362,6 +365,7 @@ func TestSkipButtonsSettingTurnsSegmentsOff(t *testing.T) {
 // jellyfin-web asks for the segments of the version it plays, by the
 // version's identifier, only when the version says it has some.
 func TestVersionsSayTheyHaveSegments(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
 	p.listed(t, p.user, p.movie)
 	sources := func() []MediaSourceInfo {
@@ -390,6 +394,7 @@ func TestVersionsSayTheyHaveSegments(t *testing.T) {
 
 // Without a segment database asked, no version says it has segments.
 func TestVersionsWithoutSegmentDatabases(t *testing.T) {
+	t.Parallel()
 	p := skipping(t)
 	var movie BaseItemDto
 	if status := p.get(t, "/Items/"+p.movie, p.token, &movie); status != http.StatusOK || movie.MediaSources == nil {
@@ -406,6 +411,7 @@ func TestVersionsWithoutSegmentDatabases(t *testing.T) {
 // recorded from Jellyfin 12.2, which had no segments, and the segments
 // with the fields of Jellyfin's MediaSegmentDto.
 func TestMediaSegmentsMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
 	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "media-segments.json"))
 	if err != nil {
@@ -457,6 +463,7 @@ var (
 // only. The third episode is listed as 53 minutes, longer than its
 // versions: credits running to their end stop a second before it.
 func TestChaptersGiveTheirVersionsSegments(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB)
 	versions := p.versions(t, p.third)
 	if len(versions) != 4 {
@@ -494,6 +501,7 @@ func TestChaptersGiveTheirVersionsSegments(t *testing.T) {
 // card. The third episode is listed as 53 minutes, the fourth as 59, and
 // the databases time the fourth's credits from 59:12.3 to 1:00:00.4.
 func TestCreditsRunningToTheEnd(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB)
 	third, fourth := p.versions(t, p.third), p.versions(t, p.fourth)
 	p.storeAnalysis(t, third[0], lasting(3_152_800))
@@ -529,6 +537,7 @@ func TestCreditsRunningToTheEnd(t *testing.T) {
 // No segment passes a version's end; credits ending well before it, and
 // the segments of a version not analyzed, stay as the databases give them.
 func TestSegmentsStopAtTheVersionsEnd(t *testing.T) {
+	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.IntroDB)
 	movie, fourth := p.versions(t, p.movie), p.versions(t, p.fourth)
 	p.storeAnalysis(t, movie[0], lasting(80_000))
@@ -554,6 +563,7 @@ func TestSegmentsStopAtTheVersionsEnd(t *testing.T) {
 // A version whose own chapters name an intro or credits says it has
 // segments, and gives them, with no segment database asked.
 func TestChaptersSayVersionsHaveSegments(t *testing.T) {
+	t.Parallel()
 	p := skipping(t)
 	versions := p.versions(t, p.third)
 	p.storeAnalysis(t, versions[0], lasting(3_150_000, chapter("Chapter 1", 0, 1_500_000), chapter("Chapter 2", 1_500_000, 3_150_000)))
@@ -601,6 +611,7 @@ func TestChaptersSayVersionsHaveSegments(t *testing.T) {
 }
 
 func TestChapterKinds(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]mediasegments.Type{
 		"Intro": mediasegments.Intro, "INTRODUCTION": mediasegments.Intro, "Opening": mediasegments.Intro,
 		"OP": mediasegments.Intro, "op 1": mediasegments.Intro, "Générique de début": mediasegments.Intro,

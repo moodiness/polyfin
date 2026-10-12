@@ -7,6 +7,7 @@ import (
 )
 
 func TestTheDefaultSubtitleAvoidsBurningIn(t *testing.T) {
+	t.Parallel()
 	subtitle := func(index int, language string, text, forced, external bool) playback.MediaStream {
 		return playback.MediaStream{Type: "Subtitle", Index: index, Language: language, IsTextSubtitleStream: text, IsForced: forced, IsExternal: external}
 	}

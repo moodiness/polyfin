@@ -22,6 +22,7 @@ import (
 // and is served resized at the size apps ask for, without any path of the
 // server's showing; off, the addon's is back.
 func TestLocalArtworkInJellyfinApps(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),

@@ -166,6 +166,7 @@ func episodeStreams(t *testing.T) string {
 // jellyfin-web plays an episode with its series' episodes from it on,
 // asked from startItemId: the episode, or the version the user picked.
 func TestEpisodeListsStartAtTheItemAsked(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	if _, err := tr.addons.Install(t.Context(), addons.Shared(), episodeStreams(t), false); err != nil {
 		t.Fatal(err)
@@ -208,6 +209,7 @@ func TestEpisodeListsStartAtTheItemAsked(t *testing.T) {
 // /UserViews does, in the same order, Polyfin's own views never left out,
 // and none of another user's own libraries, though marked too.
 func TestPolyfinUserViewsTellTheLibrariesLeftOutOfMenus(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
 	other := s.user("other", nil)
@@ -304,6 +306,7 @@ func itemNames(items []BaseItemDto) []string {
 }
 
 func TestBrowsingLibraries(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	if views["Top"] == "" || views["Groups"] == "" {
 		t.Fatalf("views: %v", views)
@@ -368,6 +371,7 @@ func TestBrowsingLibraries(t *testing.T) {
 }
 
 func TestBrowsingAnotherUsersLibrariesNeedsAnAdministrator(t *testing.T) {
+	t.Parallel()
 	s, token, _ := browsing(t)
 	other := s.user("other", nil)
 	if status := s.get(t, "/Users/"+other.ID.String()+"/Views", token, nil); status != http.StatusForbidden {
@@ -376,6 +380,7 @@ func TestBrowsingAnotherUsersLibrariesNeedsAnAdministrator(t *testing.T) {
 }
 
 func TestGenres(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	var filters struct{ Genres []string }
 	s.get(t, "/Items/Filters?parentId="+views["Top"], token, &filters)
@@ -402,6 +407,7 @@ func TestGenres(t *testing.T) {
 }
 
 func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	var page QueryResult
 	s.get(t, "/Items?ParentId="+views["Top"], token, &page)
@@ -440,6 +446,7 @@ func TestImagesAreRelayedWithoutCredentials(t *testing.T) {
 }
 
 func TestCreditedPeopleHavePhotosAndPages(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	var page QueryResult
 	s.get(t, "/Items?ParentId="+views["Top"], token, &page)
@@ -501,6 +508,7 @@ var browseShapes = shapeRules{
 // recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, with the
 // same requests.
 func TestBrowseResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	member, _ := s.store.Authenticate(t.Context(), "member", "correct horse")
 	user := member.ID.String()
@@ -572,6 +580,7 @@ func TestBrowseResponsesMatchJellyfin(t *testing.T) {
 }
 
 func TestVirtualFoldersDescribeTheLibraries(t *testing.T) {
+	t.Parallel()
 	s, memberToken, _ := browsing(t)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	token := s.signIn("admin", "phone")

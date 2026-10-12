@@ -36,6 +36,7 @@ import (
 // beside the addons' streams, named after its folder, and Polyfin serves
 // it from the disk with byte ranges.
 func TestLocalFilesAreVersions(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -111,6 +112,7 @@ func TestLocalFilesAreVersions(t *testing.T) {
 // named after the disc's folder rather than its stream: apps show and
 // download it under that name.
 func TestLocalDiscsAreNamedAfterTheirFolder(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -299,6 +301,7 @@ func localBluRayOn(t *testing.T, ffprobe string, share bool) (playbackSetup, Med
 // not one file: apps are not offered to play it as it is, nor to download
 // it, and its bytes are not served.
 func TestLocalDVDsAreNotOneFile(t *testing.T) {
+	t.Parallel()
 	p, local := localDVD(t, "ffprobe-not-installed")
 	if local.Name != "Shelf · 520 KB" || local.Size == nil || *local.Size != 520192 || local.SupportsDirectPlay || local.SupportsDirectStream {
 		t.Errorf("the DVD's version: %+v", local)
@@ -318,6 +321,7 @@ func TestLocalDVDsAreNotOneFile(t *testing.T) {
 // A Blu-ray disc in a local folder is its main playlist, sized as both its
 // clips, which is not one file: neither played as it is nor downloaded.
 func TestLocalBluRaysAreNotOneFile(t *testing.T) {
+	t.Parallel()
 	p, local := localBluRay(t, "ffprobe-not-installed")
 	if local.Size == nil || *local.Size != 2893824+2838528 || local.SupportsDirectPlay || local.SupportsDirectStream {
 		t.Errorf("the disc's version: %+v", local)
@@ -542,6 +546,7 @@ func tracks(source MediaSourceInfo) []string {
 // with its tracks, over HLS only, its video converted: the playlist's
 // segments make the title's eight seconds, even read from a seek.
 func TestLocalDVDsPlayOverHLS(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
 	p, local := localDVD(t, ffprobe)
 	source := playDisc(t, p, local, 8*time.Second)
@@ -559,6 +564,7 @@ func TestLocalDVDsPlayOverHLS(t *testing.T) {
 // both its clips, over HLS only, starting at zero though its clips start
 // at 600 seconds, its video copied (see playsCopied).
 func TestLocalBluRaysPlayTheirMainPlaylist(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 	p, local := localBluRay(t, ffprobe)
 	playsCopied(t, p, local, ffmpeg, ffprobe)
@@ -567,6 +573,7 @@ func TestLocalBluRaysPlayTheirMainPlaylist(t *testing.T) {
 // An app that does not take a Blu-ray disc's video codec has it
 // converted, though it is cut on its keyframes.
 func TestLocalBluRaysConvertForAppsWithoutTheirCodec(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-protocols", "bluray")
 	p, local := localBluRay(t, ffprobe)
 	var profile map[string]any
@@ -597,6 +604,7 @@ func TestLocalBluRaysConvertForAppsWithoutTheirCodec(t *testing.T) {
 // flags their names tell, and Polyfin serves them in the format each app
 // asks for, French accents of Windows-1252 included.
 func TestLocalSubtitleFilesAreTracks(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -815,6 +823,7 @@ func localVersion(t *testing.T, p playbackSetup, local MediaSourceInfo) library.
 // file. An app that draws PGS takes the PGS file as it is, by ranges; a
 // VobSub pair is not one file, nor are pictures text.
 func TestLocalPictureSubtitleFilesAreTracks(t *testing.T) {
+	t.Parallel()
 	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
 	if err != nil {
 		t.Fatal(err)
@@ -868,6 +877,7 @@ func TestLocalPictureSubtitleFilesAreTracks(t *testing.T) {
 // always, as it is not one file, the PGS file on an app that does not draw
 // PGS.
 func TestLocalPictureSubtitleFilesAreBurnedIn(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -961,6 +971,7 @@ func localImageOn(t *testing.T, ffprobe, name string, share bool) (playbackSetup
 // keyframes read through its file system, ISO 9660 or, for an image
 // without one, UDF 2.50, each whole.
 func TestLocalDiscImagesPlay(t *testing.T) {
+	t.Parallel()
 	t.Run("dvd", func(t *testing.T) {
 		ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "dvdvideo")
 		p, local := localImage(t, ffprobe, "dvd")
@@ -994,6 +1005,7 @@ func TestLocalDiscImagesPlay(t *testing.T) {
 // from the share, its video copied, cut on the keyframes of its clips'
 // EP maps read on the share: whole, and from a seek (see playsCopied).
 func TestShareBluRaysPlayCopied(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpegts")
 	t.Run("folder", func(t *testing.T) {
 		p, local := localBluRayOn(t, ffprobe, true)
@@ -1013,6 +1025,7 @@ func TestShareBluRaysPlayCopied(t *testing.T) {
 // converted: the segments make the title's eight seconds, even read from
 // a seek.
 func TestShareDVDsPlayOverHLS(t *testing.T) {
+	t.Parallel()
 	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "mpeg")
 	for name, open := range map[string]func() (playbackSetup, MediaSourceInfo){
 		"folder": func() (playbackSetup, MediaSourceInfo) { return localDVDOn(t, ffprobe, true) },

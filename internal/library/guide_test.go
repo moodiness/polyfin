@@ -124,6 +124,7 @@ func programTitles(programs []Item) []string {
 // name once dressing is folded away; only the programmes of a day ago to
 // eight days ahead are kept, and they feed the programme listings.
 func TestXMLTVGuideFeedsTheCatalogsChannels(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -190,6 +191,7 @@ func TestXMLTVGuideFeedsTheCatalogsChannels(t *testing.T) {
 // Guides are fetched again every 12 hours; a failed fetch keeps the last
 // programmes and tells why it failed.
 func TestXMLTVGuidesAreRefreshed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -264,6 +266,7 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 
 // Guides are due again after the hours the settings give.
 func TestGuidesFollowTheRefreshSetting(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -291,6 +294,7 @@ func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 // then 15, then hourly, not at the next refresh, and tells it was rate
 // limited; a success clears it.
 func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -330,6 +334,7 @@ func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 // A guide published as a ZIP archive is spooled in the cache folder while
 // it is read, then removed, after a success as after a failure.
 func TestXMLTVGuidesInZIPArchives(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -383,6 +388,7 @@ func TestXMLTVGuidesInZIPArchives(t *testing.T) {
 // Saving the libraries keeps the guides of those kept; a new address, or
 // none, forgets the programmes of the previous one.
 func TestGuidesFollowTheirCatalog(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -426,6 +432,7 @@ func TestGuidesFollowTheirCatalog(t *testing.T) {
 // A user's own guide, like their addons, may only reach public addresses
 // unless they are an administrator.
 func TestUsersGuidesStayOnPublicAddresses(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }

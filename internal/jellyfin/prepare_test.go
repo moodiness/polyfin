@@ -103,6 +103,7 @@ func eventually(t *testing.T, what string, done func() bool) {
 }
 
 func TestOpeningATitlePreparesItsFirstVersion(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, false)
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
 	t.Cleanup(func() { p.settle(t) })
@@ -151,6 +152,7 @@ func TestOpeningATitlePreparesItsFirstVersion(t *testing.T) {
 }
 
 func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	tr := trackingOn(t, newProbingServer(t, 10, probe.path))
 	t.Cleanup(func() { tr.settle(t) })
@@ -211,6 +213,7 @@ func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
 }
 
 func TestNextEpisodeLeadFollowsTheVersionListLife(t *testing.T) {
+	t.Parallel()
 	for minutes, want := range map[int]time.Duration{
 		accounts.DefaultVersionListMinutes: 9 * time.Minute,
 		accounts.MaxVersionListMinutes:     9 * time.Minute,
@@ -257,6 +260,7 @@ func TestNextEpisodeLeadFollowsTheVersionListLife(t *testing.T) {
 }
 
 func TestEpisodeAfter(t *testing.T) {
+	t.Parallel()
 	episode := func(id byte, season int, available bool) library.Item {
 		return library.Item{ID: accounts.ID{id}, Kind: library.KindEpisode, ParentIndexNumber: season, Available: available}
 	}
@@ -286,6 +290,7 @@ func TestEpisodeAfter(t *testing.T) {
 // preparation done is not done again for ten minutes; one that failed may
 // be.
 func TestPreparationsQueueTheNewestFirst(t *testing.T) {
+	t.Parallel()
 	p := newPreparations(nil)
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	var clock sync.Mutex

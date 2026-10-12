@@ -15,6 +15,7 @@ import (
 // The backup hour defaults to 4, from 0 to 23, and the backups kept to 7,
 // from 1 to 90; a PUT leaving them out keeps them.
 func TestSettingsBackups(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
@@ -52,6 +53,7 @@ func TestSettingsBackups(t *testing.T) {
 // The collection read hour defaults to -1, never, and otherwise goes from
 // 0 to 23; a PUT leaving it out keeps it.
 func TestSettingsCollectionReadHour(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["collectionReadHour"] != -1.0 {
@@ -86,6 +88,7 @@ func TestSettingsCollectionReadHour(t *testing.T) {
 // health. Turned on, the last run's result shows, and is a problem when it
 // failed or the last backup is older than two days.
 func TestBackupStatus(t *testing.T) {
+	t.Parallel()
 	off := newTestAPI(t, 10).signedIn("administrator", true)
 	if status, body, _ := off.call(http.MethodGet, "/backup", nil); status != http.StatusOK || body["folder"] != "" || body["next"] != nil {
 		t.Errorf("off: %d %v", status, body)

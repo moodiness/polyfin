@@ -99,6 +99,7 @@ func must[T any](value T, err error) T {
 // provider's values update underneath and rows the provider dropped go
 // away.
 func TestEditsSurviveRefreshesAndOptionChanges(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx, shared := t.Context(), addons.Shared()
 	list := newPlaylistServer(t, "#EXTM3U\n"+
@@ -235,6 +236,7 @@ func TestEditsSurviveRefreshesAndOptionChanges(t *testing.T) {
 // a stream per entry, best quality first, whatever the list's order; the
 // same name in another category stays apart.
 func TestMergingOrdersStreamsByQuality(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, "#EXTM3U\n"+
 		entry("News", "FR: Zeb One SD", "sd.ts")+
@@ -267,6 +269,7 @@ func TestMergingOrdersStreamsByQuality(t *testing.T) {
 // Countries are told by the category's name first, then the entry's: a
 // flag or a prefix of a country code; the rest is OTHER, last.
 func TestCountriesAreDetected(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, "#EXTM3U\n"+
 		entry("FR| News", "Zeb", "1.ts")+
@@ -308,6 +311,7 @@ func must2[A, B any](a A, b B, err error) (A, B) {
 // category modes; new channels arrive turned off when the option says so,
 // and sequential numbering leaves numbers to apps.
 func TestExclusionsAndNewChannels(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	body := "#EXTM3U\n" + entry("FR| News", "Zeb", "1.ts", `tvg-chno="4"`) + entry("DE| News", "Orbe", "2.ts") + entry("Kids", "ES: Quill", "3.ts") +
 		entry("Kids", "Lumo", "4.ts")
@@ -343,6 +347,7 @@ func TestExclusionsAndNewChannels(t *testing.T) {
 // A keyword bulk change counts what it would change in a dry run, then
 // changes only the channels whose names match, optionally in a category.
 func TestKeywordBulkChangesWithDryRun(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, "#EXTM3U\n"+entry("News", "Zeb Sport", "1.ts")+entry("News", "Orbe", "2.ts")+entry("Kids", "Zeb Kids", "3.ts")+
 		entry("Kids", "Zèb Junior", "4.ts"))

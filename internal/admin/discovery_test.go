@@ -19,6 +19,7 @@ import (
 // when a PUT leaves it out, and refused when it is not an http or https
 // URL; the switch turns off.
 func TestSettingsLocalDiscovery(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["localDiscovery"] != true || body["localAddress"] != "" {
@@ -57,6 +58,7 @@ func TestSettingsLocalDiscovery(t *testing.T) {
 // linked to the switch and told to notifications; turning discovery off
 // ends it.
 func TestHealthTellsATakenDiscoveryPort(t *testing.T) {
+	t.Parallel()
 	taken, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
 		t.Fatal(err)
@@ -103,6 +105,7 @@ func TestHealthTellsATakenDiscoveryPort(t *testing.T) {
 // An address of the container that discovery announced is a warning,
 // linked to the address setting, told in French too.
 func TestHealthTellsAContainersAddress(t *testing.T) {
+	t.Parallel()
 	var options *Options
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
 		o.Health = HealthSources{Discovery: func() discovery.Status {

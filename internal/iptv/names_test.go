@@ -6,6 +6,7 @@ import "testing"
 // prefix, quality tags and the separators they leave, but keeps the
 // brackets that belong to its name.
 func TestMergedNamesKeepTheirOwnBrackets(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]string{
 		"FR| ZEB ONE (PRIME) FHD": "ZEB ONE (PRIME)",
 		"FR| ORBE+CINEMA(S) HD":   "ORBE+CINEMA(S)",

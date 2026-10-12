@@ -11,6 +11,7 @@ import (
 )
 
 func TestTrackingSettingsKeepTheSecret(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("admin", true)
 	member := api.signedIn("member", false)

@@ -16,6 +16,7 @@ import (
 // when a PUT leaves them out, and refused when an entry is not an address
 // nor a network, or when there are too many.
 func TestSettingsKnownProxies(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); !reflect.DeepEqual(body["knownProxies"], []any{}) {
@@ -57,6 +58,7 @@ func TestSettingsKnownProxies(t *testing.T) {
 // tells notifications in the server language, and stops once the address
 // is known.
 func TestHealthNamesUnknownProxies(t *testing.T) {
+	t.Parallel()
 	var options *Options
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
 		o.Health = HealthSources{Proxies: forwarded.New(o.Accounts.KnownProxies)}

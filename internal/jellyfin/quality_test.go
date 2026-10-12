@@ -91,6 +91,7 @@ func needsEncoders(t *testing.T) {
 // versions that fit, in their order, and when none fits, all of them,
 // the closest to the group first, converted down.
 func TestQualityGroupsLeaveOutTallerVersions(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
@@ -183,6 +184,7 @@ func threeHeightsAddon(t *testing.T) string {
 // as to read and decode no more than needed: by their labels before they
 // are analyzed, by their analyses after.
 func TestQualityGroupsConvertTheClosestVersionWhenNoneFits(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	user := s.user("member", nil)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), threeHeightsAddon(t), false); err != nil {
@@ -253,6 +255,7 @@ func TestQualityGroupsConvertTheClosestVersionWhenNoneFits(t *testing.T) {
 // Versions left out are not tried, nor read to analyze them: a version
 // that fits and cannot be read gives way to none taller.
 func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, probe string
 		group       int
@@ -292,6 +295,7 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 // a version that fits plays as it is, and no taller one is sent at full
 // size, even from kept or made-up URLs.
 func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
@@ -356,6 +360,7 @@ func TestQualityGroupsConvertDownAndKeepTallerVersionsFromPlayingAsTheyAre(t *te
 // their group as other conversions are refused, never sent them as they
 // are; with the conversion allowed, they play converted.
 func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
@@ -390,6 +395,7 @@ func TestQualityGroupsRefuseTallerVersionsWithoutConversion(t *testing.T) {
 // A channel's stream taller than the group is converted down to it, once
 // analyzed.
 func TestQualityGroupsConvertLiveTvDown(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
 	var channels QueryResult
@@ -450,6 +456,7 @@ func TestQualityGroupsConvertLiveTvDown(t *testing.T) {
 
 // Downloads are never converted: only versions that fit download.
 func TestQualityGroupsLimitDownloads(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.sized(t, 0, 3840, 2160)
 	p.sized(t, 1, 1920, 1080)
@@ -489,6 +496,7 @@ func TestQualityGroupsLimitDownloads(t *testing.T) {
 
 // Jellyfin's policy has no quality group: apps neither see it nor reset it.
 func TestPolicyKeepsTheQualityGroup(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	member := s.user("member", nil)

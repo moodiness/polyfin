@@ -11,6 +11,7 @@ import (
 )
 
 func TestLiveSessionsShowWhatPlaysAndTakeCommands(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	administrator := p.testServer.user("root", func(c *accounts.UserChanges) { c.IsAdministrator, c.RemoteControl = new(true), new(true) })
 	stranger := p.testServer.user("bob", nil)
@@ -73,6 +74,7 @@ func TestLiveSessionsShowWhatPlaysAndTakeCommands(t *testing.T) {
 // first version: the play session tells which version plays, so that the
 // dashboard still describes it.
 func TestLiveSessionsFindTheVersionThePlaySessionNames(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	session := p.handler.Playback.Signer().Sign(playback.Grant{Version: p.versions[1].ID, User: p.user.ID})
 	if status, body := p.call(http.MethodPost, "/Sessions/Playing", app("tv", p.token), map[string]any{"ItemId": p.movie, "MediaSourceId": p.movie,

@@ -78,6 +78,7 @@ func (e staleEnv) reopened() {
 }
 
 func TestAnExpiredListIsListedWhileTheAddonIsAskedAgain(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond, 20*time.Millisecond)
 	e.expired()
 	e.reopened()
@@ -110,6 +111,7 @@ func TestAnExpiredListIsListedWhileTheAddonIsAskedAgain(t *testing.T) {
 }
 
 func TestAFollowUpListingEveryStreamEndsWithTheFullList(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond, 20*time.Millisecond)
 	e.expired()
 	e.reopened()
@@ -137,6 +139,7 @@ func TestAFollowUpListingEveryStreamEndsWithTheFullList(t *testing.T) {
 }
 
 func TestWaitingForVersionsWaitsForTheAnswerReplacingAStaleList(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
 	e.reopened()
@@ -177,6 +180,7 @@ func TestWaitingForVersionsWaitsForTheAnswerReplacingAStaleList(t *testing.T) {
 // play: the versions it listed before stay listed, the addon is not asked
 // again meanwhile, and it is asked when the title opens again.
 func TestANoticeKeepsTheVersionsOfAnExpiredList(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
 	e.reopened()
@@ -207,6 +211,7 @@ func TestANoticeKeepsTheVersionsOfAnExpiredList(t *testing.T) {
 }
 
 func TestARefreshDropsStaleLists(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
 	if got := len(e.listed()); got != 3 {
@@ -224,6 +229,7 @@ func TestARefreshDropsStaleLists(t *testing.T) {
 }
 
 func TestStaleListsAreGoneAfterADay(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
 	// Ten minutes fresh, then a day stale: a minute before its end, the
@@ -242,6 +248,7 @@ func TestStaleListsAreGoneAfterADay(t *testing.T) {
 }
 
 func TestStaleSubtitleListsAreListedWhileTheAddonIsAskedAgain(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond, 20*time.Millisecond)
 	subtitles := func() ([]string, bool) {
 		t.Helper()

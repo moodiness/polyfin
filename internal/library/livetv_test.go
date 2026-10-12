@@ -16,6 +16,7 @@ import (
 // can describe a programme of a channel the server's addon lists: its
 // artwork stays confined.
 func TestProgrammeArtworkIsConfinedByItsGuide(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := accounts.ID{1}
 	channel := record{ID: itemID(channelKey("tv:one")), Key: channelKey("tv:one"), Kind: KindChannel, Addon: &addon,
@@ -84,6 +85,7 @@ func (e env) guideChannels(t *testing.T, n int, now time.Time) []Item {
 // start time no further than its limit; programmes are kept as no item,
 // yet each opens by its identifier, even once forgotten from memory.
 func TestGuidePagesReadOnlyWhatTheyShow(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }
@@ -134,6 +136,7 @@ func TestGuidePagesReadOnlyWhatTheyShow(t *testing.T) {
 // Programmes kept as items, of Native EPG guides, are deleted two days
 // after they ended, unless a timer or a recording names them.
 func TestPastProgrammesAreSwept(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC()
 	e.service.now = func() time.Time { return now }

@@ -8,6 +8,7 @@ import (
 )
 
 func TestRootFolderCountsAndSuggestionsAnswerAsJellyfin(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	var views QueryResult
 	e.get(t, "/UserViews", e.member, &views)

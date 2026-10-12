@@ -8,6 +8,7 @@ import (
 )
 
 func TestAdministratorsChooseWhoManagesCollections(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, created, _ := administrator.call(http.MethodPost, "/users", map[string]any{"name": "member", "password": "correct horse"})

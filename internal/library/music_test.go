@@ -39,6 +39,7 @@ func advance(clock *atomic.Pointer[time.Time], d time.Duration) {
 }
 
 func TestStaleMusicPagesAreServedWhileTheAddonIsAskedAgain(t *testing.T) {
+	t.Parallel()
 	s, clock := musicService(t)
 	key := musicKey{addon: accounts.ID{1}, resource: "album", id: "a"}
 	var asked atomic.Int32
@@ -83,6 +84,7 @@ func TestStaleMusicPagesAreServedWhileTheAddonIsAskedAgain(t *testing.T) {
 }
 
 func TestAStalePageStaysWhenTheAddonFails(t *testing.T) {
+	t.Parallel()
 	s, clock := musicService(t)
 	key := musicKey{addon: accounts.ID{1}, resource: "album", id: "a"}
 	cache := newMusicCache(10, 1<<20, func(string) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
@@ -104,6 +106,7 @@ func TestAStalePageStaysWhenTheAddonFails(t *testing.T) {
 }
 
 func TestRequestsToOneAddonAreBounded(t *testing.T) {
+	t.Parallel()
 	s, _ := musicService(t)
 	cache := newMusicCache(100, 1<<20, func(int) int { return 1 }, func() time.Duration { return time.Hour }, staleMusic, s.now)
 	busy, other := accounts.ID{1}, accounts.ID{2}
@@ -159,6 +162,7 @@ func TestRequestsToOneAddonAreBounded(t *testing.T) {
 }
 
 func TestKnownFormatsDescribeTracks(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		given AudioSource
 		codec string
@@ -187,6 +191,7 @@ func TestKnownFormatsDescribeTracks(t *testing.T) {
 }
 
 func TestALinkJustGivenIsUsedUntilItExpires(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	short := Version{Expires: now.Add(30 * time.Second), Audio: &AudioSource{Resolved: now}}
 	if !short.fresh(now.Add(10 * time.Second)) {
@@ -205,6 +210,7 @@ func TestALinkJustGivenIsUsedUntilItExpires(t *testing.T) {
 }
 
 func TestMusicAnswersAreBoundedInBytes(t *testing.T) {
+	t.Parallel()
 	s, _ := musicService(t)
 	playlists := newMusicCaches(s).playlists
 	// Playlists of about 1 MB each: past 16 MB, the oldest go.
@@ -224,6 +230,7 @@ func TestMusicAnswersAreBoundedInBytes(t *testing.T) {
 }
 
 func TestPlaysOfOneTrackShareItsResolution(t *testing.T) {
+	t.Parallel()
 	s, _ := musicService(t)
 	s.music = eclipse.NewClient(stremio.NewClient("test"))
 	s.versions = cache.New[accounts.ID, Version](10, time.Hour)

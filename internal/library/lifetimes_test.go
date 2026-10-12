@@ -94,6 +94,7 @@ func (e lifetimeEnv) versions(movie accounts.ID) {
 }
 
 func TestVersionListsAreKeptForTheirSetLife(t *testing.T) {
+	t.Parallel()
 	e := newLifetimeEnv(t)
 	if got := e.users.Settings().VersionListMinutes; got != 10 {
 		t.Fatalf("default list life: %d minutes", got)

@@ -62,6 +62,7 @@ func (x *xtreamServer) account(password string) Account {
 }
 
 func TestXtreamAccountsAreRead(t *testing.T) {
+	t.Parallel()
 	client := requester{client: stremio.NewClient("test"), pacer: NewPacer(0)}
 	for _, tc := range []struct {
 		formats   []string
@@ -105,6 +106,7 @@ func TestXtreamAccountsAreRead(t *testing.T) {
 }
 
 func TestAccountsAndAddresses(t *testing.T) {
+	t.Parallel()
 	account := Account{Kind: addons.KindXtream, Server: " https://tv.example:8080/ ", Username: "user", Password: "p@ss&word"}
 	address, err := account.address()
 	if err != nil {

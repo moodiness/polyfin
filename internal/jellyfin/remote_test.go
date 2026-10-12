@@ -112,6 +112,7 @@ func (a *appSocket) command(t *testing.T, kind string, data any) {
 }
 
 func TestControllableSessionsAreListedWithTheirCapabilities(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
 	tv := s.remoteApp(t, "alice", "tv", queryMediaControl, true)
@@ -181,6 +182,7 @@ func TestControllableSessionsAreListedWithTheirCapabilities(t *testing.T) {
 }
 
 func TestCommandsReachTheControlledApp(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
 	tv := s.remoteApp(t, "alice", "tv", queryMediaControl, true)
@@ -260,6 +262,7 @@ func TestCommandsReachTheControlledApp(t *testing.T) {
 }
 
 func TestCommandsToSessionsThatCannotBeControlledAreDropped(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	phone := s.remoteApp(t, "alice", "phone", noMediaControl, true)
@@ -290,6 +293,7 @@ func TestCommandsToSessionsThatCannotBeControlledAreDropped(t *testing.T) {
 }
 
 func TestOnlyAdministratorsControlOtherUsersSessions(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
 	bob := s.user("bob", nil)

@@ -35,6 +35,7 @@ func (s testServer) configure(t *testing.T, path, token string, configuration an
 }
 
 func TestUsersWhoNeverSavedHaveANewUsersConfiguration(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	dto, raw := s.me(t, s.signIn("member", "tv"))
@@ -49,6 +50,7 @@ func TestUsersWhoNeverSavedHaveANewUsersConfiguration(t *testing.T) {
 }
 
 func TestUsersSaveTheirConfiguration(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
 	token := s.signIn("member", "tv")
@@ -103,6 +105,7 @@ func TestUsersSaveTheirConfiguration(t *testing.T) {
 }
 
 func TestOnlyAdministratorsChangeAnotherUsersConfiguration(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
 	admin := s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
@@ -136,6 +139,7 @@ func TestOnlyAdministratorsChangeAnotherUsersConfiguration(t *testing.T) {
 }
 
 func TestInvalidConfigurationsAreRefused(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	token := s.signIn("member", "tv")
@@ -182,6 +186,7 @@ func TestInvalidConfigurationsAreRefused(t *testing.T) {
 }
 
 func TestSavedConfigurationMatchesJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("viewer", nil)
 	token := s.signIn("viewer", "tv")
@@ -210,6 +215,7 @@ func TestSavedConfigurationMatchesJellyfin(t *testing.T) {
 }
 
 func TestLibrariesFollowTheHomeScreenSettings(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	list := func(path string) []string {
 		t.Helper()
@@ -237,6 +243,7 @@ func TestLibrariesFollowTheHomeScreenSettings(t *testing.T) {
 }
 
 func TestPlayedTitlesAmongTheLatestFollowTheSetting(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.movie)
 	latest := func(query string) []string {

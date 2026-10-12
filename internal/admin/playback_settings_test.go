@@ -9,6 +9,7 @@ import (
 )
 
 func TestSettingsPlaybackChoices(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	choices := func(body map[string]any) [5]any {
@@ -63,6 +64,7 @@ func TestSettingsPlaybackChoices(t *testing.T) {
 // saves both, one leaving them out keeps them, and an invalid address is
 // refused without saving anything.
 func TestSettingsRemuxDB(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	remuxDB := func(body map[string]any) [2]any { return [2]any{body["remuxDb"], body["remuxDbUrl"]} }

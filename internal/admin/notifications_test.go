@@ -17,6 +17,7 @@ import (
 // a member may not choose health events nor a target on the local network,
 // and reaches no other owner's target.
 func TestNotificationTargetsBelongToTheirOwner(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		o.Notifications = notifications.New(notifications.Options{DB: deps.pool, Accounts: o.Accounts, Version: "1.2.3",
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
@@ -101,6 +102,7 @@ func TestNotificationTargetsBelongToTheirOwner(t *testing.T) {
 // The public address links in messages start with is an http or https
 // address, kept without its trailing slash.
 func TestPublicAddressSetting(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("admin", true)
 	with := func(address string) map[string]any {
@@ -123,6 +125,7 @@ func TestPublicAddressSetting(t *testing.T) {
 // be added, and the notifications pages say so. Its password is saved but
 // never answered, and kept when a save leaves it out.
 func TestEmailTargetsNeedTheSMTPServer(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		o.Notifications = notifications.New(notifications.Options{DB: deps.pool, Accounts: o.Accounts, Version: "1.2.3",
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})

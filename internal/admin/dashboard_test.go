@@ -69,6 +69,7 @@ func (f *fakeSessions) SendMessage(_ context.Context, by accounts.User, session 
 }
 
 func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	member := api.signedIn("alice", false)
 	anonymous := api.browser()
@@ -98,6 +99,7 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 }
 
 func TestLiveSessionsTellHowEachPlaybackPlays(t *testing.T) {
+	t.Parallel()
 	sessions := &fakeSessions{}
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Sessions = sessions })
 	admin := api.signedIn("root", true)
@@ -200,6 +202,7 @@ type rawJSON string
 func (r rawJSON) MarshalJSON() ([]byte, error) { return []byte(r), nil }
 
 func TestTasksAreListedRunAndStopped(t *testing.T) {
+	t.Parallel()
 	registry := tasks.New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	registry.Register(tasks.Task{Key: "Wait", Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{"en": {Name: "Wait"}, "fr": {Name: "Attendre"}},
@@ -255,6 +258,7 @@ func waitUntil(t *testing.T, done func() bool) {
 }
 
 func TestLogsAreFollowedAndDownloadedRedacted(t *testing.T) {
+	t.Parallel()
 	ring := logs.NewRing(logs.Capacity)
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Logs = ring })
 	admin := api.signedIn("root", true)
@@ -301,6 +305,7 @@ func TestLogsAreFollowedAndDownloadedRedacted(t *testing.T) {
 }
 
 func TestVariablesHideSecrets(t *testing.T) {
+	t.Parallel()
 	environ := []string{"POLYFIN_DATABASE_URL=postgresql://polyfin:s3cret@db.internal:5432/media", "POLYFIN_API_KEY=k3y"}
 	cfg, err := config.Load(func(name string) string {
 		if name == "POLYFIN_DATABASE_URL" {
@@ -336,6 +341,7 @@ func TestVariablesHideSecrets(t *testing.T) {
 }
 
 func TestHealthDescribesTheServerFromWhatItRecords(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cacheDir := t.TempDir()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
@@ -405,6 +411,7 @@ func TestHealthDescribesTheServerFromWhatItRecords(t *testing.T) {
 // release notes, while Check for new versions is on, which it is by
 // default.
 func TestHealthTellsANewVersion(t *testing.T) {
+	t.Parallel()
 	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"tag_name":"v1.3.0","html_url":"https://github.com/moodiness/polyfin/releases/tag/v1.3.0"}`)
 	}))
@@ -449,6 +456,7 @@ func TestHealthTellsANewVersion(t *testing.T) {
 }
 
 func TestActivityIsFilteredAndPaged(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	api.browser().call(http.MethodPost, "/session", map[string]string{"name": "root", "password": "wrong password"})
@@ -468,6 +476,7 @@ func TestActivityIsFilteredAndPaged(t *testing.T) {
 }
 
 func TestTimersTellWhenRecordingIsOff(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	_, body, _ := admin.call(http.MethodGet, "/timers", nil)

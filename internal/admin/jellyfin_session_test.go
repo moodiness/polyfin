@@ -47,6 +47,7 @@ func (b browser) hasSession() bool {
 }
 
 func TestJellyfinSignInOpensTheAdminAppForAdministrators(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 100)
 	root := api.createUser("root", true)
 	b := api.browser()
@@ -69,6 +70,7 @@ func TestJellyfinSignInOpensTheAdminAppForAdministrators(t *testing.T) {
 // A member's token opens a member's session, logged as a sign-in: their own
 // pages answer, the administrators' stay forbidden.
 func TestJellyfinSignInOpensTheAdminAppForMembers(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 100)
 	admin := api.signedIn("root", true)
 	b := api.browser()
@@ -124,6 +126,7 @@ func (api testAPI) disabledToken(name string, administrator bool) string {
 }
 
 func TestJellyfinSignInRefusesWhoMayNotHaveASession(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 100)
 	root := api.createUser("root", true)
 	revoked := api.jellyfinToken(api.createUser("former", true))
@@ -180,6 +183,7 @@ func TestJellyfinSignInRefusesWhoMayNotHaveASession(t *testing.T) {
 // attempts; a valid token that may not open a session now counts toward
 // nothing.
 func TestJellyfinSignInCountsUnknownTokensAsFailures(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 3)
 	root := api.createUser("root", true)
 	night := api.nightToken("owl", false)
@@ -202,6 +206,7 @@ func TestJellyfinSignInCountsUnknownTokensAsFailures(t *testing.T) {
 // A user blocked after wrong passwords gets no session from a token either,
 // until the block ends.
 func TestJellyfinSignInRespectsTheLockout(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 100)
 	admin := api.signedIn("admin", true)
 	if status := admin.raw(http.MethodPut, "/settings", `{"serverName":"Polyfin","quickConnectEnabled":true,"legacyAuthorization":false,"language":"en","loginAttempts":3}`, nil); status != http.StatusOK {

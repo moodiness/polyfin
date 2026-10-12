@@ -20,6 +20,7 @@ import (
 // in ImageTags, the series' in SeriesPrimaryImageTag. A season without one
 // shows its series' poster, as before; so do its episodes as parents.
 func TestSeasonsShowTheirOwnImages(t *testing.T) {
+	t.Parallel()
 	var server *httptest.Server
 	var metaRequests atomic.Int32
 	show := func() stremio.Meta {

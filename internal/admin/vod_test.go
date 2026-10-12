@@ -10,6 +10,7 @@ import (
 // The VOD options are read and checked; the source counts its movies and
 // series, previews their categories, and its catalogs are libraries.
 func TestIPTVVODOptions(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	provider := newProvider(t)
 	administrator := api.signedIn("administrator", true)

@@ -64,6 +64,7 @@ func newSearchAddon(t *testing.T) *httptest.Server {
 // with an IMDb identifier, those of the year asked first, ten at most; an
 // unknown folder is not found, and only administrators may search.
 func TestFolderTitleSearch(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	var store *addons.Store
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {

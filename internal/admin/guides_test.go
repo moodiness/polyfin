@@ -44,6 +44,7 @@ func tvGuide(libraries []map[string]any) map[string]any {
 // The Libraries page sets a TV catalog's guide, which is fetched at once
 // and shown redacted with how the fetch went, and refreshes it on demand.
 func TestTVCatalogGuides(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/catalog/tv/channels") {

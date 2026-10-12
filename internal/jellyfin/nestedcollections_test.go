@@ -71,6 +71,7 @@ func nestedCollectionsAddon(t *testing.T) string {
 // orders a collection, or sorted as the app asks; in pages, one title of
 // each catalog in turn, which pages sorted one by one would mix up.
 func TestAppsListTheTitlesOfNestedCollections(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), nestedCollectionsAddon(t), false)

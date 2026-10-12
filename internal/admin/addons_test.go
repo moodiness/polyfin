@@ -23,6 +23,7 @@ func localAddon(t *testing.T) string {
 }
 
 func TestAddonScopes(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	manifestURL := localAddon(t)
 	member := api.signedIn("member", false)
@@ -48,6 +49,7 @@ func TestAddonScopes(t *testing.T) {
 }
 
 func TestAddonPreferences(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	member := api.signedIn("member", false)
 	if _, body, _ := member.call(http.MethodGet, "/account/addon-preferences", nil); body["useSharedAddons"] != true {
@@ -84,6 +86,7 @@ func (b browser) appNames(scope string) []string {
 }
 
 func TestLibrariesShowTheNameAppsShow(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],
@@ -162,6 +165,7 @@ func (b browser) saveLibraries(scope string, libraries ...map[string]any) (int, 
 // 20,000, and either on a live TV catalog are refused. A collection catalog
 // that requires its only genre takes a maximum, but offers no genre.
 func TestLibrariesTakeAGenreAndAMaximum(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],
@@ -234,6 +238,7 @@ func TestLibrariesTakeAGenreAndAMaximum(t *testing.T) {
 // catalog that is no library. A live TV catalog, which makes no menu
 // entry, and an option that is not a boolean are refused.
 func TestLibrariesHideInMenus(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],

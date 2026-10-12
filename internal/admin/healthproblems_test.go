@@ -37,6 +37,7 @@ func (p switchPinger) Ping(context.Context) error {
 // unencrypted stop counting once a key is set; a local folder Polyfin
 // cannot read is an error; with the database down, it alone is told.
 func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
+	t.Parallel()
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"id": "own", "name": "Own TV", "version": "1.0.0", "resources": ["catalog"],
 			"catalogs": [{"type": "movie", "id": "top", "name": "Top"}]}`)
@@ -173,6 +174,7 @@ func TestHealthProblemsAreThoseTheHealthPageShows(t *testing.T) {
 
 // A disk is short of room below 2 GB free, or below 5% of its size.
 func TestDisksShortOfRoom(t *testing.T) {
+	t.Parallel()
 	for _, disk := range []struct {
 		free, used int64
 		low        bool
@@ -191,6 +193,7 @@ func TestDisksShortOfRoom(t *testing.T) {
 // A local folder or a share Polyfin cannot watch tells why, what to do,
 // and that its schedule still scans it.
 func TestUnwatchedFolderText(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		failure, share, language, want string
 	}{

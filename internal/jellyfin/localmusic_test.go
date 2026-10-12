@@ -28,6 +28,7 @@ import (
 // their artists and tracks, by disc and number, with their artwork, and
 // its tracks play as they are or converted.
 func TestLocalMusicFoldersPlayInJellyfinApps(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -129,6 +130,7 @@ func TestLocalMusicFoldersPlayInJellyfinApps(t *testing.T) {
 // file, else of its lyrics tag, before LRCLIB's, which is never asked
 // about it, and served with LRCLIB's lyrics turned off too.
 func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

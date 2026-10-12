@@ -138,6 +138,7 @@ func compareLive(t *testing.T, fixture string, body []byte) {
 }
 
 func TestTVCatalogsListAsChannels(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
 
@@ -223,6 +224,7 @@ func TestTVCatalogsListAsChannels(t *testing.T) {
 // LiveTvChannel and LiveTvProgram. Programmes are found only by a search
 // that asks for them, by their type or a programme category.
 func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, user := tuned(t, addon)
 	search := func(query string) QueryResult {
@@ -282,6 +284,7 @@ func TestSearchFindsChannelsAndProgrammes(t *testing.T) {
 // The On Now rows ask what airs now: only today's guide is read for it,
 // not the week ahead.
 func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
 	var programs QueryResult
@@ -298,6 +301,7 @@ func TestProgrammesAiringNowReadTodaysGuideOnly(t *testing.T) {
 // long URL, with the channels, the sort and the fields as comma-separated
 // strings, which Jellyfin reads as lists.
 func TestGuidePostsChannelsAsOneString(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
 	var channels QueryResult
@@ -333,6 +337,7 @@ func TestGuidePostsChannelsAsOneString(t *testing.T) {
 // catalog that publishes no guide: empty lists, as Jellyfin gives without
 // guide data, without asking the addon for a guide.
 func TestGuideAnswersAsJellyfinWithoutData(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, _ := tuned(t, addon)
 	for fixture, path := range map[string]string{
@@ -415,6 +420,7 @@ func livePlaybackInfo(t *testing.T, s testServer, token, channel, profile string
 // Channels have no rating: a user under parental control lists and opens
 // them as everyone does, from the server's TV catalogs.
 func TestChannelsStayWithUsersUnderParentalControl(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _, _ := tuned(t, addon)
 	s.user("child", func(c *accounts.UserChanges) {
@@ -431,6 +437,7 @@ func TestChannelsStayWithUsersUnderParentalControl(t *testing.T) {
 }
 
 func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
 	var channels QueryResult
@@ -511,6 +518,7 @@ func TestChannelPlaysItsHLSStreamDirectly(t *testing.T) {
 }
 
 func TestChannelPlaysThroughFFmpeg(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")

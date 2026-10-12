@@ -190,6 +190,7 @@ func (e followEnv) settles(resource string, requests int) {
 }
 
 func TestFollowUpsKeepTheLongerStreamList(t *testing.T) {
+	t.Parallel()
 	e := newFollowEnv(t, 20*time.Millisecond, 50*time.Millisecond)
 	e.replies <- 1
 	if versions, err := e.service.Versions(t.Context(), e.member, e.movie); err != nil || len(versions) != 1 {
@@ -212,6 +213,7 @@ func TestFollowUpsKeepTheLongerStreamList(t *testing.T) {
 }
 
 func TestFollowUpsNeverShortenAList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		second int
@@ -238,6 +240,7 @@ func TestFollowUpsNeverShortenAList(t *testing.T) {
 }
 
 func TestAListServedFromTheCacheIsNotFollowedUp(t *testing.T) {
+	t.Parallel()
 	e := newFollowEnv(t, 20*time.Millisecond, 20*time.Millisecond)
 	e.replies <- 2
 	e.replies <- 2
@@ -255,6 +258,7 @@ func TestAListServedFromTheCacheIsNotFollowedUp(t *testing.T) {
 }
 
 func TestARefreshIsNotUndoneByAFollowUp(t *testing.T) {
+	t.Parallel()
 	// Follow-ups wait an hour unless the test hurries them: on a slow
 	// machine, a short delay could ask one before the refresh that should
 	// cancel it.
@@ -308,6 +312,7 @@ func TestARefreshIsNotUndoneByAFollowUp(t *testing.T) {
 }
 
 func TestSubtitleListsAreFollowedUp(t *testing.T) {
+	t.Parallel()
 	e := newFollowEnv(t, 20*time.Millisecond, 50*time.Millisecond)
 	e.replies <- 1
 	subtitles := func() int {
@@ -335,6 +340,7 @@ func TestSubtitleListsAreFollowedUp(t *testing.T) {
 // identifier, in the list saved too, and a version whose link changed is
 // renewed with the link the addon gives next.
 func TestVersionsKeepTheirIdentifiersAcrossAnAddonsAnswers(t *testing.T) {
+	t.Parallel()
 	answers := make(chan []stremio.Stream, 3)
 	e := repliedEnv(t, func(w http.ResponseWriter, r *http.Request, resource string) {
 		if resource != "stream" {
@@ -411,6 +417,7 @@ func TestVersionsKeepTheirIdentifiersAcrossAnAddonsAnswers(t *testing.T) {
 // when each is the other's one match, and never an identity the answer
 // lists.
 func TestCarriedIdentitiesAreNeverShared(t *testing.T) {
+	t.Parallel()
 	stream := func(name, link, filename string, size int) stremio.Stream {
 		return stremio.Stream{Name: name, URL: link, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(size)}}
 	}

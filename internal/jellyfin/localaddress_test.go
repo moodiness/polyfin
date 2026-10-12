@@ -10,6 +10,7 @@ import (
 // network the settings give, as Jellyfin gives its PublishedServerUrl, and
 // without one the address the request reached.
 func TestPublicInfoLocalAddressFollowsTheSetting(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	localAddress := func() string {
 		t.Helper()

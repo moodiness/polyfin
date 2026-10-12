@@ -41,6 +41,7 @@ func (e env) mappingsOf(key addons.LibraryKey, guides []addons.Guide) []string {
 // downloads and "unmapped" automatic mapping, and only a remap replaces
 // them. The programmes follow the mappings.
 func TestGuidesMapByRankAndKeepManualMappings(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC().Truncate(time.Minute)
 	e.service.now = func() time.Time { return now }

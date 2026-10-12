@@ -59,6 +59,7 @@ func pngPicture(t *testing.T) []byte {
 // administrators may take from a local network. The libraries answered
 // tell the choice and the tag of the image apps show.
 func TestLibraryImages(t *testing.T) {
+	t.Parallel()
 	picture := pngPicture(t)
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -220,6 +221,7 @@ func TestLibraryImages(t *testing.T) {
 // of the catalogs disabled before included; disabling a library keeps its
 // image, as do the libraries of other addons.
 func TestRemovedAddonsTakeTheirLibraryImages(t *testing.T) {
+	t.Parallel()
 	picture := pngPicture(t)
 	// Two addons, each serving its own manifest.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

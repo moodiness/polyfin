@@ -87,6 +87,7 @@ func (s *appSocket) changed(t *testing.T) userDataChange {
 }
 
 func TestAppSocketsAreKeptAliveAndToldOfTheirUsersData(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	// Jellyfin answers a socket without a valid token with a 403, and a
 	// plain request to /socket finds nothing.
@@ -150,6 +151,7 @@ func ids(list []UserItemData) []string {
 }
 
 func TestSocketRequestsAreToldApart(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		method, upgrade string
 		connection      []string

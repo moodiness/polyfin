@@ -28,6 +28,7 @@ var recordedClip = media.Analysis{Format: "matroska,webm", Streams: []media.Stre
 const matroskaTag = "[0][0][0][0]"
 
 func TestAttachedFilesAreListedAsJellyfinListsThem(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "ass", "media-source.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +60,7 @@ func TestAttachedFilesAreListedAsJellyfinListsThem(t *testing.T) {
 }
 
 func TestFontsAreNamedSoJellyfinWebLoadsThem(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		stream media.Stream
 		want   string

@@ -15,6 +15,7 @@ import (
 // The line-up routes check what they are sent, answer the contract's
 // codes and pages, and never show a custom stream's address in full.
 func TestLineupRoutesValidate(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	provider := newProvider(t)
 	administrator := api.signedIn("administrator", true)
@@ -118,6 +119,7 @@ func TestLineupRoutesValidate(t *testing.T) {
 // The guide routes of a catalog check addresses, ids, modes and mappings,
 // and a member's own catalog and streams stay on public addresses.
 func TestCatalogGuideRoutesValidate(t *testing.T) {
+	t.Parallel()
 	var channels *iptv.Service
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { channels = o.IPTV })
 	provider := newProvider(t)

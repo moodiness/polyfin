@@ -250,6 +250,7 @@ func (s testServer) signIn(name, device string) string {
 }
 
 func TestSignInAndSignOut(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	s.user("carol", func(c *accounts.UserChanges) { yes := true; c.IsDisabled = &yes })
@@ -292,6 +293,7 @@ func TestSignInAndSignOut(t *testing.T) {
 }
 
 func TestFailedSignInsAreThrottled(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 2)
 	s.user("alice", nil)
 	wrong := map[string]string{"Username": "alice", "Pw": "wrong horse"}
@@ -305,6 +307,7 @@ func TestFailedSignInsAreThrottled(t *testing.T) {
 }
 
 func TestQuickConnect(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
 	phone := s.signIn("alice", "phone")
@@ -353,6 +356,7 @@ func TestQuickConnect(t *testing.T) {
 }
 
 func TestLegacyAuthorizationFollowsTheSetting(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	token := s.signIn("alice", "tv")
@@ -368,6 +372,7 @@ func TestLegacyAuthorizationFollowsTheSetting(t *testing.T) {
 // HasUpdateAvailable tells the new version of Polyfin the daily check
 // found, while Check for new versions is on.
 func TestSystemInfoTellsANewVersion(t *testing.T) {
+	t.Parallel()
 	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"tag_name":"v99.0.0","html_url":"https://github.com/moodiness/polyfin/releases/tag/v99.0.0"}`)
 	}))
@@ -405,6 +410,7 @@ func TestSystemInfoTellsANewVersion(t *testing.T) {
 }
 
 func TestPublicUsersListsOnlyVisibleEnabledUsers(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	no, yes := false, true
 	s.user("hidden", nil)
@@ -424,6 +430,7 @@ func TestPublicUsersListsOnlyVisibleEnabledUsers(t *testing.T) {
 // responses with fixtures recorded from Jellyfin 12.2 by
 // scripts/jellyfin-fixtures.sh: same keys at every level and same types.
 func TestResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	_, authentication := s.call(http.MethodPost, "/Users/AuthenticateByName", app("tv", ""),

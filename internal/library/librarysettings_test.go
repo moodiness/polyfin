@@ -88,6 +88,7 @@ func libraryOf(catalogType, catalogID, genre string, most int) func(id accounts.
 // after it, offers it alone, adds its catalog to that genre's page only,
 // and finds its image among that genre's titles.
 func TestALibraryNarrowedToAGenreListsItOnly(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.settingsLibraries(libraryOf("movie", "top", "Drama", 0))
 	library := e.library(e.member, "Top · Drama")
@@ -152,6 +153,7 @@ func (e env) libraries() []addons.Library {
 // the collections of a collection library, whole listings included; a
 // whole listing of a library without one lists all its titles.
 func TestALibraryListsAtMostItsMaximum(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := e.settingsLibraries(libraryOf("movie", "top", "", 5), libraryOf("collection", "sets", "", 3))
 	top := e.library(e.member, "Top")
@@ -204,6 +206,7 @@ func TestALibraryListsAtMostItsMaximum(t *testing.T) {
 // titles read so far, even fewer than a listing of count, rather than wait
 // for the addon, whose request would time out only after 15 seconds.
 func TestAWholeListingWaitsForAddonsAWhile(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := e.settingsLibraries(libraryOf("movie", "top", "", 0))
 	top := e.library(e.member, "Top")
@@ -228,6 +231,7 @@ func TestAWholeListingWaitsForAddonsAWhile(t *testing.T) {
 // kept yet, reads them: what was kept, nothing, may look like the whole
 // listing from past its end.
 func TestAWholeListingFromAnIndexReadsWhatWasNotKept(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.settingsLibraries(libraryOf("movie", "top", "", 0))
 	top := e.library(e.member, "Top")
@@ -299,6 +303,7 @@ func (e env) pairOf(addon *fakeAddon) accounts.ID {
 // read of each of its catalogs, though the late listing, which merges
 // what its catalogs answered in time, may have left some out.
 func TestALateWholeListingOfACollectionKeepsEachCatalog(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pairAddon(6)
 	pair := e.pairOf(addon)
@@ -317,6 +322,7 @@ func TestALateWholeListingOfACollectionKeepsEachCatalog(t *testing.T) {
 // the rest is read in the background, to the end, so that the next one
 // lists all of it at once.
 func TestAWholeListingOpenedAgainWaitsOnlyAMoment(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pairAddon(30)
 	pair := e.pairOf(addon)
@@ -355,6 +361,7 @@ func TestAWholeListingOpenedAgainWaitsOnlyAMoment(t *testing.T) {
 // anything of it was read, lists the first page of each of its catalogs,
 // waited for as long as the addon takes, rather than nothing.
 func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addon   func() *fakeAddon
 		library string
@@ -385,6 +392,7 @@ func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 // A library's maximum replaces the catalog limit, higher as well as lower;
 // a library without one lists up to the catalog limit.
 func TestALibrarysMaximumReplacesTheCatalogLimit(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogLimit = accounts.MinCatalogLimit })
 	e.install(addons.Shared(), pagedAddon(150, 50))

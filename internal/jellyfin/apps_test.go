@@ -32,6 +32,7 @@ func hintNames(result SearchHintResult) []string {
 }
 
 func TestSearchHintsFindTitlesEpisodesAndPeopleTheUserReaches(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	// The series' episodes and the people of a movie are known once opened.
 	var shows, episodes, movies QueryResult
@@ -98,6 +99,7 @@ func TestSearchHintsFindTitlesEpisodesAndPeopleTheUserReaches(t *testing.T) {
 }
 
 func TestMovieRecommendationsFollowSimilarTitles(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	var movies QueryResult
 	s.get(t, "/Items?ParentId="+views["Top"], token, &movies)
@@ -141,6 +143,7 @@ func TestMovieRecommendationsFollowSimilarTitles(t *testing.T) {
 }
 
 func TestSmallRoutesAnswerAsJellyfin(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	var movies QueryResult
 	s.get(t, "/Items?ParentId="+views["Top"], token, &movies)
@@ -211,6 +214,7 @@ func TestSmallRoutesAnswerAsJellyfin(t *testing.T) {
 }
 
 func TestYearsAreThoseTheYearPagesOffer(t *testing.T) {
+	t.Parallel()
 	s, token, _, views := pagesServer(t)
 	years := func(query string) []string {
 		t.Helper()
@@ -243,6 +247,7 @@ func TestYearsAreThoseTheYearPagesOffer(t *testing.T) {
 }
 
 func TestFallbackFontsComeFromTheFontsFolder(t *testing.T) {
+	t.Parallel()
 	s, token, _ := browsing(t)
 	dir := t.TempDir()
 	for name, content := range map[string]string{
@@ -303,6 +308,7 @@ func TestFallbackFontsComeFromTheFontsFolder(t *testing.T) {
 // API keys have no user or session of their own: the routes that act for
 // one answer as Jellyfin does without one, and change nothing.
 func TestAPIKeysWithoutAUserChangeNothing(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	_, key, err := s.store.CreateAPIKey(t.Context(), "Script")
 	if err != nil {

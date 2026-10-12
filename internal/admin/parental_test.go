@@ -10,6 +10,7 @@ import (
 )
 
 func TestAdministratorsSetParentalControl(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
@@ -78,6 +79,7 @@ func TestAdministratorsSetParentalControl(t *testing.T) {
 }
 
 func TestRestrictedUsersKeepTheServersAddons(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	child := api.signedIn("child", false)

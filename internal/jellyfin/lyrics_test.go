@@ -131,6 +131,7 @@ func (l *lyricsServer) hasLyrics(t *testing.T, name string) map[string]bool {
 }
 
 func TestSongLyricsFromLRCLIB(t *testing.T) {
+	t.Parallel()
 	l := newLyricsServer(t)
 
 	// Listings never look songs up.

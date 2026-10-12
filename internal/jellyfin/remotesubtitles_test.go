@@ -89,6 +89,7 @@ func (p remoteSubtitlesSetup) search(t *testing.T, token, item, language string)
 }
 
 func TestRemoteSubtitleSearchMatchesLanguageCodes(t *testing.T) {
+	t.Parallel()
 	p := remoteSubtitles(t)
 	describe := func(results []RemoteSubtitleInfo) []string {
 		described := make([]string, len(results))
@@ -131,6 +132,7 @@ func TestRemoteSubtitleSearchMatchesLanguageCodes(t *testing.T) {
 }
 
 func TestRemoteSubtitleIDsRevealNoAddress(t *testing.T) {
+	t.Parallel()
 	p := remoteSubtitles(t)
 	status, body := p.call(http.MethodGet, "/Items/"+p.movie+"/RemoteSearch/Subtitles/fre", app("tv", p.token), nil)
 	if status != http.StatusOK {
@@ -157,6 +159,7 @@ func TestRemoteSubtitleIDsRevealNoAddress(t *testing.T) {
 }
 
 func TestDownloadingARemoteSubtitleKeepsItAmongTheTitles(t *testing.T) {
+	t.Parallel()
 	p := remoteSubtitles(t)
 	english := p.search(t, p.token, p.movie, "en")[0]
 	if status, body := p.call(http.MethodPost, "/Items/"+p.movie+"/RemoteSearch/Subtitles/"+english.Id, app("tv", p.token), nil); status != http.StatusNoContent {
@@ -203,6 +206,7 @@ func TestDownloadingARemoteSubtitleKeepsItAmongTheTitles(t *testing.T) {
 }
 
 func TestRemoteSubtitlesOfUnknownItems(t *testing.T) {
+	t.Parallel()
 	p := remoteSubtitles(t)
 	english := p.search(t, p.token, p.movie, "eng")[0]
 	unknown := strings.Repeat("ab", 16)
@@ -242,6 +246,7 @@ var remoteSubtitleInfoTypes = map[string]string{
 }
 
 func TestRemoteSubtitleSearchMatchesJellyfin(t *testing.T) {
+	t.Parallel()
 	p := remoteSubtitles(t)
 	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "remote-subtitles.json"))
 	if err != nil {

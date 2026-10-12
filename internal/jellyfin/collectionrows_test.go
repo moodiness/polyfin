@@ -16,6 +16,7 @@ import (
 // a library without type, by its folders, movies and series, it lists its
 // collections too.
 func TestCollectionLibrariesGetHomeRows(t *testing.T) {
+	t.Parallel()
 	s, token, ids := browsing(t)
 	var views QueryResult
 	s.get(t, "/UserViews", token, &views)
@@ -50,6 +51,7 @@ func TestCollectionLibrariesGetHomeRows(t *testing.T) {
 // title: it gets those alone. A library hidden from the user keeps its
 // collections out.
 func TestCollectionsAcrossTheServerHoldTheAddonsCollections(t *testing.T) {
+	t.Parallel()
 	s, token, ids := browsing(t)
 	if _, err := s.store.CreateUser(t.Context(), accounts.NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true}); err != nil {
 		t.Fatal(err)

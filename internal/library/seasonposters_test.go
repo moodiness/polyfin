@@ -14,6 +14,7 @@ import (
 // seasons in order, specials included or not: the list is read only when
 // its length tells which poster is which season's.
 func TestSeasonPostersMapToTheirSeasons(t *testing.T) {
+	t.Parallel()
 	show := func(seasons []int, posters stremio.Posters, byNumber map[string]string) stremio.Meta {
 		meta := stremio.Meta{ID: "tt1", Type: "series", Extras: &stremio.Extras{SeasonPosters: posters, SeasonPosterByNumber: byNumber}}
 		for _, season := range seasons {
@@ -53,6 +54,7 @@ func TestSeasonPostersMapToTheirSeasons(t *testing.T) {
 // otherwise; so do their episodes as parents, and the image route, from
 // what Polyfin already knows, without asking the addon again.
 func TestSeasonsShowTheirOwnPosters(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	const series = "https://images.example/show.jpg"
 	show := stremio.Meta{ID: "tt100", Type: "series", Name: "Show", Poster: series,

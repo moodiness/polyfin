@@ -76,6 +76,7 @@ func analyze(t *testing.T, s testServer, version library.Version, height int) {
 // falls back past a broken stream, and a quality group picks the stream
 // that fits.
 func TestLineupsShowAndPlayAsArranged(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
 	token := s.signIn("member", "tv")

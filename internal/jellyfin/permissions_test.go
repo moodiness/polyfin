@@ -65,6 +65,7 @@ func (a playbackAnswer) refused() bool {
 // needs its audio converted; the second, H.264 and AAC in MP4, plays as it
 // is.
 func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	minimal, chrome := p.profile(t, "minimal"), p.profile(t, "jellyfin-web-chrome")
@@ -115,6 +116,7 @@ func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 }
 
 func TestConversionPermissionsApplyPerKind(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	audio := map[string]any{"MediaSourceId": p.versions[0].ID.String()}
@@ -151,6 +153,7 @@ func TestConversionPermissionsApplyPerKind(t *testing.T) {
 // Burning an image subtitle in converts the video: when that is not
 // allowed, the subtitle is left out and the file plays as it is.
 func TestImageSubtitlesAreLeftOutWhenTheVideoMayNotBeConverted(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set: without an encoder, no subtitle is burned in anyway")
 	}
@@ -185,6 +188,7 @@ func TestImageSubtitlesAreLeftOutWhenTheVideoMayNotBeConverted(t *testing.T) {
 }
 
 func TestHLSRefusesConversionsThatAreNotAllowed(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	audio := p.ask(t, p.token, p.movie, p.profile(t, "minimal"), map[string]any{"MediaSourceId": p.movie}).MediaSources[0].TranscodingUrl
@@ -228,6 +232,7 @@ func TestHLSRefusesConversionsThatAreNotAllowed(t *testing.T) {
 }
 
 func TestLiveConversionsFollowThePermissions(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
 	var channels QueryResult
@@ -287,6 +292,7 @@ func TestLiveConversionsFollowThePermissions(t *testing.T) {
 }
 
 func TestDownloadsFollowThePermissions(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	userItem := "/Users/" + p.user.ID.String() + "/Items/"
 	var movie BaseItemDto
@@ -346,6 +352,7 @@ func TestDownloadsFollowThePermissions(t *testing.T) {
 }
 
 func TestPolicyCarriesConversionAndDownloadPermissions(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	member := s.user("member", nil)

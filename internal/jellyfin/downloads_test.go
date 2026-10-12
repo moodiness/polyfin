@@ -53,6 +53,7 @@ func fetchURL(t *testing.T, target string, header http.Header) (*http.Response, 
 // A title's identifier stands for the version its grant names, else for its
 // first version that has not failed, as in item details and PlaybackInfo.
 func TestDownloadsSkipFailedVersions(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	second := "attachment; filename=Movie.1080p.mp4; filename*=UTF-8''Movie.1080p.mp4"
 	userItem := "/Users/" + p.user.ID.String() + "/Items/"
@@ -95,6 +96,7 @@ func TestDownloadsSkipFailedVersions(t *testing.T) {
 }
 
 func TestDownloadsServeAVersionAsAFile(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	recorded := recordedDownloads(t)
 	fetch := func(path string, header http.Header) (*http.Response, string) {
@@ -171,6 +173,7 @@ func TestDownloadsServeAVersionAsAFile(t *testing.T) {
 }
 
 func TestMoviesWithVersionsCanBeDownloaded(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	data, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "downloads", "can-download.json"))
 	if err != nil {

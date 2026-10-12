@@ -42,6 +42,7 @@ const playlist = "\xef\xbb\xbf#EXTM3U url-tvg=\"https://guide.example/epg.xml\"\
 	"https://live.example/plain.ts\r\n"
 
 func TestM3UPlaylistsAreRead(t *testing.T) {
+	t.Parallel()
 	entries, err := parse(t, playlist)
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +75,7 @@ func TestM3UPlaylistsAreRead(t *testing.T) {
 }
 
 func TestOtherDocumentsAreNotPlaylists(t *testing.T) {
+	t.Parallel()
 	for name, document := range map[string]string{
 		"empty":     "",
 		"html":      "<html><body>Sign in</body></html>",
@@ -92,6 +94,7 @@ func TestOtherDocumentsAreNotPlaylists(t *testing.T) {
 // Headings drawn with decoration, or without a letter or digit, are not
 // channels; names that merely contain symbols are.
 func TestHeadingsAreNotChannels(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"##### ZEBRA #####", "### 24/7 ZEB ###", "===== Kids =====", "--- Sports ---", "★★★ VIP ★★★", "|==|", "", "  ---  ",
 		"ZZ| ----- NEWS -----"} {
 		if !heading(name) {

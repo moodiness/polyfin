@@ -37,6 +37,7 @@ func scriptedProbe(t *testing.T, body string) fakeProbe {
 // once the next version is ready: that version plays, and the first, still
 // being read, is left out of the list.
 func TestSlowAnalysesGiveWayToTheNextVersion(t *testing.T) {
+	t.Parallel()
 	probe := scriptedProbe(t, "[ $n -gt 1 ] || exec sleep 60\nexec cat \"$0.json\"\n")
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
 	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = accounts.MinAnalysisTimeout })
@@ -63,6 +64,7 @@ const unreadable = "echo 'Invalid data found when processing input' >&2\nexit 1\
 // When the app chooses no version, PlaybackInfo analyzes VersionAttempts
 // of them at most, at once; the others play only when analyzed before.
 func TestVersionAttemptsBoundTheVersionsAnalyzed(t *testing.T) {
+	t.Parallel()
 	for _, attempts := range []int{1, 2, 3} {
 		probe := scriptedProbe(t, unreadable)
 		p := playingOn(t, newProbingServer(t, 10, probe.path))
@@ -118,6 +120,7 @@ func threeStreamsTV(t *testing.T) string {
 
 // A channel's streams are tried as a title's versions are.
 func TestVersionAttemptsBoundTheStreamsOfAChannel(t *testing.T) {
+	t.Parallel()
 	chrome, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -161,6 +164,7 @@ func firstSource(t *testing.T, answer playbackAnswer) MediaSourceInfo {
 // Opus and H.264 in Matroska, needs its audio converted; the second plays
 // as it is.
 func TestPreferDirectPlayChoosesAVersionThatNeedsNoConversion(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	// The second version's keyframe index, which a remux copying its tracks
@@ -203,6 +207,7 @@ func TestPreferDirectPlayChoosesAVersionThatNeedsNoConversion(t *testing.T) {
 // A remux copying the tracks needs the version's keyframe index: a version
 // whose index cannot be read is not preferred.
 func TestPreferDirectPlaySkipsRemuxesThatCannotStart(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
@@ -216,6 +221,7 @@ func TestPreferDirectPlaySkipsRemuxesThatCannotStart(t *testing.T) {
 // plays without conversion: the first version plays, its audio converted,
 // rather than the second, 3 Mbit/s, which the app would play as it is.
 func TestPreferDirectPlayKeepsUnderTheUsersBitrateLimit(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	p.withBitrate(t, p.versions[1], "h264-aac-mp4", 3_000_000)
@@ -244,6 +250,7 @@ func TestPreferDirectPlayKeepsUnderTheUsersBitrateLimit(t *testing.T) {
 }
 
 func TestConversionsAtOnceAreLimited(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts video with the encoders FFmpeg has")
 	}
@@ -330,6 +337,7 @@ func TestConversionsAtOnceAreLimited(t *testing.T) {
 // Converted video is scaled down to fit the height cap's 16:9 frame,
 // keeping its shape; copied video keeps its size.
 func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts video with the encoders FFmpeg has")

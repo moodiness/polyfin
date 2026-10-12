@@ -12,6 +12,7 @@ import (
 // The settings answer what each of them accepts, and its default, from the
 // Go constants; a PUT cannot change them.
 func TestSettingsAnswerTheirBounds(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)

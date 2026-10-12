@@ -24,6 +24,7 @@ func genresAddon(t *testing.T) string {
 }
 
 func TestAdministratorsSetUserContent(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
@@ -101,6 +102,7 @@ func TestAdministratorsSetUserContent(t *testing.T) {
 }
 
 func TestAllowedHoursInTheAdminApp(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)

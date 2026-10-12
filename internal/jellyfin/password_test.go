@@ -42,6 +42,7 @@ func stringAnswer(body []byte) string {
 }
 
 func TestChangeOwnPassword(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	tv := s.signIn("alice", "tv")
@@ -88,6 +89,7 @@ func TestChangeOwnPassword(t *testing.T) {
 }
 
 func TestChangeAnotherUsersPassword(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", func(c *accounts.UserChanges) { yes := true; c.IsAdministrator = &yes })
 	bob := s.user("bob", nil)
@@ -127,6 +129,7 @@ func TestChangeAnotherUsersPassword(t *testing.T) {
 }
 
 func TestPasswordGuessingIsThrottled(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 2)
 	s.user("alice", nil)
 	token := s.signIn("alice", "tv")

@@ -71,6 +71,7 @@ func (s testServer) expectStatus(t *testing.T, want int, method, path, token str
 }
 
 func TestPlaylistsExpandSeriesAndKeepTheirOrder(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
 
@@ -148,6 +149,7 @@ func TestPlaylistsExpandSeriesAndKeepTheirOrder(t *testing.T) {
 }
 
 func TestPlaylistsAreBrowsedInTheirView(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
 	if _, ok := views["Playlists"]; ok {
@@ -206,6 +208,7 @@ func TestPlaylistsAreBrowsedInTheirView(t *testing.T) {
 }
 
 func TestPlaylistSharing(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
 	guest := s.user("guest", nil)
@@ -276,6 +279,7 @@ func TestPlaylistSharing(t *testing.T) {
 }
 
 func TestOnlyPlaylistsCanBeDeleted(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
@@ -320,6 +324,7 @@ var playlistShapes = shapeRules{
 // statuses with those recorded from Jellyfin 12.2 by
 // scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPlaylistResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s, token, views := browsing(t)
 	titles := titlesForPlaylists(t, s, token, views)
 	member, _ := s.store.Authenticate(t.Context(), "member", "correct horse")

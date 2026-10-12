@@ -132,6 +132,7 @@ func (p playbackSetup) keyframed(t *testing.T, version library.Version) {
 // lists the version chosen alone. A version named by its own identifier is
 // tried alone.
 func TestTheTitlesIdentifierFallsBackToTheNextVersion(t *testing.T) {
+	t.Parallel()
 	probe := scriptedProbe(t, "[ $n -gt 1 ] || exec sleep 60\nexec cat \"$0.json\"\n")
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
 	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = accounts.MinAnalysisTimeout })
@@ -156,6 +157,7 @@ func TestTheTitlesIdentifierFallsBackToTheNextVersion(t *testing.T) {
 // HLS: the next version plays instead, rather than one offered with
 // nothing to play.
 func TestAVersionThatCannotBeStreamedGivesWay(t *testing.T) {
+	t.Parallel()
 	p := manyOn(t, newTestServer(t, 10), manyVersionsAddon(t, 2, nil))
 	p.remuxableVersion(t, p.versions[0], false)
 	p.remuxableVersion(t, p.versions[1], true)
@@ -175,6 +177,7 @@ func TestAVersionThatCannotBeStreamedGivesWay(t *testing.T) {
 // for among the versions read at once, not beyond: when they all need a
 // conversion, the first plays, and no other is analyzed for it.
 func TestPreferDirectPlayLooksNoFurtherThanTheVersionsReadAtOnce(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	p := manyOn(t, newProbingServer(t, 10, probe.path), manyVersionsAddon(t, 5, nil))
 	for _, version := range p.versions[:parallelAttempts] {
@@ -190,6 +193,7 @@ func TestPreferDirectPlayLooksNoFurtherThanTheVersionsReadAtOnce(t *testing.T) {
 // PlaybackInfo waits for the addons' subtitles a second at most once the
 // versions are in: those that come later reach the next PlaybackInfo.
 func TestPlaybackInfoWaitsForSubtitlesASecondAtMost(t *testing.T) {
+	t.Parallel()
 	subtitles := make(chan struct{})
 	p := manyOn(t, newTestServer(t, 10), manyVersionsAddon(t, 1, subtitles))
 	p.analyzed(t, p.versions[0], "h264-aac-mp4")
@@ -214,6 +218,7 @@ func TestPlaybackInfoWaitsForSubtitlesASecondAtMost(t *testing.T) {
 // A title page is told of its versions on the user's sockets as the addons
 // answer, without asking.
 func TestVersionsArePushedToTheTitlePage(t *testing.T) {
+	t.Parallel()
 	addon := newHeldAddon(t, "Alpha", false)
 	h := heldOn(t, newTestServer(t, 10), addon.url)
 	socket, _, err := h.openSocket(t, h.token)
@@ -252,6 +257,7 @@ func TestVersionsArePushedToTheTitlePage(t *testing.T) {
 // A title's progress, asked, asked again or pushed, tells whether the web
 // player adds the versions that come to an open page, as the setting says.
 func TestVersionsTellWhetherTheWebPlayerAddsThem(t *testing.T) {
+	t.Parallel()
 	addon := newHeldAddon(t, "Alpha", false)
 	h := heldOn(t, newTestServer(t, 10), addon.url)
 	socket, _, err := h.openSocket(t, h.token)
@@ -362,6 +368,7 @@ func newListsAddon(t *testing.T) *listsAddon {
 // addon asked again that puts another version first has that one prepared
 // too.
 func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	addon := newListsAddon(t)
 	s := newProbingServer(t, 10, probe.path)
@@ -401,6 +408,7 @@ func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
 // A title whose versions are all new to Polyfin has its first two versions
 // analyzed as its page opens.
 func TestOpeningATitlePreparesItsFirstTwoVersions(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
 	t.Cleanup(func() { p.settle(t) })

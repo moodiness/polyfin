@@ -12,6 +12,7 @@ import (
 )
 
 func TestLocalizationListsMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	token := s.signIn("member", "tv")
@@ -44,6 +45,7 @@ func TestLocalizationListsMatchJellyfin(t *testing.T) {
 }
 
 func TestLocalizationListsHoldTheStandardsEntries(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	token := s.signIn("member", "tv")

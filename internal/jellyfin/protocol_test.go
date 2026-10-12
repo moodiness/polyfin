@@ -13,6 +13,7 @@ import (
 )
 
 func TestReadCredentials(t *testing.T) {
+	t.Parallel()
 	const token = "0123456789abcdef0123456789abcdef"
 	for _, tc := range []struct {
 		name   string
@@ -84,6 +85,7 @@ func TestReadCredentials(t *testing.T) {
 }
 
 func TestRouterMatchesLikeJellyfin(t *testing.T) {
+	t.Parallel()
 	rt := &router{}
 	respond := func(name string) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +120,7 @@ func TestRouterMatchesLikeJellyfin(t *testing.T) {
 }
 
 func TestRouterLogsWhatItDoesNotServe(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	unmatched := newUnmatchedRequests(slog.New(slog.NewJSONHandler(&output, nil)))
@@ -212,6 +215,7 @@ func TestRouterLogsWhatItDoesNotServe(t *testing.T) {
 // Go accepts request lines and headers of about a megabyte: what an
 // unmatched request keeps and logs stays short whatever it sends.
 func TestRouterLogsLongRequestsShort(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	unmatched := newUnmatchedRequests(slog.New(slog.NewJSONHandler(&output, nil)))
 	rt := &router{unmatched: unmatched}
@@ -249,6 +253,7 @@ func TestRouterLogsLongRequestsShort(t *testing.T) {
 }
 
 func TestPathShape(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]string{
 		"/Items/0123456789ABCDEF0123456789abcdef/Images/Primary/0": "/Items/{id}/Images/Primary/{id}",
 		"/Users/01234567-89ab-cdef-0123-456789abcdef/Items":        "/Users/{id}/Items",
@@ -267,6 +272,7 @@ func TestPathShape(t *testing.T) {
 }
 
 func TestCrossOriginRequests(t *testing.T) {
+	t.Parallel()
 	h := cors(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) }))
 
 	preflight := httptest.NewRequest(http.MethodOptions, "/Users/AuthenticateByName", nil)

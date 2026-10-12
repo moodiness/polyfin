@@ -104,6 +104,7 @@ func names(metas []stremio.Meta) []string {
 // with their numbers, groups and guide identifiers, then each channel's
 // stream with the headers its list gives; the groups shown are chosen.
 func TestSourcesListTheirChannels(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, groupsPlaylist)
 	addon, err := e.service.Add(t.Context(), addons.Shared(), NewSource{Name: " My TV ", Account: Account{Kind: addons.KindM3U, URL: list.url}}, false)
@@ -179,6 +180,7 @@ func TestSourcesListTheirChannels(t *testing.T) {
 // Lists are fetched again once due under the settings' refresh hours, and
 // by hand; a failed fetch keeps the channels and tells why.
 func TestListsAreRefreshedOnSchedule(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list := newPlaylistServer(t, "#EXTM3U\n#EXTINF:-1,Zeb One\nhttps://live.example/1.ts\n")
 	addon, err := e.service.Add(t.Context(), addons.Shared(), NewSource{Name: "TV", Account: Account{Kind: addons.KindM3U, URL: list.url}}, false)
@@ -238,6 +240,7 @@ func TestListsAreRefreshedOnSchedule(t *testing.T) {
 // A new password replaces the stored one, keeping the channels'
 // identities; one left out keeps the current one.
 func TestXtreamAccountsChange(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	x := newXtreamServer(t, "ts")
 	if _, err := e.service.Add(t.Context(), addons.Shared(), NewSource{Name: "TV", Account: x.account("wrong")}, false); !errors.Is(err, ErrLoginRefused) {

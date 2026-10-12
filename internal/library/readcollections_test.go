@@ -16,6 +16,7 @@ import (
 // the addon again and waits for its answers: the pages it leaves are the
 // addon's new ones, not the stale ones.
 func TestReadingTheCollectionsReadsThemWhole(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	elapsed := new(atomic.Int64)
 	e.service.now = func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) }

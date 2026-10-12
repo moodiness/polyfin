@@ -76,6 +76,7 @@ func (b browser) libraries(scope string) []map[string]any {
 // credentials never shown; their groups are chosen and their list
 // refreshed from the same rows.
 func TestIPTVSources(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	provider := newProvider(t)
 	administrator := api.signedIn("administrator", true)
@@ -161,6 +162,7 @@ func TestIPTVSources(t *testing.T) {
 // administrator's reach the local network, and none are added while the
 // server turns users' own addons off.
 func TestPersonalIPTVSources(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	provider := newProvider(t)
 	member := api.signedIn("member", false)
@@ -192,6 +194,7 @@ func TestPersonalIPTVSources(t *testing.T) {
 // The refresh interval of lists and guides is a setting, 12 hours by
 // default, from 1 to 168.
 func TestSettingsLiveTvRefreshHours(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["liveTvRefreshHours"] != 12.0 {

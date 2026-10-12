@@ -8,6 +8,7 @@ import (
 )
 
 func TestAdministratorsSetQualityGroups(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)

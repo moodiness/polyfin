@@ -142,6 +142,7 @@ func imageHandler(dir string) *Handler {
 }
 
 func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
+	t.Parallel()
 	art := newArtServer(t, jpegOf(t, 40, 60))
 	dir := t.TempDir()
 	h := imageHandler(dir)
@@ -212,6 +213,7 @@ func TestArtworkDownloadsAreSharedBoundedAndKept(t *testing.T) {
 // an image an item does not have, for apps to show their placeholder; a
 // server that fails otherwise is a bad gateway.
 func TestMissingArtworkIsNotFound(t *testing.T) {
+	t.Parallel()
 	art := newArtServer(t, jpegOf(t, 40, 60))
 	h := imageHandler(t.TempDir())
 	for name, want := range map[string]int{"missing": http.StatusNotFound, "gone": http.StatusNotFound, "busy": http.StatusBadGateway} {
@@ -226,6 +228,7 @@ func TestMissingArtworkIsNotFound(t *testing.T) {
 }
 
 func TestArtworkIsResizedWhenMuchSmallerIsAsked(t *testing.T) {
+	t.Parallel()
 	original := artwork{body: jpegOf(t, 3840, 2160), contentType: "image/jpeg"}
 	query := func(raw string) url.Values {
 		values, _ := url.ParseQuery(raw)

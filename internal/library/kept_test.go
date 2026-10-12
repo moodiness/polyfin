@@ -107,6 +107,7 @@ func eventually(t *testing.T, what string, done func() bool) {
 }
 
 func TestNextPagesAreReadAhead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.service.readAhead = true
 	addon := pagedAddon(100, 20)
@@ -132,6 +133,7 @@ func TestNextPagesAreReadAhead(t *testing.T) {
 }
 
 func TestReadsAskForTheMissingPagesAtOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(200, 10)
 	e.install(addons.Shared(), addon)
@@ -164,6 +166,7 @@ func TestReadsAskForTheMissingPagesAtOnce(t *testing.T) {
 }
 
 func TestLatestReadsTheFirstPageAndSmallCatalogsEndEarly(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(3, 20)
 	e.install(addons.Shared(), addon)
@@ -191,6 +194,7 @@ func TestLatestReadsTheFirstPageAndSmallCatalogsEndEarly(t *testing.T) {
 }
 
 func TestStalePagesShowWhileTheyAreRefreshed(t *testing.T) {
+	t.Parallel()
 	e := newLifetimeEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 60 })
 	listing := func() []string {
@@ -245,6 +249,7 @@ func TestStalePagesShowWhileTheyAreRefreshed(t *testing.T) {
 // for those past their refresh age, as for pages kept in memory: the next
 // listing shows the addon's new answer.
 func TestStalePagesKeptInTheDatabaseAreRefreshedToo(t *testing.T) {
+	t.Parallel()
 	e := newLifetimeEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 60 })
 	top := e.library(e.member, "Top").ID
@@ -273,6 +278,7 @@ func TestStalePagesKeptInTheDatabaseAreRefreshedToo(t *testing.T) {
 }
 
 func TestCatalogPagesAreRefreshedAfterTheirSetAge(t *testing.T) {
+	t.Parallel()
 	e := newLifetimeEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 10 })
 	e.list()
@@ -340,6 +346,7 @@ func refreshed(t *testing.T, e lifetimeEnv, what string, requests int) {
 }
 
 func TestSearchesAreKeptBrieflyWhateverTheCatalogLife(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	elapsed := new(atomic.Int64)
 	e.service.now = func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) }
@@ -377,6 +384,7 @@ func TestSearchesAreKeptBrieflyWhateverTheCatalogLife(t *testing.T) {
 }
 
 func TestKeptPagesAndDescriptionsSurviveARestart(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(30, 10)
 	e.install(addons.Shared(), addon)
@@ -422,6 +430,7 @@ func TestKeptPagesAndDescriptionsSurviveARestart(t *testing.T) {
 }
 
 func TestDescriptionsShowWhileTheyAreRefreshed(t *testing.T) {
+	t.Parallel()
 	e := newLifetimeEnv(t)
 	movie := e.list().ID
 	describe := func() string {
@@ -460,6 +469,7 @@ func TestDescriptionsShowWhileTheyAreRefreshed(t *testing.T) {
 }
 
 func TestWarmReadsEachLibrarysFirstPage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(30, 10)
 	addon.manifest.Catalogs = append(addon.manifest.Catalogs, stremio.Catalog{Type: "movie", ID: "new", Name: "New"})
@@ -515,6 +525,7 @@ func searchAddons(e env) (titleSearch, peopleSearch *fakeAddon) {
 }
 
 func TestSearchesReadFirstPagesAndWaitBrieflyForPeople(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	titleSearch, peopleSearch := searchAddons(e)
 	started := time.Now()
@@ -568,6 +579,7 @@ func (e env) addonID(id string) accounts.ID {
 }
 
 func TestAnAppGivingUpDoesNotFailOthers(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(5, 0)
 	e.install(addons.Shared(), addon)
@@ -628,6 +640,7 @@ func TestAnAppGivingUpDoesNotFailOthers(t *testing.T) {
 }
 
 func TestColdCollectionsReadTheirCatalogsInOneWave(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	skip := []stremio.Extra{{Name: "skip"}}
 	addon := &fakeAddon{
@@ -676,6 +689,7 @@ func TestColdCollectionsReadTheirCatalogsInOneWave(t *testing.T) {
 }
 
 func TestARequestBuildsTheViewOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), pagedAddon(3, 0))
 	ctx := PerRequest(t.Context())
@@ -694,6 +708,7 @@ func TestARequestBuildsTheViewOnce(t *testing.T) {
 }
 
 func TestItemsOfOtherKindsAreNotDescribed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(5, 0)
 	e.install(addons.Shared(), addon)
@@ -715,6 +730,7 @@ func TestItemsOfOtherKindsAreNotDescribed(t *testing.T) {
 }
 
 func TestCreditsAreRecordedWhenADescriptionIsFetched(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(1, 0)
 	e.install(addons.Shared(), addon)
@@ -746,6 +762,7 @@ func TestCreditsAreRecordedWhenADescriptionIsFetched(t *testing.T) {
 }
 
 func TestAutomaticImagesNeverWait(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(3, 0)
 	for i := range addon.catalogs["movie/top"] {
@@ -794,6 +811,7 @@ func TestAutomaticImagesNeverWait(t *testing.T) {
 }
 
 func TestKnownPagesAskNothing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := pagedAddon(30, 10)
 	e.install(addons.Shared(), addon)

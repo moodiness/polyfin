@@ -16,6 +16,7 @@ import (
 // catchup and catchup-days, unknown kinds and templates missing their
 // source as no archive, and days bounded.
 func TestM3UCatchupIsRead(t *testing.T) {
+	t.Parallel()
 	entries, err := parse(t, "#EXTM3U url-tvg=\"https://guide.example/epg.xml\" catchup=\"shift\" catchup-days=\"3\"\n"+
 		"#EXTINF:-1,Inherits\nhttps://live.example/1.ts\n"+
 		"#EXTINF:-1 catchup=\"append\" catchup-days=\"7\" catchup-source=\"?start={utc}\",Appends\nhttps://live.example/2.ts\n"+
@@ -60,6 +61,7 @@ func TestM3UCatchupIsRead(t *testing.T) {
 // the zone its timeshift addresses are written in; a zone of no known
 // name is none.
 func TestXtreamArchivesAreRead(t *testing.T) {
+	t.Parallel()
 	client := requester{client: stremio.NewClient("test"), pacer: NewPacer(0)}
 	for zone, want := range map[string]string{"Europe/Paris": "Europe/Paris", "Mars/Olympus": ""} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +104,7 @@ func TestXtreamArchivesAreRead(t *testing.T) {
 // programme of 44 minutes 30 seconds that started three hours ago, on the
 // night Paris moves its clocks forward.
 func TestCatchupAddresses(t *testing.T) {
+	t.Parallel()
 	start := time.Date(2026, 3, 29, 1, 30, 0, 0, time.UTC) // 03:30 in Paris, summer time since 01:00
 	end, now := start.Add(44*time.Minute+30*time.Second), start.Add(3*time.Hour)
 	paris, err := time.LoadLocation("Europe/Paris")
@@ -160,6 +163,7 @@ func TestCatchupAddresses(t *testing.T) {
 // start in seconds or in units, the start's fields in the provider's zone,
 // and times written in that zone; unknown names stay.
 func TestCatchupPlaceholders(t *testing.T) {
+	t.Parallel()
 	start := time.Date(2026, 3, 29, 1, 30, 5, 0, time.UTC)
 	end, now := start.Add(44*time.Minute+30*time.Second), start.Add(3*time.Hour)
 	paris, err := time.LoadLocation("Europe/Paris")

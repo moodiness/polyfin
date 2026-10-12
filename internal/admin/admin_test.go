@@ -142,6 +142,7 @@ func (api testAPI) signedIn(name string, administrator bool) browser {
 }
 
 func TestSetupCreatesTheFirstAdministratorOnce(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	b := api.browser()
 	if _, status, _ := b.call(http.MethodGet, "/status", nil); status["setupRequired"] != true {
@@ -197,6 +198,7 @@ func TestStatusTellsWhetherTheWebClientIsServed(t *testing.T) {
 }
 
 func TestSetupIgnoresLanguagesTheServerDoesNotSpeak(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	account := map[string]string{"name": "admin", "password": "correct horse", "setupCode": setupCode, "language": "de"}
 	if status, body, _ := api.browser().call(http.MethodPost, "/setup", account); status != http.StatusCreated {
@@ -208,6 +210,7 @@ func TestSetupIgnoresLanguagesTheServerDoesNotSpeak(t *testing.T) {
 }
 
 func TestSettingsLanguage(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["language"] != "en" {
@@ -232,6 +235,7 @@ func TestSettingsLanguage(t *testing.T) {
 }
 
 func TestSettingsPlaybackSwitches(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["prepareAhead"] != true {
@@ -266,6 +270,7 @@ func TestSettingsPlaybackSwitches(t *testing.T) {
 }
 
 func TestSettingsCatalogLimits(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["catalogLimit"] != float64(accounts.DefaultCatalogLimit) ||
@@ -315,6 +320,7 @@ func TestSettingsCatalogLimits(t *testing.T) {
 }
 
 func TestSettingsContent(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	defaults := map[string]any{"skipButtons": true, "similarTitles": true, "lyrics": true, "playedPercent": float64(90), "resumePercent": float64(5),
@@ -388,6 +394,7 @@ func TestSettingsContent(t *testing.T) {
 }
 
 func TestAccessRequiresTheRightRole(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	anonymous := api.browser()
 	if status, body, _ := anonymous.call(http.MethodGet, "/account/devices", nil); status != http.StatusUnauthorized || body["error"] != "unauthenticated" {
@@ -415,6 +422,7 @@ func TestAccessRequiresTheRightRole(t *testing.T) {
 }
 
 func TestCrossOriginChangesAreRefused(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	user := map[string]any{"name": "mallory", "password": "correct horse"}
@@ -427,6 +435,7 @@ func TestCrossOriginChangesAreRefused(t *testing.T) {
 }
 
 func TestUserManagementErrors(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, created, _ := administrator.call(http.MethodPost, "/users", map[string]any{"name": "alice", "password": "correct horse"})
@@ -461,6 +470,7 @@ func TestUserManagementErrors(t *testing.T) {
 }
 
 func TestQuickConnectApproval(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	member := api.signedIn("member", false)
 	request, err := api.quickConnect.Initiate("tv-id", "Living room TV", "Swiftfin", "1.3")
@@ -485,6 +495,7 @@ func TestQuickConnectApproval(t *testing.T) {
 }
 
 func TestFailedSignInsAreThrottled(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 2)
 	api.signedIn("alice", false)
 	b := api.browser()

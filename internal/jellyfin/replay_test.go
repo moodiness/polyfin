@@ -151,6 +151,7 @@ func replayProgrammes(t *testing.T, s testServer, token string) (folders, progra
 // without Live TV has no Replay. A replay with a resume point is in
 // Continue Watching.
 func TestReplayListsTheArchivedProgrammes(t *testing.T) {
+	t.Parallel()
 	provider := newReplayProvider(t, "")
 	s := newTestServer(t, 10)
 	s.user("member", nil)
@@ -213,6 +214,7 @@ func TestReplayListsTheArchivedProgrammes(t *testing.T) {
 // the programme's file, and its stream asks the provider for the
 // programme's start in the server's zone and its length in minutes.
 func TestReplaysPlayFromTheArchive(t *testing.T) {
+	t.Parallel()
 	ffmpeg, file := vodFile(t, "replay.ts")
 	provider := newReplayProvider(t, file)
 	s := newProbingServer(t, 10, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"))

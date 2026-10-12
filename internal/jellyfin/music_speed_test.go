@@ -190,6 +190,7 @@ func playbackInfo(t *testing.T, s testServer, token, item string) (playbackInfoR
 }
 
 func TestTracksTheAddonDoesNotDescribePlay(t *testing.T) {
+	t.Parallel()
 	ffprobe, mp3 := mp3Tone(t)
 	s := newProbingServer(t, 10, ffprobe)
 	rig := newMusicRig(t, mp3, 1, 0)
@@ -231,6 +232,7 @@ func TestTracksTheAddonDoesNotDescribePlay(t *testing.T) {
 }
 
 func TestTheNextTrackIsResolvedAhead(t *testing.T) {
+	t.Parallel()
 	ffprobe, mp3 := mp3Tone(t)
 	s := newProbingServer(t, 10, ffprobe)
 	s.setting(t, func(s *accounts.Settings) { s.PrepareAhead = true })
@@ -265,6 +267,7 @@ func TestTheNextTrackIsResolvedAhead(t *testing.T) {
 }
 
 func TestReportedQueuesNameTheNextTrack(t *testing.T) {
+	t.Parallel()
 	a, b, c := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
 	queue := []queueItem{{a.String(), "q0"}, {b.String(), "q1"}, {a.String(), "q2"}, {c.String(), "q3"}}
 	for _, test := range []struct {
@@ -293,6 +296,7 @@ func TestReportedQueuesNameTheNextTrack(t *testing.T) {
 }
 
 func TestShortLivedLinksAreAskedOncePerPlayAndRelayed(t *testing.T) {
+	t.Parallel()
 	ffprobe, mp3 := mp3Tone(t)
 	s := newProbingServer(t, 10, ffprobe)
 	rig := newMusicRig(t, mp3, 1, 0)
@@ -321,6 +325,7 @@ func TestShortLivedLinksAreAskedOncePerPlayAndRelayed(t *testing.T) {
 }
 
 func TestTheSongsTabReadsEightAlbumsAtOnce(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	rig := newMusicRig(t, "", 30, 20*time.Millisecond)
 	token, _, views := listening(t, s, rig.url)

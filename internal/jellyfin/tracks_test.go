@@ -9,6 +9,7 @@ import (
 )
 
 func TestTheDefaultAudioFollowsTheLanguagePreference(t *testing.T) {
+	t.Parallel()
 	audio := func(index int, language string, flagged bool) playback.MediaStream {
 		return playback.MediaStream{Type: "Audio", Index: index, Language: language, IsDefault: flagged}
 	}
@@ -40,6 +41,7 @@ func TestTheDefaultAudioFollowsTheLanguagePreference(t *testing.T) {
 }
 
 func TestTheDefaultSubtitleFollowsTheMode(t *testing.T) {
+	t.Parallel()
 	type flags struct{ text, forced, flagged, file bool }
 	subtitle := func(index int, language string, f flags) playback.MediaStream {
 		return playback.MediaStream{Type: "Subtitle", Index: index, Language: language, IsTextSubtitleStream: f.text,
@@ -111,6 +113,7 @@ func sameIndex(a, b *int) bool {
 }
 
 func TestDefaultTracksFollowTheUsersPreferences(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	// The first version has English (flagged) and French audio, and full
 	// and forced English subtitles, after the addon's French file.

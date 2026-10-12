@@ -44,6 +44,7 @@ func soloistAddon(t *testing.T) string {
 // An artist whose page lists no albums shows those its top tracks name,
 // each once, in Jellyfin apps; each opens through the addon's album page.
 func TestAnArtistWithoutAlbumsShowsThoseItsTopTracksName(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("listener", nil)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), soloistAddon(t), false); err != nil {

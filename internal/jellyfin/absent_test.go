@@ -10,6 +10,7 @@ import (
 // Jellyfin 12.2: empty lists, defaults and Jellyfin's own refusals, to
 // administrators only where Jellyfin requires one.
 func TestAbsentFeaturesAnswerAsAnUnconfiguredJellyfin(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	const plugin = "/Plugins/00000000-0000-0000-0000-000000000001"
 	for _, c := range []struct {
@@ -96,6 +97,7 @@ func TestAbsentFeaturesAnswerAsAnUnconfiguredJellyfin(t *testing.T) {
 
 // The wizard's configuration is Polyfin's.
 func TestStartupConfigurationFollowsTheSettings(t *testing.T) {
+	t.Parallel()
 	s, admin, _ := administrated(t)
 	if status, body := s.call(http.MethodPost, "/System/Configuration", admin, map[string]string{"ServerName": "Home", "UICulture": "fr"}); status != http.StatusNoContent {
 		t.Fatalf("configure: %d %s", status, body)

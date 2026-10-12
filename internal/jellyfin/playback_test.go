@@ -156,6 +156,7 @@ func (p playbackSetup) profile(t *testing.T, name string) json.RawMessage {
 }
 
 func TestItemDetailsListVersions(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	var movie BaseItemDto
 	if status := p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &movie); status != http.StatusOK {
@@ -202,6 +203,7 @@ func TestItemDetailsListVersions(t *testing.T) {
 }
 
 func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	ask := func(profile string, mediaSourceID string) playbackInfoResponse {
 		t.Helper()
@@ -250,6 +252,7 @@ func TestPlaybackInfoDecidesForTheDevice(t *testing.T) {
 // Apps that ask for no version, such as Strand, list the versions
 // PlaybackInfo gives for the user to pick: every one, as from Jellyfin.
 func TestPlaybackInfoListsEveryVersionUnlessOneIsAsked(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")
 	p.keyframed(t, p.versions[0])
@@ -310,6 +313,7 @@ func (p playbackSetup) remuxable(t *testing.T, more ...media.Stream) media.Analy
 }
 
 func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	// jellyfin-web asks again without direct play when the file failed to
@@ -377,6 +381,7 @@ func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
 }
 
 func TestAudioTheAppCannotTakeIsConverted(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	ask := func(profile string, more map[string]any) MediaSourceInfo {
@@ -426,6 +431,7 @@ func TestAudioTheAppCannotTakeIsConverted(t *testing.T) {
 }
 
 func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set: Polyfin converts with the encoders FFmpeg has")
@@ -464,6 +470,7 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 }
 
 func TestImageSubtitlesBrowsersCannotShowAreBurnedIn(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	// An English PGS track, after the addon's file: stream 3 for Jellyfin.
 	p.remuxable(t, media.Stream{Index: 2, Type: "subtitle", Codec: "hdmv_pgs_subtitle", Language: "eng", Width: 64, Height: 64})
@@ -519,6 +526,7 @@ func fetchText(t *testing.T, target string) (int, http.Header, string) {
 }
 
 func TestRemuxesOfferSubtitlesAsRenditions(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t)
 	// A player that takes subtitles from the playlist only, as Swiftfin's
@@ -575,6 +583,7 @@ func TestRemuxesOfferSubtitlesAsRenditions(t *testing.T) {
 }
 
 func TestWholeExtractedTracksAreExternalSubtitles(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.remuxable(t, media.Stream{Index: 2, Type: "subtitle", Codec: "subrip", Language: "eng"})
 	// Earlier remuxes extracted the embedded track over the whole version.
@@ -605,6 +614,7 @@ func TestWholeExtractedTracksAreExternalSubtitles(t *testing.T) {
 }
 
 func TestStreamsNeedAGrant(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token),
 		map[string]any{"MediaSourceId": p.versions[1].ID.String()})
@@ -654,6 +664,7 @@ func TestStreamsNeedAGrant(t *testing.T) {
 }
 
 func TestSubtitlesNeedNoCredentials(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.get(t, "/Items/"+p.movie, p.token, nil)
 	for format, want := range map[string]string{
@@ -677,6 +688,7 @@ func TestSubtitlesNeedNoCredentials(t *testing.T) {
 }
 
 func TestSessionsShowWhatDevicesPlay(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	report := func(path string, body map[string]any) {
 		t.Helper()
@@ -707,6 +719,7 @@ func TestSessionsShowWhatDevicesPlay(t *testing.T) {
 // recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, for versions
 // analyzed as the clips Jellyfin played.
 func TestPlaybackResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	user := p.user.ID.String()
 	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")

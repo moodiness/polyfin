@@ -134,6 +134,7 @@ func listed(t *testing.T, s testServer, token, path string) ([]string, int) {
 const titlesOf = "/Items?recursive=true&includeItemTypes=Movie,Series&"
 
 func TestGenreStudioAndYearPages(t *testing.T) {
+	t.Parallel()
 	s, token, user, views := pagesServer(t)
 
 	// The genre a title carries, and the one /Genres lists, open the same
@@ -178,6 +179,7 @@ func TestGenreStudioAndYearPages(t *testing.T) {
 }
 
 func TestListsByGenreStudioAndYear(t *testing.T) {
+	t.Parallel()
 	s, token, _, views := pagesServer(t)
 	action := namedPageOf(t, s, token, "/Genres/Action").Id
 	all := "includeItemTypes=Movie,Series&"
@@ -278,6 +280,7 @@ func collectionsAddon(t *testing.T) string {
 }
 
 func TestPagesListCatalogsBehindCollections(t *testing.T) {
+	t.Parallel()
 	s, token, user, _ := pagesServerWith(t, collectionsAddon(t), "collection")
 	// The collection fixed to Drama still offers its catalog's Action
 	// titles; the nested collection's series count too.
@@ -296,6 +299,7 @@ func TestPagesListCatalogsBehindCollections(t *testing.T) {
 }
 
 func TestUnknownGenresStudiosAndYears(t *testing.T) {
+	t.Parallel()
 	s, token, user, _ := pagesServer(t)
 	// Jellyfin answers the page of any name; it lists no title.
 	for _, test := range []struct{ page, list string }{
@@ -376,6 +380,7 @@ var pageShapes = shapeRules{
 // listings with those recorded from Jellyfin 12.2 by
 // scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPagesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s, token, user, _ := pagesServer(t)
 	genre := namedPageOf(t, s, token, "/Genres/Action?userId="+user)
 	studio := namedPageOf(t, s, token, "/Studios/North%20Studio?userId="+user)

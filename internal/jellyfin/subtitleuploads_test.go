@@ -15,6 +15,7 @@ import (
 )
 
 func TestUsersWhoManageSubtitlesAddFilesAdministratorsDeleteThem(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	p.testServer.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	adminToken := p.signIn("admin", "phone")
@@ -122,6 +123,7 @@ func TestUsersWhoManageSubtitlesAddFilesAdministratorsDeleteThem(t *testing.T) {
 }
 
 func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	var metas, streams atomic.Int32
 	var certification atomic.Value

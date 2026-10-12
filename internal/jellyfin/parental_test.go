@@ -178,6 +178,7 @@ func sameAnswer(want parentalAnswer, status int, body []byte) bool {
 }
 
 func TestParentalControlMatchesJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	admin := s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	child := s.user("child", nil)
@@ -309,6 +310,7 @@ func TestParentalControlMatchesJellyfin(t *testing.T) {
 }
 
 func TestParentalControlCoversPeopleSimilarTitlesAndDownloads(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	s.user("child", func(c *accounts.UserChanges) { c.Parental = &accounts.ParentalControl{MaxRating: new(13)} })
@@ -398,6 +400,7 @@ func TestParentalControlCoversPeopleSimilarTitlesAndDownloads(t *testing.T) {
 // A user an administrator disables through their policy is signed out of
 // every device, and leaves the SyncPlay groups their apps were in.
 func TestDisablingAUsersPolicySignsTheirAppsOut(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	p.testServer.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	admin := p.signIn("admin", "admin-tv")

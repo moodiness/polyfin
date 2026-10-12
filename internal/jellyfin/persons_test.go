@@ -176,6 +176,7 @@ func credit(people []BaseItemPerson, name string) BaseItemPerson {
 }
 
 func TestATitlesActorOpensAsAPersonWithTheirPhoto(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, true)
 	ann := credit(p.open(t, "Heist"), "Ann Lee")
 	if ann.Id == "" || ann.Type != "Actor" || ann.PrimaryImageTag == "" {
@@ -209,6 +210,7 @@ func TestATitlesActorOpensAsAPersonWithTheirPhoto(t *testing.T) {
 }
 
 func TestAPersonsTitlesComeFromPeopleSearchCatalogs(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, true)
 	ann := credit(p.open(t, "Heist"), "Ann Lee")
 	listing := "/Users/" + p.user + "/Items?personIds=" + ann.Id + "&recursive=true&includeItemTypes=Movie,Series&sortBy=PremiereDate,SortName&sortOrder=Descending,Ascending"
@@ -239,6 +241,7 @@ func TestAPersonsTitlesComeFromPeopleSearchCatalogs(t *testing.T) {
 }
 
 func TestAPersonsTitlesAreTheKnownOnesWithoutPeopleSearch(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, false)
 	ann := credit(p.open(t, "Heist"), "Ann Lee")
 	p.open(t, "Chase")
@@ -304,6 +307,7 @@ func privateAddon(t *testing.T) string {
 // a user only sees the people credited, and the titles known to credit
 // them, in what their own addons reach.
 func TestPeopleStayWithinTheTitlesAUserReaches(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, false)
 	owner := p.testServer.user("owner", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	token := p.signIn("owner", "phone")
@@ -362,6 +366,7 @@ func TestPeopleStayWithinTheTitlesAUserReaches(t *testing.T) {
 }
 
 func TestSimilarTitlesRankBySharedGenres(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, false)
 	similar := func(path string) []string {
 		t.Helper()
@@ -405,6 +410,7 @@ func TestSimilarTitlesRankBySharedGenres(t *testing.T) {
 }
 
 func TestSimilarTitlesCanBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, false)
 	if !p.store.Settings().SimilarTitles {
 		t.Fatal("similar titles are off by default")
@@ -460,6 +466,7 @@ var peopleShapes = shapeRules{
 // a person's titles and similar titles with those recorded from Jellyfin
 // 12.2 by scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPeopleResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	p := newPeopleSetup(t, true)
 	ann := credit(p.open(t, "Heist"), "Ann Lee")
 	for fixture, path := range map[string]string{

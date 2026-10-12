@@ -26,6 +26,7 @@ func (s testServer) css(path string) (int, string, string) {
 }
 
 func TestBrandingComesFromTheSettings(t *testing.T) {
+	t.Parallel()
 	s, _, member := administrated(t)
 	settings := s.store.Settings()
 	settings.CustomCss = ""
@@ -80,6 +81,7 @@ func TestBrandingComesFromTheSettings(t *testing.T) {
 }
 
 func TestBrandingIsSavedByAdministratorsOnly(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	settings := s.store.Settings()
 	settings.CustomJs = "console.log('kept')"

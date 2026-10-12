@@ -50,6 +50,7 @@ func nestedAddon() *fakeAddon {
 // those collections: whole, by release date, as Jellyfin orders a
 // collection; in pages, one title of each catalog in turn.
 func TestCollectionsOfCollectionsListTheirTitles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), nestedAddon())
 	genres := e.children(e.member, "Genres", 0, 10)

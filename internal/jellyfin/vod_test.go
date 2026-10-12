@@ -140,6 +140,7 @@ func (s testServer) viewsByType(t *testing.T, token string) map[string]string {
 // metadata addon when the source enriches them; played state survives a
 // refresh; parental control sees them unrated.
 func TestIPTVMoviesAndSeriesInApps(t *testing.T) {
+	t.Parallel()
 	provider := newVODProvider(t, "", 0)
 	s := newTestServer(t, 10)
 	member := s.user("member", nil)
@@ -352,6 +353,7 @@ func fetchSegments(t *testing.T, s testServer, transcoding string, segments ...i
 // ffprobe, remuxed for an app that cannot play its container, converted
 // when the app asks for it.
 func TestIPTVMoviePlaysThroughFFmpeg(t *testing.T) {
+	t.Parallel()
 	ffmpeg, file := vodFile(t, "movie.mkv")
 	s, _, info := vodPlayback(t, ffmpeg, file, map[string]any{"DeviceProfile": deviceProfile(t, "swiftfin-native")}, nil)
 	if len(info.MediaSources) != 1 {
@@ -382,6 +384,7 @@ func TestIPTVMoviePlaysThroughFFmpeg(t *testing.T) {
 // user who may not have video converted is told no stream suits, rather
 // than offered one that fails.
 func TestIPTVTransportStreamMoviesPlayConverted(t *testing.T) {
+	t.Parallel()
 	ffmpeg, file := vodFile(t, "movie.ts")
 	s, _, info := vodPlayback(t, ffmpeg, file, map[string]any{"DeviceProfile": deviceProfile(t, "jellyfin-web-chrome")}, nil)
 	if len(info.MediaSources) != 1 {
@@ -404,6 +407,7 @@ func TestIPTVTransportStreamMoviesPlayConverted(t *testing.T) {
 // A provider's movies are paged and counted whole in apps, beyond the
 // catalog limit addons' catalogs are read to.
 func TestIPTVLibrariesArePagedWhole(t *testing.T) {
+	t.Parallel()
 	provider := newVODProvider(t, "", 2498)
 	s := newTestServer(t, 10)
 	s.user("member", nil)

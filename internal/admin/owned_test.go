@@ -14,6 +14,7 @@ import (
 // Administrators see on the dashboard the addons, IPTV sources and guides
 // users keep for themselves, with their owner, after the server's.
 func TestDashboardShowsUsersOwnAddonsAndGuides(t *testing.T) {
+	t.Parallel()
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"id": "own-tv", "name": "Own TV", "version": "1.0.0", "resources": ["catalog"],
 			"catalogs": [{"type": "tv", "id": "channels", "name": "Channels"}]}`)

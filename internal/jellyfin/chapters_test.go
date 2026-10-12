@@ -20,6 +20,7 @@ type recordedChapters struct {
 }
 
 func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	fixtures := filepath.Join("testdata", "jellyfin-12.2", "chapters")
 	data, err := os.ReadFile(filepath.Join(fixtures, "chapters.json"))
@@ -123,6 +124,7 @@ func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
 }
 
 func TestChaptersAreAlwaysSent(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	probe, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "chapters", "probe.json"))
 	if err != nil {
@@ -210,6 +212,7 @@ func TestChaptersAreAlwaysSent(t *testing.T) {
 }
 
 func TestChapterNames(t *testing.T) {
+	t.Parallel()
 	infos := chapterInfos([]media.Chapter{
 		{Title: "Opening"}, {Start: 1_234_567_890}, {Title: "  "}, {Title: "Chapter 04"}, {Title: "00:05:00.000"},
 		{Title: "1.02:03:04.1234567"}, {Title: "1:02:03:04"}, {Title: "12:30"}, {Title: "-7"},

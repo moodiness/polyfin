@@ -45,6 +45,7 @@ func bigCollectionAddon(t *testing.T, count int) string {
 // a collection's page, lists every title up to WholeListing, or up to its
 // library's maximum; with a limit, as it asks.
 func TestWholeListingsListMoreThanAPage(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), bigCollectionAddon(t, 250), false)

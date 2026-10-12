@@ -66,6 +66,7 @@ func newIPTVProvider(t *testing.T) *iptvProvider {
 // logos and groups, plays them through the live path with the headers its
 // list gives, shows the groups chosen, and takes its guide by tvg-id.
 func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
+	t.Parallel()
 	provider := newIPTVProvider(t)
 	s := newTestServer(t, 10)
 	user := s.user("member", nil)
@@ -143,6 +144,7 @@ func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
 // A source of another user is not one's own, and a user without Live TV
 // has no channels from it.
 func TestIPTVSourcesFollowScopesAndLiveTv(t *testing.T) {
+	t.Parallel()
 	provider := newIPTVProvider(t)
 	s := newTestServer(t, 10)
 	owner := s.user("owner", nil)

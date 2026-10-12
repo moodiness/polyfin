@@ -52,6 +52,7 @@ func (s testServer) send(method, path, authorization, contentType, body string) 
 }
 
 func TestUsersChangeTheirOwnPicturesAndAdministratorsAnyones(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	shown := false
 	member := s.user("member", func(c *accounts.UserChanges) { c.IsHidden = &shown })

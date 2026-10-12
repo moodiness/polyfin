@@ -122,6 +122,7 @@ func jellyfinImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store
 }
 
 func TestJellyfinImportCreatesTheChosenUsersAndImportsTheirWatchData(t *testing.T) {
+	t.Parallel()
 	jellyfin := fakeJellyfin(t)
 	api, lib, data := jellyfinImportAPI(t)
 	admin := api.signedIn("root", true)
@@ -233,6 +234,7 @@ func playedMovie(t *testing.T, lib *library.Service, data *userdata.Store, user 
 // A user's own key reads that user's watch data only: the admin API names
 // its owner, and refuses another user's watch data before creating anyone.
 func TestJellyfinImportWithAUserKeyImportsOnlyItsOwner(t *testing.T) {
+	t.Parallel()
 	jellyfin := fakeJellyfin(t)
 	api, _, _ := jellyfinImportAPI(t)
 	admin := api.signedIn("root", true)
@@ -268,6 +270,7 @@ func TestJellyfinImportWithAUserKeyImportsOnlyItsOwner(t *testing.T) {
 // as them, with their password. A wrong one is refused before anyone is
 // created.
 func TestJellyfinImportSignsInAsEachUser(t *testing.T) {
+	t.Parallel()
 	jellyfin := fakeJellyfin(t)
 	api, lib, data := jellyfinImportAPI(t)
 	admin := api.signedIn("root", true)
@@ -327,6 +330,7 @@ func TestJellyfinImportSignsInAsEachUser(t *testing.T) {
 // answered back, a refused one says so, and with the setting off the
 // section is gone and the import refused.
 func TestUsersImportTheirOwnWatchHistory(t *testing.T) {
+	t.Parallel()
 	jellyfin := fakeJellyfin(t)
 	api, lib, data := jellyfinImportAPI(t)
 	admin := api.signedIn("root", true)

@@ -12,6 +12,7 @@ import (
 )
 
 func TestMetadataEditorAnswersAsJellyfinForAdministrators(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	allowed := e.ids["Allowed"]
 	status, body := e.call(http.MethodGet, "/Items/"+allowed+"/MetadataEditor", app("dashboard", e.admin), nil)
@@ -70,6 +71,7 @@ func editorBody(id string, fields map[string]any) map[string]any {
 }
 
 func TestMetadataEditsWinForEveryUserUntilCleared(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	allowed, restricted := e.ids["Allowed"], e.ids["Restricted"]
 	if status, _ := e.item(t, e.child, e.childID, allowed); status != http.StatusOK {
@@ -141,6 +143,7 @@ func TestMetadataEditsWinForEveryUserUntilCleared(t *testing.T) {
 }
 
 func TestSeriesEditsShowOnTheirEpisodes(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	show := e.ids["Show"]
 	if status, body := e.call(http.MethodPost, "/Items/"+show, app("dashboard", e.admin),
@@ -161,6 +164,7 @@ func TestSeriesEditsShowOnTheirEpisodes(t *testing.T) {
 }
 
 func TestUploadedArtworkReplacesTheAddonsUntilDeleted(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	allowed := e.ids["Allowed"]
 	upload := func(token, imageType, contentType string, data []byte) int {
@@ -227,6 +231,7 @@ func TestUploadedArtworkReplacesTheAddonsUntilDeleted(t *testing.T) {
 }
 
 func TestIdentifySearchesTheServersAddonsButCannotRebind(t *testing.T) {
+	t.Parallel()
 	e := newEdited(t)
 	var results []RemoteSearchResult
 	status, body := e.call(http.MethodPost, "/Items/RemoteSearch/Movie", app("dashboard", e.admin),

@@ -53,6 +53,7 @@ func threeVersionsAddon(t *testing.T) string {
 // addon's order. jellyfin-web's version menu opens the version picked as an
 // item, which Jellyfin 12.2 would answer with that version first.
 func TestVersionsKeepTheirOrder(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	user := s.user("member", nil)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), threeVersionsAddon(t), false); err != nil {

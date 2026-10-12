@@ -13,6 +13,7 @@ import (
 )
 
 func TestSubtitleTextsAreKeptUpTo32MB(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 0)
 	// A SubRip file of about 7 MB, under the 8 MB a download may take: a
 	// few of them go past the 32 MB kept.
@@ -56,6 +57,7 @@ func TestSubtitleTextsAreKeptUpTo32MB(t *testing.T) {
 }
 
 func TestSubtitleListsAreKeptUpTo16MB(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 0)
 	// Lists of about 1 MB: a thousand files of about 1 KB.
 	files := make([]library.ExternalSubtitle, 1000)

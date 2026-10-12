@@ -8,6 +8,7 @@ import (
 )
 
 func TestAdministratorsSetPlaybackAndAccessLimits(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
@@ -70,6 +71,7 @@ func TestAdministratorsSetPlaybackAndAccessLimits(t *testing.T) {
 }
 
 func TestAdministratorsMadeLaterKeepTheirRemoteControl(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, created, _ := administrator.call(http.MethodPost, "/users", map[string]any{"name": "helper", "password": "correct horse"})

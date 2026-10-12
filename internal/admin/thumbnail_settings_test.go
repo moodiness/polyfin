@@ -9,6 +9,7 @@ import (
 )
 
 func TestSettingsThumbnails(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	thumbnails := func(body map[string]any) [5]any {

@@ -50,6 +50,7 @@ var hlsProfile = map[string]any{"MaxStreamingBitrate": 140000000, "MusicStreamin
 		"Context": "Streaming", "MaxAudioChannels": "2", "MinSegments": "1"}}}
 
 func TestTracksConvertToHLSSegments(t *testing.T) {
+	t.Parallel()
 	ffmpeg, flac := tone(t)
 	s := newProbingServer(t, 10, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"))
 	token, _, views := listening(t, s, newFakeEclipse(t, flac).url)
@@ -108,6 +109,7 @@ func TestTracksConvertToHLSSegments(t *testing.T) {
 // none of whose versions plays: apps show that it cannot be played rather
 // than a server error.
 func TestTrackWithoutStreamHasNoCompatibleStream(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	addon := newFakeEclipse(t, "")
 	token, _, views := listening(t, s, addon.url)
@@ -137,6 +139,7 @@ func mustUser(t *testing.T, s testServer, name string) accounts.User {
 }
 
 func TestUniversalAudioPlaysAsItIsOrConverted(t *testing.T) {
+	t.Parallel()
 	ffmpeg, flac := tone(t)
 	s := newProbingServer(t, 10, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"))
 	token, user, views := listening(t, s, newFakeEclipse(t, flac).url)
@@ -177,6 +180,7 @@ func TestUniversalAudioPlaysAsItIsOrConverted(t *testing.T) {
 }
 
 func TestAudiobookAddonsMakeBooksLibraries(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	addon := newFakeEclipse(t, "")
 	addon.content = "audiobook"
@@ -224,6 +228,7 @@ func TestAudiobookAddonsMakeBooksLibraries(t *testing.T) {
 }
 
 func TestUsersOwnMusicAddonsStayOnPublicAddresses(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	addon := newFakeEclipse(t, "")
 	member := s.user("member", nil)
@@ -260,6 +265,7 @@ func TestUsersOwnMusicAddonsStayOnPublicAddresses(t *testing.T) {
 }
 
 func TestHiddenMusicLibrariesAreNotListed(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	token, _, views := listening(t, s, newFakeEclipse(t, "").url)
 	hidden := mustID(t, views["New Releases"])

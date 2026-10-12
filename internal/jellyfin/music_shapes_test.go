@@ -74,6 +74,7 @@ var musicShapes = shapeRules{
 // Jellyfin 12.2 music library by scripts/jellyfin-fixtures-music.sh, with
 // the same requests.
 func TestMusicResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	addon := newFakeEclipse(t, "")
 	token, user, views := listening(t, s, addon.url)

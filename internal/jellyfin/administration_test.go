@@ -46,6 +46,7 @@ func administrated(t *testing.T) (s testServer, admin, member string) {
 }
 
 func TestAdministrationAnswersMatchJellyfinAndNeedAnAdministrator(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
@@ -115,6 +116,7 @@ func TestAdministrationAnswersMatchJellyfinAndNeedAnAdministrator(t *testing.T) 
 // none, as on a Jellyfin server without plugins, and only administrators
 // may ask.
 func TestNoPluginConfigurationPages(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	path := "/web/ConfigurationPages?enableInMainMenu=true"
 	if status, body := s.call(http.MethodGet, path, admin, nil); status != http.StatusOK || strings.TrimSpace(string(body)) != "[]" {
@@ -126,6 +128,7 @@ func TestNoPluginConfigurationPages(t *testing.T) {
 }
 
 func TestAPIKeysActAsAnAdministratorUntilRevoked(t *testing.T) {
+	t.Parallel()
 	s, admin, _ := administrated(t)
 	if status, body := s.call(http.MethodPost, "/Auth/Keys", admin, nil); status != http.StatusBadRequest || !strings.Contains(string(body), `"app"`) {
 		t.Errorf("without app: %d %s", status, body)
@@ -201,6 +204,7 @@ func TestAPIKeysActAsAnAdministratorUntilRevoked(t *testing.T) {
 }
 
 func TestAPIKeysBrowseForTheUserTheyName(t *testing.T) {
+	t.Parallel()
 	s, _, ids := browsing(t)
 	_, key, _ := s.store.CreateAPIKey(t.Context(), "Requests")
 	header := `MediaBrowser Token="` + key + `"`
@@ -238,6 +242,7 @@ func TestAPIKeysBrowseForTheUserTheyName(t *testing.T) {
 }
 
 func TestDevicesAreListedRenamedAndSignedOut(t *testing.T) {
+	t.Parallel()
 	s, admin, alice := administrated(t)
 	s.user("bob", nil)
 	bob := app("tv", s.signIn("bob", "tv"))
@@ -272,6 +277,7 @@ func TestDevicesAreListedRenamedAndSignedOut(t *testing.T) {
 }
 
 func TestUsersAreManagedFromJellyfinApps(t *testing.T) {
+	t.Parallel()
 	s, admin, alice := administrated(t)
 	status, body := s.call(http.MethodPost, "/Users/New", admin, map[string]string{"Name": "dave", "Password": "long enough"})
 	var dave UserDto
@@ -337,6 +343,7 @@ func TestUsersAreManagedFromJellyfinApps(t *testing.T) {
 }
 
 func TestForgottenPasswordPin(t *testing.T) {
+	t.Parallel()
 	s, _, alice := administrated(t)
 	ask := func(remote string) ForgotPasswordResult {
 		t.Helper()
@@ -397,6 +404,7 @@ func TestForgottenPasswordPin(t *testing.T) {
 }
 
 func TestActivityLogIsWrittenAndPaged(t *testing.T) {
+	t.Parallel()
 	s, admin, _ := administrated(t)
 	s.call(http.MethodPost, "/Users/AuthenticateByName", app("tv", ""), map[string]string{"Username": "alice", "Pw": "wrong password"})
 	entries := func(query string) listResult[ActivityLogEntry] {
@@ -424,6 +432,7 @@ func TestActivityLogIsWrittenAndPaged(t *testing.T) {
 }
 
 func TestScheduledTasksRunStopAndKeepTheirTriggers(t *testing.T) {
+	t.Parallel()
 	s, admin, _ := administrated(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
@@ -460,6 +469,7 @@ func TestScheduledTasksRunStopAndKeepTheirTriggers(t *testing.T) {
 }
 
 func TestLogsAreServedRedacted(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	_, _ = s.logs.Write([]byte(`level=INFO msg="An addon failed" url=https://addon.example/secret-config/manifest.json token=abc123` + "\n"))
 	status, body := s.call(http.MethodGet, "/System/Logs/Log?name=POLYFIN.log", admin, nil)
@@ -479,6 +489,7 @@ func TestLogsAreServedRedacted(t *testing.T) {
 }
 
 func TestServerConfigurationAppliesPolyfinSettings(t *testing.T) {
+	t.Parallel()
 	s, admin, member := administrated(t)
 	status, _ := s.call(http.MethodPost, "/System/Configuration", admin, map[string]any{
 		"ServerName": "Den", "UICulture": "fr-FR", "MinResumePct": 10, "MaxResumePct": 80, "EnableMetrics": true, "QuickConnectAvailable": false})

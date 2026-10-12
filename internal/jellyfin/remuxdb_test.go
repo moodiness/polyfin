@@ -30,6 +30,7 @@ const remuxDBAnswer = `[
 ]`
 
 func TestItemDetailsDescribeVersionsFromRemuxDB(t *testing.T) {
+	t.Parallel()
 	var asked atomic.Int32
 	remux := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked.Add(1)

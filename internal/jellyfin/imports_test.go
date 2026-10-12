@@ -56,6 +56,7 @@ func seriesAddon(t *testing.T, metas *atomic.Int32) string {
 }
 
 func TestALargeImportedHistoryDoesNotFloodTheAddons(t *testing.T) {
+	t.Parallel()
 	var metas atomic.Int32
 	addonURL := seriesAddon(t, &metas)
 	// MDBList's history: the first episode of every series, the most

@@ -60,6 +60,7 @@ func knowProxies(t *testing.T, s testServer, networks ...string) {
 // sign-ins; once known, each client has its own, and Sessions shows each
 // device's address.
 func TestSignInsBehindAKnownProxy(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("root", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	s.user("alice", nil)
@@ -117,6 +118,7 @@ func TestSignInsBehindAKnownProxy(t *testing.T) {
 // it once the proxy is known: /System/Endpoint says so, and a forgotten
 // password makes no PIN.
 func TestLocalNetworkBehindAKnownProxy(t *testing.T) {
+	t.Parallel()
 	s, _, member := administrated(t)
 	call := behindProxy(t, s)
 	endpoint := func(client string) string {

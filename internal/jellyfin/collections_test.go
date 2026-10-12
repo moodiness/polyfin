@@ -171,6 +171,7 @@ var collectionShapes = shapeRules{
 }
 
 func TestCollectionsAreMadeChangedAndDeletedAsInJellyfin(t *testing.T) {
+	t.Parallel()
 	s, admin, titles := grouping(t)
 	member := s.user("member", nil)
 	memberToken := s.signIn("member", "phone")
@@ -324,6 +325,7 @@ func TestCollectionsAreMadeChangedAndDeletedAsInJellyfin(t *testing.T) {
 }
 
 func TestCollectionsNeedThePermissionToManageThem(t *testing.T) {
+	t.Parallel()
 	s, admin, titles := grouping(t)
 	id := s.createCollection(t, admin, "name=Picks&ids="+titles.kids)
 	member := s.user("member", nil)
@@ -376,6 +378,7 @@ func TestCollectionsNeedThePermissionToManageThem(t *testing.T) {
 }
 
 func TestCollectionsShowEachUserTheTitlesTheyMaySee(t *testing.T) {
+	t.Parallel()
 	s, admin, titles := grouping(t)
 	id := s.createCollection(t, admin, "name=Picks&ids="+strings.Join([]string{titles.teens, titles.kids, titles.adults, titles.show}, ","))
 	s.user("member", nil)
@@ -458,6 +461,7 @@ func TestCollectionsShowEachUserTheTitlesTheyMaySee(t *testing.T) {
 // its filters, as the Playlists and Collections views' pages ask theirs.
 // Jellyfin answers each, empty where it has nothing.
 func TestOwnFoldersAnswerItemPages(t *testing.T) {
+	t.Parallel()
 	s, token, titles := grouping(t)
 	playlist := s.createPlaylist(t, token, map[string]any{"Name": "Mix", "Ids": []string{titles.kids}})
 	collection := s.createCollection(t, token, "name=Saga&ids="+titles.teens)

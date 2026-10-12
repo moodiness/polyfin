@@ -12,6 +12,7 @@ import (
 // A user's own addons are left out while the server or the user's own
 // permission turns them off, and come back once both allow them again.
 func TestPersonalAddonsTurnedOffAreLeftOut(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	ctx := t.Context()
 	e.install(addons.Shared(), ratedAddon())

@@ -110,6 +110,7 @@ func itemIDs(items []BaseItemDto) []string {
 }
 
 func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	// The movie runs 1h30, 54 000 000 000 ticks.
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.movie, "PositionTicks": 0})
@@ -136,6 +137,7 @@ func TestPlaybackReportsMoveTheResumePoint(t *testing.T) {
 }
 
 func TestPlayedAndResumePercentsMoveTheThresholds(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	if s := tr.store.Settings(); s.PlayedPercent != 90 || s.ResumePercent != 5 {
 		t.Fatalf("default thresholds: played %d, resume %d", s.PlayedPercent, s.ResumePercent)
@@ -167,6 +169,7 @@ func TestPlayedAndResumePercentsMoveTheThresholds(t *testing.T) {
 }
 
 func TestPlaybackReportsAreRecordedWhenTheAppHangsUp(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	device, user, err := tr.store.DeviceByToken(t.Context(), tr.token, "127.0.0.1")
 	if err != nil {
@@ -197,6 +200,7 @@ func (tr tracking) user2(t *testing.T) {
 }
 
 func TestMarkingASeriesPlayedMarksItsEpisodes(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	data := tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.series)
 	if !data.Played || data.UnplayedItemCount == nil || *data.UnplayedItemCount != 0 || data.ItemId != tr.series {
@@ -226,6 +230,7 @@ func TestMarkingASeriesPlayedMarksItsEpisodes(t *testing.T) {
 }
 
 func TestNextUpFollowsTheFurthestPlayedEpisode(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	nextUp := func(query string) []string { return tr.list(t, "/Shows/NextUp?"+query) }
 	if got := nextUp(""); len(got) != 0 {
@@ -340,6 +345,7 @@ func airingAddon(t *testing.T) string {
 }
 
 func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), airingAddon(t), false)
@@ -420,6 +426,7 @@ func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 }
 
 func TestPlayedMarksCountPlays(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	first := tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.movie)
 	again := tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.movie)
@@ -438,6 +445,7 @@ func TestPlayedMarksCountPlays(t *testing.T) {
 }
 
 func TestFavoritesAreListed(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	if data := tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+tr.movie); !data.IsFavorite {
 		t.Errorf("favorite: %+v", data)
@@ -460,6 +468,7 @@ func TestFavoritesAreListed(t *testing.T) {
 }
 
 func TestPlayedTitlesLeaveUnplayedListings(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	before := tr.list(t, "/Items?ParentId="+tr.views["Top"])
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.movie)
@@ -478,6 +487,7 @@ func TestPlayedTitlesLeaveUnplayedListings(t *testing.T) {
 }
 
 func TestUserDataCanBeReadAndChanged(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	// Apps upload what was played offline as it is: a position near the end
 	// stays a position.
@@ -512,6 +522,7 @@ func TestUserDataCanBeReadAndChanged(t *testing.T) {
 }
 
 func TestUserDataRequestsAreChecked(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	for _, path := range []string{"/UserPlayedItems/00000000000000000000000000000001", "/UserFavoriteItems/00000000000000000000000000000001"} {
 		if status := tr.send(t, http.MethodPost, path, nil); status != http.StatusNotFound {
@@ -531,6 +542,7 @@ func TestUserDataRequestsAreChecked(t *testing.T) {
 }
 
 func TestFavoritePeopleAreListed(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	var movie BaseItemDto
 	tr.get(t, "/Users/"+tr.user+"/Items/"+tr.movie, tr.token, &movie)
@@ -549,6 +561,7 @@ func TestFavoritePeopleAreListed(t *testing.T) {
 // recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, after the same
 // marks and resume points.
 func TestUserDataResponsesMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	user, signed := tr.user, app("tv", tr.token)
 	var page QueryResult

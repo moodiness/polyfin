@@ -14,6 +14,7 @@ import (
 // The account button shows the user's profile picture: the session names
 // it, and a new one once it changes in an app.
 func TestTheSessionNamesTheProfilePicture(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	member := api.signedIn("member", false)
 	imageTagOf := func() (string, any) {

@@ -11,6 +11,7 @@ import (
 )
 
 func TestAdministratorsSetConversionAndDownloadPermissions(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
@@ -59,6 +60,7 @@ func TestAdministratorsSetConversionAndDownloadPermissions(t *testing.T) {
 }
 
 func TestSettingsSwitchConversion(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	_, settings, _ := administrator.call(http.MethodGet, "/settings", nil)
@@ -92,6 +94,7 @@ func TestSettingsSwitchConversion(t *testing.T) {
 }
 
 func TestAdministratorsTurnDownloadsOffForEveryone(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)

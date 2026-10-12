@@ -247,6 +247,7 @@ func onceEach(ids []string) map[string]int {
 }
 
 func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
+	t.Parallel()
 	// The first titles of each row are analyzed too (see
 	// TestHomeRowsPrepareTheirFirstTitles).
 	rs := rowsOnServer(t, newProbingServer(t, 10, newFakeProbe(t, true).path), false)
@@ -319,6 +320,7 @@ func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
 // Continue Watching and Next Up have the first version of their first two
 // titles analyzed once listed, so that resuming from them starts at once.
 func TestHomeRowsPrepareTheirFirstTitles(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	rs := rowsOnServer(t, newProbingServer(t, 10, probe.path), false)
 	t.Cleanup(func() { rs.listedAhead(t); rs.settle(t) })
@@ -350,6 +352,7 @@ func TestHomeRowsPrepareTheirFirstTitles(t *testing.T) {
 }
 
 func TestHomeRowsSkipTitlesListedAlready(t *testing.T) {
+	t.Parallel()
 	rs := rowsOn(t, false)
 	resume := "/Users/" + rs.member.ID.String() + "/Items/Resume"
 	movies := rs.row(t, resume)
@@ -375,6 +378,7 @@ func TestHomeRowsSkipTitlesListedAlready(t *testing.T) {
 }
 
 func TestHomeRowsListTwoTitlesAtOnce(t *testing.T) {
+	t.Parallel()
 	rs := rowsOn(t, true)
 	rs.setting(t, func(s *accounts.Settings) { s.PrepareAhead = true })
 	nextUp := "/Shows/NextUp?limit=24&enableTotalRecordCount=false"

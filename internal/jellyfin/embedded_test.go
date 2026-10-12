@@ -96,6 +96,7 @@ func playingFile(t *testing.T, file string) (s testServer, user accounts.User, t
 // jellyfin-web does: its tracks go out as files, read whole through the
 // file's index, the ASS one as its script, with the font it uses.
 func TestBrowsersGetTheTracksInsideFilesWithTheirFonts(t *testing.T) {
+	t.Parallel()
 	s, user, token, id := playingFile(t, subtitledFile)
 	movie := id.String()
 
@@ -188,6 +189,7 @@ func TestBrowsersGetTheTracksInsideFilesWithTheirFonts(t *testing.T) {
 // file, read whole through the file's index, served by ranges as Jellyfin
 // 12.2 serves its raw file.
 func TestBrowsersDrawingPGSGetItsRawFile(t *testing.T) {
+	t.Parallel()
 	file := filepath.Join("..", "container", "testdata", "pgs.mkv")
 	s, user, token, id := playingFile(t, file)
 	raw, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "jellyfin-web-chrome.json"))
@@ -236,6 +238,7 @@ func TestBrowsersDrawingPGSGetItsRawFile(t *testing.T) {
 // file carries goes out as a download, sandboxed, so that a page in a file
 // cannot run as Polyfin's; cover art is not extracted, as from Jellyfin.
 func TestAttachedFilesOtherThanFontsAreDownloads(t *testing.T) {
+	t.Parallel()
 	s, user, token, id := playingFile(t, codecsFile)
 	status, body := s.call(http.MethodPost, "/Items/"+id.String()+"/PlaybackInfo", app("tv", token), map[string]any{"UserId": user.ID.String()})
 	var response playbackInfoResponse

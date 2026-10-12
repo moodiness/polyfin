@@ -14,6 +14,7 @@ import (
 // A folder's titles show the artwork beside their files unless it is
 // added or changed with useArtwork off; a change of it alone is one.
 func TestFolderUseArtwork(t *testing.T) {
+	t.Parallel()
 	var folders *localfiles.Service
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))

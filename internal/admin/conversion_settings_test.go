@@ -14,6 +14,7 @@ import (
 )
 
 func TestSettingsConversion(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		ffmpeg = "ffmpeg-not-installed"

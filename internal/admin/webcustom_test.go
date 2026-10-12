@@ -13,6 +13,7 @@ import (
 // leaves them out, bounded, and set by administrators only. The disclaimer
 // is empty by default.
 func TestSettingsWebPlayerCode(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	member := api.signedIn("member", false)
@@ -62,6 +63,7 @@ func TestSettingsWebPlayerCode(t *testing.T) {
 // The web player's switch to add versions to an open title's page: on by
 // default, saved, and kept when a PUT leaves it out.
 func TestSettingsAddVersionsToOpenPage(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["addVersionsToOpenPage"] != true {

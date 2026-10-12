@@ -79,6 +79,7 @@ func (s contentServer) names(t *testing.T, token, path string) []string {
 }
 
 func TestHiddenLibrariesLeaveTheUsersViews(t *testing.T) {
+	t.Parallel()
 	s := newContentServer(t)
 	policy := s.policy(t, s.member)
 	if policy["EnableAllFolders"] != true || !reflect.DeepEqual(policy["EnabledFolders"], []any{}) {
@@ -136,6 +137,7 @@ func TestHiddenLibrariesLeaveTheUsersViews(t *testing.T) {
 }
 
 func TestBlockedGenresHideTitlesFromApps(t *testing.T) {
+	t.Parallel()
 	s := newContentServer(t)
 	kid := s.user("kid", func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"crime"} })
 	kidToken := s.signIn("kid", "phone")
@@ -214,6 +216,7 @@ func TestBlockedGenresHideTitlesFromApps(t *testing.T) {
 }
 
 func TestAllowedHours(t *testing.T) {
+	t.Parallel()
 	s := newContentServer(t)
 	var clock atomic.Pointer[time.Time]
 	set := func(at time.Time) { clock.Store(&at) }

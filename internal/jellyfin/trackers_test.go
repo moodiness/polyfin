@@ -107,6 +107,7 @@ func (c trackerCall) summary() string {
 }
 
 func TestUsersTrackingServicesHearOfTheirMoviesAndEpisodes(t *testing.T) {
+	t.Parallel()
 	fakes := newTrackerFakes(t)
 	var tracker *trackers.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, pool *pgxpool.Pool) {
@@ -189,6 +190,7 @@ func TestUsersTrackingServicesHearOfTheirMoviesAndEpisodes(t *testing.T) {
 }
 
 func TestUserDataUploadsReachTrackingServicesAsPlayedMarks(t *testing.T) {
+	t.Parallel()
 	fakes := newTrackerFakes(t)
 	var tracker *trackers.Service
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, pool *pgxpool.Pool) {

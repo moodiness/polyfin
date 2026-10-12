@@ -26,6 +26,7 @@ func (b browser) raw(method, path, body string, into any) int {
 }
 
 func TestAPIKeysAreShownOnceAndRevoked(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	member := api.signedIn("alice", false)
@@ -62,6 +63,7 @@ func TestAPIKeysAreShownOnceAndRevoked(t *testing.T) {
 }
 
 func TestActivityAndResetPinsAreShownToAdministrators(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	admin := api.signedIn("root", true)
 	api.browser().call(http.MethodPost, "/session", map[string]string{"name": "root", "password": "wrong password"})

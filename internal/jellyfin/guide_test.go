@@ -18,6 +18,7 @@ import (
 // each channel airs now, the programmes' details and their images, for the
 // channels without Native EPG programmes: a channel with them keeps them.
 func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, token, _ := tuned(t, addon)
 	now := time.Now().UTC()

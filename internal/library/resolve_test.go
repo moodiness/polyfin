@@ -11,6 +11,7 @@ import (
 )
 
 func TestResolveFindsTitlesByAnyOfTheirIdentifiers(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	// A catalog listed a movie by its TMDB identifier, giving its IMDb one
 	// too; another listed a series by its TVDB identifier, with two of its
@@ -94,6 +95,7 @@ func TestResolveFindsTitlesByAnyOfTheirIdentifiers(t *testing.T) {
 }
 
 func TestResolveFindsWhatAnimeCatalogsListed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	// An anime catalog listed an entry of a series under its Kitsu
 	// identifier, giving the series' IMDb one, with two of its episodes,
@@ -145,6 +147,7 @@ func TestResolveFindsWhatAnimeCatalogsListed(t *testing.T) {
 }
 
 func TestResolveRecordsTheTitlesNoCatalogListed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	// An addon describes a movie and a series no catalog listed.
 	e.install(addons.Shared(), &fakeAddon{

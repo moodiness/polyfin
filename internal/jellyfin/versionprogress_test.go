@@ -213,6 +213,7 @@ func (h heldSetup) askPlaybackInfo(t *testing.T, source string) <-chan heldAnswe
 }
 
 func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
+	t.Parallel()
 	first, second := newHeldAddon(t, "First", false), newHeldAddon(t, "Second", false)
 	h := heldOn(t, newTestServer(t, 10), first.url, second.url)
 
@@ -251,6 +252,7 @@ func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 }
 
 func TestAFailingAddonLeavesNothingPending(t *testing.T) {
+	t.Parallel()
 	first, broken := newHeldAddon(t, "First", false), newHeldAddon(t, "Broken", true)
 	h := heldOn(t, newTestServer(t, 10), first.url, broken.url)
 
@@ -262,6 +264,7 @@ func TestAFailingAddonLeavesNothingPending(t *testing.T) {
 }
 
 func TestPlaybackInfoWaitsForTheAddonsAsked(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	first, second := newHeldAddon(t, "First", false), newHeldAddon(t, "Second", false)
 	h := heldOn(t, newProbingServer(t, 10, probe.path), first.url, second.url)
@@ -351,6 +354,7 @@ func newScriptedAddon(t *testing.T, name string) *scriptedAddon {
 // again: the title stays pending meanwhile, its open page then lists the
 // streams that came later, and PlaybackInfo never waits for it.
 func TestFollowUpsAddVersionsToAnOpenTitle(t *testing.T) {
+	t.Parallel()
 	probe := newFakeProbe(t, true)
 	gathering := newScriptedAddon(t, "Gathering")
 	s := newProbingServer(t, 10, probe.path)
@@ -434,6 +438,7 @@ func expiredOnProbe(t *testing.T, probe fakeProbe) (heldSetup, *scriptedAddon) {
 // A play does not wait for the addon asked again for an expired list when
 // a version of that list plays.
 func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T) {
+	t.Parallel()
 	h, gathering := expiredOn(t)
 	started := time.Now()
 	select {
@@ -461,6 +466,7 @@ func TestPlaybackInfoPlaysExpiredVersionsWhileTheAddonIsAskedAgain(t *testing.T)
 // new answer, joining the request under way, and plays one of its
 // versions.
 func TestPlaybackInfoWaitsForTheAnswerWhenNoExpiredVersionPlays(t *testing.T) {
+	t.Parallel()
 	// The three versions listed before cannot be read; another can.
 	h, gathering := expiredOnProbe(t, scriptedProbe(t, "[ $n -gt 3 ] || { echo 'Invalid data found when processing input' >&2; exit 1; }\nexec cat \"$0.json\"\n"))
 	answered := h.askPlaybackInfo(t, "")
@@ -487,6 +493,7 @@ func TestPlaybackInfoWaitsForTheAnswerWhenNoExpiredVersionPlays(t *testing.T) {
 }
 
 func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) {
+	t.Parallel()
 	h, gathering := expiredOn(t)
 	extra := h.sources(t)[2]
 	// The new answer lists one stream: the version of the third stays

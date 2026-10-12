@@ -32,6 +32,7 @@ func names(value any) []string {
 // off. A save keeps what it leaves out, and an empty order, which older
 // pages sent to follow POLYFIN_SEGMENTS, keeps the saved one too.
 func TestSettingsSegmentSources(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	byDefault := []string{"theintrodb", "introdb", "publicmetadb"}
@@ -99,6 +100,7 @@ func TestSettingsSegmentSources(t *testing.T) {
 // kept when a PUT leaves it out, removed by an empty one; and neither key is
 // ever in an answer or the log.
 func TestSettingsTheIntroDBKey(t *testing.T) {
+	t.Parallel()
 	var status atomic.Int32
 	var mu sync.Mutex
 	var requests []string

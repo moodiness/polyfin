@@ -10,6 +10,7 @@ import (
 )
 
 func TestSettingsSecurity(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["personalAddons"] != true || body["loginAttempts"] != float64(0) ||
@@ -83,6 +84,7 @@ func TestSettingsSecurity(t *testing.T) {
 // A user's own addons, turned off by the server or for the user, are kept
 // but cannot be added, replaced, refreshed or turned on.
 func TestPersonalAddonsTurnedOffAreRefused(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	manifestURL := localAddon(t)
 	// Only administrators may install addons on the local network, as the
@@ -172,6 +174,7 @@ func (api testAPI) userID(name string) accounts.ID {
 }
 
 func TestBlockedAccountsAndUnblocking(t *testing.T) {
+	t.Parallel()
 	// The test signs in wrong on purpose, more often than the server lets an
 	// address fail.
 	api := newTestAPI(t, 100)

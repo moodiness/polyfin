@@ -145,6 +145,7 @@ func tone(t *testing.T) (string, string) {
 }
 
 func TestEclipseAddonPlaysInJellyfinMusicApps(t *testing.T) {
+	t.Parallel()
 	ffmpeg, flac := tone(t)
 	s := newProbingServer(t, 10, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"))
 	addon := newFakeEclipse(t, flac)

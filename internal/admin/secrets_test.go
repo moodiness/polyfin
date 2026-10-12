@@ -35,6 +35,7 @@ func revealed(t *testing.T, pool *pgxpool.Pool) []string {
 // Administrators read the server's saved secrets again on demand, which
 // the activity log records without the value; no one else can.
 func TestServerSecretsAreRevealedToAdministratorsOnly(t *testing.T) {
+	t.Parallel()
 	var pool *pgxpool.Pool
 	api := newTestAPI(t, 10, func(_ *Options, deps testDeps) { pool = deps.pool })
 	administrator := api.signedIn("administrator", true)
@@ -86,6 +87,7 @@ func TestServerSecretsAreRevealedToAdministratorsOnly(t *testing.T) {
 // Each user reads their own MDBList and PublicMetaDB keys again; the
 // tokens of Trakt and Simkl are never handed out.
 func TestOwnTrackingKeysAreRevealedToTheirOwnerOnly(t *testing.T) {
+	t.Parallel()
 	services := trackingServices(t)
 	var pool *pgxpool.Pool
 	api := newTestAPI(t, 10, func(options *Options, deps testDeps) {
@@ -135,6 +137,7 @@ func TestOwnTrackingKeysAreRevealedToTheirOwnerOnly(t *testing.T) {
 // Health tells whether keys are stored unencrypted, and which the key
 // cannot decrypt.
 func TestHealthReportsStoredSecrets(t *testing.T) {
+	t.Parallel()
 	var pool *pgxpool.Pool
 	var box *secrets.Box
 	api := newTestAPI(t, 10, func(options *Options, deps testDeps) {

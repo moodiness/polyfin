@@ -11,6 +11,7 @@ import (
 )
 
 func TestMyMusicListsWhatEachUserPlayedOrMarkedFavorite(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	addon := newFakeEclipse(t, "")
 	addon.rowless = true

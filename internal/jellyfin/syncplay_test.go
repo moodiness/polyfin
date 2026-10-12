@@ -251,6 +251,7 @@ func delay(t *testing.T, message socketMessage) time.Duration {
 // Every answer and every message each session receives must be Jellyfin's,
 // identifiers, dates and the positions playing moves on aside.
 func TestSyncPlaySessionMatchesJellyfin(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "syncplay-session.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -479,6 +480,7 @@ func (l *syncPlayLabels) normalize(value any, key string) any {
 // latency members report, half a second at least, so that the command
 // reaches everyone in time; a pause stops the group where it played to.
 func TestSyncPlaySchedulesPlaybackOnTheServersClock(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	entry := p.play(t)
 	// Until members report their latency, half a second is assumed of
@@ -555,6 +557,7 @@ func TestSyncPlaySchedulesPlaybackOnTheServersClock(t *testing.T) {
 // A queue holds maxQueueEntries entries at most: a queue or an addition
 // that would make it longer is refused.
 func TestSyncPlayQueuesAreBounded(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	long := slices.Repeat([]string{p.episodes[0]}, maxQueueEntries+1)
 	p.alice.post(t, p.testServer, "SetNewQueue", map[string]any{"PlayingQueue": long})
@@ -601,6 +604,7 @@ func (s testServer) stuckSocket(t *testing.T, device, token string) {
 // An app that stops reading its socket holds back its own messages only:
 // the requests of its group, and everyone else's, are answered at once.
 func TestSyncPlayAppsThatDoNotReadHoldNothingBack(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	for _, name := range []string{"alice", "bob", "carol", "dave"} {
 		tr.testServer.user(name, nil)
@@ -658,6 +662,7 @@ func TestSyncPlayAppsThatDoNotReadHoldNothingBack(t *testing.T) {
 // the request that waits on it only. A check that a change made stale
 // meanwhile is made again.
 func TestSyncPlayChecksAccessWithoutHoldingGroups(t *testing.T) {
+	t.Parallel()
 	alice, bob, carol, dave := randomID(), randomID(), randomID(), randomID()
 	item1, item2, item3 := randomID(), randomID(), randomID()
 	var mu sync.Mutex
@@ -765,6 +770,7 @@ func TestSyncPlayChecksAccessWithoutHoldingGroups(t *testing.T) {
 // A member that buffers holds the group back, but not for ever: after a
 // while, playback goes on without it.
 func TestSyncPlayWaitsForBufferingMembersForAWhile(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	p.handler.syncPlay.waitTimeout = 300 * time.Millisecond
 	entry := p.play(t)
@@ -795,6 +801,7 @@ func TestSyncPlayWaitsForBufferingMembersForAWhile(t *testing.T) {
 // A session leaves its group when its app disconnects, or when it is
 // signed out, however it is; the group goes once empty.
 func TestSyncPlayMembersLeaveWithTheirSession(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	entry := p.play(t)
 	p.alice.post(t, p.testServer, "Seek", map[string]any{"PositionTicks": 50_000_000})
@@ -879,6 +886,7 @@ func TestSyncPlayMembersLeaveWithTheirSession(t *testing.T) {
 // Members only ever get items they may see: a group is hidden from those
 // who may not see its queue, and a queue a member may not see is refused.
 func TestSyncPlayKeepsToWhatMembersMaySee(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	p.testServer.user("carol", nil)
 	carol, _ := p.store.Authenticate(t.Context(), "carol", "correct horse")
@@ -930,6 +938,7 @@ func TestSyncPlayKeepsToWhatMembersMaySee(t *testing.T) {
 // A session playing a title brings it to the group it creates, which goes
 // on from where it is once the session is ready.
 func TestSyncPlayGroupStartsWithWhatItsCreatorPlays(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	tr.testServer.user("alice", nil)
 	alice := tr.syncPlayApp(t, "alice", "alice-tv")
@@ -955,6 +964,7 @@ func TestSyncPlayGroupStartsWithWhatItsCreatorPlays(t *testing.T) {
 
 // Requests are refused as Jellyfin refuses them, before anything changes.
 func TestSyncPlayRequestsThatDoNotBind(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	for _, tc := range []struct {
 		path string
@@ -990,6 +1000,7 @@ func TestSyncPlayRequestsThatDoNotBind(t *testing.T) {
 
 // Requests of many sessions at once keep groups consistent.
 func TestSyncPlayGroupsTakeConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	tr := newTracking(t)
 	done := make(chan struct{})
 	t.Cleanup(func() { close(done) })
@@ -1069,6 +1080,7 @@ func TestSyncPlayGroupsTakeConcurrentRequests(t *testing.T) {
 
 // The queue keeps the entry playing through changes, as Jellyfin's does.
 func TestSyncPlayQueueKeepsTheEntryPlaying(t *testing.T) {
+	t.Parallel()
 	items := []accounts.ID{{1}, {2}, {3}, {4}}
 	entries := func(q *playQueue) []accounts.ID {
 		result := []accounts.ID{}

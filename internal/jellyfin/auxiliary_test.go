@@ -140,6 +140,7 @@ const (
 )
 
 func TestDisplayPreferencesDefaults(t *testing.T) {
+	t.Parallel()
 	s := newAuxiliaryServer(t)
 	_, alice := s.user("alice", false)
 
@@ -166,6 +167,7 @@ func TestDisplayPreferencesDefaults(t *testing.T) {
 }
 
 func TestDisplayPreferencesRoundTrip(t *testing.T) {
+	t.Parallel()
 	s := newAuxiliaryServer(t)
 	_, alice := s.user("alice", false)
 	_, bob := s.user("bob", false)
@@ -214,6 +216,7 @@ func TestDisplayPreferencesRoundTrip(t *testing.T) {
 }
 
 func TestDisplayPreferencesRejectsUnreadableSettings(t *testing.T) {
+	t.Parallel()
 	s := newAuxiliaryServer(t)
 	_, alice := s.user("alice", false)
 	for body, wantStatus := range map[string]int{
@@ -241,6 +244,7 @@ func TestDisplayPreferencesRejectsUnreadableSettings(t *testing.T) {
 }
 
 func TestDisplayPreferencesOfAnotherUser(t *testing.T) {
+	t.Parallel()
 	s := newAuxiliaryServer(t)
 	alice, aliceApp := s.user("alice", false)
 	_, bobApp := s.user("bob", false)
@@ -272,6 +276,7 @@ func TestDisplayPreferencesOfAnotherUser(t *testing.T) {
 }
 
 func TestEndpointClassifiesTheClientAddress(t *testing.T) {
+	t.Parallel()
 	h := &Handler{}
 	for address, want := range map[string]string{
 		"127.0.0.1:5000":        `{"IsLocal":true,"IsInNetwork":true}`,
@@ -299,6 +304,7 @@ func TestEndpointClassifiesTheClientAddress(t *testing.T) {
 }
 
 func TestBitrateTest(t *testing.T) {
+	t.Parallel()
 	s := newAuxiliaryServer(t)
 	_, alice := s.user("alice", false)
 	// Jellyfin sends the size rounded up to a power of two, at least 16.

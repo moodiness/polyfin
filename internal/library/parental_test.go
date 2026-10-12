@@ -95,6 +95,7 @@ func (e env) children(user accounts.User, library string, start, count int) Page
 }
 
 func TestParentalControlHidesTitlesAboveTheLimit(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	e.install(addons.Shared(), addon)
@@ -186,6 +187,7 @@ func TestParentalControlHidesTitlesAboveTheLimit(t *testing.T) {
 }
 
 func TestRatingsAreLookedUpOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	e.install(addons.Shared(), addon)
@@ -210,6 +212,7 @@ func TestRatingsAreLookedUpOnce(t *testing.T) {
 }
 
 func TestSlowRatingsAreHiddenUntilKnown(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	addon.metaGate = make(chan struct{})
@@ -251,6 +254,7 @@ func fakeRatings() *fakeAddon {
 }
 
 func TestOnlyTheServersAddonsRateTitles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), ratedAddon())
 	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
@@ -300,6 +304,7 @@ func TestOnlyTheServersAddonsRateTitles(t *testing.T) {
 }
 
 func TestRestrictedListingsDoNotCrawlCatalogs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	unrated, rated := titles("movie", 200), titles("movie", 200)
 	for i := range rated {
@@ -342,6 +347,7 @@ func TestRestrictedListingsDoNotCrawlCatalogs(t *testing.T) {
 }
 
 func TestRatingsAreOnlyLookedUpWhenTheyMatter(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	e.install(addons.Shared(), addon)
@@ -357,6 +363,7 @@ func TestRatingsAreOnlyLookedUpWhenTheyMatter(t *testing.T) {
 }
 
 func TestOldRatingsAreAskedAgain(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	e.install(addons.Shared(), addon)

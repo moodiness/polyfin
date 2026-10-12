@@ -15,6 +15,7 @@ import (
 // TestMusicAddonsHaveTheirHealth checks that the requests to an Eclipse
 // addon count in its health, listed and checked like a Stremio addon's.
 func TestMusicAddonsHaveTheirHealth(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/manifest.json":

@@ -41,6 +41,7 @@ func recordedAnswers(t *testing.T) map[string]recordedAnswer {
 }
 
 func TestEncodingConfigurationMatchesJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("member", nil)
 	token := s.signIn("member", "tv")

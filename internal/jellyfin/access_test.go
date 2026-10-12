@@ -40,6 +40,7 @@ func (s testServer) playbackInfo(t *testing.T, device, token, item string, body 
 }
 
 func TestPlaybacksAtOnceRefuseOneMoreDevice(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	tokens := map[string]string{"tv": p.token, "phone": p.signIn("member", "phone"), "tablet": p.signIn("member", "tablet")}
 	report := func(device, path string) {
@@ -129,6 +130,7 @@ func (s testServer) storeAnalysis(t *testing.T, version library.Version, analysi
 // its second, H.264 and AAC in MP4, 1 Mbit/s. Both play as they are in
 // jellyfin-web.
 func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
+	t.Parallel()
 	p := playing(t)
 	remuxable := p.remuxable(t)
 	remuxable.Bitrate = 3_000_000
@@ -237,6 +239,7 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 }
 
 func TestMaxBitrateAppliesToLiveTv(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
 	var channels QueryResult
@@ -259,6 +262,7 @@ func TestMaxBitrateAppliesToLiveTv(t *testing.T) {
 }
 
 func TestLiveTvOffHidesTheViewAndRefusesTheRoutes(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, false, "")
 	s, token, user := tuned(t, addon)
 	var channels QueryResult
@@ -334,6 +338,7 @@ func TestLiveTvOffHidesTheViewAndRefusesTheRoutes(t *testing.T) {
 }
 
 func TestSyncPlayAccessLevelsMatchJellyfin(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	bobUser := s.user("bob", func(c *accounts.UserChanges) { c.SyncPlay = new(accounts.SyncPlayJoin) })
@@ -383,6 +388,7 @@ func TestSyncPlayAccessLevelsMatchJellyfin(t *testing.T) {
 }
 
 func TestRemoteControlOfOtherUsersFollowsTheFlag(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("alice", nil)
 	bob := s.user("bob", nil)
@@ -434,6 +440,7 @@ func TestRemoteControlOfOtherUsersFollowsTheFlag(t *testing.T) {
 }
 
 func TestPolicyCarriesPlaybackAndAccessLimits(t *testing.T) {
+	t.Parallel()
 	s := newTestServer(t, 10)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	member := s.user("member", nil)

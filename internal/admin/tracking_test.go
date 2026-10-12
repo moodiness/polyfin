@@ -80,6 +80,7 @@ func newTrackingAPI(t *testing.T) testAPI {
 }
 
 func TestOwnTrackingFollowsTheContract(t *testing.T) {
+	t.Parallel()
 	api := newTrackingAPI(t)
 	administrator := api.signedIn("admin", true)
 	member := api.signedIn("member", false)
@@ -199,6 +200,7 @@ func mustCompact(t *testing.T, value map[string]any) string {
 }
 
 func TestHistoryImportFollowsTheContract(t *testing.T) {
+	t.Parallel()
 	api := newTrackingAPI(t)
 	member := api.signedIn("member", false)
 	other := api.signedIn("other", false)

@@ -26,6 +26,7 @@ func createInvite(t *testing.T, administrator browser, body map[string]any) (str
 // The invites list then shows the link used up, and a revoked link refuses
 // the next guest.
 func TestGuestsJoinThroughInvitesWithoutChoosingTheirSettings(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
 	limited, err := api.store.CreateUser(t.Context(), accounts.NewUser{Name: "limited", Password: "correct horse"})
@@ -105,6 +106,7 @@ func (api testAPI) invites(t *testing.T, administrator browser) []map[string]any
 // With the web client, the guest's page signs in through the Jellyfin API:
 // joining opens no admin session.
 func TestJoiningWithTheWebClientLeavesTheSignInToIt(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.WebClient = true })
 	administrator := api.signedIn("administrator", true)
 	_, token := createInvite(t, administrator, map[string]any{})
@@ -119,6 +121,7 @@ func TestJoiningWithTheWebClientLeavesTheSignInToIt(t *testing.T) {
 
 // Guessing tokens is throttled like guessing passwords.
 func TestGuessedInviteTokensAreThrottled(t *testing.T) {
+	t.Parallel()
 	api := newTestAPI(t, 2)
 	administrator := api.signedIn("administrator", true)
 	_, token := createInvite(t, administrator, map[string]any{})

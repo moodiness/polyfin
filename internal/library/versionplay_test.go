@@ -25,6 +25,7 @@ func versionNames(versions []Version) []string {
 
 // A play lists an expired list at once, while its addon is asked again.
 func TestAPlayListsAnExpiredListAtOnce(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	e.expired()
 	// The next follow-up waits until hurried: the requests counted before
@@ -57,6 +58,7 @@ func TestAPlayListsAnExpiredListAtOnce(t *testing.T) {
 
 // A play waits for an addon whose list is not known.
 func TestAPlayWaitsForAnAddonNeverAsked(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t)
 	listed := make(chan []Version, 1)
 	go func() {
@@ -107,6 +109,7 @@ func (e staleEnv) renewed(old Version) <-chan error {
 // the version's file: its follow-up is asked at once, and its answer
 // renews the version. The list never loses the version meanwhile.
 func TestARenewalWaitsForTheFollowUpOfAGatheringAddon(t *testing.T) {
+	t.Parallel()
 	// The first answer's follow-up comes long after the test.
 	e, old := renewEnv(t, time.Minute)
 	started := time.Now()
@@ -132,6 +135,7 @@ func TestARenewalWaitsForTheFollowUpOfAGatheringAddon(t *testing.T) {
 // A file the addon no longer lists, even asked again, is not renewed: the
 // list then drops it.
 func TestARenewalOfAFileGoneFails(t *testing.T) {
+	t.Parallel()
 	e, old := renewEnv(t, time.Minute)
 	done := e.renewed(old)
 	e.eventually("the renewal to ask the addon", func() bool { return e.asked("stream") == 2 })
@@ -147,6 +151,7 @@ func TestARenewalOfAFileGoneFails(t *testing.T) {
 // A renewal joins the request under way for the title, rather than asking
 // the addon once more.
 func TestARenewalJoinsTheRequestUnderWay(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
 	// Once the list expired, the calls waiting on the title's streams are
 	// told.
@@ -204,6 +209,7 @@ func (e staleEnv) restarted() *Service {
 // again. A refresh deletes them, and a day after they expired they are
 // gone.
 func TestStreamListsOutliveARestart(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t)
 	e.numbers <- []int{1, 2, 3}
 	if versions, err := e.service.Versions(t.Context(), e.member, e.movie); err != nil || len(versions) != 3 {
@@ -250,6 +256,7 @@ func TestStreamListsOutliveARestart(t *testing.T) {
 // versions dropped do not come back, at the next opening nor after a
 // restart.
 func TestADroppedListIsNotSavedBack(t *testing.T) {
+	t.Parallel()
 	e := newStaleEnv(t)
 	ctx := t.Context()
 	db := e.service.db
@@ -313,6 +320,7 @@ func TestADroppedListIsNotSavedBack(t *testing.T) {
 // A title's page, once its details answered, is told how far its versions
 // came from what is kept in memory, and each change is told as it happens.
 func TestFollowedTitlesAreToldOfTheirVersions(t *testing.T) {
+	t.Parallel()
 	e := newFollowEnv(t, 20*time.Millisecond)
 	var mu sync.Mutex
 	var told []accounts.ID

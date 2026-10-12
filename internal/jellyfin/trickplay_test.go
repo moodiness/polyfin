@@ -17,6 +17,7 @@ import (
 
 // The playlist of a version's tiles is written as Jellyfin writes it.
 func TestTrickplayPlaylistFormat(t *testing.T) {
+	t.Parallel()
 	version, _ := accounts.ParseID("0123456789abcdef0123456789abcdef")
 	got := trickplayPlaylist(thumbnails.Info{Width: 320, Height: 180, TileWidth: 10, TileHeight: 10, ThumbnailCount: 250, Interval: 10000},
 		version, "token")
@@ -95,6 +96,7 @@ func trickplayOf(t *testing.T, body []byte) (map[string]map[string]map[string]an
 // the identifier the item's MediaSources give each version, the title's
 // own for its first, which apps look them up by.
 func TestTrickplayInItems(t *testing.T) {
+	t.Parallel()
 	s := withThumbnails(t)
 	want := map[string]map[string]map[string]any{s.movie: {"320": trickplayInfo}}
 	trickplay := func(what string, body []byte) (any, bool) {
@@ -147,6 +149,7 @@ func TestTrickplayInItems(t *testing.T) {
 // The playlist and the tiles are served to users who may open the title,
 // within their hours, with a token in the header or the URL.
 func TestTrickplayRoutes(t *testing.T) {
+	t.Parallel()
 	s := withThumbnails(t)
 	base := "/Videos/" + s.movie + "/Trickplay/320/"
 	status, body := s.call(http.MethodGet, base+"tiles.m3u8", app("tv", s.token), nil)
@@ -238,6 +241,7 @@ func TestTrickplayRoutes(t *testing.T) {
 // Chapters whose image was made carry its tag, and the image is served as
 // Jellyfin serves images, by the item or the version opened.
 func TestChapterImages(t *testing.T) {
+	t.Parallel()
 	s := withThumbnails(t)
 	probe, err := os.ReadFile("testdata/jellyfin-12.2/chapters/probe.json")
 	if err != nil {
@@ -308,6 +312,7 @@ func TestChapterImages(t *testing.T) {
 // A version that starts playing gets its thumbnails in the background,
 // read from its source's keyframes once its playback stopped.
 func TestPlaybackStartMakesThumbnails(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
@@ -356,6 +361,7 @@ func TestPlaybackStartMakesThumbnails(t *testing.T) {
 // identifier its media source carries, never the 4K one's; the tiles the
 // title's identifier names are that version's, and none is refused.
 func TestTrickplayFollowsTheQualityGroup(t *testing.T) {
+	t.Parallel()
 	s := withThumbnails(t)
 	s.sized(t, 0, 3840, 2160)
 	s.sized(t, 1, 1920, 1080)

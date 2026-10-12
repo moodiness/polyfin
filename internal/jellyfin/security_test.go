@@ -9,6 +9,7 @@ import (
 )
 
 func TestWrongPasswordsBlockSignInsFromApps(t *testing.T) {
+	t.Parallel()
 	// The test signs in wrong on purpose, more often than the server lets an
 	// address fail.
 	s := newTestServer(t, 100)
@@ -79,6 +80,7 @@ func TestWrongPasswordsBlockSignInsFromApps(t *testing.T) {
 // The devices the server signs out for being unused lose their socket and
 // their SyncPlay group, as any device signed out.
 func TestUnusedDevicesLoseTheirSocket(t *testing.T) {
+	t.Parallel()
 	p := newSyncPlayers(t)
 	if _, err := p.pool.Exec(t.Context(), "UPDATE devices SET last_activity_at = now() - interval '31 days' WHERE device_id = 'bob-tv-id'"); err != nil {
 		t.Fatal(err)

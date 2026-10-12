@@ -16,6 +16,7 @@ import (
 // The PublicMetaDB key: checked with PublicMetaDB before it is saved, never
 // answered, kept when a PUT leaves it out, and removed by an empty one.
 func TestSettingsPublicMetaDBKey(t *testing.T) {
+	t.Parallel()
 	var status, asked atomic.Int32
 	var authorization atomic.Value
 	status.Store(http.StatusOK)

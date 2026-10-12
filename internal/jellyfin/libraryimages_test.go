@@ -23,6 +23,7 @@ import (
 // and VirtualFolders, and download it; a user under parental control is
 // not shown the automatic one.
 func TestLibrariesShowTheImageChosen(t *testing.T) {
+	t.Parallel()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch path := r.URL.EscapedPath(); {

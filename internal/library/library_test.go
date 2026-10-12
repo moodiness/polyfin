@@ -235,6 +235,7 @@ func names(items []Item) []string {
 }
 
 func TestCatalogsArePagedWithSkip(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -274,6 +275,7 @@ func TestCatalogsArePagedWithSkip(t *testing.T) {
 }
 
 func TestShortPagesDoNotEndACatalog(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -300,6 +302,7 @@ func TestShortPagesDoNotEndACatalog(t *testing.T) {
 // A collection that groups another collection lists the titles of that
 // collection, as its own.
 func TestCollectionsCanGroupCollections(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Types: []string{"movie", "collection"},
@@ -334,6 +337,7 @@ func TestCollectionsCanGroupCollections(t *testing.T) {
 }
 
 func TestCollectionsGroupCatalogs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	movies := titles("movie", 3)
 	series := titles("series", 2)
@@ -390,6 +394,7 @@ func TestCollectionsGroupCatalogs(t *testing.T) {
 }
 
 func TestSeriesSeasonsAndEpisodes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	now := time.Now().UTC()
 	future := now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
@@ -443,6 +448,7 @@ func TestSeriesSeasonsAndEpisodes(t *testing.T) {
 }
 
 func TestSearchQueriesOnlySearchCatalogs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -473,6 +479,7 @@ func TestSearchQueriesOnlySearchCatalogs(t *testing.T) {
 }
 
 func TestSearchKeepsTheFolderATitleWasListedIn(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -497,6 +504,7 @@ func TestSearchKeepsTheFolderATitleWasListedIn(t *testing.T) {
 // A title is recorded with the catalog that listed it, whose addon decides
 // whether its artwork may be fetched from the local network.
 func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	search := []stremio.Extra{{Name: "search", IsRequired: true}}
 	e.install(addons.Shared(), &fakeAddon{
@@ -529,6 +537,7 @@ func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
 }
 
 func TestUsersOnlyReachTheirLibraries(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := &fakeAddon{
 		manifest: stremio.Manifest{ID: "a", Name: "A", Version: "1", Resources: []stremio.Resource{{Name: "catalog"}},
@@ -561,6 +570,7 @@ func TestUsersOnlyReachTheirLibraries(t *testing.T) {
 }
 
 func TestLibraryNamesTellCollisionsApart(t *testing.T) {
+	t.Parallel()
 	catalog := func(addon, kind, name string) addons.Library {
 		return addons.Library{AddonName: addon, Catalog: stremio.Catalog{Type: kind, ID: kind + name, Name: name}}
 	}
@@ -614,6 +624,7 @@ func TestLibraryNamesTellCollisionsApart(t *testing.T) {
 }
 
 func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	show := stremio.Meta{ID: "tt200", Type: "series", Name: "Show", Videos: []stremio.Video{
 		{ID: "tt200:0:1", Title: "Behind the scenes", Season: 0, Episode: 1, Released: "2019-12-01T00:00:00Z"},
@@ -672,6 +683,7 @@ func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
 }
 
 func TestExpiredLinksAreRenewedWithTheSameFile(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	movies := titles("movie", 1)
 	stream := func(link string) stremio.Stream {

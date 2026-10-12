@@ -82,7 +82,8 @@ func countCodes(codes []int, code int) int {
 }
 
 // Requests to one host are spaced by the pacer's gap, and a host that
-// asked to wait is not asked before.
+// asked to wait is not asked before. Not parallel: it times waits of 50
+// milliseconds, which the other tests' work would stretch.
 func TestPacerSpacesRequestsToAHost(t *testing.T) {
 	p := NewPacer(100 * time.Millisecond)
 	start := time.Now()
@@ -110,6 +111,7 @@ func TestPacerSpacesRequestsToAHost(t *testing.T) {
 // a time: a provider allowing 3 requests every 2 seconds refuses none, and
 // the add succeeds; the account's connections are kept.
 func TestAddingAnAccountStaysWithinItsRateLimit(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.service.pacer = NewPacer(700 * time.Millisecond)
 	x := newLimitedXtream(t, 3, 2*time.Second)
@@ -138,6 +140,7 @@ func TestAddingAnAccountStaysWithinItsRateLimit(t *testing.T) {
 // A provider that asks to slow down is asked again once it said, and the
 // request succeeds; one that keeps refusing fails as rate limited.
 func TestRateLimitedRequestsAreTriedAgain(t *testing.T) {
+	t.Parallel()
 	client := requester{client: newEnv(t).service.client, pacer: NewPacer(0)}
 	x := newLimitedXtream(t, 1, 1500*time.Millisecond)
 	account := Account{Kind: addons.KindXtream, Server: x.url, Username: "user", Password: "secret"}
@@ -164,6 +167,7 @@ func TestRateLimitedRequestsAreTriedAgain(t *testing.T) {
 // A failed download is tried again after 5 minutes, 15, then every hour,
 // never later than the refresh interval; a success clears it.
 func TestFailedListsAreTriedAgainSooner(t *testing.T) {
+	t.Parallel()
 	for failures, want := range map[int]time.Duration{1: 5 * time.Minute, 2: 15 * time.Minute, 3: time.Hour, 9: time.Hour} {
 		if got := Backoff(failures, 12*time.Hour, 0); got != want {
 			t.Errorf("after %d failures: %s, want %s", failures, got, want)
@@ -215,6 +219,7 @@ func TestFailedListsAreTriedAgainSooner(t *testing.T) {
 // they never played or were silent twice in a row, refused ones are not; a
 // new address forgets it, when the stream played included.
 func TestStreamHealthOrdersAndHidesStreams(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	merged := ChannelsMerged
 	list := newPlaylistServer(t, "#EXTM3U\n"+entry("News", "Zeb One FHD", "fhd.ts")+entry("News", "Zeb One HD", "hd.ts")+entry("News", "Zeb One SD", "sd.ts"))

@@ -47,6 +47,7 @@ func (e env) blocking(name string, genres ...string) accounts.User {
 }
 
 func TestBlockedGenresHideTitles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := genreAddon()
 	e.install(addons.Shared(), addon)
@@ -132,6 +133,7 @@ func TestBlockedGenresHideTitles(t *testing.T) {
 }
 
 func TestUnknownGenresAreHiddenUntilKnown(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := genreAddon()
 	addon.metaGate = make(chan struct{})
@@ -159,6 +161,7 @@ func TestUnknownGenresAreHiddenUntilKnown(t *testing.T) {
 }
 
 func TestOnlyTheServersAddonsGiveGenres(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), genreAddon())
 	kid := e.blocking("kid", "Horror")
@@ -201,6 +204,7 @@ func TestOnlyTheServersAddonsGiveGenres(t *testing.T) {
 }
 
 func TestHiddenLibrariesLeaveTheViewButNotTheirTitles(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	addon := genreAddon()
 	e.install(addons.Shared(), addon)

@@ -15,6 +15,7 @@ import (
 // A member reads their own statistics, history and CSV only, whatever
 // user they name; an administrator reads everyone's, or one user's.
 func TestMembersReadOnlyTheirOwnPlaybacks(t *testing.T) {
+	t.Parallel()
 	var history *plays.History
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		history = plays.NewHistory(deps.pool, o.Accounts.Settings, slog.New(slog.NewTextHandler(io.Discard, nil)))

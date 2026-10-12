@@ -43,6 +43,7 @@ func (h heldSetup) search(t *testing.T, id, token string) searchAnswer {
 // most once every 20 seconds for a user's title, with the checks of its
 // details.
 func TestATitlesAddonsAreAskedAgainOnDemand(t *testing.T) {
+	t.Parallel()
 	addon := newScriptedAddon(t, "Gathering")
 	s := newTestServer(t, 10)
 	now := time.Now()
@@ -119,6 +120,7 @@ func TestATitlesAddonsAreAskedAgainOnDemand(t *testing.T) {
 // Asked again while one of the title's addons is still answering, Polyfin
 // leaves that one to answer and asks the others again.
 func TestAskingAgainLeavesAnAddonStillAnswering(t *testing.T) {
+	t.Parallel()
 	slow, empty := newScriptedAddon(t, "Slow"), newScriptedAddon(t, "Empty")
 	h := heldOn(t, newTestServer(t, 10), slow.url, empty.url)
 
@@ -143,6 +145,7 @@ func TestAskingAgainLeavesAnAddonStillAnswering(t *testing.T) {
 // way, the addon is asked anew: that request may have started before the
 // title's lists were dropped, and its answer is not what the user asked for.
 func TestAskingAgainDoesNotJoinAnEarlierRequest(t *testing.T) {
+	t.Parallel()
 	addon := newScriptedAddon(t, "Gathering")
 	h := heldOn(t, newTestServer(t, 10), addon.url)
 

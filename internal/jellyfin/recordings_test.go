@@ -106,6 +106,7 @@ func timerDefaults(t *testing.T, s testServer, token, program string) map[string
 // Without a recordings folder, Polyfin answers as a server that records
 // nothing, as it did before recording existed.
 func TestRecordingRoutesWithoutAFolder(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _ := recordingServer(t, "ffprobe-not-installed", "")
 	token, _ := recordingMember(t, s, addon.url, true)
@@ -152,6 +153,7 @@ func TestRecordingRoutesWithoutAFolder(t *testing.T) {
 // as jellyfin-web makes them, and read, changed and cancelled as
 // Jellyfin's are.
 func TestTimersAsJellyfinKeepsThem(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _ := recordingServer(t, "ffprobe-not-installed", t.TempDir())
 	s.setting(t, func(settings *accounts.Settings) {
@@ -237,6 +239,7 @@ func TestTimersAsJellyfinKeepsThem(t *testing.T) {
 // A series timer records the programmes of a title; cancelling it
 // cancels its timers.
 func TestSeriesTimersMakeTimers(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _ := recordingServer(t, "ffprobe-not-installed", t.TempDir())
 	token, _ := recordingMember(t, s, addon.url, true)
@@ -292,6 +295,7 @@ func TestSeriesTimersMakeTimers(t *testing.T) {
 // administrators, and stays within the user's parental control and
 // allowed hours.
 func TestRecordingNeedsPermission(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _ := recordingServer(t, "ffprobe-not-installed", t.TempDir())
 	token, member := recordingMember(t, s, addon.url, false)
@@ -399,6 +403,7 @@ func recordingAddon(t *testing.T, dir string, start, end time.Time) string {
 // live playback reads it, then plays as a file, directly or remuxed into
 // HLS, and is deleted with its file.
 func TestProgrammeIsRecordedAndPlays(t *testing.T) {
+	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
@@ -597,6 +602,7 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 // timers, series timers matching their title on their channel at their
 // time of day, and the timers they show.
 func TestXMLTVProgrammesAreScheduled(t *testing.T) {
+	t.Parallel()
 	addon := newTVAddon(t, true, "")
 	s, _ := recordingServer(t, "ffprobe-not-installed", t.TempDir())
 	token, _ := recordingMember(t, s, addon.url, true)

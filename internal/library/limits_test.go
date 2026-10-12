@@ -24,6 +24,7 @@ func limitsAddon(movies, channels int) *fakeAddon {
 }
 
 func TestCatalogLimitStopsMovieCatalogs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), limitsAddon(250, 0))
 	e.setting(func(settings *accounts.Settings) { settings.CatalogLimit = accounts.MinCatalogLimit })
@@ -62,6 +63,7 @@ func TestCatalogLimitStopsMovieCatalogs(t *testing.T) {
 }
 
 func TestChannelLimitStopsLiveTVCatalogs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), limitsAddon(0, 250))
 	channels := func() []Item {
@@ -84,6 +86,7 @@ func TestChannelLimitStopsLiveTVCatalogs(t *testing.T) {
 }
 
 func TestCatalogAndChannelLimitsAreIndependent(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.install(addons.Shared(), limitsAddon(250, 250))
 	top := e.library(e.member, "Top")

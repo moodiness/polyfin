@@ -3,6 +3,7 @@ package library
 import "testing"
 
 func TestLabelHeightReadsAddonsLabels(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		labels []string
 		want   int
@@ -36,6 +37,7 @@ func TestLabelHeightReadsAddonsLabels(t *testing.T) {
 }
 
 func TestLabelHeightLeavesUnknownWhatItCannotTell(t *testing.T) {
+	t.Parallel()
 	for _, labels := range [][]string{
 		// No label at all.
 		{"Addon", "Movie Name (2023) WEB-DL", "movie.mkv"},
