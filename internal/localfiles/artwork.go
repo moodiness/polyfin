@@ -24,19 +24,23 @@ import (
 // when every video directly in it is matched to the same title, its
 // versions included; a disc folder is its disc's own. A show's images are
 // in its folder, and a season's in its show's folder ("season01-poster")
-// or in its season folder (see seasonImages).
+// or in its season folder (see seasonImages). An episode's image is beside
+// its file, named after it, as Jellyfin's EpisodeLocalImageProvider reads
+// it (see episodeImage); an episode of a disc or a disc image has none.
 //
 // A scan chooses the images of each unit, a movie's file or disc or a
-// show's folder, and of its seasons, one per image type, and keeps them
-// with their size and modification time (see storeArtwork). Artwork gives
-// them to the library as the artwork of the titles the units are matched
-// to, which it shows in place of the addons' of the same type (see
-// library.Local), unless the folder's UseArtwork is off. When several
-// folders hold an image of the same type for a title, the folder listed
-// first among the server's sources gives it; in one folder, the first of
-// the title's units by path. Images are read from the folder or the share
-// by Open, by URLs of their own that change with their size and
-// modification time, so that apps see their tag change (see artworkURL).
+// show's folder, of its seasons, one per image type, and of its episodes'
+// files, and keeps them with their size and modification time (see
+// storeArtwork). Artwork gives them to the library as the artwork of the
+// titles and episodes the units and files are matched to, which it shows
+// in place of the addons' of the same type, an episode's image in place of
+// its still (see library.Local), unless the folder's UseArtwork is off.
+// When several folders hold an image of the same type for a title, the
+// folder listed first among the server's sources gives it; in one folder,
+// the first of the title's units by path, or of an episode's files. Images
+// are read from the folder or the share by Open, by URLs of their own that
+// change with their size and modification time, so that apps see their
+// tag change (see artworkURL).
 
 // Jellyfin's image types a title's local artwork may be of.
 const (
@@ -235,6 +239,26 @@ func (images sideImages) seasonImages(show string, season int, folder *place) ma
 	return chosen
 }
 
+// episodeImage chooses the image of an episode's file, by the names
+// Jellyfin's EpisodeLocalImageProvider reads, after the file's name
+// without extension: "<name>-thumb", then "<name>", beside the file, then
+// in a "metadata" folder beside it. Files of discs and disc images have
+// none, nor files that are no episode.
+func (images sideImages) episodeImage(f imagedFile) (string, bool) {
+	if f.season == nil || discFile(f.path) {
+		return "", false
+	}
+	beside, name := path.Dir(f.path), stem(f.path)
+	for _, dir := range []string{beside, path.Join(beside, "metadata")} {
+		for _, image := range []string{name + "-thumb", name} {
+			if rel, ok := images.find(dir, image); ok {
+				return rel, true
+			}
+		}
+	}
+	return "", false
+}
+
 // imagedFile is a file of a folder as its scan stored it: its path, unit,
 // the Stremio identifier of its title, empty when unmatched, and an
 // episode's season.
@@ -244,25 +268,34 @@ type imagedFile struct {
 }
 
 // artworkKey is an image of a unit, of one of its seasons for a show's,
-// -1 for the unit itself, and of an image type.
+// -1 for the unit itself, and of an image type; or with file, the image
+// of the episode of one of the unit's files, of no season and of type
+// Primary (see episodeImage).
 type artworkKey struct {
 	unit      string
 	season    int
 	imageType string
+	file      string
 }
 
 // chooseArtwork chooses the images of the units and seasons of a folder
-// of kind, whose name is root (see locationName), among its images, those
-// of units left unmatched included: a link makes them a title's.
+// of kind, whose name is root (see locationName), and of a shows folder's
+// episodes, among its images, those of units left unmatched included: a
+// link makes them a title's.
 func chooseArtwork(kind, root string, files []imagedFile, images sideImages) map[artworkKey]string {
 	chosen := map[artworkKey]string{}
 	keep := func(unit string, season int, found map[string]string) {
 		for imageType, rel := range found {
-			chosen[artworkKey{unit, season, imageType}] = rel
+			chosen[artworkKey{unit: unit, season: season, imageType: imageType}] = rel
 		}
 	}
 	if kind == KindShows {
 		chooseShowArtwork(files, images, keep)
+		for _, f := range files {
+			if rel, ok := images.episodeImage(f); ok {
+				chosen[artworkKey{unit: f.unit, season: -1, imageType: imagePrimary, file: f.path}] = rel
+			}
+		}
 		return chosen
 	}
 	// The titles of the videos directly in each folder, an unmatched one
@@ -382,10 +415,11 @@ type storedArtwork struct {
 }
 
 // storeArtwork stores the images of the units and seasons of a movies or
-// shows folder, as its files are stored now and its listing found them
-// (see chooseArtwork): those new or changed, by path, size and
-// modification time, and forgets those gone, but those in the folders the
-// walk skipped. root is the folder's path or address.
+// shows folder, and of a shows folder's episodes, as its files are stored
+// now and its listing found them (see chooseArtwork): those new or
+// changed, by path, size and modification time, and forgets those gone,
+// but those in the folders the walk skipped. root is the folder's path or
+// address.
 func (s *Service) storeArtwork(ctx context.Context, id accounts.ID, kind, root string, list listing) error {
 	rows, err := s.db.Query(ctx, "SELECT path, unit, coalesce(stremio_id, ''), season FROM local_files WHERE addon_id = $1", id)
 	if err != nil {
@@ -400,15 +434,16 @@ func (s *Service) storeArtwork(ctx context.Context, id accounts.ID, kind, root s
 		return err
 	}
 	desired := chooseArtwork(kind, locationName(root), files, listImages(list.sides))
-	rows, err = s.db.Query(ctx, "SELECT id, unit, coalesce(season, -1), image_type, path, size, modified FROM local_artwork WHERE addon_id = $1",
-		id)
+	rows, err = s.db.Query(ctx, `SELECT id, unit, coalesce(season, -1), image_type, coalesce(file, ''), path, size, modified
+		FROM local_artwork WHERE addon_id = $1`, id)
 	if err != nil {
 		return err
 	}
 	stored := map[artworkKey]storedArtwork{}
 	var key artworkKey
 	var row storedArtwork
-	if _, err := pgx.ForEachRow(rows, []any{&row.id, &key.unit, &key.season, &key.imageType, &row.path, &row.file.size, &row.file.modified},
+	if _, err := pgx.ForEachRow(rows, []any{&row.id, &key.unit, &key.season, &key.imageType, &key.file, &row.path, &row.file.size,
+		&row.file.modified},
 		func() error {
 			stored[key] = row
 			return nil
@@ -425,12 +460,16 @@ func (s *Service) storeArtwork(ctx context.Context, id accounts.ID, kind, root s
 		if key.season >= 0 {
 			season = &key.season
 		}
+		var episodeFile *string
+		if key.file != "" {
+			episodeFile = &key.file
+		}
 		// Another file is another image: its identifier changes too.
-		batch.Queue(`INSERT INTO local_artwork (addon_id, unit, season, image_type, path, size, modified)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (addon_id, unit, season, image_type) DO UPDATE SET path = $5, size = $6, modified = $7,
-				id = CASE WHEN local_artwork.path = $5 THEN local_artwork.id ELSE gen_random_uuid() END`,
-			id, key.unit, season, key.imageType, rel, file.size, file.modified)
+		batch.Queue(`INSERT INTO local_artwork (addon_id, unit, season, image_type, file, path, size, modified)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (addon_id, unit, season, image_type, file) DO UPDATE SET path = $6, size = $7, modified = $8,
+				id = CASE WHEN local_artwork.path = $6 THEN local_artwork.id ELSE gen_random_uuid() END`,
+			id, key.unit, season, key.imageType, episodeFile, rel, file.size, file.modified)
 	}
 	var gone []accounts.ID
 	for key, old := range stored {
@@ -463,10 +502,10 @@ type artworkSet struct {
 	images          map[accounts.ID]library.Images
 }
 
-// Artwork returns the artwork of the titles and seasons of the server's
-// enabled movies and shows folders whose UseArtwork is on, and of the
-// videos of its home videos folders, by item (see library.TitleItemID and
-// library.SeasonItemID):
+// Artwork returns the artwork of the titles, seasons and episodes of the
+// server's enabled movies and shows folders whose UseArtwork is on, and of
+// the videos of its home videos folders, by item (see library.TitleItemID,
+// library.SeasonItemID and library.EpisodeItemID):
 // images Open opens, by URLs that change with their size and modification
 // time (see artworkURL). Of the images of a type several folders hold for
 // an item, the folder listed first among the server's sources gives it. A
@@ -501,22 +540,37 @@ func (s *Service) Artwork() map[accounts.ID]library.Images {
 func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Images, error) {
 	images := map[accounts.ID]library.Images{}
 	// The title of an image's unit is that of its files matched: a show's
-	// files at its top whose name tells no episode are not.
-	rows, err := s.db.Query(ctx, `SELECT a.id, l.kind, f.stremio_id, coalesce(a.season, -1), a.image_type, a.path, a.size, a.modified
+	// files at its top whose name tells no episode are not. An episode's
+	// image is that of the episodes its file holds, once matched.
+	rows, err := s.db.Query(ctx, `SELECT a.id, l.kind, f.stremio_id, coalesce(a.season, -1), a.file IS NOT NULL, coalesce(f.season, -1),
+			coalesce(f.episode, -1), coalesce(f.last_episode, f.episode, -1), a.image_type, a.path, a.size, a.modified
 		FROM local_artwork a JOIN local_folders l ON l.addon_id = a.addon_id JOIN addons d ON d.id = a.addon_id
-		CROSS JOIN LATERAL (SELECT stremio_id FROM local_files WHERE addon_id = a.addon_id AND unit = a.unit AND stremio_id IS NOT NULL
-			LIMIT 1) f
+		CROSS JOIN LATERAL (SELECT stremio_id, season, episode, last_episode FROM local_files
+			WHERE addon_id = a.addon_id AND unit = a.unit AND (a.file IS NULL OR path = a.file) AND stremio_id IS NOT NULL LIMIT 1) f
 		WHERE (l.use_artwork AND l.kind IN ('movies', 'shows') OR l.kind = 'homevideos') AND d.enabled
-		ORDER BY d.position, d.created_at, d.id, a.unit`)
+		ORDER BY d.position, d.created_at, d.id, a.unit, a.file`)
 	if err != nil {
 		return nil, err
 	}
 	var image accounts.ID
 	var kind, title, imageType, rel string
-	var season int
+	var season, fileSeason, episode, lastEpisode int
+	var episodic bool
 	var size int64
 	var modified time.Time
-	_, err = pgx.ForEachRow(rows, []any{&image, &kind, &title, &season, &imageType, &rel, &size, &modified}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&image, &kind, &title, &season, &episodic, &fileSeason, &episode, &lastEpisode, &imageType, &rel,
+		&size, &modified}, func() error {
+		url := artworkURL(image, rel, size, modified)
+		if episodic {
+			for number := episode; fileSeason >= 0 && number >= 0 && number <= lastEpisode; number++ {
+				item := library.EpisodeItemID(episodeVideoID(title, fileSeason, number))
+				set := images[item]
+				if setArtwork(&set, imageType, url) {
+					images[item] = set
+				}
+			}
+			return nil
+		}
 		item := library.TitleItemID(library.KindMovie, title)
 		switch {
 		case kind == KindHomeVideos:
@@ -527,7 +581,7 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 			item = library.TitleItemID(library.KindSeries, title)
 		}
 		set := images[item]
-		if !setArtwork(&set, imageType, artworkURL(image, rel, size, modified)) {
+		if !setArtwork(&set, imageType, url) {
 			return nil
 		}
 		images[item] = set

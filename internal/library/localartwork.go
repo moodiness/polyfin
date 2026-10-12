@@ -11,12 +11,13 @@ import (
 // Local artwork.
 //
 // Local folders of movies and shows may hold artwork beside their files:
-// posters, backdrops, logos and the like, of a movie, a show or a season
-// (see package localfiles). An image of a type replaces the addon's image
-// of that type for its title wherever the title shows, the other types
-// still coming from the addon; artwork an administrator uploaded wins over
-// both. Seasons and episodes show their series' local poster and backdrop
-// as they show its addon's, and episodes their season's local poster. In
+// posters, backdrops, logos and the like, of a movie, a show or a season,
+// and an episode's image (see package localfiles). An image of a type
+// replaces the addon's image of that type for its title wherever the title
+// shows, the other types still coming from the addon, and an episode's
+// image its still; artwork an administrator uploaded wins over both.
+// Seasons and episodes show their series' local poster and backdrop as
+// they show its addon's, and episodes their season's local poster. In
 // Images, a local image is a URL of its own (see LocalArtworkURL), which
 // Polyfin serves by opening the image in its folder (see
 // OpenLocalArtwork): no path nor address of the server's reaches apps.
@@ -61,6 +62,10 @@ func TitleItemID(kind Kind, stremioID string) accounts.ID { return itemID(titleK
 func SeasonItemID(seriesStremioID string, season int) accounts.ID {
 	return itemID(seasonKey(seriesStremioID, season))
 }
+
+// EpisodeItemID is the item of the episode of a video identifier, as the
+// series' metadata addon lists it.
+func EpisodeItemID(videoID string) accounts.ID { return itemID(episodeKey(videoID)) }
 
 // localArtwork returns the artwork of local folders, by item; none
 // without local folders.

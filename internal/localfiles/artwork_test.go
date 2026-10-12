@@ -56,27 +56,27 @@ func TestMovieArtworkNames(t *testing.T) {
 		"Disc (2006)/poster.jpg", "Disc (2006)/Disc (2006)-disc.png",
 	)
 	want := map[artworkKey]string{
-		{"Alone (2001)/Alone (2001).mkv", -1, "Primary"}:  "Alone (2001)/POSTER.jpg",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Logo"}:     "Alone (2001)/Logo.png",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Backdrop"}: "Alone (2001)/FanArt.jpeg",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Thumb"}:    "Alone (2001)/landscape.jpg",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Art"}:      "Alone (2001)/clearart.png",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Disc"}:     "Alone (2001)/discart.png",
-		{"Alone (2001)/Alone (2001).mkv", -1, "Banner"}:   "Alone (2001)/banner.jpg",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Primary", ""}:  "Alone (2001)/POSTER.jpg",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Logo", ""}:     "Alone (2001)/Logo.png",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Backdrop", ""}: "Alone (2001)/FanArt.jpeg",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Thumb", ""}:    "Alone (2001)/landscape.jpg",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Art", ""}:      "Alone (2001)/clearart.png",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Disc", ""}:     "Alone (2001)/discart.png",
+		{"Alone (2001)/Alone (2001).mkv", -1, "Banner", ""}:   "Alone (2001)/banner.jpg",
 
-		{"Versions (2002)/Versions (2002) - 1080p.mkv", -1, "Primary"}:  "Versions (2002)/folder.jpg",
-		{"Versions (2002)/Versions (2002) - 2160p.mkv", -1, "Primary"}:  "Versions (2002)/folder.jpg",
-		{"Versions (2002)/Versions (2002) - 2160p.mkv", -1, "Backdrop"}: "Versions (2002)/Versions (2002) - 2160p-fanart.jpg",
+		{"Versions (2002)/Versions (2002) - 1080p.mkv", -1, "Primary", ""}:  "Versions (2002)/folder.jpg",
+		{"Versions (2002)/Versions (2002) - 2160p.mkv", -1, "Primary", ""}:  "Versions (2002)/folder.jpg",
+		{"Versions (2002)/Versions (2002) - 2160p.mkv", -1, "Backdrop", ""}: "Versions (2002)/Versions (2002) - 2160p-fanart.jpg",
 
-		{"Shared/First (2003).mkv", -1, "Primary"}:  "Shared/First (2003)-poster.jpg",
-		{"Shared/First (2003).mkv", -1, "Backdrop"}: "Shared/First (2003)-backdrop2.jpg",
-		{"Shared/Second (2004).mkv", -1, "Primary"}: "Shared/Second (2004).jpg",
-		{"Shared/Second (2004).mkv", -1, "Logo"}:    "Shared/Second (2004)-clearlogo.png",
+		{"Shared/First (2003).mkv", -1, "Primary", ""}:  "Shared/First (2003)-poster.jpg",
+		{"Shared/First (2003).mkv", -1, "Backdrop", ""}: "Shared/First (2003)-backdrop2.jpg",
+		{"Shared/Second (2004).mkv", -1, "Primary", ""}: "Shared/Second (2004).jpg",
+		{"Shared/Second (2004).mkv", -1, "Logo", ""}:    "Shared/Second (2004)-clearlogo.png",
 
-		{"Mixed/Known (2005).mkv", -1, "Backdrop"}: "Mixed/Known (2005)-fanart-1.png",
+		{"Mixed/Known (2005).mkv", -1, "Backdrop", ""}: "Mixed/Known (2005)-fanart-1.png",
 
-		{"Disc (2006)", -1, "Primary"}: "Disc (2006)/poster.jpg",
-		{"Disc (2006)", -1, "Disc"}:    "Disc (2006)/Disc (2006)-disc.png",
+		{"Disc (2006)", -1, "Primary", ""}: "Disc (2006)/poster.jpg",
+		{"Disc (2006)", -1, "Disc", ""}:    "Disc (2006)/Disc (2006)-disc.png",
 	}
 	if got := chooseArtwork(KindMovies, "Movies", files, found); !maps.Equal(got, want) {
 		t.Errorf("artwork:\n got %v\nwant %v", got, want)
@@ -85,7 +85,7 @@ func TestMovieArtworkNames(t *testing.T) {
 	// A disc at the folder's root is named after the folder.
 	root := []imagedFile{{path: "BDMV/PLAYLIST/00800.mpls", unit: ".", title: "tt8"}}
 	if got := chooseArtwork(KindMovies, "Lone Disc", root, sideImagesOf("Lone Disc-poster.jpg", "fanart.jpg")); !maps.Equal(got,
-		map[artworkKey]string{{".", -1, "Primary"}: "Lone Disc-poster.jpg", {".", -1, "Backdrop"}: "fanart.jpg"}) {
+		map[artworkKey]string{{".", -1, "Primary", ""}: "Lone Disc-poster.jpg", {".", -1, "Backdrop", ""}: "fanart.jpg"}) {
 		t.Errorf("a disc at the root: %v", got)
 	}
 }
@@ -113,18 +113,72 @@ func TestShowArtworkNames(t *testing.T) {
 		"Show (2001)/Mixed/poster.jpg", "Loose - S01E01-poster.jpg", "folder.jpg",
 	)
 	want := map[artworkKey]string{
-		{"Show (2001)", -1, "Primary"}:  "Show (2001)/show.jpg",
-		{"Show (2001)", -1, "Backdrop"}: "Show (2001)/backdrop.jpg",
-		{"Show (2001)", -1, "Logo"}:     "Show (2001)/Show (2001)-logo.png",
-		{"Show (2001)", 1, "Primary"}:   "Show (2001)/season1-poster.png",
-		{"Show (2001)", 1, "Backdrop"}:  "Show (2001)/Season 01/fanart.jpg",
-		{"Show (2001)", 0, "Primary"}:   "Show (2001)/season-specials-poster.jpg",
-		{"Show (2001)", 0, "Banner"}:    "Show (2001)/Specials/banner.jpg",
-		{"Show (2001)", 2, "Banner"}:    "Show (2001)/Season02-Banner.jpg",
-		{"Show (2001)", 3, "Thumb"}:     "Show (2001)/season03-landscape.jpg",
+		{"Show (2001)", -1, "Primary", ""}:  "Show (2001)/show.jpg",
+		{"Show (2001)", -1, "Backdrop", ""}: "Show (2001)/backdrop.jpg",
+		{"Show (2001)", -1, "Logo", ""}:     "Show (2001)/Show (2001)-logo.png",
+		{"Show (2001)", 1, "Primary", ""}:   "Show (2001)/season1-poster.png",
+		{"Show (2001)", 1, "Backdrop", ""}:  "Show (2001)/Season 01/fanart.jpg",
+		{"Show (2001)", 0, "Primary", ""}:   "Show (2001)/season-specials-poster.jpg",
+		{"Show (2001)", 0, "Banner", ""}:    "Show (2001)/Specials/banner.jpg",
+		{"Show (2001)", 2, "Banner", ""}:    "Show (2001)/Season02-Banner.jpg",
+		{"Show (2001)", 3, "Thumb", ""}:     "Show (2001)/season03-landscape.jpg",
 	}
 	if got := chooseArtwork(KindShows, "Shows", files, found); !maps.Equal(got, want) {
 		t.Errorf("artwork:\n got %v\nwant %v", got, want)
+	}
+}
+
+// An episode's image is beside its file, named after it, "<name>-thumb"
+// first, then "<name>", then in a "metadata" folder beside it, in any
+// letter case, empty files left out; it is that of each episode a file
+// holds, an episode at the folder's top included. Discs, disc images and
+// files that are no episode have none, and other images beside an episode
+// are not its image.
+func TestEpisodeArtworkNames(t *testing.T) {
+	season := func(n int) *int { return &n }
+	files := []imagedFile{
+		{path: "Show (2001)/Season 01/Show - S01E01.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
+		{path: "Show (2001)/Season 01/Show - S01E02.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
+		{path: "Show (2001)/Season 01/Show - S01E03-E04.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
+		{path: "Show (2001)/Season 01/Show - S01E05.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
+		{path: "Show (2001)/Season 01/Show - S01E06.mkv", unit: "Show (2001)", title: "tt1", season: season(1)},
+		{path: "Show (2001)/Season 02/Disc 1/BDMV/PLAYLIST/00001.mpls", unit: "Show (2001)", title: "tt1", season: season(2)},
+		{path: "Show (2001)/Season 02/Box.iso#2", unit: "Show (2001)", title: "tt1", season: season(2)},
+		{path: "Show (2001)/Season 02/Single.iso", unit: "Show (2001)", title: "tt1", season: season(2)},
+		{path: "Show (2001)/Show (2001) Making Of.mkv", unit: "Show (2001)", title: "tt1"},
+		{path: "Loose - S01E01.mkv", unit: "Loose - S01E01.mkv", season: season(1)},
+	}
+	found := sideImagesOf(
+		"Show (2001)/Season 01/Show - S01E01.png", "Show (2001)/Season 01/Show - S01E01-thumb.jpg",
+		"Show (2001)/Season 01/metadata/Show - S01E02-thumb.jpg", "Show (2001)/Season 01/SHOW - S01E02.webp",
+		"Show (2001)/Season 01/metadata/Show - S01E03-E04.jpg",
+		"Show (2001)/Season 01/Show - S01E05-poster.jpg", "Show (2001)/Season 01/Show - S01E05-fanart.jpg",
+		"Show (2001)/Season 01/Show - S01E0-thumb.jpg", "Show (2001)/Season 01/Show - S01E05 - thumb.jpg",
+		"Show (2001)/Season 01/Other/Show - S01E05-thumb.jpg", "Show (2001)/Season 01/Show - S01E05-thumb.gif",
+		"empty:Show (2001)/Season 01/Show - S01E06-thumb.jpg", "Show (2001)/Season 01/Show - S01E06.jpeg",
+		"Show (2001)/Season 02/Disc 1/BDMV/PLAYLIST/00001-thumb.jpg", "Show (2001)/Season 02/Disc 1/BDMV/PLAYLIST/00001.jpg",
+		"Show (2001)/Season 02/Box-thumb.jpg", "Show (2001)/Season 02/Single-thumb.jpg",
+		"Show (2001)/Show (2001) Making Of-thumb.jpg",
+		"Loose - S01E01-thumb.png",
+	)
+	episode := func(file string) artworkKey {
+		unit := "Show (2001)"
+		if !strings.Contains(file, "/") {
+			unit = file
+		}
+		return artworkKey{unit: unit, season: -1, imageType: "Primary", file: file}
+	}
+	want := map[artworkKey]string{
+		episode("Show (2001)/Season 01/Show - S01E01.mkv"):     "Show (2001)/Season 01/Show - S01E01-thumb.jpg",
+		episode("Show (2001)/Season 01/Show - S01E02.mkv"):     "Show (2001)/Season 01/SHOW - S01E02.webp",
+		episode("Show (2001)/Season 01/Show - S01E03-E04.mkv"): "Show (2001)/Season 01/metadata/Show - S01E03-E04.jpg",
+		episode("Show (2001)/Season 01/Show - S01E06.mkv"):     "Show (2001)/Season 01/Show - S01E06.jpeg",
+		episode("Loose - S01E01.mkv"):                          "Loose - S01E01-thumb.png",
+	}
+	got := chooseArtwork(KindShows, "Shows", files, found)
+	maps.DeleteFunc(got, func(key artworkKey, _ string) bool { return key.file == "" })
+	if !maps.Equal(got, want) {
+		t.Errorf("episodes' images:\n got %v\nwant %v", got, want)
 	}
 }
 
@@ -277,6 +331,105 @@ func TestShowArtworkIsKept(t *testing.T) {
 		if images := e.artworkOf(item); images.Primary == "" || e.pictured(images.Primary) != want {
 			t.Errorf("%s: %+v", want, images)
 		}
+	}
+}
+
+// An episode's image beside its file is the image of each episode the
+// file holds; a scan notices one added, replaced or removed, the folder's
+// UseArtwork turns them off and on, and other images are not theirs.
+func TestEpisodeArtworkIsKept(t *testing.T) {
+	e := newEnv(t)
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	dir := t.TempDir()
+	season := filepath.Join(dir, "The Lone Ranger (1949)", "Season 01")
+	write(t, filepath.Join(season, "The Lone Ranger - S01E01.mkv"), 10)
+	write(t, filepath.Join(season, "The Lone Ranger - S01E02.mkv"), 10)
+	write(t, filepath.Join(season, "The Lone Ranger - S01E03-E04.mkv"), 10)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E01-thumb.jpg"), []byte("still 1"), at)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E03-E04.png"), []byte("still 3"), at)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E02-poster.jpg"), []byte("unrelated"), at)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E2-thumb.jpg"), []byte("unrelated"), at)
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Shows", Path: dir, Kind: KindShows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	pilot, second := library.EpisodeItemID("tt0041038:1:1"), library.EpisodeItemID("tt0041038:1:2")
+	for item, want := range map[accounts.ID]string{pilot: "still 1", library.EpisodeItemID("tt0041038:1:3"): "still 3",
+		library.EpisodeItemID("tt0041038:1:4"): "still 3"} {
+		if images := e.artworkOf(item); images.Primary == "" || e.pictured(images.Primary) != want {
+			t.Errorf("%s: %+v", want, images)
+		}
+	}
+	if images, ok := e.service.Artwork()[second]; ok {
+		t.Errorf("an episode without an image: %+v", images)
+	}
+
+	// Added, replaced, then removed.
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E02.jpg"), []byte("still 2"), at)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E01-thumb.jpg"), []byte("still 1, again"), at)
+	before := e.artworkOf(pilot).Primary
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if images := e.artworkOf(second); images.Primary == "" || e.pictured(images.Primary) != "still 2" {
+		t.Errorf("an image added: %+v", images)
+	}
+	replaced := e.artworkOf(pilot).Primary
+	if replaced == before || e.pictured(replaced) != "still 1, again" {
+		t.Errorf("an image replaced: %q, was %q", replaced, before)
+	}
+	if err := os.Remove(filepath.Join(season, "The Lone Ranger - S01E01-thumb.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if images, ok := e.service.Artwork()[pilot]; ok {
+		t.Errorf("an image removed: %+v", images)
+	}
+	key, _ := library.LocalArtworkKey(replaced)
+	if _, _, err := e.service.Open(t.Context(), key); err != ErrGone {
+		t.Errorf("a removed image opens: %v", err)
+	}
+
+	// Off, the episodes' images show no more; on, they are back.
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{UseArtwork: new(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.service.Artwork()) != 0 {
+		t.Errorf("artwork with the option off: %v", e.service.Artwork())
+	}
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{UseArtwork: new(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if images := e.artworkOf(second); images.Primary == "" || e.pictured(images.Primary) != "still 2" {
+		t.Errorf("with the option back on: %+v", images)
+	}
+}
+
+// An episode's image on a share is kept and read from the share.
+func TestShareEpisodeArtwork(t *testing.T) {
+	e := newEnv(t)
+	dir := t.TempDir()
+	season := filepath.Join(dir, "shows", "The Lone Ranger (1949)", "Season 01")
+	write(t, filepath.Join(season, "The Lone Ranger - S01E01.mkv"), 10)
+	still := content(50_000)
+	writeImage(t, filepath.Join(season, "The Lone Ranger - S01E01-thumb.webp"), still, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	server := serveWebDAV(t, dir, "reader", "pass")
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "NAS", Path: server.URL + "/shows/", Kind: KindShows, User: "reader",
+		Password: "pass"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	images := e.artworkOf(library.EpisodeItemID("tt0041038:1:1"))
+	key, ok := library.LocalArtworkKey(images.Primary)
+	if !ok || !strings.HasSuffix(key, ".webp") {
+		t.Fatalf("artwork: %+v", images)
+	}
+	if got := e.opened(key); got != string(still) {
+		t.Errorf("the still from the share: %d bytes", len(got))
 	}
 }
 

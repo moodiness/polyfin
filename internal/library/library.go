@@ -147,10 +147,11 @@ func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 // its music folders, those Eclipse addons answer: the pages of their rows,
 // album, artist and playlist pages, searches and streams, and also their
 // album artists, their playlists and the lyrics of their tracks. Artwork
-// is the artwork its movies and shows folders hold for titles and seasons,
-// by item (see TitleItemID and SeasonItemID); it is read from memory, for
-// every item listed, and never changed by its callers. Open opens one of
-// those images by its key (see LocalArtworkKey).
+// is the artwork its movies and shows folders hold for titles, seasons and
+// episodes, by item (see TitleItemID, SeasonItemID and EpisodeItemID); it
+// is read from memory, for every item listed, and never changed by its
+// callers. Open opens one of those images by its key (see
+// LocalArtworkKey).
 type Local interface {
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)

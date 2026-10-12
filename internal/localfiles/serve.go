@@ -27,6 +27,12 @@ const catalogPage = 100
 // episodeVideo is an episode's video identifier, "<series>:<season>:<episode>".
 var episodeVideo = regexp.MustCompile(`^(.+):(\d{1,4}):(\d{1,5})$`)
 
+// episodeVideoID is the video identifier of a series' episode (see
+// episodeVideo).
+func episodeVideoID(series string, season, episode int) string {
+	return fmt.Sprintf("%s:%d:%d", series, season, episode)
+}
+
 // Catalog answers a folder's catalog: its titles, the latest found first,
 // those whose name holds search when given, from skip; a home videos
 // folder's the latest recorded first (see homeCatalog).
@@ -102,7 +108,7 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 				continue
 			}
 			seen[[2]int{*season, number}] = true
-			meta.Videos = append(meta.Videos, stremio.Video{ID: fmt.Sprintf("%s:%d:%d", id, *season, number),
+			meta.Videos = append(meta.Videos, stremio.Video{ID: episodeVideoID(id, *season, number),
 				Title: fmt.Sprintf("Episode %d", number), Season: stremio.Number(*season), Episode: stremio.Number(number)})
 		}
 	}

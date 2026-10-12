@@ -9,15 +9,17 @@ import (
 // A local image replaces the addon's of its type, the others staying; a
 // season without a poster of its own shows its series' local one, but
 // keeps the addon's own poster unless it has a local one; episodes show
-// their series' local backdrop and poster and their season's local poster.
+// their series' local backdrop and poster and their season's local poster,
+// and their own local image in place of their still.
 func TestLocalArtworkApplies(t *testing.T) {
 	t.Parallel()
 	series, season, bare := TitleItemID(KindSeries, "tt1"), SeasonItemID("tt1", 1), SeasonItemID("tt1", 2)
-	movie := TitleItemID(KindMovie, "tt2")
+	movie, pilot := TitleItemID(KindMovie, "tt2"), EpisodeItemID("tt1:1:1")
 	local := map[accounts.ID]Images{
 		movie:  {Primary: "local:movie", Disc: "local:disc"},
 		series: {Primary: "local:series", Backdrop: "local:backdrop"},
 		season: {Primary: "local:season"},
+		pilot:  {Primary: "local:still"},
 	}
 	for _, c := range []struct {
 		name       string
@@ -43,6 +45,11 @@ func TestLocalArtworkApplies(t *testing.T) {
 				Images: Images{Primary: "addon:still", Backdrop: "addon:backdrop"}},
 			Item{Kind: KindEpisode, SeriesID: series, SeasonID: season, SeriesPoster: "local:series", SeasonPoster: "local:season",
 				Images: Images{Primary: "addon:still", Backdrop: "local:backdrop"}}},
+		{"episode with a local image",
+			Item{ID: pilot, Kind: KindEpisode, SeriesID: series, SeasonID: season, SeriesPoster: "addon:series", SeasonPoster: "addon:season",
+				Images: Images{Primary: "addon:still", Backdrop: "addon:backdrop"}},
+			Item{ID: pilot, Kind: KindEpisode, SeriesID: series, SeasonID: season, SeriesPoster: "local:series", SeasonPoster: "local:season",
+				Images: Images{Primary: "local:still", Backdrop: "local:backdrop"}}},
 	} {
 		item := c.item
 		applyLocal(&item, local)

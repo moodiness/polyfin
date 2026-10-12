@@ -81,6 +81,16 @@ func discEntry(rel string) (kind, disc string, ok bool) {
 	return "", "", false
 }
 
+// discFile reports whether rel is the entry of a disc or of a disc image,
+// or of one of their titles (see discEntry and titleOf).
+func discFile(rel string) bool {
+	if base, _, ok := titleOf(rel); ok {
+		rel = base
+	}
+	_, _, disc := discEntry(rel)
+	return disc || imageFile(rel)
+}
+
 // discTitlePath is the path a scan keeps for a disc's title other than its
 // main one when no file of its own stands for it, as a Blu-ray disc's
 // playlist does: the path of the file standing for the disc, the first VOB
