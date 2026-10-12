@@ -383,7 +383,7 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 	if err != nil {
 		return Item{}, err
 	}
-	program, ok := programItem(channel, guideVideo(p), p.SubTitle)
+	program, ok := guideItem(channel, p)
 	if !ok || program.ID != id {
 		return Item{}, ErrNotFound
 	}
@@ -416,9 +416,10 @@ func (s *Service) ProgramArtwork(ctx context.Context, id accounts.ID, imageType 
 func (s *Service) guideProgramme(ctx context.Context, ref programRef) (xmltv.Programme, error) {
 	var p xmltv.Programme
 	err := s.db.QueryRow(ctx, `SELECT p.starts_at, p.ends_at, p.title, p.subtitle, p.description, p.categories, coalesce(p.season, 0),
-		coalesce(p.episode, 0), p.icon FROM live_guide_programmes p JOIN live_guides g ON g.id = p.guide_id AND p.generation = g.generation
+		coalesce(p.episode, 0), p.icon, p.is_new, p.previously_shown
+		FROM live_guide_programmes p JOIN live_guides g ON g.id = p.guide_id AND p.generation = g.generation
 		WHERE p.guide_id = $1 AND p.xmltv_id = $2 AND p.starts_at = $3 LIMIT 1`, ref.guide, ref.xmltvID, ref.start).
-		Scan(&p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories, &p.Season, &p.Episode, &p.Icon)
+		Scan(&p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories, &p.Season, &p.Episode, &p.Icon, &p.New, &p.PreviouslyShown)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return xmltv.Programme{}, ErrNotFound
 	}

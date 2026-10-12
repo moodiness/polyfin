@@ -132,6 +132,9 @@ type Item struct {
 	// EpisodeTitle is the title of the episode a programme airs, when its
 	// guide gives one.
 	EpisodeTitle string
+	// New and Repeat tell a programme its XMLTV guide marks new, or
+	// previously shown; never both.
+	New, Repeat bool
 	// Music: a track's album, by name and item, and its artwork; a track's
 	// or album's artists, and the artists of a track's album, the first
 	// its album artist; whether it is explicit; and how many tracks an

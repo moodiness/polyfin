@@ -30,9 +30,9 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
   <programme channel="one-x" start="%s" stop="%s"><title>Guide One</title></programme>
   <programme channel="two-x" start="%s" stop="%s">
     <title>Talk Show</title><sub-title>Pilot</sub-title><desc>Caf%s.</desc><icon src="ICON"/>
-    <category>Sports</category><episode-num system="xmltv_ns">1.4.</episode-num>
+    <category>Sports</category><episode-num system="xmltv_ns">1.4.</episode-num><previously-shown/>
   </programme>
-  <programme channel="two-x" start="%s" stop="%s"><title>Late Movie</title><category>Movie</category></programme>
+  <programme channel="two-x" start="%s" stop="%s"><title>Late Movie</title><category>Movie</category><previously-shown/><new/></programme>
 </tv>`, at(-time.Hour), at(time.Hour), at(-time.Hour), at(time.Hour), "\xe9", at(time.Hour), at(3*time.Hour))
 	guide := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/talk.png" {
@@ -76,8 +76,12 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 	talk := programs.Items[0]
 	if talk.Name != "Talk Show" || talk.EpisodeTitle != "Pilot" || talk.IsSports == nil || talk.IsMovie != nil ||
 		talk.ParentIndexNumber == nil || *talk.ParentIndexNumber != 2 || talk.IndexNumber == nil || *talk.IndexNumber != 5 ||
-		talk.Overview == nil || *talk.Overview != "Café." || *talk.ChannelId != two.Id {
+		talk.Overview == nil || *talk.Overview != "Café." || *talk.ChannelId != two.Id || talk.IsRepeat == nil || !*talk.IsRepeat {
 		t.Errorf("guide programme: %+v", talk)
+	}
+	// Marked new, a programme is no repeat.
+	if late := programs.Items[1]; late.Name != "Late Movie" || late.IsRepeat != nil {
+		t.Errorf("a new programme: %+v", late)
 	}
 	// Its image is relayed from the guide's address, which no item keeps.
 	if status, header, _ := s.send(http.MethodGet, "/Items/"+talk.Id+"/Images/Primary?tag="+talk.ImageTags["Primary"], "", "", ""); talk.ImageTags["Primary"] == "" ||
@@ -123,7 +127,7 @@ func TestXMLTVGuideFillsChannelsWithoutNativeEPG(t *testing.T) {
 	for _, path := range []string{"/LiveTv/Programs/" + talk.Id, "/Items/" + talk.Id} {
 		var detail BaseItemDto
 		if status := s.get(t, path, token, &detail); status != http.StatusOK || detail.Name != "Talk Show" ||
-			detail.EpisodeTitle != "Pilot" || detail.ChannelName != "Two" || detail.Type != "Program" {
+			detail.EpisodeTitle != "Pilot" || detail.ChannelName != "Two" || detail.Type != "Program" || detail.IsRepeat == nil || !*detail.IsRepeat {
 			t.Errorf("%s: %d %+v", path, status, detail)
 		}
 	}

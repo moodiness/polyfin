@@ -379,7 +379,7 @@ func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g add
 				}
 				select {
 				case rows <- []any{g.ID, generation, p.Channel, p.Start, p.Stop, p.Title, p.SubTitle, p.Description, nonNilStrings(p.Categories),
-					positive(p.Season), positive(p.Episode), p.Icon}:
+					positive(p.Season), positive(p.Episode), p.Icon, p.New, p.PreviouslyShown}:
 					return nil
 				case <-ctx.Done():
 					return ctx.Err()
@@ -388,7 +388,7 @@ func (s *Service) downloadGuide(ctx context.Context, c addons.LiveCatalog, g add
 	}()
 	source := &programmeRows{rows: rows}
 	written, copyErr := s.db.CopyFrom(ctx, pgx.Identifier{"live_guide_programmes"}, []string{"guide_id", "generation", "xmltv_id", "starts_at",
-		"ends_at", "title", "subtitle", "description", "categories", "season", "episode", "icon"}, source)
+		"ends_at", "title", "subtitle", "description", "categories", "season", "episode", "icon", "is_new", "previously_shown"}, source)
 	if copyErr != nil {
 		cancel()
 		for range rows {
@@ -553,7 +553,7 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 	starts := map[start]bool{}
 	read := func(from, to time.Time) error {
 		rows, err := s.db.Query(ctx, `SELECT c.channel_id, p.guide_id, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description,
-			p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon
+			p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon, p.is_new, p.previously_shown
 			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, number)
 			JOIN live_guides g ON g.id = c.guide_id
 			JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = c.xmltv_id
@@ -565,13 +565,12 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 		var channel, guide accounts.ID
 		var xmltvID string
 		_, err = pgx.ForEachRow(rows, []any{&channel, &guide, &xmltvID, &p.Start, &p.Stop, &p.Title, &p.SubTitle, &p.Description, &p.Categories,
-			&p.Season, &p.Episode, &p.Icon}, func() error {
+			&p.Season, &p.Episode, &p.Icon, &p.New, &p.PreviouslyShown}, func() error {
 			if starts[start{channel, p.Start.UnixNano()}] || q.Limit > 0 && len(items) >= q.Limit {
 				return nil
 			}
 			starts[start{channel, p.Start.UnixNano()}] = true
-			video := guideVideo(p)
-			program, ok := programItem(byID[channel], video, p.SubTitle)
+			program, ok := guideItem(byID[channel], p)
 			if !ok {
 				return nil
 			}
@@ -605,6 +604,14 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 		from = to
 	}
 	return items, nil
+}
+
+// guideItem describes an XMLTV programme of a channel's guide, with its
+// episode title and the guide's marks.
+func guideItem(channel Item, p xmltv.Programme) (Item, bool) {
+	item, ok := programItem(channel, guideVideo(p), p.SubTitle)
+	item.New, item.Repeat = p.New, p.PreviouslyShown
+	return item, ok
 }
 
 // guideVideo describes an XMLTV programme as the Native EPG does, which

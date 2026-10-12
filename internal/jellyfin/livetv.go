@@ -142,6 +142,9 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 				*field = new(true)
 			}
 		}
+		if item.Repeat {
+			dto.IsRepeat = new(true)
+		}
 	}
 }
 

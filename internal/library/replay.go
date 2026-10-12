@@ -70,8 +70,9 @@ func keepArchived(ctx context.Context, tx pgx.Tx, g addons.Guide, generation int
 		ids, since = append(ids, id), append(since, at.Add(-reach))
 	}
 	tag, err := tx.Exec(ctx, `INSERT INTO live_guide_programmes (guide_id, generation, xmltv_id, starts_at, ends_at, title, subtitle,
-			description, categories, season, episode, icon)
-		SELECT p.guide_id, $2, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description, p.categories, p.season, p.episode, p.icon
+			description, categories, season, episode, icon, is_new, previously_shown)
+		SELECT p.guide_id, $2, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description, p.categories, p.season, p.episode, p.icon,
+			p.is_new, p.previously_shown
 		FROM unnest($4::text[], $5::timestamptz[]) AS a (xmltv_id, since)
 		JOIN live_guide_programmes p ON p.guide_id = $1 AND p.generation = $3 AND p.xmltv_id = a.xmltv_id
 		WHERE p.ends_at <= $6 AND p.ends_at > a.since AND NOT EXISTS (SELECT 1 FROM live_guide_programmes n

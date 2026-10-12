@@ -144,7 +144,9 @@ type BaseItemDto struct {
 	IsNews                 *bool        `json:",omitempty"`
 	IsKids                 *bool        `json:",omitempty"`
 	IsSports               *bool        `json:",omitempty"`
-	ChannelType            string       `json:",omitempty"`
+	// IsRepeat marks a programme its guide marks previously shown.
+	IsRepeat    *bool  `json:",omitempty"`
+	ChannelType string `json:",omitempty"`
 	// EpisodeTitle is the title of the episode a programme airs.
 	EpisodeTitle string `json:",omitempty"`
 	// The fields of music (see describeMusic): a track's album and its
