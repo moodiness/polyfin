@@ -18,6 +18,7 @@ import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
+import MetricsToken from './MetricsToken'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
@@ -124,6 +125,18 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
           className="max-w-md"
         />
       </FieldRow>
+      <SwitchRow
+        anchor="metrics"
+        label={s.metrics}
+        help={s.metricsHelp}
+        checked={form.metrics}
+        onChange={(metrics) => update({ metrics })}
+      />
+      {form.metrics && (
+        <SettingRow anchor="metrics-token">
+          <MetricsToken saved={form.metricsTokenSet} />
+        </SettingRow>
+      )}
     </SettingsGroup>
   )
 }

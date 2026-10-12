@@ -368,6 +368,10 @@ export type Settings = {
    * watch histories of tracking services. One of its bounds' choices.
    */
   importEveryMinutes: number
+  /** Whether /metrics answers Prometheus. */
+  metrics: boolean
+  /** Whether Polyfin made the metrics token (read-only): never sent, revealed on demand. */
+  metricsTokenSet: boolean
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1836,11 +1840,14 @@ export const saveSettings = (settings: Settings) =>
 
 /** The server's secrets an administrator can read again. */
 export type ServerSecretName =
-  'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret' | 'lastFmSecret'
+  'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret' | 'lastFmSecret' | 'metricsToken'
 
 /** Reads one of the server's saved secrets again, for an administrator; never cached. */
 export const revealServerSecret = async (name: ServerSecretName) =>
   (await request<{ value: string }>('POST', `/settings/secrets/${seg(name)}/reveal`)).value
+
+/** Makes a new metrics token, which ends the former one; answers the settings. */
+export const newMetricsToken = () => request<Settings>('POST', '/settings/metrics-token')
 
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 

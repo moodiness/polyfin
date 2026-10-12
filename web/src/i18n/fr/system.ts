@@ -286,6 +286,7 @@ const system: typeof en = {
         traktClientSecret: 'Client secret Trakt',
         lastFmSecret: 'Secret partagé Last.fm',
         smtpPassword: 'Mot de passe SMTP',
+        metricsToken: 'Jeton des métriques',
       },
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
       targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,

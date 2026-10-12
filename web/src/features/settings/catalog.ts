@@ -84,6 +84,28 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['PublishedServerUrl', 'LocalAddress', 'Docker', 'IP', 'URL'],
     codes: ['invalid_local_address'],
   },
+  {
+    section: 'general',
+    anchor: 'metrics',
+    label: (t) => s(t).metrics,
+    help: (t) => s(t).metricsHelp,
+    keywords: [
+      'Prometheus',
+      'Grafana',
+      'metrics',
+      'métriques',
+      'monitoring',
+      'supervision',
+      '/metrics',
+    ],
+  },
+  {
+    section: 'general',
+    anchor: 'metrics-token',
+    label: (t) => s(t).metricsToken,
+    help: (t) => s(t).metricsTokenHelp,
+    keywords: ['Prometheus', 'bearer', 'token', 'jeton'],
+  },
   // Playback
   {
     section: 'playback',

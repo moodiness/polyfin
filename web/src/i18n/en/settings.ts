@@ -48,6 +48,18 @@ const settings = {
     localAddress: 'Address on the local network',
     localAddressHelp:
       'The address apps on the local network reach Polyfin at, such as http://192.168.1.10:8096. Discovery answers give it, and Jellyfin apps read it as the server’s local address. Empty, the answers give the address of the network interface that reaches the app, which is right unless Polyfin runs in a Docker bridge network: there, enter the host’s address and Polyfin’s port.',
+    metrics: 'Expose metrics',
+    metricsHelp:
+      'Serves Polyfin’s metrics to Prometheus at /metrics: playbacks, conversions, addon requests, imports, notifications, HTTP requests, scans, the database, disk space and the process. They name no user, title, address or device. Prometheus sends the metrics token with each request; without it, /metrics answers 401, and while this is off, 404.',
+    metricsToken: 'Metrics token',
+    metricsTokenHelp:
+      'Made by Polyfin when metrics are first turned on. Prometheus sends it as a bearer token: see the administration docs for a scrape configuration.',
+    metricsTokenPending: 'Polyfin makes the metrics token when you save.',
+    newMetricsToken: 'Make a new token',
+    newMetricsTokenTitle: 'Make a new metrics token?',
+    newMetricsTokenConfirm:
+      'The current token stops working at once: Prometheus needs the new one to read the metrics.',
+    newMetricsTokenMade: 'New metrics token made',
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',

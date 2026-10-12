@@ -51,6 +51,18 @@ const settings: typeof en = {
     localAddress: 'Adresse sur le réseau local',
     localAddressHelp:
       'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
+    metrics: 'Exposer les métriques',
+    metricsHelp:
+      'Sert les métriques de Polyfin à Prometheus à l’adresse /metrics : lectures, conversions, requêtes aux addons, imports, notifications, requêtes HTTP, analyses de dossiers, base de données, espace disque et processus. Elles ne nomment aucun utilisateur, titre, adresse ni appareil. Prometheus envoie le jeton des métriques avec chaque requête ; sans lui, /metrics répond 401, et tant que cette option est désactivée, 404.',
+    metricsToken: 'Jeton des métriques',
+    metricsTokenHelp:
+      'Créé par Polyfin la première fois que les métriques sont activées. Prometheus l’envoie comme jeton Bearer : la documentation d’administration donne une configuration de collecte.',
+    metricsTokenPending: 'Polyfin crée le jeton des métriques à l’enregistrement.',
+    newMetricsToken: 'Créer un nouveau jeton',
+    newMetricsTokenTitle: 'Créer un nouveau jeton des métriques ?',
+    newMetricsTokenConfirm:
+      'Le jeton actuel cesse aussitôt de fonctionner : Prometheus a besoin du nouveau pour lire les métriques.',
+    newMetricsTokenMade: 'Nouveau jeton des métriques créé',
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
