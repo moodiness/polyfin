@@ -154,5 +154,12 @@ ENV POLYFIN_LISTEN=:8096 POLYFIN_DATA_DIR=/data NVIDIA_VISIBLE_DEVICES=all NVIDI
 	MESA_SHADER_CACHE_DISABLE=true
 EXPOSE 8096
 USER 65532:65532
+# Whether Polyfin answers /healthz, which it does while its process serves,
+# even with PostgreSQL away (System › Health tells that): the binary asks,
+# the image having no HTTP client. Every 2 seconds while it starts, as
+# proxies such as Traefik leave out starting containers; Docker before 25
+# ignores --start-interval and checks every 30 seconds from the start.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=2m --start-interval=2s \
+	CMD ["/polyfin", "healthcheck"]
 ENTRYPOINT ["/polyfin"]
 CMD ["serve"]
