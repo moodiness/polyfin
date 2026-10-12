@@ -8,6 +8,7 @@ const account = {
       statistics: 'Statistics',
       tracking: 'Tracking',
       import: 'Import from another server',
+      appImport: 'Import from an app',
       notifications: 'Notifications',
       devices: 'Devices',
       password: 'Password',
@@ -28,6 +29,75 @@ const account = {
       started: 'The import has started. You can leave this page: it goes on.',
       lastTitle: 'Your last import',
       from: (server: string) => `From ${server}`,
+    },
+    appImport: {
+      description:
+        'Bring over what you watched in an app built on addons: the movies and episodes you played with their dates, your resume points, and the app’s library as favorites, matched by IMDb, TMDB or Kitsu. They only add to what Polyfin already has, and nothing is written to the app.',
+      apps: { nuvio: 'Nuvio' },
+      backend: 'Nuvio backend',
+      backendHelp:
+        'Leave it empty for Nuvio’s own. A self-hosted backend works too, at its address, on the local network as well.',
+      email: 'Email',
+      password: 'Password',
+      passwordHelp:
+        'Used to read the account only, and never kept. Polyfin signs in as Nuvio’s apps do, reads the account, then signs out.',
+      signIn: 'Sign in to Nuvio',
+      signingIn: 'Signing in…',
+      chooseTitle: 'Choose what to import',
+      chooseHelp:
+        'Nuvio keeps a history for each profile: choose the one to import. Polyfin keeps what it read for a few minutes only.',
+      profile: 'Profile',
+      profileNumber: (id: string) => `Profile ${id}`,
+      profileCounts: (played: number, resumes: number, library: number) =>
+        `${played} watched, ${resumes === 1 ? '1 resume point' : `${resumes} resume points`}, ${library} in the library.`,
+      addons: 'Addons',
+      addonsHelp:
+        'Each addon ticked becomes one of the account’s own addons, under My sources. Its address may hold settings and keys: Polyfin never shows it whole.',
+      addonsOff: 'Own addons are turned off for this account: the app’s addons are not offered.',
+      noAddons: 'This profile has no addon.',
+      back: 'Sign in again',
+      start: 'Import this profile',
+      starting: 'Starting…',
+      started: 'The import has started. You can leave this page: it goes on.',
+      currentTitle: 'Import in progress',
+      lastTitle: 'Last import',
+      ownLastTitle: 'Your last import',
+      from: (app: string, profile: string) => `From ${app}, profile ${profile}`,
+      startedLabel: 'Started',
+      endedLabel: 'Ended',
+      startedBy: (name: string) => `Started by ${name}`,
+      states: { running: 'Running', done: 'Done', failed: 'Failed' },
+      problem:
+        'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
+      runningHelp:
+        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
+      read: (count: number) => (count === 1 ? '1 title read.' : `${count} titles read.`),
+      counts: (read: number, played: number, resumed: number, favorites: number) =>
+        `${read === 1 ? '1 title read' : `${read} titles read`}: ${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}.`,
+      unmatched: (count: number) =>
+        count === 1 ? '1 title not found' : `${count} titles not found`,
+      unmatchedTitle: 'Titles not found',
+      unmatchedHelp:
+        'These titles were not imported: the app names them by an identifier Polyfin does not match, or no Polyfin title has it.',
+      titleColumn: 'Title',
+      kindColumn: 'Kind',
+      reasonColumn: 'Reason',
+      reasons: {
+        other_identifier: 'Not an IMDb, TMDB or Kitsu identifier',
+        not_found: 'Not in Polyfin',
+      },
+      addonInstalled: 'added',
+      addonWaiting: 'waiting',
+      addonProblems: {
+        not_allowed: 'not added: own addons were turned off',
+        exists: 'installed already',
+        invalid_address: 'not added: not an addon’s address',
+        private_network:
+          'not added: on a local network, which only an administrator’s import reaches',
+        unreachable: 'not added: the addon did not answer',
+        invalid_manifest: 'not added: not an addon',
+        internal: 'not added: Polyfin ran into an error',
+      },
     },
     statisticsHelp:
       'What you watched on this server: hours, titles, apps and devices, and your recent playbacks.',

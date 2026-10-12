@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Statistiques',
       tracking: 'Suivi',
       import: 'Importer depuis un autre serveur',
+      appImport: 'Importer depuis une appli',
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
@@ -29,6 +30,76 @@ const account: typeof en = {
       started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
       lastTitle: 'Votre dernière importation',
       from: (server: string) => `Depuis ${server}`,
+    },
+    appImport: {
+      description:
+        'Reprenez ce que vous avez regardé dans une appli basée sur des addons : les films et épisodes vus avec leurs dates, vos points de reprise, et la bibliothèque de l’appli en favoris, reconnus par IMDb, TMDB ou Kitsu. Ils complètent seulement ce que Polyfin a déjà, et rien n’est écrit dans l’appli.',
+      apps: { nuvio: 'Nuvio' },
+      backend: 'Serveur Nuvio',
+      backendHelp:
+        'Laissez vide pour celui de Nuvio. Un serveur auto-hébergé fonctionne aussi, à son adresse, y compris sur le réseau local.',
+      email: 'E-mail',
+      password: 'Mot de passe',
+      passwordHelp:
+        'Il sert seulement à lire le compte, et n’est jamais gardé. Polyfin se connecte comme les applis Nuvio, lit le compte, puis se déconnecte.',
+      signIn: 'Se connecter à Nuvio',
+      signingIn: 'Connexion…',
+      chooseTitle: 'Choisir quoi importer',
+      chooseHelp:
+        'Nuvio garde un historique par profil : choisissez celui à importer. Polyfin garde ce qu’il a lu quelques minutes seulement.',
+      profile: 'Profil',
+      profileNumber: (id: string) => `Profil ${id}`,
+      profileCounts: (played: number, resumes: number, library: number) =>
+        `${played} vus, ${resumes <= 1 ? `${resumes} point de reprise` : `${resumes} points de reprise`}, ${library} dans la bibliothèque.`,
+      addons: 'Addons',
+      addonsHelp:
+        'Chaque addon coché devient un addon propre au compte, sous Mes sources. Son adresse peut contenir des réglages et des clés : Polyfin ne la montre jamais en entier.',
+      addonsOff:
+        'Les addons personnels sont désactivés pour ce compte : les addons de l’appli ne sont pas proposés.',
+      noAddons: 'Ce profil n’a aucun addon.',
+      back: 'Se reconnecter',
+      start: 'Importer ce profil',
+      starting: 'Lancement…',
+      started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
+      currentTitle: 'Importation en cours',
+      lastTitle: 'Dernière importation',
+      ownLastTitle: 'Votre dernière importation',
+      from: (app: string, profile: string) => `Depuis ${app}, profil ${profile}`,
+      startedLabel: 'Commencée',
+      endedLabel: 'Terminée',
+      startedBy: (name: string) => `Lancée par ${name}`,
+      states: { running: 'En cours', done: 'Terminée', failed: 'Échouée' },
+      problem:
+        'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur en dit plus. Ce qui a été importé est conservé.',
+      runningHelp:
+        'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, elle s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien deux fois.',
+      read: (count: number) => (count <= 1 ? `${count} titre lu.` : `${count} titres lus.`),
+      counts: (read: number, played: number, resumed: number, favorites: number) =>
+        `${read <= 1 ? `${read} titre lu` : `${read} titres lus`} : ${played} marqués vus, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}.`,
+      unmatched: (count: number) =>
+        count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
+      unmatchedTitle: 'Titres introuvables',
+      unmatchedHelp:
+        'Ces titres n’ont pas été importés : l’appli les nomme par un identifiant que Polyfin ne reconnaît pas, ou aucun titre de Polyfin ne l’a.',
+      titleColumn: 'Titre',
+      kindColumn: 'Type',
+      reasonColumn: 'Raison',
+      reasons: {
+        other_identifier: 'Pas un identifiant IMDb, TMDB ou Kitsu',
+        not_found: 'Absent de Polyfin',
+      },
+      addonInstalled: 'ajouté',
+      addonWaiting: 'en attente',
+      addonProblems: {
+        not_allowed: 'non ajouté : les addons personnels ont été désactivés',
+        exists: 'déjà installé',
+        invalid_address: 'non ajouté : ce n’est pas l’adresse d’un addon',
+        private_network:
+          'non ajouté : sur un réseau local, que seule l’importation d’un administrateur atteint',
+        unreachable: 'non ajouté : l’addon n’a pas répondu',
+        invalid_manifest: 'non ajouté : ce n’est pas un addon',
+        internal: 'non ajouté : Polyfin a rencontré une erreur',
+      },
     },
     statisticsHelp:
       'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',

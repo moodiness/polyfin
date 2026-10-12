@@ -287,7 +287,19 @@ const common = {
       'This key is a user’s own, and Emby does not tell whose it is. Create an API key in Emby’s settings, or connect with a user account.',
     server_import_running: 'Another import is running on this server. Try again in a few minutes.',
     server_imports_disabled:
-      'Importing your watch history from another server is turned off on this server.',
+      'Importing your watch history from another server or app is turned off on this server.',
+    invalid_nuvio_address:
+      'Enter the address of the Nuvio backend, such as https://api.nuvio.tv, or leave it empty for Nuvio’s own.',
+    nuvio_sign_in_refused: 'Nuvio refused this email or password.',
+    nuvio_unreachable: 'The Nuvio backend did not answer. Check its address, and try again later.',
+    not_nuvio:
+      'Something answered at this address, but not a Nuvio backend. Check the address, or leave it empty for Nuvio’s own.',
+    nuvio_rate_limited: 'Nuvio asks to wait before signing in again. Try again in a few minutes.',
+    nuvio_backup_unsupported:
+      'Nuvio answered its account data in a form this version of Polyfin does not read. Polyfin reads version 1 of Nuvio’s account backup.',
+    app_import_expired:
+      'What was read of the account is no longer kept, after a few minutes. Sign in again.',
+    app_import_running: 'An import into this account is running. Wait for it to end.',
   },
   status: {
     title: 'Server status',

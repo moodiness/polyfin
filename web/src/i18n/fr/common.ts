@@ -309,7 +309,21 @@ const common: typeof en = {
     server_import_running:
       'Une autre importation est en cours sur ce serveur. Réessayez dans quelques minutes.',
     server_imports_disabled:
-      'L’importation de votre historique depuis un autre serveur est désactivée sur ce serveur.',
+      'L’importation de votre historique depuis un autre serveur ou une appli est désactivée sur ce serveur.',
+    invalid_nuvio_address:
+      'Saisissez l’adresse du serveur Nuvio, par exemple https://api.nuvio.tv, ou laissez vide pour celui de Nuvio.',
+    nuvio_sign_in_refused: 'Nuvio a refusé cet e-mail ou ce mot de passe.',
+    nuvio_unreachable:
+      'Le serveur Nuvio n’a pas répondu. Vérifiez son adresse, et réessayez plus tard.',
+    not_nuvio:
+      'Quelque chose a répondu à cette adresse, mais pas un serveur Nuvio. Vérifiez l’adresse, ou laissez vide pour celui de Nuvio.',
+    nuvio_rate_limited:
+      'Nuvio demande d’attendre avant de se reconnecter. Réessayez dans quelques minutes.',
+    nuvio_backup_unsupported:
+      'Nuvio a donné les données du compte sous une forme que cette version de Polyfin ne lit pas. Polyfin lit la version 1 de la sauvegarde de compte de Nuvio.',
+    app_import_expired:
+      'Ce qui a été lu du compte n’est plus gardé, après quelques minutes. Reconnectez-vous.',
+    app_import_running: 'Une importation dans ce compte est en cours. Attendez qu’elle se termine.',
   },
   status: {
     title: 'État du serveur',

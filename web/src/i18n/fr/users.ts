@@ -343,6 +343,15 @@ const users: typeof en = {
       },
       more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
     },
+    appImport: {
+      open: 'Importer depuis une appli',
+      title: 'Importer depuis une appli',
+      description:
+        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons : les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli en favoris, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli ; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
+      user: 'Dans le compte de',
+      userHelp:
+        'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',
+    },
   },
   invites: {
     title: 'Liens d’invitation',

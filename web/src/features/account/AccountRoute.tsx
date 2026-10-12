@@ -2,13 +2,24 @@ import {
   ArrowSquareInIcon,
   BellIcon,
   ChartBarIcon,
+  DeviceMobileIcon,
   DevicesIcon,
   ListChecksIcon,
   PasswordIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { fetchMyDevices, fetchOwnImport, queryKeys, signOutMyDevice } from '@/api'
+import {
+  fetchMyDevices,
+  fetchOwnAppImport,
+  fetchOwnImport,
+  queryClient,
+  queryKeys,
+  signOutMyDevice,
+  startOwnAppImport,
+  readOwnNuvio,
+  type OwnAppImport,
+} from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import DeviceList from '@/features/users/DeviceList'
@@ -16,6 +27,7 @@ import NotificationTargets from '@/features/notifications/NotificationTargets'
 import StatisticsView from '@/features/statistics/StatisticsView'
 import { useI18n } from '@/i18n'
 import { SectionNav } from '@/ui'
+import AppImport from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
@@ -24,6 +36,7 @@ const sectionIds = [
   'statistics',
   'tracking',
   'import',
+  'app-import',
   'notifications',
   'devices',
   'password',
@@ -34,8 +47,9 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, importing from another server (unless the server
- * turns it off), notifications, devices and password, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, importing from another server and from an app
+ * (unless the server turns it off), notifications, devices and password, with a list of sections
+ * beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -49,8 +63,15 @@ export default function AccountRoute() {
     refetchInterval: (query) =>
       query.state.data?.import?.state === 'running' ? ownImportPollMs : false,
   })
+  const ownAppImport = useQuery({
+    queryKey: queryKeys.ownAppImport,
+    queryFn: ({ signal }) => fetchOwnAppImport(signal),
+    refetchInterval: (query) =>
+      query.state.data?.import?.state === 'running' ? ownImportPollMs : false,
+  })
   // Shown once the server says the setting allows it.
   const importing = ownImport.data?.enabled === true
+  const importingFromApps = ownAppImport.data?.enabled === true
 
   return (
     <PageLayout
@@ -88,6 +109,16 @@ export default function AccountRoute() {
                   },
                 ]
               : []),
+            ...(importingFromApps
+              ? [
+                  {
+                    id: 'app-import' as const,
+                    label: text.sections.appImport,
+                    icon: DeviceMobileIcon,
+                    to: '#app-import',
+                  },
+                ]
+              : []),
             {
               id: 'notifications',
               label: text.sections.notifications,
@@ -115,6 +146,27 @@ export default function AccountRoute() {
           help={text.serverImport.description}
         >
           <ServerImport current={ownImport.data?.import ?? null} />
+        </AccountSection>
+      )}
+      {importingFromApps && (
+        <AccountSection
+          id="app-import"
+          title={text.sections.appImport}
+          help={text.appImport.description}
+        >
+          <AppImport
+            current={ownAppImport.data?.import ?? null}
+            addonsAllowed={ownAppImport.data?.addonsAllowed === true}
+            readNuvio={readOwnNuvio}
+            start={startOwnAppImport}
+            onStarted={(started) =>
+              queryClient.setQueryData<OwnAppImport>(
+                queryKeys.ownAppImport,
+                (data) => data && { ...data, import: started },
+              )
+            }
+            own
+          />
         </AccountSection>
       )}
       <AccountSection

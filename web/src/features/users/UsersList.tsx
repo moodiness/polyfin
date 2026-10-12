@@ -1,6 +1,7 @@
 import {
   ArrowSquareInIcon,
   CaretRightIcon,
+  DeviceMobileIcon,
   DownloadSimpleIcon,
   LinkIcon,
   PlusIcon,
@@ -41,9 +42,9 @@ import { CreateInviteModal, InviteLinks } from './InviteLinks'
 import { clockTime, useRestrictions } from './shared'
 
 /**
- * `/users`: every account, each opening its page, the button to create one, the one importing
- * accounts from a Jellyfin server, the one turning downloads off for everyone, and the invite
- * links, with the button to create one.
+ * `/users`: every account, each opening its page, the button to create one, the ones importing
+ * accounts from a Jellyfin server and a user's watch data from an app, the one turning downloads
+ * off for everyone, and the invite links, with the button to create one.
  */
 export default function UsersList() {
   const { t } = useI18n()
@@ -79,6 +80,9 @@ export default function UsersList() {
       </Button>
       <ButtonLink to="/users/jellyfin-import" icon={ArrowSquareInIcon}>
         {t.users.jellyfinImport.open}
+      </ButtonLink>
+      <ButtonLink to="/users/app-import" icon={DeviceMobileIcon}>
+        {t.users.appImport.open}
       </ButtonLink>
       <Button icon={LinkIcon} onClick={() => setInviting(true)}>
         {t.invites.create}

@@ -331,6 +331,14 @@ const users = {
       },
       more: (count: number) => `And ${count} more.`,
     },
+    appImport: {
+      open: 'Import from an app',
+      title: 'Import from an app',
+      description:
+        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library as favorites, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
+      user: 'Into the account of',
+      userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
+    },
   },
   invites: {
     title: 'Invite links',

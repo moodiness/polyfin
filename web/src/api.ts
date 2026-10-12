@@ -1535,6 +1535,116 @@ export const startOwnImport = async (body: {
 }) =>
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
 
+/** An app whose accounts Polyfin imports. */
+export type AppKind = 'nuvio'
+
+/** An addon a profile of an app offers to install, by its index; its address is redacted. */
+export type AppAddon = { index: number; name: string; address: string }
+
+/**
+ * A profile of an app account: the titles it holds, how many it played, resumed and keeps in its
+ * library, and its addons. `name` is empty when the app gives none.
+ */
+export type AppProfile = {
+  id: string
+  name: string
+  entries: number
+  played: number
+  resumes: number
+  library: number
+  addons: AppAddon[]
+}
+
+/** An app account read: the server holds it a few minutes under `key`, while a profile is chosen. */
+export type AppAccount = { key: string; app: AppKind; profiles: AppProfile[] }
+
+/** A title of the app no Polyfin title matched, by its identifier in the app. */
+export type AppUnmatched = {
+  id: string
+  name: string
+  type: 'movie' | 'series' | 'episode'
+  season: number | null
+  episode: number | null
+  reason: 'other_identifier' | 'not_found'
+}
+
+/** An addon an import installs as the user's own, and why it was not. */
+export type AppAddonInstalled = {
+  name: string
+  address: string
+  installed: boolean
+  problem:
+    | 'not_allowed'
+    | 'exists'
+    | 'invalid_address'
+    | 'private_network'
+    | 'unreachable'
+    | 'invalid_manifest'
+    | 'internal'
+    | null
+}
+
+/** An import from an app into a user's account, running or the last one since Polyfin started. */
+export type AppImportStatus = {
+  id: string
+  app: AppKind
+  profile: string
+  user: { id: string; name: string }
+  startedBy: { id: string; name: string }
+  state: 'running' | 'done' | 'failed'
+  problem: 'internal' | null
+  startedAt: string
+  endedAt: string | null
+  /** Titles of the profile; then titles newly marked played, resume points set, new favorites. */
+  read: number
+  played: number
+  resumed: number
+  favorites: number
+  /** Every title not matched; `unmatched` lists the first 500 only. */
+  unmatchedCount: number
+  unmatched: AppUnmatched[]
+  addons: AppAddonInstalled[]
+}
+
+/** What signs in to a Nuvio account; the password is used for this sign-in only. */
+export type NuvioSignIn = { backend: string; email: string; password: string }
+
+/** The profile to import of an account read, and the indexes of its addons to install. */
+export type AppImportChoice = { key: string; profile: string; addons: number[] }
+
+/**
+ * Whether the signed-in user may import from an app, whether they may add their own addons, and
+ * the import into their account running, else their last one, else null.
+ */
+export type OwnAppImport = {
+  enabled: boolean
+  addonsAllowed: boolean
+  import: AppImportStatus | null
+}
+
+export const fetchOwnAppImport = (signal?: AbortSignal) =>
+  request<OwnAppImport>('GET', '/account/app-import', undefined, signal)
+
+/** Signs in to the user's Nuvio account and reads it, then signs out. */
+export const readOwnNuvio = (body: NuvioSignIn) =>
+  request<AppAccount>('POST', '/account/app-import/nuvio', body)
+
+/** Imports the chosen profile of the account read into the user's account, in the background. */
+export const startOwnAppImport = async (body: AppImportChoice) =>
+  (await request<{ import: AppImportStatus }>('POST', '/account/app-import', body)).import
+
+/** For an administrator: whether a user may add their own addons, and the import into their account. */
+export type UserAppImport = { addonsAllowed: boolean; import: AppImportStatus | null }
+
+export const fetchUserAppImport = (id: string, signal?: AbortSignal) =>
+  request<UserAppImport>('GET', `/users/${seg(id)}/app-import`, undefined, signal)
+
+export const readUserNuvio = (id: string, body: NuvioSignIn) =>
+  request<AppAccount>('POST', `/users/${seg(id)}/app-import/nuvio`, body)
+
+export const startUserAppImport = async (id: string, body: AppImportChoice) =>
+  (await request<{ import: AppImportStatus }>('POST', `/users/${seg(id)}/app-import`, body)).import
+
 export const fetchParentalRatings = (signal?: AbortSignal) =>
   request<ParentalRating[]>('GET', '/parental-ratings', undefined, signal)
 
@@ -2367,6 +2477,8 @@ export const queryKeys = {
   users: ['users'] as const,
   jellyfinImport: ['jellyfin-import'] as const,
   ownImport: ['account', 'server-import'] as const,
+  ownAppImport: ['account', 'app-import'] as const,
+  userAppImport: (id: string) => ['users', id, 'app-import'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   parentalRatings: ['parental-ratings'] as const,
