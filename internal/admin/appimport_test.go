@@ -261,17 +261,17 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 		t.Fatalf("link: %d %v", status, link)
 	}
 	noStremioSecret(t, link)
-	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusAccepted ||
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", map[string]any{}); status != http.StatusAccepted ||
 		body["pending"] != true {
 		t.Errorf("before the approval: %d %v", status, body)
 	}
 	fake.Approve()
 	// Bob's code is not Carol's.
-	if status, body, _ := carol.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusConflict ||
+	if status, body, _ := carol.call(http.MethodPost, "/account/app-import/stremio/link/poll", map[string]any{}); status != http.StatusConflict ||
 		body["error"] != "stremio_link_expired" {
 		t.Errorf("Carol polling: %d %v", status, body)
 	}
-	status, read, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil)
+	status, read, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", map[string]any{})
 	profiles, _ := read["profiles"].([]any)
 	if status != http.StatusOK || read["app"] != "stremio" || read["key"] == "" || len(profiles) != 1 {
 		t.Fatalf("Bob's account: %d %v", status, read)
@@ -289,7 +289,7 @@ func TestUsersImportTheirStremioAccount(t *testing.T) {
 	if fake.Open() != 0 {
 		t.Error("the session the link code opened is still open")
 	}
-	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusConflict ||
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", map[string]any{}); status != http.StatusConflict ||
 		body["error"] != "stremio_link_expired" {
 		t.Errorf("polled again: %d %v", status, body)
 	}
@@ -380,7 +380,7 @@ func TestStremioImportsFollowTheirPermissions(t *testing.T) {
 		t.Errorf("the administrator's link code: %d", status)
 	}
 	fake.Approve()
-	_, read, _ := admin.call(http.MethodPost, userPath+"/stremio/link/poll", nil)
+	_, read, _ := admin.call(http.MethodPost, userPath+"/stremio/link/poll", map[string]any{})
 	if status, body, _ := admin.call(http.MethodPost, userPath, map[string]any{"key": read["key"], "profile": "1"}); status != http.StatusOK {
 		t.Fatalf("the administrator's import: %d %v", status, body)
 	}

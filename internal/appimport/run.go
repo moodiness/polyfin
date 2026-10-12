@@ -21,6 +21,8 @@ type run struct {
 	by, user accounts.User
 	entries  []Entry
 	addons   []Addon
+	// connection is the connection the import makes, nil for none.
+	connection *newConnection
 }
 
 // update changes the status of the import.
@@ -30,12 +32,36 @@ func (r *run) update(change func(*Status)) {
 	change(r.status)
 }
 
-// run merges the entries into the user's data, then installs the addons
-// chosen, and ends the import. An import that fails installs no addon.
+// run saves the connection the import makes, if any, merges the entries
+// into the user's data, then installs the addons chosen, and ends the
+// import, which the connection records as its first. The connection
+// records it before the import ends, so that whoever sees the import
+// ended sees the connection's import too. An import that fails installs
+// no addon, and keeps no connection when saving it failed.
 func (r *run) run(ctx context.Context) {
-	err := r.merge(ctx)
+	var connectedAt time.Time
+	var err error
+	if r.connection != nil {
+		connectedAt, err = r.s.connect(ctx, r.connection)
+	}
+	if err == nil {
+		err = r.merge(ctx)
+	}
 	if err == nil {
 		r.install(ctx)
+	}
+	if err != nil && ctx.Err() == nil {
+		r.s.logger.Warn("An app's watch data could not be imported", "app", r.status.App, "user_id", r.user.ID.String(), "error", err)
+	}
+	if r.connection != nil && !connectedAt.IsZero() && ctx.Err() == nil {
+		var counts Status
+		r.update(func(s *Status) { counts = *s })
+		problem := counts.Problem
+		if err != nil {
+			problem = ProblemInternal
+		}
+		r.s.record(r.connection.key, connectedAt, ConnectionImport{Read: counts.Read, Played: counts.Played, Resumed: counts.Resumed,
+			Favorites: counts.Favorites, Unmatched: counts.UnmatchedCount, Problem: problem})
 	}
 	r.update(func(s *Status) {
 		s.State = StateDone
@@ -47,8 +73,8 @@ func (r *run) run(ctx context.Context) {
 		}
 		s.EndedAt = new(r.s.now().UTC())
 	})
-	if err != nil && ctx.Err() == nil {
-		r.s.logger.Warn("An app's watch data could not be imported", "app", r.status.App, "user_id", r.user.ID.String(), "error", err)
+	if r.connection != nil {
+		r.s.unclaim(r.connection.key, r.connection.run)
 	}
 }
 

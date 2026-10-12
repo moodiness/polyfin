@@ -12,7 +12,8 @@ import (
 
 // The secrets Polyfin stores are the server's keys and passwords in the
 // settings, named below as the admin API names them, the tokens and API
-// keys of the users' tracking connections, the addresses, tokens and keys
+// keys of the users' tracking connections, what the users' app connections
+// sign in with (see appimport.SignIn), the addresses, tokens and keys
 // of the notification targets, and the passwords of the network shares.
 // Nothing else is sealed: addon addresses, IPTV passwords and guide
 // addresses are stored as they are.
@@ -26,11 +27,13 @@ var settingSecrets = []struct{ column, name string }{
 
 // Unreadable is a stored secret the key cannot open: a setting, by the
 // admin API's name of it, the tracking connection of a user to a service,
-// a notification target, by its name, of a user or of the server (User
-// empty), or the password of a network share, by its folder's name.
+// the connection of a user to an app, a notification target, by its name,
+// of a user or of the server (User empty), or the password of a network
+// share, by its folder's name.
 type Unreadable struct {
 	Setting       string
 	Service, User string
+	App           string
 	Target        string
 	Folder        string
 }
@@ -45,6 +48,8 @@ func (u Unreadable) String() string {
 		return fmt.Sprintf("server notification target %s", u.Target)
 	case u.Target != "":
 		return fmt.Sprintf("notification target %s of %s", u.Target, u.User)
+	case u.App != "":
+		return fmt.Sprintf("%s app connection of %s", u.App, u.User)
 	}
 	return fmt.Sprintf("%s connection of %s", u.Service, u.User)
 }
@@ -143,6 +148,9 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 				return err
 			}
 		}
+		if err := sealAppConnections(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
 		if err := sealTargets(ctx, b, tx, &sealed); err != nil {
 			return err
 		}
@@ -208,6 +216,22 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 	if err := rows.Err(); err != nil {
 		return Report{}, err
 	}
+	apps, err := db.Query(ctx, `SELECT u.name, c.app, c.sign_in FROM app_connections c JOIN users u ON u.id = c.user_id
+		ORDER BY u.name, c.app`)
+	if err != nil {
+		return Report{}, err
+	}
+	defer apps.Close()
+	for apps.Next() {
+		var user, app, signIn string
+		if err := apps.Scan(&user, &app, &signIn); err != nil {
+			return Report{}, err
+		}
+		check(signIn, Unreadable{App: app, User: user})
+	}
+	if err := apps.Err(); err != nil {
+		return Report{}, err
+	}
 	targets, err := db.Query(ctx, `SELECT coalesce(u.name, ''), t.name, t.secret
 		FROM notification_targets t LEFT JOIN users u ON u.id = t.user_id ORDER BY u.name NULLS FIRST, t.created_at`)
 	if err != nil {
@@ -238,6 +262,34 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 		check(password, Unreadable{Folder: name})
 	}
 	return report, shares.Err()
+}
+
+// sealAppConnections seals what the app connections stored as plaintext
+// sign in with, counting them into sealed.
+func sealAppConnections(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	rows, err := tx.Query(ctx, "SELECT user_id, app, sign_in FROM app_connections WHERE sign_in NOT LIKE $1 FOR UPDATE", prefix+"%")
+	if err != nil {
+		return err
+	}
+	type row struct {
+		user        [16]byte
+		app, signIn string
+	}
+	plain, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var c row
+		return c, r.Scan(&c.user, &c.app, &c.signIn)
+	})
+	if err != nil {
+		return err
+	}
+	for _, c := range plain {
+		if _, err := tx.Exec(ctx, "UPDATE app_connections SET sign_in = $3 WHERE user_id = $1 AND app = $2", c.user, c.app,
+			b.Seal(c.signIn)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	return nil
 }
 
 // sealTargets seals the addresses, access tokens and keys of the

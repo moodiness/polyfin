@@ -85,12 +85,13 @@ type secretsHealthJSON struct {
 }
 
 // unreadableJSON is a secret the key cannot decrypt: one of the server's,
-// by its settings name, a user's tracking connection, a notification
-// target, by its name, of a user, or of the server (user null), or a
-// network share's password, by its folder's name.
+// by its settings name, a user's tracking connection, a user's connection
+// to an app, a notification target, by its name, of a user, or of the
+// server (user null), or a network share's password, by its folder's name.
 type unreadableJSON struct {
 	Setting *string `json:"setting"`
 	Service *string `json:"service"`
+	App     *string `json:"app"`
 	Target  *string `json:"target"`
 	User    *string `json:"user"`
 	Folder  *string `json:"folder"`
@@ -123,6 +124,8 @@ func newUnreadableJSON(u secrets.Unreadable) unreadableJSON {
 		return unreadableJSON{Target: &u.Target}
 	case u.Target != "":
 		return unreadableJSON{Target: &u.Target, User: &u.User}
+	case u.App != "":
+		return unreadableJSON{App: &u.App, User: &u.User}
 	}
 	return unreadableJSON{Service: &u.Service, User: &u.User}
 }

@@ -8,8 +8,10 @@
 // email and password; or as the user pastes it, read from Stremio's web
 // app. With it, Polyfin reads the account's library and addons once, then
 // signs out, but for a key the user pasted: that would sign their own
-// browser out. The key serves that only: it is never kept, logged, nor
-// answered to the browser.
+// browser out. The key serves that only: it is never logged, nor answered
+// to the browser, and kept only when the user chooses to stay connected,
+// for the connection to read the account again (see Reader.Reread) until
+// the user disconnects, when Polyfin signs out the session it opened.
 //
 // The library holds, for each title, whether it was watched, the resume
 // point of the video played last, and whether it is in the user's library.
@@ -175,10 +177,10 @@ func (r *Reader) StartLink(ctx context.Context, by accounts.ID) (Link, error) {
 
 // PollLink asks Stremio whether the link code by waits for is approved:
 // once it is, it reads the account with the auth key the approval gives,
-// signs out, and returns the account. It fails with ErrLinkPending until
-// then, ErrLinkExpired past a few minutes, ErrUnreachable, ErrUnexpected,
-// or ErrKeyRefused.
-func (r *Reader) PollLink(ctx context.Context, by accounts.ID) (appimport.Account, error) {
+// signs out unless keep asks to stay connected, and returns the account.
+// It fails with ErrLinkPending until then, ErrLinkExpired past a few
+// minutes, ErrUnreachable, ErrUnexpected, or ErrKeyRefused.
+func (r *Reader) PollLink(ctx context.Context, by accounts.ID, keep bool) (appimport.Account, error) {
 	r.mu.Lock()
 	l := r.links[by]
 	switch {
@@ -211,15 +213,18 @@ func (r *Reader) PollLink(ctx context.Context, by accounts.ID) (appimport.Accoun
 	case err != nil || key == "":
 		return appimport.Account{}, ErrLinkPending
 	}
-	return r.read(ctx, key, true)
+	return r.read(ctx, key, true, keep, "")
 }
 
 // SignIn signs in to Stremio with email and password, reads the account,
-// signs out, and returns the account. It fails with ErrSignInRefused,
-// ErrUnreachable or ErrUnexpected.
-func (r *Reader) SignIn(ctx context.Context, email, password string) (appimport.Account, error) {
+// signs out unless keep asks to stay connected, and returns the account.
+// It fails with ErrSignInRefused, ErrUnreachable or ErrUnexpected.
+func (r *Reader) SignIn(ctx context.Context, email, password string, keep bool) (appimport.Account, error) {
 	var signedIn struct {
 		AuthKey string `json:"authKey"`
+		User    struct {
+			Email string `json:"email"`
+		} `json:"user"`
 	}
 	err := r.call(ctx, http.MethodPost, r.api+"/api/login", struct {
 		Email    string `json:"email"`
@@ -234,28 +239,29 @@ func (r *Reader) SignIn(ctx context.Context, email, password string) (appimport.
 	case strings.TrimSpace(signedIn.AuthKey) == "":
 		return appimport.Account{}, ErrUnexpected
 	}
-	return r.read(ctx, strings.TrimSpace(signedIn.AuthKey), true)
+	return r.read(ctx, strings.TrimSpace(signedIn.AuthKey), true, keep, strings.TrimSpace(signedIn.User.Email))
 }
 
 // ReadKey reads the account with the auth key the user pasted, without
 // signing out, which would sign the user's own browser out, and returns
-// the account. It fails with ErrKeyRefused, ErrUnreachable or
-// ErrUnexpected.
-func (r *Reader) ReadKey(ctx context.Context, key string) (appimport.Account, error) {
+// the account, keeping the key when keep asks to stay connected. It fails
+// with ErrKeyRefused, ErrUnreachable or ErrUnexpected.
+func (r *Reader) ReadKey(ctx context.Context, key string, keep bool) (appimport.Account, error) {
 	// A key copied from the browser's console comes quoted.
 	key = strings.Trim(strings.TrimSpace(key), `"'`)
 	if key == "" {
 		return appimport.Account{}, ErrKeyRefused
 	}
-	return r.read(ctx, key, false)
+	return r.read(ctx, key, false, keep, "")
 }
 
 // read reads the library and the addons of the account key signs in to,
-// signs out when Polyfin obtained the key itself (owned), and returns the
-// account.
-func (r *Reader) read(ctx context.Context, key string, owned bool) (appimport.Account, error) {
+// and returns the account. When keep asks to stay connected, the account
+// holds the key, with the account's email, name when known; otherwise
+// Polyfin signs out when it obtained the key itself (owned).
+func (r *Reader) read(ctx context.Context, key string, owned, keep bool, name string) (appimport.Account, error) {
 	items, descriptors, err := r.fetch(ctx, key)
-	if owned {
+	if owned && (!keep || err != nil) {
 		r.signOut(key)
 	}
 	switch {
@@ -264,7 +270,56 @@ func (r *Reader) read(ctx context.Context, key string, owned bool) (appimport.Ac
 	case err != nil:
 		return appimport.Account{}, err
 	}
-	return r.account(ctx, items, descriptors), nil
+	account := r.account(ctx, items, descriptors)
+	if keep {
+		if name == "" {
+			name = r.email(ctx, key)
+		}
+		account.Name, account.SignIn = name, &appimport.SignIn{Secret: key, Owned: owned}
+	}
+	return account, nil
+}
+
+// email returns the email of the account key signs in to, empty when
+// Stremio does not tell it.
+func (r *Reader) email(ctx context.Context, key string) string {
+	var user struct {
+		Email string `json:"email"`
+	}
+	if r.call(ctx, http.MethodPost, r.api+"/api/getUser", struct {
+		AuthKey string `json:"authKey"`
+	}{key}, &user) != nil {
+		return ""
+	}
+	return strings.TrimSpace(user.Email)
+}
+
+// Reread reads again, for a connection, the account the auth key kept
+// signs in to, and returns it with the key, which Stremio does not renew.
+// It fails with appimport.ErrSignInRefused once Stremio refuses the key,
+// appimport.ErrAppUnreachable, or ErrUnexpected.
+func (r *Reader) Reread(ctx context.Context, signIn appimport.SignIn) (appimport.Account, appimport.SignIn, error) {
+	items, descriptors, err := r.fetch(ctx, signIn.Secret)
+	switch {
+	case errors.Is(err, errRefused):
+		return appimport.Account{}, signIn, appimport.ErrSignInRefused
+	case errors.Is(err, ErrUnreachable):
+		return appimport.Account{}, signIn, appimport.ErrAppUnreachable
+	case err != nil:
+		return appimport.Account{}, signIn, err
+	}
+	account := r.account(ctx, items, descriptors)
+	account.Name = r.email(ctx, signIn.Secret)
+	return account, signIn, nil
+}
+
+// SignOut ends the session of a connection's auth key when Polyfin
+// obtained it, by a link code or a password: a key the user pasted is
+// only forgotten, as signing it out would sign their own browser out.
+func (r *Reader) SignOut(_ context.Context, signIn appimport.SignIn) {
+	if signIn.Owned && signIn.Secret != "" {
+		r.signOut(signIn.Secret)
+	}
 }
 
 // fetch reads the account's library items and addon descriptors, as

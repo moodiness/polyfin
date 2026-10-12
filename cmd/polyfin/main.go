@@ -326,14 +326,16 @@ func serve(ctx context.Context) error {
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'
-	// addons become their users' own.
-	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
-		Activity: activityLog, Logger: logger})
-	defer fromApps.Close()
+	// addons become their users' own. A series of Stremio's tells its
+	// episodes watched by their places in the list its metadata addons
+	// give, which the server's addons give again. The users who stay
+	// connected keep what reads their accounts again, sealed.
 	fromNuvio := nuvio.New(nuvio.Options{Anime: animeMapping, Version: version})
-	// A Stremio series tells its episodes watched by their places in the
-	// list its metadata addons give, which the server's addons give again.
 	fromStremio := stremioimport.New(stremioimport.Options{Anime: animeMapping, Metas: lib, Version: version})
+	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
+		Activity: activityLog, Logger: logger, DB: pool, Secrets: box,
+		Sources: map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio}})
+	defer fromApps.Close()
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
@@ -455,6 +457,8 @@ func serve(ctx context.Context) error {
 	go recorder.Run(ctx)
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
+	// The app connections due are imported, then every 6 hours.
+	go fromApps.Run(ctx)
 	go notifier.Run(ctx)
 	go updateCheck.Run(ctx)
 	go playbacks.Run(ctx)

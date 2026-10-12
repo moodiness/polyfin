@@ -42,7 +42,7 @@ func at(text string) time.Time {
 func TestAnAccountIsReadSignedInThenSignedOut(t *testing.T) {
 	t.Parallel()
 	b := backend(t)
-	account, err := New(Options{Version: "1.2.3"}).Read(t.Context(), b.URL+"/", " "+email+" ", password)
+	account, err := New(Options{Version: "1.2.3"}).Read(t.Context(), b.URL+"/", " "+email+" ", password, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 	t.Parallel()
 	b := backend(t)
 	r := New(Options{Version: "1.2.3"})
-	if _, err := r.Read(t.Context(), b.URL, email, "wrong"); !errors.Is(err, ErrSignInRefused) {
+	if _, err := r.Read(t.Context(), b.URL, email, "wrong", false); !errors.Is(err, ErrSignInRefused) {
 		t.Errorf("a wrong password: %v", err)
 	}
 	for _, request := range b.Requests() {
@@ -145,7 +145,7 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 
 	// Another version of the backup: refused, signed out still.
 	b.Set(func(b *nuviotest.Backend) { b.Backup = nuviotest.Backup(2, map[string]any{}) })
-	_, err := r.Read(t.Context(), b.URL, email, password)
+	_, err := r.Read(t.Context(), b.URL, email, password, false)
 	var unsupported *BackupError
 	if !errors.As(err, &unsupported) || unsupported.Version != 2 || !errors.Is(err, ErrUnsupportedBackup) ||
 		!strings.Contains(err.Error(), "version 2") {
@@ -157,15 +157,15 @@ func TestReadingFailsWithWhatWentWrong(t *testing.T) {
 
 	web := httptest.NewServer(http.NotFoundHandler())
 	defer web.Close()
-	if _, err := r.Read(t.Context(), web.URL, email, password); !errors.Is(err, ErrNotNuvio) {
+	if _, err := r.Read(t.Context(), web.URL, email, password, false); !errors.Is(err, ErrNotNuvio) {
 		t.Errorf("not a Nuvio backend: %v", err)
 	}
 	web.Close()
-	if _, err := r.Read(t.Context(), web.URL, email, password); !errors.Is(err, ErrUnreachable) {
+	if _, err := r.Read(t.Context(), web.URL, email, password, false); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("nothing answers: %v", err)
 	}
 	for _, address := range []string{"ftp://nuvio.example", "https://user:secret@nuvio.example", "https://nuvio.example/?a=b"} {
-		if _, err := r.Read(t.Context(), address, email, password); !errors.Is(err, ErrInvalidAddress) {
+		if _, err := r.Read(t.Context(), address, email, password, false); !errors.Is(err, ErrInvalidAddress) {
 			t.Errorf("%q: %v", address, err)
 		}
 	}
@@ -183,7 +183,7 @@ func TestABackendAskingToWaitIsWaitedFor(t *testing.T) {
 	b.Set(func(b *nuviotest.Backend) { b.Limited, b.RetryAfter = 1, "1" })
 	r := New(Options{Version: "1.2.3"})
 	started := time.Now()
-	if _, err := r.Read(t.Context(), b.URL, email, password); err != nil {
+	if _, err := r.Read(t.Context(), b.URL, email, password, false); err != nil {
 		t.Fatal(err)
 	}
 	if waited := time.Since(started); waited < time.Second {
@@ -192,7 +192,7 @@ func TestABackendAskingToWaitIsWaitedFor(t *testing.T) {
 	// Longer than a sign-in waits: it says so at once.
 	b.Set(func(b *nuviotest.Backend) { b.Limited, b.RetryAfter = 1, "120" })
 	started = time.Now()
-	if _, err := r.Read(t.Context(), b.URL, email, password); !errors.Is(err, ErrRateLimited) || time.Since(started) > 10*time.Second {
+	if _, err := r.Read(t.Context(), b.URL, email, password, false); !errors.Is(err, ErrRateLimited) || time.Since(started) > 10*time.Second {
 		t.Errorf("a long wait: %v after %v", err, time.Since(started))
 	}
 }
@@ -208,5 +208,69 @@ func TestOlderAppsCompactDatesAreRead(t *testing.T) {
 		if got := watchedAt(value); got != want {
 			t.Errorf("%d: %d, want %d", value, got, want)
 		}
+	}
+}
+
+func TestStayingConnectedKeepsAndRenewsTheSession(t *testing.T) {
+	t.Parallel()
+	b := backend(t)
+	r := New(Options{Version: "1.2.3"})
+
+	// Read to stay connected, the session stays open, and the account
+	// holds its refresh token, the backend's address, and its email.
+	account, err := r.Read(t.Context(), b.URL, email, password, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := b.Refresh()
+	if account.SignIn == nil || account.SignIn.Secret != first || account.SignIn.Backend != b.URL || !account.SignIn.Owned ||
+		account.Name != email || b.Open() != 1 {
+		t.Fatalf("account: %q %+v, %d open", account.Name, account.SignIn, b.Open())
+	}
+	kept := *account.SignIn
+	kept.Profile = "2"
+
+	// A later read renews the session: the new refresh token is returned,
+	// and the one it replaces refused.
+	again, renewed, err := r.Reread(t.Context(), kept)
+	if err != nil || renewed.Secret == first || renewed.Secret != b.Refresh() || renewed.Backend != b.URL || renewed.Profile != "2" ||
+		!b.Spent(first) || len(again.Profiles) != 2 || again.Name != email {
+		t.Fatalf("read again: %+v %v", renewed, err)
+	}
+	if _, stale, err := r.Reread(t.Context(), kept); !errors.Is(err, appimport.ErrSignInRefused) || stale != kept {
+		t.Errorf("the replaced refresh token: %+v %v", stale, err)
+	}
+	for _, request := range b.Requests() {
+		if strings.Contains(request.Query, "refresh-token") || strings.Contains(request.Query, "access-token") {
+			t.Errorf("%s %s?%s sends a secret in the address", request.Method, request.Path, request.Query)
+		}
+	}
+
+	// Signing out ends the session, and only it.
+	r.SignOut(t.Context(), renewed)
+	if b.Open() != 0 {
+		t.Error("the session is still open")
+	}
+	logouts := 0
+	for _, request := range b.Requests() {
+		if request.Path == "/auth/v1/logout" {
+			logouts++
+			if request.Query != "scope=local" {
+				t.Errorf("the sign-out ends %q", request.Query)
+			}
+		}
+	}
+	if logouts != 1 {
+		t.Errorf("%d sign-outs", logouts)
+	}
+
+	// The backend ending the account's sessions refuses the refresh token.
+	account, err = r.Read(t.Context(), b.URL, email, password, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.EndSessions()
+	if _, _, err := r.Reread(t.Context(), *account.SignIn); !errors.Is(err, appimport.ErrSignInRefused) {
+		t.Errorf("a session ended: %v", err)
 	}
 }

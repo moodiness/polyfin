@@ -6,8 +6,11 @@
 // key among it, at /.well-known/nuvio. Polyfin signs in there with the
 // account's email and password, as Nuvio's apps do, asks once for the
 // account's backup, a versioned document Nuvio's own scripts move accounts
-// with, and signs out. The password and the session serve that only: they
-// are never kept nor logged. The backup holds, for each of the account's
+// with, and signs out. The password serves that only: it is never kept
+// nor logged. A user who chooses to stay connected has the session kept
+// instead: its refresh token, never logged, renews it each time Polyfin
+// reads the account again (see Reader.Reread), until the user disconnects,
+// when Polyfin signs it out. The backup holds, for each of the account's
 // profiles, the movies and episodes watched with their dates, the resume
 // points, the library, and the addons.
 package nuvio
@@ -144,25 +147,20 @@ func ParseBackend(text string) (string, error) {
 }
 
 // Read signs in to the backend at address with email and password, reads
-// the account's backup, signs out, and returns the account with each of
-// its profiles. It fails with ErrInvalidAddress, ErrUnreachable,
-// ErrNotNuvio, ErrSignInRefused, ErrRateLimited or a BackupError.
-func (r *Reader) Read(ctx context.Context, address, email, password string) (appimport.Account, error) {
+// the account's backup, and returns the account with each of its
+// profiles. It signs out, unless keep asks to stay connected: then the
+// account holds the session's refresh token, which reads it again (see
+// Reread). It fails with ErrInvalidAddress, ErrUnreachable, ErrNotNuvio,
+// ErrSignInRefused, ErrRateLimited or a BackupError.
+func (r *Reader) Read(ctx context.Context, address, email, password string, keep bool) (appimport.Account, error) {
 	backend, err := ParseBackend(address)
 	if err != nil {
 		return appimport.Account{}, err
 	}
-	s := &session{r: r, backend: backend}
-	var configuration struct {
-		PublishableKey string `json:"publishable_key"`
+	s, err := r.open(ctx, backend)
+	if err != nil {
+		return appimport.Account{}, err
 	}
-	if err := s.send(ctx, http.MethodGet, "/.well-known/nuvio", nil, &configuration); err != nil {
-		return appimport.Account{}, notFound(err)
-	}
-	if configuration.PublishableKey == "" {
-		return appimport.Account{}, ErrNotNuvio
-	}
-	s.key = configuration.PublishableKey
 	credentials, err := json.Marshal(struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -170,30 +168,158 @@ func (r *Reader) Read(ctx context.Context, address, email, password string) (app
 	if err != nil {
 		return appimport.Account{}, err
 	}
-	var token struct {
-		AccessToken string `json:"access_token"`
-	}
-	switch err := s.send(ctx, http.MethodPost, "/auth/v1/token?grant_type=password", credentials, &token); {
+	var t token
+	switch err := s.send(ctx, http.MethodPost, "/auth/v1/token?grant_type=password", credentials, &t); {
 	case errors.Is(err, errRefused):
 		return appimport.Account{}, ErrSignInRefused
 	case err != nil:
 		return appimport.Account{}, notFound(err)
-	case token.AccessToken == "":
+	case t.AccessToken == "":
 		return appimport.Account{}, ErrNotNuvio
 	}
-	s.token = token.AccessToken
-	defer s.signOut()
+	s.token = t.AccessToken
+	kept := false
+	defer func() {
+		if !kept {
+			s.signOut()
+		}
+	}()
+	account, err := s.backup(ctx)
+	if errors.Is(err, errRefused) {
+		return appimport.Account{}, ErrSignInRefused
+	}
+	if err != nil {
+		return appimport.Account{}, err
+	}
+	if keep && t.RefreshToken != "" {
+		kept = true
+		account.Name = strings.TrimSpace(t.User.Email)
+		account.SignIn = &appimport.SignIn{Secret: t.RefreshToken, Backend: backend, Owned: true}
+	}
+	return account, nil
+}
+
+// token is a session the backend opened: its access token, the refresh
+// token that renews it, and the account's email.
+type token struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	User         struct {
+		Email string `json:"email"`
+	} `json:"user"`
+}
+
+// open reads the configuration of the backend at backend, and returns a
+// session about to sign in there.
+func (r *Reader) open(ctx context.Context, backend string) (*session, error) {
+	s := &session{r: r, backend: backend}
+	var configuration struct {
+		PublishableKey string `json:"publishable_key"`
+	}
+	if err := s.send(ctx, http.MethodGet, "/.well-known/nuvio", nil, &configuration); err != nil {
+		return nil, notFound(err)
+	}
+	if configuration.PublishableKey == "" {
+		return nil, ErrNotNuvio
+	}
+	s.key = configuration.PublishableKey
+	return s, nil
+}
+
+// backup reads the account's backup, and the account it holds: errRefused
+// when the backend refuses the session.
+func (s *session) backup(ctx context.Context) (appimport.Account, error) {
 	var b backup
 	if err := s.send(ctx, http.MethodPost, "/rest/v1/rpc/sync_export_account_backup", []byte("{}"), &b); err != nil {
 		if errors.Is(err, errRefused) {
-			return appimport.Account{}, ErrSignInRefused
+			return appimport.Account{}, errRefused
 		}
 		return appimport.Account{}, notFound(err)
 	}
 	if b.Format != backupFormat || b.Version.value != backupVersion {
 		return appimport.Account{}, &BackupError{Format: b.Format, Version: int(b.Version.value)}
 	}
-	return r.account(b.Data), nil
+	return s.r.account(b.Data), nil
+}
+
+// refresh renews the session of refresh: the backend answers a new access
+// token, and a new refresh token in place of refresh, which it refuses from
+// then on. It fails with errRefused when the backend refuses refresh.
+func (s *session) refresh(ctx context.Context, refresh string) (token, error) {
+	body, err := json.Marshal(struct {
+		RefreshToken string `json:"refresh_token"`
+	}{refresh})
+	if err != nil {
+		return token{}, err
+	}
+	var t token
+	if err := s.send(ctx, http.MethodPost, "/auth/v1/token?grant_type=refresh_token", body, &t); err != nil {
+		if errors.Is(err, errMissing) {
+			return token{}, ErrNotNuvio
+		}
+		return token{}, err
+	}
+	if t.AccessToken == "" {
+		return token{}, ErrNotNuvio
+	}
+	s.token = t.AccessToken
+	return t, nil
+}
+
+// Reread reads again, for a connection, the account the refresh token kept
+// signs in to, in the profile kept: it renews the session, and returns the
+// account with the sign-in holding the new refresh token, even when
+// reading the backup then fails, as the backend refuses the one it
+// replaced. It fails with appimport.ErrSignInRefused once the backend
+// refuses the refresh token or the session, appimport.ErrAppUnreachable,
+// appimport.ErrAppRateLimited, ErrNotNuvio or a BackupError.
+func (r *Reader) Reread(ctx context.Context, signIn appimport.SignIn) (appimport.Account, appimport.SignIn, error) {
+	s, err := r.open(ctx, signIn.Backend)
+	if err != nil {
+		return appimport.Account{}, signIn, rereadError(err)
+	}
+	t, err := s.refresh(ctx, signIn.Secret)
+	if err != nil {
+		return appimport.Account{}, signIn, rereadError(err)
+	}
+	renewed := signIn
+	if t.RefreshToken != "" {
+		renewed.Secret = t.RefreshToken
+	}
+	account, err := s.backup(ctx)
+	if err != nil {
+		return appimport.Account{}, renewed, rereadError(err)
+	}
+	account.Name = strings.TrimSpace(t.User.Email)
+	return account, renewed, nil
+}
+
+// rereadError names, as package appimport does, why reading an account
+// again failed.
+func rereadError(err error) error {
+	switch {
+	case errors.Is(err, errRefused):
+		return appimport.ErrSignInRefused
+	case errors.Is(err, ErrUnreachable):
+		return appimport.ErrAppUnreachable
+	case errors.Is(err, ErrRateLimited):
+		return appimport.ErrAppRateLimited
+	}
+	return err
+}
+
+// SignOut ends the session of a connection's refresh token: it renews it,
+// to sign out with its access token, as best it can.
+func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) {
+	ctx, cancel := context.WithTimeout(ctx, r.timing.signOut)
+	defer cancel()
+	s, err := r.open(ctx, signIn.Backend)
+	if err != nil {
+		return
+	}
+	if _, err := s.refresh(ctx, signIn.Secret); err == nil {
+		s.signOut()
+	}
 }
 
 // errRefused and errMissing are a request the backend answered refused,
@@ -300,7 +426,8 @@ func (s *session) do(ctx context.Context, method, path string, body []byte) (int
 	return response.StatusCode, response.Header, answer, nil
 }
 
-// signOut ends the session, so that the account does not keep it.
+// signOut ends the session, so that the account does not keep it: this
+// session only, not the account's others, on the user's own devices.
 func (s *session) signOut() {
 	ctx, cancel := context.WithTimeout(context.Background(), s.r.timing.signOut)
 	defer cancel()

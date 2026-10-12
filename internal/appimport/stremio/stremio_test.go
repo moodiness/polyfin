@@ -63,22 +63,22 @@ func TestTheLinkCodeIsApprovedThenTheAccountReadAndSignedOut(t *testing.T) {
 	}
 	bob, carol := accounts.ID{1}, accounts.ID{2}
 
-	if _, err := r.PollLink(t.Context(), bob); !errors.Is(err, ErrLinkExpired) {
+	if _, err := r.PollLink(t.Context(), bob, false); !errors.Is(err, ErrLinkExpired) {
 		t.Errorf("before any code: %v", err)
 	}
 	link, err := r.StartLink(t.Context(), bob)
 	if err != nil || link.Code == "" || link.URL != f.Link+"/"+link.Code {
 		t.Fatalf("link: %+v %v", link, err)
 	}
-	if _, err := r.PollLink(t.Context(), bob); !errors.Is(err, ErrLinkPending) {
+	if _, err := r.PollLink(t.Context(), bob, false); !errors.Is(err, ErrLinkPending) {
 		t.Errorf("before the approval: %v", err)
 	}
 	// The code is Bob's.
-	if _, err := r.PollLink(t.Context(), carol); !errors.Is(err, ErrLinkExpired) {
+	if _, err := r.PollLink(t.Context(), carol, false); !errors.Is(err, ErrLinkExpired) {
 		t.Errorf("Carol polling Bob's code: %v", err)
 	}
 	f.Approve()
-	account, err := r.PollLink(t.Context(), bob)
+	account, err := r.PollLink(t.Context(), bob, false)
 	if err != nil || len(entries(t, account)) != 11 {
 		t.Fatalf("after the approval: %+v %v", account, err)
 	}
@@ -86,7 +86,7 @@ func TestTheLinkCodeIsApprovedThenTheAccountReadAndSignedOut(t *testing.T) {
 		t.Error("the session the code opened is still open")
 	}
 	// The code served once.
-	if _, err := r.PollLink(t.Context(), bob); !errors.Is(err, ErrLinkExpired) {
+	if _, err := r.PollLink(t.Context(), bob, false); !errors.Is(err, ErrLinkExpired) {
 		t.Errorf("polled again: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestTheLinkCodeIsApprovedThenTheAccountReadAndSignedOut(t *testing.T) {
 	now = now.Add(defaultTiming.linkFor)
 	mu.Unlock()
 	f.Approve()
-	if _, err := r.PollLink(t.Context(), bob); !errors.Is(err, ErrLinkExpired) {
+	if _, err := r.PollLink(t.Context(), bob, false); !errors.Is(err, ErrLinkExpired) {
 		t.Errorf("past a few minutes: %v", err)
 	}
 	for _, request := range f.Requests() {
@@ -111,10 +111,10 @@ func TestTheLinkCodeIsApprovedThenTheAccountReadAndSignedOut(t *testing.T) {
 func TestThePasswordSignsInThenOut(t *testing.T) {
 	t.Parallel()
 	f, r := fake(t)
-	if _, err := r.SignIn(t.Context(), "bob@example.com", "wrong"); !errors.Is(err, ErrSignInRefused) {
+	if _, err := r.SignIn(t.Context(), "bob@example.com", "wrong", false); !errors.Is(err, ErrSignInRefused) {
 		t.Errorf("a wrong password: %v", err)
 	}
-	account, err := r.SignIn(t.Context(), " bob@example.com ", "bob's password")
+	account, err := r.SignIn(t.Context(), " bob@example.com ", "bob's password", false)
 	if err != nil || len(entries(t, account)) != 11 {
 		t.Fatalf("%+v %v", account, err)
 	}
@@ -135,14 +135,14 @@ func TestAPastedKeyIsNeverSignedOut(t *testing.T) {
 	f, r := fake(t)
 	var pasted string
 	f.Set(func(f *stremiotest.Fake) { pasted = f.Pasted })
-	if _, err := r.ReadKey(t.Context(), "someone else's"); !errors.Is(err, ErrKeyRefused) {
+	if _, err := r.ReadKey(t.Context(), "someone else's", false); !errors.Is(err, ErrKeyRefused) {
 		t.Errorf("a wrong key: %v", err)
 	}
-	if _, err := r.ReadKey(t.Context(), "  "); !errors.Is(err, ErrKeyRefused) {
+	if _, err := r.ReadKey(t.Context(), "  ", false); !errors.Is(err, ErrKeyRefused) {
 		t.Errorf("no key: %v", err)
 	}
 	// Copied from the browser's console, quoted.
-	account, err := r.ReadKey(t.Context(), ` "`+pasted+`" `)
+	account, err := r.ReadKey(t.Context(), ` "`+pasted+`" `, false)
 	if err != nil || len(entries(t, account)) != 11 {
 		t.Fatalf("%+v %v", account, err)
 	}
@@ -161,7 +161,7 @@ func TestAPastedKeyIsNeverSignedOut(t *testing.T) {
 func TestTheLibraryIsReadAsStremiosAppsReadIt(t *testing.T) {
 	t.Parallel()
 	_, r := fake(t)
-	account, err := r.ReadKey(t.Context(), "pasted-key-0123456789abcdef")
+	account, err := r.ReadKey(t.Context(), "pasted-key-0123456789abcdef", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestRemovedAndTempTellTheLibraryAndContinueWatching(t *testing.T) {
 		r := New(Options{API: f.API, Link: f.Link})
 		var pasted string
 		f.Set(func(f *stremiotest.Fake) { pasted = f.Pasted })
-		account, err := r.ReadKey(t.Context(), pasted)
+		account, err := r.ReadKey(t.Context(), pasted, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -272,14 +272,14 @@ func TestStremioFailingOrAnsweringOtherwiseIsTold(t *testing.T) {
 	}))
 	defer web.Close()
 	r := New(Options{API: web.URL, Link: web.URL})
-	if _, err := r.SignIn(t.Context(), "bob@example.com", "password"); !errors.Is(err, ErrUnexpected) {
+	if _, err := r.SignIn(t.Context(), "bob@example.com", "password", false); !errors.Is(err, ErrUnexpected) {
 		t.Errorf("not Stremio: %v", err)
 	}
 	if _, err := r.StartLink(t.Context(), accounts.ID{1}); !errors.Is(err, ErrUnexpected) {
 		t.Errorf("a link code from not Stremio: %v", err)
 	}
 	web.Close()
-	if _, err := r.ReadKey(t.Context(), "key"); !errors.Is(err, ErrUnreachable) {
+	if _, err := r.ReadKey(t.Context(), "key", false); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("not answering: %v", err)
 	}
 	if _, err := r.StartLink(t.Context(), accounts.ID{1}); !errors.Is(err, ErrUnreachable) {
@@ -382,7 +382,7 @@ func TestAccountEpisodesFollowTheirAnchor(t *testing.T) {
 		"tt0300":    {ID: "tt0300", Type: "series", Videos: season("tt0300", 1, 1)},
 	}
 	r := New(Options{Metas: metas, API: f.API, Link: f.Link})
-	account, err := r.ReadKey(t.Context(), "pasted-key-0123456789abcdef")
+	account, err := r.ReadKey(t.Context(), "pasted-key-0123456789abcdef", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,5 +416,77 @@ func TestVideosAreOrderedAsStremiosAppsOrderThem(t *testing.T) {
 	}))
 	if want := []string{"unnumbered", "bonus", "unnumbered-dated", "special", "z", "a", "b"}; !slices.Equal(got, want) {
 		t.Errorf("%v", got)
+	}
+}
+
+func TestStayingConnectedKeepsTheKeyForLaterReads(t *testing.T) {
+	t.Parallel()
+	f, r := fake(t)
+
+	// Signed in by password to stay connected, the session stays open, and
+	// the account holds its key, with the account's email.
+	account, err := r.SignIn(t.Context(), "bob@example.com", "bob's password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.SignIn == nil || !account.SignIn.Owned || account.SignIn.Secret == "" || account.Name != "bob@example.com" || f.Open() != 1 {
+		t.Fatalf("account: %q %+v, %d open", account.Name, account.SignIn, f.Open())
+	}
+	kept := *account.SignIn
+	for _, request := range f.Requests() {
+		if request.Path == "/api/logout" {
+			t.Error("a session kept was signed out")
+		}
+	}
+
+	// A later read uses the key kept, which Stremio does not renew.
+	again, renewed, err := r.Reread(t.Context(), kept)
+	if err != nil || renewed != kept || again.Name != "bob@example.com" || len(entries(t, again)) == 0 {
+		t.Fatalf("read again: %+v %v", renewed, err)
+	}
+
+	// Signing out ends the session Polyfin opened; Stremio refuses the key
+	// from then on.
+	r.SignOut(t.Context(), kept)
+	if f.Open() != 0 {
+		t.Error("the session is still open")
+	}
+	if _, _, err := r.Reread(t.Context(), kept); !errors.Is(err, appimport.ErrSignInRefused) {
+		t.Errorf("a key signed out: %v", err)
+	}
+
+	// A link code approved to stay connected keeps its session too.
+	if _, err := r.StartLink(t.Context(), accounts.ID{1}); err != nil {
+		t.Fatal(err)
+	}
+	f.Approve()
+	linked, err := r.PollLink(t.Context(), accounts.ID{1}, true)
+	if err != nil || linked.SignIn == nil || !linked.SignIn.Owned || linked.Name != "bob@example.com" || f.Open() != 1 {
+		t.Fatalf("linked: %+v %v, %d open", linked.SignIn, err, f.Open())
+	}
+	// Stremio ending every session refuses it.
+	f.Revoke()
+	if _, _, err := r.Reread(t.Context(), *linked.SignIn); !errors.Is(err, appimport.ErrSignInRefused) {
+		t.Errorf("a key revoked: %v", err)
+	}
+}
+
+func TestAPastedKeyKeptIsNeverSignedOut(t *testing.T) {
+	t.Parallel()
+	f, r := fake(t)
+	var pasted string
+	f.Set(func(f *stremiotest.Fake) { pasted = f.Pasted })
+	account, err := r.ReadKey(t.Context(), pasted, true)
+	if err != nil || account.SignIn == nil || account.SignIn.Owned || account.SignIn.Secret != pasted {
+		t.Fatalf("account: %+v %v", account.SignIn, err)
+	}
+	r.SignOut(t.Context(), *account.SignIn)
+	for _, request := range f.Requests() {
+		if request.Path == "/api/logout" {
+			t.Error("a pasted key was signed out")
+		}
+	}
+	if _, _, err := r.Reread(t.Context(), *account.SignIn); err != nil {
+		t.Errorf("read again: %v", err)
 	}
 }

@@ -32,8 +32,9 @@ type harness struct {
 	personalAddons *atomic.Bool
 }
 
-// newHarness is a service on a fresh database.
-func newHarness(t *testing.T) harness {
+// newHarness is a service on a fresh database; configure, if any,
+// completes its options.
+func newHarness(t *testing.T, configure ...func(*Options)) harness {
 	t.Helper()
 	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
@@ -52,7 +53,11 @@ func newHarness(t *testing.T) harness {
 		s.PersonalAddons = personalAddons.Load()
 		return s
 	}
-	s := New(Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger})
+	options := Options{Settings: settings, Titles: lib, UserData: data, Addons: addonStore, Logger: logger, DB: pool}
+	for _, c := range configure {
+		c(&options)
+	}
+	s := New(options)
 	t.Cleanup(s.Close)
 	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, addons: addonStore, personalAddons: personalAddons}
 }

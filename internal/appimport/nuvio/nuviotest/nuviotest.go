@@ -1,6 +1,6 @@
 // Package nuviotest serves a fake Nuvio backend for tests: its public
-// configuration, the password sign-in, the account backup and the
-// sign-out, as the official backend answers them.
+// configuration, the password sign-in, the session renewal, the account
+// backup and the sign-out, as the official backend answers them.
 package nuviotest
 
 import (
@@ -39,14 +39,20 @@ type Backend struct {
 	Limited    int
 	RetryAfter string
 	requests   []Request
-	sessions   map[string]bool
-	signIns    int
+	// sessions are the access tokens open, refreshes the refresh token of
+	// each session open, by its access token, and spent the refresh tokens
+	// replaced, which the backend refuses.
+	sessions  map[string]bool
+	refreshes map[string]string
+	spent     map[string]bool
+	last      string
+	signIns   int
 }
 
 // New serves a fake backend until the test ends.
 func New(t *testing.T) *Backend {
 	t.Helper()
-	b := &Backend{sessions: map[string]bool{}}
+	b := &Backend{sessions: map[string]bool{}, refreshes: map[string]string{}, spent: map[string]bool{}}
 	server := httptest.NewServer(http.HandlerFunc(b.serve))
 	t.Cleanup(server.Close)
 	b.URL = server.URL
@@ -72,6 +78,40 @@ func (b *Backend) Open() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.sessions)
+}
+
+// Refresh returns the refresh token of the session open last, empty when
+// none is.
+func (b *Backend) Refresh() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.refreshes[b.last]
+}
+
+// Spent reports whether refresh was replaced by a renewal.
+func (b *Backend) Spent(refresh string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.spent[refresh]
+}
+
+// EndSessions ends every session, as when the account changes its
+// password: their refresh tokens are refused.
+func (b *Backend) EndSessions() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	clear(b.sessions)
+	clear(b.refreshes)
+}
+
+// open opens a session, and answers it.
+func (b *Backend) open(w http.ResponseWriter) {
+	b.signIns++
+	access := "access-token-" + strconv.Itoa(b.signIns) + "-0123456789abcdef"
+	refresh := "refresh-token-" + strconv.Itoa(b.signIns) + "-0123456789abcdef"
+	b.sessions[access], b.refreshes[access], b.last = true, refresh, access
+	_ = json.NewEncoder(w).Encode(map[string]any{"access_token": access, "token_type": "bearer", "refresh_token": refresh,
+		"user": map[string]string{"email": b.Email}})
 }
 
 func (b *Backend) serve(w http.ResponseWriter, r *http.Request) {
@@ -106,11 +146,28 @@ func (b *Backend) serve(w http.ResponseWriter, r *http.Request) {
 			_, _ = io.WriteString(w, `{"code":400,"error_code":"invalid_credentials","msg":"Invalid login credentials"}`)
 			return
 		}
-		b.signIns++
-		token := "access-token-" + strconv.Itoa(b.signIns) + "-0123456789abcdef"
-		b.sessions[token] = true
-		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": token, "token_type": "bearer", "refresh_token": "refresh",
-			"user": map[string]string{"email": b.Email}})
+		b.open(w)
+	case r.Method == http.MethodPost && r.URL.Path == "/auth/v1/token" && r.URL.Query().Get("grant_type") == "refresh_token":
+		var renewal struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		_ = json.Unmarshal(body, &renewal)
+		session := ""
+		for access, refresh := range b.refreshes {
+			if refresh == renewal.RefreshToken && renewal.RefreshToken != "" {
+				session = access
+			}
+		}
+		if session == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token: Refresh Token Not Found"}`)
+			return
+		}
+		// The session goes on under new tokens.
+		delete(b.sessions, session)
+		delete(b.refreshes, session)
+		b.spent[renewal.RefreshToken] = true
+		b.open(w)
 	case r.Method == http.MethodPost && r.URL.Path == "/rest/v1/rpc/sync_export_account_backup":
 		if !b.sessions[bearer] {
 			w.WriteHeader(http.StatusForbidden)
@@ -120,6 +177,7 @@ func (b *Backend) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(b.Backup)
 	case r.Method == http.MethodPost && r.URL.Path == "/auth/v1/logout":
 		delete(b.sessions, bearer)
+		delete(b.refreshes, bearer)
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusNotFound)

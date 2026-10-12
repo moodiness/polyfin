@@ -1,6 +1,7 @@
 // Package stremiotest serves a fake Stremio account API and link service
-// for tests: the password sign-in, the link codes, the library, the addons
-// and the sign-out, as Stremio's own client code calls them.
+// for tests: the password sign-in, the link codes, the account, its
+// library and addons, and the sign-out, as Stremio's own client code calls
+// them.
 package stremiotest
 
 import (
@@ -83,6 +84,15 @@ func (f *Fake) Open() int {
 	return len(f.keys)
 }
 
+// Revoke ends every session, and the key the user's browser holds, as
+// signing out everywhere does.
+func (f *Fake) Revoke() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	clear(f.keys)
+	f.Pasted = ""
+}
+
 // Approve approves the last link code asked for, as the user does in a
 // browser signed in to Stremio.
 func (f *Fake) Approve() {
@@ -161,6 +171,8 @@ func (f *Fake) serveAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		result(w, f.Library)
+	case "/api/getUser":
+		result(w, map[string]any{"_id": "user", "email": f.Email, "fullname": ""})
 	case "/api/addonCollectionGet":
 		result(w, map[string]any{"addons": f.Addons, "lastModified": "2026-10-01T10:00:00.000Z"})
 	case "/api/logout":

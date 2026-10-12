@@ -10,7 +10,9 @@
 // The service holds it in memory for a few minutes, while the user chooses
 // the profile to import and its addons (see Service.Hold), then imports
 // that profile in the background (see Service.Start). Nothing the source
-// signed in with is kept.
+// signed in with is kept, unless the user chose to stay connected: then
+// the import keeps what reads the account again, sealed, and imports the
+// same profile every 6 hours (see connections.go).
 //
 // Titles are found by the identifiers the source names them by (see
 // TitleRef), as the watch histories of tracking services and other servers
@@ -33,10 +35,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -76,6 +81,13 @@ type Account struct {
 	// Profiles are the account's, in the app's order; an app without
 	// profiles has one.
 	Profiles []Profile
+	// Name is the account's email or name, as the app gives it, empty
+	// when it gives none.
+	Name string
+	// SignIn reads the account again, for a connection: set when the
+	// user asked to stay connected, nil otherwise. It is never answered
+	// nor logged.
+	SignIn *SignIn
 }
 
 // Profile is one of an account's profiles, and what it holds.
@@ -157,6 +169,15 @@ type Options struct {
 	// Activity records the addons installed; nil records nothing.
 	Activity *activity.Store
 	Logger   *slog.Logger
+	// DB keeps the connections of the users who stay connected; nil keeps
+	// none: the sign-ins kept are signed out once imported.
+	DB *pgxpool.Pool
+	// Secrets seals what the connections sign in with; nil stores it as
+	// it is.
+	Secrets *secrets.Box
+	// Sources read the accounts of the connections again, and sign them
+	// out, by app.
+	Sources map[string]Source
 }
 
 // Service holds the accounts read until the user chooses what to import,
@@ -168,17 +189,24 @@ type Service struct {
 	addons   Installer
 	activity *activity.Store
 	logger   *slog.Logger
+	db       *pgxpool.Pool
+	box      *secrets.Box
+	sources  map[string]Source
 	now      func() time.Time
 	holdFor  time.Duration
+	timing   timing
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 
-	mu sync.Mutex
+	mu     sync.Mutex
+	closed bool
 	// held are the accounts read, by the user who read them: one each.
 	held map[accounts.ID]*held
 	// imports are the import running into each account, else its last.
 	imports map[accounts.ID]*Status
+	// connecting are the imports of connections running.
+	connecting map[connectionKey]*connectionRun
 }
 
 // held is an account read, and the key that names it to its reader.
@@ -192,26 +220,56 @@ type held struct {
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{settings: options.Settings, titles: options.Titles, userData: options.UserData, addons: options.Addons,
-		activity: options.Activity, logger: options.Logger, now: time.Now, holdFor: holdFor, ctx: ctx, cancel: cancel,
-		held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{}}
+		activity: options.Activity, logger: options.Logger, db: options.DB, box: options.Secrets, sources: options.Sources, now: time.Now,
+		holdFor: holdFor, timing: defaultTiming, ctx: ctx, cancel: cancel, held: map[accounts.ID]*held{}, imports: map[accounts.ID]*Status{},
+		connecting: map[connectionKey]*connectionRun{}}
 }
 
-// Close drops the accounts held, stops the imports running and waits for
-// them to end.
+// Close drops the accounts held, signing out the sessions they kept open,
+// stops the imports running and waits for them to end.
 func (s *Service) Close() {
 	s.mu.Lock()
 	for by, h := range s.held {
 		h.timer.Stop()
 		delete(s.held, by)
+		s.release(h.account.SignIn, h.account.App)
 	}
+	s.closed = true
 	s.mu.Unlock()
 	s.cancel()
 	s.wg.Wait()
 }
 
+// spawn runs f on a goroutine Close waits for, unless the service is
+// closed. It is called with s.mu held.
+func (s *Service) spawn(f func()) bool {
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		f()
+	}()
+	return true
+}
+
+// release signs out, in the background, the session signIn of app keeps
+// open when Polyfin opened it, as no connection keeps it. It is called
+// with s.mu held.
+func (s *Service) release(signIn *SignIn, app string) {
+	source := s.sources[app]
+	if signIn == nil || !signIn.Owned || source == nil {
+		return
+	}
+	kept := *signIn
+	s.spawn(func() { source.SignOut(context.Background(), kept) })
+}
+
 // Hold keeps account, which by read, while they choose what to import,
 // for a few minutes at most, and returns the key that names it. It drops
-// the account by held before.
+// the account by held before. An account dropped without being imported
+// has the session it kept open for a connection signed out.
 func (s *Service) Hold(by accounts.ID, account Account) string {
 	var key [24]byte
 	_, _ = rand.Read(key[:])
@@ -220,6 +278,7 @@ func (s *Service) Hold(by accounts.ID, account Account) string {
 	defer s.mu.Unlock()
 	if previous := s.held[by]; previous != nil {
 		previous.timer.Stop()
+		s.release(previous.account.SignIn, previous.account.App)
 	}
 	s.held[by] = h
 	h.timer = time.AfterFunc(s.holdFor, func() {
@@ -227,6 +286,7 @@ func (s *Service) Hold(by accounts.ID, account Account) string {
 		defer s.mu.Unlock()
 		if s.held[by] == h {
 			delete(s.held, by)
+			s.release(h.account.SignIn, h.account.App)
 		}
 	})
 	return h.key
@@ -344,10 +404,13 @@ type Choice struct {
 // account by holds under key, into user's account: by themselves, or an
 // administrator. The addons chosen are installed as user's own, which
 // needs them to be allowed; only an administrator's import reaches
-// addresses on local networks. Start stops holding the account, and
-// returns the import. It fails with ErrExpired, ErrUnknownProfile,
-// ErrUnknownAddon, ErrAddonsNotAllowed, or ErrRunning while an import into
-// user's account runs, holding the account still but for ErrExpired.
+// addresses on local networks. An account read to stay connected becomes
+// user's connection to its app, in place of the one there was, which
+// imports the profile chosen again every 6 hours, and never its addons.
+// Start stops holding the account, and returns the import. It fails with
+// ErrExpired, ErrUnknownProfile, ErrUnknownAddon, ErrAddonsNotAllowed, or
+// ErrRunning while an import into user's account runs, holding the account
+// still but for ErrExpired.
 func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Status, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -387,6 +450,16 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 	}
 	s.imports[user.ID] = status
 	r := &run{s: s, status: status, by: by, user: user, entries: profile.Entries, addons: chosen}
+	if signIn := h.account.SignIn; signIn != nil {
+		if s.db == nil {
+			s.release(signIn, h.account.App)
+		} else {
+			kept := *signIn
+			kept.Profile = profile.ID
+			r.connection = &newConnection{key: connectionKey{user.ID, h.account.App}, signIn: kept, account: h.account.Name, by: by.ID}
+			r.connection.run = s.claim(r.connection.key, nil)
+		}
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
