@@ -17,7 +17,8 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 **For app developers:**
 
 - Turned off, `/MediaSegments/{id}` lists none.
-- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, or when the version's own chapters name an intro or credits (see [Segments of each version](#segments-of-each-version)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
+- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, or when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
+- `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
 
 ## The three databases
 
@@ -33,20 +34,24 @@ For each kind of segment (intro, recap, credits, preview), the first database th
 
 The databases time a title once, but the versions addons offer may be cut differently. Once Polyfin has analyzed a version, on its first play, it fits the segments to that version:
 
-- A file's own chapters win, for that file. When a version's chapters name an intro or credits, they give that version's intro or credits in place of the databases'. Other versions keep the databases'.
+- A file's own chapters win, for that file. When a version's chapters name an intro, a recap, a preview or credits, they give that version's segments of that type in place of the databases'. Other versions keep the databases'.
 - Segments never pass the end. A segment ends at the latest where the version ends. One starting at or after its end is left out.
 - Credits that run to the end stop 1 second early, so that the web player (jellyfin-web) offers its skip button. Skipping then lands a second before the end, and the next episode starts, or the movie ends.
 - When the title's listed runtime is shorter than the file, such credits end exactly at the file's end instead. The web player then shows its "Up Next" card rather than a skip button.
 - The web player shows neither while its controls are on screen when the credits start: it offers a segment only once, as playback enters it.
 
-A version not analyzed yet gets the databases' segments as they are.
+A version not analyzed yet gets the databases' segments as they are. Asking for its segments never starts an analysis.
 
-**Chapter names:** names count in any letter case, as whole words.
+**Chapter names:** Polyfin follows the default names of Jellyfin's Chapter Segments Provider plugin, adds French, and leaves out its commercial breaks. Names count in any letter case, with or without accents, as whole words.
 
-- An intro: intro, introduction, opening, OP, or "générique de début". "Opening Credits" is an intro.
-- Credits: credits (end or closing credits), ending, ED, outro, or "générique de fin".
+- An intro: intro, introduction, opening, OP, "générique de début", "générique d'ouverture" or "ouverture". "Opening Credits" is an intro.
+- A preview: preview, "next time on", "next on", "next episode", "sneak peek", "aperçu", "prochainement", "prochain épisode" or "à suivre".
+- A recap: recap, previously, "last time on", "last on", "récapitulatif", "résumé", "précédemment" or "épisode précédent".
+- Credits: credits (end or closing credits), closing, ending, ED, outro, "crédits", "générique de fin" or "générique final".
 
-OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with no database asked.
+A name is tried as an intro, then as a preview, a recap and credits, as the plugin does: "Credits and Preview" is a preview. OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with no database asked.
+
+A chapter's segment runs from its start to the next chapter's start, or to the version's end for the last chapter. Chapters of the same type in a row make one segment.
 
 **Why credits stop early:** jellyfin-web shows no skip button for credits that reach the runtime the title is listed with, when something follows in its queue. Its video page shows its "Up Next" card instead, but only for credits that reach the end of the version it plays. Credits count as running to the end when they end within 2 seconds of it. They stop early only when the listed runtime is at least the version's length, and when they still last 3 seconds, as jellyfin-web ignores shorter segments.
 
