@@ -33,7 +33,7 @@ A title's page opens as soon as its description is ready, with the versions Poly
 
 On the admin app's **Libraries** page, an administrator can leave any of the server's libraries out of the web player's menus, and each user any of their own: its top bar, the bar's **More** menu and its side menu. The library keeps its row on the home screen, and other apps keep listing it. Live TV catalogs have no such option: their channels go to Live TV.
 
-**For app developers:** `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>}]}`. Polyfin's own Live TV, Playlists and Collections views are never left out.
+**For app developers:** `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>}]}`. Polyfin's own Live TV, Playlists, Collections and Watchlist views are never left out.
 
 ### Profile pictures
 

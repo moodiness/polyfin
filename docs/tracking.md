@@ -73,6 +73,19 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 - When the history cannot be read whole, what was read is imported, and the status line says why: the service refused the connection (**Connect again**), could not be reached, or asked to wait too long.
 - **Disconnect** asks first. Disconnecting a service stops its imports and turns them off. What they imported stays in Polyfin.
 
+### The watchlist
+
+Trakt and Simkl also keep the titles you mean to watch: Trakt's watchlist, Simkl's Plan to Watch. Under **My account › Tracking**, a connected Trakt or Simkl has a second switch, **Import my Trakt watchlist** or **Import my Simkl Plan to Watch list**, off by default. Turned on, the list is read whole with each import of the service, whether the history switch is on or not, and its movies and series go to your Watchlist. A season or an episode on the list counts for its series. Titles are found as the history's are; those not found count among the titles not found, and the status line tells how many titles the import added to the Watchlist. Simkl's anime on the list are found through the [anime mapping](#anime): until the mapping is read, they wait for a later import.
+
+The Watchlist view (« À regarder » when the server language is French) shows in every Jellyfin app beside the libraries, with its row of latest items on the home screen, once your watchlist holds a title you have not started. It lists the movies and series of every list feeding it, the latest added first: Trakt's and Simkl's, and the library of a Stremio or Nuvio account (see [Importing from an app](users.md#what-comes-over-from-an-app)). Each user has their own. Parental control and blocked genres hide its titles as everywhere.
+
+- A title leaves the view once you start it: a movie with a resume point or played, a series with an episode started or played. It then shows in **Continue Watching** or **Next Up**.
+- A title leaves it once no list holds it any longer, at the next import of the list that brought it. An import that could not read the list whole takes nothing off. A title a one-off app import brought leaves only once started.
+- Jellyfin apps have no watchlist button: the view is not edited from them. Change the lists where they live.
+- Turning the switch off, or disconnecting the service, takes off the Watchlist the titles that list alone held: those another list holds stay.
+
+**For app developers:** the Watchlist view is a `CollectionFolder` without `CollectionType`, as a library of mixed content, with the same identifier on every server, listed in `/UserViews` after the Collections view. `/Items?ParentId=` lists its movies and series, the latest added first, whatever `sortBy` says; `/Items/Latest?ParentId=` gives its home row. `GET /admin/api/account/tracking` answers, for each service, `watchlist` (Trakt and Simkl) and `importWatchlist`, and `lastImport.watchlist`, the titles added; `PATCH /admin/api/account/tracking/{service}` takes `importWatchlist`, besides `importHistory`, and answers `not_found` for a service without a watchlist.
+
 ## Anime
 
 AniDB, and Simkl's and Kitsu's anime that follow it, make each season of a series, and often each half of a season, a title of its own, with its episodes numbered from 1. Polyfin's titles, like the usual metadata addons', follow the seasons of IMDb and TVDB. Polyfin maps the two with two community lists:
