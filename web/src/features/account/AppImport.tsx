@@ -56,7 +56,7 @@ const apps: readonly AppKind[] = ['nuvio', 'stremio']
  * account, or a user's, for an administrator. `current` is the import running into that account,
  * else the last one. The app chosen signs in with a form of its own, through `readers`, and the
  * account read then has its profile chosen with its addons: the server holds what it read a few
- * minutes only.
+ * minutes only. `importEveryMinutes` is how often a connection kept is imported again.
  */
 export default function AppImport({
   current,
@@ -65,6 +65,7 @@ export default function AppImport({
   start,
   onStarted,
   own,
+  importEveryMinutes,
 }: {
   current: AppImportStatus | null
   /** Whether the account's user may add their own addons: the app's are offered only then. */
@@ -74,9 +75,11 @@ export default function AppImport({
   onStarted: (started: AppImportStatus) => void
   /** The user's own account, under My account. */
   own: boolean
+  importEveryMinutes: number
 }) {
   const { t } = useI18n()
   const text = t.account.appImport
+  const every = t.account.importEvery(importEveryMinutes)
   const toast = useToast()
   const [app, setApp] = useState<AppKind>('nuvio')
   const [stayConnected, setStayConnected] = useState(false)
@@ -129,7 +132,7 @@ export default function AppImport({
               checked={stayConnected}
               onChange={setStayConnected}
               label={text.stayConnected}
-              help={text.stayConnectedHelp[app]}
+              help={text.stayConnectedHelp[app](every)}
               className="mt-3"
             />
           </div>
@@ -214,7 +217,7 @@ export default function AppImport({
                 )}
               </div>
             )}
-            {account.stayConnected && <Notice tone="info">{text.staysConnected}</Notice>}
+            {account.stayConnected && <Notice tone="info">{text.staysConnected(every)}</Notice>}
             {begin.isError && (
               <Notice tone="danger" live>
                 {errorMessage(t, begin.error)}
@@ -817,27 +820,34 @@ function AppImportProgress({ current, own }: { current: AppImportStatus; own: bo
 }
 
 /**
- * A user's connections to apps, imported every 6 hours: under My account, the user's own, or a
- * user's, for an administrator. Each shows its account, its last and next import, and why it stopped
- * or is paused, with Import now and Disconnect. `own` is the user's own account, where a paused
- * connection cannot be imported. `onChanged` tells that the connections changed.
+ * A user's connections to apps, imported every `importEveryMinutes`: under My account, the user's
+ * own, or a user's, for an administrator. Each shows its account, its last and next import, and why
+ * it stopped or is paused, with Import now and Disconnect. `own` is the user's own account, where a
+ * paused connection cannot be imported. `onChanged` tells that the connections changed.
  */
 export function AppConnections({
   connections,
   actions,
   onChanged,
   own,
+  importEveryMinutes,
 }: {
   connections: AppConnection[]
   actions: AppConnectionActions
   onChanged: () => void
   own: boolean
+  importEveryMinutes: number
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.connections
   if (connections.length === 0) return null
   return (
-    <Panel title={text.title} titleAs="h3" description={text.help} flush>
+    <Panel
+      title={text.title}
+      titleAs="h3"
+      description={text.help(t.account.importEvery(importEveryMinutes))}
+      flush
+    >
       <ul>
         {connections.map((connection) => (
           <AppConnectionRow

@@ -355,6 +355,11 @@ export type Settings = {
    */
   weeklySummaryDay: number
   weeklySummaryHour: number
+  /**
+   * How often connected accounts are imported again, in minutes: the app connections and the
+   * watch histories of tracking services. One of its bounds' choices.
+   */
+  importEveryMinutes: number
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -1137,12 +1142,14 @@ export type TrackingService = {
    * sign-in waits for the user to allow Polyfin on the page `verificationUrl` (`userCode` empty).
    */
   code: { userCode: string; verificationUrl: string; expiresAt: string } | null
-  /** Whether the service's watch history is imported into Polyfin, every 6 hours. */
+  /** Whether the service's watch history is imported into Polyfin, at the server's interval. */
   importHistory: boolean
   /** An import runs now. */
   importing: boolean
   /** How the last import went; null before the first. */
   lastImport: TrackingImport | null
+  /** When the next import runs; null while none is planned. */
+  nextImportAt: string | null
 }
 
 /** How an import of a watch history went. */
@@ -1158,9 +1165,11 @@ export type TrackingImport = {
   problem: 'reconnect' | 'unreachable' | 'rate_limited' | null
 }
 
-export const fetchTracking = async (signal?: AbortSignal) =>
-  (await request<{ services: TrackingService[] }>('GET', '/account/tracking', undefined, signal))
-    .services
+/** The signed-in user's tracking services, and how often their histories are imported, in minutes. */
+export type TrackingList = { services: TrackingService[]; importEveryMinutes: number }
+
+export const fetchTracking = (signal?: AbortSignal) =>
+  request<TrackingList>('GET', '/account/tracking', undefined, signal)
 
 /** Connects a key service with `key`, or starts a code connection without it. */
 export const connectTracking = (service: TrackingServiceName, key?: string) =>
@@ -1690,9 +1699,10 @@ export type AppConnectionImport = {
 }
 
 /**
- * A user's connection to an app, imported every 6 hours: the account as the app names it, who
- * connected it, `problem` once the app refused the sign-in kept (the user signs in again), `paused`
- * while the server does not let the user import, the last import and when the next one runs.
+ * A user's connection to an app, imported again at the server's interval: the account as the app
+ * names it, who connected it, `problem` once the app refused the sign-in kept (the user signs in
+ * again), `paused` while the server does not let the user import, the last import and when the
+ * next one runs.
  */
 export type AppConnection = {
   app: AppKind
@@ -1728,13 +1738,15 @@ export type AppImportChoice = { key: string; profile: string; addons: number[] }
 
 /**
  * Whether the signed-in user may import from an app, whether they may add their own addons, the
- * import into their account running, else their last one, else null, and their connections.
+ * import into their account running, else their last one, else null, their connections, and how
+ * often connections are imported, in minutes.
  */
 export type OwnAppImport = {
   enabled: boolean
   addonsAllowed: boolean
   import: AppImportStatus | null
   connections: AppConnection[]
+  importEveryMinutes: number
 }
 
 export const fetchOwnAppImport = (signal?: AbortSignal) =>
@@ -1752,12 +1764,13 @@ export const startOwnAppImport = async (body: AppImportChoice) =>
 
 /**
  * For an administrator: whether a user may add their own addons, the import into their account,
- * and their connections.
+ * their connections, and how often connections are imported, in minutes.
  */
 export type UserAppImport = {
   addonsAllowed: boolean
   import: AppImportStatus | null
   connections: AppConnection[]
+  importEveryMinutes: number
 }
 
 export const fetchUserAppImport = (id: string, signal?: AbortSignal) =>

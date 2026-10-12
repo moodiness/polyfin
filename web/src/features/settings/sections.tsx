@@ -550,6 +550,22 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
         onChange={(serverImports) => update({ serverImports })}
       />
       <FieldRow
+        anchor="import-every"
+        label={s.importEveryMinutes}
+        help={s.importEveryMinutesHelp}
+        error={error('import-every')}
+      >
+        <Select
+          value={form.importEveryMinutes}
+          options={((form.bounds.importEveryMinutes?.choices ?? []) as number[]).map((minutes) => ({
+            value: minutes,
+            label: s.importEveryChoice(minutes),
+          }))}
+          onValue={(importEveryMinutes) => update({ importEveryMinutes })}
+          className="max-w-xs"
+        />
+      </FieldRow>
+      <FieldRow
         anchor="login-attempts"
         label={s.loginAttempts}
         help={s.loginAttemptsHelp(range('loginAttempts'))}

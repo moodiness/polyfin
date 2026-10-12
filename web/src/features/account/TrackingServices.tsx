@@ -17,6 +17,7 @@ import {
   revealTrackingKey,
   setTrackingImport,
   type TrackingKeyServiceName,
+  type TrackingList,
   type TrackingService,
   type TrackingServiceName,
 } from '@/api'
@@ -78,11 +79,11 @@ export default function TrackingServices() {
     // The server learns when a code is entered: it is asked again while a code is waiting. React
     // Query pauses this while the page is hidden, and stops it when the page is left.
     refetchInterval: (query) =>
-      query.state.data?.some(
+      query.state.data?.services.some(
         (service) => service.code !== null && !codeExpired(service.code, Date.now()),
       )
         ? codePollMs
-        : query.state.data?.some((service) => service.importing)
+        : query.state.data?.services.some((service) => service.importing)
           ? importPollMs
           : false,
   })
@@ -97,8 +98,12 @@ export default function TrackingServices() {
   }
   return (
     <ul className="overflow-hidden rounded-panel border border-line-2 bg-s1">
-      {tracking.data.map((service) => (
-        <ServiceRow key={service.service} service={service} />
+      {tracking.data.services.map((service) => (
+        <ServiceRow
+          key={service.service}
+          service={service}
+          importEveryMinutes={tracking.data.importEveryMinutes}
+        />
       ))}
     </ul>
   )
@@ -119,8 +124,15 @@ function useNowUntil(until: number | null): number {
 
 /** Puts the service as the server answered it into the list, without asking for the list again. */
 function store(service: TrackingService) {
-  queryClient.setQueryData<TrackingService[]>(queryKeys.tracking, (services) =>
-    services?.map((current) => (current.service === service.service ? service : current)),
+  queryClient.setQueryData<TrackingList>(
+    queryKeys.tracking,
+    (list) =>
+      list && {
+        ...list,
+        services: list.services.map((current) =>
+          current.service === service.service ? service : current,
+        ),
+      },
   )
 }
 
@@ -147,7 +159,13 @@ function Ago({ iso }: { iso: string }) {
   )
 }
 
-function ServiceRow({ service }: { service: TrackingService }) {
+function ServiceRow({
+  service,
+  importEveryMinutes,
+}: {
+  service: TrackingService
+  importEveryMinutes: number
+}) {
   const { language, t } = useI18n()
   const text = t.account.tracking
   const user = useSessionUser()
@@ -392,7 +410,9 @@ function ServiceRow({ service }: { service: TrackingService }) {
         {ended}
         {codeError}
         {service.problem === 'reconnect' && service.connection === 'key' && keyForm(text.reconnect)}
-        {!service.music && <HistoryImport service={service} name={name} />}
+        {!service.music && (
+          <HistoryImport service={service} name={name} importEveryMinutes={importEveryMinutes} />
+        )}
       </>
     )
   } else {
@@ -538,10 +558,18 @@ function KeyForm({
 }
 
 /**
- * Whether a connected service's watch history is imported into Polyfin, Import now, and how the
- * last import went.
+ * Whether a connected service's watch history is imported into Polyfin, every `importEveryMinutes`,
+ * Import now, and how the last import went, with when the next runs.
  */
-function HistoryImport({ service, name }: { service: TrackingService; name: string }) {
+function HistoryImport({
+  service,
+  name,
+  importEveryMinutes,
+}: {
+  service: TrackingService
+  name: string
+  importEveryMinutes: number
+}) {
   const { t } = useI18n()
   const text = t.account.tracking.history
   const labelId = useId()
@@ -565,7 +593,7 @@ function HistoryImport({ service, name }: { service: TrackingService; name: stri
             {text.toggle(name)}
           </p>
           <p id={helpId} className="mt-0.5 text-small text-ink-3">
-            {text.toggleHelp(name)}
+            {text.toggleHelp(name, t.account.importEvery(importEveryMinutes))}
           </p>
         </div>
         <Switch
@@ -598,6 +626,12 @@ function HistoryImport({ service, name }: { service: TrackingService; name: stri
                   {text.lastImport} <Ago iso={last.at} />
                   {text.colon}
                   {text.counts(last.played, last.resumed, last.unmapped)}
+                  {service.nextImportAt !== null && (
+                    <>
+                      {' '}
+                      {text.nextImport} <Ago iso={service.nextImportAt} />.
+                    </>
+                  )}
                 </>
               )}
             </span>

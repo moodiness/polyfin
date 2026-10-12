@@ -83,6 +83,7 @@ export default function AppImportRoute() {
                   void queryClient.invalidateQueries({ queryKey: queryKeys.userAppImport(userId) })
                 }
                 own={false}
+                importEveryMinutes={status.data.importEveryMinutes}
               />
               {/* A new form for each user: what was read of one account is never imported into another. */}
               <AppImport
@@ -98,6 +99,7 @@ export default function AppImportRoute() {
                   )
                 }
                 own={false}
+                importEveryMinutes={status.data.importEveryMinutes}
               />
             </>
           )}

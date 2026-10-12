@@ -324,6 +324,10 @@ const settings = {
     serverImports: 'Users may import their watch history from another server or app',
     serverImportsHelp:
       'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin or Emby server, or from their Stremio or Nuvio account, signing in there as themselves. When off, those sections are hidden. An administrator can still import for a user, under Users.',
+    importEveryMinutes: 'Import connected accounts every',
+    importEveryMinutesHelp:
+      'How often Polyfin imports again the Stremio and Nuvio accounts users stay connected to, and the watch histories they import from tracking services. A change applies at once: each next import comes this long after the last one. Each import reads the whole account again, so a short interval sends more requests to those services, and, for Stremio, whose terms forbid automated extraction, makes that grey area more pronounced. 6 hours by default.',
+    importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
     loginAttemptsHelp: (r: RangeText) =>
       `After this many wrong passwords in a row, the account cannot sign in for 15 minutes, even with the right password. An administrator can unblock it sooner on the Users page. 0, or from ${r.min} to ${r.max}.`,

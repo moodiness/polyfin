@@ -473,6 +473,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'security',
+    anchor: 'import-every',
+    label: (t) => s(t).importEveryMinutes,
+    help: (t) => s(t).importEveryMinutesHelp,
+    codes: ['invalid_import_every_minutes'],
+  },
+  {
+    section: 'security',
     anchor: 'login-attempts',
     label: (t) => s(t).loginAttempts,
     help: (t, r) => s(t).loginAttemptsHelp(r('loginAttempts')),

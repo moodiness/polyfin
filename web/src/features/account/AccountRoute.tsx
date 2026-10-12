@@ -154,7 +154,7 @@ export default function AccountRoute() {
           <ServerImport current={ownImport.data?.import ?? null} />
         </AccountSection>
       )}
-      {(importingFromApps || appConnections.length > 0) && (
+      {ownAppImport.data !== undefined && (importingFromApps || appConnections.length > 0) && (
         <AccountSection
           id="app-import"
           title={text.sections.appImport}
@@ -168,11 +168,12 @@ export default function AccountRoute() {
                 void queryClient.invalidateQueries({ queryKey: queryKeys.ownAppImport })
               }
               own
+              importEveryMinutes={ownAppImport.data.importEveryMinutes}
             />
             {importingFromApps && (
               <AppImport
-                current={ownAppImport.data?.import ?? null}
-                addonsAllowed={ownAppImport.data?.addonsAllowed === true}
+                current={ownAppImport.data.import}
+                addonsAllowed={ownAppImport.data.addonsAllowed}
                 readers={ownAppReaders}
                 start={startOwnAppImport}
                 onStarted={(started) =>
@@ -182,6 +183,7 @@ export default function AccountRoute() {
                   )
                 }
                 own
+                importEveryMinutes={ownAppImport.data.importEveryMinutes}
               />
             )}
           </div>

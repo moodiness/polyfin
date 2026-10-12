@@ -211,6 +211,8 @@ const common: typeof en = {
       'Saisissez l’adresse de l’expéditeur seule, comme polyfin@example.org, et un nom de 128 caractères au plus.',
     invalid_weekly_summary_day: 'Choisissez dans la liste le jour du résumé de la semaine.',
     invalid_weekly_summary_hour: 'Choisissez dans la liste l’heure du résumé de la semaine.',
+    invalid_import_every_minutes:
+      'Choisissez dans la liste tous les combien les comptes connectés sont importés.',
     invalid_target_kind: 'Choisissez un type de cible dans la liste.',
     invalid_target_name: 'Le nom d’une cible doit faire de 1 à 64 caractères.',
     invalid_target_address: 'Saisissez une adresse web commençant par https:// ou http://.',

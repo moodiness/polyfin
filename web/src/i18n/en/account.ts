@@ -13,6 +13,13 @@ const account = {
       devices: 'Devices',
       password: 'Password',
     },
+    /** How often connected accounts are imported, from the server's setting, in minutes. */
+    importEvery: (minutes: number) =>
+      minutes < 60
+        ? `every ${minutes} minutes`
+        : minutes === 60
+          ? 'every hour'
+          : `every ${minutes / 60} hours`,
     serverImport: {
       description:
         'Bring your played movies and episodes, resume points and favorites over from a Jellyfin or Emby server you used before. They go into your account only, matched by IMDb, TMDB or TVDB, and only add to what Polyfin already has. Nothing is written to the other server.',
@@ -53,13 +60,13 @@ const account = {
       },
       stayConnected: 'Stay connected',
       stayConnectedHelp: {
-        nuvio:
-          'Polyfin keeps the session, encrypted, never your password, and imports the profile you choose again every 6 hours. It only reads the account. You can disconnect at any time.',
-        stremio:
-          'Polyfin keeps the auth key, encrypted, and imports the account again every 6 hours. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account every few hours makes that grey area more pronounced than a one-off import.',
+        nuvio: (every: string) =>
+          `Polyfin keeps the session, encrypted, never your password, and imports the profile you choose again ${every}. It only reads the account. You can disconnect at any time.`,
+        stremio: (every: string) =>
+          `Polyfin keeps the auth key, encrypted, and imports the account again ${every}. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account ${every} makes that grey area more pronounced than a one-off import.`,
       },
-      staysConnected:
-        'You stay connected: this profile is imported again every 6 hours, the same way. Addons are installed now only.',
+      staysConnected: (every: string) =>
+        `You stay connected: this profile is imported again ${every}, the same way. Addons are installed now only.`,
       wholeAccount: 'The whole account',
       profile: 'Profile',
       profileNumber: (id: string) => `Profile ${id}`,
@@ -143,7 +150,8 @@ const account = {
       },
       connections: {
         title: 'Connected apps',
-        help: 'Imported every 6 hours, the way they were first imported: the same profile, without their addons. Polyfin only reads them.',
+        help: (every: string) =>
+          `Imported ${every}, the way they were first imported: the same profile, without their addons. Polyfin only reads them.`,
         connectedAs: 'Connected as ',
         connected: 'Connected',
         connectedOn: (date: string) => ` since ${date}`,
@@ -276,23 +284,24 @@ const account = {
         `${name} refused this server’s app. An administrator has to check its credentials under Settings › Tracking.`,
       history: {
         toggle: (name: string) => `Import my ${name} history`,
-        toggleHelp: (name: string) =>
-          `Marks played in Polyfin what you watched on ${name}, and picks up where you stopped, so Continue Watching and Next Up match. Imported every 6 hours; nothing is sent back to ${name}.`,
+        toggleHelp: (name: string, every: string) =>
+          `Marks played in Polyfin what you watched on ${name}, and picks up where you stopped, so Continue Watching and Next Up match. Imported ${every}; nothing is sent back to ${name}.`,
         importNow: 'Import now',
         importing: 'Importing…',
         importingStatus: 'Importing your history…',
         never: 'Not imported yet.',
         lastImport: 'Last import',
         colon: ': ',
+        nextImport: 'Next import',
         counts: (played: number, resumed: number, unmapped: number) =>
           `${played === 1 ? '1 title' : `${played} titles`} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
         problem: {
           reconnect: (name: string) =>
             `${name} refused the connection during the last import. Connect again to import your history.`,
           unreachable: (name: string) =>
-            `${name} could not be read whole during the last import. What was read was imported; Polyfin tries again in 6 hours.`,
+            `${name} could not be read whole during the last import. What was read was imported; the next import tries again.`,
           rate_limited: (name: string) =>
-            `${name} asked Polyfin to wait during the last import. What was read was imported; Polyfin tries again in 6 hours.`,
+            `${name} asked Polyfin to wait during the last import. What was read was imported; the next import tries again.`,
         },
       },
     },

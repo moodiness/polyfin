@@ -14,6 +14,12 @@ const account: typeof en = {
       devices: 'Appareils',
       password: 'Mot de passe',
     },
+    importEvery: (minutes: number) =>
+      minutes < 60
+        ? `toutes les ${minutes} minutes`
+        : minutes === 60
+          ? 'toutes les heures'
+          : `toutes les ${minutes / 60} heures`,
     serverImport: {
       description:
         'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin ou Emby que vous utilisiez. Ils vont dans votre compte seulement, reconnus par IMDb, TMDB ou TVDB, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
@@ -54,13 +60,13 @@ const account: typeof en = {
       },
       stayConnected: 'Rester connecté',
       stayConnectedHelp: {
-        nuvio:
-          'Polyfin garde la session, chiffrée, jamais votre mot de passe, et importe de nouveau le profil choisi toutes les 6 heures. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment.',
-        stremio:
-          'Polyfin garde la clé d’authentification, chiffrée, et importe de nouveau le compte toutes les 6 heures. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment. Les conditions de Stremio interdisent d’extraire ses données par des moyens automatisés : lire votre compte toutes les quelques heures rend cette zone grise plus marquée qu’une importation ponctuelle.',
+        nuvio: (every: string) =>
+          `Polyfin garde la session, chiffrée, jamais votre mot de passe, et importe de nouveau le profil choisi ${every}. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment.`,
+        stremio: (every: string) =>
+          `Polyfin garde la clé d’authentification, chiffrée, et importe de nouveau le compte ${every}. Il ne fait que lire le compte. Vous pouvez vous déconnecter à tout moment. Les conditions de Stremio interdisent d’extraire ses données par des moyens automatisés : lire votre compte ${every} rend cette zone grise plus marquée qu’une importation ponctuelle.`,
       },
-      staysConnected:
-        'Vous restez connecté : ce profil est importé de nouveau toutes les 6 heures, de la même façon. Les addons ne sont installés que maintenant.',
+      staysConnected: (every: string) =>
+        `Vous restez connecté : ce profil est importé de nouveau ${every}, de la même façon. Les addons ne sont installés que maintenant.`,
       wholeAccount: 'Tout le compte',
       profile: 'Profil',
       profileNumber: (id: string) => `Profil ${id}`,
@@ -150,7 +156,8 @@ const account: typeof en = {
       },
       connections: {
         title: 'Applis connectées',
-        help: 'Importées toutes les 6 heures, comme lors de la première importation : le même profil, sans leurs addons. Polyfin ne fait que les lire.',
+        help: (every: string) =>
+          `Importées ${every}, comme lors de la première importation : le même profil, sans leurs addons. Polyfin ne fait que les lire.`,
         connectedAs: 'Connecté en tant que ',
         connected: 'Connecté',
         connectedOn: (date: string) => ` depuis le ${date}`,
@@ -285,23 +292,24 @@ const account: typeof en = {
         `${name} a refusé l’application de ce serveur. Un administrateur doit vérifier ses identifiants dans Paramètres › Suivi.`,
       history: {
         toggle: (name: string) => `Importer mon historique ${name}`,
-        toggleHelp: (name: string) =>
-          `Marque comme vu dans Polyfin ce que vous avez regardé sur ${name}, et reprend là où vous vous êtes arrêté, pour que Reprendre et À suivre correspondent. Importé toutes les 6 heures ; rien n’est renvoyé à ${name}.`,
+        toggleHelp: (name: string, every: string) =>
+          `Marque comme vu dans Polyfin ce que vous avez regardé sur ${name}, et reprend là où vous vous êtes arrêté, pour que Reprendre et À suivre correspondent. Importé ${every} ; rien n’est renvoyé à ${name}.`,
         importNow: 'Importer maintenant',
         importing: 'Importation…',
         importingStatus: 'Importation de votre historique…',
         never: 'Pas encore importé.',
         lastImport: 'Dernière importation',
         colon: ' : ',
+        nextImport: 'Prochaine importation',
         counts: (played: number, resumed: number, unmapped: number) =>
           `${played <= 1 ? `${played} titre marqué vu` : `${played} titres marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
         problem: {
           reconnect: (name: string) =>
             `${name} a refusé la connexion lors de la dernière importation. Reconnectez-vous pour importer votre historique.`,
           unreachable: (name: string) =>
-            `${name} n’a pas pu être lu entièrement lors de la dernière importation. Ce qui a été lu a été importé ; Polyfin réessaie dans 6 heures.`,
+            `${name} n’a pas pu être lu entièrement lors de la dernière importation. Ce qui a été lu a été importé ; la prochaine importation réessaie.`,
           rate_limited: (name: string) =>
-            `${name} a demandé à Polyfin d’attendre lors de la dernière importation. Ce qui a été lu a été importé ; Polyfin réessaie dans 6 heures.`,
+            `${name} a demandé à Polyfin d’attendre lors de la dernière importation. Ce qui a été lu a été importé ; la prochaine importation réessaie.`,
         },
       },
     },
