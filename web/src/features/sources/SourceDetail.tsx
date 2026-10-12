@@ -485,7 +485,7 @@ export function SourceDetail({
         )}
       </PanelSection>
 
-      {scope !== null && folder !== null && mode === 'page' && (
+      {scope !== null && folder !== null && mode === 'page' && folder.kind !== 'homevideos' && (
         <UnmatchedFiles addon={addon} folder={folder} />
       )}
 

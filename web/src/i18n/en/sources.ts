@@ -183,13 +183,15 @@ const sources = {
     pathHint: 'Where the folder is mounted in Polyfin’s container, not its path on the host.',
     pathPlaceholder: '/media/movies',
     kind: 'It holds',
-    kinds: { movies: 'Movies', shows: 'Shows', music: 'Music' },
+    kinds: { movies: 'Movies', shows: 'Shows', music: 'Music', homevideos: 'Home videos' },
     kindHelp: {
       movies:
         'One file per movie, alone or in a folder of its own, named after the movie and its year.',
       shows: 'A folder per show, with the season and episode in each file’s name, such as S01E02.',
       music:
         'Audio files read with their tags, else their names, such as Artist/Album/01 Title.flac, grouped into albums and artists.',
+      homevideos:
+        'Each video is a title of its own, named after its file, or its folder when it is alone in it, and dated by its NFO file, its recording or the file. No metadata addon is asked.',
     },
     kindFixed: 'What a folder holds cannot be changed: remove it and add it again.',
     useArtwork: 'Use its artwork',
@@ -216,6 +218,12 @@ const sources = {
     albums: 'Albums',
     artists: 'Artists',
     leftOut: 'Left out',
+    videos: 'Videos',
+    datedBy: {
+      nfo: 'Dated by an NFO file',
+      created: 'Dated by the recording',
+      file: 'Dated by the file',
+    },
     matchedBy: (parts: string[]) => `Matched: ${parts.join(', ')}.`,
     matchMethods: {
       name: (count: string) => `${count} by an identifier in the name`,

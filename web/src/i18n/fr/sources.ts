@@ -188,7 +188,12 @@ const sources: typeof en = {
       'L’endroit où le dossier est monté dans le conteneur de Polyfin, pas son chemin sur l’hôte.',
     pathPlaceholder: '/media/films',
     kind: 'Il contient',
-    kinds: { movies: 'Des films', shows: 'Des séries', music: 'Musique' },
+    kinds: {
+      movies: 'Des films',
+      shows: 'Des séries',
+      music: 'Musique',
+      homevideos: 'Vidéos personnelles',
+    },
     kindHelp: {
       movies:
         'Un fichier par film, seul ou dans un dossier à lui, nommé d’après le film et son année.',
@@ -196,6 +201,8 @@ const sources: typeof en = {
         'Un dossier par série, avec la saison et l’épisode dans le nom de chaque fichier, comme S01E02.',
       music:
         'Des fichiers audio lus d’après leurs tags, sinon leurs noms, comme Artiste/Album/01 Titre.flac, regroupés en albums et en artistes.',
+      homevideos:
+        'Chaque vidéo est un titre à part, nommé d’après son fichier, ou son dossier quand elle y est seule, et daté par son fichier NFO, son enregistrement ou le fichier. Aucun addon de métadonnées n’est interrogé.',
     },
     kindFixed:
       'Le contenu d’un dossier ne peut pas changer : supprimez-le et ajoutez-le à nouveau.',
@@ -225,6 +232,12 @@ const sources: typeof en = {
     albums: 'Albums',
     artists: 'Artistes',
     leftOut: 'Laissés de côté',
+    videos: 'Vidéos',
+    datedBy: {
+      nfo: 'Datées par un fichier NFO',
+      created: 'Datées par l’enregistrement',
+      file: 'Datées par le fichier',
+    },
     matchedBy: (parts: string[]) => `Associés : ${parts.join(', ')}.`,
     matchMethods: {
       name: (count: string) => `${count} par un identifiant dans le nom`,

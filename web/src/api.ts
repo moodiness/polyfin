@@ -463,7 +463,7 @@ export type Addon = {
 }
 
 /** What a local folder holds. */
-export type FolderKind = 'movies' | 'shows' | 'music'
+export type FolderKind = 'movies' | 'shows' | 'music' | 'homevideos'
 
 /** Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder. */
 export type FolderShare = '' | 'smb' | 'webdav'
@@ -505,6 +505,11 @@ export type LocalFolder = {
   /** A music folder's albums, and their artists. */
   albums: number
   artists: number
+  /**
+   * A home videos folder's videos by where their dates come from: an NFO file, the recording's
+   * creation time, or the file's modification time.
+   */
+  datedBy: { nfo: number; created: number; file: number }
   /** The files, or shows' folders, linked to an IMDb identifier by hand. */
   links: { unit: string; imdbId: string }[]
   /** Whether its titles show the artwork beside their files rather than the addons'. */
@@ -2237,7 +2242,7 @@ export type HistoryEntry = {
   user: { id: string; name: string }
   item: {
     id: string
-    kind: 'movie' | 'episode' | 'channel' | 'recording' | 'replay'
+    kind: 'movie' | 'episode' | 'channel' | 'recording' | 'replay' | 'video'
     name: string
     seriesName: string | null
     season: number | null

@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
   MusicNotesIcon,
   TelevisionSimpleIcon,
+  VideoCameraIcon,
 } from '@phosphor-icons/react'
 import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -94,7 +95,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
         path: path.trim(),
         kind,
         ...(share === null ? {} : { user: user.trim(), password }),
-        ...(kind === 'music' ? {} : { useArtwork }),
+        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork }),
       }),
     onSuccess: (added) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons('shared'), (old) =>
@@ -181,11 +182,12 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
             { value: 'movies', label: text.kinds.movies, icon: FilmSlateIcon },
             { value: 'shows', label: text.kinds.shows, icon: TelevisionSimpleIcon },
             { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
+            { value: 'homevideos', label: text.kinds.homevideos, icon: VideoCameraIcon },
           ]}
           className="self-start"
         />
       </Field>
-      {kind !== 'music' && (
+      {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
         </Field>
@@ -230,7 +232,7 @@ export function LocalFolderEditForm({
         name: name.trim(),
         path: path.trim(),
         ...(share === '' ? {} : { user: user.trim(), password }),
-        ...(folder.kind === 'music' ? {} : { useArtwork }),
+        ...(folder.kind === 'music' || folder.kind === 'homevideos' ? {} : { useArtwork }),
       }),
     onSuccess: onSaved,
     onSettled: () => invalidateScope('shared'),
@@ -288,7 +290,7 @@ export function LocalFolderEditForm({
           />
         </>
       )}
-      {folder.kind !== 'music' && (
+      {folder.kind !== 'music' && folder.kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
         </Field>
@@ -310,7 +312,7 @@ export function LocalFolderEditForm({
 /**
  * A folder's figures: its files, those matched, how, and the others, its last scan, and why it
  * cannot be read when it cannot. A music folder's are its tracks, albums and artists, and its
- * tracks left out.
+ * tracks left out; a home videos folder's its videos, by where their dates come from.
  */
 export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const { language, t } = useI18n()
@@ -323,11 +325,18 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           { label: text.artists, value: folder.artists, warn: false },
           { label: text.leftOut, value: folder.unmatched, warn: folder.unmatched > 0 },
         ]
-      : [
-          { label: text.files, value: folder.files, warn: false },
-          { label: text.matched, value: folder.matched, warn: false },
-          { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
-        ]
+      : folder.kind === 'homevideos'
+        ? [
+            { label: text.videos, value: folder.files, warn: false },
+            { label: text.datedBy.nfo, value: folder.datedBy.nfo, warn: false },
+            { label: text.datedBy.created, value: folder.datedBy.created, warn: false },
+            { label: text.datedBy.file, value: folder.datedBy.file, warn: false },
+          ]
+        : [
+            { label: text.files, value: folder.files, warn: false },
+            { label: text.matched, value: folder.matched, warn: false },
+            { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
+          ]
   const methods = matchMethods
     .filter((method) => folder.matchedBy[method] > 0)
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
