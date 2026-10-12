@@ -1,13 +1,13 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin; and once a week, what happened that week (see [Weekly summary](#weekly-summary)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin; once a week, what happened that week (see [Weekly summary](#weekly-summary)); and once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
 
 ## Targets
 
 There are two kinds of owners:
 
-- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, the users who joined, new versions, and the server's weekly summary.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, and their weekly summary. An administrator's own targets may receive the health events, the users who joined and new versions too, and the server's weekly summary in place of their own.
+- **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, the users who joined, new versions, and the server's weekly summary, month and year in review.
+- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, the users who joined and new versions too, and the server's summaries in place of their own.
 
 **Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
 
@@ -61,7 +61,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | **Sender address** | **Settings › Notifications** | empty | The address messages come from, such as `polyfin@example.org`. Email targets need it. |
 | **Sender name** | **Settings › Notifications** | empty | The name shown with the sender address. Empty, the server name is. |
 | **Send the weekly summary on** | **Settings › Notifications** | Monday | The day of the week the [weekly summary](#weekly-summary) is sent. |
-| **Send the weekly summary at** | **Settings › Notifications** | 9:00 | Its hour, in the server's time zone. |
+| **Send the weekly summary at** | **Settings › Notifications** | 9:00 | Its hour, in the server's time zone. The [month in review](#month-in-review) and the [year in review](#year-in-review) are sent at this hour too. |
 
 ## Events
 
@@ -79,10 +79,12 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Playback resumed | `playback_resumed` | The same. |
 | Playback stopped | `playback_stopped` | The same. |
 | Weekly summary | `weekly_summary` | The server's targets and administrators' own: the server's week. Every other user's targets: their own week. |
+| Month in review | `monthly_summary` | The server's targets and administrators' own: the server's month. Every other user's targets: their own month. |
+| Year in review | `yearly_summary` | The server's targets and administrators' own: the server's year. Every other user's targets: their own year. |
 
 ### New episodes
 
-A user follows the series they played an episode of (the 50 most recently played) and the series they marked favorite, as the Upcoming row of Jellyfin apps shows them. Every two hours, starting five minutes after Polyfin starts, Polyfin looks at the episodes of these series for those that became available. Only the users with a target for new episodes or the weekly summary are looked at, or all of them when the server has one, or an administrator one for the weekly summary. An episode is told once per user; never one the series already had when Polyfin first looked at it (so neither starting to use notifications nor following a series sends old episodes); never one released more than a week ago, which its addon added late; never one without a release date. The series' descriptions are those the library keeps: an old one is asked for again in the background, so a new episode may be told one check later. Each new episode found is kept for the weekly summary, whether or not a target was told of it.
+A user follows the series they played an episode of (the 50 most recently played) and the series they marked favorite, as the Upcoming row of Jellyfin apps shows them. Every two hours, starting five minutes after Polyfin starts, Polyfin looks at the episodes of these series for those that became available. Only the users with a target for new episodes, the weekly summary or the month in review are looked at, or all of them when the server has one, or an administrator one for the weekly summary or the month in review. An episode is told once per user; never one the series already had when Polyfin first looked at it (so neither starting to use notifications nor following a series sends old episodes); never one released more than a week ago, which its addon added late; never one without a release date. The series' descriptions are those the library keeps: an old one is asked for again in the background, so a new episode may be told one check later. Each new episode found is kept for the weekly summary and the month in review, whether or not a target was told of it.
 
 ### Recordings
 
@@ -90,11 +92,11 @@ A recording that ends is finished, or partial when part of its programme is miss
 
 ### Health problems
 
-Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**: the database, disk space, addons, IPTV sources, programme guides, failed tasks, backups, stored keys and local network discovery. Conversions at their limit and thumbnails paused for a host come and go with the load: they are not told. A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved. Each problem told is kept for the weekly summary too.
+Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**: the database, disk space, addons, IPTV sources, programme guides, failed tasks, backups, stored keys and local network discovery. Conversions at their limit and thumbnails paused for a host come and go with the load: they are not told. A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved. Each problem told is kept for the weekly summary and the month in review too.
 
 ### Users who joined
 
-A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority. Each user who joined is kept for the weekly summary too.
+A user who created their account through an invite link (see [Invite links](users.md#invite-links)) is told once, naming who created the link: the title is "New user: sam", which is an email's subject, and the message "sam joined through alex's invite.". The message opens the user's page in the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority. Each user who joined is kept for the weekly summary, the month and the year in review too.
 
 ### New versions
 
@@ -120,6 +122,27 @@ The title is "The week on Home" for the server's week, and "Your week on Home" f
 The end of the last week sent is kept in the database: a restart does not send a week again, and a server that was off at the hour sends the summary when it starts again, for the week that ended at the hour. A server off for longer sends the last week only. Polyfin looks whether the summary is due every minute. **Send the weekly summary**, under **System › Schedule**, sends the summary of the last 7 days now, to every target that chose it, without changing when the next one is sent.
 
 Targets saved before the weekly summary existed do not receive it until it is chosen in their **Events**. A new target has it chosen: it is one message a week.
+
+### Month in review
+
+On the 1st of each month, at the hour of the weekly summary (9:00 by default, in the server's time zone), Polyfin sends the review of the month that ended, from its 1st at 0:00 until the 1st of the next at 0:00: what the [weekly summary](#weekly-summary) tells, over the month. The lists are those of the weekly summary, as long: the five movies and five series played longest for the server, ten of each for a user, the first 20 new episodes, the first ten titles added to the local folders.
+
+The title is "The month on Home" for the server's month, and "Your month on Home" for a user's; the short text starts with "Month of September 2026.". A recipient with nothing to tell that month receives nothing.
+
+No target has the month in review chosen at first, not even a new one: a target chooses it beside the weekly summary, or in its place.
+
+### Year in review
+
+On January 1st, at the same hour, Polyfin sends the review of the year that ended, from January 1st at 0:00 until the next January 1st at 0:00:
+
+- to the server's targets and administrators' own, the server's year: the hours watched and the number of playbacks, the ten movies and the ten series played longest, the month with the most hours, the users who joined through an invite link, and the files added to the local folders;
+- to every other user's targets, their own year: their hours watched and playbacks, the ten movies and the ten series they played longest, and their month with the most hours.
+
+The title is "The year on Home" for the server's year, and "Your year on Home" for a user's; the short text starts with "Year 2026.", then the hours watched, and "Most watched month: March, 41.5 hours.". A recipient with nothing to tell that year receives nothing. The year counts the playbacks the [playback history](statistics.md) still keeps: with **Days to keep playback history** at 365, the default, a year in review sent after January 1st misses as many days at the start of the year, and with fewer days, its first months are missing.
+
+Every target that had the weekly summary chosen when Polyfin added the year in review has the year in review chosen too, and so does a new target. It is an event of its own: unchosen, the target keeps its weekly summary or month in review.
+
+The month and the year in review keep, as the weekly summary does, the last month and year sent in the database: a restart does not send them again, and a server that was off on the 1st at the hour sends them when it starts again, within that month only: a server off until the 1st of the next month never sends that review. The "Send the month in review" and "Send the year in review" tasks, under **System › Schedule**, send now the review of the last month, or of the last year, that ended, to every target that chose it, without changing when the next one is sent.
 
 Messages are written in the server language (**Settings › General**).
 
@@ -179,19 +202,19 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. |
 | `url` | string or null | Opens what the event is about; null without a public address. For `new_version`, the release notes on GitHub, always set. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, the user whose week it is. Null for health events, new versions, new episodes sent to the server's targets, and the server's weekly summary. |
+| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
 | `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
 | `invite` | object | For `user_joined`: the invite link's `id`, and `createdBy`, the administrator who created it (`id`, `name`), null once deleted. |
 | `release` | object | For `new_version`: `version`, the new version, `url`, its release notes, and `current`, the version the server runs. |
 | `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
-| `summary` | object | For `weekly_summary`; see [The weekly summary event](#the-weekly-summary-event). |
+| `summary` | object | For `weekly_summary`, `monthly_summary` and `yearly_summary`; see [The weekly summary event](#the-weekly-summary-event) and [The month and year in review events](#the-month-and-year-in-review-events). |
 
 The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
 
@@ -326,18 +349,58 @@ The weekly summary was added within version 1: its `summary` object is new, and 
 | `added` | array | For the server: the titles of these files, those with the most files first, ten at most: the `name` of the title they were matched to, or else the name the files tell, or for a music folder's tracks the title of their album; their `kind`, `movie`, `show` or `album`; and their number of `files` (an album's tracks). Empty for a user. |
 | `problems` | array | For the server: the problems **System › Health** found that week, as they were told: `key`, `severity`, `text`, and `foundAt`. Empty for a user. |
 
+### The month and year in review events
+
+The month and year in review were added within version 1, as `monthly_summary` and `yearly_summary`: their `summary` object is the weekly summary's, with one more field, and no other field changed. `start` and `end` are the month or the year, from its first day at 0:00 in the server's time zone until before the first day of the next, for the tasks that send them by hand too.
+
+A month in review fills the `summary` as the weekly summary does, over the month. A year in review leaves `newEpisodes` at 0 and `episodes` and `problems` empty, has ten `movies` and ten `series` for the server too, and adds `topMonth`:
+
+```json
+{
+  "version": 1,
+  "id": "5f6a7b8c9d0e41f2a3b4c5d6e7f80912",
+  "type": "yearly_summary",
+  "at": "2026-01-01T08:00:00Z",
+  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
+  "title": "Your year on Home",
+  "message": "Year 2025.\n41.5 hours watched, 30 playbacks.\nMost watched month: March, 9 hours.\nMovies: Example Movie.\nSeries: Example Series.",
+  "url": "https://media.example.org/admin/me/account#statistics",
+  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
+  "summary": {
+    "scope": "user",
+    "start": "2024-12-31T23:00:00Z",
+    "end": "2025-12-31T23:00:00Z",
+    "plays": 30,
+    "played": 149400,
+    "movies": [{ "id": "0b1c2d3e4f5061728394a5b6c7d8e9f0", "name": "Example Movie", "plays": 2, "played": 7200 }],
+    "series": [{ "id": "99887766554433221100ffeeddccbbaa", "name": "Example Series", "plays": 28, "played": 142200 }],
+    "newEpisodes": 0,
+    "episodes": [],
+    "users": [],
+    "addedFiles": 0,
+    "added": [],
+    "problems": [],
+    "topMonth": { "month": "2025-03", "plays": 6, "played": 32400 }
+  }
+}
+```
+
+| `summary` field | Type | Meaning |
+|---|---|---|
+| `topMonth` | object | For `yearly_summary` only: the month with the most hours, as `month`, `YYYY-MM` in the server's time zone, with its `plays` and `played`, in seconds; the one with more playbacks on a tie, then the earlier. Absent for a week or a month. |
+
 ## Messages for each kind
 
 Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
 
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions, indigo for weekly summaries), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
+A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions, indigo for weekly summaries and the month and year in review), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
 
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bar_chart` for weekly summaries, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
+An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bar_chart` for weekly summaries and the month and year in review, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
 
 An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
 
 - the subject is the event's title;
-- the body is its message, its link (named "Open" in HTML), and "Sent by Polyfin from" the server name. A weekly summary's body is the whole summary instead: the week and its figures, then a list for each part (the movies and series with how long and how many times they played, the new episodes, the users who joined, the files added, the problems found), each title linking to its page in the web client, each user to their page in the admin app, each problem to the page that shows it, and "Open the statistics";
+- the body is its message, its link (named "Open" in HTML), and "Sent by Polyfin from" the server name. A weekly summary's body, or a month or year in review's, is the whole summary instead: the week, month or year and its figures, then a list for each part (the movies and series with how long and how many times they played, the month with the most hours, the new episodes, the users who joined, the files added, the problems found), each title linking to its page in the web client, each user to their page in the admin app, each problem to the page that shows it, and "Open the statistics";
 - the headers are `From` (the sender name and address), `To`, `Subject`, `Date` (when the event happened), `Message-ID` (the same for each try of a message, at the sender address's domain), `Auto-Submitted: auto-generated`, so that mail servers send no automatic reply, and `X-Polyfin-Event: <type>`.
 
 A Telegram target receives the Bot API's `sendMessage` (`POST https://api.telegram.org/bot<token>/sendMessage`), with `chat_id`, and `text` in HTML (`parse_mode` is `HTML`): the event's title in bold, its message, and its link named "Open", without a preview of the page.
@@ -371,7 +434,7 @@ The admin API serves the targets: the server's to administrators at `/admin/api/
 
 Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination, and whose events are Jellyfin's own (item added, playback, users, tasks). Polyfin builds the messages itself, and:
 
-- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, users who joined through an invite link, and a weekly summary for the server and for each user;
+- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, users who joined through an invite link, and a weekly summary, a month and a year in review for the server and for each user;
 - each user chooses their own targets and events under **My account**, besides the server's;
 - the webhook format is one documented, versioned JSON event rather than templates; Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them;
 - addresses, tokens, keys and the SMTP password are stored encrypted, and failing targets are shown.
