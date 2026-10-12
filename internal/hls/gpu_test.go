@@ -162,7 +162,7 @@ func TestGPUPipelines(t *testing.T) {
 		{"Intel HDR, tone mapped on the processor", encoding(intel, cpuToneMapping), vaapiInMemoryInputs, cpuToneMap + ",format=nv12,hwupload"},
 		{"NVIDIA HDR, tone mapped on the processor", encoding(nvidiaFull, cpuToneMapping), cudaInMemory, cpuToneMap + ",format=yuv420p"},
 	} {
-		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, Encode: tc.e}.args(0)
+		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, Encode: tc.e}.args(0, 0)
 		inputs, filters := inputsAndFilters(t, args)
 		if !slices.Equal(inputs, tc.inputs) {
 			t.Errorf("%s: inputs\n got %q\nwant %q", tc.name, inputs, tc.inputs)

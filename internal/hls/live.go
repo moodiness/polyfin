@@ -422,7 +422,7 @@ func (r Remux) runArgs(dir string, start int, restart bool) []string {
 	args = append(args, "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
 	if r.Encode != nil {
 		// A keyframe starts every segment of converted video.
-		args = append(args, r.Encode.encoderArgs("expr:gte(t,n_forced*"+strconv.Itoa(liveSegment)+")")...)
+		args = append(args, r.Encode.encoderArgs("expr:gte(t,n_forced*"+strconv.Itoa(liveSegment)+")", "")...)
 	}
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)

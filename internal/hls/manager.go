@@ -251,9 +251,10 @@ func (v *VideoEncoding) Burns() bool {
 const burnLead = 10 * time.Second
 
 // burnGraph is the filter graph burning the subtitles into video stream
-// video, as output [video], for a job starting at from. The subtitle's
-// canvas, the size of the video it was made for, is scaled to the width
-// of the converted video keeping its shape, and laid at the bottom: a
+// video, as output [video], for a job starting at from, its frames going
+// through skip first (see VideoEncoding.skip). The subtitle's canvas, the
+// size of the video it was made for, is scaled to the width of the
+// converted video keeping its shape, and laid at the bottom: a
 // video cropped since keeps the subtitles near its bottom edge. It is laid
 // after the conversion to SDR, which would dim its colors, and in memory,
 // before a GPU encoder takes the frames: Intel's tone mapped frames come
@@ -266,7 +267,7 @@ const burnLead = 10 * time.Second
 // the second input, repeats none, but is read from its start, as FFmpeg
 // does not seek in PGS files reliably: the pictures shown before the job's
 // start but those of its last burnLead are left out before scaling.
-func (v *VideoEncoding) burnGraph(video int, from time.Duration) string {
+func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) string {
 	converted := v.convert() + ",format=yuv420p"
 	if v.pipeline() == throughVAAPI {
 		converted = v.vaapiToneMapping() + ",hwdownload,format=nv12"
@@ -280,7 +281,7 @@ func (v *VideoEncoding) burnGraph(video int, from time.Duration) string {
 	default:
 		subtitle = "[1:0]"
 	}
-	return "[0:" + strconv.Itoa(video) + "]" + converted + "[converted];" +
+	return "[0:" + strconv.Itoa(video) + "]" + skip + converted + "[converted];" +
 		subtitle + "scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
 		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + "[video]"
 }
@@ -292,7 +293,36 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
 	}
-	return v.encoderArgs(strings.Join(times, ","))
+	return v.encoderArgs(strings.Join(times, ","), v.skip(plan, n))
+}
+
+// skip is the filter leaving out, before they are converted, the frames a
+// job starting at segment n of a searched version decodes before the
+// frame ahead of the segment's keyframe, but the first, empty for a job of
+// another version. FFmpeg lands on a keyframe before the segment (see
+// Plan.seekTime): the frames up to the segment would be converted only for
+// take to leave them out. The first, where FFmpeg landed, tells take
+// whether it landed past the segment's start (see
+// encoding.searchFurther). The frame ahead is kept as the encoder rounds
+// times to its frame rate after the filters: the frame its keyframe is
+// asked of may come just before the time asked, as the source's frames
+// fall.
+func (v *VideoEncoding) skip(plan Plan, n int) string {
+	if n == 0 || !plan.searched {
+		return ""
+	}
+	from := plan.Start(n) - v.keyframeLead() - v.frameDuration()
+	return "select=eq(n\\,0)+gte(t\\," + strconv.FormatFloat(max(from.Seconds(), 0), 'f', 4, 64) + "),"
+}
+
+// frameDuration is how long a frame of the converted video lasts, at 24
+// frames a second when its frame rate is not known.
+func (v *VideoEncoding) frameDuration() time.Duration {
+	rate := v.FrameRate
+	if rate <= 0 {
+		rate = 24
+	}
+	return time.Duration(float64(time.Second) / rate)
 }
 
 // keyframeLead is how early each keyframe is asked of the encoder: it
@@ -302,11 +332,7 @@ func (v *VideoEncoding) args(plan Plan, n int) []string {
 // that time: one a little before the segment's start when the source's
 // frames fall so.
 func (v *VideoEncoding) keyframeLead() time.Duration {
-	rate := v.FrameRate
-	if rate <= 0 {
-		rate = 24
-	}
-	return time.Duration(0.4 / rate * float64(time.Second))
+	return time.Duration(0.4 * float64(v.frameDuration()))
 }
 
 // cutTolerance is how far before a segment's start a keyframe of FFmpeg's
@@ -334,8 +360,9 @@ var vaapiCompression = map[string]string{"veryslow": "1", "slower": "2", "slow":
 	"veryfast": "7", "superfast": "7", "ultrafast": "7"}
 
 // encoderArgs are FFmpeg's encoder options, with keyframes forced as
-// -force_key_frames takes them.
-func (v *VideoEncoding) encoderArgs(keyframes string) []string {
+// -force_key_frames takes them, and the frames going through skip before
+// the video's filters (see skip).
+func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	nvenc := v.Encoder == "h264_nvenc" || v.Encoder == "hevc_nvenc"
 	software := v.Encoder == "libx264" || v.Encoder == "libx265"
 	qvbr := v.Quality > 0 && !software && !nvenc && v.Hardware != nil && v.Hardware.QVBR
@@ -351,7 +378,7 @@ func (v *VideoEncoding) encoderArgs(keyframes string) []string {
 	args = append(args, "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
 		"-force_key_frames", keyframes)
 	if !v.Burns() {
-		args = append(args, "-vf", v.filters())
+		args = append(args, "-vf", skip+v.filters())
 	}
 	profile := "main"
 	if strings.HasPrefix(v.Encoder, "h264") {
@@ -709,6 +736,10 @@ type encoding struct {
 	// failure is why the input failed for good, nil while it did not (see
 	// Remux.Failed).
 	failure error
+	// lookback is how far before a segment's start FFmpeg starts reading a
+	// searched version, 0 until a job landed past its first segment's start
+	// (see Plan.seekTime and searchFurther).
+	lookback time.Duration
 }
 
 func (e *encoding) open(ctx context.Context, open Opener) {
@@ -963,6 +994,11 @@ type job struct {
 	// progressed is when FFmpeg last read or wrote, as far as it tells,
 	// or else when the job started.
 	progressed time.Time
+	// lookback is the encoding's when the job started (see
+	// Plan.seekTime), and landed is set once FFmpeg's first keyframe, where
+	// it landed, came (see searchFurther).
+	lookback time.Duration
+	landed   bool
 }
 
 // start replaces the running job with one starting at segment n. The
@@ -972,7 +1008,7 @@ func (e *encoding) start(n int) {
 		e.job.cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now()}
+	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now(), lookback: e.lookback}
 	e.job = j
 	go e.run(ctx, j)
 }
@@ -987,7 +1023,7 @@ func (e *encoding) progress(j *job) {
 // run runs FFmpeg for a job and files what it writes into segments, and
 // the cues of the subtitles it extracts.
 func (e *encoding) run(ctx context.Context, j *job) {
-	cmd := exec.CommandContext(ctx, e.m.ffmpeg, e.remux.args(j.start)...)
+	cmd := exec.CommandContext(ctx, e.m.ffmpeg, e.remux.args(j.start, j.lookback)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
@@ -1096,6 +1132,12 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 		return nil
 	}
 	plan := e.remux.Plan
+	if p.keyframe && !j.landed {
+		j.landed = true
+		if e.searchFurther(j, p.at) {
+			return errStale
+		}
+	}
 	if j.file == nil {
 		// FFmpeg may start on a keyframe before the segment: what comes
 		// before it is not part of the job.
@@ -1175,14 +1217,43 @@ func (e *encoding) cover(from, to time.Duration) {
 	}
 }
 
+// searchFurther starts again further back a job of a searched version
+// whose FFmpeg landed past the start of its first segment, on a keyframe
+// at at, and reports whether it did. FFmpeg found no keyframe between the
+// time it was asked and the segment's start: it is asked again as much
+// further back as it went on past that time, at least twice as far back,
+// until it lands on or before the segment or reads the version from its
+// start. The encoding's later jobs start as far back. The caller holds
+// e.mu.
+func (e *encoding) searchFurther(j *job, at time.Duration) bool {
+	plan := e.remux.Plan
+	if !plan.searched || j.start == 0 || at <= plan.Start(j.start)+tolerance {
+		return false
+	}
+	from := plan.seekTime(j.start, j.lookback)
+	if from == 0 {
+		return false
+	}
+	e.lookback = plan.Start(j.start) - from + at - from
+	e.m.logger.Debug("FFmpeg landed past a segment's start: searching further back", "segment", j.start, "asked", from, "landed", at,
+		"lookback", e.lookback)
+	e.start(j.start)
+	return true
+}
+
 // finish records the end of a job; one that reached the end of its output
 // completes its last segment, and has extracted every cue from its start.
+// One that reached it without starting its first segment, FFmpeg finding
+// no keyframe it could start it on past the time asked in a searched
+// version, starts again further back.
 func (e *encoding) finish(j *job, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err == nil && e.job == j && !e.stopped && !e.inputFailed() {
-		if err = e.close(j); err == nil {
-			plan := e.remux.Plan
+		plan := e.remux.Plan
+		if j.next == j.start && j.file == nil && e.searchFurther(j, plan.End(plan.Len()-1)) {
+			err = errStale
+		} else if err = e.close(j); err == nil {
 			e.cover(plan.Start(j.start), plan.End(plan.Len()-1))
 		}
 	}
@@ -1205,17 +1276,20 @@ func writeFile(path string, data []byte) error {
 	return os.Rename(partial, path)
 }
 
-// args is FFmpeg's command line for a job starting at segment n. Segments
-// keep the source's timestamps, shifted by timestampOffset, so that those
-// of different jobs follow each other. Extracted subtitles keep the
-// source's own. FFmpeg reports its progress on the pipe after the
-// subtitles'. A subtitle file burned in is the second input, read whole
-// (see burnGraph).
-func (r Remux) args(n int) []string {
+// args is FFmpeg's command line for a job starting at segment n, lookback
+// before it in a searched version (see Plan.seekTime). Segments keep the
+// source's timestamps, shifted by timestampOffset, so that those of
+// different jobs follow each other. Extracted subtitles keep the source's
+// own. FFmpeg reports its progress on the pipe after the subtitles'. A
+// subtitle file burned in is the second input, read whole (see
+// burnGraph).
+func (r Remux) args(n int, lookback time.Duration) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:" + strconv.Itoa(3+len(r.Subtitles))}
 	var from time.Duration
 	if n > 0 {
-		from = r.Plan.seekTime(n)
+		from = r.Plan.seekTime(n, lookback)
+	}
+	if from > 0 {
 		// Converted audio starts where the demuxer does, on the keyframe,
 		// as copied streams do, instead of at the time asked.
 		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 6, 64))
@@ -1239,7 +1313,7 @@ func (r Remux) args(n int) []string {
 		if r.Encode.BurnFile != "" {
 			args = append(args, "-i", r.Encode.BurnFile)
 		}
-		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from))
+		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from, r.Encode.skip(r.Plan, n)))
 		video = "[video]"
 	}
 	args = append(args, "-map", video)

@@ -196,7 +196,7 @@ func TestLaterJobsProbeLess(t *testing.T) {
 	plan := NewPlan(seconds(0, 2, 6, 10), 14*time.Second)
 	burned := 3
 	probes := func(r Remux, n int) bool {
-		args := r.args(n)
+		args := r.args(n, 0)
 		return contains(args, "-probesize", "2M", "-analyzeduration", "1M") && slices.Index(args, "-probesize") < slices.Index(args, "-i")
 	}
 	copied := Remux{Input: "in", Audio: -1, Format: FMP4, Plan: plan}
@@ -217,7 +217,7 @@ func TestLaterJobsProbeLess(t *testing.T) {
 		"a disc":                            {disc, 2, false},
 	} {
 		if got := probes(tc.r, tc.n); got != tc.want {
-			t.Errorf("%s: probing less %v, want %v: %q", name, got, tc.want, tc.r.args(tc.n))
+			t.Errorf("%s: probing less %v, want %v: %q", name, got, tc.want, tc.r.args(tc.n, 0))
 		}
 	}
 }
@@ -225,26 +225,37 @@ func TestLaterJobsProbeLess(t *testing.T) {
 // FFmpeg is asked a little past the keyframe a segment starts on, and
 // lands on it; a searched version, which FFmpeg's MPEG-TS demuxer lands
 // on the first keyframe after the time asked in, is asked for the
-// previous segment's start, whether it is cut on keyframes or on a grid.
+// previous segment's start, whether it is cut on keyframes or on a grid,
+// or as far before the segment as a job that landed past it taught, and
+// read from its start, without seeking, when that is before it.
 func TestSearchedVersionsSeekToThePreviousSegment(t *testing.T) {
 	plan := NewPlan(seconds(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), 14*time.Second)
-	seek := func(plan Plan, n int) string {
-		args := Remux{Input: "in", Audio: -1, Format: FMP4, Plan: plan}.args(n)
-		return args[slices.Index(args, "-ss")+1]
+	grid := NewGridPlan(30 * time.Second).Searched()
+	seek := func(plan Plan, n int, lookback time.Duration) string {
+		args := Remux{Input: "in", Audio: -1, Format: FMP4, Plan: plan}.args(n, lookback)
+		if i := slices.Index(args, "-ss"); i >= 0 {
+			return args[i+1]
+		}
+		return "none"
 	}
 	for _, tc := range []struct {
-		plan Plan
-		n    int
-		want string
+		plan     Plan
+		n        int
+		lookback time.Duration
+		want     string
 	}{
-		{plan, 1, "2.132000"},
-		{plan, 2, "6.132000"},
-		{plan.Searched(), 1, "0.132000"},
-		{plan.Searched(), 3, "6.132000"},
-		{NewGridPlan(14 * time.Second).Searched(), 2, "2.132000"},
+		{plan, 1, 0, "2.132000"},
+		{plan, 2, 0, "6.132000"},
+		{plan, 2, 9 * time.Second, "6.132000"},
+		{plan.Searched(), 1, 0, "0.132000"},
+		{plan.Searched(), 3, 0, "6.132000"},
+		{grid, 2, 0, "2.132000"},
+		{grid, 4, time.Second, "10.132000"},
+		{grid, 4, 9 * time.Second, "5.000000"},
+		{grid, 2, 7 * time.Second, "none"},
 	} {
-		if got := seek(tc.plan, tc.n); got != tc.want {
-			t.Errorf("segment %d of %v: -ss %s, want %s", tc.n, tc.plan.starts, got, tc.want)
+		if got := seek(tc.plan, tc.n, tc.lookback); got != tc.want {
+			t.Errorf("segment %d of %v, %v back: -ss %s, want %s", tc.n, tc.plan.starts, tc.lookback, got, tc.want)
 		}
 	}
 }

@@ -27,43 +27,43 @@ func defaultCases() []struct {
 		args func() []string
 	}{
 		{"copy", func() []string {
-			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "hvc1"}.args(1)
+			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "hvc1"}.args(1, 0)
 		}},
 		{"cpu h264", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "avc1",
 				AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 192_000,
-				Encode: &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 23.976, Deinterlace: true}}.args(1)
+				Encode: &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 23.976, Deinterlace: true}}.args(1, 0)
 		}},
 		{"cpu hevc tone mapped", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: TS, Plan: plan, Subtitles: []int{2},
 				AudioCodec: "ac3", AudioChannels: 6, AudioBitrate: 384_000,
-				Encode: &VideoEncoding{Encoder: "libx265", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24, ToneMap: true}}.args(0)
+				Encode: &VideoEncoding{Encoder: "libx265", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24, ToneMap: true}}.args(0, 0)
 		}},
 		{"cpu burn", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: -1, Format: TS, Plan: plan,
-				Encode: &VideoEncoding{Encoder: "libx264", Level: "4.2", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 50, Burn: &burn}}.args(2)
+				Encode: &VideoEncoding{Encoder: "libx264", Level: "4.2", Width: 1920, Height: 1080, Bitrate: 10_000_000, FrameRate: 50, Burn: &burn}}.args(2, 0)
 		}},
 		{"nvenc", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "avc1",
 				AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 192_000,
-				Encode: &VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 25, Deinterlace: true, Hardware: nvidia}}.args(0)
+				Encode: &VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 25, Deinterlace: true, Hardware: nvidia}}.args(0, 0)
 		}},
 		{"nvenc tone mapped", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "hvc1",
-				Encode: &VideoEncoding{Encoder: "hevc_nvenc", Level: "4.1", Width: 3840, Height: 2160, Bitrate: 20_000_000, FrameRate: 23.976, ToneMap: true, Hardware: nvidiaToneMapping}}.args(1)
+				Encode: &VideoEncoding{Encoder: "hevc_nvenc", Level: "4.1", Width: 3840, Height: 2160, Bitrate: 20_000_000, FrameRate: 23.976, ToneMap: true, Hardware: nvidiaToneMapping}}.args(1, 0)
 		}},
 		{"nvenc burn", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: TS, Plan: plan,
-				Encode: &VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 24, ToneMap: true, Burn: &burn, Hardware: nvidiaToneMapping}}.args(0)
+				Encode: &VideoEncoding{Encoder: "h264_nvenc", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 24, ToneMap: true, Burn: &burn, Hardware: nvidiaToneMapping}}.args(0, 0)
 		}},
 		{"vaapi", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, VideoTag: "avc1",
 				AudioCodec: "aac", AudioChannels: 6, AudioBitrate: 384_000,
-				Encode: &VideoEncoding{Encoder: "h264_vaapi", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 29.97, Deinterlace: true, Hardware: vaapi}}.args(1)
+				Encode: &VideoEncoding{Encoder: "h264_vaapi", Level: "4.1", Width: 1920, Height: 1080, Bitrate: 8_000_000, FrameRate: 29.97, Deinterlace: true, Hardware: vaapi}}.args(1, 0)
 		}},
 		{"vaapi tone mapped", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: -1, Format: TS, Plan: plan,
-				Encode: &VideoEncoding{Encoder: "hevc_vaapi", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24, ToneMap: true, Burn: &burn, Hardware: vaapi}}.args(0)
+				Encode: &VideoEncoding{Encoder: "hevc_vaapi", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24, ToneMap: true, Burn: &burn, Hardware: vaapi}}.args(0, 0)
 		}},
 		{"live cpu", func() []string {
 			return Remux{Input: "http://127.0.0.1:1/live.m3u8", InputOptions: []string{"-re"}, Video: 0, Audio: 1, Format: TS,
@@ -114,9 +114,9 @@ func TestSubtitleFileIsASecondInput(t *testing.T) {
 	plan := NewPlan([]time.Duration{0, 6 * time.Second, 12 * time.Second}, 18*time.Second)
 	encoding := &VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 1280, Height: 720, Bitrate: 5_000_000, FrameRate: 24,
 		BurnFile: "http://127.0.0.1:1/local/key/1.sup"}
-	from := strconv.FormatFloat((plan.seekTime(2) - burnLead).Seconds(), 'f', 3, 64)
+	from := strconv.FormatFloat((plan.seekTime(2, 0) - burnLead).Seconds(), 'f', 3, 64)
 	for n, want := range map[int]string{0: "[1:0]scale=1280:-2[subtitle]", 2: `[1:0]select=gte(t\,` + from + `),scale=1280:-2[subtitle]`} {
-		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: TS, Plan: plan, Encode: encoding}.args(n)
+		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: TS, Plan: plan, Encode: encoding}.args(n, 0)
 		main := slices.Index(args, "http://127.0.0.1:1/a.mkv")
 		if main < 0 || !slices.Equal(args[main+1:main+3], []string{"-i", encoding.BurnFile}) || slices.Contains(args[main+1:], "-ss") {
 			t.Errorf("segment %d: inputs %q", n, args)

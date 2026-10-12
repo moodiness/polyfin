@@ -30,7 +30,7 @@ func TestSettingsChangeTheArguments(t *testing.T) {
 	vaapi := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}}
 	vaapiQVBR := &Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, QVBR: true}
 	file := func(e VideoEncoding) []string {
-		return Remux{Input: "in", Audio: -1, Format: TS, Plan: plan, Encode: &e}.args(0)
+		return Remux{Input: "in", Audio: -1, Format: TS, Plan: plan, Encode: &e}.args(0, 0)
 	}
 	encoding := func(encoder string, hw *Hardware) VideoEncoding {
 		return VideoEncoding{Encoder: encoder, Level: "4.1", Width: 1280, Height: 720, Bitrate: 4_000_000, FrameRate: 25, Hardware: hw}
@@ -118,13 +118,13 @@ func TestSettingsChangeTheArguments(t *testing.T) {
 	// only.
 	audio := Remux{Input: "in", Audio: 1, Format: TS, Plan: plan, AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 192_000,
 		AudioFilter: "pan=stereo|c0=c0|c1=c1,volume=2", Threads: 3}
-	for name, args := range map[string][]string{"file": audio.args(0), "live": audio.liveArgs("/tmp/live", 0)} {
+	for name, args := range map[string][]string{"file": audio.args(0, 0), "live": audio.liveArgs("/tmp/live", 0)} {
 		if !contains(args, "-c:a", "aac", "-ac", "2", "-b:a", "192000", "-af", "pan=stereo|c0=c0|c1=c1,volume=2") || !contains(args, "-threads", "3") {
 			t.Errorf("%s: %q", name, args)
 		}
 	}
 	copied := Remux{Input: "in", Audio: 1, Format: TS, Plan: plan, Threads: 3}
-	if args := copied.args(0); slices.Contains(args, "-threads") {
+	if args := copied.args(0, 0); slices.Contains(args, "-threads") {
 		t.Errorf("a copy runs with threads: %q", args)
 	}
 }

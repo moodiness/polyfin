@@ -68,7 +68,7 @@ func NewGridPlan(duration time.Duration) Plan {
 func (p Plan) Grid() bool { return p.grid }
 
 // Searched returns the plan of a version FFmpeg seeks in by searching its
-// timestamps, as its MPEG-TS demuxer does reading a Blu-ray disc: it then
+// timestamps, as its MPEG-TS and MPEG program stream demuxers do: it then
 // lands on the first keyframe after the time asked, not on the one before
 // (see seekTime). Nor does FFmpeg probe less of it before a seek: an
 // MPEG-TS stream needs a full probe to find every track.
@@ -135,17 +135,28 @@ func (p Plan) TargetDuration() int {
 	return int(math.Ceil(longest.Seconds()))
 }
 
+// seekPast is how far past the time FFmpeg should start at it is asked
+// for (see seekTime).
+const seekPast = 132 * time.Millisecond
+
 // seekTime is where FFmpeg is asked to start for segment n. Its command
 // line seeks 3/23 s before the time it is given when the video has
 // B-frames, and its demuxers then go back to the closest keyframe: asking
 // a little past the keyframe a segment starts on lands on it in both
-// cases, as no other keyframe follows it within seekMargin. A searched
-// version is asked for the previous segment's start: its demuxer goes on
-// to the next keyframe, at the latest the one segment n starts on, and
-// what it reads before that is left out (see encoding.take).
-func (p Plan) seekTime(n int) time.Duration {
-	if p.searched {
-		return p.starts[n-1] + 132*time.Millisecond
+// cases, as no other keyframe follows it within seekMargin.
+//
+// A searched version is asked for the previous segment's start, or for
+// lookback before segment n's start when that is earlier: its demuxer
+// goes on to the next keyframe, and what it reads before segment n is
+// left out (see encoding.take). That keyframe comes at the latest on
+// segment n's start when the keyframes are no further apart than the
+// distance asked before it, as they are in a plan cut on them; a job that
+// lands past it starts again with a longer lookback (see
+// encoding.searchFurther). Zero, when lookback reaches the version's
+// start, has FFmpeg read it from there, without seeking.
+func (p Plan) seekTime(n int, lookback time.Duration) time.Duration {
+	if !p.searched {
+		return p.starts[n] + seekPast
 	}
-	return p.starts[n] + 132*time.Millisecond
+	return max(min(p.starts[n-1]+seekPast, p.starts[n]-lookback), 0)
 }
