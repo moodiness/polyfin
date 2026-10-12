@@ -306,6 +306,30 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	return file, info.ModTime(), nil
 }
 
+// Identity tells the file of a folder a video's key names, as Streams
+// gives it (see Open and Input), as the folder's last scan found it: path,
+// the folder's identifier and the file's path within it, and state, its
+// size and modification time, which change with what it holds.
+func (s *Service) Identity(ctx context.Context, key string) (path, state string, err error) {
+	raw, _, _ := strings.Cut(key, ".")
+	id, err := accounts.ParseID(raw)
+	if err != nil {
+		return "", "", ErrGone
+	}
+	var folder accounts.ID
+	var rel string
+	var size int64
+	var modified time.Time
+	err = s.db.QueryRow(ctx, "SELECT addon_id, path, size, modified FROM local_files WHERE id = $1", id).Scan(&folder, &rel, &size, &modified)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrGone
+	}
+	if err != nil {
+		return "", "", err
+	}
+	return folder.String() + "/" + rel, strconv.FormatInt(size, 10) + " " + strconv.FormatInt(modified.UnixMicro(), 10), nil
+}
+
 // readSeekNopCloser closes nothing.
 type readSeekNopCloser struct{ io.ReadSeeker }
 

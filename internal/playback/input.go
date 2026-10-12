@@ -34,6 +34,12 @@ type Inputs interface {
 	// reads it on from zero, read from the disc's own tables; an error
 	// when they cannot be.
 	Keyframes(ctx context.Context, key string) ([]time.Duration, error)
+	// Identity tells the file of a local folder a key names, that of a
+	// version read from its input or of one read as one file (see
+	// LocalFiles), as its folder's last scan found it: path, its folder
+	// and its path there, and state, its size and modification time,
+	// which change with what it holds.
+	Identity(ctx context.Context, key string) (path, state string, err error)
 }
 
 // LocalInputs reads the versions of local folders that are not one file

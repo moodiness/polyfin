@@ -433,6 +433,8 @@ func (r Remux) key() hls.Key {
 // next PlaybackInfo plays another. A version that holds one of its
 // source's connections takes it while FFmpeg reads (see Hold). A version
 // read from its input is read there by FFmpeg itself (see LocalInputs).
+// Seeks in a searched version start as far back as playbacks of its file
+// learned they must (see useLookback).
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -458,6 +460,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			streams = textSubtitles(analysis)
 		}
 		r := hls.Remux{Video: video.Index, Audio: audio, Format: remux.Format, Plan: plan, Subtitles: streams, Extracted: x}
+		if plan.IsSearched() {
+			s.useLookback(ctx, &r, remux.Version)
+		}
 		if s.ReadsInput(remux.Version) {
 			in, err := s.input(ctx, remux.Version)
 			if err != nil {

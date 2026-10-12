@@ -23,10 +23,12 @@ import (
 // fakeInputs finds the inputs of discs by key (see Inputs): "dvd" a DVD's
 // main title, any other key a Blu-ray disc's playlist, whose keyframes
 // are those of keyframes, or none that can be read. reads, when set,
-// counts the reads of keyframes.
+// counts the reads of keyframes. A key's file is at the path of the same
+// name, in the state states gives, or "1" when it gives none.
 type fakeInputs struct {
 	keyframes map[string][]time.Duration
 	reads     *atomic.Int32
+	states    map[string]string
 }
 
 func (f fakeInputs) Input(_ context.Context, key string) (media.Input, error) {
@@ -44,6 +46,13 @@ func (f fakeInputs) Keyframes(_ context.Context, key string) ([]time.Duration, e
 		return times, nil
 	}
 	return nil, errors.New("no keyframes")
+}
+
+func (f fakeInputs) Identity(_ context.Context, key string) (string, string, error) {
+	if state, ok := f.states[key]; ok {
+		return key, state, nil
+	}
+	return key, "1", nil
 }
 
 // A Blu-ray disc's title is cut on the keyframes the disc lists, read once

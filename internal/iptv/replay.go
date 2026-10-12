@@ -110,6 +110,25 @@ func ReplayID(channel string, start, end time.Time) (string, bool) {
 	return IDPrefix + source + ":" + replayKey + strconv.FormatInt(start.Unix(), 10) + "-" + strconv.FormatInt(end.Unix(), 10) + ":" + id, true
 }
 
+// ReplayChannel is the Stremio identifier of the channel of a replay
+// whose identifier is id (see ReplayID); ok is false for an identifier
+// that is not a replay's.
+func ReplayChannel(id string) (string, bool) {
+	rest, ok := strings.CutPrefix(id, IDPrefix)
+	if !ok {
+		return "", false
+	}
+	source, key, ok := strings.Cut(rest, ":")
+	if !ok {
+		return "", false
+	}
+	channel, _, _, ok := parseReplay(key)
+	if !ok {
+		return "", false
+	}
+	return IDPrefix + source + ":" + channel, true
+}
+
 // parseReplay reads a replay's key within its source (see ReplayID).
 func parseReplay(key string) (channel string, start, end time.Time, ok bool) {
 	rest, ok := strings.CutPrefix(key, replayKey)

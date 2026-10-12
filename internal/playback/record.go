@@ -113,6 +113,12 @@ func (s *Service) LocalFiles(open func(ctx context.Context, key string) (io.Read
 	s.loopback.mu.Lock()
 	s.loopback.local = open
 	s.loopback.mu.Unlock()
+	return s.localBase()
+}
+
+// localBase is the address the keys of the files of local folders are
+// appended to (see LocalFiles).
+func (s *Service) localBase() string {
 	return "http://" + s.loopback.listener.Addr().String() + "/local/" + s.loopback.fileKey + "/"
 }
 

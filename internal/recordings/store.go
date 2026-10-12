@@ -455,13 +455,16 @@ func (s *Service) delete(ctx context.Context, id accounts.ID) error {
 	}
 	s.removeFiles(r)
 	s.recorder.ForgetFile(id)
-	// The analysis and keyframes of its file, which plays as a version
-	// named after it.
+	// The analysis, keyframes and seek lookback of its file, which plays as
+	// a version named after it.
 	if _, err := s.db.Exec(ctx, "DELETE FROM media_analyses WHERE version_id = $1", id); err != nil {
 		s.logger.Warn("The analysis of a deleted recording could not be removed", "error", err)
 	}
 	if _, err := s.db.Exec(ctx, "DELETE FROM media_keyframes WHERE version_id = $1", id); err != nil {
 		s.logger.Warn("The keyframes of a deleted recording could not be removed", "error", err)
+	}
+	if _, err := s.db.Exec(ctx, "DELETE FROM seek_lookbacks WHERE kind = 'version' AND name = $1", id.String()); err != nil {
+		s.logger.Warn("The seek lookback of a deleted recording could not be removed", "error", err)
 	}
 	return nil
 }

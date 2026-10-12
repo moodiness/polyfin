@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
@@ -83,7 +85,13 @@ func (f *fileSource) Open(ctx context.Context, method, target string, header htt
 
 func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewer) *Service {
 	t.Helper()
-	pool := migrated.New(t)
+	return newServiceOn(t, migrated.New(t), opener, ffprobe, renew)
+}
+
+// newServiceOn is newService on the database of pool, which a service
+// started again shares.
+func newServiceOn(t *testing.T, pool *pgxpool.Pool, opener source.Opener, ffprobe string, renew Renewer) *Service {
+	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, opener, logger)
 	if err != nil {
