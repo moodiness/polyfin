@@ -141,8 +141,8 @@ func makeTemplate(ctx context.Context, url, name string, prepare func(context.Co
 }
 
 // buildTemplate makes the template database name under another name, so
-// that it exists only once prepared, then drops the templates of other keys
-// made more than templateLife ago.
+// that it exists under its own only once prepared and dated, then drops the
+// templates of other keys made more than templateLife ago.
 func buildTemplate(ctx context.Context, conn *pgx.Conn, url, name string, prepare func(context.Context, *pgxpool.Pool) error) error {
 	building := pgx.Identifier{name + "_building"}.Sanitize()
 	// A test binary stopped while making it may have left it.
@@ -173,10 +173,13 @@ func buildTemplate(ctx context.Context, conn *pgx.Conn, url, name string, prepar
 	now := time.Now().UTC()
 	// The comment dates it for the tests of other branches. No one
 	// connects to it: a database being copied must have no connection.
+	// Both are set before it takes its name: a template found undated
+	// counts as old, and the test binaries making others at the same time
+	// would drop it.
 	for _, statement := range []string{
+		"COMMENT ON DATABASE " + building + " IS '" + now.Format(time.RFC3339) + "'",
+		"ALTER DATABASE " + building + " WITH ALLOW_CONNECTIONS false",
 		"ALTER DATABASE " + building + " RENAME TO " + ident,
-		"ALTER DATABASE " + ident + " WITH ALLOW_CONNECTIONS false",
-		"COMMENT ON DATABASE " + ident + " IS '" + now.Format(time.RFC3339) + "'",
 	} {
 		if _, err := conn.Exec(ctx, statement); err != nil {
 			return err
