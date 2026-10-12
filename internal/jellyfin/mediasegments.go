@@ -47,9 +47,10 @@ var segmentTypes = map[string]string{
 // its segments out. They are then shaped for the version asked, the first
 // for the title's own identifier, once it is analyzed, and that version's
 // chapters may give its own (see versionSegments). A version not analyzed
-// yet is never analyzed for this. With the skip buttons turned off in the
-// settings, no database is asked and every item has none, as on a Jellyfin
-// server without a segment provider.
+// yet is never analyzed for this. An episode's local file without an intro
+// yet may have one found in its audio (see audioIntro). With the skip
+// buttons turned off in the settings, no database is asked and every item
+// has none, as on a Jellyfin server without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -87,8 +88,13 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		}
 		segments = h.Segments.Segments(r.Context(), title)
 	}
-	if analysis, ok := h.segmentAnalysis(r.Context(), user, item, opened); ok {
-		segments = versionSegments(segments, analysis, item.Runtime)
+	if version, ok := h.segmentVersion(r.Context(), user, item, opened); ok {
+		if analysis, ok := h.Playback.Analyzed(r.Context(), version); ok {
+			segments = versionSegments(segments, analysis, item.Runtime)
+		}
+		if item.Kind == library.KindEpisode {
+			segments = h.audioIntro(r.Context(), segments, version)
+		}
 	}
 	wanted := map[string]bool{}
 	included := listQuery(r, "includeSegmentTypes")
@@ -113,23 +119,95 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// segmentAnalysis is the analysis of the version a movie's or an episode's
-// segments are asked for, if it was analyzed: the version of the identifier
-// asked, or, for the title's own identifier, its first version listed, which
-// media sources name after the title (see sourceID).
-func (h *Handler) segmentAnalysis(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) (media.Analysis, bool) {
+// segmentVersion is the version a movie's or an episode's segments are
+// asked for: the version of the identifier asked, or, for the title's own
+// identifier, its first version listed, which media sources name after the
+// title (see sourceID). There is none before its versions are listed.
+func (h *Handler) segmentVersion(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) (accounts.ID, bool) {
 	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
-		return media.Analysis{}, false
+		return accounts.ID{}, false
 	}
-	version := opened
-	if opened == item.ID {
-		versions := h.cachedPlayable(ctx, user, item).versions
-		if len(versions) == 0 {
-			return media.Analysis{}, false
+	if opened != item.ID {
+		return opened, true
+	}
+	versions := h.cachedPlayable(ctx, user, item).versions
+	if len(versions) == 0 {
+		return accounts.ID{}, false
+	}
+	return versions[0].ID, true
+}
+
+// audioIntro adds to an episode's segments, when none is an intro, the
+// intro found in the audio of its version's file, if a local file (see
+// package audiosegments): its chapters and the databases come first.
+func (h *Handler) audioIntro(ctx context.Context, segments []mediasegments.Segment, version accounts.ID) []mediasegments.Segment {
+	if h.AudioSegments == nil || slices.ContainsFunc(segments, func(s mediasegments.Segment) bool { return s.Type == mediasegments.Intro }) {
+		return segments
+	}
+	known, ok := h.Library.KnownVersion(version)
+	if !ok {
+		return segments
+	}
+	intro, ok := h.AudioSegments.Intro(ctx, known.URL)
+	if !ok {
+		return segments
+	}
+	segments = append(segments, intro)
+	slices.SortStableFunc(segments, func(a, b mediasegments.Segment) int { return cmp.Compare(a.Start, b.Start) })
+	return segments
+}
+
+// foundIntro reports whether an intro was found in the audio of a version's
+// file (see audioIntro).
+func (h *Handler) foundIntro(ctx context.Context, version library.Version) bool {
+	if h.AudioSegments == nil {
+		return false
+	}
+	_, ok := h.AudioSegments.Intro(ctx, version.URL)
+	return ok
+}
+
+// introLookup bounds the look for the segments of an episode played,
+// before its season is compared: the databases were asked as it started.
+const introLookup = time.Minute
+
+// findIntro has the season of an episode played from a local file compared
+// in the background (see package audiosegments) when the version played,
+// mediaSource, has no intro from its chapters or a database.
+func (h *Handler) findIntro(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
+	if h.AudioSegments == nil || item.Kind != library.KindEpisode || !h.Accounts.Settings().SkipButtons {
+		return
+	}
+	id, ok := parseGUID(mediaSource)
+	if !ok {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), introLookup)
+		defer cancel()
+		// With a quality group, the title's own identifier stands for its
+		// first version that fits, as in PlaybackInfo.
+		if id == item.ID && user.QualityGroup > 0 {
+			id = h.firstWorkingVersion(ctx, user, item)
 		}
-		version = versions[0].ID
-	}
-	return h.Playback.Analyzed(ctx, version)
+		version, err := h.Library.Version(ctx, user, item.ID, id)
+		// Only a local file is read: the databases are not asked for others.
+		if err != nil || !h.AudioSegments.Reads(ctx, version.URL) {
+			return
+		}
+		var segments []mediasegments.Segment
+		if h.Segments.Asks() {
+			if title, err := h.segmentTitle(ctx, user, item); err == nil {
+				segments = h.Segments.Segments(ctx, title)
+			}
+		}
+		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
+			segments = versionSegments(segments, analysis, item.Runtime)
+		}
+		if !slices.ContainsFunc(segments, func(s mediasegments.Segment) bool { return s.Type == mediasegments.Intro }) {
+			h.AudioSegments.Played(ctx, version.URL)
+		}
+	}()
 }
 
 // Credits ending within creditsAtEnd of a version's end run to its end.

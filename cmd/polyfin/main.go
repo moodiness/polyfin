@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
 	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
+	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
@@ -317,6 +318,12 @@ func serve(ctx context.Context) error {
 		logger.Warn("No web client: POLYFIN_WEB_DIR holds no index.html", "folder", cfg.WebDir)
 	}
 	skipSegments := mediasegments.New(pool, mediasegments.Sources(accounts.SegmentSources), version, logger, store.Settings)
+	// Local episodes played without an intro have one looked for in their
+	// season's audio, a season at a time, read through the loopback
+	// interface.
+	audioSegments := audiosegments.New(audiosegments.Options{DB: pool, FFmpeg: cfg.FFmpeg, FFprobe: cfg.FFprobe, Files: folders,
+		Settings: store.Settings, Logger: logger})
+	defer audioSegments.Close()
 	userData := userdata.New(pool)
 	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
 	// anime addons name them, are mapped to IMDb and TVDB from two lists
@@ -376,6 +383,7 @@ func serve(ctx context.Context) error {
 		Preferences:   preferences.New(pool),
 		UserData:      userData,
 		Segments:      skipSegments,
+		AudioSegments: audioSegments,
 		RemuxDB:       remuxdb.New(serverID, version, logger, store.Settings),
 		Lyrics:        lyrics.New(pool, lyrics.LRCLIB, version, logger, store.Settings),
 		Playlists:     playlists.New(pool),
