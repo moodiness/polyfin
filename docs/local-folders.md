@@ -390,6 +390,8 @@ Folders organized by Jellyfin or a media manager often hold posters, backdrops a
 /media/shows/The Lone Ranger (1949)/poster.jpg
 /media/shows/The Lone Ranger (1949)/season01-poster.jpg
 /media/shows/The Lone Ranger (1949)/Season 02/folder.jpg
+/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger - S02E01.mkv
+/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger - S02E01-thumb.jpg
 ```
 
 A movie's images are named after its file, `<file name>-<name>`, such as `The General (1926)-poster.jpg`, its poster also `<file name>.jpg`; when the movie is alone in its folder (every video directly in it is the same movie, its versions included), or is a Blu-ray disc or a DVD, whose images sit in its disc folder, the names alone count too, such as `poster.jpg`. In a folder holding several movies, `poster.jpg` belongs to none of them. Of each type, the first name found counts:
@@ -406,13 +408,15 @@ A movie's images are named after its file, `<file name>-<name>`, such as `The Ge
 
 The names after the file's name come before the names alone, and `.jpg` before `.jpeg`, `.png` and `.webp`. A title has one backdrop: the first found.
 
-A show's images are in its folder, with the same names (`show` in place of `movie`, and no Disc image), alone or after the folder's name. A season's are in the show's folder, named after the season, `season01-poster`, `season01-fanart`, `season01-banner` and `season01-landscape` (`season1-…` comes first when both are there), and for the specials `specials-…` or `season-specials-…`; then in its season folder, the folder directly in the show's holding its episodes, with the names of the table, such as `folder.jpg` or `poster.jpg`. A season without a poster of its own shows its show's, as with the addons' artwork. Episodes' images are not read.
+A show's images are in its folder, with the same names (`show` in place of `movie`, and no Disc image), alone or after the folder's name. A season's are in the show's folder, named after the season, `season01-poster`, `season01-fanart`, `season01-banner` and `season01-landscape` (`season1-…` comes first when both are there), and for the specials `specials-…` or `season-specials-…`; then in its season folder, the folder directly in the show's holding its episodes, with the names of the table, such as `folder.jpg` or `poster.jpg`. A season without a poster of its own shows its show's, as with the addons' artwork.
 
-The images belong to the title the file, disc or show folder is matched to, a link made by hand included, from the moment the link is made. When the files of a title in several folders have images, each type comes from the folder listed first on the **Sources** page, then from the first of the title's files or folders by path; a disabled folder gives none.
+An episode's image is beside its file, named after it, with the names Jellyfin reads for episodes: `<file name>-thumb`, such as `The Lone Ranger - S02E01-thumb.jpg`, then `<file name>` alone, such as `The Lone Ranger - S02E01.jpg`, then the same two names in a `metadata` folder beside the file. It shows in place of the metadata addon's still, for each episode the file holds (both episodes of `S01E03-E04`). Other images beside the file, such as `<file name>-poster.jpg`, are not the episode's. The episodes of shows' discs and disc images (see [Shows on discs](#shows-on-discs)) have no file of their own: they keep the addon's still.
 
-**Use its artwork**, on the form of a movies or shows folder, chooses whether its titles show its images; it is on by default, and turning it off brings the addons' artwork back at once. Artwork an administrator uploads in a Jellyfin app wins over both.
+The images belong to the title the file, disc or show folder is matched to, and an episode's to the episodes its file holds, a link made by hand included, from the moment the link is made. When the files of a title in several folders have images, each type comes from the folder listed first on the **Sources** page, then from the first of the title's files or folders by path; a disabled folder gives none.
 
-Images are read from the folder or the share when an app first asks for them, then kept with the other artwork, at the sizes apps ask for. A scan notices an image added, replaced or removed, by its size and modification time, and apps see the new one, since its tag changes.
+**Use its artwork**, on the form of a movies or shows folder, chooses whether its titles and episodes show its images; it is on by default, and turning it off brings the addons' artwork and stills back at once. Artwork an administrator uploads in a Jellyfin app wins over both.
+
+Images are read from the folder or the share when an app first asks for them, then kept with the other artwork, at the sizes apps ask for. A scan notices an image added, replaced or removed, an episode's too, by its size and modification time, and apps see the new one, since its tag changes.
 
 ## Music folders
 
@@ -524,7 +528,7 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them for movies and shows, neither names, plots nor artwork, and only the title, plot and date for home videos.
 - Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
-- Both read the artwork beside movies and shows, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor episodes' images, and shows the addons' artwork of the types a folder has none of.
+- Both read the artwork beside movies and shows, and the image beside an episode's file, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor images for the episodes of discs, and shows the addons' artwork of the types a folder has none of.
 - Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
 - Both list home videos as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it. Polyfin dates them by the recording's creation time as well, lists no photos nor photo albums in such a library, and makes a video alone in its folder a title named after the folder.
 
