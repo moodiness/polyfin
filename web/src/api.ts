@@ -2376,6 +2376,11 @@ export type Health = {
    * none, or while Check for new versions is off.
    */
   update: { version: string; url: string } | null
+  /**
+   * The host names of Known proxies, with the addresses each resolved to when last looked up,
+   * sorted: none when it resolves to nothing, which trusts nothing.
+   */
+  proxyNames: { name: string; addresses: string[]; resolvedAt: string }[]
 }
 
 /**
@@ -2413,6 +2418,7 @@ export type HealthProblem = {
   | { code: 'unknown_proxy'; address: string }
   | { code: 'discovery_port'; port: number }
   | { code: 'discovery_address'; address: string }
+  | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
   | { code: 'backup_failed' }

@@ -139,7 +139,7 @@ const common: typeof en = {
     invalid_inactive_device_days:
       'Le nombre de jours avant de déconnecter les appareils inutilisés doit être un nombre entier de 0 à 365.',
     invalid_known_proxies:
-      'Les proxys connus doivent être des adresses IP ou des réseaux comme 172.18.0.0/16, un par ligne, 64 au plus.',
+      'Les proxys connus doivent être des adresses IP, des réseaux comme 172.18.0.0/16 ou des noms d’hôte comme traefik, un par ligne, 64 au plus.',
     personal_addons_disabled:
       'Un administrateur a désactivé vos propres addons. Ils sont conservés, mais vous ne pouvez pas en ajouter, ni les actualiser, ni les activer.',
     invalid_hidden_libraries: 'La liste des bibliothèques a changé entre-temps. Rechargez la page.',

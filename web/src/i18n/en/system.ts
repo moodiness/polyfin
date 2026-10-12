@@ -129,6 +129,8 @@ const system = {
           `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
         discoveryAddress: (address: string) =>
           `Jellyfin apps that look for servers on the local network are given ${address}, an address of Polyfin’s container they cannot reach. Set Address on the local network under Settings › General.`,
+        proxyNameUnresolved: (name: string) =>
+          `The known proxy ${name} resolves to no address, so no request is trusted to come from it. Check its name under Settings › Security, and that Polyfin shares a network with it.`,
         task: (name: string) => `The task “${name}” failed.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
@@ -261,6 +263,10 @@ const system = {
       storedPlain: 'Stored unencrypted',
       unreadable: 'Cannot be decrypted',
       noneUnreadable: 'None',
+      proxiesTitle: 'Known proxies',
+      proxiesHelp:
+        'The host names listed in Known proxies, looked up at each change of the settings, every minute, and as soon as an unknown address forwards requests. Every address a name resolves to is trusted as a proxy.',
+      resolvesToNothing: 'Resolves to nothing',
       secretNames: {
         publicMetaDbKey: 'PublicMetaDB key',
         theIntroDbKey: 'TheIntroDB key',

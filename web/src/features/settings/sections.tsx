@@ -593,8 +593,8 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
 const proxySeparators = /[\s,]+/
 
 /**
- * Known proxies, one address or network a line. The text stays as typed while it lists the same
- * entries, so that a new line can be started; discarding or saving writes it anew.
+ * Known proxies, one address, network or host name a line. The text stays as typed while it lists
+ * the same entries, so that a new line can be started; discarding or saving writes it anew.
  */
 function ProxyList({ value, onValue }: { value: string[]; onValue: (value: string[]) => void }) {
   const [text, setText] = useState(() => value.join('\n'))

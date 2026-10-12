@@ -89,6 +89,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.discoveryPort(problem.port)
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
+    case 'proxy_name_unresolved':
+      return text.proxyNameUnresolved(problem.name)
     case 'secrets_unreadable':
       return text.unreadableSecrets(
         problem.secrets.map((secret) => unreadableName(t, secret)).join(', '),

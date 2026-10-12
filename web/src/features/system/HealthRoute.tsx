@@ -104,6 +104,7 @@ export default function HealthRoute() {
               <Thumbnails health={health.data} />
               <Process health={health.data} />
               <Secrets health={health.data} />
+              <ProxyNames health={health.data} />
             </div>
           </Block>
         </>
@@ -743,6 +744,30 @@ function Secrets({ health }: { health: Health }) {
                 ),
             },
           ]}
+        />
+      </Panel>
+    </Anchor>
+  )
+}
+
+/** What each host name of Known proxies resolves to, while some are listed. */
+function ProxyNames({ health }: { health: Health }) {
+  const { t } = useI18n()
+  const text = t.system.health
+  if (health.proxyNames.length === 0) return null
+  return (
+    <Anchor id="proxies">
+      <Panel title={text.proxiesTitle} titleAs="h3" description={text.proxiesHelp}>
+        <Facts
+          items={health.proxyNames.map((proxy) => ({
+            label: proxy.name,
+            value:
+              proxy.addresses.length === 0 ? (
+                <StatusPill tone="warn">{text.resolvesToNothing}</StatusPill>
+              ) : (
+                <span className="font-mono text-small">{proxy.addresses.join(', ')}</span>
+              ),
+          }))}
         />
       </Panel>
     </Anchor>

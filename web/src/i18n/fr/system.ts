@@ -136,6 +136,8 @@ const system: typeof en = {
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.`,
         discoveryAddress: (address: string) =>
           `Les applications Jellyfin qui cherchent des serveurs sur le réseau local reçoivent ${address}, une adresse du conteneur de Polyfin qu’elles ne peuvent pas joindre. Renseignez Adresse sur le réseau local dans Paramètres › Général.`,
+        proxyNameUnresolved: (name: string) =>
+          `Le proxy connu ${name} ne correspond à aucune adresse : aucune requête n’est donc reconnue comme venant de lui. Vérifiez son nom dans Paramètres › Sécurité, et que Polyfin partage un réseau avec lui.`,
         task: (name: string) => `La tâche « ${name} » a échoué.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
@@ -270,6 +272,10 @@ const system: typeof en = {
       storedPlain: 'Enregistrées sans chiffrement',
       unreadable: 'Impossibles à déchiffrer',
       noneUnreadable: 'Aucune',
+      proxiesTitle: 'Proxys connus',
+      proxiesHelp:
+        'Les noms d’hôte listés dans Proxys connus, résolus à chaque changement des paramètres, chaque minute, et dès qu’une adresse inconnue transmet des requêtes. Chaque adresse à laquelle un nom correspond est reconnue comme proxy.',
+      resolvesToNothing: 'Ne correspond à aucune adresse',
       secretNames: {
         publicMetaDbKey: 'Clé PublicMetaDB',
         theIntroDbKey: 'Clé TheIntroDB',
