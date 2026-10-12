@@ -21,30 +21,32 @@ const maxTitleQuery = 200
 // the container) with its user and whether a password is stored, never
 // the password itself, how its last scan went and whether one is under
 // way, its files, those matched to a title, how, and the others, the
-// links made by hand, and whether its titles show the artwork beside their
-// files. A music folder's files are its tracks, matched those with a
-// title and an album, which its albums and artists count; a home videos
-// folder's are its videos, each its own title, which datedBy counts by
-// where their dates come from.
+// links made by hand, the episodes given by hand to the titles of shows'
+// discs, and whether its titles show the artwork beside their files. A
+// music folder's files are its tracks, matched those with a title and an
+// album, which its albums and artists count; a home videos folder's are
+// its videos, each its own title, which datedBy counts by where their
+// dates come from.
 type folderJSON struct {
-	Kind        string        `json:"kind"`
-	Path        string        `json:"path"`
-	Share       string        `json:"share"`
-	User        string        `json:"user"`
-	PasswordSet bool          `json:"passwordSet"`
-	CheckedAt   *time.Time    `json:"checkedAt"`
-	ScannedAt   *time.Time    `json:"scannedAt"`
-	Error       string        `json:"error"`
-	Scanning    bool          `json:"scanning"`
-	Files       int           `json:"files"`
-	Matched     int           `json:"matched"`
-	MatchedBy   matchedByJSON `json:"matchedBy"`
-	Unmatched   int           `json:"unmatched"`
-	Albums      int           `json:"albums"`
-	Artists     int           `json:"artists"`
-	DatedBy     datedByJSON   `json:"datedBy"`
-	Links       []linkJSON    `json:"links"`
-	UseArtwork  bool          `json:"useArtwork"`
+	Kind        string             `json:"kind"`
+	Path        string             `json:"path"`
+	Share       string             `json:"share"`
+	User        string             `json:"user"`
+	PasswordSet bool               `json:"passwordSet"`
+	CheckedAt   *time.Time         `json:"checkedAt"`
+	ScannedAt   *time.Time         `json:"scannedAt"`
+	Error       string             `json:"error"`
+	Scanning    bool               `json:"scanning"`
+	Files       int                `json:"files"`
+	Matched     int                `json:"matched"`
+	MatchedBy   matchedByJSON      `json:"matchedBy"`
+	Unmatched   int                `json:"unmatched"`
+	Albums      int                `json:"albums"`
+	Artists     int                `json:"artists"`
+	DatedBy     datedByJSON        `json:"datedBy"`
+	Links       []linkJSON         `json:"links"`
+	Episodes    []givenEpisodeJSON `json:"episodes"`
+	UseArtwork  bool               `json:"useArtwork"`
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
@@ -70,16 +72,32 @@ type linkJSON struct {
 	ImdbID string `json:"imdbId"`
 }
 
+// givenEpisodeJSON is the episodes given by hand to a title of a show's
+// disc: its path, its disc's kind ("bluray", "dvd", "bluray_image" or
+// "dvd_image", empty when the disc is gone), its disc's folder or image,
+// its number, and its episodes, "S01E05" or "S01E05-E06".
+type givenEpisodeJSON struct {
+	Path     string `json:"path"`
+	Disc     string `json:"disc"`
+	DiscPath string `json:"discPath"`
+	Number   int    `json:"number"`
+	Episode  string `json:"episode"`
+}
+
 func newFolderJSON(f localfiles.Folder) *folderJSON {
 	links := make([]linkJSON, 0, len(f.Links))
 	for _, l := range f.Links {
 		links = append(links, linkJSON{Unit: l.Unit, ImdbID: l.IMDb})
 	}
+	episodes := make([]givenEpisodeJSON, 0, len(f.Episodes))
+	for _, e := range f.Episodes {
+		episodes = append(episodes, givenEpisodeJSON{Path: e.Path, Disc: e.Kind, DiscPath: e.Disc, Number: e.Number, Episode: e.Episode})
+	}
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
 		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
-		Links: links, UseArtwork: f.UseArtwork}
+		Links: links, Episodes: episodes, UseArtwork: f.UseArtwork}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -201,6 +219,21 @@ type unmatchedJSON struct {
 	// its main one, "<folder>#<playlist>", or "bluray_image" or
 	// "dvd_image" for a disc image, its own unit; null for another file.
 	Disc *string `json:"disc"`
+	// DiscTitle tells which title of a show's disc the file is, its unit
+	// being the show's folder; null for another file.
+	DiscTitle *discTitleJSON `json:"discTitle"`
+}
+
+// discTitleJSON is a title of a show's disc: its disc's folder or image,
+// its number, how long it plays in seconds, null when unknown, its
+// episodes and those Polyfin suggests, "S01E05" or "S01E05-E06", null for
+// none.
+type discTitleJSON struct {
+	DiscPath  string  `json:"discPath"`
+	Number    int     `json:"number"`
+	Length    *int    `json:"length"`
+	Episode   *string `json:"episode"`
+	Suggested *string `json:"suggested"`
 }
 
 // folderUnmatched lists the files of a local folder no title was matched
@@ -221,13 +254,22 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 		Total int             `json:"total"`
 		Files []unmatchedJSON `json:"files"`
 	}{Total: total, Files: make([]unmatchedJSON, 0, len(list))}
-	for _, u := range list {
-		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason}
-		if u.Disc != "" {
-			file.Disc = new(u.Disc)
+	text := func(s string) *string {
+		if s == "" {
+			return nil
 		}
+		return &s
+	}
+	for _, u := range list {
+		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: text(u.Disc)}
 		if u.Year > 0 {
 			file.Year = new(u.Year)
+		}
+		if t := u.DiscTitle; t != nil {
+			file.DiscTitle = &discTitleJSON{DiscPath: t.Disc, Number: t.Number, Episode: text(t.Episode), Suggested: text(t.Suggested)}
+			if t.Length > 0 {
+				file.DiscTitle.Length = new(int(t.Length / time.Second))
+			}
 		}
 		result.Files = append(result.Files, file)
 	}
@@ -327,6 +369,35 @@ func (h *handler) unlinkFolderFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := h.Folders.Unlink(context.WithoutCancel(r.Context()), id, r.URL.Query().Get("path"))
+	h.answerFolder(w, r, scope, id, err)
+}
+
+// setFolderEpisodes gives titles of shows' discs of a shows folder their
+// episodes, {"episodes": [{"path", "episode"}]}, "S01E05" or
+// "S01E05-E06", an empty episode removing those given.
+func (h *handler) setFolderEpisodes(w http.ResponseWriter, r *http.Request) {
+	scope, ok := h.folderScope(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		Episodes []struct {
+			Path    string `json:"path"`
+			Episode string `json:"episode"`
+		} `json:"episodes"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	changes := make([]localfiles.EpisodeChange, 0, len(body.Episodes))
+	for _, e := range body.Episodes {
+		changes = append(changes, localfiles.EpisodeChange{Path: e.Path, Episode: e.Episode})
+	}
+	err := h.Folders.SetEpisodes(context.WithoutCancel(r.Context()), id, changes)
 	h.answerFolder(w, r, scope, id, err)
 }
 

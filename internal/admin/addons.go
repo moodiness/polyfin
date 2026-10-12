@@ -440,6 +440,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{localfiles.ErrInvalidUser, http.StatusBadRequest, "invalid_share_user"},
 		{localfiles.ErrInvalidKind, http.StatusBadRequest, "invalid_folder_kind"},
 		{localfiles.ErrInvalidIMDb, http.StatusBadRequest, "invalid_imdb_id"},
+		{localfiles.ErrInvalidEpisode, http.StatusBadRequest, "invalid_episode"},
 		{localfiles.ErrSearchFailed, http.StatusBadGateway, "title_search_failed"},
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},
 		{iptv.ErrTooLarge, http.StatusUnprocessableEntity, "channel_list_too_large"},
