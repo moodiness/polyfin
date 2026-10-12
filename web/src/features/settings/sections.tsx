@@ -300,6 +300,14 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
             reveal={() => revealServerSecret('theIntroDbKey')}
           />
         </SettingRow>
+        <SwitchRow
+          anchor="audio-intros"
+          label={s.audioIntros}
+          help={s.audioIntrosHelp}
+          checked={form.audioIntros}
+          onChange={(audioIntros) => update({ audioIntros })}
+          disabled={!form.skipButtons}
+        />
       </SettingsGroup>
       <SettingsGroup title={groups.titlePages}>
         <SwitchRow

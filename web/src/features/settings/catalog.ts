@@ -347,6 +347,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'audio-intros',
+    label: (t) => s(t).audioIntros,
+    help: (t) => s(t).audioIntrosHelp,
+    keywords: ['intro', 'audio', 'fingerprint', 'local'],
+  },
+  {
+    section: 'content',
     anchor: 'similar-titles',
     label: (t) => s(t).similarTitles,
     help: (t) => s(t).similarTitlesHelp,

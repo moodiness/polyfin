@@ -291,6 +291,9 @@ const settings = {
       turnOn: (name: string) => `Ask ${name}`,
       needsKey: 'Needs a key',
     },
+    audioIntros: 'Find intros in local episodes’ audio',
+    audioIntrosHelp:
+      'When an episode of a local folder plays without an intro from its chapters or the sources above, Polyfin compares the audio of its season’s episodes in the background, and gives each the stretch they share near their start. The season’s other episodes then have theirs, and the one played has it from its next play. Needs the skip buttons on.',
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',

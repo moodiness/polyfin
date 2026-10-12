@@ -298,6 +298,9 @@ const settings: typeof en = {
       turnOn: (name: string) => `Consulter ${name}`,
       needsKey: 'Clé requise',
     },
+    audioIntros: 'Trouver les intros dans l’audio des épisodes locaux',
+    audioIntrosHelp:
+      'Quand un épisode d’un dossier local est lu sans intro donnée par ses chapitres ou par les sources ci-dessus, Polyfin compare en arrière-plan l’audio des épisodes de sa saison, et donne à chacun le passage qu’ils partagent près de leur début. Les autres épisodes de la saison ont alors la leur, et celui qui a été lu l’a dès sa prochaine lecture. Nécessite les boutons ci-dessus.',
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
