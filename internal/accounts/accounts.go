@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -184,6 +185,10 @@ type Store struct {
 	unreadable map[string]string
 	// signIns remembers the access tokens and API keys resolved lately.
 	signIns signIns
+	// leavers are told of each user deleted (see OnDelete); leaversMu
+	// guards them.
+	leaversMu sync.Mutex
+	leavers   []Leaver
 }
 
 // Option completes a store.
@@ -207,6 +212,20 @@ func (s *Store) notifySignOut(devices []ID) {
 	if f := s.signedOut.Load(); f != nil && len(devices) > 0 {
 		(*f)(devices)
 	}
+}
+
+// Leaver is told of each user deleted, in the deletion's transaction,
+// before the user's rows go with it: it reads what it opened for user
+// outside Polyfin, and returns what signs that out, which runs once the
+// deletion is committed and must not wait; nil when there is nothing to
+// sign out. Its error fails the deletion.
+type Leaver func(ctx context.Context, tx pgx.Tx, user ID) (func(), error)
+
+// OnDelete adds leaver to those told of each user deleted.
+func (s *Store) OnDelete(leaver Leaver) {
+	s.leaversMu.Lock()
+	defer s.leaversMu.Unlock()
+	s.leavers = append(s.leavers, leaver)
 }
 
 // qualifiedUserColumns prefixes userColumns with a table alias for joins.
@@ -652,9 +671,14 @@ func (s *Store) changePassword(ctx context.Context, id ID, current, next string,
 }
 
 // DeleteUser removes an account with its devices and sessions, and revokes
-// the invites whose new accounts copy it.
+// the invites whose new accounts copy it. What the leavers opened for the
+// user outside Polyfin is signed out once it is done (see OnDelete).
 func (s *Store) DeleteUser(ctx context.Context, id ID) error {
+	s.leaversMu.Lock()
+	leavers := slices.Clone(s.leavers)
+	s.leaversMu.Unlock()
 	var signedOut []ID
+	var leave []func()
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
 			return err
@@ -666,6 +690,16 @@ func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 		if current.IsAdministrator && !current.IsDisabled {
 			if err := requireAnotherAdministrator(ctx, tx, id); err != nil {
 				return err
+			}
+		}
+		// What goes with the account is read while it is locked.
+		for _, leaver := range leavers {
+			after, err := leaver(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if after != nil {
+				leave = append(leave, after)
 			}
 		}
 		// The devices would go with the account; they are listed first, to
@@ -684,6 +718,9 @@ func (s *Store) DeleteUser(ctx context.Context, id ID) error {
 	s.forgetSignIns()
 	if err == nil {
 		s.notifySignOut(signedOut)
+		for _, after := range leave {
+			after()
+		}
 	}
 	return err
 }
