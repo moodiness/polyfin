@@ -8,7 +8,7 @@ Polyfin has separate accounts for each user, with Jellyfin authentication and Qu
 
 An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change; each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
 
-Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
+Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
 ## Watch state
 
@@ -178,7 +178,7 @@ Under **My account**, **Import from another server** lets each user bring their 
 
 - One import runs at a time on the whole server. While another runs, the user's or an administrator's, the import is refused (`server_import_running`): try again a few minutes later.
 - A user sees only their own imports. The administrator's **Import from another server** page shows the import running or the last one, saying who started it.
-- **Users may import their watch history from another server**, under **Settings › Security**, on by default, turns the section off: it is hidden, and the API refuses (`server_imports_disabled`).
+- **Users may import their watch history from another server or app**, under **Settings › Security**, on by default, turns the section off: it is hidden, and the API refuses (`server_imports_disabled`). It turns off the import from an app too (see [Importing from an app](#importing-from-an-app)).
 - Plex has no sign-in for its users: only its owner can import from it, under **Users**.
 
 **For app developers:**
@@ -186,6 +186,76 @@ Under **My account**, **Import from another server** lets each user bring their 
 - `GET /admin/api/account/server-import` answers `enabled`, and `import`, the user's own import running or their last one, `null` when none.
 - `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import.
 - Polyfin sends the sign-in, the items requests and the sign-out of the administrator's import, never `/Users`.
+
+## Importing from an app
+
+Apps built on addons, as Polyfin is, keep what their users watched in an account: Nuvio is the first Polyfin imports from. Under **My account**, **Import from an app** lets each user bring theirs over: the movies and episodes they played, their resume points, the app's library, and the app's addons they choose.
+
+1. Sign in to the app, the way that app signs in (see [Nuvio](#nuvio)). Polyfin reads the account once, then signs out.
+2. **Profile** lists the account's profiles by name, with what each watched, resumed and keeps in its library: choose the one to import. Under **Addons**, tick those to add, if any (see [The app's addons](#the-app-s-addons)).
+3. **Import this profile** imports it into the user's account, in the background. The section then shows the import, and its result: what was added, the titles not found, and the addons added.
+
+Polyfin keeps what it read of the account in memory only, while the profile is chosen, and for 5 minutes at most: after that, or after **Sign in again**, it is gone, and the import asks to sign in again (`app_import_expired`). The password is used for that sign-in only: it is never kept, nor logged.
+
+An administrator can run the same import for a user: **Import from an app**, at the top of **Users**, asks **Into the account of** which user, then goes on as the user's import does, with the user's sign-in to the app. **Users may import their watch history from another server or app**, under **Settings › Security**, turns the users' own import off (`server_imports_disabled`), not the administrator's.
+
+### What comes over from an app
+
+| From the app | Into Polyfin |
+|---|---|
+| Movies and episodes watched, with the date when the app keeps one | Played marks. |
+| Resume points of movies and episodes | Resume points, for titles not played. |
+| The library | Favorites. |
+| The addons ticked | The user's own addons. |
+
+An app's library is closer to a watchlist than to favorites: Polyfin has no watchlist, so its titles become favorites. Nothing else comes over: settings, collections, home screen layouts, and what the app keeps on the device only.
+
+### How an app's titles are matched
+
+Apps built on addons name titles by the identifiers of the addons that described them. Polyfin finds them by IMDb (`tt…`) and TMDB (`tmdb:…`) identifiers, as an [imported watch history](tracking.md#importing-your-watch-history) does, and by Kitsu identifiers (`kitsu:…`), through the [anime mapping](tracking.md#anime) and as anime catalogs list them. An episode is found by its series' identifier and its season and episode numbers; an episode of a Kitsu entry by its number in the entry. A title no catalog listed yet shows in the user's lists at once, described by the addons.
+
+A title that cannot be matched is left out, and the import goes on. The result lists these titles with why: **Not an IMDb, TMDB or Kitsu identifier** (an addon's own identifier) or **Not in Polyfin** (no catalog listed it under its identifier).
+
+The data merges as the other imports' does (see [How the data merges with Polyfin's](#how-the-data-merges-with-polyfin-s)): played marks, resume points and favorites are only added, a title keeps Polyfin's date when it is later, the more recent of two resume points stays, and the resume points imported follow Polyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)): one past the played threshold marks the title played. Importing again adds nothing twice.
+
+### The app's addons
+
+When users' own addons are allowed, by **Allow users' own addons** and the user's **Can add their own addons** (see [Users' own addons](#users-own-addons)), **Addons** offers the profile's addons one by one, by name. Each one ticked becomes one of the user's own addons, under **My sources**, as if they had added it there. When they are not allowed, none are offered, and choosing some anyway is refused (`personal_addons_disabled`).
+
+An addon's address may hold its user's settings and keys: Polyfin shows only its host, never logs it, and keeps it only as the user's addon. A user's own import reaches public addresses only, as their own addons do; an administrator's may reach the local network. The result tells, addon by addon, whether it was added, or why not: already installed, on a local network, not answering, or not an addon.
+
+### Progress of an app import
+
+- One import into an account runs at a time: while one runs, another is refused (`app_import_running`). Imports into different accounts run side by side.
+- Leaving the page does not stop an import. Polyfin keeps the running import and the last result of each account in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
+- A user sees only the imports into their own account; an administrator's page shows the import into the user chosen, saying who started it.
+
+### Nuvio
+
+A Nuvio account keeps, for each of its profiles, up to 6, the movies and episodes watched with their dates, the resume point of each, its library, and its addons. Polyfin reads them all at once, in the account backup Nuvio's own scripts move accounts with.
+
+- **Nuvio backend**: empty for Nuvio's own, or the address of a self-hosted backend, on the local network as well.
+- **Email** and **Password**: the account's, as in Nuvio's apps. **Sign in to Nuvio** signs in, reads the account, and signs out.
+
+A wrong email or password, an address where nothing answers, or where something other than a Nuvio backend answers, each say so. Nuvio may ask to wait before signing in again: Polyfin waits up to 30 seconds, twice at most, and says so past that. The account backup is versioned: Polyfin reads its version 1, and refuses another, saying so, until it reads it too.
+
+What comes over, profile by profile:
+
+- Watched: each movie and episode, with the date it was marked watched, older apps' dates included. A series marked watched as a whole, without its episodes, is not marked played: Polyfin counts a series played from its episodes.
+- Resume points: each movie's and episode's, with its runtime and date, unless it was watched since. Those of the titles of a Jellyfin or Emby server connected in Nuvio (`srv1:…`) stay in Nuvio.
+- Library: its movies and series, as favorites.
+- Addons: those turned on in the profile, or in the first profile for a profile that uses its addons. Nuvio's plugins are not addons: they do not come over.
+
+What Nuvio keeps without an account, as a guest, stays on the device. Progress Nuvio sends to Trakt or Simkl is imported from there (see [Tracking services](tracking.md)).
+
+**For app developers:**
+
+- `GET /admin/api/account/app-import` answers `enabled`, `addonsAllowed`, and `import`, the import into the user's account running or the last one, `null` when none.
+- `POST /admin/api/account/app-import/nuvio` takes `backend` (empty for Nuvio's own), `email` and `password`, and answers `key`, `app`, and `profiles`, each with its `id`, `name`, counts (`entries`, `played`, `resumes`, `library`) and `addons`, each with its `index`, `name` and `address`, redacted to its host. A refused email or password is `nuvio_sign_in_refused`, an invalid address `invalid_nuvio_address`, a backend that does not answer `nuvio_unreachable`, something else answering `not_nuvio`, a backend asking to wait too long `nuvio_rate_limited`, and a backup of another version `nuvio_backup_unsupported`, with its `version`.
+- `POST /admin/api/account/app-import` takes `key`, `profile` and `addons`, the indexes of the addons to add, and answers `import`.
+- An administrator's routes are the same under `/admin/api/users/{id}/app-import`, for the user `{id}`.
+- An import names its `app`, `profile`, `user` and `startedBy` (`id` and `name`), `state` (`running`, `done` or `failed`), its counts (`read`, `played`, `resumed`, `favorites`, `unmatchedCount`), `unmatched` (`id`, `name`, `type`, `season`, `episode`, `reason`), and `addons` (`name`, `address`, `installed`, `problem`).
+- Polyfin reads Nuvio's public configuration at `GET {backend}/.well-known/nuvio` for its publishable key, signs in with `POST {backend}/auth/v1/token?grant_type=password`, reads the account with one `POST {backend}/rest/v1/rpc/sync_export_account_backup`, which must answer `format` `nuvio_account_backup` and `version` 1, and signs out with `POST {backend}/auth/v1/logout`. The key goes in the `apikey` header and the session's token in `Authorization: Bearer …`, never in an address. A `429` or `503` answer with `Retry-After` is waited for.
 
 ## Invite links
 
@@ -430,7 +500,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
-| **Users may import their watch history from another server** | **Settings › Security** | On | Shows the import from a Jellyfin or Emby server under **My account** (see [Importing your own watch history](#importing-your-own-watch-history)). |
+| **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows the imports from a Jellyfin or Emby server and from an app under **My account** (see [Importing your own watch history](#importing-your-own-watch-history) and [Importing from an app](#importing-from-an-app)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses or networks) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
