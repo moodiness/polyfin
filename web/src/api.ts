@@ -507,6 +507,8 @@ export type LocalFolder = {
   artists: number
   /** The files, or shows' folders, linked to an IMDb identifier by hand. */
   links: { unit: string; imdbId: string }[]
+  /** Whether its titles show the artwork beside their files rather than the addons'. */
+  useArtwork: boolean
 }
 
 /** A file of a local folder no title was matched to, with why. */
@@ -535,6 +537,8 @@ export type NewLocalFolder = {
   kind: FolderKind
   user?: string
   password?: string
+  /** Whether its titles show the artwork beside their files; yes when left out. */
+  useArtwork?: boolean
 }
 
 /** A change of a folder; a password left out keeps the stored one, an empty one removes it. */
@@ -543,6 +547,7 @@ export type LocalFolderPatch = Partial<{
   path: string
   user: string
   password: string
+  useArtwork: boolean
 }>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */

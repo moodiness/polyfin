@@ -20,9 +20,10 @@ const maxTitleQuery = 200
 // address, the kind of share it is ("smb", "webdav", empty for a path in
 // the container) with its user and whether a password is stored, never
 // the password itself, how its last scan went and whether one is under
-// way, its files, those matched to a title, how, and the others, and the
-// links made by hand. A music folder's files are its tracks, matched those
-// with a title and an album, which its albums and artists count.
+// way, its files, those matched to a title, how, and the others, the
+// links made by hand, and whether its titles show the artwork beside their
+// files. A music folder's files are its tracks, matched those with a
+// title and an album, which its albums and artists count.
 type folderJSON struct {
 	Kind        string        `json:"kind"`
 	Path        string        `json:"path"`
@@ -40,6 +41,7 @@ type folderJSON struct {
 	Albums      int           `json:"albums"`
 	Artists     int           `json:"artists"`
 	Links       []linkJSON    `json:"links"`
+	UseArtwork  bool          `json:"useArtwork"`
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
@@ -64,7 +66,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
-		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Links: links}
+		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Links: links, UseArtwork: f.UseArtwork}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -83,14 +85,17 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 
 // folderRequest adds or changes a local folder: its name, its path in the
 // container or a share's address, and, on adding, what it holds, "movies",
-// "shows" or "music"; a share's user and password. On a change, a password
-// left out keeps the one stored, and an empty one removes it.
+// "shows" or "music"; a share's user and password; whether its titles
+// show the artwork beside their files, yes when left out on adding. On a
+// change, a password left out keeps the one stored, and an empty one
+// removes it.
 type folderRequest struct {
-	Name     *string `json:"name"`
-	Path     *string `json:"path"`
-	Kind     string  `json:"kind"`
-	User     *string `json:"user"`
-	Password *string `json:"password"`
+	Name       *string `json:"name"`
+	Path       *string `json:"path"`
+	Kind       string  `json:"kind"`
+	User       *string `json:"user"`
+	Password   *string `json:"password"`
+	UseArtwork *bool   `json:"useArtwork"`
 }
 
 // addFolder adds a local folder to the server's addons and scans it in
@@ -104,7 +109,7 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	folder := localfiles.NewFolder{Kind: body.Kind}
+	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork}
 	for _, field := range []struct {
 		from *string
 		to   *string
@@ -121,9 +126,10 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	h.answerAddon(w, r, scope, http.StatusCreated, addon, err)
 }
 
-// updateFolder changes a local folder's name, path or address, or a
-// share's user or password; a new path or address, a new user or
-// password, is scanned at once.
+// updateFolder changes a local folder's name, path or address, a share's
+// user or password, or whether its titles show the artwork beside their
+// files; a new path or address, a new user or password, is scanned at
+// once.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -137,12 +143,12 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil {
+	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id,
-		localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password})
+		localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork})
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 

@@ -41,6 +41,7 @@ import {
   SecretField,
   Segmented,
   Skeleton,
+  Switch,
   TextInput,
   useToast,
 } from '@/ui'
@@ -84,14 +85,17 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
   const [kind, setKind] = useState<FolderKind>('movies')
+  const [useArtwork, setUseArtwork] = useState(true)
   const share = location === 'local' ? null : location
   const mutation = useMutation({
     mutationFn: () =>
-      addLocalFolder(
-        share === null
-          ? { name: name.trim(), path: path.trim(), kind }
-          : { name: name.trim(), path: path.trim(), kind, user: user.trim(), password },
-      ),
+      addLocalFolder({
+        name: name.trim(),
+        path: path.trim(),
+        kind,
+        ...(share === null ? {} : { user: user.trim(), password }),
+        ...(kind === 'music' ? {} : { useArtwork }),
+      }),
     onSuccess: (added) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons('shared'), (old) =>
         old === undefined ? old : [...old, added],
@@ -181,6 +185,11 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
           className="self-start"
         />
       </Field>
+      {kind !== 'music' && (
+        <Field label={text.useArtwork} help={text.useArtworkHelp}>
+          <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
+        </Field>
+      )}
       {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
       <div>
         <Button type="submit" variant="primary" loading={mutation.isPending}>
@@ -192,8 +201,8 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
 }
 
 /**
- * The form changing a folder's name, path or address, and a share's user and password; what it
- * holds stays.
+ * The form changing a folder's name, path or address, a share's user and password, and whether a
+ * movies or shows folder's titles show its artwork; what it holds stays.
  */
 export function LocalFolderEditForm({
   addon,
@@ -213,6 +222,7 @@ export function LocalFolderEditForm({
   const [user, setUser] = useState(folder.user)
   // undefined keeps the stored password, '' removes it.
   const [password, setPassword] = useState<string | undefined>(undefined)
+  const [useArtwork, setUseArtwork] = useState(folder.useArtwork)
   const share = shareOf(path)
   const mutation = useMutation({
     mutationFn: () =>
@@ -220,6 +230,7 @@ export function LocalFolderEditForm({
         name: name.trim(),
         path: path.trim(),
         ...(share === '' ? {} : { user: user.trim(), password }),
+        ...(folder.kind === 'music' ? {} : { useArtwork }),
       }),
     onSuccess: onSaved,
     onSettled: () => invalidateScope('shared'),
@@ -276,6 +287,11 @@ export function LocalFolderEditForm({
             onValue={setPassword}
           />
         </>
+      )}
+      {folder.kind !== 'music' && (
+        <Field label={text.useArtwork} help={text.useArtworkHelp}>
+          <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
+        </Field>
       )}
       <p className="text-small text-ink-3">
         {text.holds}: {text.kinds[folder.kind]}. {text.kindFixed}

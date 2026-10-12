@@ -192,6 +192,9 @@ const sources = {
         'Audio files read with their tags, else their names, such as Artist/Album/01 Title.flac, grouped into albums and artists.',
     },
     kindFixed: 'What a folder holds cannot be changed: remove it and add it again.',
+    useArtwork: 'Use its artwork',
+    useArtworkHelp:
+      'Posters, backdrops and logos beside the files, such as poster.jpg or Movie (2001)-fanart.jpg, show in place of the metadata addons’ for their titles. Off, the addons’ show.',
     add: 'Add the folder',
     added: (name: string) => `${name} was added. Its first scan has started.`,
     edit: 'Edit the folder',
