@@ -13,17 +13,21 @@ import (
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio/nuviotest"
+	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
+	"github.com/moodiness/polyfin/internal/appimport/stremio/stremiotest"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
-// appImportAPI serves the admin API with imports from apps, and returns
-// the library, the user data and the addons they write to.
-func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *addons.Store) {
+// appImportAPI serves the admin API with imports from apps, the Stremio
+// accounts on a fake Stremio, and returns the library, the user data and
+// the addons they write to, and the fake.
+func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *addons.Store, *stremiotest.Fake) {
 	t.Helper()
 	var lib *library.Service
 	var data *userdata.Store
 	var installed *addons.Store
+	fake := stremiotest.New(t)
 	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
@@ -32,8 +36,10 @@ func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *ad
 			Logger: logger})
 		t.Cleanup(o.AppImport.Close)
 		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
+		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: fake.API,
+			Link: fake.Link})
 	})
-	return api, lib, data, installed
+	return api, lib, data, installed, fake
 }
 
 // appImportDone waits for the import into the account path reads to end,
@@ -58,7 +64,7 @@ func appImportDone(t *testing.T, b browser, path string) map[string]any {
 
 func TestUsersImportTheirNuvioAccount(t *testing.T) {
 	t.Parallel()
-	api, lib, data, _ := appImportAPI(t)
+	api, lib, data, _, _ := appImportAPI(t)
 	backend := nuviotest.New(t)
 	addon := localAddon(t)
 	backend.Set(func(b *nuviotest.Backend) {
@@ -142,7 +148,7 @@ func TestUsersImportTheirNuvioAccount(t *testing.T) {
 
 func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	t.Parallel()
-	api, _, _, installed := appImportAPI(t)
+	api, _, _, installed, _ := appImportAPI(t)
 	backend := nuviotest.New(t)
 	addon := localAddon(t)
 	backend.Set(func(b *nuviotest.Backend) {
@@ -215,5 +221,172 @@ func TestAppImportsFollowTheirPermissions(t *testing.T) {
 	if status, body, _ := bob.call(http.MethodPost, "/account/app-import", map[string]any{"key": "any", "profile": "1"}); status != http.StatusForbidden ||
 		body["error"] != "server_imports_disabled" {
 		t.Errorf("importing with the setting off: %d %v", status, body)
+	}
+}
+
+// stremioSample puts the sample account on the fake (see
+// stremiotest.Sample), with the addon at first, and returns the auth key
+// the user's browser holds.
+func stremioSample(fake *stremiotest.Fake, first string) string {
+	var pasted string
+	fake.Set(func(f *stremiotest.Fake) {
+		f.Email, f.Password = "bob@example.com", "bob's password"
+		f.Library = stremiotest.Sample()
+		f.Addons = stremiotest.SampleAddons(first, "https://second.example/u/other-secret/manifest.json")
+		pasted = f.Pasted
+	})
+	return pasted
+}
+
+// noStremioSecret fails when an answer holds a password or an auth key.
+func noStremioSecret(t *testing.T, answer map[string]any) {
+	t.Helper()
+	raw, _ := json.Marshal(answer)
+	for _, secret := range []string{"secret", "bob's password", "issued-key", "pasted-key"} {
+		if strings.Contains(string(raw), secret) {
+			t.Errorf("the answer holds %q: %s", secret, raw)
+		}
+	}
+}
+
+func TestUsersImportTheirStremioAccount(t *testing.T) {
+	t.Parallel()
+	api, lib, data, _, fake := appImportAPI(t)
+	pasted := stremioSample(fake, localAddon(t))
+	bob, carol := api.signedIn("bob", false), api.signedIn("carol", false)
+
+	// The link code first: Bob opens the link, and the page waits.
+	status, link, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link", nil)
+	if status != http.StatusOK || link["code"] == "" || link["link"] != fake.Link+"/"+link["code"].(string) {
+		t.Fatalf("link: %d %v", status, link)
+	}
+	noStremioSecret(t, link)
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusAccepted ||
+		body["pending"] != true {
+		t.Errorf("before the approval: %d %v", status, body)
+	}
+	fake.Approve()
+	// Bob's code is not Carol's.
+	if status, body, _ := carol.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusConflict ||
+		body["error"] != "stremio_link_expired" {
+		t.Errorf("Carol polling: %d %v", status, body)
+	}
+	status, read, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil)
+	profiles, _ := read["profiles"].([]any)
+	if status != http.StatusOK || read["app"] != "stremio" || read["key"] == "" || len(profiles) != 1 {
+		t.Fatalf("Bob's account: %d %v", status, read)
+	}
+	noStremioSecret(t, read)
+	profile := profiles[0].(map[string]any)
+	if profile["id"] != "1" || profile["name"] != "" || profile["entries"] != 11.0 || profile["played"] != 6.0 || profile["resumes"] != 2.0 ||
+		profile["library"] != 3.0 {
+		t.Errorf("profile: %v", profile)
+	}
+	if offered := profile["addons"].([]any); len(offered) != 2 || offered[0].(map[string]any)["name"] != "First" ||
+		!strings.HasSuffix(offered[1].(map[string]any)["address"].(string), "/…/manifest.json") {
+		t.Errorf("addons: %v", offered)
+	}
+	if fake.Open() != 0 {
+		t.Error("the session the link code opened is still open")
+	}
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/link/poll", nil); status != http.StatusConflict ||
+		body["error"] != "stremio_link_expired" {
+		t.Errorf("polled again: %d %v", status, body)
+	}
+
+	// The password, then a key pasted, which is never signed out.
+	signIn := map[string]any{"email": "bob@example.com", "password": "wrong"}
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/password", signIn); status != http.StatusBadRequest ||
+		body["error"] != "stremio_sign_in_refused" {
+		t.Errorf("a wrong password: %d %v", status, body)
+	}
+	signIn["password"] = "bob's password"
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/password", signIn); status != http.StatusOK ||
+		body["app"] != "stremio" {
+		t.Errorf("the password: %d %v", status, body)
+	}
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import/stremio/key", map[string]any{"key": "wrong"}); status != http.StatusBadRequest ||
+		body["error"] != "stremio_key_refused" {
+		t.Errorf("a wrong key: %d %v", status, body)
+	}
+	status, read, _ = bob.call(http.MethodPost, "/account/app-import/stremio/key", map[string]any{"key": pasted})
+	if status != http.StatusOK || read["app"] != "stremio" {
+		t.Fatalf("the key: %d %v", status, read)
+	}
+	noStremioSecret(t, read)
+	for _, request := range fake.Requests() {
+		if request.Path == "/api/logout" && request.AuthKey == pasted {
+			t.Error("the pasted key was signed out")
+		}
+	}
+	if fake.Open() != 0 {
+		t.Error("the password's session is still open")
+	}
+
+	status, body, _ := bob.call(http.MethodPost, "/account/app-import", map[string]any{"key": read["key"], "profile": "1"})
+	if started, _ := body["import"].(map[string]any); status != http.StatusOK || started == nil || started["app"] != "stremio" {
+		t.Fatalf("Bob's import: %d %v", status, body)
+	}
+	done := appImportDone(t, bob, "/account/app-import")
+	// Played: the first and the removed movie, and S1E1 to S1E3; resumed:
+	// the second movie and S2E1; favorites: the first movie and the
+	// series; reported: the series watched against an episode Polyfin's
+	// addons do not list, one of another identifier, one not found.
+	if done["read"] != 11.0 || done["played"] != 5.0 || done["resumed"] != 2.0 || done["favorites"] != 2.0 || done["unmatchedCount"] != 3.0 {
+		t.Errorf("Bob's result: %v", done)
+	}
+	reasons := map[string]string{}
+	for _, u := range done["unmatched"].([]any) {
+		entry := u.(map[string]any)
+		reasons[entry["id"].(string)] = entry["reason"].(string)
+	}
+	if reasons["tt0200"] != "episode_list" || reasons["custom:1"] != "other_identifier" || reasons["tmdb:999999"] != "not_found" {
+		t.Errorf("unmatched: %v", done["unmatched"])
+	}
+	bobID := api.userID("bob")
+	if !playedMovie(t, lib, data, bobID, "tt0000001") || !playedMovie(t, lib, data, bobID, "tt0000003") ||
+		playedMovie(t, lib, data, bobID, "tt0000002") {
+		t.Error("Bob's movies")
+	}
+}
+
+func TestStremioImportsFollowTheirPermissions(t *testing.T) {
+	t.Parallel()
+	api, _, _, _, fake := appImportAPI(t)
+	pasted := stremioSample(fake, localAddon(t))
+	admin, bob := api.signedIn("root", true), api.signedIn("bob", false)
+	userPath := "/users/" + api.userID("bob").String() + "/app-import"
+
+	// The administrator's routes are theirs only.
+	for _, route := range []string{"/stremio/link", "/stremio/link/poll", "/stremio/password", "/stremio/key"} {
+		if status, _, _ := bob.call(http.MethodPost, userPath+route, map[string]any{"key": pasted}); status != http.StatusForbidden {
+			t.Errorf("a member on %s: %d", route, status)
+		}
+	}
+
+	// An administrator imports into Bob's account, even with the users'
+	// import turned off, while Bob may not any longer.
+	settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en", "serverImports": false}
+	if status, _, _ := admin.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
+		t.Fatalf("turning users' imports off: %d", status)
+	}
+	for _, route := range []string{"/stremio/link", "/stremio/link/poll", "/stremio/password", "/stremio/key"} {
+		if status, body, _ := bob.call(http.MethodPost, "/account/app-import"+route, map[string]any{"key": pasted}); status != http.StatusForbidden ||
+			body["error"] != "server_imports_disabled" {
+			t.Errorf("Bob on %s with the setting off: %d %v", route, status, body)
+		}
+	}
+	if status, _, _ := admin.call(http.MethodPost, userPath+"/stremio/link", nil); status != http.StatusOK {
+		t.Errorf("the administrator's link code: %d", status)
+	}
+	fake.Approve()
+	_, read, _ := admin.call(http.MethodPost, userPath+"/stremio/link/poll", nil)
+	if status, body, _ := admin.call(http.MethodPost, userPath, map[string]any{"key": read["key"], "profile": "1"}); status != http.StatusOK {
+		t.Fatalf("the administrator's import: %d %v", status, body)
+	}
+	done := appImportDone(t, admin, userPath)
+	if done["app"] != "stremio" || done["startedBy"].(map[string]any)["name"] != "root" || done["user"].(map[string]any)["name"] != "bob" ||
+		done["played"] != 5.0 {
+		t.Errorf("the administrator's import: %v", done)
 	}
 }

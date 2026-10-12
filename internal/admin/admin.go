@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
+	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -121,6 +122,8 @@ type Options struct {
 	AppImport *appimport.Service
 	// Nuvio reads Nuvio accounts, for AppImport; nil offers none.
 	Nuvio *nuvio.Reader
+	// Stremio reads Stremio accounts, for AppImport; nil offers none.
+	Stremio *stremioimport.Reader
 	// Notifications keeps the server's and users' notification targets;
 	// nil offers none.
 	Notifications *notifications.Service
@@ -169,6 +172,10 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/app-import", h.signedIn(h.ownAppImport))
 	mux.Handle("POST /admin/api/account/app-import", h.signedIn(h.startAppImport(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-import/nuvio", h.signedIn(h.readNuvio(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/stremio/link", h.signedIn(h.startStremioLink(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/stremio/link/poll", h.signedIn(h.pollStremioLink(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/stremio/password", h.signedIn(h.readStremioPassword(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/stremio/key", h.signedIn(h.readStremioKey(h.ownAppImportTarget)))
 	own := notificationRoutes{h: h, owner: ownTargets}
 	mux.Handle("GET /admin/api/account/notifications", h.signedIn(own.list))
 	mux.Handle("POST /admin/api/account/notifications/targets", h.signedIn(own.create))
@@ -191,6 +198,10 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/users/{id}/app-import", h.administrator(h.userAppImport))
 	mux.Handle("POST /admin/api/users/{id}/app-import", h.administrator(h.startAppImport(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-import/nuvio", h.administrator(h.readNuvio(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/link", h.administrator(h.startStremioLink(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/link/poll", h.administrator(h.pollStremioLink(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/password", h.administrator(h.readStremioPassword(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/key", h.administrator(h.readStremioKey(h.userAppImportTarget)))
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))

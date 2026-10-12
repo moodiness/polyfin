@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/appimport"
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
+	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
@@ -323,13 +324,16 @@ func serve(ctx context.Context) error {
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
 		Logger: logger})
 	defer fromJellyfin.Close()
-	// The watch data of accounts on apps built on addons, Nuvio's first,
-	// finds its titles and merges the same way; the accounts' addons
-	// become their users' own.
+	// The watch data of accounts on apps built on addons, Nuvio's and
+	// Stremio's, finds its titles and merges the same way; the accounts'
+	// addons become their users' own.
 	fromApps := appimport.New(appimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Addons: addonStore,
 		Activity: activityLog, Logger: logger})
 	defer fromApps.Close()
 	fromNuvio := nuvio.New(nuvio.Options{Anime: animeMapping, Version: version})
+	// A Stremio series tells its episodes watched by their places in the
+	// list its metadata addons give, which the server's addons give again.
+	fromStremio := stremioimport.New(stremioimport.Options{Anime: animeMapping, Metas: lib, Version: version})
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
@@ -414,6 +418,7 @@ func serve(ctx context.Context) error {
 		JellyfinImport: fromJellyfin,
 		AppImport:      fromApps,
 		Nuvio:          fromNuvio,
+		Stremio:        fromStremio,
 		Plays:          history,
 	}
 	// Notifications tell of new episodes, ended recordings, the problems
