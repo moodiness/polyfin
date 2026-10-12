@@ -242,6 +242,13 @@ func (s *Store) UserChanged(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase("User %s was changed", "Utilisateur %s modifié", user.Name), Type: "UserPolicyUpdated", UserID: &user.ID})
 }
 
+// AccountEnded records that user's account reached its end date, from
+// which it is refused as a disabled one is. Jellyfin has no such entry.
+func (s *Store) AccountEnded(ctx context.Context, user accounts.User) {
+	s.record(ctx, Entry{Name: s.phrase("The account of %s ended", "Le compte de %s a pris fin", user.Name), Type: "UserEnded",
+		UserID: &user.ID})
+}
+
 // PasswordChanged records a new password for user.
 func (s *Store) PasswordChanged(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase("The password of %s was changed", "Mot de passe de %s changé", user.Name),

@@ -581,6 +581,25 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			return err
 		},
 	})
+	// An account is refused from its end date on its own: this only writes
+	// the end to the activity log.
+	registry.Register(tasks.Task{
+		Key:      "RecordEndedAccounts",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Record ended accounts", Description: "Writes to the activity log, once each, the accounts whose end date has come."},
+			"fr": {Name: "Noter les comptes arrivés à leur fin", Description: "Inscrit au journal d’activité, une fois chacun, les comptes dont la date de fin est arrivée."},
+		},
+		Interval: accounts.EndCheckInterval,
+		AtStart:  true,
+		Run: func(ctx context.Context) error {
+			ended, err := store.EndedAccounts(ctx)
+			for _, user := range ended {
+				activityLog.AccountEnded(ctx, user)
+			}
+			return err
+		},
+	})
 }
 
 // registerLocalFoldersTask registers the scans of local folders: each
