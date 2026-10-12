@@ -108,11 +108,11 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	// Only movies, episodes and replays resume, of the types asked: the
-	// others are left out before anything is described.
+	// Only movies, home videos, episodes and replays resume, of the types
+	// asked: the others are left out before anything is described.
 	keep := itemTypeFilter(r)
 	var kinds []library.Kind
-	for _, kind := range []library.Kind{library.KindMovie, library.KindEpisode, library.KindReplay} {
+	for _, kind := range []library.Kind{library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay} {
 		if keep(library.Item{Kind: kind}) {
 			kinds = append(kinds, kind)
 		}
@@ -132,7 +132,7 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		playing = h.playingItems(r, user)
 	}
 	items = slices.DeleteFunc(items, func(item library.Item) bool {
-		return (item.Kind != library.KindMovie && item.Kind != library.KindEpisode && item.Kind != library.KindReplay) || !keep(item) || playing[item.ID] ||
+		return (!versioned(item.Kind) && item.Kind != library.KindReplay) || !keep(item) || playing[item.ID] ||
 			(term != "" && !strings.Contains(strings.ToLower(item.Name), term))
 	})
 	if hasParent {

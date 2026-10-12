@@ -57,10 +57,10 @@ type CollectionCreationResult struct {
 var collectionsViewID, _ = accounts.ParseID(nameID("view", "collections"))
 
 // collectionKinds are the items a collection holds. Like Jellyfin's, a
-// collection holds titles, their seasons and episodes, other groups and
-// channels; Polyfin leaves out people and programmes, which its guide
-// replaces.
-var collectionKinds = []library.Kind{library.KindMovie, library.KindSeries, library.KindSeason, library.KindEpisode,
+// collection holds titles, home videos among them, their seasons and
+// episodes, other groups and channels; Polyfin leaves out people and
+// programmes, which its guide replaces.
+var collectionKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindSeries, library.KindSeason, library.KindEpisode,
 	library.KindCollection, library.KindChannel}
 
 // collectionItems checks the items ids names for a collection: each must be
@@ -617,7 +617,7 @@ func collectionItem(c collections.Collection, titles []library.Item, data map[ac
 	var ratings []string
 	for _, title := range titles {
 		switch title.Kind {
-		case library.KindMovie, library.KindEpisode:
+		case library.KindMovie, library.KindVideo, library.KindEpisode:
 			item.Contents.Released++
 			if data[title.ID].Played {
 				played++

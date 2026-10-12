@@ -80,6 +80,8 @@ func playedTitle(item library.Item) plays.Title {
 	switch item.Kind {
 	case library.KindMovie:
 		t.Kind = plays.Movie
+	case library.KindVideo:
+		t.Kind = plays.HomeVideo
 	case library.KindEpisode:
 		t.Kind = plays.Episode
 		t.SeriesID, t.SeriesName, t.Season, t.Episode = item.SeriesID, item.SeriesName, item.ParentIndexNumber, item.IndexNumber

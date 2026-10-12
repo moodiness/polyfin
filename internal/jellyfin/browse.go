@@ -135,17 +135,17 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		if !streams {
 			dto.MediaStreams = nil
 		}
-	} else if dto.Chapters != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+	} else if dto.Chapters != nil && versioned(item.Kind) {
 		// Only what is known: a listing never asks addons for streams.
 		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
 	}
 	if path := fields.has("Path"); (path || fields.has("CanDownload")) &&
-		(item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+		versioned(item.Kind) {
 		// Only what is known, as MediaSources in the same listing: a listing
 		// never asks addons for streams.
 		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID, path)
 	}
-	if fields.has("Trickplay") && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+	if fields.has("Trickplay") && versioned(item.Kind) {
 		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
 	}
 	return dto
@@ -540,7 +540,7 @@ func pageOf(items []BaseItemDto, start, limit, total int) QueryResult {
 // type filters.
 func searchKinds(keep func(library.Item) bool) []library.Kind {
 	var kinds []library.Kind
-	for _, kind := range []library.Kind{library.KindMovie, library.KindSeries} {
+	for _, kind := range []library.Kind{library.KindMovie, library.KindSeries, library.KindVideo} {
 		if keep(library.Item{Kind: kind}) {
 			kinds = append(kinds, kind)
 		}

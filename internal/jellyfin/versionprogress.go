@@ -232,7 +232,7 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var progress VersionProgress
-	if item.Kind == library.KindMovie || item.Kind == library.KindEpisode {
+	if versioned(item.Kind) {
 		if progress, ok = h.titleProgress(w, r, user, item.ID, id); !ok {
 			return
 		}
@@ -257,7 +257,7 @@ func (h *Handler) searchVersions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode {
+	if !versioned(item.Kind) {
 		h.writeProgress(w, VersionProgress{})
 		return
 	}

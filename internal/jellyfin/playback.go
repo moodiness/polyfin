@@ -218,7 +218,7 @@ func (h *Handler) played(ctx context.Context, user accounts.User, opened account
 		return library.Item{}, err
 	}
 	switch item.Kind {
-	case library.KindMovie, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook:
 		return item, nil
 	}
 	return library.Item{}, library.ErrNotFound
@@ -892,7 +892,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// With a quality group, the title's own identifier stands for the
 	// version PlaybackInfo offers first under it, which leaves out those
 	// taller than the group.
-	if wanted == item.ID && user.QualityGroup > 0 && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
+	if wanted == item.ID && user.QualityGroup > 0 && versioned(item.Kind) {
 		wanted = h.firstWorkingVersion(r.Context(), user, item)
 	}
 	version, err := h.version(r.Context(), user, item, wanted)

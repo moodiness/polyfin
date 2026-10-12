@@ -115,7 +115,7 @@ func (h *Handler) listAhead(user accounts.User, items []library.Item) {
 	}
 	titles := 0
 	for _, item := range items[:min(len(items), homeRowTitles)] {
-		if item.Kind == library.KindMovie || item.Kind == library.KindEpisode {
+		if versioned(item.Kind) {
 			h.listings.add(user, item.ID, titles < homeRowPrepared)
 			titles++
 		}
