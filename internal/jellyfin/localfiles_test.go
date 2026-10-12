@@ -260,41 +260,46 @@ func localBluRay(t *testing.T, ffprobe string) (playbackSetup, MediaSourceInfo) 
 // localBluRayOn is localBluRay, on a WebDAV share when share is set.
 func localBluRayOn(t *testing.T, ffprobe string, share bool) (playbackSetup, MediaSourceInfo) {
 	t.Helper()
-	return localDiscOn(t, ffprobe, func(dir string) {
-		archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", "bluray.tar.gz"))
+	return localDiscOn(t, ffprobe, func(dir string) { unpackDisc(t, "bluray.tar.gz", dir) }, share)
+}
+
+// unpackDisc unpacks the packed Blu-ray disc name of package localfiles's
+// test data, its BDMV folder, into the disc folder dir.
+func unpackDisc(t *testing.T, name, dir string) {
+	t.Helper()
+	archive, err := os.Open(filepath.Join("..", "localfiles", "testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	unzipped, err := gzip.NewReader(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := tar.NewReader(unzipped)
+	for {
+		header, err := files.Next()
+		if errors.Is(err, io.EOF) {
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer archive.Close()
-		unzipped, err := gzip.NewReader(archive)
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+		target := filepath.Join(dir, filepath.FromSlash(header.Name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(files)
 		if err != nil {
 			t.Fatal(err)
 		}
-		files := tar.NewReader(unzipped)
-		for {
-			header, err := files.Next()
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if header.Typeflag != tar.TypeReg {
-				continue
-			}
-			target := filepath.Join(dir, filepath.FromSlash(header.Name))
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			data, err := io.ReadAll(files)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(target, data, 0o644); err != nil {
-				t.Fatal(err)
-			}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			t.Fatal(err)
 		}
-	}, share)
+	}
 }
 
 // A DVD of a local folder is one version, named after its folder, which is
@@ -361,7 +366,14 @@ func playDisc(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Du
 // playDiscOn is playDisc on the app of profile.
 func playDiscOn(t *testing.T, p playbackSetup, local MediaSourceInfo, want time.Duration, profile json.RawMessage) MediaSourceInfo {
 	t.Helper()
-	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+	return playItemOn(t, p, p.movie, local, want, profile)
+}
+
+// playItemOn is playDiscOn for the media source of item, a movie or an
+// episode.
+func playItemOn(t *testing.T, p playbackSetup, item string, local MediaSourceInfo, want time.Duration, profile json.RawMessage) MediaSourceInfo {
+	t.Helper()
+	status, data := p.call(http.MethodPost, "/Items/"+item+"/PlaybackInfo", app("tv", p.token), map[string]any{
 		"UserId": p.user.ID.String(), "MediaSourceId": local.Id, "DeviceProfile": profile})
 	var info playbackInfoResponse
 	if err := json.Unmarshal(data, &info); status != http.StatusOK || err != nil || len(info.MediaSources) != 1 {
@@ -494,21 +506,30 @@ func frameTimes(t *testing.T, ffprobe, file string) (times []float64, codec stri
 }
 
 // playsCopied checks that the test Blu-ray disc's main title plays over
-// HLS on jellyfin-web with its H.264 video copied, cut on the keyframes
-// of its clips' EP maps: its segments, in order, hold each of the title's
-// 4560 frames once, a frame every 1/24 s from 10 s (see
-// hls.timestampOffset); a later segment read first, from a seek, holds
-// the same frames as in order.
+// HLS on jellyfin-web with its H.264 video copied (see playsCopiedFor).
 func playsCopied(t *testing.T, p playbackSetup, local MediaSourceInfo, ffmpeg, ffprobe string) {
 	t.Helper()
-	source := playDisc(t, p, local, 190*time.Second)
-	if got := tracks(source); !slices.Equal(got, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}) {
+	playsCopiedFor(t, p, p.movie, local, 190, []string{"Subtitle subrip fra", "Video h264 ", "Audio ac3 "}, ffmpeg, ffprobe)
+}
+
+// playsCopiedFor checks that a Blu-ray disc's title, item's media source
+// local, plays over HLS on jellyfin-web with its tracks, its H.264 video
+// copied, cut on the keyframes of its clips' EP maps: its segments, in
+// order, hold each of the title's frames, seconds at 24 a second, once, a
+// frame every 1/24 s from 10 s (see hls.timestampOffset); a later segment
+// read first, from a seek, holds the same frames as in order.
+func playsCopiedFor(t *testing.T, p playbackSetup, item string, local MediaSourceInfo, seconds int, want []string, ffmpeg, ffprobe string) {
+	t.Helper()
+	profile := p.profile(t, "jellyfin-web-chrome")
+	length := time.Duration(seconds) * time.Second
+	source := playItemOn(t, p, item, local, length, profile)
+	if got := tracks(source); !slices.Equal(got, want) {
 		t.Errorf("tracks: %q", got)
 	}
 	if strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") {
 		t.Fatalf("the video is converted: %s", source.TranscodingUrl)
 	}
-	seek := playDisc(t, p, local, 190*time.Second)
+	seek := playItemOn(t, p, item, local, length, profile)
 	uris := segmentURIs(t, p, seek.TranscodingUrl)
 	later := len(uris) * 2 / 3
 	sought, _ := frameTimes(t, ffprobe, decoded(t, ffmpeg, getSegment(t, p, uris[0]), getSegment(t, p, uris[later])))
@@ -519,7 +540,7 @@ func playsCopied(t *testing.T, p playbackSetup, local MediaSourceInfo, ffmpeg, f
 		segments[i] = getSegment(t, p, uri)
 	}
 	times, codec := frameTimes(t, ffprobe, decoded(t, ffmpeg, segments...))
-	if len(times) != 190*24 || codec != "h264" {
+	if len(times) != seconds*24 || codec != "h264" {
 		t.Fatalf("the segments hold %d %s frames", len(times), codec)
 	}
 	for i, at := range times {
