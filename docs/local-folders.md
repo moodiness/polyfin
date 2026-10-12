@@ -126,7 +126,7 @@ Folders organized by Jellyfin or a media manager often hold NFO files, which giv
 /media/shows/The Lone Ranger (1949)/tvshow.nfo
 ```
 
-In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots, ratings and artwork still come from the metadata addons, and episodes' NFO files are not read.
+In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots and ratings still come from the metadata addons, and artwork from them or the images beside the files (see [Artwork](#artwork)), and episodes' NFO files are not read.
 
 ### Subtitle files
 
@@ -297,7 +297,7 @@ Folders mounted in the container are also watched for changes, with inotify on L
 - Network shares (SMB and WebDAV) are watched by listing their folders again, as described below.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing; when it is back, it is scanned and watched again within a minute.
-- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, disc images, NFO files, subtitle files, a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan. In a music folder, its subfolders named `Extras` or `Other` are watched, as its scans read them, and its audio files, artwork, lyrics files and playlists start a scan.
+- Hidden folders and the folders a scan leaves out, such as `Extras`, are not watched, and changes to files other than videos, disc images, NFO files, subtitle files, images (see [Artwork](#artwork)), a DVD's `.IFO` and `.VOB` files and a Blu-ray disc's playlists do not start a scan. In a music folder, its subfolders named `Extras` or `Other` are watched, as its scans read them, and its audio files, artwork, lyrics files and playlists start a scan.
 
 Network shares give no notice of their changes to Polyfin: WebDAV has none, and the SMB library Polyfin uses does not offer SMB's change notifications. So Polyfin lists each share's folders again every 2 minutes, and compares each listing with the one its last scan read: the names of its folders, and the names, sizes and modification times of its videos, NFO, subtitle and other files a scan reads. When one differs, the share is scanned again a few seconds later, which reads only what changed. A movie copied onto a share shows within a few minutes of the copy's end.
 
@@ -316,13 +316,50 @@ sudo sysctl --system
 
 When Health says the limit of watchers or of open files is reached, raise `fs.inotify.max_user_instances` the same way, or the container's limit of open files (`--ulimit nofile=…` with Docker).
 
-A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Subtitle files added, changed or removed are offered as they are now from the next scan on. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO and subtitle files are listed with the folders, and only the NFO files new or changed are read.
+A scan reads only what changed: a file is new or changed by its path, size and modification time; files gone are forgotten; files whose title is known keep it without asking the addons again. An NFO file is read when it is new or changed the same way; one added, changed or removed matches its movie, disc or show again, even when the videos did not change, and one removed leaves it to its name and the search. Subtitle files and images added, changed or removed are offered as they are now from the next scan on. Files left unmatched are matched again at each scan. A few titles are looked up at once, so a large first scan takes a while; the folder's figures follow it. On a share, NFO and subtitle files and images are listed with the folders, and only the NFO files new or changed are read.
 
 Symbolic links to files of the folder are followed; links leading out of the folder, and links to folders, are not.
 
 ## Versions
 
 A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play over HLS only, a Blu-ray disc's video copied when the app takes it and a DVD's converted (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
+
+## Artwork
+
+Folders organized by Jellyfin or a media manager often hold posters, backdrops and logos beside their files, chosen by hand. Polyfin reads them as Jellyfin does, as `.jpg`, `.jpeg`, `.png` or `.webp` files, names compared in any letter case, and shows them in place of the metadata addons' artwork of the same type; the types a folder has no image of still come from the addons.
+
+```
+/media/movies/Nosferatu (1922)/Nosferatu (1922).mkv
+/media/movies/Nosferatu (1922)/poster.jpg
+/media/movies/Nosferatu (1922)/fanart.jpg
+/media/movies/The General (1926).mkv
+/media/movies/The General (1926)-poster.jpg
+/media/shows/The Lone Ranger (1949)/poster.jpg
+/media/shows/The Lone Ranger (1949)/season01-poster.jpg
+/media/shows/The Lone Ranger (1949)/Season 02/folder.jpg
+```
+
+A movie's images are named after its file, `<file name>-<name>`, such as `The General (1926)-poster.jpg`, its poster also `<file name>.jpg`; when the movie is alone in its folder (every video directly in it is the same movie, its versions included), or is a Blu-ray disc or a DVD, whose images sit in its disc folder, the names alone count too, such as `poster.jpg`. In a folder holding several movies, `poster.jpg` belongs to none of them. Of each type, the first name found counts:
+
+| Type | Names |
+|---|---|
+| Primary (poster) | `poster`, `folder`, `cover`, `default`, `movie` |
+| Backdrop | `fanart`, `fanart-1` to `fanart-20`, `background`, `background-1`…, `art`, `art-1`…, `backdrop`, `backdrop1`… |
+| Logo | `logo`, `clearlogo` |
+| Thumb | `landscape`, `thumb` |
+| Banner | `banner` |
+| Art | `clearart` |
+| Disc | `disc`, `cdart`, `discart` |
+
+The names after the file's name come before the names alone, and `.jpg` before `.jpeg`, `.png` and `.webp`. A title has one backdrop: the first found.
+
+A show's images are in its folder, with the same names (`show` in place of `movie`, and no Disc image), alone or after the folder's name. A season's are in the show's folder, named after the season, `season01-poster`, `season01-fanart`, `season01-banner` and `season01-landscape` (`season1-…` comes first when both are there), and for the specials `specials-…` or `season-specials-…`; then in its season folder, the folder directly in the show's holding its episodes, with the names of the table, such as `folder.jpg` or `poster.jpg`. A season without a poster of its own shows its show's, as with the addons' artwork. Episodes' images are not read.
+
+The images belong to the title the file, disc or show folder is matched to, a link made by hand included, from the moment the link is made. When the files of a title in several folders have images, each type comes from the folder listed first on the **Sources** page, then from the first of the title's files or folders by path; a disabled folder gives none.
+
+**Use its artwork**, on the form of a movies or shows folder, chooses whether its titles show its images; it is on by default, and turning it off brings the addons' artwork back at once. Artwork an administrator uploads in a Jellyfin app wins over both.
+
+Images are read from the folder or the share when an app first asks for them, then kept with the other artwork, at the sizes apps ask for. A scan notices an image added, replaced or removed, by its size and modification time, and apps see the new one, since its tag changes.
 
 ## Music folders
 
@@ -356,8 +393,8 @@ On a share, ffprobe and FFmpeg read each new or changed file through Polyfin, at
 - A track's artists are the names of its artists tag (a tag given several times, as Vorbis comments allow), else of its artist tag, separated by `;`: `Ann; Ben` gives Ann and Ben, each with their page, the song listed under each. Its artist tag is kept as written, for search. An album's artists are its album artist tag's, split the same way.
 - An album's tracks are in disc, then track order, then by path. Its title and artist are those of its first track; its year, the latest of its tracks'; its genres, all of theirs.
 - Albums group into artists by album artist. An artist's page lists their albums and their songs, including those on other artists' albums, at most 100.
-- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg` or `.png`, any letter case) beside its first track.
-- An artist's picture is `artist`, `folder` or `photo` (`.jpg`, `.jpeg` or `.png`, any letter case) in their folder: the folder holding the folders of their albums, and of no album of another artist. Without one, it is the artwork of their first album. The artists views show it.
+- An album's artwork is the cover its first track embedding one embeds, else `cover`, `folder` or `front` (`.jpg`, `.jpeg`, `.png` or `.webp`, any letter case) beside its first track.
+- An artist's picture is `artist`, `folder` or `photo` (`.jpg`, `.jpeg`, `.png` or `.webp`, any letter case) in their folder: the folder holding the folders of their albums, and of no album of another artist. Without one, it is the artwork of their first album. The artists views show it.
 - Search finds songs by title, artist and album, albums by title and artist, and artists by name; every word must be found, in any letter case.
 
 The folder's figures count its tracks, albums and album artists, and the tracks left out.
@@ -390,21 +427,22 @@ The tracks a scan first finds count among the files added of the [weekly summary
 
 ## Compared with Jellyfin
 
-- Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file only adds a version.
+- Jellyfin reads metadata from files and providers of its own; Polyfin takes titles and their descriptions from the metadata addons, and a local file adds a version, and its artwork when the folder holds some.
 - Both watch folders for changes. Polyfin also scans them at startup, on its schedule and on demand, and watches the network shares it reads itself by listing them again every few minutes.
 - Jellyfin's "Identify" matches an item by hand from a search of its providers; Polyfin links an unmatched file to an IMDb identifier, typed or chosen from a search of the metadata addons.
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them, neither names, plots nor artwork.
-- Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder. Local artwork is not read for movies and shows.
+- Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
+- Both read the artwork beside movies and shows, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor episodes' images, and shows the addons' artwork of the types a folder has none of.
 - Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
 
 ## For app developers
 
-A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows` or `music`), last scan, error, counts and links. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
+A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows` or `music`), last scan, error, counts and links, and `useArtwork`, whether its titles show the artwork beside its files (see [Artwork](#artwork)). `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
 
 | Route | What it does |
 |---|---|
-| `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address |
-| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user` or `password`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
+| `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address; `"useArtwork": false` adds a movies or shows folder whose artwork its titles do not show |
+| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user`, `password` or `useArtwork`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
 | `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path |
 | `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. A failed search answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
@@ -414,3 +452,5 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder that cannot be watched is a problem of its own (`code` `folder_unwatched`): in the container, its `failure` is `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`; for a share, which carries `share`, it is `unreachable`, `refused` or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
 Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A share's files are served the same way.
+
+A title's local artwork is one of its images like the addons': its `ImageTags`, `BackdropImageTags` and `/Items/{id}/Images` list it by tags that change when the image's size or modification time changes, and `/Items/{id}/Images/{type}` serves it, resized as apps ask, from the folder or the share. Besides `Primary`, `Backdrop`, `Logo`, `Thumb` and `Banner`, a local image may be an `Art` or a `Disc` image. No path of the server's shows: `/Items/{id}/Images` gives no `Path`.
