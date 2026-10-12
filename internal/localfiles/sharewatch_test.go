@@ -130,8 +130,12 @@ func TestShareWatchScansAfterFilesAdded(t *testing.T) {
 	wt.scanned(id)
 	wt.still()
 
-	// A subtitle file is read by a scan too, and so is a removal.
+	// A subtitle file is read by a scan too, as is an image, and so is a
+	// removal.
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).fr.srt"), 10)
+	wt.scanned(id)
+	wt.still()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "poster.jpg"), 10)
 	wt.scanned(id)
 	wt.still()
 	if err := os.Remove(filepath.Join(dir, "movies", "Shows", "Old", "The General (1926).mkv")); err != nil {

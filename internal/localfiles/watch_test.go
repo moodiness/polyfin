@@ -212,6 +212,29 @@ func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 	}
 }
 
+// An image added, replaced or removed beside a video starts a scan, as
+// any image may be a title's artwork.
+func TestWatchScansAfterArtworkChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	id := testID(1)
+	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt.start()
+	for _, name := range []string{"poster.jpg", "Nosferatu (1922)-fanart.PNG", "clearlogo.webp", "folder.jpeg"} {
+		write(t, filepath.Join(root, "Nosferatu (1922)", name), 10)
+		wt.scanned(id)
+		wt.still()
+	}
+	write(t, filepath.Join(root, "Nosferatu (1922)", "poster.jpg"), 20)
+	wt.scanned(id)
+	wt.still()
+	if err := os.Remove(filepath.Join(root, "Nosferatu (1922)", "folder.jpeg")); err != nil {
+		t.Fatal(err)
+	}
+	wt.scanned(id)
+	wt.still()
+}
+
 // An audio file, an album's or an artist's image, a lyrics file or a
 // playlist added to a music folder starts a scan, in its subfolders named
 // like a movie's extras too, which its scans read; any other file does

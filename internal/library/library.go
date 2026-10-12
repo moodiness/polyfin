@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"math"
 	"slices"
@@ -141,7 +142,11 @@ func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 // stream requests addons answer over HTTP (see package localfiles); for
 // its music folders, those Eclipse addons answer: the pages of their rows,
 // album, artist and playlist pages, searches and streams, and also their
-// album artists, their playlists and the lyrics of their tracks.
+// album artists, their playlists and the lyrics of their tracks. Artwork
+// is the artwork its movies and shows folders hold for titles and seasons,
+// by item (see TitleItemID and SeasonItemID); it is read from memory, for
+// every item listed, and never changed by its callers. Open opens one of
+// those images by its key (see LocalArtworkKey).
 type Local interface {
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
@@ -155,6 +160,8 @@ type Local interface {
 	MusicSearch(ctx context.Context, source accounts.ID, term string) (eclipse.Results, error)
 	MusicStream(ctx context.Context, source accounts.ID, id string) (eclipse.Stream, error)
 	MusicLyrics(ctx context.Context, source accounts.ID, id string) (string, error)
+	Artwork() map[accounts.ID]Images
+	Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -2065,10 +2072,15 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 
 // Artwork returns the URL of an item's image and whether downloading it is
 // confined to public addresses: the artwork an administrator uploaded, else
-// the addon's (see Uploaded). It needs no user: Jellyfin apps load images
-// without credentials, and artwork URLs carry no secret.
+// a local folder's (see Local.Artwork), else the addon's (see Uploaded). It
+// needs no user: Jellyfin apps load images without credentials, and
+// artwork URLs carry no secret.
 func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
 	if url, ok := s.UploadedArtwork(id, imageType); ok {
+		return url, false, nil
+	}
+	local := s.localArtwork()
+	if url := local[id].URL(imageType); url != "" {
 		return url, false, nil
 	}
 	r, err := s.load(ctx, id)
@@ -2131,8 +2143,9 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		if err != nil || series.Meta == nil {
 			return "", false, ErrNotFound
 		}
-		images = Images{Primary: series.Meta.Poster, Backdrop: series.Meta.Background}
-		// A season shows its series' artwork, uploaded or not, unless it
+		images = withLocal(Images{Primary: series.Meta.Poster, Backdrop: series.Meta.Background},
+			Images{Primary: local[series.ID].Primary, Backdrop: local[series.ID].Backdrop})
+		// A season shows its series' artwork, local or uploaded, unless it
 		// has its own.
 		for _, imageType := range []string{"Primary", "Backdrop"} {
 			if url, ok := s.UploadedArtwork(series.ID, imageType); ok {

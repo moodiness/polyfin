@@ -313,7 +313,8 @@ type stored struct {
 // and matched, and those left unmatched matched again, unless their name
 // could not be read; a unit with files already matched keeps their title,
 // unless the identifier its NFO file gives changed. The subtitle files
-// beside the videos are stored as they are now (see storeSubtitles).
+// beside the videos and the titles' artwork are stored as they are now
+// (see storeSubtitles and storeArtwork).
 func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -447,6 +448,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return err
 	}
 	if err := s.storeSubtitles(ctx, id, list, sidecars(folder.Kind, rootName, entries, list.sides)); err != nil {
+		return err
+	}
+	if err := s.storeArtwork(ctx, id, folder.Kind, root, list); err != nil {
 		return err
 	}
 	return s.finish(ctx, id, at, list)

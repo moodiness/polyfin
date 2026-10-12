@@ -577,23 +577,31 @@ func (set *overrideSet) rename(c *Credit) {
 	}
 }
 
-// overridden returns items with what administrators changed of them (see
-// overrideSet.apply). Items may come from caches: they are copied, never
-// changed in place.
+// overridden returns items with their local artwork (see applyLocal) and
+// what administrators changed of them (see overrideSet.apply). Items may
+// come from caches: they are copied, never changed in place.
 func (s *Service) overridden(items []Item) []Item {
 	set := s.overridesNow()
-	if len(set.fields) == 0 && len(set.images) == 0 {
+	local := s.localArtwork()
+	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 {
 		return items
 	}
 	result := slices.Clone(items)
 	for i := range result {
+		if len(local) > 0 {
+			applyLocal(&result[i], local)
+		}
 		set.apply(&result[i])
 	}
 	return result
 }
 
-// overriddenItem returns an item with what administrators changed of it.
+// overriddenItem returns an item with its local artwork and what
+// administrators changed of it.
 func (s *Service) overriddenItem(item Item) Item {
+	if local := s.localArtwork(); len(local) > 0 {
+		applyLocal(&item, local)
+	}
 	s.overridesNow().apply(&item)
 	return item
 }

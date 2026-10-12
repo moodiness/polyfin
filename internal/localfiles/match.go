@@ -384,7 +384,8 @@ func (s *Service) unit(ctx context.Context, id accounts.ID, path string) (Folder
 	return folder, unit, err
 }
 
-// rematch matches a unit's files again, to link when given.
+// rematch matches a unit's files again, to link when given; the unit's
+// artwork is then its new title's.
 func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string) error {
 	entries, err := s.unitFiles(ctx, folder, unit)
 	if err != nil || len(entries) == 0 {
@@ -394,6 +395,7 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	if err != nil {
 		return err
 	}
+	defer s.artworkChanged()
 	return s.store(ctx, folder.Addon.ID, folder.Kind, entries, m)
 }
 

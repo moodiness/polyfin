@@ -57,6 +57,13 @@ func (s *Store) changed() {
 	s.changes.Add(1)
 }
 
+// Changes counts the changes made to the addons, libraries and guides
+// (see Store.changes): what is derived from them, read when it counted n,
+// is to be read again once it counts more.
+func (s *Store) Changes() uint64 {
+	return s.changes.Load()
+}
+
 // current returns a snapshot holding every change made before the call.
 // While Watch follows the changes, the last snapshot is served until a
 // change comes, and one read of the database serves every caller waiting

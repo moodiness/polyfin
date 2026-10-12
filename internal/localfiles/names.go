@@ -58,15 +58,21 @@ var (
 	artistImageNames = []string{"artist", "folder", "photo"}
 )
 
-// imageExtensions are those of the images a music folder's scan reads:
-// JPEG and PNG.
-var imageExtensions = []string{".jpg", ".jpeg", ".png"}
+// imageExtensions are those of the images a scan reads, in the order they
+// are preferred for a same name: JPEG, PNG and WebP.
+var imageExtensions = []string{".jpg", ".jpeg", ".png", ".webp"}
+
+// imageSide reports whether name is an image, by its extension (see
+// imageExtensions).
+func imageSide(name string) bool {
+	return slices.Contains(imageExtensions, strings.ToLower(path.Ext(name)))
+}
 
 // musicImage reports whether name is an image a music folder's scan lists
-// beside the tracks: an album's artwork or an artist's picture, as JPEG or
-// PNG, by one of folderImageNames or artistImageNames.
+// beside the tracks: an album's artwork or an artist's picture, by one of
+// folderImageNames or artistImageNames.
 func musicImage(name string) bool {
-	if !slices.Contains(imageExtensions, strings.ToLower(path.Ext(name))) {
+	if !imageSide(name) {
 		return false
 	}
 	s := strings.ToLower(stem(name))
@@ -86,13 +92,14 @@ func m3uFile(name string) bool {
 
 // listed tells which files a scan of a folder of kind lists, by name: the
 // files it reads (videos, or a music folder's audio files), and the side
-// files beside them (NFO and subtitle files, or a music folder's images,
-// lyrics files and playlists).
+// files beside them (NFO and subtitle files and images, which may be a
+// title's artwork whatever their name, as one named after its video; or a
+// music folder's images, lyrics files and playlists).
 func listed(kind, name string) (file, side bool) {
 	if kind == KindMusic {
 		return audioFile(name), musicImage(name) || lyricsFile(name) || m3uFile(name)
 	}
-	return videoFile(name), sideFile(name)
+	return videoFile(name), sideFile(name) || imageSide(name)
 }
 
 // skippedFolder reports whether a scan leaves a folder out: hidden ones,

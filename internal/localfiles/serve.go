@@ -222,13 +222,14 @@ func formatSize(size int64) string {
 var ErrGone = errors.New("the file is no longer in its folder")
 
 // Open opens the file key names, its identifier and extension as Streams
-// gives them, a video, a subtitle file, a track or an album's artwork, for
-// reading, with its modification time: within its folder, through no
-// symbolic link leading out of it, or from its share; a cover a track
-// embeds, from what its scan kept; the title of a disc on a share, as one
-// file (see openTitle). A VobSub pair is named by its .idx file, whose key
-// with the .sub extension opens its .sub file, as FFmpeg finds it. A share
-// that cannot be read fails with why (see shareFailure).
+// gives them, a video, a subtitle file, a track, an album's artwork or a
+// title's (see Artwork), for reading, with its modification time: within
+// its folder, through no symbolic link leading out of it, or from its
+// share; a cover a track embeds, from what its scan kept; the title of a
+// disc on a share, as one file (see openTitle). A VobSub pair is named by
+// its .idx file, whose key with the .sub extension opens its .sub file, as
+// FFmpeg finds it. A share that cannot be read fails with why (see
+// shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
 	raw, extension, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
@@ -243,7 +244,8 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 		FROM (SELECT addon_id, path, NULL::bytea AS data, NULL::timestamptz AS modified FROM local_files WHERE id = $1
 			UNION ALL SELECT addon_id, CASE WHEN $2 AND pair <> '' THEN pair ELSE path END, NULL, NULL FROM local_subtitles WHERE id = $1
 			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_tracks WHERE id = $1
-			UNION ALL SELECT addon_id, path, data, modified FROM local_covers WHERE id = $1) f
+			UNION ALL SELECT addon_id, path, data, modified FROM local_covers WHERE id = $1
+			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_artwork WHERE id = $1) f
 		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id, strings.EqualFold(extension, "sub")).
 		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed)
 	if errors.Is(err, pgx.ErrNoRows) {

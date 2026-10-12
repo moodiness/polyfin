@@ -158,13 +158,16 @@ type Contents struct {
 }
 
 // Images are artwork URLs; empty when the item has none. Banner is only
-// ever an administrator's upload.
+// ever an administrator's upload or a local folder's image, and Art and
+// Disc a local folder's (see Local.Artwork).
 type Images struct {
 	Primary  string
 	Backdrop string
 	Logo     string
 	Thumb    string
 	Banner   string
+	Art      string
+	Disc     string
 }
 
 // URL returns the artwork of a Jellyfin image type.
@@ -180,6 +183,10 @@ func (i Images) URL(imageType string) string {
 		return i.Thumb
 	case "banner":
 		return i.Banner
+	case "art":
+		return i.Art
+	case "disc":
+		return i.Disc
 	default:
 		return ""
 	}
