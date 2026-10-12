@@ -148,7 +148,7 @@ Polyfin answers two addresses, without signing in, for monitoring tools:
 - `/healthz` answers 200 while Polyfin's process serves, PostgreSQL reachable or not. The health check asks it.
 - `/readyz` answers 200 when PostgreSQL is reachable too, and 503 when it is not.
 
-Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503.
+Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503. For Prometheus, Polyfin can also expose its metrics at `/metrics`, with a token: see [Metrics](administration.md#metrics).
 
 ## GPU
 

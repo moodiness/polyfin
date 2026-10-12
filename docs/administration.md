@@ -130,6 +130,51 @@ A listing of a library or a collection that takes more than 5 seconds logs "A li
 - `read`: the addons and the database;
 - `described`: the titles for the app.
 
+## Metrics
+
+Polyfin can expose its metrics to Prometheus, in its text format, at `/metrics`. Turn **Expose metrics** on under **Settings › General**: Polyfin then makes the **Metrics token**, shown under it as saved keys are (see [Showing a saved key](#showing-a-saved-key)). Prometheus sends the token as a bearer token with every request.
+
+- Off, the default, `/metrics` answers 404.
+- Without the token, or with another, it answers 401.
+- **Make a new token**, beside the token, asks first, then makes another: the former stops working at once. The activity log records who made it, never the token.
+- The token is stored encrypted with `POLYFIN_SECRET_KEY` when it is set, as the other saved keys are. Turned off, metrics keep their token for when they are turned on again.
+
+The metrics name no user, title, address, device or token. Their labels take a few fixed values, so that the series stay few; addons are named as they are listed under **Content › Sources**, and addons with the same name are counted together.
+
+| Metric | Type | Labels | What it counts |
+|---|---|---|---|
+| `polyfin_playbacks` | gauge | `kind`: `video`, `live_tv`, `music`, `audiobook`; `delivery`: `direct_play`, `remux`, `conversion` | Playbacks under way, as **Home** shows them. |
+| `polyfin_conversions` | gauge | `method`: `nvidia`, `vaapi`, `processor` | Conversions under way, of files and channels: those that convert the video. |
+| `polyfin_encoding_failures_total` | counter | `method`: as above, or `copy` for a remux | Remuxes and conversions FFmpeg failed. |
+| `polyfin_segments_total` | counter | `method`: as above | HLS segments made of files. |
+| `polyfin_addon_request_duration_seconds` | histogram | `addon`; `resource`: `manifest`, `catalog`, `meta`, `stream`, `subtitles`, `other`; `outcome`: `success`, `failure` | Requests to addons and how long their answers took. An answer, even "not found", is a success, as on **System › Health**. |
+| `polyfin_imports_total` | counter | `service`: the app (`stremio`, `nuvio`) or the tracking service (`trakt`, `simkl`, …); `outcome` | Imports of app connections and of watch histories. One that could not read the account whole counts as a failure. |
+| `polyfin_tracking_sent_total` | counter | `service`; `outcome` | What was sent to tracking services, such as a title watched, each try counted. |
+| `polyfin_notifications_total` | counter | `target`: `webhook`, `discord`, `ntfy`, `email`, `telegram`, `gotify`, `pushover`; `outcome` | Notifications sent, each try counted. |
+| `polyfin_http_request_duration_seconds` | histogram | `api`: `jellyfin`, `admin` (the admin app and its API), `web` (the web client), `other` (`/healthz`, `/readyz`, `/metrics`); `status`: `1xx` to `5xx` | HTTP requests and how long they took, a stream's until it ended. Requests under `/jellyfin` count as at the root: the web client's as `web`, the rest as `jellyfin`, the admin app and monitoring routes included, since they answer at the root only. |
+| `polyfin_scans_running` | gauge | | Scans of local folders under way. |
+| `polyfin_scan_duration_seconds` | histogram | | Scans of local folders and how long they took. |
+| `polyfin_database_connections` | gauge | `state`: `in_use`, `idle`, `max` | Connections to PostgreSQL. |
+| `polyfin_disk_free_bytes` | gauge | `folder`: `cache`, `recordings`, `backups` | Space free on the disks Polyfin writes to, those in use, as **System › Health** checks them. |
+
+Prometheus' own metrics of the process follow: memory, goroutines and garbage collection (`go_*`), and on Linux processor time, memory and open files (`process_*`).
+
+A scrape configuration, the token in a file Prometheus reads:
+
+```yaml
+scrape_configs:
+  - job_name: polyfin
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/polyfin-token
+    static_configs:
+      - targets: ["polyfin:8096"]
+```
+
+`credentials: <the token>` puts it in the configuration itself instead. `/healthz` and `/readyz` tell whether Polyfin answers and reaches PostgreSQL (see [Health check](installation.md#health-check)).
+
+**For app developers:** `/admin/api/settings` holds the setting as `metrics`, and `metricsTokenSet` tells whether the token was made; no answer holds the token. `POST /admin/api/settings/secrets/metricsToken/reveal` answers it, and `POST /admin/api/settings/metrics-token` makes a new one and answers the settings.
+
 ## Settings
 
 **Settings** has one page per section, listed on its left, with a search box over all of them (**Search a setting**). Each section page saves only its own changes. Leaving a page with unsaved changes asks first. **Settings › Diagnostics** ends with the `POLYFIN_*` variables in effect, read only:
@@ -143,7 +188,7 @@ A **Web player** link appears when the server serves a web client. See [configur
 
 Fields that hold a key or a secret hide it. While you type one, an eye button (**Show key**, **Hide key**) shows what you typed. Once saved, the key shows as dots, with its own eye:
 
-- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key**, **Trakt client secret** and **Last.fm shared secret**.
+- Under **Settings**, administrators can show the server's **PublicMetaDB key**, **TheIntroDB key**, **Trakt client secret**, **Last.fm shared secret** and **Metrics token**.
 - Under **My account › Tracking**, each user can show their own **MDBList** and **PublicMetaDB** API keys and their **ListenBrainz user token**. Trakt, Simkl and Last.fm hold tokens or session keys rather than keys, which are never shown.
 
 The key is fetched from the server when the eye is clicked, and hidden again on a second click, after a minute, or when you leave the page. Each time, the activity log records who showed which key, never the key itself, and the answer is never cached. A key that cannot be decrypted with `POLYFIN_SECRET_KEY` counts as not saved and cannot be shown.
