@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -607,22 +608,78 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, service stri
 	return nil
 }
 
-// revoke tells the service a token is no longer used.
+// Leaving reads, in tx, the tokens of user's connections to the services
+// that revoke them, as user is being deleted, and returns what revokes
+// them in the background once the deletion is committed (see
+// accounts.Store.OnDelete), and cancels the codes user waits on. The keys
+// users typed and Last.fm's session keys are only forgotten, and tokens
+// the server's key cannot open too.
+func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (func(), error) {
+	rows, err := tx.Query(ctx, "SELECT service, token, refresh_token FROM tracking_connections WHERE user_id = $1 AND service = ANY($2)",
+		user, []string{Trakt, Simkl})
+	if err != nil {
+		return nil, err
+	}
+	type revocable struct{ service, token, refresh string }
+	var tokens []revocable
+	for rows.Next() {
+		var r revocable
+		if err := rows.Scan(&r.service, &r.token, &r.refresh); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		token, err := s.box.Open(r.token)
+		if err == nil {
+			r.refresh, err = s.box.Open(r.refresh)
+		}
+		if err == nil {
+			r.token = token
+			tokens = append(tokens, r)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for key, p := range s.pending {
+			if key.user == user {
+				p.cancel()
+				delete(s.pending, key)
+			}
+		}
+		for _, r := range tokens {
+			s.spawn(func() { s.revoke(r.service, r.token, r.refresh) })
+		}
+	}, nil
+}
+
+// revoke tells the service a token is no longer used, logging a failure,
+// without the token.
 func (s *Service) revoke(service, token, refresh string) {
 	settings := s.settings()
 	if !Available(service, settings) {
 		return
 	}
+	var answer reply
+	var err error
 	if service == Trakt {
-		_, _ = s.api(s.ctx, Trakt, "", settings, http.MethodPost, "/oauth/revoke", nil, map[string]string{
+		answer, err = s.api(s.ctx, Trakt, "", settings, http.MethodPost, "/oauth/revoke", nil, map[string]string{
 			"token": token, "client_id": settings.TraktClientID, "client_secret": settings.TraktClientSecret})
-		return
+	} else {
+		// Revoking either token of Simkl revokes both.
+		if refresh != "" {
+			token = refresh
+		}
+		answer, err = s.form(s.ctx, "/oauth2/revoke", url.Values{"client_id": {settings.SimklClientID}, "token": {token}})
 	}
-	// Revoking either token of Simkl revokes both.
-	if refresh != "" {
-		token = refresh
+	if err == nil && answer.status >= http.StatusBadRequest {
+		err = fmt.Errorf("the service answered %d", answer.status)
 	}
-	_, _ = s.form(s.ctx, "/oauth2/revoke", url.Values{"client_id": {settings.SimklClientID}, "token": {token}})
+	if err != nil && s.ctx.Err() == nil {
+		s.logger.Warn("A tracking service's token could not be revoked", "service", service, "error", err)
+	}
 }
 
 // errTokenRefused reports a refresh token the service refused.

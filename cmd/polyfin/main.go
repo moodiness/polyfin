@@ -358,6 +358,10 @@ func serve(ctx context.Context) error {
 		Sources: map[string]appimport.Source{nuvio.App: fromNuvio, stremioimport.App: fromStremio},
 		Stopped: func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) }})
 	defer fromApps.Close()
+	// Deleting a user signs out, in the background, the sessions Polyfin
+	// opened for them at apps and tracking services.
+	store.OnDelete(tracking.Leaving)
+	store.OnDelete(fromApps.Leaving)
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
