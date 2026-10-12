@@ -22,9 +22,9 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
-    env:
+    env: &test-environment
       POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
-    services:
+    services: &test-services
       postgres:
         # Docker Hub limits the pulls of shared runners: its images come
         # from Google's mirror of it, pinned to the same digests.
@@ -40,11 +40,13 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - name: Check out repository
+      - &checkout
+        name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-      - name: Set up Go
+      - &setup-go
+        name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
@@ -82,7 +84,8 @@ jobs:
             echo "version=${version}"
             echo "prerelease=${prerelease}"
           } >> "$GITHUB_OUTPUT"
-      - name: Set up Buildx
+      - &setup-buildx
+        name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           # The Dockerfile's Docker Hub images come through Google's mirror
@@ -90,13 +93,15 @@ jobs:
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
-      - name: Install the image's FFmpeg for the remux tests
+      - &install-ffmpeg
+        name: Install the image's FFmpeg for the remux tests
         run: |
           # The Dockerfile's FFmpeg stage: the very build the image ships.
           docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
           echo "POLYFIN_TEST_FFMPEG=$RUNNER_TEMP/ffmpeg/bin/ffmpeg" >> "$GITHUB_ENV"
       - name: Build admin app, check formatting, vet and test
-        run: make check
+        # internal/jellyfin's tests run meanwhile, in the job of their own.
+        run: make web lint test-others bounds
       - name: Build production binary and verify its version
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -115,9 +120,24 @@ jobs:
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile
 
+  jellyfin:
+    # By far the longest package's tests: they would double the check job's.
+    name: Jellyfin API tests under the race detector
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env: *test-environment
+    services: *test-services
+    steps:
+      - *checkout
+      - *setup-go
+      - *setup-buildx
+      - *install-ffmpeg
+      - name: Test internal/jellyfin
+        run: make test-jellyfin
+
   image:
     name: Build and smoke test the image without publishing
-    needs: check
+    needs: [check, jellyfin]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

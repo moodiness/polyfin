@@ -2,7 +2,7 @@ GO ?= go
 NPM ?= npm
 VERSION ?= dev
 
-.PHONY: web build dev check compose-check image-check
+.PHONY: web build dev check lint test test-jellyfin test-others bounds compose-check image-check
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -15,17 +15,36 @@ build: web
 dev: web
 	$(GO) run ./cmd/polyfin serve
 
-# Database tests run only when POLYFIN_TEST_DATABASE_URL is set. Under the
-# race detector, the jellyfin package's tests, which play media through
-# FFmpeg, take most of go test's default 10 minutes: they get 20.
-check: web
+# Database tests run only when POLYFIN_TEST_DATABASE_URL is set.
+check: web lint test bounds
+
+# Formatting and vet; the admin app's formatting needs make web first.
+lint:
 	$(NPM) --prefix web run format:check
 	@unformatted="$$(gofmt -l cmd internal web/*.go)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "gofmt needed:"; printf '%s\n' "$$unformatted"; exit 1; \
 	fi
 	$(GO) vet ./...
-	$(GO) test -race -timeout 20m ./...
+
+# Every package's tests under the race detector. CI runs them in two jobs at
+# once: test-jellyfin, by far the longest package, and test-others, which
+# leaves out that package alone (internal/jellyfinimport stays in).
+JELLYFIN := github.com/moodiness/polyfin/internal/jellyfin
+
+test:
+	$(GO) test -race ./...
+
+test-jellyfin:
+	$(GO) test -race $(JELLYFIN)
+
+test-others:
+	$(GO) test -race $$($(GO) list ./... | grep -vxF $(JELLYFIN))
+
+# Time bounds checked without the race detector, which slows the work they
+# time tenfold.
+bounds:
+	$(GO) test -run '^TestLargeLineupsStayFast$$' ./internal/iptv
 
 # An empty env file keeps a developer's private .env out of the validation.
 compose-check:
