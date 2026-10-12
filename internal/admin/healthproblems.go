@@ -48,13 +48,15 @@ const (
 	problemUnknownProxy      = "unknown_proxy"
 	problemDiscoveryPort     = "discovery_port"
 	problemDiscoveryAddress  = "discovery_address"
+	problemProxyName         = "proxy_name_unresolved"
 )
 
 // healthProblemJSON is something System › Health shows as needing
 // attention. Key names it for as long as it lasts; Code tells what it is,
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
-// guide, with Failure, the failure's code, for an addon or a local folder,
+// guide, Name alone for a host name of Known proxies that resolves to
+// nothing, with Failure, the failure's code, for an addon or a local folder,
 // or why a local folder is not watched, and Share, the kind of network
 // share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
 // for an address that sends forwarded headers without being a known
@@ -224,6 +226,12 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			p := healthProblemJSON{Key: "unknown_proxy:" + address.String(), Code: problemUnknownProxy, Tone: notifications.SeverityWarning,
 				To: "/settings/security#known-proxies", Address: address.String()}
 			add(p)
+		}
+		for _, name := range h.Health.Proxies.Names() {
+			if len(name.Addresses) == 0 {
+				add(healthProblemJSON{Key: "proxy_name:" + name.Name, Code: problemProxyName, Tone: notifications.SeverityWarning,
+					To: "/settings/security#known-proxies", Name: name.Name})
+			}
 		}
 	}
 	if h.Health.Discovery != nil {
@@ -438,6 +446,11 @@ func (p healthProblemJSON) text(language string) string {
 			"If it is your reverse proxy, add it to Known proxies under Settings › Security.",
 			"%s transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme %s. "+
 				"Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.", p.Address, p.Address)
+	case problemProxyName:
+		return say("The known proxy %s resolves to no address, so no request is trusted to come from it. "+
+			"Check its name under Settings › Security, and that Polyfin shares a network with it.",
+			"Le proxy connu %s ne correspond à aucune adresse : aucune requête n’est donc reconnue comme venant de lui. "+
+				"Vérifiez son nom dans Paramètres › Sécurité, et que Polyfin partage un réseau avec lui.", p.Name)
 	case problemDiscoveryPort:
 		return say("Polyfin cannot listen on UDP port %d, so Jellyfin apps on the local network do not find it by themselves. "+
 			"Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.",

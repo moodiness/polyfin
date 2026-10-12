@@ -191,8 +191,11 @@ func serve(ctx context.Context) error {
 	quickConnect := quickconnect.New()
 	signIns := throttle.New(signInFailures, signInWindow)
 	// The client of a request is read behind the known proxies, for every
-	// route; System › Health names the proxies missing from them.
-	proxies := forwarded.New(store.KnownProxies)
+	// route; System › Health names the proxies missing from them. Their
+	// host names are resolved now, at each change of the settings, every
+	// minute, and when an unknown address forwards requests.
+	proxies := forwarded.New(store.KnownProxies, nil)
+	proxies.Watch(ctx, store.KnownProxyNames, store.SettingsChanged)
 	// Jellyfin apps that look for servers on the local network find this
 	// one, while the settings turn it on; a port another server uses is
 	// told in System › Health, and never stops the start.

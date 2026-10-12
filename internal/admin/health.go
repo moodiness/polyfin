@@ -46,7 +46,8 @@ type HealthSources struct {
 	// tells none.
 	Updates *updates.Checker
 	// Proxies names the addresses that send forwarded headers without
-	// being known proxies; nil names none.
+	// being known proxies, and what the host names of Known proxies
+	// resolve to; nil names none.
 	Proxies *forwarded.Proxies
 	// Discovery tells how local network discovery goes; nil tells
 	// nothing.
@@ -73,6 +74,18 @@ type healthJSON struct {
 	// Update is the new version of Polyfin out, null when there is none,
 	// or while Check for new versions is off.
 	Update *updateJSON `json:"update"`
+	// ProxyNames are the host names of Known proxies, with what each
+	// resolved to when last looked up.
+	ProxyNames []proxyNameJSON `json:"proxyNames"`
+}
+
+// proxyNameJSON is a host name of Known proxies and the addresses it
+// resolved to at ResolvedAt, sorted: none when it resolves to nothing,
+// which trusts nothing.
+type proxyNameJSON struct {
+	Name       string    `json:"name"`
+	Addresses  []string  `json:"addresses"`
+	ResolvedAt time.Time `json:"resolvedAt"`
 }
 
 // shareHealthJSON is how a network share is watched for changes: Watch is
@@ -201,7 +214,8 @@ var softwareEncoders = []string{"libx264", "libx265", "aac", "libfdk_aac", "ac3"
 // health describes how the server's parts fare, from what they record:
 // nothing is requested outside the server.
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
-	result := healthJSON{CheckedAt: h.now(), Disks: []diskJSON{}, Addons: []addonHealthJSON{}, Shares: []shareHealthJSON{}}
+	result := healthJSON{CheckedAt: h.now(), Disks: []diskJSON{}, Addons: []addonHealthJSON{}, Shares: []shareHealthJSON{},
+		ProxyNames: []proxyNameJSON{}}
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	result.Process = processJSON{Version: h.Version, GoVersion: runtime.Version(), StartedAt: h.Health.Started,
@@ -307,6 +321,15 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	result.Secrets = h.secretsHealth(r.Context())
 	if release, ok := h.Health.Updates.Available(); ok {
 		result.Update = &updateJSON{Version: release.Version, URL: release.URL}
+	}
+	if h.Health.Proxies != nil {
+		for _, name := range h.Health.Proxies.Names() {
+			addresses := make([]string, len(name.Addresses))
+			for i, address := range name.Addresses {
+				addresses[i] = address.String()
+			}
+			result.ProxyNames = append(result.ProxyNames, proxyNameJSON{Name: name.Name, Addresses: addresses, ResolvedAt: name.Resolved})
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }

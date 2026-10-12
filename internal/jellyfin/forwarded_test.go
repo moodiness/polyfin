@@ -19,7 +19,7 @@ import (
 // proxy on 127.0.0.1 forwards it.
 func behindProxy(t *testing.T, s testServer) func(client, method, path, authorization string, body any) (int, []byte) {
 	t.Helper()
-	server := httptest.NewServer(forwarded.New(s.store.KnownProxies).Handler(s.handler))
+	server := httptest.NewServer(forwarded.New(s.store.KnownProxies, nil).Handler(s.handler))
 	t.Cleanup(server.Close)
 	return func(client, method, path, authorization string, body any) (int, []byte) {
 		t.Helper()

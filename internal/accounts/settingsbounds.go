@@ -66,6 +66,7 @@ func DefaultSettings() Settings {
 		LoginAttempts:      DefaultLoginAttempts,
 		InactiveDeviceDays: DefaultInactiveDeviceDays,
 		KnownProxies:       []netip.Prefix{},
+		KnownProxyNames:    []string{},
 		DetailedLog:        false,
 
 		AnalysisTimeout:     DefaultAnalysisTimeout,

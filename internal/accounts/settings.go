@@ -96,41 +96,57 @@ const (
 	DefaultInactiveDeviceDays = 0
 )
 
-// ErrInvalidKnownProxies reports a Settings.KnownProxies entry that is not
-// an IP address nor a network, or more than MaxKnownProxies entries.
+// ErrInvalidKnownProxies reports a Known proxies entry that is not an IP
+// address, a network nor a host name, or more than MaxKnownProxies entries
+// between Settings.KnownProxies and Settings.KnownProxyNames.
 var ErrInvalidKnownProxies = errors.New("invalid known proxies")
 
-// MaxKnownProxies is how many addresses and networks Settings.KnownProxies
-// holds at most.
+// MaxKnownProxies is how many addresses, networks and host names Known
+// proxies holds at most, together.
 const MaxKnownProxies = 64
 
 // ParseKnownProxies reads the entries of Known proxies: IPv4 and IPv6
 // addresses, and networks in CIDR notation, such as 172.18.0.0/16 (see
-// canonicalProxies).
-func ParseKnownProxies(entries []string) ([]netip.Prefix, error) {
+// canonicalProxies), then host names, such as a container's name on a
+// Docker network (see canonicalProxyNames).
+func ParseKnownProxies(entries []string) ([]netip.Prefix, []string, error) {
 	if len(entries) > MaxKnownProxies {
-		return nil, ErrInvalidKnownProxies
+		return nil, nil, ErrInvalidKnownProxies
 	}
 	proxies := make([]netip.Prefix, 0, len(entries))
+	names := []string{}
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
 		network, err := netip.ParsePrefix(entry)
 		if err != nil {
 			address, err := netip.ParseAddr(entry)
+			if err != nil && validHostName(entry) {
+				names = append(names, entry)
+				continue
+			}
 			if err != nil || address.Zone() != "" {
-				return nil, ErrInvalidKnownProxies
+				return nil, nil, ErrInvalidKnownProxies
 			}
 			network = netip.PrefixFrom(address, address.BitLen())
 		}
 		proxies = append(proxies, network)
 	}
-	return canonicalProxies(proxies)
+	proxies, err := canonicalProxies(proxies)
+	if err != nil {
+		return nil, nil, err
+	}
+	names, err = canonicalProxyNames(names)
+	if err != nil {
+		return nil, nil, err
+	}
+	return proxies, names, nil
 }
 
-// FormatKnownProxies writes known proxies as ParseKnownProxies reads them,
-// a single address without its prefix length.
-func FormatKnownProxies(proxies []netip.Prefix) []string {
-	entries := make([]string, len(proxies))
+// FormatKnownProxies writes known proxies as ParseKnownProxies reads them:
+// the addresses and networks, a single address without its prefix length,
+// then the host names.
+func FormatKnownProxies(proxies []netip.Prefix, names []string) []string {
+	entries := make([]string, len(proxies), len(proxies)+len(names))
 	for i, network := range proxies {
 		if network.IsSingleIP() {
 			entries[i] = network.Addr().String()
@@ -138,7 +154,7 @@ func FormatKnownProxies(proxies []netip.Prefix) []string {
 			entries[i] = network.String()
 		}
 	}
-	return entries
+	return append(entries, names...)
 }
 
 // canonicalProxies checks known proxies and returns them as they are
@@ -165,6 +181,50 @@ func canonicalProxies(proxies []netip.Prefix) ([]netip.Prefix, error) {
 		}
 	}
 	return canonical, nil
+}
+
+// canonicalProxyNames checks the host names of known proxies and returns
+// them in lower case, each once, in the order given; empty, not nil, for
+// none, as the column holds no NULL.
+func canonicalProxyNames(names []string) ([]string, error) {
+	if len(names) > MaxKnownProxies {
+		return nil, ErrInvalidKnownProxies
+	}
+	canonical := make([]string, 0, len(names))
+	for _, name := range names {
+		if !validHostName(name) {
+			return nil, ErrInvalidKnownProxies
+		}
+		if name = strings.ToLower(name); !slices.Contains(canonical, name) {
+			canonical = append(canonical, name)
+		}
+	}
+	return canonical, nil
+}
+
+// validHostName reports whether name is a host name the resolver can look
+// up: dot-separated labels of 1 to 63 letters, digits, hyphens and
+// underscores, as Docker allows in a container's name, none starting or
+// ending with a hyphen, 253 characters at most, with an optional final
+// dot. Its last label is not all digits, so that a mistyped IPv4 address,
+// such as 192.168.1.300, is no name.
+func validHostName(name string) bool {
+	name = strings.TrimSuffix(name, ".")
+	if name == "" || len(name) > 253 {
+		return false
+	}
+	labels := strings.Split(name, ".")
+	for _, label := range labels {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range []byte(label) {
+			if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || c == '-' || c == '_') {
+				return false
+			}
+		}
+	}
+	return strings.Trim(labels[len(labels)-1], "0123456789") != ""
 }
 
 // ErrInvalidAnalysisTimeout reports an AnalysisTimeout outside
@@ -790,6 +850,10 @@ type Settings struct {
 	// forwarded.Resolve). Empty by default: no forwarded header is
 	// trusted.
 	KnownProxies []netip.Prefix
+	// KnownProxyNames are the host names of reverse proxies, in lower
+	// case, trusted at the addresses they resolve to (see
+	// forwarded.Proxies.Lookup). Empty by default.
+	KnownProxyNames []string
 	// DetailedLog logs at the debug level rather than at the info level
 	// (see FollowLogLevel).
 	DetailedLog bool
@@ -1042,7 +1106,7 @@ func validWebText(text string, max int) bool {
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
-	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, detailed_log, " +
+	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -1073,7 +1137,7 @@ func (settings *Settings) fields() []any {
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff,
 		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
-		&settings.DetailedLog,
+		&settings.KnownProxyNames, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
@@ -1160,6 +1224,12 @@ func (s *Store) Settings() Settings {
 // settings: every request reads it.
 func (s *Store) KnownProxies() []netip.Prefix {
 	return s.settings.Load().KnownProxies
+}
+
+// KnownProxyNames returns Settings().KnownProxyNames without copying the
+// settings.
+func (s *Store) KnownProxyNames() []string {
+	return s.settings.Load().KnownProxyNames
 }
 
 // Environment is what the environment variables that were options before
@@ -1313,6 +1383,14 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, err
 	}
 	settings.KnownProxies = proxies
+	names, err := canonicalProxyNames(settings.KnownProxyNames)
+	if err != nil {
+		return Settings{}, err
+	}
+	if len(proxies)+len(names) > MaxKnownProxies {
+		return Settings{}, ErrInvalidKnownProxies
+	}
+	settings.KnownProxyNames = names
 	if settings.AnalysisTimeout < MinAnalysisTimeout || settings.AnalysisTimeout > MaxAnalysisTimeout {
 		return Settings{}, ErrInvalidAnalysisTimeout
 	}

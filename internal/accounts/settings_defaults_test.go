@@ -56,6 +56,9 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 		named[strings.ToLower(key)] = true
 	}
 	fields := reflect.TypeFor[Settings]()
+	// The host names of Known proxies share the bounds of knownProxies,
+	// the admin API's list of both.
+	named["knownproxynames"] = true
 	for i := range fields.NumField() {
 		if name := fields.Field(i).Name; !named[strings.ToLower(name)] {
 			t.Errorf("no bounds for %s", name)
