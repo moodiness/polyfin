@@ -143,6 +143,9 @@ func DefaultSettings() Settings {
 		WeeklySummaryHour: DefaultWeeklySummaryHour,
 
 		ImportEveryMinutes: DefaultImportEveryMinutes,
+
+		Metrics:      false,
+		MetricsToken: "",
 	}
 }
 
@@ -294,6 +297,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"weeklySummaryHour": between(0, 23, d.WeeklySummaryHour),
 
 		"importEveryMinutes": choice(d.ImportEveryMinutes, anys(ImportEveryChoices)),
+
+		"metrics":      is(d.Metrics),
+		"metricsToken": text(MaxMetricsTokenBytes, d.MetricsToken),
 	}
 }
 

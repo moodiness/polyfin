@@ -23,6 +23,7 @@ var settingSecrets = []struct{ column, name string }{
 	{"trakt_client_secret", "traktClientSecret"},
 	{"lastfm_secret", "lastFmSecret"},
 	{"smtp_password", "smtpPassword"},
+	{"metrics_token", "metricsToken"},
 }
 
 // Unreadable is a stored secret the key cannot open: a setting, by the

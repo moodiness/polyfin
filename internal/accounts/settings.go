@@ -410,6 +410,13 @@ var (
 	ErrInvalidWeeklySummaryHour = errors.New("invalid weekly summary hour")
 )
 
+// MaxMetricsTokenBytes bounds Settings.MetricsToken, which Polyfin makes
+// of 32 hexadecimal characters; ErrInvalidMetricsToken reports one longer,
+// or holding control characters.
+const MaxMetricsTokenBytes = 32
+
+var ErrInvalidMetricsToken = errors.New("invalid metrics token")
+
 // The defaults of Settings.WeeklySummaryDay and WeeklySummaryHour: Monday
 // at 9:00.
 const (
@@ -1079,6 +1086,13 @@ type Settings struct {
 	// histories of tracking services (see trackers). One of
 	// ImportEveryChoices.
 	ImportEveryMinutes int
+	// Metrics serves Polyfin's metrics, for Prometheus, at /metrics (see
+	// package metrics), to requests that send MetricsToken as a bearer
+	// token. Polyfin makes the token when metrics are first turned on, and
+	// again when asked (see NewMetricsToken). A secret, like
+	// PublicMetaDBKey.
+	Metrics      bool
+	MetricsToken string
 }
 
 // SMTPAvailable reports whether email notifications can be sent: an SMTP
@@ -1147,7 +1161,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
-	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes"
+	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
+	"metrics, metrics_token"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1184,7 +1199,7 @@ func (settings *Settings) fields() []any {
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
 		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
-		&settings.ImportEveryMinutes}
+		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1212,6 +1227,7 @@ func (settings *Settings) secrets() []struct {
 		{"traktClientSecret", &settings.TraktClientSecret},
 		{"lastFmSecret", &settings.LastFMSecret},
 		{"smtpPassword", &settings.SMTPPassword},
+		{"metricsToken", &settings.MetricsToken},
 	}
 }
 
@@ -1541,6 +1557,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !slices.Contains(ImportEveryChoices, settings.ImportEveryMinutes) {
 		return Settings{}, ErrInvalidImportEveryMinutes
 	}
+	if !validLine(settings.MetricsToken, MaxMetricsTokenBytes) {
+		return Settings{}, ErrInvalidMetricsToken
+	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
 		unblocked, err := s.db.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL "+
@@ -1551,6 +1570,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		if unblocked.RowsAffected() > 0 {
 			s.forgetSignIns()
 		}
+	}
+	// Metrics turned on with no token, the first time or when the key
+	// cannot read the one stored, get one.
+	if settings.Metrics && settings.MetricsToken == "" {
+		settings.MetricsToken, _ = newToken()
 	}
 	s.secretsMu.Lock()
 	defer s.secretsMu.Unlock()
@@ -1566,6 +1590,14 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	s.storeSettings(&settings)
 	return settings, nil
+}
+
+// NewMetricsToken makes a new metrics token, which ends the former one,
+// and returns the settings with it.
+func (s *Store) NewMetricsToken(ctx context.Context) (Settings, error) {
+	settings := s.Settings()
+	settings.MetricsToken, _ = newToken()
+	return s.UpdateSettings(ctx, settings)
 }
 
 func validServerName(name string) bool {

@@ -18,6 +18,7 @@ var serverSecrets = map[string]func(accounts.Settings) string{
 	"theIntroDbKey":     func(s accounts.Settings) string { return s.TheIntroDBKey },
 	"traktClientSecret": func(s accounts.Settings) string { return s.TraktClientSecret },
 	"lastFmSecret":      func(s accounts.Settings) string { return s.LastFMSecret },
+	"metricsToken":      func(s accounts.Settings) string { return s.MetricsToken },
 }
 
 // secretJSON is a secret revealed on demand. Answers never cache it.
@@ -43,6 +44,19 @@ func (h *handler) revealServerSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Activity.SecretRevealed(r.Context(), sessionFrom(r.Context()).User, name, false)
 	writeJSON(w, http.StatusOK, secretJSON{Value: value})
+}
+
+// newMetricsToken makes a new metrics token, which ends the former one,
+// records who did in the activity log, and answers the settings, which
+// never hold the token.
+func (h *handler) newMetricsToken(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.Accounts.NewMetricsToken(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	h.Activity.MetricsTokenMade(r.Context(), sessionFrom(r.Context()).User.Name)
+	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }
 
 // revealTrackingKey answers the API key or user token the signed-in user

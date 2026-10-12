@@ -471,6 +471,12 @@ type settingsJSON struct {
 	// again, one of the bounds' choices; it keeps its current value when a
 	// PUT leaves it out.
 	ImportEveryMinutes *int `json:"importEveryMinutes"`
+	// Metrics, whether /metrics answers, keeps its current value when a PUT
+	// leaves it out. MetricsTokenSet tells whether Polyfin made the token
+	// it needs, which no answer holds; a PUT ignores it (see
+	// newMetricsToken).
+	Metrics         *bool `json:"metrics"`
+	MetricsTokenSet bool  `json:"metricsTokenSet"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -616,6 +622,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		WeeklySummaryHour: &settings.WeeklySummaryHour,
 
 		ImportEveryMinutes: &settings.ImportEveryMinutes,
+
+		Metrics:         &settings.Metrics,
+		MetricsTokenSet: settings.MetricsToken != "",
 	}
 }
 
@@ -1155,6 +1164,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		WeeklySummaryHour: valueOr(body.WeeklySummaryHour, current.WeeklySummaryHour),
 
 		ImportEveryMinutes: valueOr(body.ImportEveryMinutes, current.ImportEveryMinutes),
+
+		Metrics:      valueOr(body.Metrics, current.Metrics),
+		MetricsToken: current.MetricsToken,
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

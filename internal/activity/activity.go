@@ -261,6 +261,13 @@ func (s *Store) SettingsSaved(ctx context.Context, administrator string) {
 		Type: "ServerConfigurationUpdated"})
 }
 
+// MetricsTokenMade records that administrator made a new metrics token,
+// never the token.
+func (s *Store) MetricsTokenMade(ctx context.Context, administrator string) {
+	s.record(ctx, Entry{Name: s.phrase("%s made a new metrics token", "%s a créé un nouveau jeton des métriques", administrator),
+		Type: "ServerConfigurationUpdated"})
+}
+
 // secretNames name the secrets that can be revealed, in English and
 // French: the server's, by their admin API name, and the users' own API
 // keys, by service.
@@ -272,6 +279,7 @@ var secretNames = map[string][2]string{
 	"mdblist":           {"their MDBList API key", "sa clé d’API MDBList"},
 	"publicmetadb":      {"their PublicMetaDB API key", "sa clé d’API PublicMetaDB"},
 	"listenbrainz":      {"their ListenBrainz user token", "son jeton d’utilisateur ListenBrainz"},
+	"metricsToken":      {"the metrics token", "le jeton des métriques"},
 }
 
 // SecretRevealed records that user had a stored secret shown, by its name

@@ -60,8 +60,9 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	// the secrets are never answered, but have bounds.
 	readOnly := map[string]bool{"bounds": true, "conversionHardware": true, "recordingsFolderDefault": true, "backupFolderDefault": true,
 		"renderNodes": true, "publicMetaDbKeySet": true, "theIntroDbKeySet": true, "traktClientSecretSet": true, "lastFmSecretSet": true,
-		"smtpPasswordSet": true}
-	secrets := map[string]bool{"publicMetaDbKey": true, "theIntroDbKey": true, "traktClientSecret": true, "lastFmSecret": true, "smtpPassword": true}
+		"smtpPasswordSet": true, "metricsTokenSet": true}
+	secrets := map[string]bool{"publicMetaDbKey": true, "theIntroDbKey": true, "traktClientSecret": true, "lastFmSecret": true, "smtpPassword": true,
+		"metricsToken": true}
 	for name := range body {
 		if _, found := bounds[name]; !found && !readOnly[name] {
 			t.Errorf("no bounds for %s", name)

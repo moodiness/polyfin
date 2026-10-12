@@ -213,6 +213,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
+	mux.Handle("POST /admin/api/settings/metrics-token", h.administrator(h.newMetricsToken))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 	mux.Handle("POST /admin/api/users/downloads/off", h.administrator(h.turnOffDownloads))
 	mux.Handle("GET /admin/api/jellyfin-import", h.administrator(h.jellyfinImport))
