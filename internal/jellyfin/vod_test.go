@@ -3,12 +3,14 @@ package jellyfin
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -251,18 +253,18 @@ func TestIPTVMoviesAndSeriesInApps(t *testing.T) {
 	}
 }
 
-// vodFile makes eight seconds of H.264 and AAC in container (by its
-// extension) with the FFmpeg of POLYFIN_TEST_FFMPEG, skipping the test
-// without one.
-func vodFile(t *testing.T, name string) (string, string) {
+// vodFile makes twenty seconds of H.264 and AAC in container (by its
+// extension), with args, with the FFmpeg of POLYFIN_TEST_FFMPEG, skipping
+// the test without one.
+func vodFile(t *testing.T, name string, args ...string) (string, string) {
 	t.Helper()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
 	file := filepath.Join(t.TempDir(), name)
-	cmd := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=20",
-		"-f", "lavfi", "-i", "sine=duration=20", "-c:v", "libx264", "-g", "48", "-pix_fmt", "yuv420p", "-c:a", "aac", file)
+	cmd := exec.Command(ffmpeg, slices.Concat([]string{"-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=20",
+		"-f", "lavfi", "-i", "sine=duration=20", "-c:v", "libx264", "-g", "48", "-pix_fmt", "yuv420p", "-c:a", "aac"}, args, []string{file})...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
 	}
@@ -380,12 +382,14 @@ func TestIPTVMoviePlaysThroughFFmpeg(t *testing.T) {
 }
 
 // An MPEG-TS movie, which has no index to remux it by, plays converted,
-// cut every few seconds and seekable, as Jellyfin plays such files; a
-// user who may not have video converted is told no stream suits, rather
-// than offered one that fails.
+// cut every few seconds and seekable, as Jellyfin plays such files: a
+// segment read first, as after a seek, starts on its keyframe, though the
+// file's first packet tells it starts an hour in, as a recording of a
+// broadcast does. A user who may not have video converted is told no
+// stream suits, rather than offered one that fails.
 func TestIPTVTransportStreamMoviesPlayConverted(t *testing.T) {
 	t.Parallel()
-	ffmpeg, file := vodFile(t, "movie.ts")
+	ffmpeg, file := vodFile(t, "movie.ts", "-output_ts_offset", "3600")
 	s, _, info := vodPlayback(t, ffmpeg, file, map[string]any{"DeviceProfile": deviceProfile(t, "jellyfin-web-chrome")}, nil)
 	if len(info.MediaSources) != 1 {
 		t.Fatalf("PlaybackInfo: %+v", info)
@@ -394,6 +398,29 @@ func TestIPTVTransportStreamMoviesPlayConverted(t *testing.T) {
 	if source.SupportsDirectPlay || !source.SupportsTranscoding || source.TranscodingUrl == "" || source.RunTimeTicks == nil ||
 		*source.RunTimeTicks < 19*10_000_000 {
 		t.Fatalf("an MPEG-TS movie: %+v", source)
+	}
+	p := playbackSetup{testServer: s}
+	uris := segmentURIs(t, p, source.TranscodingUrl)
+	initURI := ""
+	if strings.Contains(uris[0], "/-1.") {
+		initURI, uris = uris[0], uris[1:]
+	}
+	// Segment 3 starts 10 seconds in; the segments' times are the movie's,
+	// 10 seconds later (see hls.timestampOffset).
+	segment := getSegment(t, p, uris[3])
+	if initURI != "" {
+		segment = append(getSegment(t, p, initURI), segment...)
+	}
+	read := filepath.Join(t.TempDir(), "segment")
+	if err := os.WriteFile(read, segment, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), "-v", "error", "-select_streams", "v", "-show_entries", "packet=pts_time,flags",
+		"-of", "csv=p=0", read).Output()
+	first, _, _ := strings.Cut(string(out), "\n")
+	pts, flags, _ := strings.Cut(first, ",")
+	if at, _ := strconv.ParseFloat(pts, 64); err != nil || !strings.HasPrefix(flags, "K") || math.Abs(at-20) > 1.0/24 {
+		t.Errorf("segment 3, read first, starts with %q: %v", first, err)
 	}
 	fetchSegments(t, s, source.TranscodingUrl, 0, 2)
 

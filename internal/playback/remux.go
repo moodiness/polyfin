@@ -51,11 +51,11 @@ type Remux struct {
 // Plan returns how a version is cut into segments, reading its keyframe
 // index on first use. An MPEG-TS file, which has no index, is cut every
 // few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
-// Jellyfin plays such files, with FFmpeg reading it from the time asked.
-// So is a version read from its input (see LocalInputs) whose keyframes
-// the disc does not tell. The bytes of its first segment are warmed
-// meanwhile, unless a warm of the version ran lately (see Warm), in the
-// background when ctx is.
+// Jellyfin plays such files, with FFmpeg searching it from before the
+// time asked (see hls.Plan.Searched). So is a version read from its input
+// (see LocalInputs) whose keyframes the disc does not tell. The bytes of
+// its first segment are warmed meanwhile, unless a warm of the version ran
+// lately (see Warm), in the background when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	plan, err := s.plan(ctx, version)
 	if err == nil && !plan.Grid() {
@@ -88,7 +88,7 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 	}
 	times, err := s.keyframes(ctx, version, analysis)
 	if errors.Is(err, container.ErrNoIndex) && transportStream(analysis) {
-		return hls.NewGridPlan(analysis.Duration), nil
+		return hls.NewGridPlan(analysis.Duration).Searched(), nil
 	}
 	if err != nil {
 		return hls.Plan{}, err
@@ -493,6 +493,12 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// taking a body cut short for the end of the file.
 		failed := src.Failed()
 		r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
+		// An MPEG-TS file starts at the time its first packet tells, such
+		// as 1.4 seconds, or hours into a broadcast: its timestamps are
+		// shifted to start at zero, as a grid's times do.
+		if plan.Grid() {
+			r.InputOptions = []string{"-start_at_zero"}
+		}
 		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
 			r.ADTS = true
 		}
