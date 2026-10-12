@@ -503,7 +503,13 @@ A folder or share added as holding **Home videos** (fr « Vidéos personnelles �
 - Its artwork is the images beside it, with the names a movie's take (see [Artwork](#artwork)): `day 2-poster.jpg`, or `poster.jpg` in its own folder. Without a poster, it shows a frame of the video, taken a tenth into it as Jellyfin takes one, at most 640 pixels wide as chapter images are, kept with the scan and made again when the video changes.
 - Subtitle files beside a video are offered with it, as for any local file. Discs and disc images are left out, as in a shows folder.
 
-A title's identifier comes from its folder and its path in it: it stays through scans and restarts. A video renamed or moved is another title: what users did with the former one, its watch state, resume point, favorites and collections, stays with it and no longer shows.
+A title's identifier is kept with its video through scans and restarts, and follows it when it is renamed or moved: what users did with it, its watch state, resume point, favorites and collections, stays with it, and apps' links to it still lead to it. A scan reads the size of each video it finds and a hash of its first and last MiB, once, when it first finds it or the file changes. A video found with the size and hash of exactly one video gone is that video again:
+
+- renamed, moved into a subfolder, or in a folder renamed, as `Trip/day 2.mov` becoming `Summer 2019/Beach.mov`;
+- moved into another Home videos folder, whichever folder is scanned first. When the folder it went to is scanned first, the video is still in the one it left, and the video found is a new title for a moment: the scan of the folder it left, finding it gone, gives it back its identifier, unless users already did something with the new title (played, marked, rated, made a favorite, added to a collection or playlist, given a subtitle file or edited), which then stays as it is. A copy and a delete seen by scans in between, as a slow move between disks, count as a move too;
+- moved out and back within 30 days: the videos gone from every Home videos folder of the server are remembered for 30 days, those of a folder removed or given another path too.
+
+A copy is a title of its own while its original is still there, and stays one when the original goes later, its folder scanned after the copy was found. So are videos when several gone, or several found by one scan, have the same contents. A video replaced at the same path, its contents changed, keeps its title. A video found again keeps the time it was first found: the weekly summary does not count it as added.
 
 ### In apps
 
@@ -520,6 +526,7 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 - Polyfin reads no other field of NFO files, such as people, tags or ratings, and does not write them.
 - A video is one title: several files of one recording are not joined, and a folder holding several videos is no title of its own.
 - A frame is made once per video as it is; one that cannot be made (an unreadable video) is tried again only once the video changes.
+- A video renamed or moved and changed at once, or before a scan read its contents, is another title. The first scan after updating Polyfin reads the contents of the videos found before.
 
 ## Compared with Jellyfin
 
@@ -530,7 +537,7 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 - Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
 - Both read the artwork beside movies and shows, and the image beside an episode's file, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor images for the episodes of discs, and shows the addons' artwork of the types a folder has none of.
 - Both read music folders with their tags, their playlists and their lyrics files. Polyfin groups albums by album artist and name rather than by folder, splits artists at `;` only, and reads no `.txt` lyrics.
-- Both list home videos as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it. Polyfin dates them by the recording's creation time as well, lists no photos nor photo albums in such a library, and makes a video alone in its folder a title named after the folder.
+- Both list home videos as `Video` items of a `homevideos` library, judged as **Other** by parental control, with a frame of the video when no image is beside it. Polyfin dates them by the recording's creation time as well, lists no photos nor photo albums in such a library, makes a video alone in its folder a title named after the folder, and keeps a video's item when it is renamed or moved, where Jellyfin makes another.
 
 ## For app developers
 
