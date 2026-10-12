@@ -1,8 +1,10 @@
 GO ?= go
 NPM ?= npm
 VERSION ?= dev
+# The PostgreSQL image-health starts the image against, on the host.
+IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/polyfin
 
-.PHONY: web build dev check lint test test-jellyfin test-others bounds compose-check image-check
+.PHONY: web build dev check lint test test-jellyfin test-others bounds compose-check image-check image-health
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -62,3 +64,18 @@ image-check:
 	fi
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --output type=cacheonly .
 	docker buildx build --target jellyfin-web-source --output type=cacheonly .
+
+# The image image-check built becomes healthy within its start period,
+# 2 minutes, against the PostgreSQL of IMAGE_DATABASE_URL.
+image-health:
+	docker run -d --name polyfin-health --add-host host.docker.internal:host-gateway \
+		-e POLYFIN_DATABASE_URL='$(IMAGE_DATABASE_URL)' polyfin-local:check
+	@status=starting; tries=0; \
+	while [ "$$status" = starting ] && [ $$tries -lt 60 ]; do \
+		sleep 2; tries=$$((tries + 1)); \
+		status="$$(docker inspect --format '{{if .State.Running}}{{.State.Health.Status}}{{else}}exited{{end}}' polyfin-health)"; \
+	done; \
+	echo "image health: $$status after $$((tries * 2)) seconds"; \
+	if [ "$$status" != healthy ]; then docker logs polyfin-health; fi; \
+	docker rm -f polyfin-health >/dev/null; \
+	[ "$$status" = healthy ]

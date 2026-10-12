@@ -140,6 +140,8 @@ jobs:
     needs: [check, jellyfin]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # The PostgreSQL the image starts against, on the runner's port 5432.
+    services: *test-services
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -157,6 +159,8 @@ jobs:
         env:
           VERSION: ${{ needs.check.outputs.version }}
         run: make image-check VERSION="$VERSION"
+      - name: See the image become healthy
+        run: make image-health
 
   publish:
     name: Publish multi-platform image to GHCR

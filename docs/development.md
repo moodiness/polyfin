@@ -28,6 +28,7 @@ make check                    # formatting, vet and tests
 - `make check` runs every package's tests under the race detector (`make test`), then, without it, the time bounds of a large IPTV line-up (`make bounds`): the race detector slows that work tenfold, and gets a tenth of the line-up. CI runs the tests of `internal/jellyfin`, by far the longest, in a job of their own (`make test-jellyfin`), and the others beside the rest of the checks (`make test-others`).
 - The tests of the slowest packages run in parallel. A test that changes state other tests read, such as a package variable, or that times waits of a few milliseconds, stays sequential and says why.
 - The SMB share tests run when `POLYFIN_TEST_SMB` names a share holding video files, its user and password in the address: `smb://user:password@host:port/share/folder`. The user must be allowed to write there: the change notification test adds, renames and removes files in a folder of its own, removed after. CI does not run them; WebDAV folders are tested against a server in the tests themselves.
+- `make image-check` builds the image and checks the version it prints; `make image-health` then starts it against the PostgreSQL of `IMAGE_DATABASE_URL`, by default the host's on port 5432 with the user, password and database `polyfin`, and waits for its health check to report it healthy, as CI does.
 
 ## Jellyfin fixtures
 
