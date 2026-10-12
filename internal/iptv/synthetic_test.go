@@ -398,6 +398,7 @@ func syntheticVideos(ctx context.Context) map[string][]byte {
 //
 //	POLYFIN_SYNTHETIC_XTREAM=1 go test -run TestServeSyntheticXtream -v -timeout 0 ./internal/iptv
 func TestServeSyntheticXtream(t *testing.T) {
+	t.Parallel()
 	setting := os.Getenv("POLYFIN_SYNTHETIC_XTREAM")
 	if setting == "" {
 		t.Skip("set POLYFIN_SYNTHETIC_XTREAM to serve a synthetic Xtream provider")
@@ -431,13 +432,15 @@ func TestServeSyntheticXtream(t *testing.T) {
 
 // A line-up of about 54,000 entries in hundreds of groups is imported,
 // merged, refreshed, listed and searched within bounds: reconciling is
-// batched and listing pages and searches read the database once.
+// batched and listing pages and searches read the database once. The race
+// detector gets a smaller one (see lineupScale).
 func TestLargeLineupsStayFast(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("large line-up")
 	}
 	e := newEnv(t)
-	server := newSyntheticServer(newSynthetic(54_000, 420), nil)
+	server := newSyntheticServer(newSynthetic(54_000/lineupScale, 420/lineupScale), nil)
 	server.Start()
 	t.Cleanup(server.Close)
 	account := Account{Kind: addons.KindXtream, Server: server.URL, Username: "user", Password: "secret"}
@@ -460,7 +463,7 @@ func TestLargeLineupsStayFast(t *testing.T) {
 		return err
 	})
 	source, err := e.service.Source(t.Context(), addons.Shared(), addon.ID)
-	if err != nil || source.Lineup.Channels != 54_000 || source.Lineup.Categories != 420 {
+	if err != nil || source.Lineup.Channels != 54_000/lineupScale || source.Lineup.Categories != 420/lineupScale {
 		t.Fatalf("line-up: %+v %v", source.Lineup, err)
 	}
 	// An edit survives the refreshes and option changes below.
@@ -484,8 +487,8 @@ func TestLargeLineupsStayFast(t *testing.T) {
 		t.Errorf("the edited channel after merging: %+v %v", kept, err)
 	}
 	bound("listing a page far down", 1*time.Second, func() error {
-		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: 20_000, Limit: 500})
-		if err == nil && (len(page) != 500 || total < 20_500) {
+		total, page, err := e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: 20_000 / lineupScale, Limit: 500 / lineupScale})
+		if err == nil && (len(page) != 500/lineupScale || total < 20_500/lineupScale) {
 			err = fmt.Errorf("%d of %d", len(page), total)
 		}
 		return err
@@ -508,7 +511,7 @@ func TestLargeLineupsStayFast(t *testing.T) {
 		errs := make([]error, 8)
 		for i := range 8 {
 			wg.Go(func() {
-				_, _, errs[i] = e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: i * 1000, Limit: 100})
+				_, _, errs[i] = e.service.ListChannels(t.Context(), addons.Shared(), addon.ID, ChannelFilter{Offset: i * 1000 / lineupScale, Limit: 100})
 			})
 		}
 		wg.Wait()
