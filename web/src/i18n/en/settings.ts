@@ -323,7 +323,7 @@ const settings = {
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
     serverImports: 'Users may import their watch history from another server or app',
     serverImportsHelp:
-      'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin or Emby server, or from their Nuvio account, signing in there as themselves. When off, those sections are hidden. An administrator can still import for a user, under Users.',
+      'Under My account, each user can import their played movies and episodes, resume points and favorites from a Jellyfin or Emby server, or from their Stremio or Nuvio account, signing in there as themselves. When off, those sections are hidden. An administrator can still import for a user, under Users.',
     loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
     loginAttemptsHelp: (r: RangeText) =>
       `After this many wrong passwords in a row, the account cannot sign in for 15 minutes, even with the right password. An administrator can unblock it sooner on the Users page. 0, or from ${r.min} to ${r.max}.`,

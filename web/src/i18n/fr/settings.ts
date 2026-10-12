@@ -332,7 +332,7 @@ const settings: typeof en = {
     serverImports:
       'Les utilisateurs peuvent importer leur historique depuis un autre serveur ou une appli',
     serverImportsHelp:
-      'Sous Mon compte, chaque utilisateur peut importer ses films et épisodes vus, ses points de reprise et ses favoris depuis un serveur Jellyfin ou Emby, ou depuis son compte Nuvio, en s’y connectant avec ses propres identifiants. Sinon, ces sections sont masquées. Un administrateur peut toujours importer pour un utilisateur, sous Utilisateurs.',
+      'Sous Mon compte, chaque utilisateur peut importer ses films et épisodes vus, ses points de reprise et ses favoris depuis un serveur Jellyfin ou Emby, ou depuis son compte Stremio ou Nuvio, en s’y connectant avec ses propres identifiants. Sinon, ces sections sont masquées. Un administrateur peut toujours importer pour un utilisateur, sous Utilisateurs.',
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
     loginAttemptsHelp: (r: RangeText) =>
       `Après ce nombre de mots de passe faux à la suite, le compte ne peut plus se connecter pendant 15 minutes, même avec le bon mot de passe. Un administrateur peut le débloquer plus tôt depuis la page Utilisateurs. 0, ou de ${r.min} à ${r.max}.`,
