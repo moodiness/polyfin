@@ -253,6 +253,16 @@ func blockCatalogs(t *testing.T, addon *fakeAddon) func() {
 	return answer
 }
 
+// answerCatalogsLate has addon answer no catalog request until wait after
+// the first of them arrived, or the test ends: however long a listing
+// took before it asked the addon, it waits that long.
+func answerCatalogsLate(t *testing.T, addon *fakeAddon, wait time.Duration) {
+	answer := blockCatalogs(t, addon)
+	addon.mu.Lock()
+	addon.gated = sync.OnceFunc(func() { time.AfterFunc(wait, answer) })
+	addon.mu.Unlock()
+}
+
 // pairAddon serves a collection catalog, Sets, whose one collection, Pair,
 // groups two movie catalogs of size titles each, in pages of 2: movie 0,
 // movie 1… and other 0, other 1….
@@ -361,7 +371,9 @@ func TestAWholeListingOpenedAgainWaitsOnlyAMoment(t *testing.T) {
 
 // A collection first opened while its addon is slow, past wholeWait before
 // anything of it was read, lists the first page of each of its catalogs,
-// waited for as long as the addon takes, rather than nothing.
+// waited for as long as the addon takes, rather than nothing. The addon
+// answers a second after the listing first asks it, so that it is slower
+// than wholeWait however long the listing took before.
 func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
@@ -380,8 +392,7 @@ func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 			if len(collections.Items) != 1 {
 				t.Fatalf("the collections: %v", names(collections.Items))
 			}
-			answer := blockCatalogs(t, addon)
-			time.AfterFunc(300*time.Millisecond, answer)
+			answerCatalogsLate(t, addon, time.Second)
 			e.service.wholeWait = 50 * time.Millisecond
 			page, err := e.service.Whole(t.Context(), e.member, collections.Items[0].ID, 0, 4, "")
 			if err != nil || !slices.Equal(names(page.Items), tc.want) || !page.More {

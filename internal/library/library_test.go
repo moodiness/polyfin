@@ -36,9 +36,10 @@ type fakeAddon struct {
 	// metaGate, when set, holds every meta request until it is closed.
 	metaGate chan struct{}
 	// catalogGate, when set, holds every catalog request until it is
-	// closed; hold holds them until enough of them wait (see
-	// holdCatalogs).
+	// closed, and gated, when set, is told of each request it holds; hold
+	// holds them until enough of them wait (see holdCatalogs).
 	catalogGate chan struct{}
+	gated       func()
 	hold        *catalogHold
 	// reply, when set, answers the stream and subtitle requests instead
 	// (see scriptedReplies).
@@ -74,7 +75,7 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Lock()
 		items := a.catalogs[parts[1]+"/"+catalogID]
-		gate, hold := a.catalogGate, a.hold
+		gate, gated, hold := a.catalogGate, a.gated, a.hold
 		if hold != nil {
 			hold.arrived++
 			if hold.arrived == hold.count {
@@ -83,6 +84,9 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		a.mu.Unlock()
 		if gate != nil {
+			if gated != nil {
+				gated()
+			}
 			select {
 			case <-gate:
 			case <-r.Context().Done():
