@@ -81,6 +81,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Weekly summary | `weekly_summary` | The server's targets and administrators' own: the server's week. Every other user's targets: their own week. |
 | Month in review | `monthly_summary` | The server's targets and administrators' own: the server's month. Every other user's targets: their own month. |
 | Year in review | `yearly_summary` | The server's targets and administrators' own: the server's year. Every other user's targets: their own year. |
+| Connection stopped | `connection_stopped` | The targets of the user whose connection stopped, and the server's. |
 
 ### New episodes
 
@@ -92,7 +93,7 @@ A recording that ends is finished, or partial when part of its programme is miss
 
 ### Health problems
 
-Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**: the database, disk space, addons, IPTV sources, programme guides, failed tasks, backups, stored keys and local network discovery. Conversions at their limit and thumbnails paused for a host come and go with the load: they are not told. A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved. Each problem told is kept for the weekly summary and the month in review too.
+Every five minutes, Polyfin looks at the problems **System › Health** shows under **Needs attention**: the database, disk space, addons, IPTV sources, programme guides, failed tasks, backups, stored keys and local network discovery. Conversions at their limit and thumbnails paused for a host come and go with the load: they are not told. Neither are the stopped connections it lists: their own event told them (see [Stopped connections](#stopped-connections)). A problem is told once two checks in a row found it, and solved once two checks in a row no longer find it, so that a brief failure sends nothing. What was told is kept in the database: a restart neither tells a problem again nor forgets to tell when it is solved. Each problem told is kept for the weekly summary and the month in review too.
 
 ### Users who joined
 
@@ -145,6 +146,18 @@ Every target that had the weekly summary chosen when Polyfin added the year in r
 The month and the year in review keep, as the weekly summary does, the last month and year sent in the database: a restart does not send them again, and a server that was off on the 1st at the hour sends them when it starts again, within that month only: a server off until the 1st of the next month never sends that review. The "Send the month in review" and "Send the year in review" tasks, under **System › Schedule**, send now the review of the last month, or of the last year, that ended, to every target that chose it, without changing when the next one is sent.
 
 Messages are written in the server language (**Settings › General**).
+
+### Stopped connections
+
+An app connection (see [Staying connected](users.md#staying-connected)) stops when Nuvio or Stremio refuses the sign-in Polyfin kept: a key signed out, a session ended. A tracking service (see [Connection status](tracking.md#connection-status)) stops when it refuses the user's token or key, and shows **Connect again**. Either way, nothing comes over from it, or reaches it, until the user connects it again, which only the page where they connected it showed until now.
+
+A connection that stops is told once, as it stops: the title is "Connection stopped: Stremio", and the message names the app or service and the user and says what to do, such as "Stremio refused the sign-in Polyfin kept for sam: nothing is imported from it until sam signs in again under My account › Import from an app, with Stay connected ticked." or, for a tracking service, "until sam presses Connect again under My account › Tracking.". With a public address, the message opens that page of the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+- Only refusals are told. An app or service that does not answer, fails or asks to wait is tried again, and nothing is told.
+- What stopped is kept in the database: a restart does not tell it again, nor does a later refusal of the same connection. A connection made again, then refused again, is told again.
+- **System › Health** lists the connections stopped, by user and app or service, each opening the user's page. They are not told as health problems: this event already told them.
+
+A new target has this event chosen. Targets saved before it existed do not receive it until it is chosen in their **Events**.
 
 ## Delivery
 
@@ -202,12 +215,12 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. |
 | `url` | string or null | Opens what the event is about; null without a public address. For `new_version`, the release notes on GitHub, always set. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
+| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is; for `connection_stopped`, the user whose connection stopped. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
 | `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
@@ -215,6 +228,7 @@ A user who joined through an invite link:
 | `release` | object | For `new_version`: `version`, the new version, `url`, its release notes, and `current`, the version the server runs. |
 | `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
 | `summary` | object | For `weekly_summary`, `monthly_summary` and `yearly_summary`; see [The weekly summary event](#the-weekly-summary-event) and [The month and year in review events](#the-month-and-year-in-review-events). |
+| `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
 
 The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
 
@@ -286,6 +300,23 @@ The playback events were added within version 1: their `playback` object is new,
 | `converted` | boolean | Whether `method` is `conversion`. |
 | `startedAt` | string | When the playback started, RFC 3339 in UTC. |
 | `played` | number | How long it played since, in seconds, pauses left out. |
+
+`connection_stopped` was added within version 1 too, with its `connection` object:
+
+```json
+{
+  "version": 1,
+  "id": "7e6d5c4b3a2f41e0d9c8b7a6f5e4d3c2",
+  "type": "connection_stopped",
+  "at": "2026-10-11T06:00:00Z",
+  "server": { "id": "fedcba9876543210fedcba9876543210", "name": "Home", "url": "https://media.example.org" },
+  "title": "Connection stopped: Trakt",
+  "message": "Trakt refused the token or key Polyfin kept for sam: nothing is sent to it or imported from it until sam presses Connect again under My account › Tracking.",
+  "url": "https://media.example.org/admin/me/account#tracking",
+  "user": { "id": "11223344556677889900aabbccddeeff", "name": "sam" },
+  "connection": { "kind": "tracking", "service": "trakt", "name": "Trakt" }
+}
+```
 
 ### The weekly summary event
 
@@ -393,9 +424,9 @@ A month in review fills the `summary` as the weekly summary does, over the month
 
 Failed recordings and health problems that are errors are urgent: ntfy, Gotify and Pushover show them with a higher priority.
 
-A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions, indigo for weekly summaries and the month and year in review), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
+A Discord target receives one embed: the event's title, its message as the description, its link, a color by event (blue for new episodes, green for finished recordings and solved problems, red for failures and errors, amber for warnings and stopped connections, teal for users who joined and for playbacks that start or resume, grey for those that pause or stop, sky blue for new versions, indigo for weekly summaries and the month and year in review), the time, and the server name in the footer, sent as `Polyfin`. Messages never mention anyone (`allowed_mentions` is empty).
 
-An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bar_chart` for weekly summaries and the month and year in review, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
+An ntfy target receives a JSON publication to its server's root address, with `topic`, `title`, `message`, `tags` (`tv` for new episodes, `red_circle` for finished recordings, with `warning` when partial, `x` for failures, `warning` for problems and stopped connections, `white_check_mark` for solved ones, `wave` for users who joined, `package` for new versions, `arrow_forward` for playbacks that start or resume, `pause_button` and `stop_button` for those that pause or stop, `bar_chart` for weekly summaries and the month and year in review, `bell` for tests), a high `priority` (4) for urgent events, and `click`, the event's link. The access token, if any, is sent as `Authorization: Bearer`.
 
 An email target receives a `multipart/alternative` message, in plain text and in HTML, in the server language:
 

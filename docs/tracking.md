@@ -176,7 +176,8 @@ Nothing waits for the services: reports and marks are sent in the background.
 ### Connection status
 
 - A service that refuses the user's token or key shows **Connect again**. It gets nothing more until the user connects it again, and what waited for it is dropped. Last.fm refuses the session once the user removed Polyfin from the applications of their Last.fm account.
-- A service that keeps failing shows as unreachable while Polyfin retries.
+- That refusal is told once, as the connection stops, to the user's notification targets and the server's that chose **Connection stopped** (see [Stopped connections](notifications.md#stopped-connections)). **System › Health** lists the connections stopped, by user and service. Connecting again, then a new refusal, tells again.
+- A service that keeps failing shows as unreachable while Polyfin retries. Nothing is told: the connection has not stopped.
 
 ### Tokens and keys
 
