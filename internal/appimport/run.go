@@ -85,7 +85,8 @@ func counts(found []library.TitleTarget, t library.TitleTarget) bool {
 
 // merge finds the titles of the entries and adds them to the user's data:
 // played marks, then resume points of the titles still unplayed, then
-// favorites. It reports the entries it did not find.
+// favorites. It reports the entries it did not find, and those found
+// that the source could not read whole.
 func (r *run) merge(ctx context.Context) error {
 	refs := make([]library.TitleRef, 0, len(r.entries))
 	// of is the index in refs of each entry's title, -1 for one without
@@ -121,6 +122,9 @@ func (r *run) merge(ctx context.Context) error {
 		if len(found) == 0 {
 			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: ReasonNotFound})
 			continue
+		}
+		if e.Problem != "" {
+			noMatch = append(noMatch, Unmatched{Label: e.Label, Reason: e.Problem})
 		}
 		for _, t := range found {
 			item := userdata.Item{ID: t.ID, Series: t.Series, Season: t.Season}

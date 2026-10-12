@@ -5,12 +5,12 @@
 // their own addons.
 //
 // Each app is read by a source of its own, which signs in to the account
-// the app's way and reads it whole (see package nuvio): it hands the
-// account over as an Account, normalized, with its profiles. The service
-// holds it in memory for a few minutes, while the user chooses the profile
-// to import and its addons (see Service.Hold), then imports that profile
-// in the background (see Service.Start). Nothing the source signed in with
-// is kept.
+// the app's way and reads it whole (see packages nuvio and stremio): it
+// hands the account over as an Account, normalized, with its profiles.
+// The service holds it in memory for a few minutes, while the user chooses
+// the profile to import and its addons (see Service.Hold), then imports
+// that profile in the background (see Service.Start). Nothing the source
+// signed in with is kept.
 //
 // Titles are found by the identifiers the source names them by (see
 // TitleRef), as the watch histories of tracking services and other servers
@@ -71,7 +71,7 @@ const maxUnmatched = 500
 
 // Account is an app account a source signed in to and read.
 type Account struct {
-	// App names the app: "nuvio".
+	// App names the app: "nuvio" or "stremio".
 	App string
 	// Profiles are the account's, in the app's order; an app without
 	// profiles has one.
@@ -105,6 +105,11 @@ type Entry struct {
 	Resume *Resume
 	// Favorite is set for a title of the app's library.
 	Favorite bool
+	// Problem names why the source could not read part of what the
+	// profile holds of the title, empty when it read it all: the entry
+	// is listed among the unmatched with this reason, once its title is
+	// found, and what was read of it is imported still.
+	Problem string
 }
 
 // Resume is a resume point: at Position of Runtime, set at At. Runtime is
@@ -240,10 +245,14 @@ const ProblemInternal = "internal"
 
 // The reasons a title is not matched: the app names it by an identifier
 // Polyfin does not find titles by, or no Polyfin title has its
-// identifiers.
+// identifiers. ReasonEpisodeList is a series found, whose episodes played
+// the app tells by their place in its list of the series' episodes,
+// which the list Polyfin's addons give does not match: none of them is
+// marked played (see Entry.Problem).
 const (
 	ReasonOtherIdentifier = "other_identifier"
 	ReasonNotFound        = "not_found"
+	ReasonEpisodeList     = "episode_list"
 )
 
 // The reasons a chosen addon is not installed: the user may no longer add
@@ -290,7 +299,8 @@ type Status struct {
 	Addons []AddonStatus
 }
 
-// Unmatched is an entry no Polyfin title matched, and why.
+// Unmatched is an entry no Polyfin title matched, or one the source could
+// not read whole, and why.
 type Unmatched struct {
 	Label
 	Reason string

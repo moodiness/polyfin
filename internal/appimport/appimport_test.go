@@ -180,7 +180,9 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		{Title: newerHere, Resume: resume(30*time.Minute, 100*time.Minute, "2026-10-01T20:00:00Z")},
 		// Past the played threshold: played.
 		{Title: nearlyDone, Resume: resume(95*time.Minute, 100*time.Minute, "2026-10-02T20:00:00Z")},
-		{Title: series, Favorite: true},
+		// A series whose episodes played the source could not read: it
+		// is reported, and a favorite still.
+		{Title: series, Label: Label{ID: "tt0100", Name: "Series", Kind: "series"}, Favorite: true, Problem: ReasonEpisodeList},
 		{Title: library.TitleRef{}, Label: Label{ID: "local:home-video", Name: "Holiday", Kind: "movie"}, Played: true},
 		{Title: ref(t, "tmdb:999999", true, 0, 0), Label: Label{ID: "tmdb:999999", Name: "Unknown", Kind: "movie"}, Favorite: true},
 	}
@@ -192,14 +194,15 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 	}
 	// Newly played: by TMDB, the episode, the anime's episode, and the
 	// movie past the threshold; the movie by IMDb was played already.
-	if status.Read != 10 || status.Played != 4 || status.Resumed != 1 || status.Favorites != 2 || status.UnmatchedCount != 2 {
+	if status.Read != 10 || status.Played != 4 || status.Resumed != 1 || status.Favorites != 2 || status.UnmatchedCount != 3 {
 		t.Errorf("counts: %+v", status)
 	}
 	reasons := map[string]string{}
 	for _, u := range status.Unmatched {
 		reasons[u.Name] = u.Reason
 	}
-	if len(reasons) != 2 || reasons["Holiday"] != ReasonOtherIdentifier || reasons["Unknown"] != ReasonNotFound {
+	if len(reasons) != 3 || reasons["Holiday"] != ReasonOtherIdentifier || reasons["Unknown"] != ReasonNotFound ||
+		reasons["Series"] != ReasonEpisodeList {
 		t.Errorf("unmatched: %+v", status.Unmatched)
 	}
 
@@ -232,7 +235,7 @@ func TestEntriesAreMatchedAndOnlyAddedTo(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := h.imported(t, alice, alice, account, Choice{Profile: "1"})
-	if again.Played != 0 || again.Resumed != 0 || again.Favorites != 0 || again.UnmatchedCount != 2 {
+	if again.Played != 0 || again.Resumed != 0 || again.Favorites != 0 || again.UnmatchedCount != 3 {
 		t.Errorf("again: %+v", again)
 	}
 	check("resumed, after", resumed, func(d userdata.Data) bool { return d.Position == 60*time.Minute })
