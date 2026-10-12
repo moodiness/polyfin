@@ -1,5 +1,3 @@
-github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701 h1:xiTow1n7oNJPzn9QH+U2sT65mO2F12zNNlY4ZzOew70=
-github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701/go.mod h1:1pQXB0vAlzRlqcY7LYKOOZMw0wKfJPFxTLsJRF2Gswo=
 github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc h1:0xCWmFKBmarCqqqLeM7jFBSw/Or81UEElFqO8MY+GDs=
 github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc/go.mod h1:uvR42Hb/t52HQd7x5/ZLzZEK8oihrFpgnodIJ1vte2E=
 github.com/coder/websocket v1.8.15 h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=

@@ -29,3 +29,5 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
+
+replace github.com/cloudsoda/go-smb2 => ./third_party/go-smb2

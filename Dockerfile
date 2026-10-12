@@ -11,6 +11,9 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 WORKDIR /build
 COPY go.mod go.sum ./
+# The SMB library is a copy in the repository (go.mod replaces it):
+# downloading the modules reads its go.mod.
+COPY third_party/go-smb2/ ./third_party/go-smb2/
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/

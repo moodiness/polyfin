@@ -1,0 +1,22 @@
+go-smb2, the SMB client library Polyfin reads network shares with.
+Copyright (c) 2016 Hiroshi Ioka, and the contributors of
+https://github.com/cloudsoda/go-smb2. Licensed under the BSD 2-Clause
+License: see LICENSE.
+
+This folder is a copy of github.com/cloudsoda/go-smb2 at commit
+0c5d69b69701 (pseudo-version v0.0.0-20260918041005-0c5d69b69701), which
+Polyfin's go.mod replaces the module with. It is changed as follows:
+
+- Pull request #64 of cloudsoda/go-smb2, "Implement SMB2 CHANGE_NOTIFY
+  (File.Notify)", by forrestbao (commit 0da7f66), is merged in: the
+  CHANGE_NOTIFY request and response in internal/smb2 (const.go,
+  request.go, response.go), and notify.go, with File.Notify.
+- notify.go adds, beyond that pull request:
+  - File.NotifyContext, Notify bound to a context of its own rather than
+    to the share the folder was opened from, so that a watch can stop
+    while its handle can still be closed;
+  - Share.OpenNotify, which opens a folder to watch with the right to list
+    it only, sharing read, write and delete access, so that watching a
+    folder does not keep others from renaming or deleting it.
+- The library's tests, examples, test data, README and CI files are left
+  out.
