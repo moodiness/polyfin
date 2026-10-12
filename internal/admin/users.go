@@ -434,6 +434,10 @@ type settingsJSON struct {
 	// out.
 	WeeklySummaryDay  *int `json:"weeklySummaryDay"`
 	WeeklySummaryHour *int `json:"weeklySummaryHour"`
+	// ImportEveryMinutes is how often connected accounts are imported
+	// again, one of the bounds' choices; it keeps its current value when a
+	// PUT leaves it out.
+	ImportEveryMinutes *int `json:"importEveryMinutes"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -575,6 +579,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		WeeklySummaryDay:  &settings.WeeklySummaryDay,
 		WeeklySummaryHour: &settings.WeeklySummaryHour,
+
+		ImportEveryMinutes: &settings.ImportEveryMinutes,
 	}
 }
 
@@ -1100,6 +1106,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 		WeeklySummaryDay:  valueOr(body.WeeklySummaryDay, current.WeeklySummaryDay),
 		WeeklySummaryHour: valueOr(body.WeeklySummaryHour, current.WeeklySummaryHour),
+
+		ImportEveryMinutes: valueOr(body.ImportEveryMinutes, current.ImportEveryMinutes),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

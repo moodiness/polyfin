@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -415,6 +416,16 @@ const (
 	DefaultWeeklySummaryDay  = 1
 	DefaultWeeklySummaryHour = 9
 )
+
+// ErrInvalidImportEveryMinutes reports an ImportEveryMinutes that is not
+// one of ImportEveryChoices.
+var ErrInvalidImportEveryMinutes = errors.New("invalid import interval")
+
+// ImportEveryChoices are the values Settings.ImportEveryMinutes takes, from
+// 15 minutes to 24 hours; DefaultImportEveryMinutes is 6 hours.
+var ImportEveryChoices = []int{15, 30, 60, 120, 180, 360, 720, 1440}
+
+const DefaultImportEveryMinutes = 360
 
 // ErrInvalidLiveTvRefreshHours reports a LiveTvRefreshHours outside
 // [MinLiveTvRefreshHours, MaxLiveTvRefreshHours].
@@ -1055,6 +1066,11 @@ type Settings struct {
 	// WeeklySummaryHour its hour, 0 to 23, both in the server's time zone.
 	WeeklySummaryDay  int
 	WeeklySummaryHour int
+	// ImportEveryMinutes is how often, in minutes, connected accounts are
+	// imported again: the app connections (see appimport) and the watch
+	// histories of tracking services (see trackers). One of
+	// ImportEveryChoices.
+	ImportEveryMinutes int
 }
 
 // SMTPAvailable reports whether email notifications can be sent: an SMTP
@@ -1073,6 +1089,12 @@ func (s Settings) TraktAvailable() bool {
 // saved.
 func (s Settings) SimklAvailable() bool {
 	return s.SimklClientID != ""
+}
+
+// ImportEvery is how long after an import of a connected account the next
+// one runs (see ImportEveryMinutes).
+func (s Settings) ImportEvery() time.Duration {
+	return time.Duration(s.ImportEveryMinutes) * time.Minute
 }
 
 // LastFMAvailable reports whether users can connect Last.fm: its API
@@ -1117,7 +1139,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
-	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour"
+	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1153,7 +1175,8 @@ func (settings *Settings) fields() []any {
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
-		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour}
+		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
+		&settings.ImportEveryMinutes}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1506,6 +1529,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.WeeklySummaryHour < 0 || settings.WeeklySummaryHour > 23 {
 		return Settings{}, ErrInvalidWeeklySummaryHour
+	}
+	if !slices.Contains(ImportEveryChoices, settings.ImportEveryMinutes) {
+		return Settings{}, ErrInvalidImportEveryMinutes
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
