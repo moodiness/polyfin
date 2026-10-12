@@ -109,6 +109,10 @@ type User struct {
 	// QualityGroup is the tallest video the user is offered, a height of
 	// ConversionHeights, 0 for Original, no limit (see FitsGroup).
 	QualityGroup int
+	// EndsOn is the date the account ends, at midnight UTC, nil for never:
+	// from that date in the server's time zone, it is refused as a
+	// disabled one is (see Ended). An administrator's never ends.
+	EndsOn *time.Time
 }
 
 // NewUser describes an account to create.
@@ -152,6 +156,10 @@ type UserChanges struct {
 	QualityGroup *int
 	// UseSharedAddons, see User.
 	UseSharedAddons *bool
+	// EndsOn sets the date the account ends, the zero time for never; an
+	// administrator's cannot be set (ErrAdministratorEnds), and making a
+	// user an administrator clears theirs. See User.
+	EndsOn *time.Time
 }
 
 // Store is the accounts repository.
@@ -225,7 +233,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -236,7 +244,7 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup}
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -394,8 +402,8 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 }
 
 // Authenticate checks a name and password. The name is matched without
-// regard to case. A disabled account is reported only after its password is
-// verified, so the response does not reveal which names exist.
+// regard to case. A disabled or ended account is reported only after its
+// password is verified, so the response does not reveal which names exist.
 //
 // While Settings.LoginAttempts is set, that many wrong passwords in a row
 // block the account for LoginBlock: every sign-in is then refused as a
@@ -440,7 +448,7 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 			return User{}, err
 		}
 	}
-	if user.IsDisabled {
+	if user.Refused(now) {
 		return User{}, ErrDisabled
 	}
 	return user, nil
@@ -533,6 +541,22 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				return err
 			}
 		}
+		// An administrator's account never ends, so that the last one is
+		// never locked out: making a user one clears their end date.
+		endsOn := current.EndsOn
+		if changes.EndsOn != nil {
+			endsOn = endDate(*changes.EndsOn)
+		}
+		administrator := current.IsAdministrator
+		if changes.IsAdministrator != nil {
+			administrator = *changes.IsAdministrator
+		}
+		if administrator {
+			if changes.EndsOn != nil && endsOn != nil {
+				return ErrAdministratorEnds
+			}
+			endsOn = nil
+		}
 		if hash != nil {
 			// A new password starts the count of wrong ones again.
 			if _, err := tx.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1", id); err != nil {
@@ -564,7 +588,9 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				subtitle_management = coalesce($24, subtitle_management),
 				live_tv_management = coalesce($25, live_tv_management),
 				quality_group = coalesce($26, quality_group),
-				use_shared_addons = coalesce($27, use_shared_addons)
+				use_shared_addons = coalesce($27, use_shared_addons),
+				ends_on = $28,
+				end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
@@ -572,7 +598,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons))
+			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}

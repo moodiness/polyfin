@@ -31,6 +31,8 @@ var (
 	ErrInvalidInviteUses   = errors.New("invalid invite uses")
 	ErrInvalidInviteExpiry = errors.New("invalid invite expiry")
 	ErrInvalidInviteModel  = errors.New("invalid invite model user")
+	// ErrInvalidInviteAccountEnd refuses an account end out of bounds.
+	ErrInvalidInviteAccountEnd = errors.New("invalid invite account end")
 	// ErrInviteUnknown reports a token that is no invite's; the other
 	// errors, an invite that may no longer create accounts.
 	ErrInviteUnknown = errors.New("unknown invite")
@@ -41,7 +43,8 @@ var (
 
 // Invite is an invite link, which lets guests create a member account for
 // themselves: at most MaxUses of them, until ExpiresAt (never when nil),
-// unless it is revoked.
+// unless it is revoked. Each account it creates ends AccountDays after it
+// is created, never when 0.
 type Invite struct {
 	ID        ID
 	MaxUses   int
@@ -52,8 +55,9 @@ type Invite struct {
 	// Model is the user whose settings the new accounts copy, nil for the
 	// defaults of a new user; CreatedBy, the administrator who created the
 	// invite, nil once deleted.
-	Model     *InviteUser
-	CreatedBy *InviteUser
+	Model       *InviteUser
+	CreatedBy   *InviteUser
+	AccountDays int
 }
 
 // InviteUser names a user an invite refers to.
@@ -92,13 +96,15 @@ func (i Invite) stateError(now time.Time) error {
 
 // NewInvite describes an invite to create: how many accounts it may create,
 // from 1 to MaxInviteUses; how many days it lasts, from 1 to MaxInviteDays,
-// 0 for no expiry; the user whose settings the accounts copy, if any; and
-// the administrator creating it.
+// 0 for no expiry; the user whose settings the accounts copy, if any; the
+// administrator creating it; and how many days after its creation each
+// account ends, from 1 to MaxInviteDays, 0 for never.
 type NewInvite struct {
-	MaxUses   int
-	Days      int
-	Model     *ID
-	CreatedBy ID
+	MaxUses     int
+	Days        int
+	Model       *ID
+	CreatedBy   ID
+	AccountDays int
 }
 
 const (
@@ -114,7 +120,7 @@ const (
 		"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 		"subtitle_management, live_tv_management, quality_group"
 	inviteColumns = "i.id, i.max_uses, i.uses, i.expires_at, i.created_at, i.revoked_at, " +
-		"m.id, m.name, c.id, c.name"
+		"m.id, m.name, c.id, c.name, coalesce(i.account_days, 0)"
 	inviteJoins = " FROM invites i LEFT JOIN users m ON m.id = i.model_user_id LEFT JOIN users c ON c.id = i.created_by"
 )
 
@@ -123,7 +129,7 @@ func scanInvite(row pgx.Row, more ...any) (Invite, error) {
 	var modelID, creatorID *ID
 	var modelName, creatorName *string
 	err := row.Scan(append([]any{&invite.ID, &invite.MaxUses, &invite.Uses, &invite.ExpiresAt, &invite.CreatedAt, &invite.RevokedAt,
-		&modelID, &modelName, &creatorID, &creatorName}, more...)...)
+		&modelID, &modelName, &creatorID, &creatorName, &invite.AccountDays}, more...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return invite, ErrNotFound
 	}
@@ -162,6 +168,9 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 	if invite.Days < 0 || invite.Days > MaxInviteDays {
 		return Invite{}, "", ErrInvalidInviteExpiry
 	}
+	if invite.AccountDays < 0 || invite.AccountDays > MaxInviteDays {
+		return Invite{}, "", ErrInvalidInviteAccountEnd
+	}
 	var expires *time.Time
 	if invite.Days > 0 {
 		expires = new(s.now().Add(time.Duration(invite.Days) * 24 * time.Hour))
@@ -180,8 +189,9 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 			}
 		}
 		var id ID
-		if err := tx.QueryRow(ctx, `INSERT INTO invites (secret_hash, max_uses, expires_at, model_user_id, created_by)
-			VALUES ($1, $2, $3, $4, $5) RETURNING id`, hash[:], invite.MaxUses, expires, invite.Model, invite.CreatedBy).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO invites (secret_hash, max_uses, expires_at, model_user_id, created_by, account_days)
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, 0)) RETURNING id`, hash[:], invite.MaxUses, expires, invite.Model, invite.CreatedBy,
+			invite.AccountDays).Scan(&id); err != nil {
 			return err
 		}
 		var err error
@@ -269,6 +279,7 @@ func (s *Store) InviteByToken(ctx context.Context, token string) (Invite, error)
 // invite of token, under the rules of CreateUser, and counts the use. The
 // account copies the settings of the invite's model, or takes those of a
 // new user, hidden from the sign-in screen; it is never an administrator.
+// It ends the invite's AccountDays after today, in the server's time zone.
 // The invite is locked meanwhile: two guests on its last use create one
 // account, and the other gets ErrInviteUsedUp. It returns the invite as it
 // was before this use, with InviteByToken's errors.
@@ -289,6 +300,13 @@ func (s *Store) AcceptInvite(ctx context.Context, token, name, password string) 
 		if invite.Model != nil {
 			user, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ("+modelColumns+") = (SELECT "+modelColumns+
 				" FROM users WHERE id = $2) WHERE id = $1 RETURNING "+userColumns, user.ID, invite.Model.ID))
+			if err != nil {
+				return err
+			}
+		}
+		if invite.AccountDays > 0 {
+			user, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ends_on = $2 WHERE id = $1 RETURNING "+userColumns,
+				user.ID, Day(s.now()).AddDate(0, 0, invite.AccountDays)))
 			if err != nil {
 				return err
 			}

@@ -59,14 +59,15 @@ func (s *Store) CreateAdminSession(ctx context.Context, user ID) (string, time.T
 	return token, expires, err
 }
 
-// AdminSession resolves a session token of an enabled user and extends the
-// session when it is more than a day old.
+// AdminSession resolves a session token of an enabled user whose account
+// has not ended, and extends the session when it is more than a day old.
 func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, error) {
 	session := AdminSession{TokenHash: HashAdminToken(token)}
 	user := &session.User
 	err := s.db.QueryRow(ctx, "SELECT s.expires_at, "+qualifiedUserColumns("u")+`
 		FROM admin_sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.is_disabled`, session.TokenHash).Scan(
+		WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.is_disabled AND (u.ends_on IS NULL OR u.ends_on > $2)`,
+		session.TokenHash, Day(s.now())).Scan(
 		append([]any{&session.ExpiresAt}, user.fields()...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AdminSession{}, ErrNotFound

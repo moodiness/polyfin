@@ -104,6 +104,8 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 // DeviceByToken resolves an access token to its device and enabled user, and
 // records the activity, at most once a minute or when the device's address
 // changes. A token resolved less than signInLife ago is not looked up again.
+// The device of an account that ended is refused, as one of a disabled
+// account is, and kept: a later end date brings it back.
 func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) (Device, User, error) {
 	hash := string(hashToken(token))
 	now := s.now()
@@ -118,6 +120,9 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 		}
 		entry.device, entry.at = device, now
 		s.signIns.keepDevice(hash, entry, generation)
+	}
+	if entry.user.Ended(now) {
+		return Device{}, User{}, ErrNotFound
 	}
 	if now.Sub(entry.device.LastActivityAt) >= activityResolution || entry.device.RemoteAddress != remoteAddress {
 		_, err := s.db.Exec(ctx, `WITH touched AS (
