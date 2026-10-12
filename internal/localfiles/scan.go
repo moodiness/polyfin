@@ -505,8 +505,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 }
 
 // finish marks a folder scanned at at, keeps the prints of a share's
-// folders its listing has (see Service.shareSeen), and gives what users
-// did with the titles its files were before what it holds changed to
+// folders its listing has (see Service.shareSeen), forgets what was read
+// in the audio of files gone or changed (see forgetAudio), and gives what
+// users did with the titles its files were before what it holds changed to
 // those they are now (see follow).
 func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list listing) error {
 	if _, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at); err != nil {
@@ -518,7 +519,26 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list
 		s.kept[id]++
 		s.mu.Unlock()
 	}
+	if err := s.forgetAudio(ctx); err != nil && ctx.Err() == nil {
+		s.logger.Warn("What was read in the audio of local files gone or changed could not be deleted", "error", err)
+	}
 	return s.follow(ctx, id, list.skipped)
+}
+
+// audioKept is the condition the rows of the audio tables, of alias r,
+// meet while a folder still has their file as it was read: at the same
+// path (see EpisodeFile), size and modification time.
+const audioKept = `EXISTS (SELECT 1 FROM local_files f JOIN addons a ON a.id = f.addon_id
+	WHERE regexp_replace(a.manifest_url, '/$', '') || '/' || f.path = r.path AND f.size = r.size AND f.modified = r.modified)`
+
+// forgetAudio deletes the fingerprints and the segments kept for the audio
+// of local episodes (see package audiosegments) whose file no folder has
+// as it was read: gone, renamed, changed, or of a folder removed or moved.
+func (s *Service) forgetAudio(ctx context.Context) error {
+	batch := &pgx.Batch{}
+	batch.Queue("DELETE FROM audio_fingerprints r WHERE NOT " + audioKept)
+	batch.Queue("DELETE FROM audio_segments r WHERE NOT " + audioKept)
+	return s.db.SendBatch(ctx, batch).Close()
 }
 
 // storedFiles reads the files a folder's scans found, by path.

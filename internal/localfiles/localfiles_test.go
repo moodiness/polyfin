@@ -258,3 +258,63 @@ func TestEpisodesAreStreams(t *testing.T) {
 		t.Errorf("an unknown title: %v", err)
 	}
 }
+
+// What was read in the audio of a show's files (see package audiosegments)
+// is deleted by the scan that finds a file renamed or changed; what was
+// read of a file still as it was stays.
+func TestScansForgetTheAudioOfFilesGoneOrChanged(t *testing.T) {
+	e := newEnv(t)
+	season := "The Lone Ranger (1949)/Season 01/"
+	addon, dir := e.folder(KindShows, map[string]int{
+		season + "The Lone Ranger - S01E01.mkv": 10,
+		season + "The Lone Ranger - S01E02.mkv": 10,
+		season + "The Lone Ranger - S01E03.mkv": 10,
+	})
+	streams, err := e.service.Streams(t.Context(), addon.ID, "tt0041038:1:1")
+	if err != nil || len(streams) != 1 {
+		t.Fatalf("streams: %+v %v", streams, err)
+	}
+	file, ok, err := e.service.EpisodeFile(t.Context(), streams[0].URL)
+	if err != nil || !ok {
+		t.Fatalf("episode file: %v %v", ok, err)
+	}
+	files, err := e.service.SeasonFiles(t.Context(), file)
+	if err != nil || len(files) != 3 {
+		t.Fatalf("season files: %+v %v", files, err)
+	}
+	for _, f := range files {
+		if _, err := e.pool.Exec(t.Context(), `INSERT INTO audio_fingerprints (path, part, size, modified, start_ms, frames)
+			VALUES ($1, 'end', $2, $3, 0, ''::bytea)`, f.Path, f.Size, f.Modified); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.pool.Exec(t.Context(), `INSERT INTO audio_segments (path, type, size, modified, season, start_ms, end_ms)
+			VALUES ($1, 'Outro', $2, $3, '', 1000, 2000)`, f.Path, f.Size, f.Modified); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.Rename(filepath.Join(dir, season+"The Lone Ranger - S01E02.mkv"), filepath.Join(dir, season+"The Lone Ranger - S01E02 - 720p.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, season+"The Lone Ranger - S01E03.mkv"), 20)
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"audio_fingerprints", "audio_segments"} {
+		rows, err := e.pool.Query(t.Context(), "SELECT path FROM "+table+" ORDER BY path")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var kept []string
+		for rows.Next() {
+			var path string
+			if err := rows.Scan(&path); err != nil {
+				t.Fatal(err)
+			}
+			kept = append(kept, path)
+		}
+		if want := []string{files[0].Path}; !slices.Equal(kept, want) {
+			t.Errorf("%s: %v, want %v", table, kept, want)
+		}
+	}
+}
