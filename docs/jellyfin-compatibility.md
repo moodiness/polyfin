@@ -17,6 +17,8 @@ Polyfin targets the apps that connect to a Jellyfin server, including:
 - Official Jellyfin apps
 - Kodi
 
+Apps reach Polyfin at its address, such as `http://192.168.1.10:8096`, and also under `/jellyfin` at that address, such as `http://192.168.1.10:8096/jellyfin`, where a Jellyfin server behind a reverse proxy often lives: given an address without a path, some apps try it there first. Under `/jellyfin`, in any letter case, the Jellyfin API, its WebSocket at `/jellyfin/socket` and the web client at `/jellyfin/web/` answer as at the root. The admin app, `/healthz` and `/readyz` are at the root only.
+
 ## What apps get
 
 Jellyfin apps get the rest of what they ask a movie, series and Live TV server for.

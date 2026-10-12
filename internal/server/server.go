@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -15,7 +16,12 @@ import (
 
 const (
 	adminPrefix = "/admin/"
-	readyWait   = 2 * time.Second
+	// jellyfinBase is the path apps also reach the Jellyfin API, its
+	// WebSocket and the web client under, as on a Jellyfin server behind a
+	// reverse proxy that serves it at /jellyfin: given an address without a
+	// path, some apps try it before the root.
+	jellyfinBase = "/jellyfin"
+	readyWait    = 2 * time.Second
 	// Hashed build files never change content under the same name.
 	immutableCache = "public, max-age=31536000, immutable"
 	// Addon logos are hosted by each addon, over https.
@@ -54,44 +60,48 @@ type Options struct {
 
 // New returns the handler serving every Polyfin route. Answers that gain
 // from it go gzip-compressed to clients that accept it (see compress).
-// Every route sees the client Proxies resolves.
+// Every route sees the client Proxies resolves. The Jellyfin API, its
+// WebSocket and the web client answer under jellyfinBase as at the root;
+// the admin app, /healthz and /readyz stay at the root only.
 func New(options Options) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.Handle("GET /healthz", rootOnly(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeText(w, http.StatusOK, "ok")
-	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+	}), options.Jellyfin))
+	mux.Handle("GET /readyz", rootOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !databaseReady(r.Context(), options.Database) {
 			writeText(w, http.StatusServiceUnavailable, "database unavailable")
 			return
 		}
 		writeText(w, http.StatusOK, "ok")
-	})
+	}), options.Jellyfin))
 	// Once Polyfin is set up, its web client is the place to go, as on
 	// Jellyfin; before, or without one, the admin app is.
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		target := adminPrefix
 		if options.Web != nil && setUp(r.Context(), options.SetupRequired) {
-			target = webPrefix
+			target = basePath(r) + webPrefix
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-	mux.Handle("/admin/api/", options.AdminAPI)
+	mux.Handle("/admin/api/", rootOnly(options.AdminAPI, options.Jellyfin))
 	// No method in the pattern: it would conflict with "/admin/api/", which
 	// must answer every method. adminApp restricts methods itself.
-	mux.Handle("/admin/", adminApp(options.Admin, options.Logger))
+	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.Logger), options.Jellyfin))
+	// As the mux would, but at the root only.
+	mux.Handle("/admin", rootOnly(http.RedirectHandler(adminPrefix, http.StatusMovedPermanently), options.Jellyfin))
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {
 			return setUp(ctx, options.SetupRequired)
 		}, options.CustomJs, options.Jellyfin, options.Logger))
 		// Permanently, as Jellyfin does; the mux's own redirect is a 307.
 		mux.HandleFunc("/web", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, webPrefix, http.StatusMovedPermanently)
+			http.Redirect(w, r, basePath(r)+webPrefix, http.StatusMovedPermanently)
 		})
 		// Jellyfin sends robots.txt to the web client's, which keeps search
 		// engines away.
 		mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, webPrefix+"robots.txt", http.StatusFound)
+			http.Redirect(w, r, basePath(r)+webPrefix+"robots.txt", http.StatusFound)
 		})
 	}
 	mux.Handle("/", options.Jellyfin)
@@ -100,7 +110,67 @@ func New(options Options) http.Handler {
 	if options.Proxies != nil {
 		handler = options.Proxies.Handler(handler)
 	}
-	return handler
+	return underJellyfinBase(handler)
+}
+
+type baseKey struct{}
+
+// underJellyfinBase serves a request whose path starts with jellyfinBase,
+// matched without regard to case, as the same request without it, before
+// anything else sees the path: jellyfinBase alone stands for the root.
+// basePath tells the routes the base the app wrote.
+func underJellyfinBase(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rest, ok := cutBase(r.URL.Path)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		base := r.URL.Path[:len(jellyfinBase)]
+		stripped := r.WithContext(context.WithValue(r.Context(), baseKey{}, base))
+		stripped.URL = new(url.URL)
+		*stripped.URL = *r.URL
+		stripped.URL.Path = rest
+		stripped.URL.RawPath = ""
+		if raw, ok := cutBase(r.URL.RawPath); ok {
+			stripped.URL.RawPath = raw
+		}
+		next.ServeHTTP(w, stripped)
+	})
+}
+
+// cutBase returns p without jellyfinBase, and whether p was under it.
+func cutBase(p string) (string, bool) {
+	if len(p) < len(jellyfinBase) || !strings.EqualFold(p[:len(jellyfinBase)], jellyfinBase) {
+		return "", false
+	}
+	rest := p[len(jellyfinBase):]
+	switch {
+	case rest == "":
+		return "/", true
+	case rest[0] == '/':
+		return rest, true
+	}
+	return "", false
+}
+
+// basePath returns the jellyfinBase a request came under, as the app wrote
+// it, or "" for the root, for the addresses Polyfin sends back.
+func basePath(r *http.Request) string {
+	base, _ := r.Context().Value(baseKey{}).(string)
+	return base
+}
+
+// rootOnly serves requests with h at the root only: under jellyfinBase,
+// other answers them, as a Jellyfin server at /jellyfin would.
+func rootOnly(h, other http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if basePath(r) != "" {
+			other.ServeHTTP(w, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func databaseReady(ctx context.Context, db Pinger) bool {
@@ -177,7 +247,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		header := w.Header()
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Referrer-Policy", "no-referrer")
-		if r.URL.Path == "/admin" || strings.HasPrefix(r.URL.Path, adminPrefix) {
+		if basePath(r) == "" && (r.URL.Path == "/admin" || strings.HasPrefix(r.URL.Path, adminPrefix)) {
 			header.Set("Content-Security-Policy", adminPolicy)
 		}
 		next.ServeHTTP(w, r)

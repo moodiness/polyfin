@@ -122,6 +122,6 @@ volumes:
 1. Under **Settings › Security**, add `traefik` to **Known proxies**. **System › Health** then shows the address it resolves to on the `proxy` network.
 2. Under **Settings › Notifications**, set **Public address** to `https://media.example.org`.
 
-Traefik passes WebSockets and sets `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Real-Ip` by itself. In apps, the server's address is `https://media.example.org`.
+Traefik passes WebSockets and sets `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Real-Ip` by itself. In apps, the server's address is `https://media.example.org`. Polyfin also answers apps under `https://media.example.org/jellyfin`, as at the root, so a proxy that already serves Jellyfin at `/jellyfin` can forward that path to Polyfin as it is (see [Compatible apps](jellyfin-compatibility.md#compatible-apps)). The admin app stays at the root only.
 
 Traefik routes to Polyfin only once its container is healthy, which it becomes within seconds of starting (see [Behind Traefik](installation.md#behind-traefik)).

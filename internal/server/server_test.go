@@ -114,3 +114,71 @@ func TestPathsReachTheirOwner(t *testing.T) {
 		}
 	}
 }
+
+// Apps given an address without a path try it under /jellyfin first, where
+// Jellyfin behind a reverse proxy often lives, and keep whichever answers
+// as the base of every request: Polyfin answers there as at the root, with
+// the path the routes know. The admin app and the probes stay at the root.
+func TestJellyfinBaseAnswersAsTheRoot(t *testing.T) {
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" && r.URL.Path == "/Users/Me" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, "jellyfin "+r.URL.Path)
+	})
+	h := New(Options{
+		Database:      database{},
+		Admin:         fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>Polyfin</title>")}},
+		AdminAPI:      owner("admin api"),
+		Jellyfin:      api,
+		Web:           webFiles,
+		SetupRequired: setupState{}.SetupRequired,
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	for target, want := range map[string]string{
+		"/jellyfin/System/Info/Public": "jellyfin /System/Info/Public",
+		"/JellyFin/system/info/public": "jellyfin /system/info/public",
+		"/jellyfin/socket":             "jellyfin /socket",
+		"/jellyfin/web/themes":         "jellyfin /web/themes",
+		"/jellyfin/admin/":             "jellyfin /admin/",
+		"/jellyfin/admin/users":        "jellyfin /admin/users",
+		"/jellyfin/admin/api/users":    "jellyfin /admin/api/users",
+		"/jellyfin/healthz":            "jellyfin /healthz",
+		"/jellyfin/readyz":             "jellyfin /readyz",
+		// Not under the base.
+		"/jellyfinx/System/Info/Public": "jellyfin /jellyfinx/System/Info/Public",
+		"/admin/api/users":              "admin api",
+	} {
+		response := get(h, target)
+		if got := response.Body.String(); got != want {
+			t.Errorf("%s served %q, want %q", target, got, want)
+		}
+		if response.Header().Get("Content-Security-Policy") != "" && strings.HasPrefix(want, "jellyfin") {
+			t.Errorf("%s: the admin app's Content-Security-Policy", target)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/jellyfin/Users/Me", nil)
+	request.Header.Set("Authorization", `MediaBrowser Client="App", Token="t"`)
+	recorder := httptest.NewRecorder()
+	h.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "jellyfin /Users/Me" {
+		t.Errorf("signed in, /jellyfin/Users/Me: %d %q", recorder.Code, recorder.Body)
+	}
+
+	if body := get(h, "/jellyfin/web/").Body.String(); !strings.Contains(body, `<script src="polyfin.js"></script>`) {
+		t.Errorf("/jellyfin/web/: %q, want the web client's page", body)
+	}
+	for target, want := range map[string]string{
+		"/jellyfin":            "/jellyfin/web/",
+		"/jellyfin/":           "/jellyfin/web/",
+		"/Jellyfin/web":        "/Jellyfin/web/",
+		"/jellyfin/robots.txt": "/jellyfin/web/robots.txt",
+		"/web":                 "/web/",
+	} {
+		if response := get(h, target); response.Code/100 != 3 || response.Header().Get("Location") != want {
+			t.Errorf("%s: %d to %q, want a redirect to %s", target, response.Code, response.Header().Get("Location"), want)
+		}
+	}
+}
