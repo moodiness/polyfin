@@ -116,6 +116,9 @@ type Service struct {
 	attached *cache.Cache[accounts.ID, []container.Attachment]
 	// feeds are the live streams being read (see feed.go).
 	feeds liveState
+	// speech is what is known of versions' speech, and of the subtitles
+	// synced to it (see speech.go).
+	speech speechState
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -163,6 +166,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		rangeHosts:  cache.New[string, bool](500, 24*time.Hour),
 		trackCues:   cache.New[trackKey, []subtitles.Cue](50, time.Hour),
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
+		speech:      newSpeechState(),
 	}
 	server.live = s.ServeLive
 	return s, nil

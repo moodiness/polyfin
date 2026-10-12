@@ -160,6 +160,9 @@ type loopback struct {
 
 	mu      sync.Mutex
 	sources map[string]*source.Source
+	// budgets bound what FFmpeg reads of some sources (see
+	// registerWithin).
+	budgets map[string]*readBudget
 	feeds   map[string]library.Version
 	// files are Polyfin's own files, recordings, by version (see
 	// FileVersion), served under fileKey, as the files of local folders
@@ -177,8 +180,8 @@ func newLoopback() (*loopback, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &loopback{listener: listener, sources: map[string]*source.Source{}, feeds: map[string]library.Version{},
-		files: map[accounts.ID]string{}, fileKey: randomKey()}
+	l := &loopback{listener: listener, sources: map[string]*source.Source{}, budgets: map[string]*readBudget{},
+		feeds: map[string]library.Version{}, files: map[accounts.ID]string{}, fileKey: randomKey()}
 	l.server = &http.Server{Handler: http.HandlerFunc(l.serve), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = l.server.Serve(listener) }()
 	return l, nil
@@ -194,13 +197,23 @@ func randomKey() string {
 // register makes a source readable at the returned URL until release is
 // called.
 func (l *loopback) register(src *source.Source) (string, func()) {
+	return l.registerWithin(src, nil)
+}
+
+// registerWithin is register, what is read of the source counted by
+// budget, which refuses to serve more than its limit; nil counts nothing.
+func (l *loopback) registerWithin(src *source.Source, budget *readBudget) (string, func()) {
 	key := randomKey()
 	l.mu.Lock()
 	l.sources[key] = src
+	if budget != nil {
+		l.budgets[key] = budget
+	}
 	l.mu.Unlock()
 	release := func() {
 		l.mu.Lock()
 		delete(l.sources, key)
+		delete(l.budgets, key)
 		l.mu.Unlock()
 	}
 	return "http://" + l.listener.Addr().String() + "/" + key, release
@@ -220,11 +233,16 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.mu.Lock()
-	src, ok := l.sources[strings.TrimPrefix(r.URL.Path, "/")]
+	key := strings.TrimPrefix(r.URL.Path, "/")
+	src, ok := l.sources[key]
+	budget := l.budgets[key]
 	l.mu.Unlock()
 	if !ok || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 		http.NotFound(w, r)
 		return
+	}
+	if budget != nil {
+		w = budgetWriter{w, budget}
 	}
 	src.ServeHTTP(w, r)
 }
