@@ -100,6 +100,30 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
         checked={form.updateCheck}
         onChange={(updateCheck) => update({ updateCheck })}
       />
+      <SwitchRow
+        anchor="local-discovery"
+        label={s.localDiscovery}
+        help={s.localDiscoveryHelp}
+        checked={form.localDiscovery}
+        onChange={(localDiscovery) => update({ localDiscovery })}
+      />
+      <FieldRow
+        anchor="local-address"
+        label={s.localAddress}
+        help={s.localAddressHelp}
+        error={error('local-address')}
+      >
+        <TextInput
+          value={form.localAddress}
+          onValue={(localAddress) => update({ localAddress })}
+          placeholder="http://192.168.1.10:8096"
+          maxLength={limits('localAddress').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-md"
+        />
+      </FieldRow>
     </SettingsGroup>
   )
 }

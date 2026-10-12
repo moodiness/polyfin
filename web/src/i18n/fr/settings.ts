@@ -45,6 +45,12 @@ const settings: typeof en = {
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
       'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications « Nouvelle version ». Désactivé, Polyfin ne contacte jamais GitHub.',
+    localDiscovery: 'Répondre à la découverte sur le réseau local',
+    localDiscoveryHelp:
+      'Les applications Jellyfin et Emby qui cherchent des serveurs sur le réseau local trouvent Polyfin et l’affichent, sans qu’il faille saisir son adresse. Elles le demandent sur le port UDP 7359, et Polyfin ne répond qu’aux adresses du réseau local. S’applique tout de suite, sans redémarrage. Avec Docker, il faut le réseau de l’hôte ou le port 7359/udp publié : voir la documentation d’installation.',
+    localAddress: 'Adresse sur le réseau local',
+    localAddressHelp:
+      'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
     legacyWarningTitle: 'Avertissement de sécurité',
     legacyWarning:
       'Les méthodes héritées peuvent transmettre les identifiants dans les URL, qui se retrouvent alors dans les journaux, l’historique du navigateur et les proxys. N’activez cette option que si une de vos applications ne parvient pas à se connecter autrement.',
@@ -436,7 +442,7 @@ const settings: typeof en = {
     variableHint: 'Variable d’environnement',
     ledes: {
       general:
-        'Le nom du serveur, sa langue, la connexion des applications et la recherche de nouvelles versions.',
+        'Le nom du serveur, sa langue, la connexion des applications et leur découverte du serveur, et la recherche de nouvelles versions.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',

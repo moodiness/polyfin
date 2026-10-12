@@ -185,6 +185,8 @@ const common = {
       'The RemuxDB address must be a web address starting with http:// or https://.',
     invalid_public_address:
       'The public address must be a web address starting with http:// or https://, without a query.',
+    invalid_local_address:
+      'The address on the local network must be a web address starting with http:// or https://, such as http://192.168.1.10:8096, without a query.',
     invalid_smtp_host:
       'Enter the SMTP server’s host name, such as smtp.example.org, without spaces.',
     invalid_smtp_port: 'The SMTP port must be a whole number from 1 to 65535.',

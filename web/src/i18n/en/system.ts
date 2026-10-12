@@ -125,6 +125,10 @@ const system = {
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         unknownProxy: (address: string) =>
           `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
+        discoveryPort: (port: number) =>
+          `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
+        discoveryAddress: (address: string) =>
+          `Jellyfin apps that look for servers on the local network are given ${address}, an address of Polyfin’s container they cannot reach. Set Address on the local network under Settings › General.`,
         task: (name: string) => `The task “${name}” failed.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',

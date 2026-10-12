@@ -132,6 +132,10 @@ const system: typeof en = {
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,
         unknownProxy: (address: string) =>
           `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
+        discoveryPort: (port: number) =>
+          `Polyfin ne peut pas écouter sur le port UDP ${port} : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.`,
+        discoveryAddress: (address: string) =>
+          `Les applications Jellyfin qui cherchent des serveurs sur le réseau local reçoivent ${address}, une adresse du conteneur de Polyfin qu’elles ne peuvent pas joindre. Renseignez Adresse sur le réseau local dans Paramètres › Général.`,
         task: (name: string) => `La tâche « ${name} » a échoué.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',

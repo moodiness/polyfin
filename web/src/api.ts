@@ -154,6 +154,13 @@ export type Settings = {
   legacyAuthorization: boolean
   /** Asks GitHub once a day for Polyfin's latest release, to tell administrators of a new version. */
   updateCheck: boolean
+  /** Answers the discovery messages Jellyfin apps broadcast on the local network (UDP port 7359). */
+  localDiscovery: boolean
+  /**
+   * Address Polyfin is reached at on the local network, such as http://192.168.1.10:8096, which
+   * discovery announces; empty announces the address of the interface that reaches the app.
+   */
+  localAddress: string
   /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
   language: Language
   /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
@@ -2095,6 +2102,8 @@ export type HealthProblem = {
   | { code: 'conversions_full' }
   | { code: 'thumbnails_paused'; host: string }
   | { code: 'unknown_proxy'; address: string }
+  | { code: 'discovery_port'; port: number }
+  | { code: 'discovery_address'; address: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
   | { code: 'backup_failed' }

@@ -69,6 +69,21 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).updateCheckHelp,
     keywords: ['GitHub', 'update', 'release', 'mise à jour'],
   },
+  {
+    section: 'general',
+    anchor: 'local-discovery',
+    label: (t) => s(t).localDiscovery,
+    help: (t) => s(t).localDiscoveryHelp,
+    keywords: ['discovery', 'découverte', 'UDP', '7359', 'broadcast', 'auto discovery'],
+  },
+  {
+    section: 'general',
+    anchor: 'local-address',
+    label: (t) => s(t).localAddress,
+    help: (t) => s(t).localAddressHelp,
+    keywords: ['PublishedServerUrl', 'LocalAddress', 'Docker', 'IP', 'URL'],
+    codes: ['invalid_local_address'],
+  },
   // Playback
   {
     section: 'playback',

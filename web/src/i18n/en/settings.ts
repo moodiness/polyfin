@@ -42,6 +42,12 @@ const settings = {
     updateCheck: 'Check for new versions',
     updateCheckHelp:
       'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',
+    localDiscovery: 'Answer local network discovery',
+    localDiscoveryHelp:
+      'Jellyfin and Emby apps that look for servers on the local network find Polyfin and list it, so its address does not have to be typed. They ask on UDP port 7359, and Polyfin answers only addresses of the local network. Applies at once, without a restart. In Docker, this needs host networking or the published port 7359/udp: see the installation docs.',
+    localAddress: 'Address on the local network',
+    localAddressHelp:
+      'The address apps on the local network reach Polyfin at, such as http://192.168.1.10:8096. Discovery answers give it, and Jellyfin apps read it as the server’s local address. Empty, the answers give the address of the network interface that reaches the app, which is right unless Polyfin runs in a Docker bridge network: there, enter the host’s address and Polyfin’s port.',
     legacyWarningTitle: 'Security warning',
     legacyWarning:
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
@@ -426,7 +432,8 @@ const settings = {
     noMatchHelp: 'Try another word, such as the name of a variable or a service.',
     variableHint: 'Environment variable',
     ledes: {
-      general: 'The server’s name, its language, how apps sign in and the check for new versions.',
+      general:
+        'The server’s name, its language, how apps sign in and find it, and the check for new versions.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
       content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
