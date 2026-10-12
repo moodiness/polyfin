@@ -207,7 +207,7 @@ Each folder then lists its channel's programmes within that channel's archive, h
 
 ### Playing a programme
 
-- A programme plays as a movie's file does: analyzed, played as it is, remuxed or converted (see [Playback](playback.md) and [Transcoding](transcoding.md)). As the archive answers an MPEG-TS stream of unknown length, the programme's length stands for it. A file under a tenth of the programme's length is refused, as a short clip standing in for a title is.
+- A programme plays as a movie's file does: analyzed, played as it is, remuxed or converted (see [Playback](playback.md) and [Transcoding](transcoding.md)). As the archive answers an MPEG-TS stream of unknown length, the programme's length stands for it. A file under a tenth of the programme's length is refused, as a short clip standing in for a title is. Its times count from its start, though its packets tell the time of the broadcast, and a seek lands where asked (see [HLS segments](transcoding.md#hls-segments)).
 - Polyfin always relays it: the address holds the account's credentials, and is never shown nor logged.
 - An archive that answers an HLS playlist, as a `default` or `append` template ending in `.m3u8` may, is refused: the app is told no stream suits. Programmes play as files, and Polyfin's HLS path for sources is the live one, which keeps a sliding window of an endless stream and cannot serve a finite playlist to seek in. `xc` and `flussonic` archives are MPEG-TS files.
 - Programmes get no scrubbing thumbnails nor chapter images, which would read the whole file through a provider connection.
@@ -264,7 +264,7 @@ Movies and series are ordinary titles in apps: details, search, latest, genres, 
 
 Each movie or episode has one version, the provider's file (`/movie/…` or `/series/…` with its container for Xtream). It is labelled with the quality its name gives (4K, FHD, HD, SD) for quality groups. It plays, converts, downloads and takes thumbnails and subtitles as any title's (see [Playback](playback.md) and [Transcoding](transcoding.md)).
 
-An MPEG-TS file has no index to cut it by its keyframes. It plays as it is on apps that take MPEG-TS, and otherwise only converted: cut into a 2-second segment, then one every four seconds over its duration, FFmpeg reading it from the time an app seeks to, the encoder placing a keyframe at each segment's start. A user who may not have video converted is told no stream suits instead. This holds for addons' MPEG-TS files too.
+An MPEG-TS file has no index to cut it by its keyframes. It plays as it is on apps that take MPEG-TS, and otherwise only converted: cut into a 2-second segment, then one every four seconds over its duration, the encoder placing a keyframe at each segment's start. After a seek, FFmpeg reads it from before the time asked, as it lands on the first keyframe after the time it is given, and what comes before the segment is left out (see [HLS segments](transcoding.md#hls-segments)). A user who may not have video converted is told no stream suits instead. This holds for addons' MPEG-TS files too.
 
 **Compared with Jellyfin:**
 - MPEG-TS files play as Jellyfin plays such files.

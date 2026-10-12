@@ -99,7 +99,7 @@ If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics
 Remuxes and conversions of files are cut into HLS segments on the source's own keyframes:
 
 - The first segment ends on the first keyframe at least 2 seconds in, and each next one on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
-- An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds.
+- An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds. Its segments count from its start, whatever time its first packet tells, such as an hour into a broadcast, and a seek lands where asked, however far apart its keyframes are.
 - A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
 - Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
 - An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good ends its conversion, and the next request answers `503` too.
@@ -108,7 +108,8 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 
 - `EXT-X-TARGETDURATION` is the longest segment, rounded up.
 - After a seek, FFmpeg probes 2 MB of the file's head, which the analysis already read, rather than 5 MB; conversions burning subtitles in, MPEG-TS files and discs probe as usual.
-- After a seek in a Blu-ray disc, FFmpeg starts at the previous segment's keyframe, as its Blu-ray reader lands on the keyframe after the time asked, and what comes before the segment asked is left out.
+- After a seek in an MPEG-TS file or a disc, FFmpeg starts at the previous segment's start, as its MPEG-TS and MPEG program stream readers land on the first keyframe after the time asked, and what comes before the segment asked is left out, without being converted.
+- When FFmpeg still lands past the segment's start, as in a file with a keyframe every 10 seconds, it starts again further back: as much further back as it went past the time asked, so at least twice as far, until it lands before the segment or reads the file from its start. The playback's later seeks start as far back. Each try costs an FFmpeg start; the frames read before the segment are decoded but not converted.
 
 ## Conversion settings
 
