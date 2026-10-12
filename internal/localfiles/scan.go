@@ -191,17 +191,20 @@ func under(rel string, skipped []string) bool {
 	return false
 }
 
-// claim marks a scan of the folder under way; it reports false when one
-// already is.
-func (s *Service) claim(id accounts.ID) (release func(), ok bool) {
+// claim marks a scan of the folder under way, done under ctx; it reports
+// false when one already is. The scan's context ends with release, or
+// when the folder's scan is stopped (see hold).
+func (s *Service) claim(ctx context.Context, id accounts.ID) (scanCtx context.Context, release func(), ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, busy := s.running[id]; busy {
-		return nil, false
+		return nil, nil, false
 	}
+	scanCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
-	s.running[id] = done
-	return func() {
+	s.running[id] = scanning{done: done, stop: stop}
+	return scanCtx, func() {
+		stop()
 		s.mu.Lock()
 		delete(s.running, id)
 		s.scanned[id] = true
@@ -210,37 +213,63 @@ func (s *Service) claim(id accounts.ID) (release func(), ok bool) {
 	}, true
 }
 
+// hold stops the scan of the folder under way, waits for it to end, and
+// keeps the folder from being scanned until release: what it holds
+// changes meanwhile.
+func (s *Service) hold(id accounts.ID) (release func()) {
+	for {
+		_, release, ok := s.claim(context.Background(), id)
+		if ok {
+			return release
+		}
+		s.mu.Lock()
+		current, busy := s.running[id]
+		s.mu.Unlock()
+		if busy {
+			current.stop()
+			<-current.done
+		}
+	}
+}
+
 // StartScan scans a folder in the background, unless a scan of it is
 // under way.
 func (s *Service) StartScan(id accounts.ID) {
-	release, ok := s.claim(id)
+	scanCtx, release, ok := s.claim(s.ctx, id)
 	if !ok {
 		return
 	}
 	s.wg.Go(func() {
 		defer release()
-		if err := s.scan(s.ctx, id); err != nil && s.ctx.Err() == nil {
+		// Neither a stopped scan nor one the service's end cut short fails.
+		if err := s.scan(scanCtx, id); err != nil && scanCtx.Err() == nil {
 			s.logger.Warn("A local folder could not be scanned", "folder", id, "error", err)
 		}
 	})
 }
 
-// Scan scans a folder now, once a scan of it under way ended.
+// Scan scans a folder now, once a scan of it under way ended. A scan
+// stopped as what the folder holds changes ends without an error: the
+// folder is scanned again.
 func (s *Service) Scan(ctx context.Context, id accounts.ID) error {
 	for {
-		release, ok := s.claim(id)
+		scanCtx, release, ok := s.claim(ctx, id)
 		if ok {
 			defer release()
-			return s.scan(ctx, id)
+			err := s.scan(scanCtx, id)
+			if err != nil && scanCtx.Err() != nil && ctx.Err() == nil {
+				return nil
+			}
+			return err
 		}
 		s.mu.Lock()
-		done := s.running[id]
+		current, busy := s.running[id]
 		s.mu.Unlock()
-		if done == nil {
+		if !busy {
 			continue
 		}
 		select {
-		case <-done:
+		case <-current.done:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -475,8 +504,10 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	return s.finish(ctx, id, at, list)
 }
 
-// finish marks a folder scanned at at, and keeps the prints of a share's
-// folders its listing has (see Service.shareSeen).
+// finish marks a folder scanned at at, keeps the prints of a share's
+// folders its listing has (see Service.shareSeen), and gives what users
+// did with the titles its files were before what it holds changed to
+// those they are now (see follow).
 func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list listing) error {
 	if _, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at); err != nil {
 		return err
@@ -487,7 +518,7 @@ func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list
 		s.kept[id]++
 		s.mu.Unlock()
 	}
-	return nil
+	return s.follow(ctx, id, list.skipped)
 }
 
 // storedFiles reads the files a folder's scans found, by path.

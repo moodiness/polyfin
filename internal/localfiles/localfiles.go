@@ -119,11 +119,11 @@ type Service struct {
 	wg     sync.WaitGroup
 
 	mu sync.Mutex
-	// running are the scans under way, by folder, each closed when it
-	// ends; scanned the folders scanned since the service started; prints
-	// the prints of the folders the last scan of a share listed, by
-	// folder (see listing), and kept how many scans of a share kept them.
-	running map[accounts.ID]chan struct{}
+	// running are the scans under way, by folder (see scanning); scanned
+	// the folders scanned since the service started; prints the prints of
+	// the folders the last scan of a share listed, by folder (see
+	// listing), and kept how many scans of a share kept them.
+	running map[accounts.ID]scanning
 	scanned map[accounts.ID]bool
 	prints  map[accounts.ID]map[string]uint64
 	kept    map[accounts.ID]int
@@ -148,6 +148,13 @@ type Service struct {
 	artworkMu      sync.Mutex
 }
 
+// scanning is a scan under way: done is closed when it ends, and stop
+// stops it.
+type scanning struct {
+	done chan struct{}
+	stop context.CancelFunc
+}
+
 // matchWorkers bounds the units a scan matches at once, each asking the
 // metadata addons.
 const matchWorkers = 4
@@ -159,7 +166,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
-		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]chan struct{}{},
+		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
 		shares: map[accounts.ID]*pooledRemote{}}
 }
@@ -336,7 +343,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	if folder.Kind != KindMovies && folder.Kind != KindShows && folder.Kind != KindMusic && folder.Kind != KindHomeVideos {
+	if !validKind(folder.Kind) {
 		return addons.Addon{}, ErrInvalidKind
 	}
 	share := shareKind(location)
@@ -371,28 +378,36 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 }
 
 // Changes are what Update changes of a folder: its name, its path or
-// address, a share's user, its password, removed when empty, and whether
-// its titles show the artwork beside their files.
+// address, a share's user, its password, removed when empty, whether its
+// titles show the artwork beside their files, and what it holds.
 type Changes struct {
 	Name       *string
 	Path       *string
 	User       *string
 	Password   *string
 	UseArtwork *bool
+	Kind       *string
 }
 
 // Update changes a folder's name, path or address, a share's user or
-// password, or whether its titles show the artwork beside their files,
-// which applies at once. A new path or address forgets the files found in
-// the former one, their links included, and is scanned at once, as a
-// share whose user or password changed is. A path in the container keeps
-// no user nor password.
+// password, whether its titles show the artwork beside their files, which
+// applies at once, or what it holds. A new path or address forgets the
+// files found in the former one, their links included, and is scanned at
+// once, as a share whose user or password changed is. A path in the
+// container keeps no user nor password.
+//
+// What a folder holds changes as a new path does, its addon and library
+// kept with their identifiers (see addons.Store.Update): the links made by
+// hand and the episodes given to discs go, and what users did with its
+// titles follows its files between movies, shows and home videos (see
+// rememberTitles and follow); to or from music, nothing follows. A scan
+// under way stops first.
 func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (addons.Addon, error) {
 	current, err := s.Folder(ctx, id)
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	name, location := current.Addon.Manifest.Name, current.Addon.ManifestURL
+	name, location, kind := current.Addon.Manifest.Name, current.Addon.ManifestURL, current.Kind
 	if changes.Name != nil {
 		if name, err = validName(*changes.Name); err != nil {
 			return addons.Addon{}, err
@@ -401,6 +416,11 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if changes.Path != nil {
 		if location, err = validLocation(*changes.Path); err != nil {
 			return addons.Addon{}, err
+		}
+	}
+	if changes.Kind != nil {
+		if kind = *changes.Kind; !validKind(kind) {
+			return addons.Addon{}, ErrInvalidKind
 		}
 	}
 	share := shareKind(location)
@@ -419,8 +439,14 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		user, changes.Password = "", new("")
 	}
 	moved := location != current.Addon.ManifestURL
+	retyped := kind != current.Kind
 	credentials := user != current.User || changes.Password != nil
-	addon, err := s.addons.Update(ctx, addons.Shared(), id, addons.KindLocal, location, manifest(id, name, current.Kind, share), func(tx pgx.Tx) error {
+	release := func() {}
+	if moved || retyped {
+		// A scan under way stops: what it found is forgotten.
+		release = s.hold(id)
+	}
+	addon, err := s.addons.Update(ctx, addons.Shared(), id, addons.KindLocal, location, manifest(id, name, kind, share), func(tx pgx.Tx) error {
 		if changes.UseArtwork != nil {
 			if _, err := tx.Exec(ctx, "UPDATE local_folders SET use_artwork = $2 WHERE addon_id = $1", id, *changes.UseArtwork); err != nil {
 				return err
@@ -436,8 +462,16 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 				}
 			}
 		}
-		if !moved {
+		if !moved && !retyped {
 			return nil
+		}
+		if retyped {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET kind = $2 WHERE addon_id = $1", id, kind); err != nil {
+				return err
+			}
+			if err := rememberTitles(ctx, tx, id, current.Kind, kind); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, "DELETE FROM local_files WHERE addon_id = $1", id); err != nil {
 			return err
@@ -462,17 +496,23 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		_, err := tx.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = NULL, error = $3 WHERE addon_id = $1", id, checked, failure)
 		return err
 	})
+	release()
 	if err != nil {
 		return addons.Addon{}, err
 	}
 	s.artworkChanged()
-	if moved || share != "" && credentials {
+	if moved || retyped || share != "" && credentials {
 		s.StartScan(id)
 	}
-	if moved {
+	if moved || retyped {
 		s.watch.kick()
 	}
 	return addon, nil
+}
+
+// validKind reports whether a folder may hold kind.
+func validKind(kind string) bool {
+	return kind == KindMovies || kind == KindShows || kind == KindMusic || kind == KindHomeVideos
 }
 
 // Folder describes one of the server's local folders.

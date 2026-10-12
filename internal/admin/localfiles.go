@@ -115,11 +115,11 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 }
 
 // folderRequest adds or changes a local folder: its name, its path in the
-// container or a share's address, and, on adding, what it holds, "movies",
-// "shows", "music" or "homevideos"; a share's user and password; whether
-// its titles show the artwork beside their files, yes when left out on
-// adding. On a change, a password left out keeps the one stored, and an
-// empty one removes it.
+// container or a share's address, what it holds, "movies", "shows",
+// "music" or "homevideos", left out on a change to keep it; a share's user
+// and password; whether its titles show the artwork beside their files,
+// yes when left out on adding. On a change, a password left out keeps the
+// one stored, and an empty one removes it.
 type folderRequest struct {
 	Name       *string `json:"name"`
 	Path       *string `json:"path"`
@@ -158,9 +158,9 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateFolder changes a local folder's name, path or address, a share's
-// user or password, or whether its titles show the artwork beside their
-// files; a new path or address, a new user or password, is scanned at
-// once.
+// user or password, whether its titles show the artwork beside their
+// files, or what it holds; a new path or address, a new user or password,
+// or what it holds, is scanned at once.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -174,12 +174,15 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil {
+	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.Kind == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id,
-		localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork})
+	changes := localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork}
+	if body.Kind != "" {
+		changes.Kind = &body.Kind
+	}
+	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id, changes)
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }
 
