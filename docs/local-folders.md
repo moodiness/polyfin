@@ -386,7 +386,7 @@ On a folder's page under **Sources**, **Edit the folder** changes what it holds,
 
 A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play over HLS only, a Blu-ray disc's video copied when the app takes it and a DVD's converted (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
 
-An episode whose file has no intro in its chapters, of a series or a season the segment databases do not know, gets the intro the episodes of its season share in their audio, once one of them was played (see [Intros found in local episodes' audio](skip-segments.md#intros-found-in-local-episodes-audio)).
+An episode whose file has no intro or credits in its chapters, of a series or a season the segment databases do not know, gets the intro and the credits the episodes of its season share in their audio, once one of them was played (see [Intros and credits found in local episodes' audio](skip-segments.md#intros-and-credits-found-in-local-episodes-audio)).
 
 ## Artwork
 

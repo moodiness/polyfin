@@ -31,7 +31,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - Apps that keep titles for offline viewing can download the movies and episodes whose versions they were shown. A download is the version's file, under its file name, sent to the source or relayed as playback would be.
 - Active playback appears in Jellyfin apps' dashboards.
 - Apps can control one another (play, pause, seek, messages) when the controlled app keeps Jellyfin's live connection (WebSocket) open.
-- The skip intro, recap and credits buttons come from [TheIntroDB](https://theintrodb.org) and [IntroDB](https://introdb.app), community databases, from the chapters of the version played, and, for the episodes of local folders, from the intro their season's episodes share in their audio. Polyfin sends the databases only titles' IDs, episode numbers and runtimes. See [Skip segments](skip-segments.md).
+- The skip intro, recap and credits buttons come from [TheIntroDB](https://theintrodb.org) and [IntroDB](https://introdb.app), community databases, from the chapters of the version played, and, for the episodes of local folders, from the intro and the credits their season's episodes share in their audio. Polyfin sends the databases only titles' IDs, episode numbers and runtimes. See [Skip segments](skip-segments.md).
 - With **Describe versions from RemuxDB** on, a title's page shows the tracks of its versions before they are played, from what [RemuxDB](https://remuxdb.1632022.xyz), a community database, found in the same files. Polyfin sends it only titles' IDs. See [Tracks from RemuxDB](#tracks-from-remuxdb).
 
 **Compared with Jellyfin:**
