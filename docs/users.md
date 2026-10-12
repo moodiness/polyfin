@@ -564,7 +564,7 @@ When every version is taller, all are kept rather than none, the closest to the 
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows the imports from a Jellyfin or Emby server and from an app under **My account** (see [Importing your own watch history](#importing-your-own-watch-history) and [Importing from an app](#importing-from-an-app)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
-| **Known proxies** | **Settings › Security** | None (up to 64 addresses or networks) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
+| **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
 
 ### Users' own addons
@@ -606,7 +606,7 @@ Polyfin signs out the Jellyfin apps not used for that many days, at startup and 
 
 ### Known proxies
 
-Behind a reverse proxy, every request reaches Polyfin from the proxy's address. Listing the proxy's address, or its network, has Polyfin take each request to come from the client the proxy names, for failed sign-ins, the addresses devices show and the local network. See [Known proxies](reverse-proxy.md#known-proxies).
+Behind a reverse proxy, every request reaches Polyfin from the proxy's address. Listing the proxy's address, its network, or its host name, such as its container's name on a Docker network, has Polyfin take each request to come from the client the proxy names, for failed sign-ins, the addresses devices show and the local network. A host name is looked up again every minute, so the proxy may change addresses. See [Known proxies](reverse-proxy.md#known-proxies).
 
 ### Detailed log
 

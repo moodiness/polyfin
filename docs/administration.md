@@ -70,9 +70,10 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Backups**: the last run and its result, the last backup made, its file and size, and the next one. A failed backup, or a last backup older than two days, is a problem. See [Backups](backups.md);
   - **Thumbnails**: the queue and paused sources;
   - **Polyfin**: memory, goroutines, uptime and version;
-  - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error.
+  - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error;
+  - **Known proxies**: while some are listed by host name, the addresses each name resolves to (see [Proxies by name](reverse-proxy.md#proxies-by-name)).
 
-An address on the local network that sends `X-Forwarded-For` or `X-Real-IP` without being one of the **Known proxies** is a warning, named for an hour after its last such request, with a link to the setting: it is usually a reverse proxy missing from it (see [Known proxies](reverse-proxy.md#known-proxies)).
+An address on the local network that sends `X-Forwarded-For` or `X-Real-IP` without being one of the **Known proxies** is a warning, named for an hour after its last such request, with a link to the setting: it is usually a reverse proxy missing from it (see [Known proxies](reverse-proxy.md#known-proxies)). A host name of **Known proxies** that resolves to nothing is a warning too, with a link to the setting: it trusts nothing.
 
 Local network discovery has two warnings, linked to its settings (see [Local network discovery](#local-network-discovery)): its UDP port is used by another program, such as a Jellyfin server on the same host, or its answers give an address of Polyfin's container, which apps on the local network cannot reach.
 

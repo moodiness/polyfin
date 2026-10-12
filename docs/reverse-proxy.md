@@ -35,15 +35,29 @@ Without a known proxy, Polyfin takes every request to come from the address its 
 - **Sessions**, the playbacks on **Home** and each user's devices show the proxy's address;
 - when the proxy is on the local network, every client counts as on it: apps are told so by `/System/Endpoint`, and a forgotten password asked from the internet makes a PIN.
 
-List the proxy under **Known proxies**, in **Settings › Security**: one IPv4 or IPv6 address, or one network such as `172.30.0.0/24`, per line, up to 64. A request from a known proxy is then taken to come from the client its `X-Forwarded-For` header names: the rightmost address there that is not a known proxy, read across every line of the header. Without that header, `X-Real-IP` names the client. Requests from any other address keep their connection's address, and their forwarded headers are ignored, since anyone can send them.
+List the proxy under **Known proxies**, in **Settings › Security**, one entry per line, up to 64: an IPv4 or IPv6 address, a network such as `172.30.0.0/24`, or a host name such as `traefik` (see [Proxies by name](#proxies-by-name)). A request from a known proxy is then taken to come from the client its `X-Forwarded-For` header names: the rightmost address there that is not a known proxy, read across every line of the header. Without that header, `X-Real-IP` names the client. Requests from any other address keep their connection's address, and their forwarded headers are ignored, since anyone can send them.
 
 List only proxies: a client connecting from a known address could name any address it likes.
 
 **System › Health** warns when an address on the local network sends `X-Forwarded-For` or `X-Real-IP` without being a known proxy, naming that address, for an hour after its last such request. That is how a proxy missing from the list shows up. Addresses on the internet are never named: a client can send the headers itself.
 
+### Proxies by name
+
+A host name, such as a container's name on a Docker network, is looked up with the system's resolver when the settings are saved, when Polyfin starts, and then every minute. Every address it resolves to is a known proxy, until a lookup no longer returns it: when the proxy gets another address, the old one stops being trusted at the next lookup, within a minute. A name removed from the list stops being trusted at once. A name that resolves to nothing, or whose lookup fails, trusts nothing.
+
+While names are listed, a request with `X-Forwarded-For` or `X-Real-IP` from an address on the local network that is not a known proxy has them looked up again at once, at most once every 10 seconds. A proxy that starts after Polyfin, as after a reboot, or comes back with another address, is thus trusted within seconds rather than a minute. The lookup runs in the background: the request that sets it off is still taken to come from its connection's address, and the next ones from the client the proxy names once its address is found.
+
+**System › Health** shows what each name resolves to, under **Known proxies**, and warns of a name that resolves to nothing.
+
+A name is only as trusted as the DNS that answers for it: whoever controls that answer chooses the addresses Polyfin trusts. List only names your own network resolves, such as the containers' names Docker's own DNS answers on a network you made, never a name a public DNS server answers.
+
+Names are written in letters, digits, hyphens, underscores and dots; Polyfin keeps them in lower case.
+
+**For app developers:** in `/admin/api/settings`, `knownProxies` lists the addresses and networks first, then the names; a `PUT` with an entry that is no address, network or host name, or with more than 64 entries, answers 400 `invalid_known_proxies`. `GET /admin/api/health` lists the names under `proxyNames`, each with its `addresses`, sorted, and `resolvedAt`, and `GET /admin/api/health/problems` warns of one that resolves to nothing as `proxy_name_unresolved`, with `name`.
+
 ### A proxy in a Docker network
 
-When the proxy and Polyfin are containers on the same Docker network, Polyfin sees the proxy's address on that network, such as `172.30.0.2`, not the host's. A container's address can change when it is created again, so list the network's subnet instead, and fix it in Compose (see the example below). Keep that network for the proxy and Polyfin: every container on it is trusted.
+When the proxy and Polyfin are containers on the same Docker network, Polyfin sees the proxy's address on that network, such as `172.30.0.2`, not the host's. A container's address can change when the containers start in another order, so list the proxy's container name instead (see the example below): Docker's own DNS answers it on a network the containers share, one you declare rather than the default `bridge` network. Listing the network's subnet, fixed in Compose, works too, but then every container on that network is trusted.
 
 When the proxy runs on the host, or uses the host's network, and reaches Polyfin through its published port, Polyfin usually sees the address of the Docker network's gateway, such as `172.18.0.1`. **System › Health** names the address it sees.
 
@@ -56,12 +70,13 @@ With a CDN, or a second proxy, in front of the one that reaches Polyfin, the fir
 
 ## Example: Traefik with Docker labels
 
-This adds Traefik to the `compose.yaml` of [Installation](installation.md), with certificates from Let's Encrypt. Polyfin joins a `proxy` network whose subnet is fixed, and keeps its port for the local network.
+This adds Traefik to the `compose.yaml` of [Installation](installation.md), with certificates from Let's Encrypt. Traefik's container is named `traefik`, Polyfin joins its `proxy` network, and keeps its port for the local network.
 
 ```yaml
 services:
   traefik:
     image: traefik:v3.5
+    container_name: traefik
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -97,9 +112,6 @@ services:
 
 networks:
   proxy:
-    ipam:
-      config:
-        - subnet: 172.30.0.0/24
 
 volumes:
   letsencrypt:
@@ -107,7 +119,7 @@ volumes:
 
 `polyfin_proxy` is the `proxy` network as Compose names it, after the project's name, `polyfin`. Point `media.example.org` at the server, open ports 80 and 443, start the stack, then:
 
-1. Under **Settings › Security**, add `172.30.0.0/24` to **Known proxies**.
+1. Under **Settings › Security**, add `traefik` to **Known proxies**. **System › Health** then shows the address it resolves to on the `proxy` network.
 2. Under **Settings › Notifications**, set **Public address** to `https://media.example.org`.
 
 Traefik passes WebSockets and sets `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Real-Ip` by itself. In apps, the server's address is `https://media.example.org`.
