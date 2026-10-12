@@ -145,3 +145,54 @@ func entryIDs(entries []Entry) []accounts.ID {
 	}
 	return ids
 }
+
+// What users did with items follows them to others as an import adds it:
+// played marks are added, the newer resume point is kept, favorites are
+// set, nothing is taken back, each user's apart.
+func TestDataFollowsAsAnImport(t *testing.T) {
+	store, alice, bob := setup(t)
+	older := time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC)
+	newer := older.Add(48 * time.Hour)
+	played, resumed, favorite := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
+	wasResumed, resumedLater, untouched, wasPlayed := accounts.ID{11}, accounts.ID{12}, accounts.ID{13}, accounts.ID{14}
+	set := func(user, id accounts.ID, change func(*Data)) {
+		t.Helper()
+		if _, err := store.Change(t.Context(), user, []Item{{ID: id}}, change); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(alice, played, func(d *Data) { d.MarkPlayed(&newer, newer); d.PlayCount = 3 })
+	set(alice, resumed, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = 30*time.Minute, 2*time.Hour, &older })
+	set(alice, favorite, func(d *Data) { d.Favorite = true })
+	set(alice, wasResumed, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = 10*time.Minute, 2*time.Hour, &older })
+	set(alice, resumedLater, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = time.Hour, 2*time.Hour, &newer })
+	set(alice, wasPlayed, func(d *Data) { d.MarkPlayed(&newer, newer) })
+	set(bob, favorite, func(d *Data) { d.Favorite = true })
+	if err := store.Follow(t.Context(), []Move{
+		{From: []accounts.ID{played}, To: []Item{{ID: wasResumed}}},
+		{From: []accounts.ID{resumed}, To: []Item{{ID: resumedLater}, {ID: untouched}}},
+		{From: []accounts.ID{favorite}, To: []Item{{ID: wasPlayed}}},
+	}, jellyfin); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get(t.Context(), alice, []accounts.ID{wasResumed, resumedLater, untouched, wasPlayed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := got[wasResumed]; !d.Played || d.PlayCount != 3 || d.Position != 0 {
+		t.Errorf("played over a resume point: %+v", d)
+	}
+	if d := got[resumedLater]; d.Played || d.Position != time.Hour {
+		t.Errorf("an older resume point over a newer one: %+v", d)
+	}
+	if d := got[untouched]; d.Played || d.Position != 30*time.Minute || d.LastPlayed == nil || !d.LastPlayed.Equal(older) {
+		t.Errorf("a resume point: %+v", d)
+	}
+	if d := got[wasPlayed]; !d.Played || !d.Favorite {
+		t.Errorf("a favorite over a played mark: %+v", d)
+	}
+	theirs, err := store.Get(t.Context(), bob, []accounts.ID{wasResumed, resumedLater, untouched, wasPlayed})
+	if err != nil || len(theirs) != 1 || !theirs[wasPlayed].Favorite || theirs[wasPlayed].Played {
+		t.Errorf("another user's: %+v %v", theirs, err)
+	}
+}

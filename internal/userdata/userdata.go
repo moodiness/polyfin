@@ -258,3 +258,63 @@ func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, 
 func optionalID(id accounts.ID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: id != accounts.ID{}}
 }
+
+// Move names items whose data follows other items: what users did with
+// From goes to To (see Store.Follow).
+type Move struct {
+	From []accounts.ID
+	To   []Item
+}
+
+// Follow gives what each user did with the items each move comes from to
+// the items it goes to, under thresholds (see Data.Follow).
+func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds) error {
+	var from []accounts.ID
+	for _, move := range moves {
+		from = append(from, move.From...)
+	}
+	if len(from) == 0 {
+		return nil
+	}
+	rows, err := s.db.Query(ctx, "SELECT DISTINCT user_id FROM user_data WHERE item_id = ANY($1)", from)
+	if err != nil {
+		return err
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		kept, err := s.Get(ctx, user, from)
+		if err != nil {
+			return err
+		}
+		gains := map[accounts.ID][]Data{}
+		var items []Item
+		for _, move := range moves {
+			for _, id := range move.From {
+				data, ok := kept[id]
+				if !ok || !data.follows() {
+					continue
+				}
+				for _, to := range move.To {
+					if to.ID == id {
+						continue
+					}
+					if gains[to.ID] == nil {
+						items = append(items, to)
+					}
+					gains[to.ID] = append(gains[to.ID], data)
+				}
+			}
+		}
+		if _, err := s.ChangeEach(ctx, user, items, func(item Item, d *Data) {
+			for _, gain := range gains[item.ID] {
+				d.Follow(gain, thresholds)
+			}
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
