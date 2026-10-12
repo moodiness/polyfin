@@ -720,6 +720,25 @@ func (s *Service) homeCatalog(ctx context.Context, source accounts.ID, skip int,
 	})
 }
 
+// HeldVideos reports which of the home videos of the Stremio identifiers
+// ids a file of a home videos folder holds now: the others are gone, from
+// disk or as their folder holds something else, and may come back within
+// goneDays days (see recognize).
+func (s *Service) HeldVideos(ctx context.Context, ids []string) (map[string]bool, error) {
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT f.stremio_id FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		WHERE l.kind = $1 AND f.stremio_id = ANY($2)`, KindHomeVideos, ids)
+	if err != nil {
+		return nil, err
+	}
+	held := map[string]bool{}
+	var id string
+	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
+		held[id] = true
+		return nil
+	})
+	return held, err
+}
+
 // homeMeta describes one of a home videos folder's videos by its
 // identifier.
 func (s *Service) homeMeta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {

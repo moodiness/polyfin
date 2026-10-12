@@ -356,3 +356,133 @@ func TestHomeVideosFollowedInJellyfinApps(t *testing.T) {
 		t.Errorf("a favorite meanwhile: %s %+v, was %s", late["day 2"], data, before["day 2"])
 	}
 }
+
+// Continue Watching leaves out the home videos no folder holds: deleted,
+// or their folder holding something else. Their resume point stays, and
+// shows again when the video comes back. A movie a home video became
+// stays listed, as its addon still describes it.
+func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, o.Logger, o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
+		folders.UseTools(ffprobe, ffmpeg)
+	})
+	tr := trackingOn(t, s)
+	dir := t.TempDir()
+	video := filepath.Join(dir, "Movie (2008).mp4")
+	// Six minutes, past Jellyfin's shortest resumable runtime.
+	if out, err := exec.Command(ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration=360:size=64x48:rate=1", "-c:v", "mpeg4",
+		video).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	file, err := os.ReadFile(video)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Family", Path: dir, Kind: localfiles.KindHomeVideos})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := func() {
+		t.Helper()
+		if err := folders.Scan(t.Context(), addon.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	change := func(kind string) {
+		t.Helper()
+		if _, err := folders.Update(t.Context(), addon.ID, localfiles.Changes{Kind: &kind}); err != nil {
+			t.Fatal(err)
+		}
+		scan()
+	}
+	// The titles of the folder's library, and those Continue Watching and
+	// the resumable items list, by identifier.
+	titles := func() []string {
+		t.Helper()
+		var views, page QueryResult
+		s.get(t, "/UserViews", tr.token, &views)
+		for _, view := range views.Items {
+			if view.Name == "Family" {
+				s.get(t, "/Items?ParentId="+view.Id+"&Recursive=true&IncludeItemTypes=Movie,Video", tr.token, &page)
+			}
+		}
+		var ids []string
+		for _, item := range page.Items {
+			ids = append(ids, item.Id)
+		}
+		return ids
+	}
+	resumed := func() (map[string]int64, []string) {
+		t.Helper()
+		var resume, resumable QueryResult
+		s.get(t, "/UserItems/Resume?MediaTypes=Video", tr.token, &resume)
+		s.get(t, "/Items?Filters=IsResumable&Recursive=true", tr.token, &resumable)
+		positions := map[string]int64{}
+		for _, item := range resume.Items {
+			positions[item.Id] = item.UserData.PlaybackPositionTicks
+		}
+		var listed []string
+		for _, item := range resumable.Items {
+			listed = append(listed, item.Id)
+		}
+		slices.Sort(listed)
+		return positions, listed
+	}
+	scan()
+	home := titles()
+	if len(home) != 1 {
+		t.Fatalf("the home video: %v", home)
+	}
+	source := s.playbackInfo(t, "tv", tr.token, home[0], nil).MediaSources[0].Id
+	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": home[0], "MediaSourceId": source, "PositionTicks": 0})
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": home[0], "MediaSourceId": source, "PositionTicks": 1_800_000_000})
+
+	// A movie, linked by hand: Continue Watching lists the movie alone.
+	change(localfiles.KindMovies)
+	if err := folders.Link(t.Context(), addon.ID, "Movie (2008).mp4", "tt1000"); err != nil {
+		t.Fatal(err)
+	}
+	scan()
+	movies := titles()
+	if len(movies) != 1 || movies[0] == home[0] {
+		t.Fatalf("the movie: %v", movies)
+	}
+	if positions, listed := resumed(); len(positions) != 1 || positions[movies[0]] != 1_800_000_000 || !slices.Equal(listed, movies) {
+		t.Errorf("as a movie: %v %v", positions, listed)
+	}
+
+	// A home video again: the video is back, the movie stays.
+	change(localfiles.KindHomeVideos)
+	if again := titles(); !slices.Equal(again, home) {
+		t.Fatalf("the home video again: %v, was %v", again, home)
+	}
+	if positions, _ := resumed(); len(positions) != 2 || positions[home[0]] != 1_800_000_000 || positions[movies[0]] != 1_800_000_000 {
+		t.Errorf("a home video again: %v", positions)
+	}
+
+	// Deleted, the video leaves Continue Watching; put back, it returns.
+	if err := os.Remove(video); err != nil {
+		t.Fatal(err)
+	}
+	scan()
+	if positions, listed := resumed(); len(positions) != 1 || positions[home[0]] != 0 || slices.Contains(listed, home[0]) {
+		t.Errorf("deleted: %v %v", positions, listed)
+	}
+	if err := os.WriteFile(video, file, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scan()
+	if positions, _ := resumed(); positions[home[0]] != 1_800_000_000 {
+		t.Errorf("put back: %v", positions)
+	}
+}

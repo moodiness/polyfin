@@ -167,6 +167,9 @@ type Local interface {
 	MusicLyrics(ctx context.Context, source accounts.ID, id string) (string, error)
 	Artwork() map[accounts.ID]Images
 	Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
+	// HeldVideos reports which of the home videos of the Stremio
+	// identifiers ids a file of a folder holds now.
+	HeldVideos(ctx context.Context, ids []string) (map[string]bool, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -487,9 +490,10 @@ func (s *Service) HiddenInMenus(ctx context.Context, user accounts.User) ([]acco
 	return hidden, nil
 }
 
-// LibraryID is the item of a library in Jellyfin apps.
+// LibraryID is the item of a library in Jellyfin apps, which keeps its
+// identifier when its catalog's type changes (see addons.Library.KeyType).
 func LibraryID(l addons.Library) accounts.ID {
-	return itemID(libraryKey(l.AddonID, l.Catalog.Type, l.Catalog.ID))
+	return itemID(libraryKey(l.AddonID, cmp.Or(l.KeyType, l.Catalog.Type), l.Catalog.ID))
 }
 
 // ServerLibrary is one of the server's libraries, with the genres its
@@ -1574,7 +1578,8 @@ func (s *Service) Original(ctx context.Context, user accounts.User, id accounts.
 
 // Items describes the items of ids the user can reach, in order. Items
 // that no longer exist, or whose addon fails to describe them, are left
-// out.
+// out, and so are home videos no folder holds now (see goneVideos): their
+// users' data stays, for when the video is found again.
 func (s *Service) Items(ctx context.Context, user accounts.User, ids []accounts.ID) ([]Item, error) {
 	return s.ItemsOf(ctx, user, ids, nil)
 }
@@ -1596,6 +1601,10 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 	for _, r := range records {
 		byID[r.ID] = r
 	}
+	gone, err := s.goneVideos(ctx, records)
+	if err != nil {
+		return nil, err
+	}
 	found := make([]*Item, len(ids))
 	var g errgroup.Group
 	g.SetLimit(8)
@@ -1603,6 +1612,8 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 		r, recorded := byID[id]
 		_, isLibrary := v.library(id)
 		switch {
+		case gone[id]:
+			continue
 		case kinds == nil:
 		case isLibrary && !slices.Contains(kinds, KindLibrary), recorded && !isLibrary && !slices.Contains(kinds, r.Kind):
 			continue
@@ -1635,6 +1646,35 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 		}
 	}
 	return s.overridden(items), nil
+}
+
+// goneVideos are the items of records that are home videos no folder
+// holds now: deleted, or their folder holding something else. Within 30
+// days, a video found again is the same title (see localfiles.recognize).
+func (s *Service) goneVideos(ctx context.Context, records []record) (map[accounts.ID]bool, error) {
+	var videos []string
+	for _, r := range records {
+		if r.Kind == KindVideo && r.Meta != nil {
+			videos = append(videos, r.Meta.ID)
+		}
+	}
+	if len(videos) == 0 {
+		return nil, nil
+	}
+	held := map[string]bool{}
+	if s.local != nil {
+		var err error
+		if held, err = s.local.HeldVideos(ctx, videos); err != nil {
+			return nil, err
+		}
+	}
+	gone := map[accounts.ID]bool{}
+	for _, r := range records {
+		if r.Kind == KindVideo && r.Meta != nil && !held[r.Meta.ID] {
+			gone[r.ID] = true
+		}
+	}
+	return gone, nil
 }
 
 func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error) {
