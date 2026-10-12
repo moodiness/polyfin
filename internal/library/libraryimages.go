@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"sync"
 	"time"
@@ -183,10 +184,12 @@ func (s *Service) automaticImages(ctx context.Context, libraries []library) []st
 }
 
 // libraryRecord is what Polyfin remembers of a library: its catalog, and
-// its automatic image, if any.
+// its automatic image, if any. Its key keeps the catalog type its
+// identifier comes from (see LibraryID).
 func libraryRecord(l library, image string) record {
 	addon := l.addon.addon.ID
-	return record{ID: l.item.ID, Key: libraryKey(addon, l.catalog.Type, l.catalog.ID), Kind: KindLibrary, Addon: &addon,
+	keyType := cmp.Or(l.addon.addon.LibraryKeyTypes[l.catalog.ID], l.catalog.Type)
+	return record{ID: l.item.ID, Key: libraryKey(addon, keyType, l.catalog.ID), Kind: KindLibrary, Addon: &addon,
 		CatalogType: l.catalog.Type, CatalogID: l.catalog.ID, Confined: l.addon.confined, Poster: image}
 }
 
@@ -270,7 +273,7 @@ func (s *Service) DownloadImage(ctx context.Context, id accounts.ID, imageType, 
 func (s *Service) DeleteLibraryImages(ctx context.Context, addon addons.Addon) error {
 	items := make([]accounts.ID, 0, len(addon.Manifest.Catalogs))
 	for _, catalog := range addon.Manifest.Catalogs {
-		items = append(items, LibraryID(addons.Library{AddonID: addon.ID, Catalog: catalog}))
+		items = append(items, LibraryID(addons.Library{AddonID: addon.ID, Catalog: catalog, KeyType: addon.LibraryKeyTypes[catalog.ID]}))
 	}
 	return s.deleteUploadedImages(ctx, items)
 }

@@ -3,6 +3,7 @@
 package addons
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -101,6 +102,10 @@ type Addon struct {
 	Settings    map[string]string
 	Enabled     bool
 	RefreshedAt time.Time
+	// LibraryKeyTypes are the catalog types the libraries of its catalogs
+	// take their identifiers from, by catalog identifier, for the catalogs
+	// whose type changed since (see Library.KeyType).
+	LibraryKeyTypes map[string]string
 }
 
 // Stremio reports whether the addon is a Stremio addon, whose resources
@@ -129,6 +134,11 @@ type Library struct {
 	Name        *string
 	Enabled     bool
 	AddonActive bool
+	// KeyType is the catalog type the library takes its identifier from
+	// when its catalog's type changed since the library was made, as a
+	// local folder's does when it holds something else; empty for the
+	// catalog's own (see Addon.LibraryKeyTypes).
+	KeyType string
 	// Filterable tells that the library takes a Genre and MaxItems: a
 	// catalog of titles or collections, not of live TV or music.
 	Filterable bool
@@ -275,8 +285,8 @@ type queryer interface {
 func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
-	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt},
-		extra...)...)
+	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
+		&addon.LibraryKeyTypes}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -319,7 +329,7 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 	return music
 }
 
-const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at"
+const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types"
 
 // Addons lists the scope's addons in order. The addons, their manifests
 // and settings are shared with other callers: they must not be changed.
@@ -520,9 +530,10 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 }
 
 // Update changes an IPTV source's or a local folder's address and
-// manifest, keeping its libraries; setup stores, in the same transaction,
-// what changes with them. It answers ErrNotFound for an addon of another
-// kind.
+// manifest, keeping its libraries: a catalog whose type changes, its
+// identifier kept, keeps its library, and the library its identifier (see
+// Library.KeyType). setup stores, in the same transaction, what changes
+// with them. It answers ErrNotFound for an addon of another kind.
 func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, address string, manifest stremio.Manifest,
 	setup func(pgx.Tx) error) (Addon, error) {
 	defer s.changed()
@@ -532,8 +543,25 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 	}
 	var addon Addon
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $4, manifest = $5, refreshed_at = now()
-			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $3 RETURNING `+addonColumns, id, scope.Owner, kind, address, encoded))
+		var raw []byte
+		var keyTypes map[string]string
+		err := tx.QueryRow(ctx, "SELECT manifest, library_key_types FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $3 FOR UPDATE",
+			id, scope.Owner, kind).Scan(&raw, &keyTypes)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		var old stremio.Manifest
+		if err := json.Unmarshal(raw, &old); err != nil {
+			return err
+		}
+		if keyTypes, err = retypeLibraries(ctx, tx, scope, id, old, manifest, keyTypes); err != nil {
+			return err
+		}
+		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_key_types = $5, refreshed_at = now()
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, address, encoded, keyTypes))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -544,6 +572,45 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 		return setup(tx)
 	})
 	return addon, err
+}
+
+// retypeLibraries moves, in tx, the libraries of an addon's catalogs
+// whose type changes from manifest old to manifest, their identifiers
+// kept, to their new type, and returns the addon's LibraryKeyTypes, from
+// keyTypes, that keep the libraries' identifiers.
+func retypeLibraries(ctx context.Context, tx pgx.Tx, scope Scope, id accounts.ID, old, manifest stremio.Manifest,
+	keyTypes map[string]string) (map[string]string, error) {
+	if keyTypes == nil {
+		keyTypes = map[string]string{}
+	}
+	locked := false
+	for _, before := range old.Catalogs {
+		if _, kept := manifest.Catalog(before.Type, before.ID); kept {
+			continue
+		}
+		i := slices.IndexFunc(manifest.Catalogs, func(c stremio.Catalog) bool { return c.ID == before.ID })
+		if i < 0 {
+			continue
+		}
+		if !locked {
+			if err := lockScope(ctx, tx, scope); err != nil {
+				return nil, err
+			}
+			locked = true
+		}
+		after := manifest.Catalogs[i].Type
+		if _, err := tx.Exec(ctx, "UPDATE libraries SET catalog_type = $4 WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3",
+			id, before.Type, before.ID, after); err != nil {
+			return nil, err
+		}
+		first := cmp.Or(keyTypes[before.ID], before.Type)
+		if first == after {
+			delete(keyTypes, before.ID)
+		} else {
+			keyTypes[before.ID] = first
+		}
+	}
+	return keyTypes, nil
 }
 
 // SyncCatalogs replaces an IPTV source's manifest, in tx, as its options
@@ -907,7 +974,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			continue
 		}
 		chosen[row.key] = len(enabled)
-		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
+		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, KeyType: addon.LibraryKeyTypes[catalog.ID],
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
 			HideInMenus: row.hideInMenus}
 		// A genre the catalog no longer offers lists the whole catalog.
@@ -934,7 +1001,8 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 				continue
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
-				AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: LibraryImageNone})
+				KeyType: addon.LibraryKeyTypes[catalog.ID], AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
+				Image: LibraryImageNone})
 		}
 	}
 	return result
