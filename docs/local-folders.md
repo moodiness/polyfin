@@ -22,7 +22,7 @@ With compose, add the volumes to the `polyfin` service:
       - /srv/media/shows:/media/shows:ro
 ```
 
-Then, in the admin app, open **Sources**, choose **Add a source › Folder**, keep **Local folder**, and give its name (the library's name in apps), its path in the container (`/media/movies`, not the host's path), and whether it holds movies or shows. What a folder holds cannot be changed afterwards: remove it and add it again.
+Then, in the admin app, open **Sources**, choose **Add a source › Folder**, keep **Local folder**, and give its name (the library's name in apps), its path in the container (`/media/movies`, not the host's path), and whether it holds movies or shows. What a folder holds can change afterwards (see [Changing what a folder holds](#changing-what-a-folder-holds)).
 
 ### Permissions
 
@@ -373,6 +373,15 @@ A scan reads only what changed: a file is new or changed by its path, size and m
 
 Symbolic links to files of the folder are followed; links leading out of the folder, and links to folders, are not.
 
+## Changing what a folder holds
+
+On a folder's page under **Sources**, **Edit the folder** changes what it holds, **It holds**: movies, shows, music or home videos. Before changing anything, the admin app says what follows and what is dropped, and asks. The folder keeps its library, which apps know by its identifier, with its place in their home screens and menus, its address, user and password, and its other settings. A scan under way stops, and the folder is scanned again as the new kind, in the background.
+
+- Between movies, shows and home videos, what users did with a video follows it, as an import adds it (see [How the data merges with Polyfin's](users.md#how-the-data-merges-with-polyfin-s)): a played mark is added, the newer resume point is kept, a favorite is set, and nothing is taken back. A home video that becomes a movie or an episode gives it its watch state, resume point and favorite; a movie or an episode that becomes a home video gives the home video theirs. A file the new scan does not match gets them once it is matched, by hand or by a later scan.
+- A folder turned away from home videos keeps its videos' identifiers for 30 days (see [Titles](#titles)): meanwhile they leave Continue Watching, and holding home videos again within that time, it lists them as the same titles, with what users did with them.
+- The links made by hand and the episodes given to shows' discs are dropped: each was made for one kind.
+- To or from music, nothing follows: songs and videos are other files. What users did with the former titles stays with them and no longer shows.
+
 ## Versions
 
 A matched file is one more version of its title, or of each of its episodes, named after the folder, with the resolution its name gives and its size, such as `Movies · 1080p · 4.2 GB`. Polyfin reads it from the disk or the share, with byte ranges, and plays it like any other version: direct play, remux or conversion, with its embedded audio and subtitle tracks and the subtitle files beside it. A Blu-ray disc's playlist, a DVD and a disc image play over HLS only, a Blu-ray disc's video copied when the app takes it and a DVD's converted (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)). The folder's library lists its titles, the latest found first.
@@ -422,7 +431,7 @@ Images are read from the folder or the share when an app first asks for them, th
 
 ## Music folders
 
-A folder or share added as holding **Music** is a music library of its own. Its audio files are read with their tags and grouped into albums and artists, and the library answers as an [Eclipse music addon](addons-and-libraries.md#music-addons)'s does: albums, artists and songs views, album and artist pages, search, lyrics, scrobbling, statistics and playback all work as for an addon's music. What a folder holds is chosen when it is added and cannot change.
+A folder or share added as holding **Music** is a music library of its own. Its audio files are read with their tags and grouped into albums and artists, and the library answers as an [Eclipse music addon](addons-and-libraries.md#music-addons)'s does: albums, artists and songs views, album and artist pages, search, lyrics, scrobbling, statistics and playback all work as for an addon's music. What a folder holds can change (see [Changing what a folder holds](#changing-what-a-folder-holds)): to or from music, nothing users did follows.
 
 ```
 /media/music/Tone Quartet/Sine Studies/01 First Light.flac
@@ -486,7 +495,7 @@ The tracks a scan first finds count among the files added of the [weekly summary
 
 ## Home videos
 
-A folder or share added as holding **Home videos** (fr « Vidéos personnelles ») lists videos no metadata addon knows: recordings of a family, a concert or a school play. Each video is a title of its own, which the folder names, dates and plays itself: nothing is sent to the metadata addons, and nothing is ever unmatched. What a folder holds is chosen when it is added and cannot change.
+A folder or share added as holding **Home videos** (fr « Vidéos personnelles ») lists videos no metadata addon knows: recordings of a family, a concert or a school play. Each video is a title of its own, which the folder names, dates and plays itself: nothing is sent to the metadata addons, and nothing is ever unmatched. What a folder holds can change (see [Changing what a folder holds](#changing-what-a-folder-holds)): its videos' watch state follows them to the movies and episodes they become, and back.
 
 ```
 /media/family/Beach.mp4
@@ -509,13 +518,15 @@ A title's identifier is kept with its video through scans and restarts, and foll
 
 - renamed, moved into a subfolder, or in a folder renamed, as `Trip/day 2.mov` becoming `Summer 2019/Beach.mov`;
 - moved into another Home videos folder, whichever folder is scanned first. When the folder it went to is scanned first, the video is still in the one it left, and the video found is a new title for a moment: the scan of the folder it left, finding it gone, gives it back its identifier, unless users already did something with the new title (played, marked, rated, made a favorite, added to a collection or playlist, given a subtitle file or edited), which then stays as it is. A copy and a delete seen by scans in between, as a slow move between disks, count as a move too;
-- moved out and back within 30 days: the videos gone from every Home videos folder of the server are remembered for 30 days, those of a folder removed or given another path too.
+- moved out and back within 30 days: the videos gone from every Home videos folder of the server are remembered for 30 days, those of a folder removed, given another path or holding something else too.
 
 A copy is a title of its own while its original is still there, and stays one when the original goes later, its folder scanned after the copy was found. So are videos when several gone, or several found by one scan, have the same contents. A video replaced at the same path, its contents changed, keeps its title. A video found again keeps the time it was first found: the weekly summary does not count it as added.
 
 ### In apps
 
 The folder is a library of Jellyfin's `homevideos` type, its titles `Video` items, as Jellyfin's home videos are: jellyfin-web shows it with its Folders and Videos views, newest recording first in the Folders view. Search, watch state, resume points, Continue Watching, collections, the libraries a user sees, allowed hours and downloads work as for other titles, and the videos play, seek and show their scrubbing thumbnails as other local files do.
+
+A home video no folder holds any more, deleted from disk or in a folder that holds something else now, leaves Continue Watching and the lists of resumable, favorite and played items. What users did with it stays: found again within 30 days (see [Titles](#titles)), it shows again with its watch state and resume point. A movie or an episode a home video became stays listed, as its addon still describes it.
 
 Parental control judges them as Jellyfin judges its videos: unrated, of the **Other** kind. A user blocking unrated **Other** items sees none of them; a highest rating alone hides none.
 
@@ -548,7 +559,7 @@ A local folder or network share is an addon of kind `local` in the admin API, li
 | Route | What it does |
 |---|---|
 | `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address; `"useArtwork": false` adds a movies or shows folder whose artwork its titles do not show |
-| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user`, `password` or `useArtwork`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
+| `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user`, `password`, `useArtwork` or `kind`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it; a new `kind` (`movies`, `shows`, `music` or `homevideos`, else `invalid_folder_kind`) keeps the folder's identifier and its library's, stops its scan under way, forgets its files, links and discs' episodes, and scans it again |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
 | `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc", "discTitle"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path. A title of a show's disc has as `unit` its show's folder, as `reason` `disc_episode` while its show is matched, and `discTitle` `{"discPath", "number", "length", "episode", "suggested"}`: its disc's folder or image, its number, how long it plays in seconds (null when unknown), its episodes and those suggested, such as `S01E05` (null for none); `discTitle` is null for other files. A disc's titles follow one another, in the order of their numbers |
 | `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. A failed search answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
