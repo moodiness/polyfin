@@ -2,6 +2,7 @@ package localfiles
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -32,13 +33,24 @@ type watchTest struct {
 	scans chan accounts.ID
 }
 
+// noShares is the share source of watchers whose shares, when the tests
+// list some, cannot be read: they are polled and watched as unreachable
+// ones are.
+type noShares struct{}
+
+func (noShares) shareReader(context.Context, accounts.ID, string) (remote, string, error) {
+	return nil, "", errors.New("no share in these tests")
+}
+
+func (noShares) shareSeen(accounts.ID) seenShare { return seenShare{} }
+
 func newWatchTest(t *testing.T, folders func(context.Context) ([]watchFolder, error), open func() (fileWatcher, error)) *watchTest {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 	scans := make(chan accounts.ID, 64)
 	w := newWatcher(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), folders,
-		func(_ context.Context, id accounts.ID) { scans <- id }, open, nil, wg.Go)
+		func(_ context.Context, id accounts.ID) { scans <- id }, open, noShares{}, wg.Go)
 	w.quiet, w.check = testQuiet, time.Hour
 	t.Cleanup(func() {
 		cancel()
