@@ -2,17 +2,19 @@
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
 // solved, a user who joined through an invite, a new version of Polyfin, a
-// playback that started, paused, resumed or stopped, once a week a summary
-// of the week, once a month and once a year a review of the month and of
-// the year, and an app or tracking connection that stopped. Messages go to
-// targets: generic webhooks, which receive a versioned JSON event (see
-// Event); Discord webhooks, ntfy topics, Telegram chats, Gotify servers and
-// Pushover users, which receive messages formatted for them; and email
-// addresses, through the SMTP server
+// playback that started, paused, resumed or stopped, an account blocked
+// after wrong passwords, a sign-in on a device an account never used, once
+// a week a summary of the week, once a month and once a year a review of
+// the month and of the year, and an app or tracking connection that
+// stopped. Messages go to targets: generic webhooks, which receive a
+// versioned JSON event (see Event); Discord webhooks, ntfy topics,
+// Telegram chats, Gotify servers and Pushover users, which receive
+// messages formatted for them; and email addresses, through the SMTP server
 // of the settings. Administrators add the server's targets, which receive
-// the events of every user; each user adds their own, which receive their
-// own events, and the health, joining and new version events and the
-// server's summaries for administrators.
+// the events of every user but their sign-ins on new devices; each user
+// adds their own, which receive their own events, and the health, joining
+// and new version events, every account's blocks and the server's
+// summaries for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -88,6 +90,12 @@ const (
 	// service refused what Polyfin kept, and stopped (see
 	// Service.ConnectionStopped).
 	ConnectionStopped = "connection_stopped"
+	// AccountBlocked tells that wrong passwords blocked an account, to the
+	// server's targets, administrators' own and the account's own;
+	// NewDevice tells a user that their account signed in from a device it
+	// never used, to their own targets only (see signins.go).
+	AccountBlocked = "account_blocked"
+	NewDevice      = "new_device"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -95,7 +103,8 @@ const (
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
-	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped}
+	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped,
+	AccountBlocked, NewDevice}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user
@@ -104,13 +113,22 @@ func administratorsEvent(event string) bool {
 	return event == HealthProblem || event == HealthSolved || event == UserJoined || event == NewVersion
 }
 
+// personalEvent reports whether event is one only users' own targets
+// receive: a sign-in on a new device.
+func personalEvent(event string) bool {
+	return event == NewDevice
+}
+
 // EventsFor lists the events the targets of owner may receive: every event
-// for the server's targets (owner nil) and administrators', all but the
-// administrators' events for other users.
+// but the personal ones for the server's targets (owner nil), every event
+// for administrators', all but the administrators' events for other
+// users.
 func EventsFor(owner *accounts.User) []string {
 	var events []string
 	for _, event := range Events {
-		if !administratorsEvent(event) || owner == nil || owner.IsAdministrator {
+		switch {
+		case owner == nil && personalEvent(event):
+		case owner == nil || owner.IsAdministrator || !administratorsEvent(event):
 			events = append(events, event)
 		}
 	}

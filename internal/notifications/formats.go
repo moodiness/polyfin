@@ -30,6 +30,8 @@ var discordColors = map[string]int{
 	MonthlySummary:    0x6366f1,
 	YearlySummary:     0x6366f1,
 	ConnectionStopped: 0xf59e0b,
+	AccountBlocked:    0xf97316,
+	NewDevice:         0xf59e0b,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -107,6 +109,8 @@ var ntfyTags = map[string][]string{
 	MonthlySummary:    {"bar_chart"},
 	YearlySummary:     {"bar_chart"},
 	ConnectionStopped: {"warning"},
+	AccountBlocked:    {"lock"},
+	NewDevice:         {"key"},
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its

@@ -40,8 +40,10 @@ func TestNotificationTargetsBelongToTheirOwner(t *testing.T) {
 	if strings.Contains(string(encoded), "a-secret-token") || len(listed["targets"].([]any)) != 1 {
 		t.Errorf("listed: %s", encoded)
 	}
-	if got := listed["events"].([]any); len(got) != len(notifications.Events) {
-		t.Errorf("an administrator's events: %v", got)
+	// Every event but the sign-ins on new devices, which only users' own
+	// targets receive.
+	if got := listed["events"].([]any); len(got) != len(notifications.Events)-1 || slices.Contains(got, any("new_device")) {
+		t.Errorf("the server's events: %v", got)
 	}
 	if response.Header.Get("Content-Type") != "application/json" {
 		t.Errorf("content type: %s", response.Header.Get("Content-Type"))
@@ -60,7 +62,8 @@ func TestNotificationTargetsBelongToTheirOwner(t *testing.T) {
 	for _, event := range own["events"].([]any) {
 		events = append(events, event.(string))
 	}
-	if slices.Contains(events, "health_problem") || !slices.Contains(events, "new_episode") || len(own["targets"].([]any)) != 0 {
+	if slices.Contains(events, "health_problem") || !slices.Contains(events, "new_episode") || !slices.Contains(events, "new_device") ||
+		!slices.Contains(events, "account_blocked") || len(own["targets"].([]any)) != 0 {
 		t.Errorf("a member's notifications: %v", own)
 	}
 	// Addresses are written as public IP addresses, which are checked

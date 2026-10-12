@@ -50,6 +50,8 @@ type Event struct {
 	Summary   *SummaryJSON   `json:"summary,omitempty"`
 	// Connection is the connection a connection_stopped event tells of.
 	Connection *ConnectionJSON `json:"connection,omitempty"`
+	SignIn     *SignInJSON     `json:"signIn,omitempty"`
+	Block      *BlockJSON      `json:"block,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
