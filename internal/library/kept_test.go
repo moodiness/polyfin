@@ -533,7 +533,10 @@ func TestSearchesReadFirstPagesAndWaitBrieflyForPeople(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if elapsed := time.Since(started); elapsed > 2*time.Second {
+	// The people search answers only once the test opens its gate, below:
+	// a search that waited for it would wait for its request's 15-second
+	// timeout, far more than peopleGrace on any machine.
+	if elapsed := time.Since(started); elapsed > 7500*time.Millisecond {
 		t.Errorf("the search waited %v for the people search", elapsed)
 	}
 	if len(found) != 10 || found[0].Name != "movie 0" {
@@ -784,7 +787,9 @@ func TestAutomaticImagesNeverWait(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if elapsed := time.Since(started); elapsed > time.Second {
+		// While the test holds the catalog's gate closed, libraries that
+		// waited for it would wait for its request's 15-second timeout.
+		if elapsed := time.Since(started); elapsed > 7500*time.Millisecond {
 			t.Errorf("the libraries waited %v", elapsed)
 		}
 		return libraries[0].Images.Primary

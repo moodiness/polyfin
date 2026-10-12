@@ -320,19 +320,21 @@ func TestALateWholeListingOfACollectionKeepsEachCatalog(t *testing.T) {
 // A whole listing opened again, whose last listing kept a listing of
 // count, waits for the addon only keptWait before it lists what was kept;
 // the rest is read in the background, to the end, so that the next one
-// lists all of it at once.
+// lists all of it at once. The addon answers only after wholeWait, and
+// a listing that waited for it, or for wholeWait, waits at least half of
+// it: a busy machine cannot stretch keptWait that far.
 func TestAWholeListingOpenedAgainWaitsOnlyAMoment(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
 	addon := pairAddon(30)
 	pair := e.pairOf(addon)
 	e.service.readAhead = true
+	e.service.wholeWait, e.service.keptWait = 30*time.Second, 50*time.Millisecond
 	answer := blockCatalogs(t, addon)
-	time.AfterFunc(7*time.Second, answer)
-	e.service.wholeWait, e.service.keptWait = 5*time.Second, 50*time.Millisecond
+	time.AfterFunc(e.service.wholeWait+10*time.Second, answer)
 	started := time.Now()
 	page, err := e.service.Whole(t.Context(), e.member, pair, 0, 4, "")
-	if waited := time.Since(started); waited > time.Second {
+	if waited := time.Since(started); waited > e.service.wholeWait/2 {
 		t.Errorf("waited %v for the addon", waited)
 	}
 	want := []string{"movie 0", "other 0", "movie 1", "other 1", "movie 2", "other 2", "movie 3", "other 3"}
