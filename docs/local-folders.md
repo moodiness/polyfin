@@ -99,7 +99,7 @@ Movies, one file per movie, alone or in a folder of its own, a Blu-ray disc or a
 /media/movies/The.General.1926.1080p.BluRay.mkv
 ```
 
-Shows, a folder per show, the season and episode in each file's name:
+Shows, a folder per show, the season and episode in each file's name, or discs copied as they are (see [Shows on discs](#shows-on-discs)):
 
 ```
 /media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E02.mkv
@@ -112,6 +112,44 @@ Shows, a folder per show, the season and episode in each file's name:
 An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
 
 Files whose names end in `sample`, hidden folders, and folders named `Extras`, `Featurettes`, `Trailers`, `Behind The Scenes`, `Deleted Scenes`, `Interviews` or `Samples` are left out, as are a Blu-ray disc's streams and playlists, which its titles play, and the files of a DVD.
+
+### Shows on discs
+
+A show kept on discs, as box sets are, may be copied as it is into the show's folder or one of its season folders: a Blu-ray disc's folder, a DVD's folder or a disc image (see [Blu-ray discs](#blu-ray-discs), [DVD folders](#dvd-folders) and [Disc images](#disc-images)).
+
+```
+/media/shows/The Lone Ranger (1949)/Season 01/Disc 1/VIDEO_TS/VIDEO_TS.IFO
+/media/shows/The Lone Ranger (1949)/Season 01/Disc 2/BDMV/PLAYLIST/00001.mpls
+/media/shows/The Lone Ranger (1949)/Season 02/The Lone Ranger S02E01-E04.iso
+```
+
+The show is matched by its folder, as for its files: its name, its `tvshow.nfo` or a link. A disc's episodes are its titles, a Blu-ray disc's playlists or a DVD's titles:
+
+- a title plays at least 3 minutes: shorter ones are trailers, menus' clips and most extras;
+- a "play all" title, which chains other titles, is left out: it plays mostly the parts of two or more other titles, whatever their order, a DVD's cells or the parts of a Blu-ray disc's clips;
+- a title playing the same parts as one of a lower number, such as an episode with another audio track, counts once;
+- a disc keeps at most 40 titles, the first by number, in the order of their numbers.
+
+A disc in a season folder is of that season; else of the season its name gives, as `Season 2 Disc 1` or `S02D01` do; else of season 1. Its place among the season's discs is the number its name gives: `Disc 2`, `DISC02`, `Disk 2`, `DVD 2`, `BD 2`, `Vol. 2`, `Part 2`, or the `D` of `S01D02`.
+
+Each title holds the episodes:
+
+- given by hand: the unmatched files list each title without episodes, as `DVD: The Lone Ranger (1949)/Season 01/Disc 1 · title 3`, with its length; type its episode beside it as a file's name gives it, `S01E05`, or `S01E05-E06` for a title holding two (see [Unmatched files](#unmatched-files));
+- else those of the disc's name, as `The Lone Ranger S02E01-E04.iso` or a disc folder named `S01E05-E08` give: its titles are numbered in order without asking, when the disc has as many titles as the name gives episodes.
+
+Polyfin suggests each disc's episodes: its titles in order, after the episodes the season's discs before it hold, from episode 1 for a season's first, or from the first its name gives. **Use these episodes**, beside the disc, gives them all at once. The episodes given survive every scan, even while the disc is away, and are listed under **Linked by hand**, where removing them leaves the title to its disc's name, or to the suggestion, again.
+
+An episode plays as another movie of a disc does: a DVD's title converted, through FFmpeg's DVD reader; a Blu-ray disc's playlist through its Blu-ray reader, its video copied when the app takes it; an image's from the image; and on a share, as on a local folder (see [Discs on shares](#discs-on-shares)). Through the Jellyfin API, its version is named after the disc and its title, such as `Season 01 - Disc 2 - title 1.m2ts` or `The Lone Ranger S02E01-E04 - title 2.iso`.
+
+Limits:
+
+- A DVD whose episodes are the chapters of one title lists that title alone: give it all its episodes, such as `S01E01-E04`.
+- A disc whose titles cannot be read is left out: a Blu-ray disc without playlists Polyfin reads, a DVD without IFO files it reads, and an image whose UDF file system it does not read.
+- Extras of 3 minutes or more are listed as titles too: leave them without episodes.
+- A DVD folder's episode is sized as its cells, and a Blu-ray disc folder's as the clips it plays, so the episodes cut from one clip each have the clip's size; an image's episodes each have the image's size, as its movies do.
+- A disc at the root of a shows folder, or an image at its top, belongs to no show, and is left out.
+- The titles of shows' discs have no subtitle files.
+- A title's episodes are typed in the admin app or given by the disc's name: episodes' NFO files and chapter names are not read.
 
 ### NFO files
 
@@ -184,6 +222,8 @@ A disc plays its playlists from its folder rather than as one file, so it plays 
 
 Files beside `BDMV` in a disc folder are read as any other file, and folders a scan leaves out, such as `Extras`, still are.
 
+In a shows folder, a show's disc is its episodes, its playlists chosen otherwise (see [Shows on discs](#shows-on-discs)).
+
 Limits:
 
 - A disc whose playlists cannot be read, or whose main title lasts less than 3 minutes, which FFmpeg's Blu-ray reader refuses, plays its largest stream, as one file, played as it is when the app takes it. A movie split over several streams then plays its largest stream only.
@@ -191,7 +231,6 @@ Limits:
 - There is no direct play and no download of a playlist, and no thumbnails or chapter images are made for it.
 - A seek in a disc starts FFmpeg one segment early, as its Blu-ray reader lands on the keyframe after the time asked: the first segment after a seek takes a little longer to come.
 - The disc must not be encrypted: Polyfin reads discs copied without their copy protection.
-- In a shows folder, discs are left out: a disc of episodes is not read as one episode. Extract its episodes to files of their own.
 
 Folders scanned before Polyfin read discs held one file per stream; their next scan leaves one per disc, read as above, and a link made on one of a disc's streams moves to the disc. Folders scanned by Polyfin 0.30 held a disc's largest stream; their next scan reads the disc's playlists, and the disc keeps its link.
 
@@ -223,6 +262,8 @@ A DVD holding several movies lists each other movie as a title of its own, with 
 
 The DVD is read from its folder rather than as one file, so it always plays converted: its video is converted over HLS, cut every few seconds as an MPEG-TS file's is, and its audio is copied when the app takes it. A user who may not have video converted is not offered it.
 
+In a shows folder, a show's DVD is its episodes, its titles chosen otherwise (see [Shows on discs](#shows-on-discs)).
+
 Limits:
 
 - On a network share, a DVD's title is read as one MPEG program stream of its cells (see [Discs on shares](#discs-on-shares)) rather than through FFmpeg's DVD reader: it has no chapters, and its cells' timestamps are read as they are, without the corrections FFmpeg's DVD reader makes where they restart.
@@ -230,7 +271,6 @@ Limits:
 - A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video.
 - No thumbnails or chapter images are made for a DVD.
 - A DVD's MPEG-2 video is converted even for an app that takes it: the IFO files' time maps tell where each second starts, not where each keyframe does, and FFmpeg's DVD reader starts a seek's timestamps at the time asked rather than at the keyframe it lands on, so copied segments would not join.
-- In a shows folder, DVDs are left out, as discs are.
 - The DVD must not be encrypted: Polyfin reads DVDs copied without their copy protection.
 
 ## Disc images
@@ -247,7 +287,7 @@ A disc kept as an image is an `.iso` file. In a movies folder, an image of a DVD
 - it plays its main title from the image itself: a DVD image its longest title, as a DVD folder does, and a Blu-ray image its longest playlist;
 - through the Jellyfin API, its version is named after the image's file.
 
-An image holding several movies, as a box set's often does, lists each other movie as a title of its own, chosen as a DVD folder's or a Blu-ray disc folder's are: link it by hand, listed in the unmatched files as `Blu-ray image: Box.iso · title 2` beside the image's path with its number, `Box.iso#2`. Through the Jellyfin API, its version is named after the image and its number, such as `Box - title 2.iso`.
+An image holding several movies, as a box set's often does, lists each other movie as a title of its own, chosen as a DVD folder's or a Blu-ray disc folder's are: link it by hand, listed in the unmatched files as `Blu-ray image: Box.iso · title 2` beside the image's path with its number, `Box.iso#2`. Through the Jellyfin API, its version is named after the image and its number, such as `Box - title 2.iso`. In a shows folder, a show's image is its episodes, each beside the image's path with its number, `Disc 1.iso#2` (see [Shows on discs](#shows-on-discs)).
 
 A scan reads what each new or changed image is, and its titles, and keeps the answer while the image's size and modification time stay the same. It reads the image's ISO 9660 file system, or its UDF one when the image has no ISO 9660 one holding the disc, as many Blu-ray images do (UDF 1.02 to 2.60, a UDF 2.50 metadata partition included):
 
@@ -262,7 +302,7 @@ Images a scan read before Polyfin listed their other movies, and UDF-only images
 
 Limits:
 
-- Images in a shows folder are left out. On a network share, an image is read on the share (see [Discs on shares](#discs-on-shares)); one whose titles cannot be read there, or whose UDF file system Polyfin does not read, is left out, as FFmpeg's Blu-ray reader cannot open it from the share.
+- On a network share, an image is read on the share (see [Discs on shares](#discs-on-shares)); one whose titles cannot be read there, or whose UDF file system Polyfin does not read, is left out, as FFmpeg's Blu-ray reader cannot open it from the share.
 - There is no direct play and no download, and no thumbnails or chapter images are made for an image.
 - A Blu-ray image's main title must last at least 3 minutes, as FFmpeg's Blu-ray reader requires.
 - An image whose UDF file system Polyfin does not read (see above) lists its main title only, and plays it converted.
@@ -283,7 +323,9 @@ A folder's figures tell how its matched files were matched: by an identifier in 
 
 ## Unmatched files
 
-A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, the search failed, or the file is another movie of a Blu-ray disc, which only a link matches. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder, or one title of a disc holding several movies; for a disc image, the image. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
+A folder's page lists the files no title was found for, with why: the name gives no title or episode number, no title of that name, several titles of that name (add the year), titles of other years, the search failed, the file is another movie of a Blu-ray disc, which only a link matches, or it is a title of a show's disc without its episodes. Rename the file and scan again, add an NFO file giving its identifier, or type the IMDb identifier of the title (the `tt…` part of its IMDb address) beside it and choose **Link**. In a shows folder, the link covers the whole show folder; for a Blu-ray disc or a DVD, the whole disc folder, or one title of a disc holding several movies; for a disc image, the image. Links survive every scan, even when the file changes or is moved away and back; remove one from the folder's page to match it by its name or NFO file again. While the folder is scanned, the list follows the scan: the files found are added to it as they come, and an identifier being typed stays, so files can be linked before the scan ends.
+
+A title of a show's disc is listed with its disc and number, such as `Blu-ray disc: The Lone Ranger (1949)/Season 01/Disc 2 · title 1`, and its length; a disc's titles follow one another, in order, under the episodes Polyfin suggests for them (see [Shows on discs](#shows-on-discs)). Type a title's episode beside it, `S01E05` or `S01E05-E06`, and choose **Save**, or choose **Use these episodes** to give the disc's titles those suggested. A title whose show is matched leaves the list once numbered, and its episodes are listed under **Linked by hand**, where they can be removed. While its show is unmatched, a title keeps the show's reason and its link form, which links the show.
 
 To find the title without leaving Polyfin, choose **Find the title** beside a file. The search is filled with what the file's name was read as, and its year; change them and choose **Search**, or press Enter. Polyfin searches the server's metadata addons for titles of the folder's kind, movies or shows, and lists at most 10 with their poster, name, year and kind, those of the year given first. Choosing one links the file, its show folder or its disc, as typing its identifier does. Only titles with an IMDb identifier are listed, since links are made to IMDb identifiers; for a title the search does not find, type its identifier.
 
@@ -488,23 +530,24 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 
 ## For app developers
 
-A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows` or `music`), last scan, error, counts and links, and `useArtwork`, whether its titles show the artwork beside its files (see [Artwork](#artwork)). `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
+A local folder or network share is an addon of kind `local` in the admin API, listed with the other sources (`GET /admin/api/scopes/shared/addons`), its `folder` field describing its path or address, kind (`movies`, `shows` or `music`), last scan, error, counts and links, and `useArtwork`, whether its titles show the artwork beside its files (see [Artwork](#artwork)). `episodes` lists the episodes given by hand to the titles of shows' discs: `[{"path", "disc", "discPath", "number", "episode"}]`, `disc` the disc's kind as in the unmatched files (empty while an image is gone), `discPath` its folder or image, `number` the title's and `episode` such as `S01E05` or `S01E05-E06`. `matchedBy` counts its matched files by how they were matched: `{"name", "nfo", "search", "link"}`. For a music folder, `files` counts its tracks, `matched` those in an album, `unmatched` those left out, and `albums` and `artists` its albums and their artists; its unmatched files are the tracks left out, with `reason` `no_title` or `no_album`. For a share, `share` is `"smb"` or `"webdav"` (empty for a local folder), `user` its user, and `passwordSet` whether a password is stored; the password itself is never answered. `error` is `missing`, `unreadable`, `not_folder`, or for a share `unreachable` or `refused`; empty after a scan that could read the folder. The administrator routes are:
 
 | Route | What it does |
 |---|---|
 | `POST /admin/api/scopes/shared/folders` | adds a folder: `{"name", "path", "kind": "movies" or "shows"}`, and for a share `"user"` and `"password"`; `path` is a path in the container or a share's address; `"useArtwork": false` adds a movies or shows folder whose artwork its titles do not show |
 | `PATCH /admin/api/scopes/shared/folders/{id}` | changes its `name`, `path`, `user`, `password` or `useArtwork`; a new path or address forgets the files found; a `password` left out keeps the stored one, an empty one removes it |
 | `POST /admin/api/scopes/shared/folders/{id}/scan` | starts a scan (202) |
-| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path |
+| `GET /admin/api/scopes/shared/folders/{id}/unmatched` | `{"total", "files": [{"path", "unit", "title", "year", "size", "reason", "disc", "discTitle"}]}`; `disc` is `"bluray"` for a Blu-ray disc's playlist or stream and `"dvd"` for a DVD, its `unit` the disc folder, or for a title other than a disc's main one the disc folder, `#` and its playlist's or title's number (`Box/DISC02#00002`), `"dvd_image"` or `"bluray_image"` for a disc image, its `unit` the image, or for a title other than its main one the image, `#` and its number (`Box.iso#00002`), and `null` for other files. A DVD's or an image's title other than its main one has as `path` its disc's file with `#` and its number (`Box/VIDEO_TS/VTS_02_1.VOB#2`, `Box.iso#2`), which links take as any path. A title of a show's disc has as `unit` its show's folder, as `reason` `disc_episode` while its show is matched, and `discTitle` `{"discPath", "number", "length", "episode", "suggested"}`: its disc's folder or image, its number, how long it plays in seconds (null when unknown), its episodes and those suggested, such as `S01E05` (null for none); `discTitle` is null for other files. A disc's titles follow one another, in the order of their numbers |
 | `GET /admin/api/scopes/shared/folders/{id}/titles?query=…&year=…` | searches the metadata addons for titles of the folder's kind: `{"titles": [{"imdbId", "name", "year", "kind", "posterId"}]}`, at most 10, only titles with an IMDb identifier, those of `year` (optional) first; `kind` is `movie` or `show`, and `posterId` the item whose Primary image (`/Items/{posterId}/Images/Primary`) is the poster, null without one. A failed search answers 502, `addon_unreachable` when an addon could not be reached, `title_search_failed` otherwise |
 | `PUT /admin/api/scopes/shared/folders/{id}/links` | links `{"path", "imdbId"}`; `path` is a file, a show's folder or a disc's folder |
 | `DELETE /admin/api/scopes/shared/folders/{id}/links?path=…` | removes a link |
+| `PUT /admin/api/scopes/shared/folders/{id}/episodes` | gives titles of shows' discs their episodes, `{"episodes": [{"path", "episode"}]}`, at most 1,000: `path` a title's, as the unmatched files give it, `episode` as a file's name gives it (`S01E05`, `s1e5`, `S01E05-E06`, `S01E05E06`), an empty one removing those given. Answers the folder; `invalid_episode` (400) for an episode written otherwise, 404 for a path that is no title of a show's disc |
 
 An address that is not `smb://host[:port]/share[/path]` or `http(s)://host/path`, or that holds a user or password, is refused with `invalid_share_address`; a user longer than 256 characters or a password longer than 1,024 with `invalid_share_user`. On **System › Health**, the problem of a folder (`code` `folder`) carries its error as `failure`, and `share` for a share. A folder that cannot be watched is a problem of its own (`code` `folder_unwatched`): in the container, its `failure` is `watch_limit` (the limit of watches, ENOSPC), `instance_limit` (the limit of watchers or of open files, EMFILE) or `failed`; for a share, which carries `share`, it is `unreachable`, `refused` or `failed`. A share's password the key cannot decrypt is listed among the stored secrets as `{"folder": name}`.
 
 `GET /admin/api/health` lists the enabled shares under `shares`, each with its `id`, `name`, `share` (`smb` or `webdav`), and `watch`: `notified`, `polled`, or empty while it is not watched. A polled share's `polled` tells why: `webdav`, `unsupported` (the SMB server refuses change notifications), `silent` (it did not tell of a change a listing found), `failed` (its notifications were lost, and are asked for again), or empty while they are asked for. A notified share's `polled` is `partial` when its server missed a change in one of its folders, and its folders are listed every 2 minutes too. `unwatched` is the share's `folder_unwatched` failure, and `watchFolders` whether **Watch folders and shares for changes** is on.
 
-Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A share's files are served the same way.
+Through the Jellyfin API, a local file is a media source of its title like any other, its `Name` the folder's name and its `Path` its file name. A Blu-ray disc's `Path` is its disc folder's name with the `.m2ts` extension, such as `Nosferatu (1922).m2ts`, or `Nosferatu (1922) - Disc 1.m2ts` for a folder named after the disc's number, and `Box - DISC02 - title 2.m2ts` for a title other than its main one. A playlist's media source, as a DVD's, has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A DVD's `Path` is its disc folder's name with its main title's `.VOB` extension, such as `Nosferatu (1922).VOB`, or `Box - DISC02 - title 2.VOB` for a title other than its main one; its media source has `SupportsDirectPlay` and `SupportsDirectStream` false, PlaybackInfo offers it only with a `TranscodingUrl`, and its download answers 400. A disc image's `Path` is its file name, such as `Nosferatu (1922).iso`, or `Box - title 2.iso` for a title other than its main one, and its media source plays as a DVD's does. A title of a show's disc is a media source of its episodes, named as a disc's title other than its main one: `Season 01 - Disc 2 - title 1.m2ts`, `Season 01 - Disc 1 - title 3.VOB` or `Disc 1 - title 2.iso`. A share's files are served the same way.
 
 A title's local artwork is one of its images like the addons': its `ImageTags`, `BackdropImageTags` and `/Items/{id}/Images` list it by tags that change when the image's size or modification time changes, and `/Items/{id}/Images/{type}` serves it, resized as apps ask, from the folder or the share. Besides `Primary`, `Backdrop`, `Logo`, `Thumb` and `Banner`, a local image may be an `Art` or a `Disc` image. No path of the server's shows: `/Items/{id}/Images` gives no `Path`.
 
