@@ -42,9 +42,9 @@ Trakt, Simkl and Last.fm are offered only once an administrator has set them up;
 
 Polyfin can also read what you watched elsewhere, in other apps that report to the same services, so that played marks, **Continue Watching** and **Next Up** match. It is off by default. Under **My account › Tracking**, each connected service has:
 
-- The **Import my … history** switch (such as **Import my Trakt history**): turning it on imports at once, then every 6 hours.
+- The **Import my … history** switch (such as **Import my Trakt history**): turning it on imports at once, then as often as the administrator's **Import connected accounts every** says, every 6 hours by default (see [How often connected accounts are imported](users.md#how-often-connected-accounts-are-imported)).
 - **Import now**: imports at once.
-- A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, and what stopped it, if anything.
+- A status line: when the last import ran, how many titles it marked played, how many resume points it set, how many titles of the history Polyfin could not find, when the next import runs, and what stopped it, if anything.
 
 Importing only adds to your data in Polyfin. It never sends anything to any service, and one user's history never reaches another user. Last.fm and ListenBrainz have no import: Polyfin only sends them what you play. An administrator moving from a Jellyfin, Emby or Plex server imports its users' watch data the same way (see [Moving from Jellyfin](users.md#moving-from-jellyfin) and [Moving from Emby and Plex](users.md#moving-from-emby-and-plex)), and you can import your own from a Jellyfin or Emby server you used before (see [Importing your own watch history](users.md#importing-your-own-watch-history)), or from your account on an app built on addons, such as Stremio or Nuvio (see [Importing from an app](users.md#importing-from-an-app)).
 

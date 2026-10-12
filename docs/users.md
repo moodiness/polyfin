@@ -191,7 +191,7 @@ Under **My account**, **Import from another server** lets each user bring their 
 
 Apps built on addons, as Polyfin is, keep what their users watched in an account: Polyfin imports from Nuvio and Stremio. Under **My account**, **Import from an app** lets each user bring theirs over: the movies and episodes they played, their resume points, the app's library, and the app's addons they choose.
 
-1. Choose the **App**, tick **Stay connected** to have it imported again every 6 hours (see [Staying connected](#staying-connected)), and sign in to it, the way that app signs in (see [Nuvio](#nuvio) and [Stremio](#stremio)). Polyfin reads the account once, then signs out, but for a Stremio key you paste, and unless you stay connected.
+1. Choose the **App**, tick **Stay connected** to have it imported again on its own, every 6 hours by default (see [Staying connected](#staying-connected)), and sign in to it, the way that app signs in (see [Nuvio](#nuvio) and [Stremio](#stremio)). Polyfin reads the account once, then signs out, but for a Stremio key you paste, and unless you stay connected.
 2. **Profile** lists the account's profiles by name, with what each watched, resumed and keeps in its library: choose the one to import. An app without profiles, as Stremio, has one: **The whole account**. Under **Addons**, tick those to add, if any (see [The app's addons](#the-app-s-addons)).
 3. **Import this profile** imports it into the user's account, in the background. The section then shows the import, and its result: what was added, the titles not found, and the addons added.
 
@@ -232,20 +232,20 @@ An addon's address may hold its user's settings and keys: Polyfin shows only its
 
 ### Staying connected
 
-Someone who goes on watching in Nuvio or Stremio on some devices, and through Polyfin on others, can stay connected rather than import again by hand. **Stay connected**, ticked before signing in, keeps what reads the account again, and the import that follows becomes the first of a connection: Polyfin imports the account again every 6 hours, the same way.
+Someone who goes on watching in Nuvio or Stremio on some devices, and through Polyfin on others, can stay connected rather than import again by hand. **Stay connected**, ticked before signing in, keeps what reads the account again, and the import that follows becomes the first of a connection: Polyfin imports the account again as often as **Import connected accounts every** says, every 6 hours by default, the same way (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)).
 
 - What is kept: for Stremio, the account's auth key: the one Polyfin got by a link code or a password is not signed out at the end of the import, and a key you paste is kept as it is. For Nuvio, the backend's address, the profile chosen, and the session's refresh token, saved again each time Nuvio renews it, at every import. The password is never kept. One connection per app per user: signing in again with **Stay connected** replaces it, and signs out the session Polyfin opened before.
 - How it is protected: it is stored in the database encrypted with `POLYFIN_SECRET_KEY`, as tracking tokens are (see [Configuration](configuration.md)), never shown, never sent back to the browser, and never logged. Without the key, it is stored as it is, and **System › Health** warns about it. A connection the key cannot decrypt counts as none: sign in again.
-- The imports: every 6 hours, Polyfin reads the account again and imports the profile chosen when connecting, with the same rules as the first import: played marks only added, the newer resume point wins, favorites only set. The addons are chosen once, at the first import: later imports never install any. Polyfin only reads the account: nothing is ever written to the app.
+- The imports: at that interval, Polyfin reads the account again and imports the profile chosen when connecting, with the same rules as the first import: played marks only added, the newer resume point wins, favorites only set. The addons are chosen once, at the first import: later imports never install any. Polyfin only reads the account: nothing is ever written to the app.
 - Status: under **Import from an app**, **Connected apps** shows each connection: the account, by the email the app gives, who connected it and when, the last import with what it added, and when the next one runs. **Import now** imports at once. When the app refuses what Polyfin kept, a key signed out or a session ended, the connection stops, says so, and is not imported until you sign in again with **Stay connected** ticked. An app that does not answer, or asks to wait, is tried again at the next import.
 - Disconnecting: **Disconnect** forgets everything kept, after signing out the session Polyfin opened: the Stremio key it got by a link code or a password, and the Nuvio session. A key you pasted is only forgotten, as signing it out would sign your browser out. What was imported stays.
 - Who: users connect their own accounts while **Users may import their watch history from another server or app**, under **Settings › Security**, allows it: turned off, their connections are paused, still shown, and they may still disconnect them. An administrator can connect an app for a user from **Import from an app**, at the top of **Users**, as for the import; the page lists the connections of the user chosen, with **Import now** and **Disconnect**. An administrator's own connections are never paused.
 
-Staying connected to Stremio deepens the risk of reading it (see [Stremio](#stremio)): its terms forbid extracting its data by automated means, and reading an account every few hours is more plainly automated than a one-off import.
+Staying connected to Stremio deepens the risk of reading it (see [Stremio](#stremio)): its terms forbid extracting its data by automated means, and reading an account again and again is more plainly automated than a one-off import, the more so at a short interval.
 
 **For app developers:**
 
-- `GET /admin/api/account/app-import` also answers `connections`, each with its `app`, `account` (`null` when the app gives none), `connectedAt`, `connectedBy` (`id` and `name`, `null` once that account is deleted), `problem` (`sign_in_refused`, or `null`), `paused`, `importing`, `lastImport` (`at`, `read`, `played`, `resumed`, `favorites`, `unmatched` and `problem`: `unreachable`, `rate_limited`, `unexpected`, `profile_missing`, `sign_in_refused`, `internal`, or `null`) and `nextImportAt` (`null` while stopped or paused). What a connection signs in with is never answered.
+- `GET /admin/api/account/app-import` also answers `connections`, each with its `app`, `account` (`null` when the app gives none), `connectedAt`, `connectedBy` (`id` and `name`, `null` once that account is deleted), `problem` (`sign_in_refused`, or `null`), `paused`, `importing`, `lastImport` (`at`, `read`, `played`, `resumed`, `favorites`, `unmatched` and `problem`: `unreachable`, `rate_limited`, `unexpected`, `profile_missing`, `sign_in_refused`, `internal`, or `null`) and `nextImportAt`, the last import, or the connection, plus the interval set (`null` while stopped or paused), and `importEveryMinutes`, the interval. What a connection signs in with is never answered.
 - The sign-in routes take `stayConnected`; the account read answers it back, and the import of it saves the connection.
 - `POST /admin/api/account/app-connections/{app}/import` imports at once, and answers `connection`. A connection stopped is `app_connection_stopped`, none `app_not_connected`, and the setting off for a user `server_imports_disabled`.
 - `DELETE /admin/api/account/app-connections/{app}` disconnects, even with the setting off, and answers `204`.
@@ -305,7 +305,7 @@ The row of bits has its limit: it means something only against the same episode 
 Reading a Stremio account has its risks:
 
 - Stremio's account API is not documented. Polyfin calls it as Stremio's own apps do; Stremio may change it, or turn other clients away, without notice.
-- Stremio's General Terms (section 5.4.1) forbid using Stremio for "monitoring, copying or extracting any information from Stremio, including its contents, graphic user interface or Database whether done mechanically or by automated means". A user reading their own account with their own key is a grey zone: nothing says it is allowed. Staying connected, which reads the account every 6 hours, makes that grey zone more pronounced.
+- Stremio's General Terms (section 5.4.1) forbid using Stremio for "monitoring, copying or extracting any information from Stremio, including its contents, graphic user interface or Database whether done mechanically or by automated means". A user reading their own account with their own key is a grey zone: nothing says it is allowed. Staying connected, which reads the account again at the interval set, every 6 hours by default, makes that grey zone more pronounced, the more so as the interval is short.
 - Stremio's own export of an account's data, under its settings, is reported broken: its library repeats one title many times (Stremio/stremio-bugs#614). Polyfin does not read it.
 
 Users who connected Trakt in Stremio can import their history from Trakt as well (see [Tracking services](tracking.md)).
@@ -556,12 +556,13 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 ## Security settings
 
-**Settings › Security** gathers five settings, and **Settings › Diagnostics** a sixth. They apply at once, without a restart.
+**Settings › Security** gathers six settings, and **Settings › Diagnostics** a seventh. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows the imports from a Jellyfin or Emby server and from an app under **My account** (see [Importing your own watch history](#importing-your-own-watch-history) and [Importing from an app](#importing-from-an-app)). |
+| **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often the apps users stay connected to, and the watch histories they import from tracking services, are imported again (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
@@ -579,6 +580,18 @@ On a user's page under **Users**, the **Access** section also holds **Can add th
 - their addons cannot be added, replaced, refreshed or turned on (403 `personal_addons_disabled`).
 
 The addons come back once both are on again. See [Addons and libraries](addons-and-libraries.md).
+
+### How often connected accounts are imported
+
+**Import connected accounts every** sets how often Polyfin imports again the Nuvio and Stremio accounts users stay connected to (see [Staying connected](#staying-connected)) and the watch histories they import from tracking services (see [Importing your watch history](tracking.md#importing-your-watch-history)): from 15 minutes to 24 hours, 6 hours by default. Someone who watches in one of those apps, then opens a Jellyfin app, finds their progress sooner with a short interval, or at once with **Import now**.
+
+- A change applies at once: the next import of each connection comes that long after its last import, or after it was connected, so a shorter interval brings the imports due forward, and a longer one puts them off. The next import that **Connected apps** and **My account › Tracking** show follows it. Polyfin looks for the imports due every minute.
+- Each import reads the whole account again, so a short interval sends more requests to those services. Polyfin already waits when one asks it to, and keeps to each service's pace (see [Pace and problems](tracking.md#pace-and-problems)).
+- Stremio's terms forbid extracting its data by automated means: the more often Polyfin reads a Stremio account, the more pronounced that grey zone grows (see [Stremio](#stremio)).
+
+**For app developers:**
+
+- `GET /admin/api/settings` answers `importEveryMinutes`, in minutes, its choices in `bounds`. `PUT` takes one of them; any other is `invalid_import_every_minutes`.
 
 ### Blocking after wrong passwords
 
