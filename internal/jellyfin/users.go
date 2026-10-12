@@ -66,6 +66,11 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.Accounts.Authenticate(r.Context(), body.Username, body.Pw)
+	var blocked *accounts.BlockError
+	if errors.As(err, &blocked) && h.AccountBlocked != nil {
+		h.AccountBlocked(blocked.User, accounts.DeviceInfo{DeviceID: c.DeviceID, DeviceName: c.Device, Client: c.Client,
+			ClientVersion: c.Version, RemoteAddress: key})
+	}
 	switch {
 	// An account blocked for wrong passwords answers as a wrong password
 	// does, the right password included. Jellyfin, which disables such an
@@ -107,6 +112,10 @@ func (h *Handler) signIn(w http.ResponseWriter, r *http.Request, user accounts.U
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	// An account's first device, and those it used before, are not told.
+	if device.Unfamiliar && h.NewDevice != nil {
+		h.NewDevice(user, device)
 	}
 	user, err = h.Accounts.User(r.Context(), user.ID)
 	if err != nil {

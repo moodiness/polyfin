@@ -47,6 +47,11 @@ type Options struct {
 	QuickConnect *quickconnect.Store
 	// SignIns throttles failed password sign-ins per client address.
 	SignIns *throttle.Failures
+	// AccountBlocked is told of the wrong password that blocked an
+	// account, with the app and address it came from, and NewDevice of a
+	// sign-in from a device the account never used; nil tells nothing.
+	AccountBlocked func(accounts.User, accounts.DeviceInfo)
+	NewDevice      func(accounts.User, accounts.Device)
 	// WebSocketPort is the port apps reach the server on.
 	WebSocketPort int
 	// Library browses the catalogs of users' addons.
