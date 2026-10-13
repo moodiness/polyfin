@@ -364,10 +364,28 @@ func TestRecordingNeedsPermission(t *testing.T) {
 }
 
 // recordingAddon serves a live TV catalog of one channel whose stream is
-// the HLS playlist in dir, and whose guide has one programme, from start to
-// end.
+// the HLS playlist in dir, listed as a live stream airs: its first three
+// segments at once, then one more every 2 seconds, their length, and never
+// its end; and whose guide has one programme, from start to end.
 func recordingAddon(t *testing.T, dir string, start, end time.Time) string {
 	t.Helper()
+	playlist, err := os.ReadFile(filepath.Join(dir, "one.m3u8"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var header string
+	var segments []string
+	for line := range strings.Lines(string(playlist)) {
+		switch {
+		case strings.HasPrefix(line, "#EXTINF"):
+			segments = append(segments, line)
+		case len(segments) == 0:
+			header += line
+		default:
+			segments[len(segments)-1] += line
+		}
+	}
+	opened := time.Now()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.EscapedPath()
@@ -389,6 +407,10 @@ func recordingAddon(t *testing.T, dir string, start, end time.Time) string {
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": channels})
 		case path == "/stream/tv/tv%3Arec.json":
 			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "Live", URL: server.URL + "/live/one.m3u8"}}})
+		case path == "/live/one.m3u8":
+			aired := min(len(segments), 3+int(time.Since(opened)/(2*time.Second)))
+			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+			_, _ = io.WriteString(w, header+strings.Join(segments[:aired], ""))
 		case strings.HasPrefix(path, "/live/"):
 			http.ServeFile(w, r, filepath.Join(dir, strings.TrimPrefix(path, "/live/")))
 		default:
@@ -412,11 +434,11 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	if _, err := os.Stat(ffprobe); err != nil {
 		t.Skip("no ffprobe next to POLYFIN_TEST_FFMPEG")
 	}
-	// A live playlist: no end, so FFmpeg waits for more until the
-	// recording ends.
+	// A live stream, long enough to air past the recording's end: FFmpeg
+	// records it as it comes, and stops at the recording's end.
 	stream := t.TempDir()
-	cmd := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=12",
-		"-f", "lavfi", "-i", "sine=duration=12", "-c:v", "libx264", "-g", "24", "-pix_fmt", "yuv420p", "-c:a", "aac",
+	cmd := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=60",
+		"-f", "lavfi", "-i", "sine=duration=60", "-c:v", "libx264", "-g", "24", "-pix_fmt", "yuv420p", "-c:a", "aac",
 		"-f", "hls", "-hls_time", "2", "-hls_list_size", "0", "-hls_flags", "omit_endlist", filepath.Join(stream, "one.m3u8"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
@@ -438,19 +460,22 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	var channels QueryResult
 	s.get(t, "/LiveTv/Channels", token, &channels)
 	liveAnalysis(t, s, user, channels.Items[0].Id)
-	// The recording goes on at least 10 seconds after the timer is made,
+	// The recording goes on at least 30 seconds after the timer is made,
 	// its post padding past the programme's end, however long the steps
-	// above took: the test sees it under way before it ends.
+	// above took. It is waited for 20 seconds at most: the checks of the
+	// recording under way have 10 seconds more before it ends, even on a
+	// runner slow to start it.
+	const lasts = 30 * time.Second
 	timer := timerDefaults(t, s, token, show.Id)
-	timer["PostPaddingSeconds"] = max(0, int(math.Ceil(time.Now().Add(10*time.Second).Sub(end).Seconds())))
+	made := time.Now()
+	timer["PostPaddingSeconds"] = max(0, int(math.Ceil(made.Add(lasts).Sub(end).Seconds())))
 	if status, body := s.call(http.MethodPost, "/LiveTv/Timers", app("tv", token), timer); status != http.StatusNoContent {
 		t.Fatalf("a timer made: %d %s", status, body)
 	}
 
 	// It records at once: it is under way, its timer active.
 	var recording BaseItemDto
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) {
+	for deadline := made.Add(lasts - 10*time.Second); time.Now().Before(deadline); {
 		var active QueryResult
 		s.get(t, "/LiveTv/Recordings?isInProgress=true", token, &active)
 		if len(active.Items) == 1 {
@@ -473,7 +498,7 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	}
 
 	// Once the programme ends, it is one Matroska file.
-	for id := recording.Id; time.Now().Before(deadline.Add(20 * time.Second)); time.Sleep(200 * time.Millisecond) {
+	for id := recording.Id; time.Now().Before(made.Add(lasts + 30*time.Second)); time.Sleep(200 * time.Millisecond) {
 		recording = BaseItemDto{}
 		s.get(t, "/LiveTv/Recordings/"+id, token, &recording)
 		if recording.Status == "" {
