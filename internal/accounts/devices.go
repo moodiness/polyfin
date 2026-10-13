@@ -1,9 +1,12 @@
 package accounts
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -260,6 +263,32 @@ func (s *Store) AllDevices(ctx context.Context, deviceID string) ([]ListedDevice
 		listed.Device = device
 		return listed, err
 	})
+}
+
+// DeviceApps lists the apps every user is signed in with, by the name they
+// send in the Client field of their authorization: each once whatever its
+// letter case, spelled as on the most recently active of its devices, by
+// name whatever the case.
+func (s *Store) DeviceApps(ctx context.Context) ([]string, error) {
+	rows, err := s.db.Query(ctx, `SELECT client FROM devices WHERE client <> ''
+		GROUP BY client ORDER BY max(last_activity_at) DESC, client`)
+	if err != nil {
+		return nil, err
+	}
+	clients, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	apps := make([]string, 0, len(clients))
+	for _, client := range clients {
+		if !slices.ContainsFunc(apps, func(app string) bool { return strings.EqualFold(app, client) }) {
+			apps = append(apps, client)
+		}
+	}
+	slices.SortFunc(apps, func(a, b string) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a), strings.ToLower(b)), cmp.Compare(a, b))
+	})
+	return apps, nil
 }
 
 // SignOutDeviceID signs out every user signed in on a device identifier,

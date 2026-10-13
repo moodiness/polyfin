@@ -565,6 +565,42 @@ const (
 	DefaultCollectionReadHour = -1
 )
 
+// ErrInvalidCollectionLibraryApps reports a Settings.CollectionLibraryApps
+// entry that is empty once trimmed, longer than MaxCollectionLibraryAppLength
+// characters or holding a control character, or more than
+// MaxCollectionLibraryApps entries.
+var ErrInvalidCollectionLibraryApps = errors.New("invalid collection library apps")
+
+// MaxCollectionLibraryApps is how many apps Settings.CollectionLibraryApps
+// names at most, and MaxCollectionLibraryAppLength the longest name, in
+// characters.
+const (
+	MaxCollectionLibraryApps      = 32
+	MaxCollectionLibraryAppLength = 100
+)
+
+// canonicalCollectionLibraryApps checks the apps told collection libraries
+// hold collections and returns them trimmed, each once whatever its letter
+// case, with the spelling it first has, in the order given; empty, not
+// nil, for none, as the column holds no NULL.
+func canonicalCollectionLibraryApps(apps []string) ([]string, error) {
+	if len(apps) > MaxCollectionLibraryApps {
+		return nil, ErrInvalidCollectionLibraryApps
+	}
+	canonical := make([]string, 0, len(apps))
+	for _, app := range apps {
+		app = strings.TrimSpace(app)
+		if app == "" || !utf8.ValidString(app) || utf8.RuneCountInString(app) > MaxCollectionLibraryAppLength ||
+			strings.ContainsFunc(app, unicode.IsControl) {
+			return nil, ErrInvalidCollectionLibraryApps
+		}
+		if !slices.ContainsFunc(canonical, func(kept string) bool { return strings.EqualFold(kept, app) }) {
+			canonical = append(canonical, app)
+		}
+	}
+	return canonical, nil
+}
+
 // ErrInvalidRemuxDBURL reports a Settings.RemuxDBURL that is not a valid
 // address (see ValidRemuxDBURL).
 var ErrInvalidRemuxDBURL = errors.New("invalid RemuxDB address")
@@ -1031,6 +1067,12 @@ type Settings struct {
 	// at which every collection of the server's collection libraries is
 	// read each day; -1 never.
 	CollectionReadHour int
+	// CollectionLibraryApps are the apps, by the name they send in the
+	// Client field of their authorization, told an addon's collection
+	// library holds collections, as Jellyfin's Collections view does;
+	// other apps are told it holds mixed content (see
+	// Store.CollectionLibraryApp). None by default.
+	CollectionLibraryApps []string
 	// RemuxDB makes item details describe the versions of a movie or an
 	// episode not analyzed yet, their audio, subtitle and video tracks, as
 	// RemuxDB found them in the same file; off, RemuxDB is never asked.
@@ -1158,7 +1200,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
-	"backup_hour, backups_kept, collection_read_hour, remuxdb, remuxdb_url, " +
+	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
@@ -1194,7 +1236,7 @@ func (settings *Settings) fields() []any {
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
-		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.RemuxDB, &settings.RemuxDBURL,
+		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
@@ -1277,6 +1319,14 @@ func (s *Store) KnownProxies() []netip.Prefix {
 // settings.
 func (s *Store) KnownProxyNames() []string {
 	return s.settings.Load().KnownProxyNames
+}
+
+// CollectionLibraryApp reports whether an app, by the name it sends in the
+// Client field of its authorization, is one of CollectionLibraryApps,
+// whatever its letter case, without copying the settings: every listing
+// of libraries asks.
+func (s *Store) CollectionLibraryApp(client string) bool {
+	return slices.ContainsFunc(s.settings.Load().CollectionLibraryApps, func(app string) bool { return strings.EqualFold(app, client) })
 }
 
 // Environment is what the environment variables that were options before
@@ -1504,6 +1554,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.CollectionReadHour < -1 || settings.CollectionReadHour > 23 {
 		return Settings{}, ErrInvalidCollectionReadHour
 	}
+	apps, err := canonicalCollectionLibraryApps(settings.CollectionLibraryApps)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.CollectionLibraryApps = apps
 	if settings.CacheSizeGB < MinCacheSizeGB || settings.CacheSizeGB > MaxCacheSizeGB {
 		return Settings{}, ErrInvalidCacheSize
 	}

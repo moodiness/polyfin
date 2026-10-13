@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -131,15 +132,26 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				}
 			}
 		case b.Bounded && kind == reflect.Slice:
-			// A list of addresses holds up to Max of them.
-			networks := make([]netip.Prefix, int(b.Max)+1)
-			for i := range networks {
-				networks[i] = netip.PrefixFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 32)
+			// A list of addresses, or of app names, holds up to Max of them.
+			var entries []any
+			for i := range int(b.Max) + 1 {
+				if field.Type().Elem().Kind() == reflect.String {
+					entries = append(entries, "App "+strconv.Itoa(i))
+				} else {
+					entries = append(entries, netip.PrefixFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 32))
+				}
 			}
-			if err := try(name, networks[:int(b.Max)]); err != nil {
+			list := func(n int) any {
+				value := reflect.MakeSlice(field.Type(), n, n)
+				for i := range n {
+					value.Index(i).Set(reflect.ValueOf(entries[i]))
+				}
+				return value.Interface()
+			}
+			if err := try(name, list(int(b.Max))); err != nil {
 				t.Errorf("%s: %v entries refused: %v", name, b.Max, err)
 			}
-			if err := try(name, networks); err == nil {
+			if err := try(name, list(int(b.Max)+1)); err == nil {
 				t.Errorf("%s: %v entries accepted", name, b.Max+1)
 			}
 		case b.Choices != nil && kind != reflect.Slice:

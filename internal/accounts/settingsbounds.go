@@ -112,9 +112,10 @@ func DefaultSettings() Settings {
 		LastFMAPIKey: "",
 		LastFMSecret: "",
 
-		BackupHour:         DefaultBackupHour,
-		BackupsKept:        DefaultBackupsKept,
-		CollectionReadHour: DefaultCollectionReadHour,
+		BackupHour:            DefaultBackupHour,
+		BackupsKept:           DefaultBackupsKept,
+		CollectionReadHour:    DefaultCollectionReadHour,
+		CollectionLibraryApps: []string{},
 
 		RemuxDB:    false,
 		RemuxDBURL: DefaultRemuxDBURL,
@@ -155,7 +156,8 @@ type SettingBounds struct {
 	Default any
 	// Min and Max bound a number, the length of a text, in characters for
 	// the server name and in bytes for the others, or the number of
-	// entries of a list of addresses. Bounded tells whether they apply.
+	// entries of a list of addresses or apps. Bounded tells whether they
+	// apply.
 	Min, Max float64
 	Bounded  bool
 	// Zero tells that 0 is accepted too, below Min, turning the setting
@@ -266,9 +268,10 @@ func SettingsBounds() map[string]SettingBounds {
 		"lastFmApiKey":          text(MaxTrackingAppBytes, d.LastFMAPIKey),
 		"lastFmSecret":          text(MaxTrackingAppBytes, d.LastFMSecret),
 
-		"backupHour":         between(0, 23, d.BackupHour),
-		"backupsKept":        between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
-		"collectionReadHour": between(-1, 23, d.CollectionReadHour),
+		"backupHour":            between(0, 23, d.BackupHour),
+		"backupsKept":           between(MinBackupsKept, MaxBackupsKept, d.BackupsKept),
+		"collectionReadHour":    between(-1, 23, d.CollectionReadHour),
+		"collectionLibraryApps": between(0, MaxCollectionLibraryApps, d.CollectionLibraryApps),
 
 		"remuxDb":    is(d.RemuxDB),
 		"remuxDbUrl": text(MaxRemuxDBURLBytes, d.RemuxDBURL),
