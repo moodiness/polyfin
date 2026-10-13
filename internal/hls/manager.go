@@ -477,6 +477,8 @@ type Manager struct {
 	ahead atomic.Pointer[func() time.Duration]
 	// stall is stallTimeout, which tests shorten.
 	stall time.Duration
+	// grace is recordGrace, which tests lengthen.
+	grace time.Duration
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -499,7 +501,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout,
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout, grace: recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
 	go m.stopIdle()
 	return m, nil

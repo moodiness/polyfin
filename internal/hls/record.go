@@ -13,6 +13,19 @@ import (
 	"time"
 )
 
+const (
+	// recordGrace is how long FFmpeg is given to stop a recording at its
+	// first interrupt before it gets a second. FFmpeg looks for interrupts
+	// every half second, then stops at the next packet it reads: a source
+	// that flows stops well within. A read waiting for its source, as for a
+	// live playlist that lists no new segment, ends only at the second
+	// interrupt (see Record).
+	recordGrace = 2 * time.Second
+	// recordKill is how long after its first interrupt FFmpeg is killed,
+	// as a last resort.
+	recordKill = 10 * time.Second
+)
+
 // userLives counts the live encodings and recordings of user, with the
 // oldest of their live encodings, which a new one may replace. The caller
 // holds m.mu.
@@ -42,6 +55,14 @@ func (m *Manager) userLives(user string) (int, *live) {
 // neither past serverLives nor while key records already, which ErrBusy
 // reports. It returns nil once the stream ended, ctx's error once ctx
 // ended, and FFmpeg's error otherwise.
+//
+// When ctx ends, FFmpeg is interrupted, so that it writes what it holds.
+// Its first interrupt does not end a read that waits for its source: one
+// still running recordGrace later is interrupted again, which ends that
+// read. FFmpeg writes nothing more after its second interrupt, so it
+// writes each packet as it comes (see recordArgs): all that is lost is
+// the few packets it was still putting in order, past the recording's end.
+// It is killed recordKill after the first interrupt, as a last resort.
 func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -83,13 +104,25 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 	}
 	defer release()
 	cmd := exec.CommandContext(ctx, m.ffmpeg, remux.recordArgs(path)...)
-	// FFmpeg is asked to stop, so that it writes what it holds.
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-	cmd.WaitDelay = 10 * time.Second
+	var again *time.Timer
+	cmd.Cancel = func() error {
+		err := cmd.Process.Signal(os.Interrupt)
+		if err == nil {
+			again = time.AfterFunc(m.grace, func() { _ = cmd.Process.Signal(os.Interrupt) })
+		}
+		return err
+	}
+	cmd.WaitDelay = recordKill
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	m.logger.Debug("Started a recording")
 	err = cmd.Run()
+	// Cancel, if it ran, returned before Run did. Once FFmpeg was waited
+	// for, the second interrupt is not sent: one due meanwhile finds the
+	// process done, and is not sent either (see os.ErrProcessDone).
+	if again != nil {
+		again.Stop()
+	}
 	switch {
 	case ctx.Err() != nil:
 		return ctx.Err()
@@ -136,7 +169,9 @@ func (m *Manager) Finish(ctx context.Context, parts []string, path string) error
 }
 
 // recordArgs is FFmpeg's command line copying the stream into path as
-// MPEG-TS, which stays readable however the recording stops.
+// MPEG-TS, which stays readable however the recording stops. Each packet
+// is written as it comes, rather than kept in FFmpeg's buffer, which a
+// second interrupt would lose (see Record).
 func (r Remux) recordArgs(path string) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 	args = append(args, r.InputOptions...)
@@ -144,5 +179,5 @@ func (r Remux) recordArgs(path string) []string {
 	if r.Audio >= 0 {
 		args = append(args, "-map", "0:"+strconv.Itoa(r.Audio))
 	}
-	return append(args, "-map_metadata", "-1", "-c", "copy", "-f", "mpegts", path)
+	return append(args, "-map_metadata", "-1", "-c", "copy", "-flush_packets", "1", "-f", "mpegts", path)
 }
