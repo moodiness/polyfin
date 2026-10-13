@@ -16,9 +16,10 @@ import (
 // that a restart does not forget the versions known before: a list read
 // back is stale (see list), listed at once while the addon is asked again,
 // as a list that expired is, and kept as long (see staleLists). A refresh
-// of the title deletes it (see forgetLists). A list's saving and deletion
-// take its lock (see listLocks), so that the copy saved ends as the list
-// in memory: a list dropped while it was being saved is not saved back.
+// of the title deletes it (see forgetLists). A list's saving, reading back
+// and dropping take its lock (see listLocks), so that the copy saved ends
+// as the list in memory: a list dropped while it was being saved is not
+// saved back, nor read back from a copy read before it was dropped.
 
 const (
 	// savedTimeout bounds the reading and saving of a list.
@@ -142,15 +143,16 @@ func (s *Service) writeStreams(key streamKey) bool {
 	return true
 }
 
-// deleteSavedStreams deletes the stream list saved for key, under the key's
-// lock: the list in memory, dropped before, is not saved back by a save
-// under way (see writeStreams).
-func (s *Service) deleteSavedStreams(ctx context.Context, key streamKey) {
+// dropStreams drops the stream list kept for key, in memory and saved,
+// under the key's lock: a save under way does not save it back (see
+// writeStreams), nor does a read under way restore it (see streamListOf).
+func (s *Service) dropStreams(ctx context.Context, key streamKey) {
+	tracked := s.tracked()
+	defer tracked.saving.lock(key)()
+	s.streamLists.Delete(key)
 	if s.db == nil {
 		return
 	}
-	tracked := s.tracked()
-	defer tracked.saving.lock(key)()
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), savedTimeout)
 	defer cancel()
 	if _, err := s.db.Exec(ctx, "DELETE FROM stream_lists WHERE addon_id = $1 AND content_type = $2 AND stremio_id = $3",
@@ -160,9 +162,9 @@ func (s *Service) deleteSavedStreams(ctx context.Context, key streamKey) {
 	tracked.unsaved.Put(key, true)
 }
 
-// listLocks holds a lock for each stream list being saved or deleted (see
-// writeStreams and deleteSavedStreams). A list's lock is dropped once
-// nothing holds or awaits it. Its zero value is ready.
+// listLocks holds a lock for each stream list being saved, read back or
+// dropped (see writeStreams, streamListOf and dropStreams). A list's lock
+// is dropped once nothing holds or awaits it. Its zero value is ready.
 type listLocks struct {
 	mu    sync.Mutex
 	locks map[streamKey]*listLock

@@ -370,6 +370,5 @@ func (s *Service) forgetLists(ctx context.Context, key streamKey) {
 func (s *Service) forgetStreams(ctx context.Context, key streamKey) {
 	s.stopFollowUps(key, listStreams)
 	s.flight.Forget(streamsFlight(key))
-	s.streamLists.Delete(key)
-	s.deleteSavedStreams(ctx, key)
+	s.dropStreams(ctx, key)
 }

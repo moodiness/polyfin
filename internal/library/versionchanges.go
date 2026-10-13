@@ -111,11 +111,13 @@ func (s *Service) FollowedProgress(ctx context.Context, user accounts.User, id a
 
 // streamListOf returns, as listOf does, the stream list an addon gave for
 // a title, restoring the list saved before a restart when none is kept in
-// memory (see savedStreams).
+// memory (see savedStreams), under the list's lock: a list dropped
+// meanwhile is not restored (see dropStreams).
 func (s *Service) streamListOf(ctx context.Context, key streamKey) (l list[stremio.Stream], fresh, ok bool) {
 	if l, fresh, ok = listOf(s, s.streamLists, key); ok {
 		return l, fresh, ok
 	}
+	defer s.tracked().saving.lock(key)()
 	saved, ok := s.savedStreams(ctx, key)
 	if !ok {
 		return list[stremio.Stream]{}, false, false
