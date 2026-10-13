@@ -1,8 +1,11 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -175,5 +178,29 @@ func TestHealthReportsStoredSecrets(t *testing.T) {
 	}
 	if encoded, _ := json.Marshal(got); strings.Contains(string(encoded), "pm-plain") || strings.Contains(string(encoded), "enc:v1") {
 		t.Errorf("health holds a secret: %s", encoded)
+	}
+}
+
+// Inspecting the secrets fails when the request ends, such as a tab closed
+// during a Health refresh: nothing is logged then, and a real failure still
+// is.
+func TestSecretsHealthLogsOnlyWhileTheRequestLasts(t *testing.T) {
+	t.Parallel()
+	var logged bytes.Buffer
+	h := &handler{Options: Options{Logger: slog.New(slog.NewTextHandler(&logged, nil))}}
+	h.Health.Secrets = func(ctx context.Context) (secrets.Report, error) {
+		if err := ctx.Err(); err != nil {
+			return secrets.Report{}, err
+		}
+		return secrets.Report{}, errors.New("the database is gone")
+	}
+
+	ended, cancel := context.WithCancel(t.Context())
+	cancel()
+	if got := h.secretsHealth(ended); got != nil || logged.Len() != 0 {
+		t.Errorf("ended request: %v, logged %q", got, logged.String())
+	}
+	if got := h.secretsHealth(t.Context()); got != nil || !strings.Contains(logged.String(), "The stored secrets could not be inspected") {
+		t.Errorf("failure: %v, logged %q", got, logged.String())
 	}
 }

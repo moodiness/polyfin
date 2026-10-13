@@ -118,7 +118,11 @@ func (h *handler) secretsHealth(ctx context.Context) *secretsHealthJSON {
 	}
 	report, err := h.Health.Secrets(ctx)
 	if err != nil {
-		h.Logger.Warn("The stored secrets could not be inspected", "error", err)
+		// A request that ended, such as a tab closed during a refresh, is
+		// not a failure: nobody reads the answer.
+		if ctx.Err() == nil {
+			h.Logger.Warn("The stored secrets could not be inspected", "error", err)
+		}
 		return nil
 	}
 	result := &secretsHealthJSON{Encrypted: h.Health.SecretKey, Plaintext: report.Plaintext, Unreadable: []unreadableJSON{}}
