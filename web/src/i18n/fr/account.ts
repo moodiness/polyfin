@@ -3,7 +3,7 @@ import type en from '../en/account'
 const account: typeof en = {
   account: {
     title: 'Mon compte',
-    signedInAs: 'Connecté en tant que ',
+    signedInAs: 'Connecté avec le compte ',
     sectionsLabel: 'Sections du compte',
     sections: {
       statistics: 'Statistiques',
@@ -158,7 +158,7 @@ const account: typeof en = {
         title: 'Applis connectées',
         help: (every: string) =>
           `Importées ${every}, comme lors de la première importation : le même profil, sans leurs addons. Polyfin ne fait que les lire.`,
-        connectedAs: 'Connecté en tant que ',
+        connectedAs: 'Connecté avec le compte ',
         connected: 'Connecté',
         connectedOn: (date: string) => ` depuis le ${date}`,
         connectedBy: (name: string) => ` par ${name}`,
@@ -201,7 +201,7 @@ const account: typeof en = {
     statisticsHelp:
       'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',
     notificationsHelp:
-      'Où Polyfin vous prévient quand un nouvel épisode d’une série que vous suivez sort, quand vos enregistrements se terminent, ou quand vos lectures commencent et s’arrêtent, et vous envoie le résumé de votre semaine.',
+      'Où Polyfin vous signale les nouveaux épisodes des séries que vous suivez, vos enregistrements et vos lectures, vos connexions qui s’arrêtent, les blocages de votre compte et les nouveaux appareils où il se connecte, et vous envoie le résumé de votre semaine et le bilan de votre mois et de votre année.',
     devicesHelp:
       'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',
@@ -264,7 +264,7 @@ const account: typeof en = {
       signInExpires: (when: string) => `Cette demande expire ${when}.`,
       signInEnded:
         'Polyfin n’a pas été autorisé à temps, ou a été refusé. Recommencez pour réessayer.',
-      connectedAs: 'Connecté en tant que ',
+      connectedAs: 'Connecté avec le compte ',
       connectedWithKey: 'Connecté avec votre clé d’API',
       connected: 'Connecté',
       connectedOn: (date: string) => ` le ${date}`,

@@ -250,7 +250,7 @@ const users: typeof en = {
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
-        `${signedIn ? `Connecté en tant que ${owner ?? 'cet utilisateur'}` : `Cette clé appartient à ${owner ?? 'un utilisateur'}`}, qui n’est pas administrateur de ce serveur : Polyfin n’importe que ce compte. Pour lister les autres utilisateurs du serveur, connectez-vous avec le compte d’un administrateur ou une clé d’API.`,
+        `${signedIn ? `Connecté avec le compte ${owner ?? 'de cet utilisateur'}` : `Cette clé appartient à ${owner ?? 'un utilisateur'}`}, qui n’est pas administrateur de ce serveur : Polyfin n’importe que ce compte. Pour lister les autres utilisateurs du serveur, connectez-vous avec le compte d’un administrateur ou une clé d’API.`,
       serverPassword: (server: string) => `Mot de passe sur ${server}`,
       serverPasswordHelp: (user: string) =>
         `Polyfin se connecte avec le compte ${user} pour lire ses données de visionnage, puis se déconnecte. Laissez vide si le compte n’en a pas.`,

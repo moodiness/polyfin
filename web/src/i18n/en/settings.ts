@@ -465,7 +465,7 @@ const settings = {
       liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
       notifications:
-        'Where Polyfin tells of new episodes, recordings, Health problems and new users, for every user, and sends the weekly summary.',
+        'Where Polyfin tells, for every user, of new episodes, recordings, playbacks and connections that stop, and of Health problems, new users, new versions and blocked accounts, and sends the weekly summary and the month and year in review.',
     },
     groups: {
       skip: 'Skip intro and credits',

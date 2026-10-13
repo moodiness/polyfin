@@ -15,7 +15,7 @@ const home: typeof en = {
     approve: 'Autoriser et connecter cet appareil',
     approving: 'Autorisation…',
     approved: (device: string, user: string) =>
-      `${device} est maintenant connecté en tant que ${user}.`,
+      `${device} est maintenant connecté avec le compte ${user}.`,
     another: 'Autoriser un autre appareil',
     steps: [
       'Ouvrez l’application Jellyfin sur l’appareil et choisissez Quick Connect.',
