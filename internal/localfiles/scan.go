@@ -192,10 +192,10 @@ func under(rel string, skipped []string) bool {
 	return false
 }
 
-// claim marks a scan of the folder under way, done under ctx and counted
-// in the metrics; it reports false when one already is. The scan's
-// context ends with release, or when the folder's scan is stopped (see
-// hold).
+// claim marks a scan of the folder under way, done under ctx; it reports
+// false when one already is. The scan's context ends with release, or
+// when the folder's scan is stopped (see hold). The scans count in the
+// metrics, not the claims of hold.
 func (s *Service) claim(ctx context.Context, id accounts.ID) (scanCtx context.Context, release func(), ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -205,14 +205,12 @@ func (s *Service) claim(ctx context.Context, id accounts.ID) (scanCtx context.Co
 	scanCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	s.running[id] = scanning{done: done, stop: stop}
-	finished := metrics.ScanStarted()
 	return scanCtx, func() {
 		stop()
 		s.mu.Lock()
 		delete(s.running, id)
 		s.scanned[id] = true
 		s.mu.Unlock()
-		finished()
 		close(done)
 	}, true
 }
@@ -243,8 +241,10 @@ func (s *Service) StartScan(id accounts.ID) {
 	if !ok {
 		return
 	}
+	finished := metrics.ScanStarted()
 	s.wg.Go(func() {
 		defer release()
+		defer finished()
 		// Neither a stopped scan nor one the service's end cut short fails.
 		if err := s.scan(scanCtx, id); err != nil && scanCtx.Err() == nil {
 			s.logger.Warn("A local folder could not be scanned", "folder", id, "error", err)
@@ -260,6 +260,7 @@ func (s *Service) Scan(ctx context.Context, id accounts.ID) error {
 		scanCtx, release, ok := s.claim(ctx, id)
 		if ok {
 			defer release()
+			defer metrics.ScanStarted()()
 			err := s.scan(scanCtx, id)
 			if err != nil && scanCtx.Err() != nil && ctx.Err() == nil {
 				return nil

@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -160,6 +161,32 @@ func TestFolderKindChanges(t *testing.T) {
 	}
 	if _, err := e.service.Update(t.Context(), addon.ID, Changes{Kind: new("films")}); err != ErrInvalidKind {
 		t.Errorf("another kind: %v", err)
+	}
+}
+
+// A change of what a folder holds, its kind or its path, counts in the
+// metrics as the one scan that follows: the folder held meanwhile is no
+// scan.
+func TestFolderChangeCountsOneScan(t *testing.T) {
+	e := newEnv(t)
+	addon, _ := e.folder(KindHomeVideos, map[string]int{"Nosferatu (1922).mkv": 10})
+	elsewhere := t.TempDir()
+	write(t, filepath.Join(elsewhere, "Nosferatu (1922).mkv"), 10)
+	for _, tc := range []struct {
+		name    string
+		changes Changes
+	}{{"kind", Changes{Kind: new(KindMovies)}}, {"path", Changes{Path: &elsewhere}}} {
+		scans := metrics.Value("polyfin_scan_duration_seconds", nil)
+		if _, err := e.service.Update(t.Context(), addon.ID, tc.changes); err != nil {
+			t.Fatal(err)
+		}
+		e.idle(addon.ID)
+		if got := metrics.Value("polyfin_scan_duration_seconds", nil); got != scans+1 {
+			t.Errorf("%s: %v scans counted, want 1", tc.name, got-scans)
+		}
+		if running := metrics.Value("polyfin_scans_running", nil); running != 0 {
+			t.Errorf("%s: %v scans running", tc.name, running)
+		}
 	}
 }
 
