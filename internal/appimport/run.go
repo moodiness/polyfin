@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
@@ -28,6 +30,10 @@ type run struct {
 	// list is the watchlist the library goes to: the connection's, which
 	// the import replaces, or watchlist.Import, which it adds to.
 	list string
+	// connectedAt is when the connection whose library the import saves
+	// was made, zero for a one-off import: the library is saved only
+	// while that connection exists.
+	connectedAt time.Time
 }
 
 // update changes the status of the import.
@@ -48,6 +54,7 @@ func (r *run) run(ctx context.Context) {
 	var err error
 	if r.connection != nil {
 		connectedAt, err = r.s.connect(ctx, r.connection)
+		r.connectedAt = connectedAt
 	}
 	if err == nil {
 		err = r.merge(ctx)
@@ -74,7 +81,11 @@ func (r *run) run(ctx context.Context) {
 	r.update(func(s *Status) {
 		s.State = StateDone
 		if err != nil {
-			s.State, s.Problem = StateFailed, ProblemInternal
+			// An import stopped, as its connection is disconnected or
+			// its user deleted, did not fail; its addons are not added.
+			if ctx.Err() == nil {
+				s.State, s.Problem = StateFailed, ProblemInternal
+			}
 			for i := range s.Addons {
 				s.Addons[i].Problem = AddonInternal
 			}
@@ -244,7 +255,11 @@ func (r *run) merge(ctx context.Context) error {
 	if r.s.watchlist == nil {
 		return nil
 	}
-	added, err := r.s.watchlist.Save(ctx, r.user.ID, r.list, titles, r.list != watchlist.Import)
+	var held func(context.Context, pgx.Tx) (bool, error)
+	if !r.connectedAt.IsZero() {
+		held = r.s.connectionExists(connectionKey{r.user.ID, r.status.App}, r.connectedAt)
+	}
+	added, err := r.s.watchlist.SaveWhile(ctx, r.user.ID, r.list, titles, r.list != watchlist.Import, held)
 	if err != nil {
 		return err
 	}

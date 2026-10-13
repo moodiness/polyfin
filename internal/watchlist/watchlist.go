@@ -70,6 +70,16 @@ const unstarted = `NOT EXISTS (SELECT 1 FROM user_data d WHERE d.user_id = w.use
 // returns how many of titles the watchlist did not hold before and the
 // user has not started: the titles it adds to the Watchlist view.
 func (s *Store) Save(ctx context.Context, user accounts.ID, list string, titles []Title, whole bool) (int, error) {
+	return s.SaveWhile(ctx, user, list, titles, whole, nil)
+}
+
+// SaveWhile is Save, done only while held, when not nil, reports true,
+// run first in the transaction that saves: it locks what it reads, such
+// as the connection whose list it is, so that what deletes that, then
+// drops the list, waits for the titles saved, or keeps them from being
+// saved. Not held, nothing is saved, and SaveWhile returns 0.
+func (s *Store) SaveWhile(ctx context.Context, user accounts.ID, list string, titles []Title, whole bool,
+	held func(context.Context, pgx.Tx) (bool, error)) (int, error) {
 	// A title listed twice is saved once, with its latest date.
 	ids := make([]accounts.ID, 0, len(titles))
 	dates := make([]pgtype.Timestamptz, 0, len(titles))
@@ -87,6 +97,11 @@ func (s *Store) Save(ctx context.Context, user accounts.ID, list string, titles 
 	}
 	var added int
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if held != nil {
+			if ok, err := held(ctx, tx); err != nil || !ok {
+				return err
+			}
+		}
 		err := tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT $1::uuid AS user_id, item_id FROM unnest($2::uuid[]) AS c (item_id)) w
 			WHERE NOT EXISTS (SELECT 1 FROM watchlist o WHERE o.user_id = w.user_id AND o.item_id = w.item_id) AND `+unstarted,
 			user, ids).Scan(&added)

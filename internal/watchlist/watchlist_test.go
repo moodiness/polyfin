@@ -1,9 +1,13 @@
 package watchlist
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
@@ -136,5 +140,31 @@ func TestStartedTitlesAreLeftOut(t *testing.T) {
 	change([]userdata.Item{{ID: other}}, func(d *userdata.Data) { d.Position = time.Minute })
 	if got := h.titles(t); !slices.Equal(got, []accounts.ID{movie}) {
 		t.Errorf("after starting one: %v", got)
+	}
+}
+
+// SaveWhile saves only while held reports true, and fails with it.
+func TestSaveWhileSavesOnlyWhileHeld(t *testing.T) {
+	t.Parallel()
+	h := setup(t)
+	list := Connection("stremio")
+	held := func(answer bool, err error) func(context.Context, pgx.Tx) (bool, error) {
+		return func(context.Context, pgx.Tx) (bool, error) { return answer, err }
+	}
+	if added, err := h.SaveWhile(t.Context(), h.user, list, []Title{dated(1, 1)}, true, held(false, nil)); err != nil || added != 0 {
+		t.Errorf("not held: %d %v", added, err)
+	}
+	failure := errors.New("the check failed")
+	if _, err := h.SaveWhile(t.Context(), h.user, list, []Title{dated(1, 1)}, true, held(true, failure)); !errors.Is(err, failure) {
+		t.Errorf("failed check: %v", err)
+	}
+	if got := h.titles(t); len(got) != 0 {
+		t.Fatalf("saved while not held: %v", got)
+	}
+	if added, err := h.SaveWhile(t.Context(), h.user, list, []Title{dated(1, 1)}, true, held(true, nil)); err != nil || added != 1 {
+		t.Errorf("held: %d %v", added, err)
+	}
+	if got := h.titles(t); !slices.Equal(got, []accounts.ID{item(1)}) {
+		t.Errorf("held: %v", got)
 	}
 }

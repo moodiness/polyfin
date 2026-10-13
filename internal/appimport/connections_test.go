@@ -15,8 +15,10 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // fakeSource reads again the account of a fake app, as a source does.
@@ -604,5 +606,93 @@ func TestTheLibraryLeavesTheWatchlistWhenNoListHoldsIt(t *testing.T) {
 	}
 	if got := h.watchlistOf(t, alice.ID); !slices.Equal(got, []accounts.ID{movie(2)}) {
 		t.Errorf("after disconnecting: %v", got)
+	}
+}
+
+// blockingTitles finds titles as Titles does, once release is closed,
+// closing entered as the first finding starts. It goes on when its
+// context ends, as a finding under way may.
+type blockingTitles struct {
+	Titles
+	once             sync.Once
+	entered, release chan struct{}
+}
+
+func (b *blockingTitles) Resolve(ctx context.Context, refs []library.TitleRef) ([][]library.TitleTarget, error) {
+	b.once.Do(func() { close(b.entered) })
+	<-b.release
+	return b.Titles.Resolve(context.WithoutCancel(ctx), refs)
+}
+
+// A connection disconnected, or its user deleted, while its first import
+// still matches its titles leaves none of its library on the watchlist,
+// and the import ends without failing.
+func TestTheFirstImportOfAConnectionGoneSavesNoLibrary(t *testing.T) {
+	t.Parallel()
+	for _, leave := range []string{"disconnected", "deleted"} {
+		t.Run(leave, func(t *testing.T) {
+			t.Parallel()
+			h := newConnectionHarness(t)
+			h.store.OnDelete(h.Leaving)
+			titles := &blockingTitles{Titles: h.lib, entered: make(chan struct{}), release: make(chan struct{})}
+			h.titles = titles
+			alice := h.user(t, "alice", false)
+			const secret = "kept-secret-0123456789abcdef"
+			h.source.set(func(f *fakeSource) { f.accepted[secret] = true })
+			account := Account{App: "stremio", SignIn: &SignIn{Secret: secret, Owned: true}, Profiles: []Profile{{ID: "1", Entries: []Entry{
+				{Title: ref(t, "tt0000001", true, 0, 0), Watchlist: true}, {Title: ref(t, "tt0000002", true, 0, 0), Watchlist: true}}}}}
+			if _, err := h.Start(alice, alice, h.Hold(alice.ID, account), Choice{Profile: "1"}); err != nil {
+				t.Fatal(err)
+			}
+			<-titles.entered
+			if leave == "disconnected" {
+				if err := h.Disconnect(t.Context(), alice.ID, "stremio"); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := h.store.DeleteUser(t.Context(), alice.ID); err != nil {
+				t.Fatal(err)
+			}
+			close(titles.release)
+			if status := h.ended(t, alice.ID); status.State != StateDone || status.Problem != "" || status.Watchlist != 0 {
+				t.Errorf("the import: %+v", status)
+			}
+			h.idle(t)
+			var rows int
+			if err := h.pool.QueryRow(t.Context(), "SELECT count(*) FROM watchlist WHERE user_id = $1", alice.ID).Scan(&rows); err != nil || rows != 0 {
+				t.Errorf("watchlist rows: %d %v", rows, err)
+			}
+			if strings.Contains(h.log.String(), "could not be imported") {
+				t.Errorf("logged: %s", h.log.String())
+			}
+		})
+	}
+}
+
+// An import that saves a connection's library once the connection is gone,
+// as its stop came too late, saves nothing.
+func TestALibraryIsNotSavedForAConnectionGone(t *testing.T) {
+	t.Parallel()
+	h := newConnectionHarness(t)
+	alice := h.user(t, "alice", false)
+	account := Account{Profiles: []Profile{{ID: "1"}}}
+	h.source.set(func(f *fakeSource) { f.account, f.accepted["alice's"] = account, true })
+	c := h.connected(t, alice, alice, account, SignIn{Secret: "alice's", Owned: true}, Choice{Profile: "1"})
+	entries := []Entry{{Title: ref(t, "tt0000001", true, 0, 0), Watchlist: true}}
+	merge := func() *Status {
+		status := &Status{App: "stremio"}
+		r := &run{s: h.Service, status: status, user: alice, entries: entries, list: watchlist.Connection("stremio"), connectedAt: c.ConnectedAt}
+		if err := r.merge(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		return status
+	}
+	if status := merge(); status.Watchlist != 1 || len(h.watchlistOf(t, alice.ID)) != 1 {
+		t.Fatalf("connected: %+v %v", status, h.watchlistOf(t, alice.ID))
+	}
+	if err := h.Disconnect(t.Context(), alice.ID, "stremio"); err != nil {
+		t.Fatal(err)
+	}
+	if status := merge(); status.Watchlist != 0 || len(h.watchlistOf(t, alice.ID)) != 0 {
+		t.Errorf("disconnected: %+v %v", status, h.watchlistOf(t, alice.ID))
 	}
 }

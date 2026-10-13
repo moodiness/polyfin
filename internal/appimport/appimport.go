@@ -491,6 +491,7 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 	}
 	s.imports[user.ID] = status
 	r := &run{s: s, status: status, by: by, user: user, entries: profile.Entries, addons: chosen, list: watchlist.Import}
+	ctx, stop := s.ctx, context.CancelFunc(func() {})
 	if signIn := h.account.SignIn; signIn != nil {
 		if s.db == nil {
 			s.release(signIn, h.account.App)
@@ -498,14 +499,18 @@ func (s *Service) Start(by, user accounts.User, key string, choice Choice) (*Sta
 			kept := *signIn
 			kept.Profile = profile.ID
 			r.connection = &newConnection{key: connectionKey{user.ID, h.account.App}, signIn: kept, account: h.account.Name, by: by.ID}
-			r.connection.run = s.claim(r.connection.key, nil)
+			// Disconnecting, or deleting the user, stops it as it stops
+			// the later imports.
+			ctx, stop = context.WithCancel(s.ctx)
+			r.connection.run = s.claim(r.connection.key, stop)
 			r.list = watchlist.Connection(h.account.App)
 		}
 	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		r.run(s.ctx)
+		defer stop()
+		r.run(ctx)
 	}()
 	return status.clone(), nil
 }

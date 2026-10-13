@@ -418,7 +418,10 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.User, app string)
 
 // Disconnect forgets user's connection to app, stopping its import, after
 // signing out the session Polyfin opened. A key the user pasted is only
-// forgotten. The titles its library alone put on the watchlist leave it.
+// forgotten. The titles its library alone put on the watchlist leave it:
+// an import saves the library only while the connection exists, locking
+// it, so that it saves before the connection is deleted, and its titles
+// are dropped, or sees it deleted and saves nothing.
 // Disconnecting an app not connected does nothing.
 func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) error {
 	if s.db == nil {
@@ -622,7 +625,8 @@ func (s *Service) importConnection(ctx context.Context, key connectionKey) {
 	}
 	if profile != nil {
 		status := &Status{App: key.app, Profile: profile.Name, User: key.user, State: StateRunning, Read: len(profile.Entries)}
-		r := &run{s: s, status: status, user: accounts.User{ID: key.user}, entries: profile.Entries, list: watchlist.Connection(key.app)}
+		r := &run{s: s, status: status, user: accounts.User{ID: key.user}, entries: profile.Entries, list: watchlist.Connection(key.app),
+			connectedAt: c.ConnectedAt}
 		if err := r.merge(ctx); err != nil {
 			if ctx.Err() != nil {
 				return
@@ -651,6 +655,22 @@ func readProblem(err error) string {
 		return ProblemRateLimited
 	}
 	return ProblemUnexpected
+}
+
+// connectionExists returns what tells, in a transaction, whether the
+// connection key names, made at connectedAt, still exists, locking it
+// until the transaction ends: disconnecting it, or deleting its user,
+// waits for what the transaction saves of it.
+func (s *Service) connectionExists(key connectionKey, connectedAt time.Time) func(context.Context, pgx.Tx) (bool, error) {
+	return func(ctx context.Context, tx pgx.Tx) (bool, error) {
+		var exists bool
+		err := tx.QueryRow(ctx, "SELECT true FROM app_connections WHERE user_id = $1 AND app = $2 AND connected_at = $3 FOR SHARE",
+			key.user, key.app, connectedAt).Scan(&exists)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return exists, err
+	}
 }
 
 // renew saves the sign-in the app renewed of the connection key names
