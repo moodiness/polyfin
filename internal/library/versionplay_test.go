@@ -293,10 +293,7 @@ func TestADroppedListIsNotSavedBack(t *testing.T) {
 	})
 	refreshed := make(chan error, 1)
 	go func() { refreshed <- e.service.Refresh(ctx, e.member, e.movie) }()
-	e.eventually("the list to be dropped from memory", func() bool {
-		_, kept := e.service.streamLists.Get(key)
-		return !kept
-	})
+	e.eventually("the refresh to wait for the save", func() bool { return e.service.lockUsers(key) == 2 })
 	// Time for the refresh to delete the list saved, if it does not wait
 	// for the save.
 	time.Sleep(100 * time.Millisecond)
@@ -315,6 +312,80 @@ func TestADroppedListIsNotSavedBack(t *testing.T) {
 	if versions, _ := e.restarted().KnownVersions(ctx, e.member, e.movie); len(versions) != 0 {
 		t.Errorf("listed after the refresh and a restart: %q", versionNames(versions))
 	}
+}
+
+// A list read back from the database while the title's lists are dropped,
+// by a refresh or a user asking its addons again, is not restored: the
+// versions dropped do not come back, to that reading nor after it.
+func TestADroppedListIsNotReadBack(t *testing.T) {
+	t.Parallel()
+	e := newStaleEnv(t)
+	ctx := t.Context()
+	db := e.service.db
+	e.numbers <- []int{1, 2, 3}
+	versions, err := e.service.Versions(ctx, e.member, e.movie)
+	if err != nil || len(versions) != 3 {
+		t.Fatalf("versions: %q %v", versionNames(versions), err)
+	}
+	origin := versions[0].Origin
+	key := streamKey{origin.Addon, origin.Type, origin.ID}
+	// Another transaction locks the list saved: deleting it waits, while
+	// reading it does not.
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	var holder int
+	if err := tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&holder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT 1 FROM stream_lists WHERE addon_id = $1 AND content_type = $2 AND stremio_id = $3 FOR UPDATE",
+		key.addon, key.contentType, key.id); err != nil {
+		t.Fatal(err)
+	}
+	asked := make(chan error, 1)
+	go func() { asked <- e.service.AskAgain(ctx, e.member, e.movie) }()
+	e.eventually("the deletion of the list saved to wait", func() bool {
+		var waiting int
+		_ = db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", holder).Scan(&waiting)
+		return waiting > 0
+	})
+	// The title's versions are read meanwhile, as a page told of the
+	// changes reads them.
+	read := make(chan []Version, 1)
+	go func() {
+		versions, _ := e.service.KnownVersions(ctx, e.member, e.movie)
+		read <- versions
+	}()
+	e.eventually("the reading to end or to wait for the drop", func() bool { return len(read) == 1 || e.service.lockUsers(key) == 2 })
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-asked; err != nil {
+		t.Fatal(err)
+	}
+	if versions := <-read; len(versions) != 0 {
+		t.Errorf("read while dropped: %q", versionNames(versions))
+	}
+	if versions, _ := e.service.KnownVersions(ctx, e.member, e.movie); len(versions) != 0 {
+		t.Errorf("listed once dropped: %q", versionNames(versions))
+	}
+	// The addon, asked again, answers.
+	e.numbers <- []int{4}
+	e.eventually("the addon's new answer", func() bool { return slices.Equal(e.listed(), []string{"Source 4"}) })
+}
+
+// lockUsers is how many hold or await the lock of key's stream list (see
+// listLocks).
+func (s *Service) lockUsers(key streamKey) int {
+	locks := &s.tracked().saving
+	locks.mu.Lock()
+	defer locks.mu.Unlock()
+	if l := locks.locks[key]; l != nil {
+		return l.users
+	}
+	return 0
 }
 
 // A title's page, once its details answered, is told how far its versions
