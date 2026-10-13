@@ -230,13 +230,13 @@ func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
 // adds another service's: a played mark is added, with the larger play
 // count; a resume point is kept when it is newer than the item's own (see
 // ImportResume); a favorite is set. Nothing the item records is taken
-// back.
+// back (see Store.Follow for what from loses).
 func (d *Data) Follow(from Data, thresholds Thresholds) {
 	switch {
 	case from.Played:
 		d.ImportPlayed(from.LastPlayed)
 		d.PlayCount = max(d.PlayCount, from.PlayCount)
-	case from.Position > 0 && from.LastPlayed != nil:
+	case from.givesResume():
 		d.ImportResume(ImportedResume{Position: from.Position, Runtime: from.Runtime, At: *from.LastPlayed}, thresholds)
 	}
 	if from.Favorite {
@@ -246,5 +246,11 @@ func (d *Data) Follow(from Data, thresholds Thresholds) {
 
 // follows reports whether Follow takes anything from d.
 func (d Data) follows() bool {
-	return d.Played || d.Position > 0 && d.LastPlayed != nil || d.Favorite
+	return d.Played || d.givesResume() || d.Favorite
+}
+
+// givesResume reports whether Follow gives d's resume point: an item not
+// played, with a resume point and the time it was set.
+func (d Data) givesResume() bool {
+	return !d.Played && d.Position > 0 && d.LastPlayed != nil
 }

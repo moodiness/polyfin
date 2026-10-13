@@ -148,13 +148,16 @@ func entryIDs(entries []Entry) []accounts.ID {
 
 // What users did with items follows them to others as an import adds it:
 // played marks are added, the newer resume point is kept, favorites are
-// set, nothing is taken back, each user's apart.
+// set, nothing is taken back from the items it goes to, each user's apart.
+// A resume point moves: the item it comes from loses it, unless the items
+// it goes to were played before it and so take none; played marks and
+// favorites stay.
 func TestDataFollowsAsAnImport(t *testing.T) {
 	store, alice, bob := setup(t)
 	older := time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC)
 	newer := older.Add(48 * time.Hour)
-	played, resumed, favorite := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
-	wasResumed, resumedLater, untouched, wasPlayed := accounts.ID{11}, accounts.ID{12}, accounts.ID{13}, accounts.ID{14}
+	played, resumed, favorite, resumedAfter := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}, accounts.ID{4}
+	wasResumed, resumedLater, untouched, wasPlayed, playedBefore := accounts.ID{11}, accounts.ID{12}, accounts.ID{13}, accounts.ID{14}, accounts.ID{15}
 	set := func(user, id accounts.ID, change func(*Data)) {
 		t.Helper()
 		if _, err := store.Change(t.Context(), user, []Item{{ID: id}}, change); err != nil {
@@ -164,18 +167,21 @@ func TestDataFollowsAsAnImport(t *testing.T) {
 	set(alice, played, func(d *Data) { d.MarkPlayed(&newer, newer); d.PlayCount = 3 })
 	set(alice, resumed, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = 30*time.Minute, 2*time.Hour, &older })
 	set(alice, favorite, func(d *Data) { d.Favorite = true })
+	set(alice, resumedAfter, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = 20*time.Minute, 2*time.Hour, &newer })
 	set(alice, wasResumed, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = 10*time.Minute, 2*time.Hour, &older })
 	set(alice, resumedLater, func(d *Data) { d.Position, d.Runtime, d.LastPlayed = time.Hour, 2*time.Hour, &newer })
 	set(alice, wasPlayed, func(d *Data) { d.MarkPlayed(&newer, newer) })
+	set(alice, playedBefore, func(d *Data) { d.MarkPlayed(&older, older) })
 	set(bob, favorite, func(d *Data) { d.Favorite = true })
 	if err := store.Follow(t.Context(), []Move{
 		{From: []accounts.ID{played}, To: []Item{{ID: wasResumed}}},
 		{From: []accounts.ID{resumed}, To: []Item{{ID: resumedLater}, {ID: untouched}}},
 		{From: []accounts.ID{favorite}, To: []Item{{ID: wasPlayed}}},
+		{From: []accounts.ID{resumedAfter}, To: []Item{{ID: playedBefore}}},
 	}, jellyfin); err != nil {
 		t.Fatal(err)
 	}
-	got, err := store.Get(t.Context(), alice, []accounts.ID{wasResumed, resumedLater, untouched, wasPlayed})
+	got, err := store.Get(t.Context(), alice, []accounts.ID{wasResumed, resumedLater, untouched, wasPlayed, playedBefore})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,8 +197,32 @@ func TestDataFollowsAsAnImport(t *testing.T) {
 	if d := got[wasPlayed]; !d.Played || !d.Favorite {
 		t.Errorf("a favorite over a played mark: %+v", d)
 	}
+	if d := got[playedBefore]; !d.Played || d.Position != 0 {
+		t.Errorf("a newer resume point over a played mark: %+v", d)
+	}
 	theirs, err := store.Get(t.Context(), bob, []accounts.ID{wasResumed, resumedLater, untouched, wasPlayed})
 	if err != nil || len(theirs) != 1 || !theirs[wasPlayed].Favorite || theirs[wasPlayed].Played {
 		t.Errorf("another user's: %+v %v", theirs, err)
+	}
+	// What the items come from: the resume point given has moved, the one
+	// no item took stays, and played marks and favorites stay.
+	left, err := store.Get(t.Context(), alice, []accounts.ID{played, resumed, favorite, resumedAfter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := left[played]; !d.Played || d.PlayCount != 3 {
+		t.Errorf("a played mark given: %+v", d)
+	}
+	if d := left[resumed]; d.Position != 0 || d.Played {
+		t.Errorf("a resume point given: %+v", d)
+	}
+	if d := left[favorite]; !d.Favorite {
+		t.Errorf("a favorite given: %+v", d)
+	}
+	if d := left[resumedAfter]; d.Position != 20*time.Minute {
+		t.Errorf("a resume point no item took: %+v", d)
+	}
+	if theirs, err := store.Get(t.Context(), bob, []accounts.ID{favorite}); err != nil || !theirs[favorite].Favorite {
+		t.Errorf("another user's favorite given: %+v %v", theirs, err)
 	}
 }

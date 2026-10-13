@@ -40,7 +40,9 @@ func (e env) libraryOf(id accounts.ID) (accounts.ID, string) {
 // made by hand and episodes given to discs go. What users did with its
 // home videos follows them to the movies they are matched to, as an
 // import adds it, and back from the movies; a file matched later gets it
-// then. Turned back to home videos, its videos are the same titles.
+// then. A resume point moves with its file; played marks and favorites
+// are given and stay. Turned back to home videos, its videos are the same
+// titles.
 func TestFolderKindChanges(t *testing.T) {
 	e := newEnv(t)
 	addon, _ := e.folder(KindHomeVideos, map[string]int{"Nosferatu (1922).mkv": 10, "The General (1926).mkv": 11, "Beach.mkv": 12})
@@ -99,6 +101,12 @@ func TestFolderKindChanges(t *testing.T) {
 	if d := get(movie("tt0017925")); d.Position != 30*time.Minute {
 		t.Errorf("the movie's newer resume point: %+v", d)
 	}
+	if d := get(video("The General (1926).mkv")); d.Position != 0 {
+		t.Errorf("the home video's resume point, moved: %+v", d)
+	}
+	if d := get(video("Nosferatu (1922).mkv")); !d.Played {
+		t.Errorf("the home video's played mark, given: %+v", d)
+	}
 	if d := get(movie("tt0015864")); d.Favorite {
 		t.Errorf("before the link: %+v", d)
 	}
@@ -111,9 +119,14 @@ func TestFolderKindChanges(t *testing.T) {
 	if d := get(movie("tt0015864")); !d.Favorite {
 		t.Errorf("a file matched later: %+v", d)
 	}
+	if d := get(video("Beach.mkv")); !d.Favorite {
+		t.Errorf("the home video's favorite, given: %+v", d)
+	}
 
-	// The movie is played meanwhile; a disc has episodes.
+	// The movie is played meanwhile, another one resumed; a disc has
+	// episodes.
 	set(movie("tt0017925"), func(d *userdata.Data) { d.MarkPlayed(&newer, newer) })
+	set(movie("tt0015864"), func(d *userdata.Data) { d.Position, d.Runtime, d.LastPlayed = 20*time.Minute, time.Hour, &newer })
 	if _, err := e.pool.Exec(t.Context(), `INSERT INTO local_disc_episodes (addon_id, path, season, episode, last_episode)
 		VALUES ($1, 'Show/Disc 1/VIDEO_TS#1', 1, 1, 1)`, addon.ID); err != nil {
 		t.Fatal(err)
@@ -131,6 +144,15 @@ func TestFolderKindChanges(t *testing.T) {
 	}
 	if d := get(video("The General (1926).mkv")); !d.Played {
 		t.Errorf("a played movie's home video: %+v", d)
+	}
+	if d := get(video("Beach.mkv")); d.Position != 20*time.Minute || !d.Favorite {
+		t.Errorf("a resumed movie's home video: %+v", d)
+	}
+	if d := get(movie("tt0015864")); d.Position != 0 || !d.Favorite {
+		t.Errorf("the movie's resume point, moved: %+v", d)
+	}
+	if d := get(movie("tt0017925")); !d.Played {
+		t.Errorf("the movie's played mark, given: %+v", d)
 	}
 	folder, err := e.service.Folder(t.Context(), addon.ID)
 	if err != nil || len(folder.Links) != 0 || len(folder.Episodes) != 0 || folder.Kind != KindHomeVideos {

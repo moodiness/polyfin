@@ -267,7 +267,9 @@ type Move struct {
 }
 
 // Follow gives what each user did with the items each move comes from to
-// the items it goes to, under thresholds (see Data.Follow).
+// the items it goes to, under thresholds (see Data.Follow). A resume point
+// moves: the item it comes from loses it once an item it goes to records
+// as recent a play.
 func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds) error {
 	var from []accounts.ID
 	for _, move := range moves {
@@ -291,6 +293,10 @@ func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds)
 		}
 		gains := map[accounts.ID][]Data{}
 		var items []Item
+		// The items whose resume point is given, in order, with the items
+		// it goes to.
+		var resumed []accounts.ID
+		resumes := map[accounts.ID][]accounts.ID{}
 		for _, move := range moves {
 			for _, id := range move.From {
 				data, ok := kept[id]
@@ -305,12 +311,49 @@ func (s *Store) Follow(ctx context.Context, moves []Move, thresholds Thresholds)
 						items = append(items, to)
 					}
 					gains[to.ID] = append(gains[to.ID], data)
+					if data.givesResume() {
+						if resumes[id] == nil {
+							resumed = append(resumed, id)
+						}
+						resumes[id] = append(resumes[id], to.ID)
+					}
 				}
 			}
 		}
-		if _, err := s.ChangeEach(ctx, user, items, func(item Item, d *Data) {
+		changed, err := s.ChangeEach(ctx, user, items, func(item Item, d *Data) {
 			for _, gain := range gains[item.ID] {
 				d.Follow(gain, thresholds)
+			}
+		})
+		if err != nil {
+			return err
+		}
+		after := make(map[accounts.ID]Data, len(items))
+		for i, item := range items {
+			after[item.ID] = changed[i]
+		}
+		// The moves come from folders whose files changed kind: a resume
+		// point was recorded through the file, which its former title no
+		// longer plays, so it moves with the file, and Continue Watching
+		// lists the file once. The former title loses it once one of its
+		// new titles records the file as recently: by that resume point or
+		// a newer one, or by a later played mark. A new title played before
+		// it, which an import's rules give no resume point, leaves it where
+		// it is rather than lost. Played marks and favorites are only given.
+		var losing []Item
+		for _, id := range resumed {
+			at := *kept[id].LastPlayed
+			if slices.ContainsFunc(resumes[id], func(to accounts.ID) bool {
+				d := after[to]
+				return d.LastPlayed != nil && !d.LastPlayed.Before(at)
+			}) {
+				losing = append(losing, Item{ID: id})
+			}
+		}
+		if _, err := s.ChangeEach(ctx, user, losing, func(item Item, d *Data) {
+			// Unless it was played since it was read.
+			if d.LastPlayed != nil && d.LastPlayed.Equal(*kept[item.ID].LastPlayed) {
+				d.Position = 0
 			}
 		}); err != nil {
 			return err

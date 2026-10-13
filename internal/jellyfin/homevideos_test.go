@@ -359,8 +359,10 @@ func TestHomeVideosFollowedInJellyfinApps(t *testing.T) {
 
 // Continue Watching leaves out the home videos no folder holds: deleted,
 // or their folder holding something else. Their resume point stays, and
-// shows again when the video comes back. A movie a home video became
-// stays listed, as its addon still describes it.
+// shows again when the video comes back. Through a change of what the
+// folder holds and back, the resume point moves with the file, from the
+// home video to the movie and back, the newest kept: Continue Watching
+// lists the file once at every stage. A favorite is given and stays.
 func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
 	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
@@ -443,9 +445,22 @@ func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
 	if len(home) != 1 {
 		t.Fatalf("the home video: %v", home)
 	}
-	source := s.playbackInfo(t, "tv", tr.token, home[0], nil).MediaSources[0].Id
-	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": home[0], "MediaSourceId": source, "PositionTicks": 0})
-	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": home[0], "MediaSourceId": source, "PositionTicks": 1_800_000_000})
+	// Continue Watching lists the file once, as listed, with its position.
+	once := func(stage, id string, position int64) {
+		t.Helper()
+		if positions, listed := resumed(); len(positions) != 1 || positions[id] != position || !slices.Equal(listed, []string{id}) {
+			t.Errorf("%s: %v %v, want %s at %d", stage, positions, listed, id, position)
+		}
+	}
+	play := func(id string, position int64) {
+		t.Helper()
+		source := s.playbackInfo(t, "tv", tr.token, id, nil).MediaSources[0].Id
+		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": id, "MediaSourceId": source, "PositionTicks": 0})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": id, "MediaSourceId": source, "PositionTicks": position})
+	}
+	play(home[0], 1_800_000_000)
+	tr.mark(t, http.MethodPost, "/UserFavoriteItems/"+home[0])
+	once("a home video", home[0], 1_800_000_000)
 
 	// A movie, linked by hand: Continue Watching lists the movie alone.
 	change(localfiles.KindMovies)
@@ -457,17 +472,25 @@ func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
 	if len(movies) != 1 || movies[0] == home[0] {
 		t.Fatalf("the movie: %v", movies)
 	}
-	if positions, listed := resumed(); len(positions) != 1 || positions[movies[0]] != 1_800_000_000 || !slices.Equal(listed, movies) {
-		t.Errorf("as a movie: %v %v", positions, listed)
+	once("as a movie", movies[0], 1_800_000_000)
+	if data := tr.userData(t, movies[0]); !data.IsFavorite {
+		t.Errorf("the movie's favorite: %+v", data)
 	}
+	play(movies[0], 2_400_000_000)
+	once("the movie played further", movies[0], 2_400_000_000)
 
-	// A home video again: the video is back, the movie stays.
+	// A home video again: the video is back, with the movie's newer resume
+	// point, which the movie no longer has.
 	change(localfiles.KindHomeVideos)
 	if again := titles(); !slices.Equal(again, home) {
 		t.Fatalf("the home video again: %v, was %v", again, home)
 	}
-	if positions, _ := resumed(); len(positions) != 2 || positions[home[0]] != 1_800_000_000 || positions[movies[0]] != 1_800_000_000 {
-		t.Errorf("a home video again: %v", positions)
+	once("a home video again", home[0], 2_400_000_000)
+	if data := tr.userData(t, home[0]); !data.IsFavorite {
+		t.Errorf("the home video's favorite: %+v", data)
+	}
+	if data := tr.userData(t, movies[0]); data.PlaybackPositionTicks != 0 || !data.IsFavorite {
+		t.Errorf("the movie again: %+v", data)
 	}
 
 	// Deleted, the video leaves Continue Watching; put back, it returns.
@@ -475,14 +498,12 @@ func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan()
-	if positions, listed := resumed(); len(positions) != 1 || positions[home[0]] != 0 || slices.Contains(listed, home[0]) {
+	if positions, listed := resumed(); len(positions) != 0 || len(listed) != 0 {
 		t.Errorf("deleted: %v %v", positions, listed)
 	}
 	if err := os.WriteFile(video, file, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	scan()
-	if positions, _ := resumed(); positions[home[0]] != 1_800_000_000 {
-		t.Errorf("put back: %v", positions)
-	}
+	once("put back", home[0], 2_400_000_000)
 }

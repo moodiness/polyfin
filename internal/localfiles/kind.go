@@ -14,7 +14,9 @@ import (
 // home videos, what users did with a video follows it: the items its file
 // was the titles of are kept (see rememberTitles) until a scan matches the
 // file as the new kind, when their watch state, resume point and favorite
-// go to its new titles, as an import adds them (see follow). To or from
+// go to its new titles, as an import adds them (see follow). The resume
+// point moves, as it was recorded through the file: the former titles no
+// longer play it, and Continue Watching lists the file once. To or from
 // music nothing follows: songs and videos are other files.
 
 // followsKind reports whether what users did with the titles of a
@@ -86,9 +88,10 @@ func rememberTitles(ctx context.Context, tx pgx.Tx, id accounts.ID, from, to str
 
 // follow gives what users did with the former titles of a folder's files
 // (see rememberTitles) to the titles its scan matched them to, by an
-// import's rules (see userdata.Data.Follow). A file not matched keeps its
-// former titles for a later scan; a file gone forgets them, but those in
-// the folders skipped, which the scan could not read.
+// import's rules, the resume points moving (see userdata.Store.Follow). A
+// file not matched keeps its former titles for a later scan; a file gone
+// forgets them, but those in the folders skipped, which the scan could not
+// read.
 func (s *Service) follow(ctx context.Context, id accounts.ID, skipped []string) error {
 	rows, err := s.db.Query(ctx, `SELECT o.path, o.item_id, l.kind, f.path IS NOT NULL, f.stremio_id, f.season, f.episode, f.last_episode
 		FROM local_former_titles o JOIN local_folders l ON l.addon_id = o.addon_id
