@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"slices"
@@ -194,6 +195,22 @@ func titlesThrough(r *http.Request) bool {
 	return recursive && len(include) > 0 && !slices.ContainsFunc(include, func(t string) bool {
 		return strings.EqualFold(t, "BoxSet") || strings.EqualFold(t, "Folder") || strings.EqualFold(t, "CollectionFolder")
 	})
+}
+
+// listingContext marks the context of a listing of a folder's children as
+// the request narrows it. A recursive listing of titles lists a collection
+// library's titles, those of its collections, as Jellyfin's are those
+// within a library's folders. The item types it keeps narrow the catalogs
+// a library or a collection reads, so that its pages and its total count
+// only what the listing keeps: a listing of collections within an addon's
+// collection, which lists titles, lists none, out of none (see
+// library.WithKinds).
+func listingContext(r *http.Request, keep func(library.Item) bool) context.Context {
+	ctx := library.WithKinds(r.Context(), func(kind library.Kind) bool { return keep(library.Item{Kind: kind}) })
+	if titlesThrough(r) {
+		ctx = library.WithTitlesThrough(ctx)
+	}
+	return ctx
 }
 
 func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
@@ -449,12 +466,7 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	asked := time.Now()
-	ctx := r.Context()
-	if titlesThrough(r) {
-		// A collection library's titles are those of its collections, as
-		// Jellyfin's are those within a library's folders.
-		ctx = library.WithTitlesThrough(ctx)
-	}
+	ctx := listingContext(r, keep)
 	var page library.Page
 	var err error
 	if wholeListing(r) {

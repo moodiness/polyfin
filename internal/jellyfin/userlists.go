@@ -549,7 +549,9 @@ const scanLimit = 2000
 // excludingListing lists the children of a folder the filter keeps, for
 // filters that exclude items (unplayed, not favorite, not liked). The
 // catalog is read from its start, from cache, so that each page starts
-// where the previous one ended.
+// where the previous one ended. It reads what the listing of the folder
+// would, narrowed as the request asks (see listingContext): a recursive
+// listing of a collection library's titles reads those of its collections.
 func (h *Handler) excludingListing(w http.ResponseWriter, r *http.Request, user accounts.User, f stateFilter, parent accounts.ID, hasParent bool, start, limit int) {
 	if !hasParent {
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
@@ -561,16 +563,17 @@ func (h *Handler) excludingListing(w http.ResponseWriter, r *http.Request, user 
 		return
 	}
 	keep := itemTypeFilter(r)
+	ctx := listingContext(r, keep)
 	var kept []library.Item
 	var states []userState
 	total, excluded, offset := 0, 0, 0
 	for offset < scanLimit && len(kept) < max(start, 0)+limit {
-		page, err := h.Library.Children(r.Context(), user, parent, offset, defaultPageSize, genre)
+		page, err := h.Library.Children(ctx, user, parent, offset, defaultPageSize, genre)
 		if err != nil {
 			h.browseError(w, r, err)
 			return
 		}
-		state, err := h.userState(r.Context(), user, page.Items)
+		state, err := h.userState(ctx, user, page.Items)
 		if err != nil {
 			h.internalError(w, r, err)
 			return
