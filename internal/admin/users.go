@@ -416,11 +416,12 @@ type settingsJSON struct {
 	LastFMAPIKey    *string `json:"lastFmApiKey"`
 	LastFMSecret    *string `json:"lastFmSecret,omitempty"`
 	LastFMSecretSet bool    `json:"lastFmSecretSet"`
-	// BackupHour, BackupsKept and CollectionReadHour keep their current
-	// values when a PUT leaves them out.
-	BackupHour         *int `json:"backupHour"`
-	BackupsKept        *int `json:"backupsKept"`
-	CollectionReadHour *int `json:"collectionReadHour"`
+	// BackupHour, BackupsKept, CollectionReadHour and CollectionLibraryApps
+	// keep their current values when a PUT leaves them out.
+	BackupHour            *int      `json:"backupHour"`
+	BackupsKept           *int      `json:"backupsKept"`
+	CollectionReadHour    *int      `json:"collectionReadHour"`
+	CollectionLibraryApps *[]string `json:"collectionLibraryApps"`
 	// RemuxDB and RemuxDBURL keep their current values when a PUT leaves
 	// them out.
 	RemuxDB    *bool   `json:"remuxDb"`
@@ -591,9 +592,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LastFMAPIKey:         &settings.LastFMAPIKey,
 		LastFMSecretSet:      settings.LastFMSecret != "",
 
-		BackupHour:         &settings.BackupHour,
-		BackupsKept:        &settings.BackupsKept,
-		CollectionReadHour: &settings.CollectionReadHour,
+		BackupHour:            &settings.BackupHour,
+		BackupsKept:           &settings.BackupsKept,
+		CollectionReadHour:    &settings.CollectionReadHour,
+		CollectionLibraryApps: &settings.CollectionLibraryApps,
 
 		RemuxDB:    &settings.RemuxDB,
 		RemuxDBURL: &settings.RemuxDBURL,
@@ -979,6 +981,17 @@ func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
 }
 
+// settingsApps answers the apps an administrator may choose among in the
+// settings: those every user is signed in with (see accounts.DeviceApps).
+func (h *handler) settingsApps(w http.ResponseWriter, r *http.Request) {
+	apps, err := h.Accounts.DeviceApps(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string][]string{"apps": apps})
+}
+
 // settingsJSON describes settings with the default folders, the render
 // nodes, what conversions run on, and the bounds of each setting.
 func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
@@ -1133,9 +1146,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		LastFMAPIKey:      valueOr(body.LastFMAPIKey, current.LastFMAPIKey),
 		LastFMSecret:      valueOr(body.LastFMSecret, current.LastFMSecret),
 
-		BackupHour:         valueOr(body.BackupHour, current.BackupHour),
-		BackupsKept:        valueOr(body.BackupsKept, current.BackupsKept),
-		CollectionReadHour: valueOr(body.CollectionReadHour, current.CollectionReadHour),
+		BackupHour:            valueOr(body.BackupHour, current.BackupHour),
+		BackupsKept:           valueOr(body.BackupsKept, current.BackupsKept),
+		CollectionReadHour:    valueOr(body.CollectionReadHour, current.CollectionReadHour),
+		CollectionLibraryApps: valueOr(body.CollectionLibraryApps, current.CollectionLibraryApps),
 
 		RemuxDB:    valueOr(body.RemuxDB, current.RemuxDB),
 		RemuxDBURL: valueOr(body.RemuxDBURL, current.RemuxDBURL),

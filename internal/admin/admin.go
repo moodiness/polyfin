@@ -212,6 +212,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
+	mux.Handle("GET /admin/api/settings/apps", h.administrator(h.settingsApps))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/settings/metrics-token", h.administrator(h.newMetricsToken))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
@@ -452,6 +453,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidWeeklySummaryHour, http.StatusBadRequest, "invalid_weekly_summary_hour"},
 		{accounts.ErrInvalidImportEveryMinutes, http.StatusBadRequest, "invalid_import_every_minutes"},
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
+		{accounts.ErrInvalidCollectionLibraryApps, http.StatusBadRequest, "invalid_collection_library_apps"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidVAAPIDevice, http.StatusBadRequest, "invalid_vaapi_device"},
