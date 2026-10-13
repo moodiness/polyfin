@@ -334,6 +334,8 @@ export type Settings = {
   backupFolderDefault: string
   /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
   collectionReadHour: number
+  /** Apps, by the name they sign in with, told an addon's collection library holds collections (boxsets) rather than mixed content; none by default. */
+  collectionLibraryApps: string[]
   /** Describes the versions not analyzed yet from RemuxDB, which the titles' IMDb ids are sent to. */
   remuxDb: boolean
   /** Address of the RemuxDB server asked: an http or https URL, without a trailing slash. */
@@ -1849,6 +1851,10 @@ export const revealServerSecret = async (name: ServerSecretName) =>
 /** Makes a new metrics token, which ends the former one; answers the settings. */
 export const newMetricsToken = () => request<Settings>('POST', '/settings/metrics-token')
 
+/** The apps users are signed in with, by the name they send, each once whatever its case, sorted. */
+export const fetchSettingsApps = async (signal?: AbortSignal) =>
+  (await request<{ apps: string[] }>('GET', '/settings/apps', undefined, signal)).apps
+
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
 export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
@@ -2679,6 +2685,7 @@ export const queryKeys = {
   userAppImport: (id: string) => ['users', id, 'app-import'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
+  settingsApps: ['settings', 'apps'] as const,
   parentalRatings: ['parental-ratings'] as const,
   /** Prefix of every scope: invalidating it refreshes all addons and libraries. */
   scopes: ['scopes'] as const,

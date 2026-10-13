@@ -195,6 +195,8 @@ const common: typeof en = {
       'Le dossier des sauvegardes doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
+    invalid_collection_library_apps:
+      'Choisissez dans la liste les applis qui présentent les bibliothèques de collections par collection.',
     invalid_remuxdb_url:
       'L’adresse de RemuxDB doit être une adresse web commençant par http:// ou https://.',
     invalid_public_address:

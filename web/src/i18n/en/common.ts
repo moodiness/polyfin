@@ -181,6 +181,8 @@ const common = {
       'The backups folder must be an absolute path to a folder Polyfin can write to.',
     invalid_collection_read_hour:
       'Choose the hour collections are read at, or Never, from the list.',
+    invalid_collection_library_apps:
+      'Choose the apps that show collection libraries by collection from the list.',
     invalid_remuxdb_url:
       'The RemuxDB address must be a web address starting with http:// or https://.',
     invalid_public_address:

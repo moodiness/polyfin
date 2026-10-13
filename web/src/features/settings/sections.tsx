@@ -16,6 +16,7 @@ import {
 } from '@/ui'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
+import CollectionLibraryApps from './CollectionLibraryApps'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
 import MetricsToken from './MetricsToken'
@@ -466,6 +467,11 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
           className="max-w-[10rem]"
         />
       </FieldRow>
+      <CollectionLibraryApps
+        chosen={form.collectionLibraryApps}
+        onChange={(collectionLibraryApps) => update({ collectionLibraryApps })}
+        error={error('collection-library-apps')}
+      />
       <FieldRow
         anchor="local-scan-hours"
         label={s.localScanHours}

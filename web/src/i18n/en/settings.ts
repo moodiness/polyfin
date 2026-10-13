@@ -331,6 +331,10 @@ const settings = {
     collectionReadHourNever: 'Never',
     collectionReadHourHelp:
       'Reads every collection of the server’s collection libraries at this hour, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others.',
+    collectionLibraryApps: 'Apps that show collection libraries by collection',
+    collectionLibraryAppsHelp:
+      'Collection libraries are told to apps as libraries of mixed content, so that jellyfin-web and Streamyfin give them a row on the home screen. The apps ticked are told they hold collections, as Jellyfin’s Collections view does: apps that list a library by its type then show its collections, and a collection’s titles once it is opened, rather than the titles of all its collections together. jellyfin-web and Streamyfin leave such libraries out of their home screen rows, so do not tick them. The list shows the apps that have signed in to this server.',
+    collectionLibraryAppsNone: 'No app has signed in to this server yet.',
     localScanHours: 'Scan local folders every (hours, 0 = never)',
     localScanHoursHelp: (r: RangeText) =>
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,

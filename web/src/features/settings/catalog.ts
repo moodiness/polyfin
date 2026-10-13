@@ -446,6 +446,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'catalogs',
+    anchor: 'collection-library-apps',
+    label: (t) => s(t).collectionLibraryApps,
+    help: (t) => s(t).collectionLibraryAppsHelp,
+    keywords: ['boxsets', 'CollectionType', 'collections', 'app', 'appli', 'client'],
+    codes: ['invalid_collection_library_apps'],
+  },
+  {
+    section: 'catalogs',
     anchor: 'local-scan-hours',
     label: (t) => s(t).localScanHours,
     help: (t, r) => s(t).localScanHoursHelp(r('localScanHours')),
