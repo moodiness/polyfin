@@ -71,6 +71,17 @@ export function useMoveSource(scope: Scope) {
   return { move, announcement, error: order.isError ? order.error : null }
 }
 
+/**
+ * What a source says it is: a folder's location, in the admin app's language, else the addon's
+ * description, which a folder's addon gives in English.
+ */
+function describe(t: Messages, addon: Addon): string {
+  if (addon.folder !== null) {
+    return t.localFolders.locations[addon.folder.share === '' ? 'local' : addon.folder.share]
+  }
+  return addon.description
+}
+
 /** What a row says under its name: its owner, then what it brings. */
 function rowMeta(t: Messages, language: string, addon: Addon): string {
   if (addon.source !== null) {
@@ -78,7 +89,8 @@ function rowMeta(t: Messages, language: string, addon: Addon): string {
       ? t.sources.notDownloaded
       : t.sources.channelsShown(addon.source.lineup.shownChannels.toLocaleString(language))
   }
-  return addon.description !== '' ? addon.description : t.sources.catalogCount(addon.catalogCount)
+  const description = describe(t, addon)
+  return description !== '' ? description : t.sources.catalogCount(addon.catalogCount)
 }
 
 type Query = {
@@ -172,7 +184,7 @@ export function SourceBrowser({
       (needle === '' ||
         [
           entry.addon.name,
-          entry.addon.description,
+          describe(t, entry.addon),
           entry.owner?.name ?? '',
           text.tag[entry.addon.kind],
         ]
