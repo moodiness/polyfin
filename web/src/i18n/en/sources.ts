@@ -199,7 +199,7 @@ const sources = {
     changeKindScan: (from: string, to: string) =>
       `It holds ${from}; it will hold ${to}. The folder and its library keep their identifiers, its address and its settings, and Polyfin scans it again as ${to}, in the background.`,
     changeKindFollows:
-      'What users did with each video, its watch state, resume point and favorite, follows it to its new title, as an import adds it: played marks are added, the newer resume point is kept, favorites are set.',
+      'What users did with each video, its watch state, resume point and favorite, follows it to its new title: played marks and favorites are given, and the former title keeps them; the resume point moves with the file, and the former title loses it.',
     changeKindNothing:
       'Nothing follows: songs and videos are other files. What users did with its titles stays with them and no longer shows.',
     changeKindBack:

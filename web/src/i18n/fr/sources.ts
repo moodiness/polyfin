@@ -189,8 +189,8 @@ const sources: typeof en = {
     pathPlaceholder: '/media/films',
     kind: 'Il contient',
     kinds: {
-      movies: 'Des films',
-      shows: 'Des séries',
+      movies: 'Films',
+      shows: 'Séries',
       music: 'Musique',
       homevideos: 'Vidéos personnelles',
     },
@@ -213,9 +213,9 @@ const sources: typeof en = {
     changeKind: 'Changer',
     changeKindTitle: (name: string) => `Changer le contenu de ${name} ?`,
     changeKindScan: (from: string, to: string) =>
-      `Il contient ${from} ; il contiendra ${to}. Le dossier et sa bibliothèque gardent leurs identifiants, son adresse et ses réglages, et Polyfin l’analyse à nouveau en arrière-plan.`,
+      `Il contient ${from} ; il contiendra ${to}. Le dossier et sa bibliothèque gardent leurs identifiants, son adresse et ses réglages, et Polyfin l’analyse à nouveau comme contenant ${to}, en arrière-plan.`,
     changeKindFollows:
-      'Ce que les utilisateurs ont fait de chaque vidéo, son état de lecture, son point de reprise et son favori, la suit vers son nouveau titre, comme une importation l’ajoute : ce qui a été vu s’ajoute, le point de reprise le plus récent est gardé, les favoris s’ajoutent.',
+      'Ce que les utilisateurs ont fait de chaque vidéo, son état de lecture, son point de reprise et son favori, la suit vers son nouveau titre : ce qui a été vu et les favoris lui sont donnés, et l’ancien titre les garde ; le point de reprise suit le fichier, et l’ancien titre le perd.',
     changeKindNothing:
       'Rien ne suit : les morceaux et les vidéos sont d’autres fichiers. Ce que les utilisateurs ont fait de ses titres leur reste attaché et ne s’affiche plus.',
     changeKindBack:
