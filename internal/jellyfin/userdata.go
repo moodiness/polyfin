@@ -42,8 +42,9 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
 }
 
-// userState is what a user did with the items of one response, and what
-// is known of its songs' lyrics.
+// userState is what a user did with the items of one response, what is
+// known of its songs' lyrics, and how the app asking is told collection
+// libraries.
 type userState struct {
 	data map[accounts.ID]userdata.Data
 	// counts are the played and resumable episodes under series and
@@ -55,10 +56,16 @@ type userState struct {
 	// lyrics holds the songs known to have lyrics (see lyrics.Known):
 	// listings never look songs up.
 	lyrics map[accounts.ID]bool
+	// collectionLibraries tells the app asking an addon's collection
+	// library holds collections: an administrator chose the app (see
+	// appCollectionType).
+	collectionLibraries bool
 }
 
-// userState loads what user did with items, and which of its songs have
-// lyrics.
+// userState loads what user did with items, which of its songs have
+// lyrics, and whether the app asking, the caller of ctx, is told
+// collection libraries hold collections: every description of a library
+// goes through it.
 func (h *Handler) userState(ctx context.Context, user accounts.User, items []library.Item) (userState, error) {
 	ids := make([]accounts.ID, 0, len(items))
 	var parents, songs []accounts.ID
@@ -79,7 +86,8 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 	if err != nil {
 		return userState{}, err
 	}
-	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs)}
+	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
+		collectionLibraries: h.collectionLibrariesByType(ctx)}
 	var incomplete []accounts.ID
 	for _, item := range items {
 		if item.Kind == library.KindSeries && item.Contents == nil && counts[item.ID].Played > 0 {

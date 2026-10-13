@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -361,12 +362,27 @@ func isFolder(kind library.Kind) bool {
 // mixed content does, and has no type. Jellyfin apps leave libraries of
 // collections out of their home rows of latest items (jellyfin-web's
 // Latest Media, Streamyfin's Recently Added), which then left such
-// libraries, often a server's only ones, without rows.
-func appCollectionType(item library.Item) string {
-	if item.Kind == library.KindLibrary && item.CollectionType == "boxsets" && item.ID != collectionsViewID {
+// libraries, often a server's only ones, without rows. Some apps list a
+// library by its type, though: told nothing, they list the titles of all
+// its collections together. The apps an administrator chose for
+// collectionLibraries are told its own type, boxsets, and list its
+// collections, then a collection's titles (see
+// accounts.Settings.CollectionLibraryApps).
+func appCollectionType(item library.Item, collectionLibraries bool) string {
+	if item.Kind == library.KindLibrary && item.CollectionType == "boxsets" && item.ID != collectionsViewID && !collectionLibraries {
 		return ""
 	}
 	return item.CollectionType
+}
+
+// collectionLibrariesByType reports whether the app of ctx's caller is told
+// an addon's collection library holds collections: an administrator chose
+// it, by the name it sends in the Client field of its authorization. A
+// request made with an API key, under the key's app name, or without a
+// caller, is not.
+func (h *Handler) collectionLibrariesByType(ctx context.Context) bool {
+	c := callerFrom(ctx)
+	return c.APIKey == nil && c.Device.Client != "" && h.Accounts.CollectionLibraryApp(c.Device.Client)
 }
 
 // newItemDto describes an item, with what the user did with it in state.
@@ -386,7 +402,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		IsFolder:          folder,
 		Type:              itemTypes[item.Kind],
 		Status:            item.Status,
-		CollectionType:    appCollectionType(item),
+		CollectionType:    appCollectionType(item, state.collectionLibraries),
 		SeriesName:        item.SeriesName,
 		ImageTags:         map[string]string{},
 		BackdropImageTags: []string{},
@@ -665,8 +681,8 @@ type QueryResult struct {
 // the IsFolder and IsNotFolder filters only folders or the others. An
 // addon's collection, a folder of titles, is kept by a request for
 // folders too: jellyfin-web lists a library without content type, as an
-// addon's collection library is to apps (see appCollectionType), by its
-// folders, movies and series. A request that leaves folders out still
+// addon's collection library is to most apps (see appCollectionType), by
+// its folders, movies and series. A request that leaves folders out still
 // keeps it, as Jellyfin keeps collections.
 func itemTypeFilter(r *http.Request) func(library.Item) bool {
 	include := listQuery(r, "includeItemTypes")
