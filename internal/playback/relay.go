@@ -202,6 +202,9 @@ func (l *loopback) register(src *source.Source) (string, func()) {
 
 // registerWithin is register, what is read of the source counted by
 // budget, which refuses to serve more than its limit; nil counts nothing.
+// A source read within a budget is served without reading ahead (see
+// source.Source.ServeAsked): what is fetched of it is what is served,
+// within a block a request.
 func (l *loopback) registerWithin(src *source.Source, budget *readBudget) (string, func()) {
 	key := randomKey()
 	l.mu.Lock()
@@ -242,7 +245,8 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if budget != nil {
-		w = budgetWriter{w, budget}
+		src.ServeAsked(budgetWriter{w, budget}, r)
+		return
 	}
 	src.ServeHTTP(w, r)
 }

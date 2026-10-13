@@ -1,16 +1,24 @@
 package playback
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"math"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/testspeech"
 )
@@ -131,4 +139,164 @@ func TestStretchesShortenToTheReadBudget(t *testing.T) {
 			}
 		})
 	}
+}
+
+// patterned is a file of size bytes whose bytes are their offset's last.
+type patterned struct{ size int64 }
+
+func (f patterned) ReadAt(p []byte, off int64) (int, error) {
+	n := int(min(int64(len(p)), max(f.size-off, 0)))
+	for i := range n {
+		p[i] = byte(off + int64(i))
+	}
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+// sentCounter counts what a server sends.
+type sentCounter struct {
+	http.ResponseWriter
+	sent *atomic.Int64
+}
+
+func (w sentCounter) Write(p []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(p)
+	w.sent.Add(int64(n))
+	return n, err
+}
+
+// socketBuffer bounds the socket buffers of a fake addon's connections,
+// so that what one holds unread when it closes is a little.
+const socketBuffer = 64 << 10
+
+// smallBuffers fetches from a local server over connections whose
+// receive buffer is socketBuffer.
+type smallBuffers struct{ client *http.Client }
+
+func newSmallBuffers(t *testing.T) *smallBuffers {
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err == nil {
+			err = conn.(*net.TCPConn).SetReadBuffer(socketBuffer)
+		}
+		return conn, err
+	}}
+	t.Cleanup(transport.CloseIdleConnections)
+	return &smallBuffers{client: &http.Client{Transport: transport}}
+}
+
+func (o *smallBuffers) Open(ctx context.Context, method, target string, header http.Header, _ bool) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, method, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header = header.Clone()
+	return o.client.Do(request)
+}
+
+// What is read of an addon's file within a budget is what is fetched of
+// it: FFmpeg's requests at its start, near its end and in its middle have
+// the addon send no more than the budget, and allowance. A playback's
+// reads still fetch ahead of what they read.
+func TestReadsWithinABudgetFetchNoMoreThanIt(t *testing.T) {
+	t.Parallel()
+	const (
+		size   = 256 << 20
+		budget = 32 << 20
+		// allowance is a block for each of the three requests, read past
+		// what is served, and what each connection's buffers hold.
+		allowance = 4 << 20
+	)
+	for _, tc := range []struct {
+		name     string
+		budgeted bool
+	}{{"within a budget", true}, {"playback", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var sent atomic.Int64
+			addon := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.ServeContent(sentCounter{w, &sent}, r, "", time.Time{}, io.NewSectionReader(patterned{size}, 0, size))
+			}))
+			addon.Config.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+				_ = conn.(*net.TCPConn).SetWriteBuffer(socketBuffer)
+				return ctx
+			}
+			addon.Start()
+			t.Cleanup(addon.Close)
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, newSmallBuffers(t), logger)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = sources.Close() })
+			loopback, err := newLoopback()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = loopback.Close() })
+			src := sources.Open(accounts.ID{1}, source.Location{URL: addon.URL + "/version.mkv"}, nil)
+			defer src.Release()
+			register := loopback.register
+			if tc.budgeted {
+				register = func(src *source.Source) (string, func()) {
+					return loopback.registerWithin(src, &readBudget{limit: budget})
+				}
+			}
+			input, release := register(src)
+			defer release()
+			ffmpeg := newSmallBuffers(t).client
+			// read reads n bytes from off, all that is served for n < 0,
+			// and returns what the addon sent, the request still open,
+			// once that reached enough or stopped growing.
+			read := func(off, n, enough int64) int64 {
+				t.Helper()
+				request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, input, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				request.Header.Set("Range", fmt.Sprintf("bytes=%d-", off))
+				response, err := ffmpeg.Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				if response.StatusCode != http.StatusPartialContent {
+					t.Fatalf("from %d: HTTP %d", off, response.StatusCode)
+				}
+				if n < 0 {
+					_, _ = io.Copy(io.Discard, response.Body)
+				} else if _, err := io.CopyN(io.Discard, response.Body, n); err != nil {
+					t.Fatalf("from %d: %v", off, err)
+				}
+				return settled(&sent, enough)
+			}
+			if !tc.budgeted {
+				// The window read ahead of a playback is 32 blocks.
+				if got := read(0, 1<<20, 32<<20); got < 32<<20 {
+					t.Errorf("the addon sent %d MiB for 1 MiB read: nothing ahead", got>>20)
+				}
+				return
+			}
+			read(0, 1<<20, math.MaxInt64)
+			read(size-(2<<20), 1<<20, math.MaxInt64)
+			if got := read(size/2, -1, math.MaxInt64); got > budget+allowance {
+				t.Errorf("the addon sent %d MiB, over the budget of %d MiB", got>>20, budget>>20)
+			}
+		})
+	}
+}
+
+// settled is what sent counts once it reached enough, or stopped growing
+// for a second.
+func settled(sent *atomic.Int64, enough int64) int64 {
+	last := sent.Load()
+	for still, deadline := time.Now(), time.Now().Add(10*time.Second); last < enough && time.Since(still) < time.Second && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+		if now := sent.Load(); now != last {
+			last, still = now, time.Now()
+		}
+	}
+	return last
 }

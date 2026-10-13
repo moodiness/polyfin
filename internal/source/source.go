@@ -945,7 +945,18 @@ func contentRange(value string) (start, end, total int64, ok bool) {
 // failing while a body is sent is not cut at once: what reads it is
 // stopped on Failed, and a body cut short reads as the end of the file.
 func (s *Source) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if sending, err := s.serve(w, r); err != nil && sending && r.Context().Err() == nil {
+	s.serveHTTP(w, r, true)
+}
+
+// ServeAsked is ServeHTTP without reading ahead: a request fetches the
+// blocks it reads, nothing more, for a read that must not fetch more than
+// it is sent, and the window a playback reads ahead of stays where it is.
+func (s *Source) ServeAsked(w http.ResponseWriter, r *http.Request) {
+	s.serveHTTP(w, r, false)
+}
+
+func (s *Source) serveHTTP(w http.ResponseWriter, r *http.Request, streaming bool) {
+	if sending, err := s.serve(w, r, streaming); err != nil && sending && r.Context().Err() == nil {
 		timer := time.NewTimer(failedHold)
 		defer timer.Stop()
 		select {
@@ -964,18 +975,19 @@ const failedHold = time.Second
 // content type set on w is kept. The error, for logs, is what made the
 // answer fail or end early.
 func (s *Source) Relay(w http.ResponseWriter, r *http.Request) error {
-	_, err := s.serve(w, r)
+	_, err := s.serve(w, r, true)
 	return err
 }
 
-// serve answers a request for the source's bytes, and tells whether the
-// error, if any, came once the answer was being sent.
-func (s *Source) serve(w http.ResponseWriter, r *http.Request) (sending bool, err error) {
+// serve answers a request for the source's bytes, read by a streaming
+// reader or not, and tells whether the error, if any, came once the answer
+// was being sent.
+func (s *Source) serve(w http.ResponseWriter, r *http.Request, streaming bool) (sending bool, err error) {
 	if err := s.Failure(); err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return false, err
 	}
-	reader := s.NewReader()
+	reader := s.reader(streaming)
 	defer reader.Close()
 	size, err := reader.Size(r.Context())
 	if err != nil {
