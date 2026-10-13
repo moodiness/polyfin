@@ -982,6 +982,12 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	if l.catalog.Type == "collection" && titlesThrough(ctx) {
 		return s.collectionLibraryTitles(ctx, v, l, src, start, count)
 	}
+	// A listing that keeps none of what the library lists, its collections
+	// or its titles, lists nothing, out of none.
+	if kind, ok := listedKind(l.catalog.Type); l.catalog.Type == "collection" && !keepsKind(ctx, KindCollection) ||
+		ok && !keepsKind(ctx, kind) {
+		return Page{}, nil
+	}
 	metas, total, err := s.window(ctx, v, src, start, count)
 	if err != nil {
 		return Page{}, err
@@ -1074,6 +1080,53 @@ func titlesThrough(ctx context.Context) bool {
 	return marked
 }
 
+// kindsKey marks the context of a listing that keeps only items of some
+// kinds (see WithKinds).
+type kindsKey struct{}
+
+// WithKinds marks a listing that keeps only the items whose kind keeps
+// reports, as a Jellyfin listing narrowed by item type: a library or a
+// collection then reads only the catalogs whose titles it keeps, so that
+// its pages and its total count those alone, and a collection library
+// lists no collection when collections are not kept. The titles of a
+// catalog are told by its type, movies or series (see listedKind); other
+// catalogs are read as before.
+func WithKinds(ctx context.Context, keeps func(Kind) bool) context.Context {
+	return context.WithValue(ctx, kindsKey{}, keeps)
+}
+
+// keepsKind reports whether a listing keeps items of kind: always, unless
+// it was marked by WithKinds.
+func keepsKind(ctx context.Context, kind Kind) bool {
+	keeps, ok := ctx.Value(kindsKey{}).(func(Kind) bool)
+	return !ok || keeps(kind)
+}
+
+// listedKind is the kind of the titles a catalog of a type lists, when its
+// type tells it: movies or series. Other catalogs, such as anime ones, may
+// list both.
+func listedKind(catalogType string) (Kind, bool) {
+	switch catalogType {
+	case "movie", "anime.movie":
+		return KindMovie, true
+	case "series", "anime.series":
+		return KindSeries, true
+	}
+	return "", false
+}
+
+// keptSources returns the sources whose titles the listing of ctx keeps
+// (see WithKinds).
+func keptSources(ctx context.Context, sources []source) []source {
+	kept := make([]source, 0, len(sources))
+	for _, src := range sources {
+		if kind, ok := listedKind(src.catalog.Type); !ok || keepsKind(ctx, kind) {
+			kept = append(kept, src)
+		}
+	}
+	return kept
+}
+
 // collectionLibraryTitles lists the titles of a collection library's
 // collections, those its catalog lists as src: the titles of the catalogs
 // they group, and of those the collections within them group, merged one
@@ -1085,6 +1138,7 @@ func (s *Service) collectionLibraryTitles(ctx context.Context, v view, l library
 	if err != nil {
 		return Page{}, err
 	}
+	sources = keptSources(ctx, sources)
 	if len(sources) == 0 {
 		return Page{More: unknown}, nil
 	}
@@ -1164,6 +1218,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 	most := s.collectionMax(ctx, v, r)
 	count = withinMax(start, count, most)
 	sources, nested := s.collectionSources(ctx, addon, meta, most, first)
+	sources = keptSources(ctx, sources)
 	if len(sources) == 0 {
 		return Page{}, nil
 	}
