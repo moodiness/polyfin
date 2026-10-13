@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -506,4 +507,109 @@ func TestGoneHomeVideosLeaveContinueWatching(t *testing.T) {
 	}
 	scan()
 	once("put back", home[0], 2_400_000_000)
+}
+
+// A video replaced by a longer one at its path is played for its new
+// length, though its earlier playback found its former length: a stop past
+// the former end, well before the new one, leaves a resume point, whether
+// the reports name the media source PlaybackInfo gave or none.
+func TestAReplacedVideoPlaysForItsNewLength(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, o.Logger, o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
+		folders.UseTools(ffprobe, ffmpeg)
+	})
+	tr := trackingOn(t, s)
+	dir := t.TempDir()
+	// Each video of seconds, modified at a time of its own, so that the
+	// scan finds it changed.
+	write := func(name string, seconds int, modified time.Time) {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if out, err := exec.Command(ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration="+strconv.Itoa(seconds)+":size=64x48:rate=1",
+			"-c:v", "mpeg4", path).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		if err := os.Chtimes(path, modified, modified); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := time.Date(2024, time.May, 1, 12, 0, 0, 0, time.UTC)
+	for _, name := range []string{"Party.mp4", "Picnic.mp4"} {
+		write(name, 60, before)
+	}
+	addon, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Family", Path: dir, Kind: localfiles.KindHomeVideos})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := func() {
+		t.Helper()
+		if err := folders.Scan(t.Context(), addon.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The videos of the library, by name.
+	videos := func() map[string]string {
+		t.Helper()
+		var views QueryResult
+		s.get(t, "/UserViews", tr.token, &views)
+		ids := map[string]string{}
+		for _, view := range views.Items {
+			if view.Name != "Family" {
+				continue
+			}
+			var page QueryResult
+			s.get(t, "/Items?ParentId="+view.Id+"&Recursive=true&IncludeItemTypes=Video", tr.token, &page)
+			for _, item := range page.Items {
+				ids[item.Name] = item.Id
+			}
+		}
+		if len(ids) != 2 {
+			t.Fatalf("the videos: %v", ids)
+		}
+		return ids
+	}
+	// Party's reports name the media source PlaybackInfo gives, Picnic's
+	// none. Each playback is a start and a stop at position.
+	play := func(ids map[string]string, position int64) {
+		t.Helper()
+		party := map[string]any{"ItemId": ids["Party"], "MediaSourceId": s.playbackInfo(t, "tv", tr.token, ids["Party"], nil).MediaSources[0].Id}
+		picnic := map[string]any{"ItemId": ids["Picnic"]}
+		for _, report := range []map[string]any{party, picnic} {
+			report["PositionTicks"] = 0
+			tr.report(t, "/Sessions/Playing", report)
+			report["PositionTicks"] = position
+			tr.report(t, "/Sessions/Playing/Stopped", report)
+		}
+	}
+	scan()
+	first := videos()
+	// A minute long, both are played from the start, and stopped there.
+	play(first, 0)
+
+	// Replaced by videos of seven minutes, they are the same items, and a
+	// stop at two and a half minutes leaves a resume point, at 35%.
+	for _, name := range []string{"Party.mp4", "Picnic.mp4"} {
+		write(name, 420, before.Add(time.Hour))
+	}
+	scan()
+	if again := videos(); again["Party"] != first["Party"] || again["Picnic"] != first["Picnic"] {
+		t.Fatalf("the videos replaced: %v, were %v", again, first)
+	}
+	play(first, 1_500_000_000)
+	for _, name := range []string{"Party", "Picnic"} {
+		if data := tr.userData(t, first[name]); data.Played || data.PlaybackPositionTicks != 1_500_000_000 ||
+			data.PlayedPercentage == nil || int(*data.PlayedPercentage) != 35 {
+			t.Errorf("%s stopped at 2'30 of 7': %+v", name, data)
+		}
+	}
 }

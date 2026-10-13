@@ -455,7 +455,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 		return
 	}
 	h.recordPlayback(ctx, user, device.DeviceName, event, item)
-	runtime := h.playedRuntime(ctx, user, item, mediaSource)
+	runtime := h.playedRuntime(ctx, user, item, mediaSource, event == playbackStarted || playing.Item != id)
 	// Videos prepare the next episode near the end, make thumbnails and
 	// find their speech, and local episodes without an intro or credits
 	// have them looked for in their season's audio; tracks prepare the next
@@ -539,18 +539,24 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 }
 
 // playedRuntime is the runtime of the version a report names, as analyzed,
-// or the title's when the version is unknown.
-func (h *Handler) playedRuntime(ctx context.Context, user accounts.User, item library.Item, mediaSource string) time.Duration {
-	key := item.ID.String() + "|" + mediaSource
-	if runtime, ok := h.runtimes.Get(key); ok {
+// or the title's when the report names no version. The report that starts
+// a playback, starts, looks it up, and the playback's other reports reuse
+// it: by the next playback, the same name may stand for another file, as
+// when a local file is replaced at its path, the title's own identifier
+// standing for its first version.
+func (h *Handler) playedRuntime(ctx context.Context, user accounts.User, item library.Item, mediaSource string, starts bool) time.Duration {
+	id, ok := parseGUID(mediaSource)
+	if !ok {
+		return item.Runtime
+	}
+	key := item.ID.String() + "|" + id.String()
+	if runtime, ok := h.runtimes.Get(key); ok && !starts {
 		return runtime
 	}
 	runtime := item.Runtime
-	if id, ok := parseGUID(mediaSource); ok {
-		if version, err := h.version(ctx, user, item, id); err == nil {
-			if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok && analysis.Duration > 0 {
-				runtime = analysis.Duration
-			}
+	if version, err := h.version(ctx, user, item, id); err == nil {
+		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok && analysis.Duration > 0 {
+			runtime = analysis.Duration
 		}
 	}
 	h.runtimes.Put(key, runtime)

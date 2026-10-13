@@ -123,7 +123,8 @@ type Handler struct {
 	// for players that fetch them without credentials.
 	subtitleFiles *cache.Cache[accounts.ID, []library.ExternalSubtitle]
 	subtitleCache *cache.Cache[accounts.ID, subtitleText]
-	// runtimes remembers the runtime of the version each report names.
+	// runtimes remembers, for the reports of a playback, the runtime of
+	// the version they name (see playedRuntime).
 	runtimes *cache.Cache[string, time.Duration]
 	// configurations remembers each user's configuration, which item
 	// listings read for every title.
