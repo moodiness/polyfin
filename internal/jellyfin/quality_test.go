@@ -276,6 +276,9 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 			// were never analyzed.
 			versions := p.versionsOf(t, p.remote)
 			answer := p.ask(t, p.token, p.remote, p.profile(t, "jellyfin-web-chrome"), nil)
+			// The versions after the one that plays are read in the
+			// background: the answer does not wait for them.
+			eventually(t, "the versions to be analyzed", func() bool { return probe.runs() >= test.runs })
 			switch {
 			case probe.runs() != test.runs:
 				t.Errorf("%d versions analyzed, want %d", probe.runs(), test.runs)
