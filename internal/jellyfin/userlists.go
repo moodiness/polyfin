@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"cmp"
 	"context"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"slices"
@@ -86,10 +87,32 @@ func (h *Handler) writeItems(w http.ResponseWriter, r *http.Request, user accoun
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: total, StartIndex: start})
 }
 
+// resumeKinds are the kinds Continue Watching lists: movies, home videos,
+// episodes and replays. Jellyfin lists its videos of other kinds there
+// too, recordings and home videos: apps show any video in Continue
+// Watching.
+var resumeKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay}
+
+// resumeItems describes the items of entries Continue Watching lists, of
+// kinds, in order: the titles the user hid, with the episodes of the
+// series they hid, are left out.
+func (h *Handler) resumeItems(ctx context.Context, user accounts.User, entries []userdata.Entry, kinds []library.Kind) ([]library.Item, error) {
+	items, err := h.Library.ItemsOf(ctx, user, entryIDs(entries), kinds)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := h.Library.HiddenTitles(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(hidden.Without(items), func(item library.Item) bool {
+		return !versioned(item.Kind) && item.Kind != library.KindReplay
+	}), nil
+}
+
 // resume lists what the user can resume: movies, episodes and replays with
-// a resume point, played or not, most recently played first. Jellyfin
-// lists its videos of other kinds there too, recordings and home videos:
-// apps show any video in Continue Watching.
+// a resume point, played or not, most recently played first (see
+// resumeKinds), but the titles the user hid.
 func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -108,11 +131,10 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	// Only movies, home videos, episodes and replays resume, of the types
-	// asked: the others are left out before anything is described.
+	// Only the kinds asked are described.
 	keep := itemTypeFilter(r)
 	var kinds []library.Kind
-	for _, kind := range []library.Kind{library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay} {
+	for _, kind := range resumeKinds {
 		if keep(library.Item{Kind: kind}) {
 			kinds = append(kinds, kind)
 		}
@@ -121,7 +143,7 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		h.writeItems(w, r, user, nil, start, 0)
 		return
 	}
-	items, err := h.Library.ItemsOf(r.Context(), user, entryIDs(entries), kinds)
+	items, err := h.resumeItems(r.Context(), user, entries, kinds)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -132,8 +154,7 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		playing = h.playingItems(r, user)
 	}
 	items = slices.DeleteFunc(items, func(item library.Item) bool {
-		return (!versioned(item.Kind) && item.Kind != library.KindReplay) || !keep(item) || playing[item.ID] ||
-			(term != "" && !strings.Contains(strings.ToLower(item.Name), term))
+		return !keep(item) || playing[item.ID] || (term != "" && !strings.Contains(strings.ToLower(item.Name), term))
 	})
 	if hasParent {
 		items = h.keepWithin(r.Context(), user, items, parent, itself)
@@ -184,7 +205,9 @@ type watching struct {
 
 // nextUp lists, for each series the user is watching, the episode to watch
 // next: the first unplayed one after the furthest episode played. Series
-// come in the order their furthest played episode was played.
+// come in the order their furthest played episode was played. The series
+// the user hid are left out, unless asked for by seriesId, as their page
+// does.
 func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -231,9 +254,14 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 		// A series asked for is considered whatever the user did with it.
 		candidates = []watching{{series: seriesID}}
 	} else {
-		if cutoff != nil {
-			candidates = slices.DeleteFunc(candidates, func(c watching) bool { return c.latest.Before(*cutoff) })
+		hidden, err := h.Library.HiddenTitles(r.Context(), user)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
 		}
+		candidates = slices.DeleteFunc(candidates, func(c watching) bool {
+			return hidden[c.series] || cutoff != nil && c.latest.Before(*cutoff)
+		})
 		candidates = candidates[:min(len(candidates), watchedSeriesLimit)]
 	}
 	type entry struct {
@@ -292,7 +320,8 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 }
 
 // upcoming lists the episodes airing from yesterday on, UTC, of the series
-// the user watches or marked favorite, soonest first.
+// the user watches or marked favorite, soonest first, but those of the
+// series they hid.
 func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -311,8 +340,17 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	hidden, err := h.Library.HiddenTitles(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	var candidates []accounts.ID
-	seen := map[accounts.ID]bool{}
+	// The hidden series count as seen, so that none is a candidate.
+	seen := maps.Clone(hidden)
+	if seen == nil {
+		seen = map[accounts.ID]bool{}
+	}
 	for _, e := range watched {
 		if e.Played && !seen[e.Series] && len(candidates) < watchedSeriesLimit {
 			seen[e.Series] = true
@@ -472,8 +510,8 @@ func (f stateFilter) keepsData(data UserItemData, resumable bool) bool {
 
 // stateCandidates lists, from the user's data, the items that may pass the
 // filter: those the user marked, with the series and seasons of marked
-// episodes. ok is false when the filter only excludes items, which the
-// user's data cannot list.
+// episodes, but the titles the user hid. ok is false when the filter only
+// excludes items, which the user's data cannot list.
 func (h *Handler) stateCandidates(ctx context.Context, user accounts.User, f stateFilter) ([]library.Item, bool, error) {
 	var entries []userdata.Entry
 	var err error
@@ -512,7 +550,11 @@ func (h *Handler) stateCandidates(ctx context.Context, user accounts.User, f sta
 		}
 	}
 	items, err := h.Library.Items(ctx, user, ids)
-	return items, true, err
+	if err != nil {
+		return nil, true, err
+	}
+	hidden, err := h.Library.HiddenTitles(ctx, user)
+	return hidden.Without(items), true, err
 }
 
 // stateListing answers a listing narrowed to what the user did.

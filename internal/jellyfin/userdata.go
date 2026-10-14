@@ -40,6 +40,7 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Users/{userId}/Items/Resume", h.resume)
 	signedIn(http.MethodGet, "/Shows/NextUp", h.nextUp)
 	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
+	h.hiddenTitleRoutes(signedIn)
 }
 
 // userState is what a user did with the items of one response, what is

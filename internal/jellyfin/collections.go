@@ -581,7 +581,7 @@ func premiere(item library.Item) time.Time {
 }
 
 // collectionTitles lists, for each collection, the titles in it user may
-// see, in the order they were added.
+// see, in the order they were added: the titles user hid are left out.
 func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, lists ...collections.Collection) ([][]library.Item, error) {
 	var ids []accounts.ID
 	seen := map[accounts.ID]bool{}
@@ -599,7 +599,11 @@ func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, list
 		if err != nil {
 			return nil, err
 		}
-		for _, item := range items {
+		hidden, err := h.Library.HiddenTitles(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range hidden.Without(items) {
 			byID[item.ID] = item
 		}
 	}

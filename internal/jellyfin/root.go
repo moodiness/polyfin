@@ -146,7 +146,8 @@ func (c *ItemCounts) add(kind library.Kind) {
 // writeNamedPage): their first page of items, plus one when more follow,
 // as far as Polyfin keeps them: counts are informational, and asking the
 // addons would make the screens that show them wait (see
-// library.KnownPages). Favorites are counted exactly.
+// library.KnownPages). Favorites are counted exactly, but the titles the
+// user hid, which their listing leaves out.
 func (h *Handler) itemCounts(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	favorite, favoriteSet := b.bool(r, "isFavorite")
@@ -170,7 +171,12 @@ func (h *Handler) itemCounts(w http.ResponseWriter, r *http.Request) {
 			h.internalError(w, r, err)
 			return
 		}
-		for _, item := range items {
+		hidden, err := h.Library.HiddenTitles(r.Context(), user)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, item := range hidden.Without(items) {
 			counts.add(item.Kind)
 		}
 		writeJSON(w, http.StatusOK, counts)

@@ -104,16 +104,20 @@ func (h *Handler) movieRecommendations(w http.ResponseWriter, r *http.Request) {
 }
 
 // recentlyPlayedMovies lists up to count of the movies the user played
-// last, most recent first, among those they still reach.
+// last, most recent first, among those they still reach and did not hide.
 func (h *Handler) recentlyPlayedMovies(r *http.Request, user accounts.User, count int) ([]library.Item, error) {
 	played, err := h.UserData.Played(r.Context(), user.ID)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := h.Library.HiddenTitles(r.Context(), user)
 	if err != nil {
 		return nil, err
 	}
 	var ids []accounts.ID
 	for _, entry := range played {
 		// Episodes name their series; movies have none.
-		if entry.Series == (accounts.ID{}) {
+		if entry.Series == (accounts.ID{}) && !hidden[entry.Item] {
 			ids = append(ids, entry.Item)
 		}
 	}
