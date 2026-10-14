@@ -12,6 +12,7 @@ import {
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import LibraryEditor from '@/features/libraries/LibraryEditor'
+import SmartLists from '@/features/libraries/SmartLists'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -72,6 +73,7 @@ export default function MySourcesRoute() {
         />
       </Block>
       <LibraryEditor scope="me" />
+      <SmartLists scope="me" />
       <AddSourceModal
         scope="me"
         open={adding}

@@ -990,6 +990,94 @@ export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'cat
     | { image: 'custom'; url: string }
   )
 
+/** What a rule of a smart list looks at; `group` holds rules of its own. */
+export type SmartField =
+  'group' | 'genre' | 'year' | 'rating' | 'language' | 'type' | 'rank' | 'state'
+
+/** What a `state` rule matches, for the user who opens the list. */
+export type SmartState = 'played' | 'unplayed' | 'started' | 'favorite'
+
+/** How a smart list orders its titles. */
+export type SmartSort = 'catalog' | 'premiere' | 'rating' | 'name' | 'random'
+
+/**
+ * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
+ * language code, `movie` or `series`, or a SmartState; `min` and `max` bound a year or a rating,
+ * and `max` is the place in its catalog. A group matches `all` or `any` of its `rules`.
+ */
+export type SmartRule = {
+  field: SmartField
+  not?: boolean
+  value?: string
+  min?: number
+  max?: number
+  match?: 'all' | 'any'
+  rules?: SmartRule[]
+}
+
+/** A catalog a smart list draws from. */
+export type SmartCatalogRef = { addonId: string; type: string; id: string }
+
+/** A smart list as it is saved: `itemId` is its library or collection in Jellyfin apps. */
+export type SmartList = {
+  id: string
+  itemId: string
+  name: string
+  shownAs: 'library' | 'collection'
+  catalogs: SmartCatalogRef[]
+  rules: SmartRule
+  sort: SmartSort
+  /** Most titles it lists; null for no maximum. */
+  maxItems: number | null
+  updatedAt: string
+}
+
+/** A smart list being made or changed. */
+export type SmartListDraft = Omit<SmartList, 'id' | 'itemId' | 'updatedAt'>
+
+/**
+ * A catalog a scope's smart lists may draw from. `shared`: one of the server's addons, which a
+ * user's own list may use while they use the server's sources.
+ */
+export type SmartCatalogChoice = {
+  addonId: string
+  addonName: string
+  shared: boolean
+  catalogType: string
+  catalogId: string
+  catalogName: string
+  /** Genres its genre filter offers; empty when it offers none. */
+  genres: string[]
+}
+
+/** What a smart list may draw from, and the ISO 639-1 codes of the languages its rules may name. */
+export type SmartChoices = { catalogs: SmartCatalogChoice[]; languages: string[] }
+
+/**
+ * A title of a smart list's preview. `languages`: those its description gives, by their ISO 639-1
+ * code when they have one; empty while it was not described.
+ */
+export type SmartTitle = {
+  id: string
+  name: string
+  type: 'movie' | 'series'
+  year: number | null
+  rating: number | null
+  genres: string[]
+  languages: string[]
+}
+
+/**
+ * A smart list as it stands now: its first titles, how many it lists, how many may match once their
+ * description is read, and whether every catalog answered in time.
+ */
+export type SmartPreview = {
+  titles: SmartTitle[]
+  listed: number
+  unknown: number
+  complete: boolean
+}
+
 /**
  * `parentalControl`: the user's parental control keeps them on the server's addons only.
  * `personalAddons`: false while the server or the user's permission turns their own addons off;
@@ -1973,6 +2061,30 @@ export const saveLibraries = (scope: Scope, libraries: LibrarySelection[]) =>
 export const saveLibraryImage = (scope: Scope, body: LibraryImageRequest) =>
   request<Library[]>('PUT', `${scopePath(scope)}/libraries/image`, body)
 
+/** The scope's smart lists, in the order they were made. */
+export const fetchSmartLists = (scope: Scope, signal?: AbortSignal) =>
+  request<SmartList[]>('GET', `${scopePath(scope)}/smart-lists`, undefined, signal)
+
+export const fetchSmartList = (scope: Scope, id: string, signal?: AbortSignal) =>
+  request<SmartList>('GET', `${scopePath(scope)}/smart-lists/${seg(id)}`, undefined, signal)
+
+/** The catalogs the scope's smart lists may draw from, and the languages their rules may name. */
+export const fetchSmartChoices = (scope: Scope, signal?: AbortSignal) =>
+  request<SmartChoices>('GET', `${scopePath(scope)}/smart-lists/catalogs`, undefined, signal)
+
+export const createSmartList = (scope: Scope, list: SmartListDraft) =>
+  request<SmartList>('POST', `${scopePath(scope)}/smart-lists`, list)
+
+export const saveSmartList = (scope: Scope, id: string, list: SmartListDraft) =>
+  request<SmartList>('PUT', `${scopePath(scope)}/smart-lists/${seg(id)}`, list)
+
+export const deleteSmartList = (scope: Scope, id: string) =>
+  request<void>('DELETE', `${scopePath(scope)}/smart-lists/${seg(id)}`)
+
+/** The titles a smart list, saved or not, lists for the signed-in user now. */
+export const previewSmartList = (scope: Scope, list: SmartListDraft, signal?: AbortSignal) =>
+  request<SmartPreview>('POST', `${scopePath(scope)}/smart-lists/preview`, list, signal)
+
 /** Query parameters, without those left undefined. */
 function params(values: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams()
@@ -2718,6 +2830,11 @@ export const queryKeys = {
   scope: (scope: Scope) => ['scopes', scope] as const,
   addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
   libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
+  smartLists: (scope: Scope) => ['scopes', scope, 'smart-lists'] as const,
+  smartList: (scope: Scope, id: string) => ['scopes', scope, 'smart-lists', id] as const,
+  smartChoices: (scope: Scope) => ['scopes', scope, 'smart-choices'] as const,
+  smartPreview: (scope: Scope, list: SmartListDraft) =>
+    ['scopes', scope, 'smart-preview', JSON.stringify(list)] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,

@@ -128,6 +128,17 @@ const common: typeof en = {
       'Le genre d’une bibliothèque n’est pas proposé par son catalogue. Choisissez-en un autre dans la liste, puis enregistrez à nouveau.',
     invalid_library_max_items:
       'Le nombre maximum de titres d’une bibliothèque doit être un nombre entier de 1 à 20 000, ou rester vide.',
+    invalid_smart_list_name: 'Le nom d’une liste intelligente doit comporter de 1 à 64 caractères.',
+    invalid_smart_list_shown_as:
+      'Choisissez si la liste s’affiche comme une bibliothèque ou comme une collection.',
+    invalid_smart_list_catalogs: 'Choisissez de 1 à 50 catalogues dont la liste tire ses titres.',
+    invalid_smart_list_rules:
+      'Une règle est incomplète : donnez une valeur à chacune, et au moins une borne à chaque année ou note.',
+    invalid_smart_list_sort: 'Choisissez comment la liste est triée.',
+    invalid_smart_list_max_items:
+      'Le nombre maximum de titres d’une liste intelligente doit être un nombre entier de 1 à 20 000, ou rester vide.',
+    too_many_smart_lists:
+      'Il y a déjà 100 listes intelligentes ici. Supprimez-en une pour en créer une autre.',
     invalid_image: 'Choisissez une image JPEG, PNG ou WebP de 10 Mo au plus.',
     invalid_image_url: 'Saisissez une adresse d’image commençant par https:// ou http://.',
     image_unreachable:

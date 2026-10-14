@@ -344,7 +344,7 @@ const settings: typeof en = {
     collectionReadHour: 'Lire toutes les collections chaque jour',
     collectionReadHourNever: 'Jamais',
     collectionReadHourHelp:
-      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons : laissez-le désactivé pour un addon que vous partagez avec d’autres.',
+      'Lit toutes les collections des bibliothèques de collections du serveur à cette heure, l’une après l’autre, puis les catalogues des listes intelligentes du serveur, pour qu’elles s’ouvrent tout de suite. Cela demande beaucoup de pages aux addons : laissez-le désactivé pour un addon que vous partagez avec d’autres.',
     collectionLibraryApps: 'Applis qui présentent les bibliothèques de collections par collection',
     collectionLibraryAppsHelp:
       'Les bibliothèques de collections sont présentées aux applis comme des bibliothèques de contenu mixte, pour que jellyfin-web et Streamyfin leur donnent une rangée sur l’accueil. Les applis cochées apprennent qu’elles contiennent des collections, comme la vue Collections de Jellyfin : les applis qui listent une bibliothèque selon son type affichent alors ses collections, puis les titres d’une collection une fois ouverte, plutôt que les titres de toutes ses collections mélangés. jellyfin-web et Streamyfin écartent ces bibliothèques des rangées de leur accueil : ne les cochez donc pas. La liste montre les applis qui se sont connectées à ce serveur.',

@@ -11,6 +11,7 @@ import NotFoundRoute from '@/features/home/NotFoundRoute'
 import HomeRoute from '@/features/home/HomeRoute'
 import QuickConnectRoute from '@/features/home/QuickConnectRoute'
 import LibrariesRoute from '@/features/libraries/LibrariesRoute'
+import SmartListRoute from '@/features/libraries/SmartListRoute'
 import CatalogGuidesRoute from '@/features/livetv/CatalogGuidesRoute'
 import LiveTvRoute from '@/features/livetv/LiveTvRoute'
 import SettingsRoute from '@/features/settings/SettingsRoute'
@@ -113,6 +114,7 @@ export const router = createBrowserRouter(
         // Every user's own pages.
         { path: 'me/account', element: <AccountRoute /> },
         { path: 'me/sources', element: <MySourcesRoute /> },
+        { path: 'me/sources/smart/:id', element: <SmartListRoute scope="me" /> },
         { path: 'me/sources/:id/:section?', element: <SourceRoute scope="me" /> },
         { path: 'me/quick-connect', element: <QuickConnectRoute /> },
 
@@ -130,6 +132,7 @@ export const router = createBrowserRouter(
               children: [
                 { path: 'sources', element: <SourcesRoute /> },
                 { path: 'libraries', element: <LibrariesRoute /> },
+                { path: 'libraries/smart/:id', element: <SmartListRoute scope="shared" /> },
                 { path: 'live-tv', element: <LiveTvRoute /> },
               ],
             },

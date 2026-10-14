@@ -118,6 +118,15 @@ const common = {
       'A library’s genre is not offered by its catalog. Choose another one from the list, then save again.',
     invalid_library_max_items:
       'A library’s maximum titles must be a whole number from 1 to 20,000, or empty.',
+    invalid_smart_list_name: 'A smart list’s name must be 1 to 64 characters long.',
+    invalid_smart_list_shown_as: 'Choose whether the list shows as a library or as a collection.',
+    invalid_smart_list_catalogs: 'Choose from 1 to 50 catalogs for the list to draw from.',
+    invalid_smart_list_rules:
+      'A rule is incomplete: give each one its value, and each year or rating at least one bound.',
+    invalid_smart_list_sort: 'Choose how the list is sorted.',
+    invalid_smart_list_max_items:
+      'A smart list’s maximum titles must be a whole number from 1 to 20,000, or empty.',
+    too_many_smart_lists: 'There are already 100 smart lists here. Delete one to make another.',
     invalid_image: 'Choose a JPEG, PNG or WebP image of at most 10 MB.',
     invalid_image_url: 'Enter an image address starting with https:// or http://.',
     image_unreachable:
