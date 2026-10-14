@@ -8,6 +8,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -248,5 +249,68 @@ func TestAUsersOwnSmartListIsTheirsAlone(t *testing.T) {
 	// A series library, as it holds series only.
 	if item, err := e.service.Item(t.Context(), e.admin, SmartListItemID(shared.ID)); err != nil || item.CollectionType != "tvshows" {
 		t.Errorf("the server's list: %+v %v", item, err)
+	}
+}
+
+// A title the user hides leaves their smart lists at once, totals
+// included, and comes back as soon as it is shown again, while the titles
+// read for the list still serve its next listings; other users keep it.
+func TestASmartListLeavesOutATitleHiddenAtOnce(t *testing.T) {
+	t.Parallel()
+	e, _, addon := smartEnv(t)
+	list := e.makeList(nil, "Everything", addon, []string{"movie/popular"}, group(smartlists.MatchAll), smartlists.SortName, 0)
+	page := e.listing(e.member, list)
+	if got := names(page.Items); !slices.Equal(got, []string{"Amélie", "Heat", "La Haine", "Le Dîner", "Les Visiteurs"}) {
+		t.Fatalf("listing: %v", got)
+	}
+	heat := page.Items[1].ID
+	if err := e.service.userData.Hide(t.Context(), e.member.ID, heat, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.listing(e.member, list); slices.Contains(names(got.Items), "Heat") || got.Total != 4 {
+		t.Errorf("once Heat is hidden: %v of %d", names(got.Items), got.Total)
+	}
+	if got := e.listing(e.admin, list); !slices.Contains(names(got.Items), "Heat") || got.Total != 5 {
+		t.Errorf("another user's listing: %v of %d", names(got.Items), got.Total)
+	}
+	if _, err := e.service.userData.Show(t.Context(), e.member.ID, heat); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.listing(e.member, list); !slices.Contains(names(got.Items), "Heat") || got.Total != 5 {
+		t.Errorf("once Heat is shown again: %v of %d", names(got.Items), got.Total)
+	}
+	if kept := e.service.smartCache.Len(); kept != 1 {
+		t.Errorf("%d entries kept for one list read the same way by every user", kept)
+	}
+}
+
+// Users who read a list's catalogs the same way share the titles read for
+// it, whichever of them read them first: a title one of them hid is still
+// listed for the others, and a title the others hid still for them.
+func TestUsersSharingASmartListKeepTheirOwnHiddenTitles(t *testing.T) {
+	t.Parallel()
+	e, _, addon := smartEnv(t)
+	list := e.makeList(nil, "Everything", addon, []string{"movie/popular"}, group(smartlists.MatchAll), smartlists.SortName, 0)
+	ids := map[string]accounts.ID{}
+	for _, item := range e.listing(e.admin, list).Items {
+		ids[item.Name] = item.ID
+	}
+	// The entry read for the admin is dropped: the member, who hid Heat,
+	// reads the list first.
+	e.service.smartCache = cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize)
+	if err := e.service.userData.Hide(t.Context(), e.member.ID, ids["Heat"], time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.userData.Hide(t.Context(), e.admin.ID, ids["Amélie"], time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.listing(e.member, list); !slices.Equal(names(got.Items), []string{"Amélie", "La Haine", "Le Dîner", "Les Visiteurs"}) || got.Total != 4 {
+		t.Errorf("the member's listing: %v of %d", names(got.Items), got.Total)
+	}
+	if got := e.listing(e.admin, list); !slices.Equal(names(got.Items), []string{"Heat", "La Haine", "Le Dîner", "Les Visiteurs"}) || got.Total != 4 {
+		t.Errorf("the admin's listing, from the entry the member's listing kept: %v of %d", names(got.Items), got.Total)
+	}
+	if kept := e.service.smartCache.Len(); kept != 1 {
+		t.Errorf("%d entries kept for one list read the same way by both", kept)
 	}
 }

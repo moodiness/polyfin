@@ -31,7 +31,7 @@ A title's page opens as soon as its description is ready, with the versions Poly
 
 ### Ratings
 
-With the server's **MDBList API key for ratings**, `CommunityRating` carries a movie's or series' IMDb rating from MDBList (0 to 10) and `CriticRating` its critics' score or audience score (0 to 100), as **Critic rating shows** chooses; an administrator's edit still wins. Listings that fit on one page, collections read whole, sort by `SortBy=CriticRating` as by `CommunityRating`, titles without one first; the Watchlist keeps its own order. See [Ratings](addons-and-libraries.md#ratings).
+With the server's **MDBList API key for ratings**, `CommunityRating` carries a movie's or series' IMDb rating from MDBList (0 to 10) and `CriticRating` its critics' score or audience score (0 to 100), as **Critic rating shows** chooses; an administrator's edit still wins. Listings that fit on one page, addons' collections read whole among them, sort by `SortBy=CriticRating` as by `CommunityRating`, titles without one first. The Watchlist and smart lists keep their own order (see [Smart lists](addons-and-libraries.md#smart-lists)). See [Ratings](addons-and-libraries.md#ratings).
 
 **For app developers:** `/Polyfin/Items/{id}/Ratings` answers a title's `CommunityRating`, `CriticsScore` and `AudienceScore` (null when it has none, all null without a key) and `Pending` while MDBList is being asked about it.
 

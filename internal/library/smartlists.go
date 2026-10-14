@@ -172,7 +172,9 @@ type smartKey struct {
 // smartReader tells apart the ways sources are read: by which addon, at
 // which address and how far, narrowed to which genre. A user whose
 // parental control or blocked genres hide titles reads them apart, as the
-// titles they are shown differ (see visibleMetas).
+// titles they are shown differ (see visibleMetas). The titles a user hid
+// tell no reader apart: they are read for every user, and left out at
+// each listing (see smartMatches).
 func smartReader(v view, sources []source) string {
 	var b strings.Builder
 	if v.restricted() {
@@ -256,6 +258,12 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 	result := smartResult{complete: complete}
 	var undescribed []record
 	for _, c := range candidates {
+		// The titles read for a list are those of every user who reads its
+		// catalogs the same way (see smartCandidates): the caller's hidden
+		// ones leave at each listing, as their played titles do.
+		if v.hidden.Hides(c.item) {
+			continue
+		}
 		t := c.title
 		t.State = states[c.item.ID]
 		switch list.Rules.Judge(t) {
@@ -278,11 +286,13 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 }
 
 // smartCandidates returns the titles a list's catalogs list, one of each
-// catalog in turn, each once, with what is known of them. Those read for a
-// saved list whole serve its listings for smartLife, for every user who
-// reads its catalogs the same way (see smartKey); the descriptions of
-// those not described then are looked for again at each listing, as they
-// come in the background.
+// catalog in turn, each once, with what is known of them, the titles the
+// user hid included: they are left out at each listing (see smartMatches),
+// so that a title hidden or shown again changes the list at once. Those
+// read for a saved list whole serve its listings for smartLife, for every
+// user who reads its catalogs the same way (see smartKey); the
+// descriptions of those not described then are looked for again at each
+// listing, as they come in the background.
 func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.List) ([]smartTitle, bool, error) {
 	sources := s.smartSources(v, list)
 	key := smartKey{list.ID, list.UpdatedAt, smartReader(v, sources)}
@@ -293,7 +303,9 @@ func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.L
 			return titles, true, s.smartDescribed(ctx, v, list, titles)
 		}
 	}
-	lists, complete := s.smartRead(ctx, v, sources)
+	reader := v
+	reader.hidden = nil
+	lists, complete := s.smartRead(ctx, reader, sources)
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
 	}
@@ -680,13 +692,17 @@ func sortSmart(titles []smartTitle, list smartlists.List, user accounts.ID, now 
 
 // smartView is the view a list is judged in for user: the user's, or for
 // one of the server's lists previewed, the server's addons, with what the
-// user did with the titles.
+// user did with the titles and those they hid.
 func (s *Service) smartView(ctx context.Context, user accounts.User, shared bool) (view, error) {
 	if !shared {
 		return s.view(ctx, user)
 	}
 	v, err := s.buildView(ctx, accounts.User{})
+	if err != nil {
+		return view{}, err
+	}
 	v.user = user.ID
+	v.hidden, err = s.hiddenTitles(ctx, user.ID)
 	return v, err
 }
 
