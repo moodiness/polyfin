@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ApiError,
+  discardRestore,
   fetchBackupFiles,
   prepareRestore,
   queryKeys,
@@ -16,6 +17,7 @@ import { useI18n, type Messages } from '@/i18n'
 import {
   Badge,
   Button,
+  cx,
   Field,
   InlineError,
   Modal,
@@ -81,8 +83,13 @@ function RestoreModal({
     return (
       <Confirm
         plan={plan}
-        onClose={onClose}
+        onClose={() => {
+          // The file downloaded or sent for it is deleted at once.
+          void discardRestore(plan.id).catch(() => undefined)
+          onClose()
+        }}
         onBack={() => {
+          void discardRestore(plan.id).catch(() => undefined)
           setPlan(null)
           prepare.reset()
         }}
@@ -148,6 +155,7 @@ function Choices({
         <FileList
           key={destination.id}
           title={destination.name}
+          mono
           files={there}
           // A password the key cannot decrypt is told in the interface's language.
           error={destination.unreadable ? t.backups.destinations.unreadable : error}
@@ -161,12 +169,15 @@ function Choices({
 
 function FileList({
   title,
+  mono = false,
   files,
   error,
   disabled,
   onChoose,
 }: {
   title: string
+  /** A destination's name, an address: shown in monospace, unlike the folder's heading. */
+  mono?: boolean
   files: BackupFile[]
   error?: string
   disabled: boolean
@@ -188,7 +199,8 @@ function FileList({
             <span className="min-w-0 flex-1">
               <code className="font-mono text-small break-all text-ink">{file.name}</code>
               <span className="block text-small text-ink-3">
-                {dateTime(file.madeAt, language)} · {formatBytes(file.size, language)}
+                {dateTime(file.madeAt, language)} ·{' '}
+                {file.size < 0 ? '–' : formatBytes(file.size, language)}
                 {file.beforeRestore && (
                   <>
                     {' '}
@@ -212,7 +224,9 @@ function FileList({
   }
   return (
     <section>
-      <h3 className="mb-2 font-mono text-[14px] font-medium break-all text-ink">{title}</h3>
+      <h3 className={cx('mb-2 text-[14px] font-medium break-all text-ink', mono && 'font-mono')}>
+        {title}
+      </h3>
       {body}
     </section>
   )

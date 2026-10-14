@@ -2823,7 +2823,7 @@ export const testBackupDestination = (id: string) =>
     `/backup/destinations/${seg(id)}/test`,
   )
 
-/** A backup that can be restored, `madeAt` read from its name. */
+/** A backup that can be restored, `madeAt` read from its name; `size` is -1 when its destination does not tell it. */
 export type BackupFile = { name: string; size: number; madeAt: string; beforeRestore: boolean }
 
 /** The backups of the folder and of each destination, newest first. */
@@ -2870,6 +2870,10 @@ export async function uploadRestore(file: File): Promise<RestorePlan> {
 /** Restores the backup checked: Polyfin stops, restores it, and starts again. */
 export const startRestore = (id: string, serverName: string, anyway: boolean) =>
   request<{ restoring: boolean }>('POST', '/backup/restore', { id, serverName, anyway })
+
+/** Drops a backup checked and not restored, with the file downloaded or sent for it. */
+export const discardRestore = (id: string) =>
+  request<void>('POST', '/backup/restore/discard', { id })
 
 /** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */
 export type Sources = {
