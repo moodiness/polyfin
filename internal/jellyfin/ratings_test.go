@@ -21,11 +21,13 @@ import (
 // it, for the browsing addon's titles: Movie 0 (tt0000) has an IMDb rating
 // of 8.1, a critics' score of 97 and an audience score of 60, Movie 1
 // (tt0001) 6.2, 40 and 90, the show (tt0100) 8.9, 88 and 91; MDBList does
-// not know Movie 2 (tt0002). It counts the titles it is asked about.
+// not know Movie 2 (tt0002). It counts the titles it is asked about, and
+// keeps its answers while held (see hold).
 type fakeMDBList struct {
 	mu    sync.Mutex
 	asked []string
 	url   string
+	held  chan struct{}
 }
 
 func newFakeMDBList(t *testing.T) *fakeMDBList {
@@ -38,7 +40,15 @@ func newFakeMDBList(t *testing.T) *fakeMDBList {
 		for _, id := range body.IDs {
 			f.asked = append(f.asked, r.Method+" "+r.URL.Path+" "+id+" "+r.URL.Query().Get("apikey"))
 		}
+		held := f.held
 		f.mu.Unlock()
+		if held != nil {
+			select {
+			case <-held:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		w.Header().Set("X-RateLimit-Limit", "1000")
 		w.Header().Set("X-RateLimit-Remaining", "998")
 		var items []string
@@ -63,6 +73,18 @@ func (f *fakeMDBList) requests() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.asked)
+}
+
+// hold has MDBList keep its answers, as a slow one would, until answer
+// is called, which the test's end does at the latest.
+func (f *fakeMDBList) hold(t *testing.T) (answer func()) {
+	held := make(chan struct{})
+	f.mu.Lock()
+	f.held = held
+	f.mu.Unlock()
+	answer = sync.OnceFunc(func() { close(held) })
+	t.Cleanup(answer)
+	return answer
 }
 
 // rated is the browsing server with its ratings looked up on a fake
@@ -122,10 +144,12 @@ func describeScores(item BaseItemDto) string {
 func TestTitlesShowTheirRatingsFromMDBList(t *testing.T) {
 	t.Parallel()
 	r := newRated(t, "server-key")
+	answer := r.mdblist.hold(t)
 	top := "ParentId=" + r.ids["Top"]
 	if got := r.scores(t, top); got["Movie 0"] != "7.5 -" {
 		t.Fatalf("the first listing, before MDBList answered: %v", got)
 	}
+	answer()
 	want := map[string]string{"Movie 0": "8.1 97", "Movie 1": "6.2 40", "Movie 2": "7.5 -"}
 	eventually(t, "rated", func() bool { return fmt.Sprint(r.scores(t, top)) == fmt.Sprint(want) })
 	if asked := r.mdblist.requests(); !slices.Equal(asked, []string{
