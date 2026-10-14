@@ -134,6 +134,10 @@ const system = {
         task: (name: string) => `The task “${name}” failed.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
+        backupDestinationFailed: (name: string) =>
+          `${name}: the last upload of the database backups failed.`,
+        backupDestinationStale: (name: string) =>
+          `${name}: the newest database backup there is more than two days old.`,
         conversionsFull: 'Video conversions are at their limit: new ones wait or play otherwise.',
         unreadableSecrets: (names: string) =>
           `Stored keys cannot be decrypted with POLYFIN_SECRET_KEY and count as not set: ${names}. Set the key they were encrypted with again, or enter them again.`,
@@ -300,6 +304,7 @@ const system = {
       targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
       serverTargetOf: (target: string) => `server notification target “${target}”`,
       sharePasswordOf: (folder: string) => `password of the share “${folder}”`,
+      destinationSecretOf: (name: string) => `password or key of the backup destination “${name}”`,
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',
       noIptvHint: 'Add an IPTV account under Content › Sources.',
       noGuides: 'No programme guide.',

@@ -478,6 +478,9 @@ const settings: typeof en = {
     backupsKeptHelp: (r: RangeText) =>
       `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     lastBackup: 'Dernière sauvegarde',
+    backupDestinations: 'Destinations',
+    backupDestinationsHelp:
+      'Chaque sauvegarde est aussi envoyée à ces endroits, sous le même nom de fichier, une fois écrite dans le dossier : stockages compatibles S3, serveurs SFTP ou WebDAV. Un envoi qui échoue est retenté à la sauvegarde suivante.',
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',

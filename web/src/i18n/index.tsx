@@ -1,6 +1,7 @@
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
 import enAccount from './en/account'
 import enNotifications from './en/notifications'
+import enBackups from './en/backups'
 import enAuth from './en/auth'
 import enCommon from './en/common'
 import enHome from './en/home'
@@ -15,6 +16,7 @@ import enSystem from './en/system'
 import enUsers from './en/users'
 import frAccount from './fr/account'
 import frNotifications from './fr/notifications'
+import frBackups from './fr/backups'
 import frAuth from './fr/auth'
 import frCommon from './fr/common'
 import frHome from './fr/home'
@@ -53,6 +55,7 @@ const en = {
   ...enAccount,
   ...enNotifications,
   ...enStatistics,
+  ...enBackups,
 }
 
 /** Every message of the interface, in one language. */
@@ -73,6 +76,7 @@ const fr: Messages = {
   ...frAccount,
   ...frNotifications,
   ...frStatistics,
+  ...frBackups,
 }
 
 // Two areas defining the same top-level key would silently hide one of them.

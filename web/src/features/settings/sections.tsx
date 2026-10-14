@@ -25,6 +25,7 @@ import {
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
 import CollectionLibraryApps from './CollectionLibraryApps'
+import BackupDestinations from './BackupDestinations'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
 import MetricsToken from './MetricsToken'
@@ -1085,6 +1086,12 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
           />
         </FieldRow>
         {form.backups && <LastBackup />}
+      </SettingsGroup>
+      <SettingsGroup title={s.backupDestinations}>
+        <SettingRow anchor="backup-destinations">
+          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{s.backupDestinationsHelp}</p>
+          <BackupDestinations />
+        </SettingRow>
       </SettingsGroup>
     </>
   )

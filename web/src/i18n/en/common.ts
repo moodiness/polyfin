@@ -202,6 +202,37 @@ const common = {
       'The recordings folder must be an absolute path to a folder Polyfin can write to.',
     invalid_backup_folder:
       'The backups folder must be an absolute path to a folder Polyfin can write to.',
+    too_many_destinations: 'There are already 10 backup destinations: delete one first.',
+    invalid_destination_kind: 'Choose the kind of destination from the list.',
+    invalid_destination_address:
+      'Enter the address as asked: an http:// or https:// address without a path for S3 storage, a host name or IP address for an SFTP server, the address of a folder for a WebDAV server.',
+    invalid_bucket:
+      'Enter the bucket’s name: 3 to 63 lowercase letters, digits, dots, hyphens or underscores.',
+    invalid_destination_folder:
+      'The folder must not go up with “..”, nor hold control characters, and is at most 512 bytes.',
+    invalid_region: 'The region is lowercase letters, digits and hyphens, such as eu-west-3.',
+    invalid_port: 'The port is a whole number from 1 to 65535.',
+    invalid_destination_user: 'Enter the user, or the access key for S3 storage.',
+    invalid_destination_secret:
+      'Enter the password, the secret key for S3 storage, or for an SFTP server a private key.',
+    invalid_private_key:
+      'The private key must be an OpenSSH or PEM private key without a passphrase.',
+    backups_off: 'Backups are off: turn them on above first.',
+    pg_restore_missing:
+      'pg_restore was not found on the server: install PostgreSQL 18’s client tools, which the Docker image includes.',
+    backup_not_found: 'This backup is no longer there: choose another one.',
+    not_a_backup: 'This file is not a backup of Polyfin’s database.',
+    newer_backup: 'This backup was made by a newer Polyfin: update Polyfin first.',
+    changed_backup:
+      'This backup was made by a Polyfin whose database migrations differ from this one’s.',
+    restore_expired: 'The backup chosen is no longer ready: choose it again.',
+    unreadable_secrets:
+      'This backup holds keys that POLYFIN_SECRET_KEY cannot decrypt: confirm with Restore anyway.',
+    restoring: 'A restore is already under way.',
+    wrong_server_name: 'Type the server’s name exactly as shown.',
+    too_large: 'The file is too large.',
+    destination_failed: 'The destination could not be read.',
+    restore_failed: 'The restore could not start: nothing was changed.',
     invalid_collection_read_hour:
       'Choose the hour collections are read at, or Never, from the list.',
     invalid_collection_library_apps:

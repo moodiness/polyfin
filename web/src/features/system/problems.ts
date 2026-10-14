@@ -44,6 +44,7 @@ export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
   if (secret.setting !== null) return text.secretNames[secret.setting]
   if (secret.folder !== null) return text.sharePasswordOf(secret.folder)
+  if (secret.destination !== null) return text.destinationSecretOf(secret.destination)
   if (secret.target !== null) {
     return secret.user === null
       ? text.serverTargetOf(secret.target)
@@ -101,6 +102,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.backupFailed
     case 'backup_stale':
       return text.backupStale
+    case 'backup_destination_failed':
+      return text.backupDestinationFailed(problem.name)
+    case 'backup_destination_stale':
+      return text.backupDestinationStale(problem.name)
     case 'iptv':
       return text.iptv(ownedName(t, problem.name, problem.owner ?? null))
     case 'guide':

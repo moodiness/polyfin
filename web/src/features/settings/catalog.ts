@@ -737,6 +737,13 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).lastBackup,
     keywords: ['backup'],
   },
+  {
+    section: 'backups',
+    anchor: 'backup-destinations',
+    label: (t) => s(t).backupDestinations,
+    help: (t) => s(t).backupDestinationsHelp,
+    keywords: ['S3', 'SFTP', 'WebDAV', 'MinIO', 'NAS'],
+  },
   // Notifications
   {
     section: 'notifications',

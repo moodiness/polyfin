@@ -1145,13 +1145,21 @@ export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly jellyfinId: string | null
+  /** What a remote server or a tool answered, as the server tells it, when it tells it. */
+  readonly detail: string | null
 
-  constructor(status: number, code: string, jellyfinId: string | null = null) {
+  constructor(
+    status: number,
+    code: string,
+    jellyfinId: string | null = null,
+    detail: string | null = null,
+  ) {
     super(`Admin API error ${status}: ${code}`)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.jellyfinId = jellyfinId
+    this.detail = detail
   }
 }
 
@@ -1174,20 +1182,29 @@ export async function request<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   })
-  if (!response.ok) {
-    let code = 'unknown'
-    let jellyfinId: string | null = null
-    try {
-      const payload = (await response.json()) as { error?: unknown; jellyfinId?: unknown }
-      if (typeof payload.error === 'string') code = payload.error
-      if (typeof payload.jellyfinId === 'string') jellyfinId = payload.jellyfinId
-    } catch {
-      // Non-JSON error body (proxy page, empty response): keep the generic code.
-    }
-    throw new ApiError(response.status, code, jellyfinId)
-  }
+  if (!response.ok) throw await apiError(response)
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+/** The error of an answer that is not ok, with its code, from its JSON body when it has one. */
+async function apiError(response: Response): Promise<ApiError> {
+  let code = 'unknown'
+  let jellyfinId: string | null = null
+  let detail: string | null = null
+  try {
+    const payload = (await response.json()) as {
+      error?: unknown
+      jellyfinId?: unknown
+      message?: unknown
+    }
+    if (typeof payload.error === 'string') code = payload.error
+    if (typeof payload.jellyfinId === 'string') jellyfinId = payload.jellyfinId
+    if (typeof payload.message === 'string') detail = payload.message
+  } catch {
+    // Non-JSON error body (proxy page, empty response): keep the generic code.
+  }
+  return new ApiError(response.status, code, jellyfinId, detail)
 }
 
 const seg = encodeURIComponent
@@ -2657,6 +2674,8 @@ export type UnreadableSecret = {
   user: string | null
   /** A network share's password, by its folder's name. */
   folder: string | null
+  /** A backup destination's password or key, by what the destination shows. */
+  destination: string | null
 }
 
 /**
@@ -2685,6 +2704,7 @@ export type HealthProblem = {
   | { code: 'secrets_plaintext' }
   | { code: 'backup_failed' }
   | { code: 'backup_stale' }
+  | { code: 'backup_destination_failed' | 'backup_destination_stale'; name: string }
   | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
@@ -2721,10 +2741,135 @@ export type Backup = {
   size: number
   /** Whether the last run failed or the last backup is older than two days. */
   problem: boolean
+  /** Where the backups are sent besides the folder, with their last upload. */
+  destinations: BackupDestination[]
+  /** Why a backup cannot be restored, empty when it can. */
+  restore: '' | 'pg_restore_missing'
+  /** How the last restore went; `error` is empty after a success. */
+  lastRestore: { at: string; file: string; administrator: string; error: string } | null
 }
 
 export const fetchBackup = (signal?: AbortSignal) =>
   request<Backup>('GET', '/backup', undefined, signal)
+
+export type BackupDestinationKind = 's3' | 'sftp' | 'webdav'
+
+/**
+ * A place backups are sent to. Its password, secret key and private key are never sent:
+ * `secretSet` and `privateKeySet` tell whether they are set. `address` is an S3 endpoint, an SFTP
+ * server's host or a WebDAV folder's address; `folder` an S3 prefix or an SFTP folder. `hostKey` is
+ * the fingerprint of the SFTP server's key saved at the first connection. `ranAt` and `error` are
+ * the last upload, `newestFile` and `newestAt` the newest backup there.
+ */
+export type BackupDestination = {
+  id: string
+  kind: BackupDestinationKind
+  name: string
+  address: string
+  port: number
+  bucket: string
+  folder: string
+  region: string
+  username: string
+  secretSet: boolean
+  privateKeySet: boolean
+  hostKey: string
+  kept: number
+  createdAt: string
+  ranAt: string | null
+  error: string
+  newestFile: string
+  newestAt: string | null
+  problem: 'failed' | 'stale' | null
+  unreadable: boolean
+}
+
+/** A destination to add, or the fields to change: those left out keep their values. */
+export type BackupDestinationDraft = {
+  kind?: BackupDestinationKind
+  address?: string
+  port?: number
+  bucket?: string
+  folder?: string
+  region?: string
+  username?: string
+  secret?: string
+  privateKey?: string
+  hostKey?: ''
+  kept?: number
+}
+
+export const fetchBackupDestinations = (signal?: AbortSignal) =>
+  request<{ destinations: BackupDestination[]; kinds: BackupDestinationKind[] }>(
+    'GET',
+    '/backup/destinations',
+    undefined,
+    signal,
+  )
+
+export const createBackupDestination = (draft: BackupDestinationDraft) =>
+  request<BackupDestination>('POST', '/backup/destinations', draft)
+
+export const updateBackupDestination = (id: string, draft: BackupDestinationDraft) =>
+  request<BackupDestination>('PATCH', `/backup/destinations/${seg(id)}`, draft)
+
+export const deleteBackupDestination = (id: string) =>
+  request<void>('DELETE', `/backup/destinations/${seg(id)}`)
+
+/** Writes a small file, reads it back and deletes it: `error` tells why it failed. */
+export const testBackupDestination = (id: string) =>
+  request<{ ok: boolean; error: string; destination: BackupDestination }>(
+    'POST',
+    `/backup/destinations/${seg(id)}/test`,
+  )
+
+/** A backup that can be restored, `madeAt` read from its name. */
+export type BackupFile = { name: string; size: number; madeAt: string; beforeRestore: boolean }
+
+/** The backups of the folder and of each destination, newest first. */
+export type BackupFiles = {
+  folder: BackupFile[]
+  destinations: { destination: BackupDestination; files: BackupFile[]; error: string }[]
+}
+
+export const fetchBackupFiles = (signal?: AbortSignal) =>
+  request<BackupFiles>('GET', '/backup/files', undefined, signal)
+
+/**
+ * A backup checked to be restored: `unreadable` counts by kind the stored keys in it that
+ * POLYFIN_SECRET_KEY cannot decrypt; `serverName` is what the confirmation asks to type.
+ */
+export type RestorePlan = {
+  id: string
+  file: string
+  destination: string | null
+  uploaded: boolean
+  madeAt: string | null
+  size: number
+  unreadable: Partial<
+    Record<'settings' | 'tracking' | 'apps' | 'notifications' | 'shares' | 'destinations', number>
+  >
+  serverName: string
+}
+
+/** Checks a backup of the folder (`destination` null) or of a destination, to restore it. */
+export const prepareRestore = (destination: string | null, file: string) =>
+  request<RestorePlan>('POST', '/backup/restore/prepare', { destination, file })
+
+/** Sends a backup file and checks it, to restore it. */
+export async function uploadRestore(file: File): Promise<RestorePlan> {
+  const response = await fetch(`${apiBase}/backup/restore/upload?name=${seg(file.name)}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream' },
+    body: file,
+  })
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as RestorePlan
+}
+
+/** Restores the backup checked: Polyfin stops, restores it, and starts again. */
+export const startRestore = (id: string, serverName: string, anyway: boolean) =>
+  request<{ restoring: boolean }>('POST', '/backup/restore', { id, serverName, anyway })
 
 /** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */
 export type Sources = {
@@ -2916,6 +3061,8 @@ export const queryKeys = {
   /** Under the health's key: refreshing the health refreshes them too. */
   healthProblems: (language: Language) => ['health', 'problems', language] as const,
   backup: ['backup'] as const,
+  backupDestinations: ['backup', 'destinations'] as const,
+  backupFiles: ['backup', 'files'] as const,
   sources: ['sources'] as const,
   /** The unmatched files of a local folder. */
   unmatched: (id: string) => ['unmatched', id] as const,

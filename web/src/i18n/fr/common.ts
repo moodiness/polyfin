@@ -219,6 +219,39 @@ const common: typeof en = {
       'Le dossier des enregistrements doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     invalid_backup_folder:
       'Le dossier des sauvegardes doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
+    too_many_destinations:
+      'Il y a déjà 10 destinations des sauvegardes : supprimez-en une d’abord.',
+    invalid_destination_kind: 'Choisissez le type de destination dans la liste.',
+    invalid_destination_address:
+      'Saisissez l’adresse demandée : une adresse http:// ou https:// sans chemin pour un stockage S3, un nom d’hôte ou une adresse IP pour un serveur SFTP, l’adresse d’un dossier pour un serveur WebDAV.',
+    invalid_bucket:
+      'Saisissez le nom du compartiment : 3 à 63 minuscules, chiffres, points, traits d’union ou tirets bas.',
+    invalid_destination_folder:
+      'Le dossier ne doit pas remonter avec « .. », ni contenir de caractères de contrôle, et fait au plus 512 octets.',
+    invalid_region:
+      'La région est faite de minuscules, de chiffres et de traits d’union, comme eu-west-3.',
+    invalid_port: 'Le port est un nombre entier de 1 à 65535.',
+    invalid_destination_user: 'Saisissez l’utilisateur, ou la clé d’accès pour un stockage S3.',
+    invalid_destination_secret:
+      'Saisissez le mot de passe, la clé secrète pour un stockage S3, ou pour un serveur SFTP une clé privée.',
+    invalid_private_key: 'La clé privée doit être une clé OpenSSH ou PEM sans phrase de passe.',
+    backups_off: 'Les sauvegardes sont désactivées : activez-les d’abord ci-dessus.',
+    pg_restore_missing:
+      'pg_restore est introuvable sur le serveur : installez les outils clients de PostgreSQL 18, que l’image Docker contient.',
+    backup_not_found: 'Cette sauvegarde n’est plus là : choisissez-en une autre.',
+    not_a_backup: 'Ce fichier n’est pas une sauvegarde de la base de données de Polyfin.',
+    newer_backup:
+      'Cette sauvegarde a été faite par un Polyfin plus récent : mettez d’abord Polyfin à jour.',
+    changed_backup:
+      'Cette sauvegarde a été faite par un Polyfin dont les migrations de la base de données diffèrent de celles de celui-ci.',
+    restore_expired: 'La sauvegarde choisie n’est plus prête : choisissez-la à nouveau.',
+    unreadable_secrets:
+      'Cette sauvegarde contient des clés que POLYFIN_SECRET_KEY ne peut pas déchiffrer : confirmez avec Restaurer quand même.',
+    restoring: 'Une restauration est déjà en cours.',
+    wrong_server_name: 'Saisissez le nom du serveur exactement comme il est affiché.',
+    too_large: 'Le fichier est trop volumineux.',
+    destination_failed: 'La destination n’a pas pu être lue.',
+    restore_failed: 'La restauration n’a pas pu commencer : rien n’a été modifié.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_collection_library_apps:

@@ -46,6 +46,7 @@ import { dateTime, errorMessage, formatHour, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
+import RestoreBackup from './RestoreBackup'
 import { Anchor } from './parts'
 
 /** The task that backs the database up every day while backups are on in the settings. */
@@ -257,9 +258,12 @@ function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
       <Panel
         title={text.backupsTitle}
         actions={
-          task && (
-            <TaskButtonLabelled task={task} act={act} running={running} label={text.backUpNow} />
-          )
+          <div className="flex flex-wrap items-center gap-2">
+            {health.data?.backup && <RestoreBackup unavailable={health.data.backup.restore} />}
+            {task && (
+              <TaskButtonLabelled task={task} act={act} running={running} label={text.backUpNow} />
+            )}
+          </div>
         }
       >
         {health.isPending ? (

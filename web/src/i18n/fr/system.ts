@@ -141,6 +141,10 @@ const system: typeof en = {
         task: (name: string) => `La tâche « ${name} » a échoué.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
+        backupDestinationFailed: (name: string) =>
+          `${name} : le dernier envoi des sauvegardes de la base de données a échoué.`,
+        backupDestinationStale: (name: string) =>
+          `${name} : la sauvegarde de la base de données la plus récente qui s’y trouve date de plus de deux jours.`,
         conversionsFull:
           'Les conversions vidéo sont à leur limite : les nouvelles attendent ou sont lues autrement.',
         unreadableSecrets: (names: string) =>
@@ -309,6 +313,8 @@ const system: typeof en = {
       targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,
       serverTargetOf: (target: string) => `Cible de notification du serveur « ${target} »`,
       sharePasswordOf: (folder: string) => `Mot de passe du partage « ${folder} »`,
+      destinationSecretOf: (name: string) =>
+        `Mot de passe ou clé de la destination des sauvegardes « ${name} »`,
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
       noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
       noGuides: 'Aucun guide des programmes.',

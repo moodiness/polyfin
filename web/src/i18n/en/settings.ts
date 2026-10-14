@@ -468,6 +468,9 @@ const settings = {
     backupsKeptHelp: (r: RangeText) =>
       `After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From ${r.min} to ${r.max}; ${r.default} by default.`,
     lastBackup: 'Last backup',
+    backupDestinations: 'Destinations',
+    backupDestinationsHelp:
+      'Each backup is also sent to these places, under the same file name, once written to the folder: S3-compatible storage, SFTP or WebDAV servers. A failed upload is tried again at the next backup.',
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
