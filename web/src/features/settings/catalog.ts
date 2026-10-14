@@ -389,6 +389,22 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'mdblist-ratings-key',
+    label: (t) => s(t).mdblistRatingsKey,
+    help: (t) => s(t).mdblistRatingsKeyHelp,
+    keywords: ['MDBList', 'api key', 'IMDb', 'rating', 'CommunityRating', 'CriticRating'],
+    codes: ['invalid_mdblist_ratings_key', 'mdblist_unreachable'],
+  },
+  {
+    section: 'content',
+    anchor: 'critic-rating-shows',
+    label: (t) => s(t).criticRatingShows,
+    help: (t) => s(t).criticRatingShowsHelp,
+    keywords: ['CriticRating', 'critics', 'audience', 'rating'],
+    codes: ['invalid_critic_rating_shows'],
+  },
+  {
+    section: 'content',
     anchor: 'lyrics',
     label: (t) => s(t).lyrics,
     help: (t) => s(t).lyricsHelp,

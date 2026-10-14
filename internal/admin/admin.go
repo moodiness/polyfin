@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -87,6 +88,10 @@ type Options struct {
 	// Segments checks the keys of the segment databases before the settings
 	// save them; nil saves no key.
 	Segments *mediasegments.Service
+	// Ratings checks the server's MDBList key for ratings before the
+	// settings save it, and tells System › Health how its lookups stand;
+	// nil saves no key.
+	Ratings *ratings.Service
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
 	// Sessions are the playbacks under way, which the dashboard shows and
@@ -402,6 +407,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidCatalogRefreshMinutes, http.StatusBadRequest, "invalid_catalog_refresh_minutes"},
 		{accounts.ErrInvalidPublicMetaDBKey, http.StatusBadRequest, "invalid_publicmetadb_key"},
 		{accounts.ErrInvalidTheIntroDBKey, http.StatusBadRequest, "invalid_theintrodb_key"},
+		{accounts.ErrInvalidMDBListRatingsKey, http.StatusBadRequest, "invalid_mdblist_ratings_key"},
+		{accounts.ErrInvalidCriticRatingShows, http.StatusBadRequest, "invalid_critic_rating_shows"},
 		{accounts.ErrInvalidSegmentOrder, http.StatusBadRequest, "invalid_segment_order"},
 		{accounts.ErrInvalidSegmentSourcesOff, http.StatusBadRequest, "invalid_segment_sources_off"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},

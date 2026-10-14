@@ -165,6 +165,11 @@ const common = {
       'TheIntroDB did not accept this key. Copy it again from your TheIntroDB account. Nothing was saved.',
     theintrodb_unreachable:
       'TheIntroDB could not be reached to check the key, or limits requests for now. Nothing was saved: try again later.',
+    invalid_mdblist_ratings_key:
+      'MDBList did not accept this key. Copy it again from your MDBList account. Nothing was saved.',
+    mdblist_unreachable:
+      'MDBList could not be reached to check the key. Nothing was saved: try again later.',
+    invalid_critic_rating_shows: 'Choose from the list which score the critic rating shows.',
     invalid_segment_order:
       'The order of the skip marker sources must list each source once. Reload the page.',
     invalid_trakt_app:

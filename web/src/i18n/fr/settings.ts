@@ -319,6 +319,13 @@ const settings: typeof en = {
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
+    mdblistRatingsKey: 'Clé d’API MDBList des notes',
+    mdblistRatingsKeyHelp:
+      'Facultatif. Avec la clé d’un compte MDBList, les films et les séries affichent leur note IMDb, le score des critiques et celui du public donnés par MDBList, cherchés en arrière-plan et gardés pour tous les utilisateurs. Les clés MDBList des utilisateurs pour le suivi ne servent jamais à cela. Sans clé, MDBList n’est jamais consulté.',
+    criticRatingShows: 'La note critique affiche',
+    criticRatingShowsHelp:
+      'Les applications Jellyfin n’ont qu’un champ pour une note critique, de 0 à 100 : il affiche le score des critiques ou celui du public. Sur la fiche d’un titre, le lecteur web affiche les deux, avec la note IMDb.',
+    criticRatingChoices: { critics: 'Score des critiques', audience: 'Score du public' },
     lyrics: 'Paroles des chansons depuis LRCLIB',
     lyricsHelp:
       'Les applications affichent les paroles des chansons, synchronisées ligne par ligne quand LRCLIB, une base de paroles libre, les connaît. Polyfin recherche une chanson une seule fois, par son artiste, son titre, son album et sa durée, quand sa lecture commence ou que sa fiche ou ses paroles s’ouvrent. Si cette option est désactivée, les chansons n’ont pas de paroles et LRCLIB n’est jamais consulté.',
@@ -471,7 +478,8 @@ const settings: typeof en = {
       general:
         'Le nom du serveur, sa langue, la connexion des applications et leur découverte du serveur, et la recherche de nouvelles versions.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
-      content: 'Passer l’intro, titres similaires, paroles des chansons et seuils de lecture.',
+      content:
+        'Passer l’intro, titres similaires, notes, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
       security:
         'Addons et importations des utilisateurs, comptes bloqués, appareils inutilisés et proxys inverses.',
@@ -484,6 +492,7 @@ const settings: typeof en = {
     groups: {
       skip: 'Passer l’intro et le générique',
       titlePages: 'Fiche des titres',
+      ratings: 'Notes',
       music: 'Musique',
       thresholds: 'Seuils de lecture',
     },

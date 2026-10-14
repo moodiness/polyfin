@@ -247,6 +247,22 @@ const system: typeof en = {
       pausedHosts: 'Sources en pause',
       noPausedHosts: 'Aucune source en pause.',
       until: (time: string) => `jusqu’à ${time}`,
+      ratingsTitle: 'Notes depuis MDBList',
+      ratingsHelp:
+        'Les demandes que MDBList accorde chaque jour à la clé des notes du serveur, et celles qui restent jusqu’à sa remise à zéro quotidienne. Les titres dont les notes ne sont pas gardées sont demandés par lots, en arrière-plan.',
+      requestsLeft: 'Demandes restantes aujourd’hui',
+      requestsLeftOf: (left: string, limit: string) => `${left} sur ${limit}`,
+      notToldYet: 'Connues à la prochaine demande à MDBList',
+      resets: 'Remise à zéro quotidienne',
+      ratingsHeld: 'Nouvelle demande',
+      heldReasons: {
+        limit: 'MDBList limite les demandes',
+        refused: 'MDBList a refusé la clé',
+        failed: 'MDBList n’a pas répondu',
+      } as Record<string, string>,
+      notHeld: 'Dès maintenant',
+      titlesWaiting: 'Titres en attente',
+      titlesKept: 'Titres dont les notes sont gardées',
       backupTitle: 'Sauvegardes',
       backupOff: 'Les sauvegardes sont désactivées. Activez-les dans Paramètres › Sauvegardes.',
       backup: {
@@ -283,6 +299,7 @@ const system: typeof en = {
       secretNames: {
         publicMetaDbKey: 'Clé PublicMetaDB',
         theIntroDbKey: 'Clé TheIntroDB',
+        mdblistRatingsKey: 'Clé d’API MDBList des notes',
         traktClientSecret: 'Client secret Trakt',
         lastFmSecret: 'Secret partagé Last.fm',
         smtpPassword: 'Mot de passe SMTP',

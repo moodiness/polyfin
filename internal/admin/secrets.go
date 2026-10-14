@@ -16,6 +16,7 @@ import (
 var serverSecrets = map[string]func(accounts.Settings) string{
 	"publicMetaDbKey":   func(s accounts.Settings) string { return s.PublicMetaDBKey },
 	"theIntroDbKey":     func(s accounts.Settings) string { return s.TheIntroDBKey },
+	"mdblistRatingsKey": func(s accounts.Settings) string { return s.MDBListRatingsKey },
 	"traktClientSecret": func(s accounts.Settings) string { return s.TraktClientSecret },
 	"lastFmSecret":      func(s accounts.Settings) string { return s.LastFMSecret },
 	"metricsToken":      func(s accounts.Settings) string { return s.MetricsToken },

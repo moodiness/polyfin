@@ -239,6 +239,22 @@ const system = {
       pausedHosts: 'Paused sources',
       noPausedHosts: 'No source is paused.',
       until: (time: string) => `until ${time}`,
+      ratingsTitle: 'Ratings from MDBList',
+      ratingsHelp:
+        'The requests MDBList allows the server’s key for ratings each day, and those left until its daily reset. Titles whose ratings are not kept are asked about in batches, in the background.',
+      requestsLeft: 'Requests left today',
+      requestsLeftOf: (left: string, limit: string) => `${left} of ${limit}`,
+      notToldYet: 'Known once MDBList is next asked',
+      resets: 'Daily reset',
+      ratingsHeld: 'Asked again',
+      heldReasons: {
+        limit: 'MDBList limits requests',
+        refused: 'MDBList refused the key',
+        failed: 'MDBList did not answer',
+      } as Record<string, string>,
+      notHeld: 'Now',
+      titlesWaiting: 'Titles waiting',
+      titlesKept: 'Titles with ratings kept',
       backupTitle: 'Backups',
       backupOff: 'Backups are off. Turn them on under Settings › Backups.',
       backup: {
@@ -274,6 +290,7 @@ const system = {
       secretNames: {
         publicMetaDbKey: 'PublicMetaDB key',
         theIntroDbKey: 'TheIntroDB key',
+        mdblistRatingsKey: 'MDBList API key for ratings',
         traktClientSecret: 'Trakt client secret',
         lastFmSecret: 'Last.fm shared secret',
         smtpPassword: 'SMTP password',

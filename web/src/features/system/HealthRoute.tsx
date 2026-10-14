@@ -102,6 +102,7 @@ export default function HealthRoute() {
               <Disks health={health.data} />
               <Backups health={health.data} />
               <Thumbnails health={health.data} />
+              <Ratings health={health.data} />
               <Process health={health.data} />
               <Secrets health={health.data} />
               <ProxyNames health={health.data} />
@@ -835,6 +836,56 @@ function Thumbnails({ health }: { health: Health }) {
             </div>
           </div>
         )}
+      </Panel>
+    </Anchor>
+  )
+}
+
+/** The lookups of titles' ratings on MDBList, while the server has a key for them. */
+function Ratings({ health }: { health: Health }) {
+  const { language, t } = useI18n()
+  const text = t.system.health
+  const ratings = health.ratings
+  if (ratings === null) return null
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
+  const number = new Intl.NumberFormat(language)
+  return (
+    <Anchor id="ratings">
+      <Panel title={text.ratingsTitle} titleAs="h3" description={text.ratingsHelp}>
+        <Facts
+          items={[
+            {
+              label: text.requestsLeft,
+              value:
+                ratings.remaining !== null && ratings.limit !== null ? (
+                  <span className="tabular-nums">
+                    {text.requestsLeftOf(
+                      number.format(ratings.remaining),
+                      number.format(ratings.limit),
+                    )}
+                  </span>
+                ) : (
+                  text.notToldYet
+                ),
+            },
+            ...(ratings.resetsAt !== null
+              ? [{ label: text.resets, value: time.format(new Date(ratings.resetsAt)) }]
+              : []),
+            {
+              label: text.ratingsHeld,
+              value:
+                ratings.heldUntil !== null ? (
+                  <StatusPill tone={ratings.held === 'refused' ? 'danger' : 'warn'}>
+                    {`${text.heldReasons[ratings.held] ?? ''} ${text.until(time.format(new Date(ratings.heldUntil)))}`.trim()}
+                  </StatusPill>
+                ) : (
+                  text.notHeld
+                ),
+            },
+            { label: text.titlesWaiting, value: number.format(ratings.waiting) },
+            { label: text.titlesKept, value: number.format(ratings.kept) },
+          ]}
+        />
       </Panel>
     </Anchor>
   )

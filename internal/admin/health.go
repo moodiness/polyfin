@@ -77,6 +77,9 @@ type healthJSON struct {
 	// ProxyNames are the host names of Known proxies, with what each
 	// resolved to when last looked up.
 	ProxyNames []proxyNameJSON `json:"proxyNames"`
+	// Ratings is how the lookups of titles' ratings on MDBList stand,
+	// null while no key is saved.
+	Ratings *ratingsHealthJSON `json:"ratings"`
 }
 
 // proxyNameJSON is a host name of Known proxies and the addresses it
@@ -107,6 +110,42 @@ type shareHealthJSON struct {
 type updateJSON struct {
 	Version string `json:"version"`
 	URL     string `json:"url"`
+}
+
+// ratingsHealthJSON is how the lookups of titles' ratings on MDBList
+// stand: the requests MDBList allows a day (Limit), those left (Remaining)
+// until ResetsAt, each null until MDBList tells them; HeldUntil, when it is
+// left alone after a 429 ("limit"), a key it refused ("refused") or a
+// failure ("failed"), as Held tells; the titles waiting to be asked about,
+// and those whose ratings are kept.
+type ratingsHealthJSON struct {
+	Limit     *int       `json:"limit"`
+	Remaining *int       `json:"remaining"`
+	ResetsAt  *time.Time `json:"resetsAt"`
+	HeldUntil *time.Time `json:"heldUntil"`
+	Held      string     `json:"held"`
+	Waiting   int        `json:"waiting"`
+	Kept      int        `json:"kept"`
+}
+
+// ratingsHealth describes how the lookups of titles' ratings stand, nil
+// while no key is saved.
+func (h *handler) ratingsHealth() *ratingsHealthJSON {
+	status := h.Ratings.Status()
+	if !status.Enabled {
+		return nil
+	}
+	result := &ratingsHealthJSON{Held: status.Held, Waiting: status.Waiting, Kept: status.Kept}
+	if status.Known {
+		result.Limit, result.Remaining = new(status.Limit), new(status.Remaining)
+	}
+	if !status.ResetsAt.IsZero() {
+		result.ResetsAt = new(status.ResetsAt)
+	}
+	if !status.HeldUntil.IsZero() {
+		result.HeldUntil = new(status.HeldUntil)
+	}
+	return result
 }
 
 type processJSON struct {
@@ -319,6 +358,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	result.Secrets = h.secretsHealth(r.Context())
+	result.Ratings = h.ratingsHealth()
 	if release, ok := h.Health.Updates.Available(); ok {
 		result.Update = &updateJSON{Version: release.Version, URL: release.URL}
 	}

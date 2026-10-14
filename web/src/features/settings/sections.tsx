@@ -339,6 +339,38 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           onChange={(similarTitles) => update({ similarTitles })}
         />
       </SettingsGroup>
+      <SettingsGroup title={groups.ratings}>
+        <SettingRow
+          anchor="mdblist-ratings-key"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.mdblistRatingsKey}
+            help={s.mdblistRatingsKeyHelp}
+            saved={form.mdblistRatingsKeySet}
+            value={form.mdblistRatingsKey}
+            onValue={(mdblistRatingsKey) => update({ mdblistRatingsKey })}
+            error={error('mdblist-ratings-key')}
+            reveal={() => revealServerSecret('mdblistRatingsKey')}
+          />
+        </SettingRow>
+        <FieldRow
+          anchor="critic-rating-shows"
+          label={s.criticRatingShows}
+          help={s.criticRatingShowsHelp}
+          error={error('critic-rating-shows')}
+        >
+          <Select
+            value={form.criticRatingShows}
+            options={(['critics', 'audience'] as const).map((value) => ({
+              value,
+              label: s.criticRatingChoices[value],
+            }))}
+            onValue={(criticRatingShows) => update({ criticRatingShows })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+      </SettingsGroup>
       <SettingsGroup title={groups.music}>
         <SwitchRow
           anchor="lyrics"

@@ -47,6 +47,7 @@ import (
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/secrets"
@@ -246,6 +247,11 @@ func serve(ctx context.Context) error {
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
+	// Movies and series show the ratings MDBList gives them while the
+	// settings hold the server's key, looked up in the background.
+	titleRatings := ratings.New(pool, ratings.MDBList, version, logger, store.Settings)
+	defer titleRatings.Close()
+	lib.UseRatings(titleRatings)
 	// Local folders match their files through the library's searches of
 	// the metadata addons.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
@@ -426,6 +432,7 @@ func serve(ctx context.Context) error {
 		IPTV:          channels,
 		Folders:       folders,
 		Segments:      skipSegments,
+		Ratings:       titleRatings,
 		Activity:      activityLog,
 		DataDir:       cfg.DataDir,
 		WebClient:     webClient != nil,

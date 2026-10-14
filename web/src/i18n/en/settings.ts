@@ -312,6 +312,13 @@ const settings = {
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',
+    mdblistRatingsKey: 'MDBList API key for ratings',
+    mdblistRatingsKeyHelp:
+      'Optional. With a key from an MDBList account, movies and series show their IMDb rating, critics’ score and audience score from MDBList, looked up in the background and kept for every user. Users’ own MDBList keys for tracking are never used for this. Without a key, MDBList is never asked.',
+    criticRatingShows: 'Critic rating shows',
+    criticRatingShowsHelp:
+      'Jellyfin apps have a single field for a critic rating, from 0 to 100: it shows the critics’ score or the audience score. On a title’s page, the web player shows both, with the IMDb rating.',
+    criticRatingChoices: { critics: 'Critics’ score', audience: 'Audience score' },
     lyrics: 'Song lyrics from LRCLIB',
     lyricsHelp:
       'Apps show the lyrics of songs, synced line by line when LRCLIB, a free lyrics database, has them. Polyfin looks a song up once, by its artist, title, album and length, when it starts playing or its details or lyrics open. When off, songs have no lyrics and LRCLIB is never asked.',
@@ -462,7 +469,7 @@ const settings = {
       general:
         'The server’s name, its language, how apps sign in and find it, and the check for new versions.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
-      content: 'Skip intro buttons, similar titles, song lyrics and playback thresholds.',
+      content: 'Skip intro buttons, similar titles, ratings, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
       security:
         'Users’ own addons and imports, blocked accounts, unused devices and reverse proxies.',
@@ -474,6 +481,7 @@ const settings = {
     groups: {
       skip: 'Skip intro and credits',
       titlePages: 'Title pages',
+      ratings: 'Ratings',
       music: 'Music',
       thresholds: 'Playback thresholds',
     },

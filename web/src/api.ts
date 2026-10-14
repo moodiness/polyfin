@@ -193,6 +193,12 @@ export type Settings = {
   audioIntros: boolean
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
+  /** Whether the server's MDBList key for ratings is saved; titles then show MDBList's ratings. */
+  mdblistRatingsKeySet: boolean
+  /** Sent only to change the key: a new key, checked with MDBList before it is saved, or "" to remove it. */
+  mdblistRatingsKey?: string
+  /** The score CriticRating carries: the critics' score or the audience score. */
+  criticRatingShows: 'critics' | 'audience'
   /** Whether songs get lyrics from LRCLIB, which is sent their artist, title, album and length. */
   lyrics: boolean
   /** Percent of a title's runtime past which a reported position marks it played. */
@@ -1842,7 +1848,12 @@ export const saveSettings = (settings: Settings) =>
 
 /** The server's secrets an administrator can read again. */
 export type ServerSecretName =
-  'publicMetaDbKey' | 'theIntroDbKey' | 'traktClientSecret' | 'lastFmSecret' | 'metricsToken'
+  | 'publicMetaDbKey'
+  | 'theIntroDbKey'
+  | 'mdblistRatingsKey'
+  | 'traktClientSecret'
+  | 'lastFmSecret'
+  | 'metricsToken'
 
 /** Reads one of the server's saved secrets again, for an administrator; never cached. */
 export const revealServerSecret = async (name: ServerSecretName) =>
@@ -2443,6 +2454,20 @@ export type Health = {
    * sorted: none when it resolves to nothing, which trusts nothing.
    */
   proxyNames: { name: string; addresses: string[]; resolvedAt: string }[]
+  /**
+   * How the lookups of titles' ratings on MDBList stand, null while no key is saved: the requests
+   * MDBList allows a day and those left until `resetsAt`, null until MDBList tells them; until when
+   * it is left alone, and why; the titles waiting to be asked about, and those with ratings kept.
+   */
+  ratings: {
+    limit: number | null
+    remaining: number | null
+    resetsAt: string | null
+    heldUntil: string | null
+    held: '' | 'limit' | 'refused' | 'failed'
+    waiting: number
+    kept: number
+  } | null
 }
 
 /**

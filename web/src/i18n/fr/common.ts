@@ -178,6 +178,11 @@ const common: typeof en = {
       'TheIntroDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte TheIntroDB. Rien n’a été enregistré.',
     theintrodb_unreachable:
       'TheIntroDB n’a pas pu être joint pour vérifier la clé, ou limite les demandes pour le moment. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_mdblist_ratings_key:
+      'MDBList n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte MDBList. Rien n’a été enregistré.',
+    mdblist_unreachable:
+      'MDBList n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_critic_rating_shows: 'Choisissez dans la liste le score qu’affiche la note critique.',
     invalid_segment_order:
       'L’ordre des sources de repères doit citer chaque source une fois. Rechargez la page.',
     invalid_trakt_app:

@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/ratings"
 )
 
 type userJSON struct {
@@ -331,6 +332,12 @@ type settingsJSON struct {
 	ResumePercent         *int      `json:"resumePercent"`
 	VersionListMinutes    *int      `json:"versionListMinutes"`
 	CatalogRefreshMinutes *int      `json:"catalogRefreshMinutes"`
+	// MDBListRatingsKeySet and MDBListRatingsKey are the same for the
+	// server's MDBList key for ratings, which MDBList checks too.
+	// CriticRatingShows is "critics" or "audience".
+	MDBListRatingsKeySet bool    `json:"mdblistRatingsKeySet"`
+	MDBListRatingsKey    *string `json:"mdblistRatingsKey,omitempty"`
+	CriticRatingShows    *string `json:"criticRatingShows"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -529,6 +536,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SegmentSourcesOff:     &settings.SegmentSourcesOff,
 		AudioIntros:           &settings.AudioIntros,
 		SimilarTitles:         &settings.SimilarTitles,
+		MDBListRatingsKeySet:  settings.MDBListRatingsKey != "",
+		CriticRatingShows:     &settings.CriticRatingShows,
 		Lyrics:                &settings.Lyrics,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
@@ -1048,6 +1057,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ratingsKey, ok := h.ratingsKey(w, r, body.MDBListRatingsKey, current.MDBListRatingsKey)
+	if !ok {
+		return
+	}
 	// An empty order is what older pages sent to follow POLYFIN_SEGMENTS,
 	// which the settings now hold: it keeps the saved one.
 	segmentOrder := current.SegmentOrder
@@ -1082,6 +1095,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SegmentSourcesOff:     valueOr(body.SegmentSourcesOff, current.SegmentSourcesOff),
 		AudioIntros:           valueOr(body.AudioIntros, current.AudioIntros),
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
+		MDBListRatingsKey:     ratingsKey,
+		CriticRatingShows:     valueOr(body.CriticRatingShows, current.CriticRatingShows),
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
@@ -1294,6 +1309,34 @@ func (h *handler) segmentKey(w http.ResponseWriter, r *http.Request, database st
 	case err != nil:
 		h.Logger.Warn("A segment database could not check the key", "database", database, "error", err)
 		writeError(w, http.StatusBadGateway, codes[1])
+		return "", false
+	}
+	return key, true
+}
+
+// ratingsKey is the MDBList key for ratings a settings PUT saves, as
+// segmentKey tells the key of a segment database: one MDBList refuses, or
+// that is malformed, is answered 400 invalid_mdblist_ratings_key, and one
+// MDBList could not be asked about 502 mdblist_unreachable.
+func (h *handler) ratingsKey(w http.ResponseWriter, r *http.Request, sent *string, current string) (key string, ok bool) {
+	if sent == nil {
+		return current, true
+	}
+	key = strings.TrimSpace(*sent)
+	if *sent == "" || key == current {
+		return key, true
+	}
+	if key == "" || !accounts.ValidRatingsKey(key) {
+		writeError(w, http.StatusBadRequest, "invalid_mdblist_ratings_key")
+		return "", false
+	}
+	switch err := h.Ratings.CheckKey(r.Context(), key); {
+	case errors.Is(err, ratings.ErrKeyRefused):
+		writeError(w, http.StatusBadRequest, "invalid_mdblist_ratings_key")
+		return "", false
+	case err != nil:
+		h.Logger.Warn("MDBList could not check the key for ratings", "error", err)
+		writeError(w, http.StatusBadGateway, "mdblist_unreachable")
 		return "", false
 	}
 	return key, true
