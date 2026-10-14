@@ -76,8 +76,14 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 FOR UPDATE`, key...).Scan(&reach); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE catalog_reach SET reach = greatest(reach, $5), read_at = greatest(read_at, $6)
-			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4`, append(key, skip+len(metas), seen)...); err != nil {
+		// Only a page that starts within the reach extends it: one beyond
+		// it leaves unread titles before it, which were there all along.
+		end := reach
+		if skip <= reach {
+			end = max(reach, skip+len(metas))
+		}
+		if _, err := tx.Exec(ctx, `UPDATE catalog_reach SET reach = $5, read_at = greatest(read_at, $6)
+			WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4`, append(key, end, seen)...); err != nil {
 			return err
 		}
 		if len(ids) == 0 {
@@ -114,12 +120,17 @@ func inLockOrderValues(records []record) []record {
 }
 
 // forgetArrivals forgets the catalogs no read reached for
-// catalogForgotten, and the titles no read saw for arrivalForgotten.
+// catalogForgotten, and the titles no read saw for arrivalForgotten. Both
+// take their rows in key order, as recordArrivals does.
 func (s *Service) forgetArrivals(ctx context.Context) error {
-	if _, err := s.db.Exec(ctx, "DELETE FROM catalog_reach WHERE read_at < $1", s.now().Add(-catalogForgotten)); err != nil {
+	if _, err := s.db.Exec(ctx, `DELETE FROM catalog_reach WHERE (addon_id, catalog_type, catalog_id, genre) IN (
+		SELECT addon_id, catalog_type, catalog_id, genre FROM catalog_reach WHERE read_at < $1
+		ORDER BY addon_id, catalog_type, catalog_id, genre FOR UPDATE)`, s.now().Add(-catalogForgotten)); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(ctx, "DELETE FROM catalog_arrivals WHERE last_seen < $1", s.now().Add(-arrivalForgotten))
+	_, err := s.db.Exec(ctx, `DELETE FROM catalog_arrivals WHERE (addon_id, catalog_type, catalog_id, genre, item_id) IN (
+		SELECT addon_id, catalog_type, catalog_id, genre, item_id FROM catalog_arrivals WHERE last_seen < $1
+		ORDER BY addon_id, catalog_type, catalog_id, genre, item_id FOR UPDATE)`, s.now().Add(-arrivalForgotten))
 	return err
 }
 
