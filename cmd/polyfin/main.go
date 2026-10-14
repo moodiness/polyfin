@@ -342,6 +342,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			logger.Warn("pg_restore was not found: backups cannot be restored from the admin app until it is installed", "pg_restore",
 				backups.PgRestore())
 		}
+		// Backups downloaded or sent to be restored, and never restored, go.
+		backups.RemoveRestoreLeftovers()
 	}
 	registerBackupTask(registry, backups)
 	webClient := server.WebClientFiles(cfg.WebDir)
