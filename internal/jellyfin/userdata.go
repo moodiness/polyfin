@@ -44,8 +44,8 @@ func (h *Handler) userDataRoutes(rt *router) {
 }
 
 // userState is what a user did with the items of one response, what is
-// known of its songs' lyrics, and how the app asking is told collection
-// libraries.
+// known of its songs' lyrics and of its songs' and albums' gains, and how
+// the app asking is told collection libraries.
 type userState struct {
 	data map[accounts.ID]userdata.Data
 	// counts are the played and resumable episodes under series and
@@ -57,6 +57,8 @@ type userState struct {
 	// lyrics holds the songs known to have lyrics (see lyrics.Known):
 	// listings never look songs up.
 	lyrics map[accounts.ID]bool
+	// gains holds the gains known of songs and albums (see gains).
+	gains map[accounts.ID]float64
 	// collectionLibraries tells the app asking an addon's collection
 	// library holds collections: an administrator chose the app (see
 	// appCollectionType).
@@ -64,9 +66,9 @@ type userState struct {
 }
 
 // userState loads what user did with items, which of its songs have
-// lyrics, and whether the app asking, the caller of ctx, is told
-// collection libraries hold collections: every description of a library
-// goes through it.
+// lyrics, the gains of its songs and albums, and whether the app asking,
+// the caller of ctx, is told collection libraries hold collections: every
+// description of a library goes through it.
 func (h *Handler) userState(ctx context.Context, user accounts.User, items []library.Item) (userState, error) {
 	ids := make([]accounts.ID, 0, len(items))
 	var parents, songs []accounts.ID
@@ -88,7 +90,7 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		return userState{}, err
 	}
 	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
-		collectionLibraries: h.collectionLibrariesByType(ctx)}
+		gains: h.gains(ctx, items), collectionLibraries: h.collectionLibrariesByType(ctx)}
 	var incomplete []accounts.ID
 	for _, item := range items {
 		if item.Kind == library.KindSeries && item.Contents == nil && counts[item.ID].Played > 0 {
@@ -481,8 +483,10 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	if audio && event == playbackStarted {
 		h.prepareNextTrack(user, item, state)
 		// A song played is looked up once, so that its lyrics are there
-		// when the app asks.
+		// when the app asks, and an addon's measured once, so that its
+		// gain is there the next time it plays.
 		h.lookUpLyrics(item)
+		h.measureLoudness(user, item)
 	}
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()

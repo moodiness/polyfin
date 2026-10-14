@@ -31,7 +31,8 @@ type Track struct {
 	Year       int     `json:"year,omitempty"`
 	// Polyfin's own local music folders also tell a track's album artist,
 	// its disc and number on it, its genres, its artists and album artists
-	// one by one, and whether it has lyrics; addons never do.
+	// one by one, whether it has lyrics, and its gain, in dB (see package
+	// loudness), nil while unknown; addons never do.
 	AlbumArtist  string   `json:"-"`
 	Disc         int      `json:"-"`
 	Number       int      `json:"-"`
@@ -39,6 +40,7 @@ type Track struct {
 	Artists      []string `json:"-"`
 	AlbumArtists []string `json:"-"`
 	Lyrics       bool     `json:"-"`
+	Gain         *float64 `json:"-"`
 }
 
 // Album is a release and, on its page, its tracks.
@@ -52,10 +54,12 @@ type Album struct {
 	Description string  `json:"description,omitempty"`
 	Explicit    bool    `json:"explicit,omitempty"`
 	Tracks      []Track `json:"tracks,omitempty"`
-	// Genres and Artists, its artists one by one, are a local music
-	// folder's album's; addons never tell them.
+	// Genres and Artists, its artists one by one, and Gain, in dB (see
+	// package loudness), nil while unknown, are a local music folder's
+	// album's; addons never tell them.
 	Genres  []string `json:"-"`
 	Artists []string `json:"-"`
+	Gain    *float64 `json:"-"`
 }
 
 // Artist is a performer and, on their page, their top tracks and albums.

@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -77,6 +78,9 @@ type Options struct {
 	RemuxDB *remuxdb.Service
 	// Lyrics finds songs' lyrics on LRCLIB; nil finds none.
 	Lyrics *lyrics.Service
+	// Loudness gives the gains of music addons' songs and measures them
+	// after their first play; nil gives and measures none.
+	Loudness *loudness.Service
 	// Playlists stores the playlists users make.
 	Playlists *playlists.Store
 	// Collections stores the collections users make.

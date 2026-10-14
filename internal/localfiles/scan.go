@@ -391,7 +391,11 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		if err := s.scanMusic(ctx, id, list, local); err != nil {
 			return err
 		}
-		return s.finish(ctx, id, at, list)
+		if err := s.finish(ctx, id, at, list); err != nil {
+			return err
+		}
+		s.measureMusic(id)
+		return nil
 	}
 	if folder.Kind == KindHomeVideos {
 		if err := s.scanHomeVideos(ctx, id, root, list); err != nil {

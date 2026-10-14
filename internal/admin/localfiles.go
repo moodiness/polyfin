@@ -43,6 +43,8 @@ type folderJSON struct {
 	Unmatched   int                `json:"unmatched"`
 	Albums      int                `json:"albums"`
 	Artists     int                `json:"artists"`
+	Gained      int                `json:"gained"`
+	Measured    int                `json:"measured"`
 	DatedBy     datedByJSON        `json:"datedBy"`
 	Links       []linkJSON         `json:"links"`
 	Episodes    []givenEpisodeJSON `json:"episodes"`
@@ -96,8 +98,9 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
-		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
-		Links: links, Episodes: episodes, UseArtwork: f.UseArtwork}
+		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Gained: f.Gained, Measured: f.Measured,
+		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
+		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork}
 }
 
 // folderScope answers the folder routes' scope: local folders are the

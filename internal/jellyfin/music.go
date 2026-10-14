@@ -58,8 +58,9 @@ func creditNames(list []library.Credit) *[]string {
 // artists, and whether it has lyrics (those LRCLIB gave, or its own in a
 // local music folder), an album's artists and, in its details, its tracks
 // and length, as Jellyfin's do; an artist's details count their albums.
-// Its album artist is the first of its album's artists, as on Jellyfin.
-func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail, hasLyrics bool) {
+// Its album artist is the first of its album's artists, as on Jellyfin. A
+// song or album has its gain, nil while unknown (see Handler.gains).
+func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail, hasLyrics bool, gain *float64) {
 	if !library.MusicKind(item.Kind) {
 		return
 	}
@@ -92,8 +93,12 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail,
 			dto.ParentIndexNumber = new(item.ParentIndexNumber)
 		}
 		dto.Artists, dto.ArtistItems, dto.AlbumArtists = creditNames(item.Artists), credits(item.Artists), credits(albumArtists)
+		if item.Kind == library.KindTrack {
+			dto.NormalizationGain = gain
+		}
 	case library.KindAlbum:
 		dto.Artists, dto.ArtistItems, dto.AlbumArtists = creditNames(item.Artists), credits(item.Artists), credits(albumArtists)
+		dto.NormalizationGain = gain
 		if detail {
 			dto.ChildCount, dto.RecursiveItemCount = new(children), new(children)
 			dto.CumulativeRunTimeTicks = new(int64(item.Runtime / 100))

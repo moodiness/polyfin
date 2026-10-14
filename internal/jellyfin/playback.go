@@ -172,10 +172,11 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 	}
 	// Jellyfin describes the item as on its page, without what concerns
 	// the user or managing the item; a song tells whether it has lyrics,
-	// for the lyrics button of the apps controlling it.
+	// for the lyrics button of the apps controlling it, and its gain.
 	var state userState
 	if item.Kind == library.KindTrack {
 		state.lyrics = h.Lyrics.Known(r.Context(), []accounts.ID{item.ID})
+		state.gains = h.gains(r.Context(), []library.Item{item})
 	}
 	dto := h.newItemDto(item, nil, true, state)
 	h.addMediaSources(r, user, &dto, item, playing.Item, false)

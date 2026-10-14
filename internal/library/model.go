@@ -73,8 +73,10 @@ type Item struct {
 	// ParentID is the folder the item was listed in; zero for libraries.
 	ParentID accounts.ID
 	// CollectionType is the content of a library: "movies", "tvshows",
-	// "boxsets", or empty for mixed content.
+	// "boxsets", or empty for mixed content. LocalFolder tells a library,
+	// or an item of music, is a local folder's.
 	CollectionType  string
+	LocalFolder     bool
 	Overview        string
 	Genres          []string
 	ProductionYear  int
@@ -142,16 +144,20 @@ type Item struct {
 	// its album artist; whether it is explicit; and how many tracks an
 	// album or playlist holds, or albums an artist, when known. ISRC
 	// identifies a track's recording. Lyrics tells that a track of a local
-	// music folder has lyrics of its own (see Service.TrackLyrics).
-	Album        string
-	AlbumID      accounts.ID
-	AlbumPoster  string
-	Artists      []Credit
-	AlbumArtists []Credit
-	Explicit     bool
-	ChildCount   *int
-	ISRC         string
-	Lyrics       bool
+	// music folder has lyrics of its own (see Service.TrackLyrics), and
+	// NormalizationGain is a local track's or album's gain, in dB (see
+	// package loudness), nil while unknown; music addons' come from
+	// loudness.Service.
+	Album             string
+	AlbumID           accounts.ID
+	AlbumPoster       string
+	Artists           []Credit
+	AlbumArtists      []Credit
+	Explicit          bool
+	ChildCount        *int
+	ISRC              string
+	Lyrics            bool
+	NormalizationGain *float64
 	// Container is a track's format, as its addon labels it, until its
 	// stream is known.
 	Container string

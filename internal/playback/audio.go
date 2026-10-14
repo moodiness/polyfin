@@ -300,6 +300,31 @@ func (s *Service) audioInput(version library.Version) (input string, options []s
 	return target, nil, func() { free(); unurge(); src.Release() }, nil
 }
 
+// ReadAudio has read run on a track's stream as a conversion reads it
+// (see audioInput), in the background: read is given the address FFmpeg
+// reads it from and the input options it reads it with. The file of a
+// track goes through the shared source cache, its link renewed as it
+// expires, without hurrying its host as a playback does.
+func (s *Service) ReadAudio(ctx context.Context, version library.Version, read func(ctx context.Context, input string, options []string) error) error {
+	manifest := ""
+	if version.Audio != nil {
+		manifest = version.Audio.Manifest
+	}
+	if manifest == "hls" || manifest == "dash" {
+		input, options, release, err := s.audioInput(version)
+		if err != nil {
+			return err
+		}
+		defer release()
+		return read(ctx, input, options)
+	}
+	src := s.open(version)
+	defer src.Release()
+	target, free := s.loopback.register(src)
+	defer free()
+	return read(ctx, target, nil)
+}
+
 // audio describes a conversion to target, read from version.
 func audioConversion(input string, options []string, target *AudioTarget) hls.Audio {
 	a := hls.Audio{Input: input, InputOptions: options, Encoder: "copy"}

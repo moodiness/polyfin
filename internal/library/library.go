@@ -467,6 +467,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 				Kind:           KindLibrary,
 				Name:           name,
 				CollectionType: collection,
+				LocalFolder:    entries[i].addon.Local(),
 			},
 			addon:       entries[i],
 			catalog:     l.Catalog,

@@ -27,6 +27,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
@@ -65,6 +66,8 @@ const (
 // trackInfo is what a scan read of an audio file: its tags (or, without
 // them, its file and folder names), and its audio. artist and albumArtist
 // are as written; artists and albumArtists name them one by one.
+// trackGain and albumGain are its ReplayGain tags', relative to
+// loudness.Reference, nil without one.
 type trackInfo struct {
 	title, artist, album, albumArtist string
 	artists, albumArtists             []string
@@ -76,6 +79,7 @@ type trackInfo struct {
 	codec                             string
 	sampleRate, bitDepth              int
 	cover                             bool
+	trackGain, albumGain              *float64
 }
 
 // probed is the part of ffprobe's JSON a scan reads.
@@ -110,7 +114,8 @@ var (
 // tag; its album artists, those its album artists tag names, else its
 // album artist tag (see splitNames). Its lyrics are its lyrics tag's:
 // synced, plain, or one of an ID3 tag's (lyrics-eng), as ffprobe names
-// them.
+// them. Its gains are its ReplayGain tags', of ID3, Vorbis comments and
+// MP4 alike, else its Opus R128 tags', moved to the same reference.
 func readProbe(data []byte) (trackInfo, error) {
 	var p probed
 	if err := json.Unmarshal(data, &p); err != nil {
@@ -188,8 +193,22 @@ func readProbe(data []byte) (trackInfo, error) {
 			}
 		}
 	}
+	info.trackGain = tagGain(first("replaygain_track_gain"), first("r128_track_gain"))
+	info.albumGain = tagGain(first("replaygain_album_gain"), first("r128_album_gain"))
 	info.duration, _ = strconv.ParseFloat(p.Format.Duration, 64)
 	return info, nil
+}
+
+// tagGain reads a gain from a ReplayGain tag, else from an Opus R128 tag;
+// nil when neither holds one.
+func tagGain(replayGain, r128 string) *float64 {
+	if gain, ok := loudness.ReplayGain(replayGain); replayGain != "" && ok {
+		return &gain
+	}
+	if gain, ok := loudness.R128Gain(r128); r128 != "" && ok {
+		return &gain
+	}
+	return nil
 }
 
 // splitNames lists the names a tag holds, separated by ";" as written, or
@@ -397,19 +416,24 @@ func (s *Service) readCover(ctx context.Context, target string) ([]byte, string,
 // scanMusic reads a music folder's listing: tracks gone are forgotten,
 // new and changed ones read and stored, and the artwork of albums and
 // artists chosen again when their tracks or images changed; its lyrics
-// files and playlists are read when new or changed. root is the folder's
-// path in the container, empty for a share: a playlist's absolute paths
-// are read within it.
+// files and playlists are read when new or changed. The tracks read
+// before their gains were are read again, once. A changed track is
+// measured again (see measureMusic). root is the folder's path in the
+// container, empty for a share: a playlist's absolute paths are read
+// within it.
 func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, root string) error {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified FROM local_tracks WHERE addon_id = $1", id)
+	rows, err := s.db.Query(ctx, "SELECT path, size, modified, gains_read FROM local_tracks WHERE addon_id = $1", id)
 	if err != nil {
 		return err
 	}
 	known := map[string]found{}
+	unread := map[string]bool{}
 	var rel string
 	var f found
-	if _, err := pgx.ForEachRow(rows, []any{&rel, &f.size, &f.modified}, func() error {
+	var gainsRead bool
+	if _, err := pgx.ForEachRow(rows, []any{&rel, &f.size, &f.modified, &gainsRead}, func() error {
 		known[rel] = f
+		unread[rel] = !gainsRead
 		return nil
 	}); err != nil {
 		return err
@@ -436,7 +460,9 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(s.workers)
 	for rel, f := range list.files {
-		if old, ok := known[rel]; ok && old.size == f.size && old.modified.Equal(f.modified) {
+		old, ok := known[rel]
+		unchanged := ok && old.size == f.size && old.modified.Equal(f.modified)
+		if unchanged && !unread[rel] {
 			continue
 		}
 		group.Go(func() error {
@@ -445,23 +471,34 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()
 				}
-				// Read by its names alone.
 				s.logger.Debug("The tags of an audio file cannot be read", "path", rel, "error", err)
+				if unchanged {
+					// Read again for its gains only: it keeps what was read.
+					_, err := s.db.Exec(groupCtx, "UPDATE local_tracks SET gains_read = true WHERE addon_id = $1 AND path = $2", id, rel)
+					return err
+				}
+				// Read by its names alone.
 				info = trackInfo{}
 			}
 			info, reason := named(rel, info)
+			// A file read again unchanged, for its gains, keeps its
+			// measure.
 			_, err = s.db.Exec(groupCtx, `INSERT INTO local_tracks (addon_id, path, size, modified, title, artist, album, album_artist, artists,
 					artist_ids, album_artists, album_artist_ids, album_id, track, disc, year, genres, duration, codec, container, sample_rate,
-					bit_depth, cover, lyrics, reason)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+					bit_depth, cover, lyrics, reason, track_gain, album_gain)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+					$26, $27)
 				ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, title = $5, artist = $6, album = $7, album_artist = $8,
 					artists = $9, artist_ids = $10, album_artists = $11, album_artist_ids = $12, album_id = $13, track = $14, disc = $15,
 					year = $16, genres = $17, duration = $18, codec = $19, container = $20, sample_rate = $21, bit_depth = $22, cover = $23,
-					lyrics = $24, reason = $25`,
+					lyrics = $24, reason = $25, track_gain = $26, album_gain = $27, gains_read = true,
+					loudness = CASE WHEN local_tracks.size = $3 AND local_tracks.modified = $4 THEN local_tracks.loudness END,
+					measure_failures = CASE WHEN local_tracks.size = $3 AND local_tracks.modified = $4 THEN local_tracks.measure_failures ELSE 0 END,
+					measure_after = CASE WHEN local_tracks.size = $3 AND local_tracks.modified = $4 THEN local_tracks.measure_after END`,
 				id, rel, f.size, f.modified, info.title, info.artist, info.album, info.albumArtist, nonNil(info.artists),
 				artistIDs(info.artists), nonNil(info.albumArtists), artistIDs(info.albumArtists), nameID("al", info.albumArtist, info.album),
 				info.track, info.disc, info.year, nonNil(info.genres), info.duration, info.codec, audioContainers[strings.ToLower(path.Ext(rel))],
-				info.sampleRate, info.bitDepth, info.cover, info.lyrics, reason)
+				info.sampleRate, info.bitDepth, info.cover, info.lyrics, reason, info.trackGain, info.albumGain)
 			return err
 		})
 	}
@@ -846,16 +883,49 @@ func artistFolders(firsts map[string][]string) map[string]string {
 // keeps: their identifier, title, artist and artists (their first
 // track's album artist, as written and one by one, joined by the unit
 // separator), year, track count, genres (joined by the unit separator),
-// and artwork.
-const albumsQuery = `WITH albums AS (
+// artwork, and what gives their gain: the album gain tag its tracks
+// agree on, all of them, else the loudness of its tracks together once
+// each is known, from its track gain tag or measured (see albumGain).
+var albumsQuery = `WITH albums AS (
 	SELECT album_id, (array_agg(album ORDER BY disc, track, path))[1] AS album,
 		(array_agg(album_artist ORDER BY disc, track, path))[1] AS artist,
 		(array_agg(array_to_string(album_artists, chr(31)) ORDER BY disc, track, path))[1] AS artists, max(year) AS year, count(*) AS tracks,
-		coalesce(string_agg(array_to_string(genres, chr(31)), chr(31)), '') AS genres
+		coalesce(string_agg(array_to_string(genres, chr(31)), chr(31)), '') AS genres,
+		CASE WHEN count(album_gain) = count(*) AND max(album_gain) - min(album_gain) < 0.005 THEN min(album_gain) END AS album_gain,
+		CASE WHEN count(` + trackLoudness + `) = count(*) THEN ` + loudness.TogetherSQL(trackLoudness, "duration") + ` END AS loudness
 	FROM local_tracks WHERE addon_id = $1 AND reason = '' %s GROUP BY album_id)
-SELECT a.album_id, a.album, a.artist, a.artists, a.year, a.tracks, a.genres, c.id, coalesce(c.path, ''), coalesce(c.content_type, ''), c.modified
+SELECT a.album_id, a.album, a.artist, a.artists, a.year, a.tracks, a.genres, c.id, coalesce(c.path, ''), coalesce(c.content_type, ''), c.modified,
+	a.album_gain, a.loudness
 FROM albums a LEFT JOIN local_covers c ON c.addon_id = $1 AND c.item_id = a.album_id
 ORDER BY lower(a.artist), lower(a.album), a.album_id`
+
+// trackLoudness is the loudness of a track, in LUFS: that its track gain
+// tag gives, else as measured; null while unknown.
+var trackLoudness = "coalesce(" + strconv.FormatFloat(loudness.Reference, 'f', -1, 64) + " - track_gain, loudness)"
+
+// albumGain is the gain of an album: the album gain tag its tracks agree
+// on, else that of its tracks' loudness together, nil while unknown.
+func albumGain(tag, together *float64) *float64 {
+	if tag != nil {
+		return tag
+	}
+	return trackGain(nil, together)
+}
+
+// trackGain is the gain of a track: its track gain tag's, else that of
+// its loudness as measured, nil while unknown.
+func trackGain(tag, measured *float64) *float64 {
+	if tag != nil {
+		return tag
+	}
+	if measured == nil {
+		return nil
+	}
+	if gain, ok := loudness.Gain(*measured); ok {
+		return &gain
+	}
+	return nil
+}
 
 // albums lists the albums albumsQuery finds, filter narrowing its tracks
 // with args from $2 on, page appended.
@@ -869,13 +939,15 @@ func (s *Service) albums(ctx context.Context, id accounts.ID, filter, page strin
 		var artists, genres, image, contentType string
 		var cover *accounts.ID
 		var modified *time.Time
+		var gainTag, together *float64
 		if err := row.Scan(&a.ID, &a.Title, &a.Artist, &artists, &a.Year, &a.TrackCount, &genres, &cover, &image, &contentType,
-			&modified); err != nil {
+			&modified, &gainTag, &together); err != nil {
 			return a, err
 		}
 		a.ArtworkURL = s.coverURL(cover, image, contentType, modified)
 		a.Artists = splitJoined(artists)
 		a.Genres = splitJoined(genres)
+		a.Gain = albumGain(gainTag, together)
 		return a, nil
 	})
 }
@@ -918,10 +990,10 @@ func (s *Service) coverURL(cover *accounts.ID, image, contentType string, modifi
 
 // tracksQuery lists a music folder's tracks with their artists and album
 // artists, one by one, whether they have lyrics (a lyrics file or tag),
-// and their album's artwork.
+// their album's artwork, and their track gain tag and measured loudness.
 const tracksQuery = `SELECT t.id, t.title, t.artist, t.album, t.album_artist, t.artists, t.album_artists, t.album_id, t.track, t.disc, t.year,
 	t.genres, t.duration, t.container, t.lyrics <> '' OR EXISTS (SELECT FROM local_lyrics l WHERE ` + lyricsOf + ` AND l.text <> ''),
-	c.id, coalesce(c.path, ''), coalesce(c.content_type, ''), c.modified
+	c.id, coalesce(c.path, ''), coalesce(c.content_type, ''), c.modified, t.track_gain, t.loudness
 FROM local_tracks t LEFT JOIN local_covers c ON c.addon_id = t.addon_id AND c.item_id = t.album_id
 WHERE t.addon_id = $1 AND t.reason = '' `
 
@@ -939,13 +1011,15 @@ func (s *Service) tracks(ctx context.Context, id accounts.ID, filter string, arg
 		var image, contentType string
 		var cover *accounts.ID
 		var modified *time.Time
+		var gainTag, measured *float64
 		if err := row.Scan(&track, &t.Title, &t.Artist, &t.Album, &t.AlbumArtist, &t.Artists, &t.AlbumArtists, &t.AlbumID, &t.Number, &t.Disc,
-			&t.Year, &t.Genres, &duration, &t.Format, &t.Lyrics, &cover, &image, &contentType, &modified); err != nil {
+			&t.Year, &t.Genres, &duration, &t.Format, &t.Lyrics, &cover, &image, &contentType, &modified, &gainTag, &measured); err != nil {
 			return t, err
 		}
 		t.ID = track.String()
 		t.Duration = eclipse.Seconds(time.Duration(duration * float64(time.Second)))
 		t.ArtworkURL = s.coverURL(cover, image, contentType, modified)
+		t.Gain = trackGain(gainTag, measured)
 		return t, nil
 	})
 }

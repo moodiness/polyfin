@@ -38,6 +38,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/metrics"
@@ -279,6 +280,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	defer folders.Close()
 	lib.UseLocal(folders)
 	folders.UseTools(cfg.FFprobe, cfg.FFmpeg)
+	// The loudness of songs without a gain is measured two at a time, those
+	// of local folders and those of music addons together.
+	meter := loudness.NewMeter(cfg.FFmpeg)
+	folders.UseMeter(meter)
 	folders.UseToneMapping(segments.HasFilters("zscale", "tonemap"))
 	folders.Watch()
 	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
@@ -413,6 +418,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	updateCheck := updates.New(updates.Options{DB: pool, Version: version, Logger: logger,
 		Enabled: func() bool { return store.Settings().UpdateCheck },
 		Notify:  func(release updates.Release) { notifier.NewVersion(release.Version, release.URL) }})
+	// The songs of music addons are measured after their first play, read
+	// as playback reads them; their measures end before playback closes.
+	songLoudness := loudness.New(pool, meter, logger, store.Settings)
+	defer songLoudness.Close()
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:     serverID,
 		Accounts:     store,
@@ -432,6 +441,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		AudioSegments:  audioSegments,
 		RemuxDB:        remuxdb.New(serverID, version, logger, store.Settings),
 		Lyrics:         lyrics.New(pool, lyrics.LRCLIB, version, logger, store.Settings),
+		Loudness:       songLoudness,
 		Playlists:      playlists.New(pool),
 		Collections:    collections.New(pool),
 		Thumbnails:     images,

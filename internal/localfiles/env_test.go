@@ -31,6 +31,7 @@ type env struct {
 	addons  *addons.Store
 	library *library.Service
 	titles  *countedTitles
+	users   *accounts.Store
 }
 
 // countedTitles counts the searches the service asks the library for.
@@ -114,7 +115,7 @@ func newEnv(t *testing.T) env {
 	t.Cleanup(service.Close)
 	service.UseFiles("http://files.example/", "http://inputs.example/")
 	lib.UseLocal(service)
-	return env{t: t, pool: pool, service: service, addons: store, library: lib, titles: titles}
+	return env{t: t, pool: pool, service: service, addons: store, library: lib, titles: titles, users: users}
 }
 
 // folder adds a folder of kind at a new temporary path holding files, each

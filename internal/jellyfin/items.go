@@ -152,7 +152,8 @@ type BaseItemDto struct {
 	EpisodeTitle string `json:",omitempty"`
 	// The fields of music (see describeMusic): a track's album and its
 	// artwork, the artists of a track or an album and the artist of its
-	// album, whether a track has lyrics, and what an artist's page counts.
+	// album, whether a track has lyrics, a track's or album's gain, and
+	// what an artist's page counts.
 	Album                string          `json:",omitempty"`
 	AlbumId              string          `json:",omitempty"`
 	AlbumPrimaryImageTag string          `json:",omitempty"`
@@ -161,6 +162,7 @@ type BaseItemDto struct {
 	ArtistItems          *[]NameGuidPair `json:",omitempty"`
 	Artists              *[]string       `json:",omitempty"`
 	HasLyrics            *bool           `json:",omitempty"`
+	NormalizationGain    *float64        `json:",omitempty"`
 	SongCount            *int            `json:",omitempty"`
 	AlbumCount           *int            `json:",omitempty"`
 	ArtistCount          *int            `json:",omitempty"`
@@ -536,7 +538,11 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		}
 	}
 	describeLive(&dto, item, fields, detail)
-	describeMusic(&dto, item, fields, detail, state.lyrics[item.ID])
+	var gain *float64
+	if g, known := state.gains[item.ID]; known {
+		gain = &g
+	}
+	describeMusic(&dto, item, fields, detail, state.lyrics[item.ID], gain)
 	return dto
 }
 

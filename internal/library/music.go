@@ -73,7 +73,8 @@ func AudioKind(kind Kind) bool {
 // AlbumArtist are as written; Artists and AlbumArtists name them one by
 // one when a local music folder's tags give several, or other names than
 // written (see artistNames). Lyrics tells that a local track has lyrics of
-// its own.
+// its own, and Gain is a local track's or album's gain, in dB (see package
+// loudness).
 type musicEntry struct {
 	Type         string   `json:"type"`
 	ID           string   `json:"id,omitempty"`
@@ -99,12 +100,13 @@ type musicEntry struct {
 	Format       string   `json:"format,omitempty"`
 	Content      string   `json:"content,omitempty"`
 	Lyrics       bool     `json:"lyrics,omitempty"`
+	Gain         *float64 `json:"gain,omitempty"`
 }
 
 func trackEntry(t eclipse.Track, index int, content string) musicEntry {
 	e := musicEntry{Type: eclipse.TypeTrack, ID: t.ID, Title: t.Title, Artist: t.Artist, Album: t.Album, AlbumID: t.AlbumID,
 		Duration: t.Duration.Duration().Seconds(), Artwork: t.ArtworkURL, ISRC: t.ISRC, Explicit: t.Explicit, Year: t.Year, Index: index,
-		StreamURL: t.StreamURL, Format: t.Format, Content: content, Disc: t.Disc, Genres: t.Genres, Lyrics: t.Lyrics}
+		StreamURL: t.StreamURL, Format: t.Format, Content: content, Disc: t.Disc, Genres: t.Genres, Lyrics: t.Lyrics, Gain: t.Gain}
 	if t.AlbumArtist != "" && !strings.EqualFold(t.AlbumArtist, t.Artist) {
 		e.AlbumArtist = t.AlbumArtist
 	}
@@ -129,7 +131,7 @@ func artistNames(names []string, written string) []string {
 func albumEntry(a eclipse.Album, content string) musicEntry {
 	e := musicEntry{Type: eclipse.TypeAlbum, ID: a.ID, Title: a.Title, Artist: a.Artist, Artwork: a.ArtworkURL, Year: a.Year,
 		Explicit: a.Explicit, Overview: a.Description, Count: a.TrackCount, Content: content, Genres: a.Genres,
-		Artists: artistNames(a.Artists, a.Artist)}
+		Artists: artistNames(a.Artists, a.Artist), Gain: a.Gain}
 	if len(a.Tracks) > 0 {
 		e.Count = len(a.Tracks)
 		for _, t := range a.Tracks {
@@ -322,6 +324,7 @@ func musicItem(r record) Item {
 		item.Container = e.Format
 		item.Album = e.Album
 		item.Lyrics = e.Lyrics
+		item.NormalizationGain = e.Gain
 		if ref := e.albumRef(addon); ref != "" {
 			item.AlbumID = itemID(ref)
 			item.AlbumPoster = e.Artwork
@@ -330,6 +333,7 @@ func musicItem(r record) Item {
 	case eclipse.TypeAlbum:
 		item.Artists = creditList(addon, e.artistList())
 		item.AlbumArtists = item.Artists
+		item.NormalizationGain = e.Gain
 	case eclipse.TypePlaylist:
 		item.Artists = creditList(addon, uniqueNames(e.Artist))
 	}
@@ -1253,7 +1257,11 @@ func (s *Service) musicItems(ctx context.Context, v view, records, named []recor
 	}
 	items := make([]Item, 0, len(kept))
 	for _, r := range kept {
-		items = append(items, musicItem(r))
+		item := musicItem(r)
+		if entry, ok := v.addon(*r.Addon); ok {
+			item.LocalFolder = entry.addon.Local()
+		}
+		items = append(items, item)
 	}
 	return items, nil
 }
@@ -1336,6 +1344,8 @@ func (s *Service) musicDetails(ctx context.Context, v view, r record) (Item, err
 					e.Overview = cmpOr(album.Description, e.Overview)
 					e.Artwork = cmpOr(album.ArtworkURL, e.Artwork)
 					e.Year = cmpOr(album.Year, e.Year)
+					// A local album's, as its tracks are now measured.
+					e.Gain = album.Gain
 				}
 			}
 		}
@@ -1367,7 +1377,9 @@ func (s *Service) musicDetails(ctx context.Context, v view, r record) (Item, err
 		}
 	}
 	r.Music = &e
-	return musicItem(r), nil
+	item := musicItem(r)
+	item.LocalFolder = entry.addon.Local()
+	return item, nil
 }
 
 // ArtistByName finds an artist by name among the artists the user's music

@@ -52,6 +52,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -112,6 +113,9 @@ type Service struct {
 	toneMapping     bool
 	// workers bounds the units matched at once in a scan.
 	workers int
+	// meter measures the loudness of music folders' tracks without a
+	// gain, nil until UseMeter: none is measured.
+	meter *loudness.Meter
 
 	// ctx ends the scans started in the background, which wg waits for.
 	ctx    context.Context
@@ -130,6 +134,10 @@ type Service struct {
 	// layouts are how the titles of discs on shares are laid out, by
 	// version (see openTitle).
 	layouts map[accounts.ID]titleLayout
+	// measuring are the music folders whose tracks are being measured,
+	// which measures waits for (see measureMusic).
+	measuring map[accounts.ID]bool
+	measures  sync.WaitGroup
 
 	// shares are the readers of the folders that are network shares, by
 	// folder, kept between requests.
@@ -168,7 +176,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
 		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
-		shares: map[accounts.ID]*pooledRemote{}}
+		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -186,6 +194,11 @@ func (s *Service) UseTools(ffprobe, ffmpeg string) { s.ffprobe, s.ffmpeg = ffpro
 // which the frames of HDR home videos are made with (see homeFrame); it is
 // called before the service is used.
 func (s *Service) UseToneMapping(on bool) { s.toneMapping = on }
+
+// UseMeter sets the meter the loudness of music folders' tracks without a
+// gain is measured with, as the settings ask (see measureMusic); it is
+// called before the service is used.
+func (s *Service) UseMeter(meter *loudness.Meter) { s.meter = meter }
 
 // Watch watches the folders for changes until Close; it is called once,
 // before the service is used.
@@ -303,7 +316,9 @@ type Folder struct {
 	ShareWatch, Polled string
 	// Albums and Artists count a music folder's albums and their artists;
 	// its Files are its tracks, Matched those with a title and an album.
-	Albums, Artists int
+	// Gained counts those of its tracks with a gain, from their tags or
+	// measured, and Measured those whose loudness was measured.
+	Albums, Artists, Gained, Measured int
 	// Dated counts a home videos folder's videos by where their dates
 	// come from (see homeDate); its Files are its videos, all matched.
 	Dated Dates
@@ -531,9 +546,11 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
 				(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
 			(SELECT count(DISTINCT album_id) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
-			(SELECT count(DISTINCT a) FROM local_tracks, unnest(album_artist_ids) a WHERE addon_id = $1 AND reason = '')
-		FROM local_folders WHERE addon_id = $1`, id).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password, &f.UseArtwork,
-		&f.Files, &f.Matched, &f.Albums, &f.Artists)
+			(SELECT count(DISTINCT a) FROM local_tracks, unnest(album_artist_ids) a WHERE addon_id = $1 AND reason = ''),
+			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND (track_gain IS NOT NULL OR loudness > $2)),
+			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL)
+		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
+		&f.UseArtwork, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
 	f.PasswordSet = password != ""
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Folder{}, addons.ErrNotFound

@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/loudness"
 )
 
 const defaultPageSize = 100
@@ -307,20 +308,27 @@ func (h *Handler) libraryViews(r *http.Request, user accounts.User) ([]BaseItemD
 // settings do. Jellyfin keeps them to administrators and refuses anyone
 // else with an empty 403, as it does for every endpoint it restricts by
 // policy. Libraries are addon catalogs: they have no paths, and nothing
-// scans them, so they are always idle.
+// scans them, so they are always idle. A music library tells whether its
+// songs' loudness is measured (see loudness.Measures).
 func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	if !user.IsAdministrator {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	views, err := h.libraryViews(r, user)
+	libraries, err := h.Library.Libraries(r.Context(), user)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
+	views, err := h.folderDtos(r, user, libraries)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	settings := h.Accounts.Settings()
 	folders := make([]VirtualFolderInfo, 0, len(views))
-	for _, view := range views {
+	for i, view := range views {
 		folder := VirtualFolderInfo{
 			Name:           view.Name,
 			Locations:      []string{},
@@ -328,6 +336,9 @@ func (h *Handler) virtualFolders(w http.ResponseWriter, r *http.Request) {
 			LibraryOptions: newLibraryOptions(),
 			ItemId:         view.Id,
 			RefreshStatus:  "Idle",
+		}
+		if view.CollectionType == "music" {
+			folder.LibraryOptions.EnableLUFSScan = loudness.Measures(settings, !libraries[i].LocalFolder)
 		}
 		// Jellyfin names the library itself as the holder of its image,
 		// and nothing when it has none.
