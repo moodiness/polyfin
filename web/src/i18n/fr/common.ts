@@ -387,7 +387,7 @@ const common: typeof en = {
     letterboxd_export_invalid:
       'Ce fichier n’est pas un export Letterboxd : choisissez le fichier ZIP que donne Letterboxd, tel quel. Il contient watched.csv ou diary.csv.',
     letterboxd_export_too_large:
-      'Ce fichier dépasse 20 Mo : choisissez le fichier ZIP que donne Letterboxd.',
+      'Ce fichier dépasse 20 Mo ou compte plus de 50 000 films : choisissez le fichier ZIP que donne Letterboxd.',
     invalid_nuvio_address:
       'Saisissez l’adresse du serveur Nuvio, par exemple https://api.nuvio.tv, ou laissez vide pour celui de Nuvio.',
     nuvio_sign_in_refused: 'Nuvio a refusé cet e-mail ou ce mot de passe.',

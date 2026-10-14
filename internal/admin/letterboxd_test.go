@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -108,11 +110,19 @@ func (b browser) upload(path string, fields map[string]string, file []byte) (int
 		_, _ = part.Write(file)
 	}
 	_ = form.Close()
-	request, _ := http.NewRequestWithContext(b.api.t.Context(), http.MethodPost, b.api.url+"/admin/api"+path, &body)
-	request.Header.Set("Content-Type", form.FormDataContentType())
+	return b.post(path, form.FormDataContentType(), &body)
+}
+
+// post posts body, of contentType, to path, and answers the status and
+// the decoded answer.
+func (b browser) post(path, contentType string, body io.Reader) (int, map[string]any) {
+	b.api.t.Helper()
+	request, _ := http.NewRequestWithContext(b.api.t.Context(), http.MethodPost, b.api.url+"/admin/api"+path, body)
+	request.Header.Set("Content-Type", contentType)
 	response, err := b.client.Do(request)
 	if err != nil {
-		b.api.t.Fatal(err)
+		b.api.t.Error(err)
+		return 0, nil
 	}
 	defer response.Body.Close()
 	var decoded map[string]any
@@ -187,9 +197,11 @@ func TestLetterboxdImport(t *testing.T) {
 		status int
 		code   string
 	}{
-		"not a ZIP":      {map[string]string{"kind": "letterboxd"}, []byte("Date,Name\n"), http.StatusBadRequest, "letterboxd_export_invalid"},
-		"no CSV files":   {map[string]string{"kind": "letterboxd"}, emptyZip(t), http.StatusBadRequest, "letterboxd_export_invalid"},
-		"too large":      {map[string]string{"kind": "letterboxd"}, make([]byte, letterboxd.MaxExportBytes+1), http.StatusRequestEntityTooLarge, "letterboxd_export_too_large"},
+		"not a ZIP":    {map[string]string{"kind": "letterboxd"}, []byte("Date,Name\n"), http.StatusBadRequest, "letterboxd_export_invalid"},
+		"no CSV files": {map[string]string{"kind": "letterboxd"}, emptyZip(t), http.StatusBadRequest, "letterboxd_export_invalid"},
+		"too large":    {map[string]string{"kind": "letterboxd"}, make([]byte, letterboxd.MaxExportBytes+1), http.StatusRequestEntityTooLarge, "letterboxd_export_too_large"},
+		"too many movies": {map[string]string{"kind": "letterboxd"}, manyMoviesExport(t, letterboxd.MaxMovies+1), http.StatusRequestEntityTooLarge,
+			"letterboxd_export_too_large"},
 		"without a file": {map[string]string{"kind": "letterboxd"}, nil, http.StatusBadRequest, "invalid_request"},
 		"another kind":   {map[string]string{"kind": "jellyfin"}, export, http.StatusBadRequest, "invalid_request"},
 		"a wrong switch": {map[string]string{"kind": "letterboxd", "ratings": "maybe"}, export, http.StatusBadRequest, "invalid_request"},
@@ -334,6 +346,78 @@ func TestLetterboxdImportOneAtATime(t *testing.T) {
 	letterboxdDone(t, other, "/account/server-import")
 }
 
+// While an export is being received for an account, a second one sent
+// into it is refused at once, before its file is read; the first goes on
+// and starts.
+func TestLetterboxdUploadsAtOnce(t *testing.T) {
+	t.Parallel()
+	var service *letterboxd.Service
+	var store *addons.Store
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		lib := library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
+		store = deps.addons
+		service = letterboxd.New(letterboxd.Options{Titles: lib, UserData: userdata.New(deps.pool), Watchlist: watchlist.New(deps.pool),
+			Logger: logger})
+		o.Letterboxd = service
+		t.Cleanup(o.Letterboxd.Close)
+	})
+	if _, err := store.Install(t.Context(), addons.Shared(), newMovieSearchAddon(t, nil).URL+"/manifest.json", false); err != nil {
+		t.Fatal(err)
+	}
+	admin := api.signedIn("root", true)
+	member := api.signedIn("ines", false)
+	ines, err := api.store.Authenticate(t.Context(), "ines", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var form bytes.Buffer
+	writer := multipart.NewWriter(&form)
+	_ = writer.WriteField("kind", "letterboxd")
+	part, _ := writer.CreateFormFile("file", "letterboxd-export.zip")
+	_, _ = part.Write(letterboxdExport(t))
+	_ = writer.Close()
+	sent, held := form.Bytes()[:form.Len()/2], form.Bytes()[form.Len()/2:]
+
+	// The member's upload sends half of its form, then waits.
+	reader, rest := io.Pipe()
+	type answer struct {
+		status int
+		body   map[string]any
+	}
+	first := make(chan answer, 1)
+	go func() {
+		status, body := member.post("/account/server-import", writer.FormDataContentType(), reader)
+		first <- answer{status, body}
+	}()
+	if _, err := rest.Write(sent); err != nil {
+		t.Fatal(err)
+	}
+	// The account is held once the handler reads the form.
+	for deadline := time.Now().Add(30 * time.Second); !service.Running(ines.ID); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			_ = rest.CloseWithError(errors.New("given up"))
+			t.Fatal("the account is not held while the first export is received")
+		}
+	}
+	if status, body := member.upload("/account/server-import", map[string]string{"kind": "letterboxd"}, letterboxdExport(t)); status != http.StatusConflict ||
+		body["error"] != "server_import_running" {
+		t.Errorf("a second upload meanwhile: %d %v", status, body)
+	}
+	if status, body := admin.upload("/users/"+ines.ID.String()+"/server-import", map[string]string{"kind": "letterboxd"}, letterboxdExport(t)); status != http.StatusConflict ||
+		body["error"] != "server_import_running" {
+		t.Errorf("the administrator's upload meanwhile: %d %v", status, body)
+	}
+	if _, err := rest.Write(held); err != nil {
+		t.Fatal(err)
+	}
+	_ = rest.Close()
+	if got := <-first; got.status != http.StatusOK {
+		t.Errorf("the first upload: %d %v", got.status, got.body)
+	}
+	letterboxdDone(t, member, "/account/server-import")
+}
+
 // emptyZip is a ZIP holding a profile only.
 func emptyZip(t *testing.T) []byte {
 	t.Helper()
@@ -341,6 +425,24 @@ func emptyZip(t *testing.T) []byte {
 	archive := zip.NewWriter(&buffer)
 	f, _ := archive.Create("profile.csv")
 	_, _ = io.WriteString(f, "Username\nines\n")
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+// manyMoviesExport is an export whose watched.csv names movies movies.
+func manyMoviesExport(t *testing.T, movies int) []byte {
+	t.Helper()
+	var watched strings.Builder
+	watched.WriteString("Date,Name,Year\n")
+	for i := range movies {
+		fmt.Fprintf(&watched, "2020-01-01,Movie %d,2000\n", i)
+	}
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	f, _ := archive.Create("watched.csv")
+	_, _ = io.WriteString(f, watched.String())
 	if err := archive.Close(); err != nil {
 		t.Fatal(err)
 	}

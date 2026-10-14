@@ -74,13 +74,17 @@ type Service struct {
 	// stops end those running.
 	imports map[accounts.ID]*Status
 	stops   map[accounts.ID]context.CancelFunc
+	// reserved are the accounts an export is being received and read for
+	// (see Reserve).
+	reserved map[accounts.ID]bool
 }
 
 // New returns a service importing with options.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{titles: options.Titles, userData: options.UserData, watchlist: options.Watchlist, logger: options.Logger,
-		now: time.Now, ctx: ctx, cancel: cancel, imports: map[accounts.ID]*Status{}, stops: map[accounts.ID]context.CancelFunc{}}
+		now: time.Now, ctx: ctx, cancel: cancel, imports: map[accounts.ID]*Status{}, stops: map[accounts.ID]context.CancelFunc{},
+		reserved: map[accounts.ID]bool{}}
 }
 
 // Close stops the imports running and waits for them to end.
@@ -180,17 +184,38 @@ func (s *Service) Current(user accounts.ID) *Status {
 	return s.imports[user].clone()
 }
 
-// Running reports whether an import into user's account runs.
+// Running reports whether an import into user's account runs, or an export
+// to import into it is being received and read.
 func (s *Service) Running(user accounts.ID) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.imports[user] != nil && s.imports[user].State == StateRunning
+	return s.reserved[user] || s.imports[user] != nil && s.imports[user].State == StateRunning
+}
+
+// Reserve holds user's account while the caller receives and reads an
+// export to import into it, before Start, so that a second export sent
+// meanwhile is refused before it is read. It fails with ErrRunning while
+// an import into the account runs or the account is held; else release,
+// called once, holds it no more.
+func (s *Service) Reserve(user accounts.ID) (release func(), err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reserved[user] || s.imports[user] != nil && s.imports[user].State == StateRunning {
+		return nil, ErrRunning
+	}
+	s.reserved[user] = true
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.reserved, user)
+	}, nil
 }
 
 // Start imports, in the background, what choice asks for of export into
 // user's account: by themselves, or an administrator. Only the movies it
 // imports are searched. It fails with ErrRunning while an import into
-// user's account runs.
+// user's account runs; the caller holding the account (see Reserve) may
+// start.
 func (s *Service) Start(by, user accounts.User, export Export, choice Choice) (*Status, error) {
 	movies := make([]Movie, 0, len(export.Movies))
 	for _, m := range export.Movies {
@@ -218,7 +243,8 @@ func (s *Service) Start(by, user accounts.User, export Export, choice Choice) (*
 		defer stop()
 		r.run(ctx)
 	}()
-	s.logger.Info("A Letterboxd import started", "user_id", user.ID.String(), "movies", len(movies))
+	s.logger.Info("A Letterboxd import started", "user_id", user.ID.String(), "movies", len(movies),
+		"lines_skipped", export.Skipped)
 	return status.clone(), nil
 }
 

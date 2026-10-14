@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -315,7 +317,9 @@ func TestImport(t *testing.T) {
 	}
 }
 
-// One import into an account runs at a time.
+// One import into an account runs at a time: an account held while an
+// export is read refuses another hold, and a hold is refused while an
+// import runs.
 func TestImportRunningRefusesAnother(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -326,11 +330,25 @@ func TestImportRunningRefusesAnother(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	unhold, err := h.Reserve(h.user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Reserve(h.user.ID); !errors.Is(err, ErrRunning) {
+		t.Errorf("a second hold: %v", err)
+	}
+	if !h.Running(h.user.ID) {
+		t.Error("not running while held")
+	}
 	if _, err := h.Start(h.user, h.user, parsed, Choice{}); err != nil {
 		t.Fatal(err)
 	}
+	unhold()
 	if _, err := h.Start(h.user, h.user, parsed, Choice{}); !errors.Is(err, ErrRunning) {
 		t.Errorf("a second import: %v", err)
+	}
+	if _, err := h.Reserve(h.user.ID); !errors.Is(err, ErrRunning) {
+		t.Errorf("a hold while an import runs: %v", err)
 	}
 	if !h.Running(h.user.ID) {
 		t.Error("not running")
@@ -401,5 +419,68 @@ func TestParse(t *testing.T) {
 	}
 	if _, err := Parse([]byte("Date,Name,Year\n")); !errors.Is(err, ErrInvalidExport) {
 		t.Errorf("not a ZIP: %v", err)
+	}
+}
+
+// An export naming more movies than MaxMovies, small as its ZIP is, is
+// refused as soon as the cap is passed: the files read after it are not
+// read, a diary.csv without names here, and parsing holds little memory.
+func TestParseRefusesTooManyMovies(t *testing.T) {
+	t.Parallel()
+	var watched strings.Builder
+	watched.WriteString("Date,Name,Year,Letterboxd URI\n")
+	rows := 4 * MaxMovies
+	for i := range rows {
+		fmt.Fprintf(&watched, "2020-01-01,m%d,%d,https://boxd.it/%d\n", i, 1900+i%100, i)
+	}
+	export := exportZip(t, map[string]string{"watched.csv": watched.String(), "diary.csv": "Date,Title\n2020-01-01,Somewhere\n"})
+	if len(export) > MaxExportBytes {
+		t.Fatalf("the ZIP weighs %d bytes", len(export))
+	}
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	parsed, err := Parse(export)
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, ErrTooManyMovies) || parsed.Movies != nil {
+		t.Fatalf("an export of %d movies: %d movies, %v", rows, len(parsed.Movies), err)
+	}
+	// Reading every line would allocate several times this.
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 256<<20 {
+		t.Errorf("parsing allocated %d MB", allocated>>20)
+	}
+
+	// MaxMovies movies, each given by several files, are read.
+	var listed strings.Builder
+	listed.WriteString("Date,Name,Year\n")
+	for i := range MaxMovies {
+		fmt.Fprintf(&listed, "2020-01-01,m%d,%d\n", i, 1900+i%100)
+	}
+	parsed, err = Parse(exportZip(t, map[string]string{"watched.csv": listed.String(), "watchlist.csv": listed.String()}))
+	if err != nil || len(parsed.Movies) != MaxMovies {
+		t.Errorf("an export of %d movies: %d movies, %v", MaxMovies, len(parsed.Movies), err)
+	}
+}
+
+// A line with a value read longer than maxFieldBytes, a name, link, year,
+// date or rating, is skipped and counted; a long value in a column not
+// read does no harm.
+func TestParseSkipsLongValues(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("x", maxFieldBytes+1)
+	export, err := Parse(exportZip(t, map[string]string{
+		"watched.csv": "Date,Name,Year,Letterboxd URI,Notes\n" +
+			"2020-01-01,Quiet Harbour,1999,https://boxd.it/aaa2," + long + "\n" +
+			"2020-01-01," + long + ",1999,https://boxd.it/aaa3,\n" +
+			"2020-01-01,Long Link,1999,https://boxd.it/" + long + ",\n" +
+			long + ",Long Date,1999,https://boxd.it/aaa4,\n",
+		"ratings.csv": "Date,Name,Year,Letterboxd URI,Rating\n" +
+			"2020-01-01,Quiet Harbour,1999,https://boxd.it/aaa2," + long + "\n",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(export.Movies) != 1 || export.Movies[0].Name != "Quiet Harbour" || export.Movies[0].Rating != nil || export.Skipped != 4 {
+		t.Errorf("movies %+v, %d skipped", export.Movies, export.Skipped)
 	}
 }

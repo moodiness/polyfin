@@ -20,10 +20,25 @@ const MaxExportBytes = 20 << 20
 // few megabytes at most, and a ZIP may unpack to far more than it weighs.
 const maxFileBytes = 64 << 20
 
+// MaxMovies bounds the movies of an export: far more than a member logs,
+// while a small ZIP may name millions, each held with the import and
+// searched in turn.
+const MaxMovies = 50_000
+
+// maxFieldBytes bounds each value read of a line: a name, link, year,
+// date or rating. A longer one is no export's, and its line is skipped.
+const maxFieldBytes = 512
+
+// fieldsRead are the columns whose values are read, of any file.
+var fieldsRead = []string{"Name", "Year", "Letterboxd URI", "Date", "Watched Date", "Rating"}
+
 // ErrInvalidExport reports a file that is not a Letterboxd export: not a
 // ZIP, without watched.csv or diary.csv, or with a file read whose columns
 // are not an export's.
 var ErrInvalidExport = errors.New("not a Letterboxd export")
+
+// ErrTooManyMovies reports an export naming more than MaxMovies movies.
+var ErrTooManyMovies = errors.New("the Letterboxd export names too many movies")
 
 // The files of the export read, under its root. The movies liked are those
 // of the likes folder; its other files, the reviews and lists liked, are
@@ -43,6 +58,9 @@ const dateLayout = "2006-01-02"
 // year, in the order the files first give them.
 type Export struct {
 	Movies []Movie
+	// Skipped counts the lines skipped as a value of theirs is longer than
+	// maxFieldBytes.
+	Skipped int
 }
 
 // Movie is a movie of the export, and what the member did with it.
@@ -74,7 +92,8 @@ type Movie struct {
 // Parse reads an export's ZIP file, in memory: the files listed above,
 // under the folder that holds watched.csv or diary.csv, the ZIP's root
 // or a folder of it. Each file's columns are read by their names. It
-// fails with ErrInvalidExport.
+// fails with ErrInvalidExport, or with ErrTooManyMovies as soon as the
+// files name more than MaxMovies movies.
 func Parse(data []byte) (Export, error) {
 	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
@@ -93,7 +112,7 @@ func Parse(data []byte) (Export, error) {
 	// files whose links name movies, the diary's last.
 	for _, read := range []struct {
 		name string
-		row  func(row)
+		row  func(row) error
 	}{
 		{watchedFile, p.watched},
 		{ratingsFile, p.rated},
@@ -105,7 +124,7 @@ func Parse(data []byte) (Export, error) {
 		if f == nil {
 			continue
 		}
-		if err := readCSV(f, read.row); err != nil {
+		if err := readCSV(f, read.row, &p.skipped); err != nil {
 			return Export{}, err
 		}
 	}
@@ -149,10 +168,22 @@ func (r row) get(name string) string {
 	return strings.TrimSpace(r.values[i])
 }
 
+// tooLong reports whether a value of the columns read is longer than
+// maxFieldBytes.
+func (r row) tooLong() bool {
+	for _, name := range fieldsRead {
+		if i, ok := r.columns[name]; ok && i < len(r.values) && len(r.values[i]) > maxFieldBytes {
+			return true
+		}
+	}
+	return false
+}
+
 // readCSV reads f, a CSV file whose first line names its columns, and
-// hands each line naming a movie to read. A file without a Name column is
-// not an export's.
-func readCSV(f *zip.File, read func(row)) error {
+// hands each line naming a movie to read, stopping at its first error. A
+// line with a value read longer than maxFieldBytes is skipped, and
+// counted in skipped. A file without a Name column is not an export's.
+func readCSV(f *zip.File, read func(row) error, skipped *int) error {
 	opened, err := f.Open()
 	if err != nil {
 		return ErrInvalidExport
@@ -185,8 +216,15 @@ func readCSV(f *zip.File, read func(row)) error {
 			return ErrInvalidExport
 		}
 		line := row{columns: columns, values: values}
-		if line.get("Name") != "" {
-			read(line)
+		if line.get("Name") == "" {
+			continue
+		}
+		if line.tooLong() {
+			*skipped++
+			continue
+		}
+		if err := read(line); err != nil {
+			return err
 		}
 	}
 	if limited.N <= 0 {
@@ -210,6 +248,7 @@ type parser struct {
 	// index, and the latest one with a rating.
 	diaryDate   map[int]time.Time
 	diaryRating map[int]diaryRating
+	skipped     int
 }
 
 type diaryRating struct {
@@ -218,13 +257,17 @@ type diaryRating struct {
 }
 
 // movie is the movie line names, added when new; link, the line's link,
-// is kept when the movie has none.
-func (p *parser) movie(line row) *Movie {
+// is kept when the movie has none. It fails with ErrTooManyMovies for a
+// new movie past MaxMovies.
+func (p *parser) movie(line row) (*Movie, error) {
 	name := line.get("Name")
 	year, _ := strconv.Atoi(line.get("Year"))
 	key := movieKey{name, max(year, 0)}
 	i, ok := p.byKey[key]
 	if !ok {
+		if len(p.movies) >= MaxMovies {
+			return nil, ErrTooManyMovies
+		}
 		i = len(p.movies)
 		p.byKey[key] = i
 		p.movies = append(p.movies, Movie{Name: key.name, Year: key.year})
@@ -233,37 +276,57 @@ func (p *parser) movie(line row) *Movie {
 	if m.Link == "" {
 		m.Link = webAddress(line.get("Letterboxd URI"))
 	}
-	return m
+	return m, nil
 }
 
-func (p *parser) watched(line row) {
-	m := p.movie(line)
+func (p *parser) watched(line row) error {
+	m, err := p.movie(line)
+	if err != nil {
+		return err
+	}
 	m.Watched = true
 	if at := date(line.get("Date")); at != nil && m.PlayedAt == nil {
 		m.PlayedAt = at
 	}
+	return nil
 }
 
-func (p *parser) rated(line row) {
-	m := p.movie(line)
+func (p *parser) rated(line row) error {
+	m, err := p.movie(line)
+	if err != nil {
+		return err
+	}
 	if rating, ok := stars(line.get("Rating")); ok {
 		m.Rating = &rating
 	}
+	return nil
 }
 
-func (p *parser) listed(line row) {
-	m := p.movie(line)
+func (p *parser) listed(line row) error {
+	m, err := p.movie(line)
+	if err != nil {
+		return err
+	}
 	m.Watchlist = true
 	m.AddedAt = date(line.get("Date"))
+	return nil
 }
 
-func (p *parser) liked(line row) {
-	p.movie(line).Liked = true
+func (p *parser) liked(line row) error {
+	m, err := p.movie(line)
+	if err != nil {
+		return err
+	}
+	m.Liked = true
+	return nil
 }
 
 // logged counts a diary line: a viewing of its movie, on its Watched Date.
-func (p *parser) logged(line row) {
-	m := p.movie(line)
+func (p *parser) logged(line row) error {
+	m, err := p.movie(line)
+	if err != nil {
+		return err
+	}
 	i := p.byKey[movieKey{m.Name, m.Year}]
 	m.Watched = true
 	m.Plays++
@@ -288,6 +351,7 @@ func (p *parser) logged(line row) {
 			p.diaryRating[i] = diaryRating{when, rating}
 		}
 	}
+	return nil
 }
 
 // export ends the reading: a movie's latest diary date stands over the
@@ -306,7 +370,7 @@ func (p *parser) export() Export {
 			m.Plays = max(m.Plays, 1)
 		}
 	}
-	return Export{Movies: p.movies}
+	return Export{Movies: p.movies, Skipped: p.skipped}
 }
 
 // date reads a date of the export, at noon UTC, the same day in most of

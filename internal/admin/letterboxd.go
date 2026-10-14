@@ -33,10 +33,10 @@ func multipartForm(r *http.Request) bool {
 
 // letterboxdForm reads the export and the switches r sends, or answers why
 // it could not: invalid_request for a form without the file or of another
-// kind, letterboxd_export_too_large for a file over the bound, and
-// letterboxd_export_invalid for a file that is not an export. A switch
-// not sent keeps its default: the watchlist and the ratings on, the
-// movies liked off.
+// kind, letterboxd_export_too_large for a file over the bound or naming
+// more than letterboxd.MaxMovies movies, and letterboxd_export_invalid for
+// a file that is not an export. A switch not sent keeps its default: the
+// watchlist and the ratings on, the movies liked off.
 func letterboxdForm(w http.ResponseWriter, r *http.Request) (letterboxd.Export, letterboxd.Choice, bool) {
 	choice := letterboxd.Choice{Watchlist: true, Ratings: true}
 	if !multipartForm(r) {
@@ -110,6 +110,10 @@ func letterboxdForm(w http.ResponseWriter, r *http.Request) (letterboxd.Export, 
 		return letterboxd.Export{}, choice, false
 	}
 	export, err := letterboxd.Parse(file)
+	if errors.Is(err, letterboxd.ErrTooManyMovies) {
+		writeError(w, http.StatusRequestEntityTooLarge, "letterboxd_export_too_large")
+		return letterboxd.Export{}, choice, false
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "letterboxd_export_invalid")
 		return letterboxd.Export{}, choice, false
@@ -120,12 +124,20 @@ func letterboxdForm(w http.ResponseWriter, r *http.Request) (letterboxd.Export, 
 // startLetterboxd imports the export r sends into user's account, which
 // by starts, in the background, and answers it. One import into an
 // account runs at a time: while the user's own import from a server, or
-// their Letterboxd import, runs, it answers 409 server_import_running.
+// their Letterboxd import, runs, or another export for the account is
+// being received, it answers 409 server_import_running before reading the
+// file.
 func (h *handler) startLetterboxd(w http.ResponseWriter, r *http.Request, by, user accounts.User) {
 	if h.ownImportRunning(user.ID) {
 		writeError(w, http.StatusConflict, "server_import_running")
 		return
 	}
+	release, err := h.Letterboxd.Reserve(user.ID)
+	if err != nil {
+		writeError(w, http.StatusConflict, "server_import_running")
+		return
+	}
+	defer release()
 	export, choice, ok := letterboxdForm(w, r)
 	if !ok {
 		return
