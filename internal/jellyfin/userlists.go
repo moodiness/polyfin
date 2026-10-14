@@ -662,6 +662,10 @@ func compareBy(key string, a, b library.Item, state userState) int {
 		}
 	case "communityrating":
 		return cmp.Compare(a.CommunityRating, b.CommunityRating)
+	case "criticrating":
+		// A title without one comes before any, as one without a
+		// community rating does.
+		return cmp.Compare(criticRating(a), criticRating(b))
 	case "runtime":
 		return cmp.Compare(a.Runtime, b.Runtime)
 	}
@@ -676,4 +680,12 @@ func compareBool(a, b bool) int {
 		return 1
 	}
 	return -1
+}
+
+// criticRating is an item's critic rating, -1 when it has none.
+func criticRating(item library.Item) float64 {
+	if item.CriticRating == nil {
+		return -1
+	}
+	return *item.CriticRating
 }

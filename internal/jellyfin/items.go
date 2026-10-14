@@ -548,8 +548,9 @@ func nonNil(values []string) []string {
 }
 
 // describeEdited adds to a DTO what only administrators' edits give an
-// item (see library.Overrides): its sort name, original title, taglines,
-// tags, studios and critic and custom ratings, as Jellyfin describes them.
+// item (see library.Overrides), or MDBList for its critic rating: its sort
+// name, original title, taglines, tags, studios and critic and custom
+// ratings, as Jellyfin describes them.
 func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail bool) {
 	if detail || fields.has("SortName") {
 		dto.SortName = sortName(item)
