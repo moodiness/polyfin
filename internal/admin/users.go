@@ -322,13 +322,16 @@ type settingsJSON struct {
 	// SegmentOrder is the order of preference of the segment databases,
 	// every one of them once, and SegmentSourcesOff those never asked. A
 	// PUT leaving either out keeps it; an empty order, which older pages
-	// sent to follow POLYFIN_SEGMENTS, keeps it too.
+	// sent to follow POLYFIN_SEGMENTS, keeps it too. MeasureLoudness is
+	// "off", "local" or "all".
 	SegmentOrder          []string  `json:"segmentOrder"`
 	SegmentSourcesOff     *[]string `json:"segmentSourcesOff"`
 	AudioIntros           *bool     `json:"audioIntros"`
 	SimilarTitles         *bool     `json:"similarTitles"`
 	GenerateImages        *bool     `json:"generateImages"`
 	Lyrics                *bool     `json:"lyrics"`
+	EvenVolume            *bool     `json:"evenVolume"`
+	MeasureLoudness       *string   `json:"measureLoudness"`
 	PlayedPercent         *int      `json:"playedPercent"`
 	ResumePercent         *int      `json:"resumePercent"`
 	VersionListMinutes    *int      `json:"versionListMinutes"`
@@ -552,6 +555,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MDBListRatingsKeySet:  settings.MDBListRatingsKey != "",
 		CriticRatingShows:     &settings.CriticRatingShows,
 		Lyrics:                &settings.Lyrics,
+		EvenVolume:            &settings.EvenVolume,
+		MeasureLoudness:       &settings.MeasureLoudness,
 		PlayedPercent:         &settings.PlayedPercent,
 		ResumePercent:         &settings.ResumePercent,
 		VersionListMinutes:    &settings.VersionListMinutes,
@@ -1118,6 +1123,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MDBListRatingsKey:     ratingsKey,
 		CriticRatingShows:     valueOr(body.CriticRatingShows, current.CriticRatingShows),
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
+		EvenVolume:            valueOr(body.EvenVolume, current.EvenVolume),
+		MeasureLoudness:       valueOr(body.MeasureLoudness, current.MeasureLoudness),
 		PlayedPercent:         valueOr(body.PlayedPercent, current.PlayedPercent),
 		ResumePercent:         valueOr(body.ResumePercent, current.ResumePercent),
 		VersionListMinutes:    valueOr(body.VersionListMinutes, current.VersionListMinutes),

@@ -448,6 +448,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidTheIntroDBKey, http.StatusBadRequest, "invalid_theintrodb_key"},
 		{accounts.ErrInvalidMDBListRatingsKey, http.StatusBadRequest, "invalid_mdblist_ratings_key"},
 		{accounts.ErrInvalidCriticRatingShows, http.StatusBadRequest, "invalid_critic_rating_shows"},
+		{accounts.ErrInvalidMeasureLoudness, http.StatusBadRequest, "invalid_measure_loudness"},
 		{accounts.ErrInvalidSegmentOrder, http.StatusBadRequest, "invalid_segment_order"},
 		{accounts.ErrInvalidSegmentSourcesOff, http.StatusBadRequest, "invalid_segment_sources_off"},
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},

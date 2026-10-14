@@ -658,6 +658,15 @@ func ValidRatingsKey(key string) bool {
 // or the audience score.
 var CriticRatingChoices = []string{"critics", "audience"}
 
+// ErrInvalidMeasureLoudness reports a Settings.MeasureLoudness not among
+// MeasureLoudnessChoices.
+var ErrInvalidMeasureLoudness = errors.New("invalid loudness measure choice")
+
+// MeasureLoudnessChoices are the songs without a gain whose loudness is
+// measured (see Settings.MeasureLoudness), the first by default: none,
+// those of local music folders, or those of music addons too.
+var MeasureLoudnessChoices = []string{"off", "local", "all"}
+
 // ErrInvalidTraktApp, ErrInvalidSimklApp and ErrInvalidLastFMApp report a
 // Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey or
 // LastFMSecret longer than MaxTrackingAppBytes, or holding anything but
@@ -1025,6 +1034,13 @@ type Settings struct {
 	// apps, synced line by line when LRCLIB has them; off, LRCLIB is never
 	// asked and tracks have no lyrics.
 	Lyrics bool
+	// EvenVolume gives apps the gains of songs and albums known, which
+	// even the volume from one song to the next (see package loudness);
+	// off, apps get none and nothing is measured. MeasureLoudness, one of
+	// MeasureLoudnessChoices, tells which songs without a gain have their
+	// loudness measured.
+	EvenVolume      bool
+	MeasureLoudness string
 	// PlayedPercent is how far into a title, in percent of its runtime, a
 	// reported position marks it played; ResumePercent is how far it must
 	// be to keep a resume point. ResumePercent is below PlayedPercent.
@@ -1355,7 +1371,7 @@ func validWebText(text string, max int) bool {
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
-	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
@@ -1389,7 +1405,8 @@ func (settings *Settings) fields() []any {
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
-		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,
+		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames, &settings.DetailedLog,
@@ -1630,6 +1647,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !slices.Contains(CriticRatingChoices, settings.CriticRatingShows) {
 		return Settings{}, ErrInvalidCriticRatingShows
+	}
+	if !slices.Contains(MeasureLoudnessChoices, settings.MeasureLoudness) {
+		return Settings{}, ErrInvalidMeasureLoudness
 	}
 	if !validSegmentOrder(settings.SegmentOrder) {
 		return Settings{}, ErrInvalidSegmentOrder
