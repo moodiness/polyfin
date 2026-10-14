@@ -600,10 +600,12 @@ When every version is taller, all are kept rather than none, the closest to the 
 
 Under **My sources**, users choose which catalogs of their own addons are libraries, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
 
+Users also make their own smart lists under **My sources**, with **Add a smart list**, as administrators make the server's (see [Smart lists](addons-and-libraries.md#smart-lists)). A user's own list may draw from their own addons' catalogs and, while they use the server's sources, from the server's. Only they see it: as a library among their own, or in the Collections view. The rules on what was played, started or marked favorite follow what they did, in their own lists as in the server's.
+
 On a user's page under **Users**, the **Access** section also holds **Can add their own addons**, on by default. While either this or **Allow users' own addons** is off:
 
 - the user's own addons are kept but not used;
-- their apps show the server's addons and libraries only;
+- their apps show the server's addons, libraries and smart lists only: their own smart lists are kept but not shown, and cannot be made or changed;
 - **My sources** says why;
 - their addons cannot be added, replaced, refreshed or turned on (403 `personal_addons_disabled`).
 

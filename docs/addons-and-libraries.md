@@ -81,6 +81,55 @@ A genre the addon stops offering lists the whole catalog again, until another is
 
 - A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. For a library or an addon's collection, the titles kept from earlier listings answer at once when they make the whole listing. Otherwise the listing waits for the addons 3 seconds at most, or 1 second when the titles kept fill a page of 100, then lists those read by then, and at least the first page of each catalog. It reads the rest in the background, for the next listing. A listing with a `limit` lists as many as it asks, within the library's maximum.
 
+### Smart lists
+
+A smart list gathers titles by what they are, from the catalogs it names, such as "French movies of the 1990s not watched yet". Administrators make the server's under **Content › Libraries**, with **Add a smart list**: every user sees them, unless their visible libraries leave a list shown as a library out. Users make their own under **My sources**: only they see them (see [Users' own addons](users.md#users-own-addons)).
+
+A list draws from any catalog of movies or series of the server's addons, enabled as a library or not. A user's own list may also draw from their own addons. It then keeps the titles that match its rules:
+
+| Rule | Matches |
+|---|---|
+| **Genre** | A title with this genre, in any letter case. |
+| **Year** | A title that came out from one year to another, either left empty for no bound. |
+| **IMDb rating** | A title whose IMDb rating is within the bounds given. |
+| **Language** | A title whose description gives this language. |
+| **Movie or series** | Movies, or series. |
+| **Place in its catalog** | A title among the first so many of its catalog, as the catalog orders them: by popularity for a popular catalog. |
+| **Watch state** | A title the user opening the list played, did not play, started without finishing, or marked favorite. A series is played once every released episode is. |
+
+- Each rule can be negated with **is not**.
+- Titles match **All of the rules** or **Any of the rules**, and a group of rules inside the list matches all or any of its own.
+- A list without rules keeps every title of its catalogs.
+- **Sort**: as its catalogs list them, one of each in turn, as an addon's collection does; by premiere date, the latest first; by IMDb rating, the highest first, those without one last; by name; or at random, in an order drawn again each day.
+- **Maximum titles**: from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
+- **Shown as**: a library or a collection.
+
+The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for their description.
+
+How a list is made:
+
+- Polyfin reads each catalog up to its maximum, from the catalog pages it keeps and reads again after **Refresh catalogs after (minutes)**. That maximum is the library's own when the catalog is one of the user's libraries with a maximum, else **Titles read per movie and series catalog**.
+- When the rules require a genre that a catalog offers in its genre filter, Polyfin asks the catalog for that genre's titles, as for a library's genre, rather than reading it whole. A place in that catalog is then a place among that genre's titles.
+- The rules are applied each time the list is listed. The rules on what the user did are applied for each user, so a movie leaves "not watched yet" once played.
+- A catalog page usually gives a title's genres, year and IMDb rating. The language comes only with the title's full description. Polyfin reads the missing descriptions in the background, a few at a time, as it looks up ratings for users under parental control. The server's lists ask the server's addons only. Once read, what a description does not give the title does not have.
+- Until then, a title whose rules need its description is left out, negated rules included, and the list grows as descriptions come.
+- A listing waits for the addons 3 seconds at most. Past that, it lists the titles of the pages already kept and reads the others in the background.
+
+Limits:
+
+- A list sees only the titles its catalogs list within their maximum, and it changes as they change.
+- A list whose catalogs are long is slow to fill the first time. **Read every collection each day** reads the server's smart lists too.
+- Parental control, blocked genres and allowed hours apply as everywhere. A user under parental control sees the server's lists only.
+- A list keeps its own sort: apps cannot sort it otherwise.
+- A library made of a list offers no genre to filter by.
+
+**For app developers:**
+
+- A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none, as the Watchlist. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
+- A list shown as a collection is a `BoxSet` in the **Collections** view, by name with the collections made by users. The view shows once such a list exists.
+- The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
+- The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. `.../catalogs` gives the catalogs a list may draw from and the languages its rules may name. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description) and `complete` (whether every catalog answered in time).
+
 ### Libraries hidden from the top bar
 
 Under **Content › Libraries**, **Hide from the web player's top bar** in a library's row leaves the library out of the web player's menus: the buttons of its top bar, the bar's **More** menu, and its side menu, in both of its layouts. It is saved with the list's **Save**, like the library's name, and the row then says **Hidden from the top bar**. Users set the same for their own libraries under **My sources**. Live TV catalogs have no such choice: their channels go to Live TV, never to a menu.
@@ -231,7 +280,7 @@ Some catalogs are nearly endless, so Polyfin stops reading a catalog after a set
 | **Channels read per Live TV catalog** | **Settings › Catalogs** | 10,000 (100 to 50,000) | Item limit for Live TV catalogs (see [Live TV](live-tv.md)). |
 | **Keep version lists for (minutes)** | **Settings › Catalogs** | 10 (1 to 360) | How long a title's versions and subtitles from the addons are used before Polyfin asks the addons again. |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | 60 (1 to 1,440) | How old a catalog page, the Live TV guide's included, may get before Polyfin reads it again. Apps never wait for it. |
-| **Read every collection each day** | **Settings › Catalogs** | Never (or an hour, 0 to 23) | Reads every collection of the server's collection libraries at this hour of the server's time zone, one after the other, so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others. |
+| **Read every collection each day** | **Settings › Catalogs** | Never (or an hour, 0 to 23) | Reads every collection of the server's collection libraries at this hour of the server's time zone, one after the other, then the catalogs of the server's [smart lists](#smart-lists), so that they open at once. It asks the addons for many pages: leave it off for an addon you share with others. |
 | **Apps that show collection libraries by collection** | **Settings › Catalogs** | None | The apps, among those that have signed in to the server, told that collection libraries hold collections, as Jellyfin's Collections view does, so that they list a collection library's collections, then a collection's titles (see [Collections from addons](#collections-from-addons)). Do not tick jellyfin-web or Streamyfin: they leave such libraries out of their home rows. |
 | **Scan local folders every (hours, 0 = never)** | **Settings › Catalogs** | 6 (0 to 168) | How long after its last scan a local folder or network share is scanned again (see [Local folders](local-folders.md#scanning)). 0 turns the schedule off. |
 | **Watch folders and shares for changes** | **Settings › Catalogs** | On | Scans a folder mounted in the container a few seconds after its files stop changing, an SMB share a few seconds after its server tells of a change, and a WebDAV share a few seconds after a listing of its folders, made every 2 minutes, differs from its last scan's (see [Watching for changes](local-folders.md#watching-for-changes)). |
@@ -255,7 +304,7 @@ To answer quickly:
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
 - jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. Reading them all can take long the first time: the page waits for the addons 3 seconds at most and shows the titles read by then, at least the first page of each catalog, while Polyfin reads the rest in the background. The next time, the page shows them all at once; if Polyfin is still reading, it shows those read so far after 1 second at most.
-- With **Read every collection each day** set to an hour, Polyfin reads every collection of the server's collection libraries whole at that hour: the scheduled task "Read every collection", which an administrator can also run by hand. It reads one collection after the other, asks the addons again for the pages past **Refresh catalogs after (minutes)** and waits for their answers, so that every collection page then opens at once with all its titles. The server log tells how many collections it read and how long it took.
+- With **Read every collection each day** set to an hour, Polyfin reads every collection of the server's collection libraries whole at that hour: the scheduled task "Read every collection", which an administrator can also run by hand. It reads one collection after the other, then every catalog of the server's smart lists up to its maximum, asks the addons again for the pages past **Refresh catalogs after (minutes)** and waits for their answers, so that every collection page and smart list then opens at once with all its titles. The server log tells how many collections and smart lists it read and how long it took.
 - A title's description is read again after 6 hours, or when its page is opened after **Refresh catalogs after (minutes)**. Meanwhile, the one known shows.
 - A search reads the first page of the search catalogs, as Stremio apps do, and lists up to 100 titles. It answers once the title searches have answered, and waits 0.3 seconds more for people-search catalogs. A slower answer is kept for the next search of the same term.
 - When an app gives up on a request, what Polyfin was reading for it goes on and is kept for the next request. Other apps waiting for the same page get it.
