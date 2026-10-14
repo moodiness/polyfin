@@ -1,6 +1,9 @@
 // Package backup backs Polyfin's database up into a folder with pg_dump,
 // while the settings turn backups on: every day at the hour they choose and
-// whenever an administrator asks. It keeps the newest backups there.
+// whenever an administrator asks. It keeps the newest backups there, sends
+// them to the destinations an administrator adds (S3-compatible storage,
+// SFTP and WebDAV servers), keeping the newest there too, and restores one
+// (see Restore).
 //
 // A backup is pg_dump's custom format, which pg_restore restores into an
 // empty database. It is written under a hidden temporary name and renamed
@@ -19,12 +22,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/secrets"
 )
 
 // StaleAfter is the age past which the last backup made is a problem while
@@ -34,22 +39,23 @@ const StaleAfter = 48 * time.Hour
 // nameLayout is the time in a backup's name, polyfin-YYYYMMDD-HHMMSS.dump.
 const nameLayout = "20060102-150405"
 
-// backupName matches the backups Polyfin makes, the only files it deletes
-// to keep the newest; partialName matches a backup being written, which a
-// crash may leave.
+// backupName matches the backups Polyfin makes every day, the only files
+// it deletes to keep the newest; partialName matches a backup being
+// written, which a crash may leave, a before-restore one too.
 var (
 	backupName  = regexp.MustCompile(`^polyfin-\d{8}-\d{6}\.dump$`)
-	partialName = regexp.MustCompile(`^\.polyfin-\d{8}-\d{6}\.dump\.partial$`)
+	partialName = regexp.MustCompile(`^\.polyfin-\d{8}-\d{6}(-before-restore)?\.dump\.partial$`)
 )
 
 // maxErrorBytes bounds what is kept of pg_dump's error output: its last
 // lines tell what failed.
 const maxErrorBytes = 2000
 
-// DB is where how the last backup went is recorded.
+// DB is where how backups went is recorded, and the destinations kept.
 type DB interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // Config is what the service needs.
@@ -61,11 +67,16 @@ type Config struct {
 	// holds the password, which is never logged nor written on pg_dump's
 	// command line: pg_dump gets it in PGPASSWORD.
 	DatabaseURL string
-	// PgDump is pg_dump's executable, a path or a name looked up in PATH;
-	// empty is pg_dump.
-	PgDump string
-	// DB records how the last backup went; nil records nothing.
+	// PgDump is pg_dump's executable, PgRestore pg_restore's, a path or a
+	// name looked up in PATH; empty is pg_dump and pg_restore.
+	PgDump    string
+	PgRestore string
+	// DB records how the last backup went and keeps the destinations; nil
+	// records nothing, and sends backups nowhere.
 	DB DB
+	// Secrets seals the destinations' passwords and keys; nil stores them
+	// as they are.
+	Secrets *secrets.Box
 	// Settings gives BackupHour and BackupsKept, read when they are used.
 	Settings func() accounts.Settings
 	Logger   *slog.Logger
@@ -75,6 +86,14 @@ type Config struct {
 type Service struct {
 	cfg Config
 	now func() time.Time
+	// runs keeps backups from being made at the same time.
+	runs sync.Mutex
+	// mu guards the backup prepared to be restored, and whether a restore
+	// was started.
+	mu        sync.Mutex
+	plan      *Plan
+	restoring bool
+	requests  chan Plan
 }
 
 // New returns the backup service of cfg.
@@ -82,7 +101,10 @@ func New(cfg Config) *Service {
 	if cfg.PgDump == "" {
 		cfg.PgDump = "pg_dump"
 	}
-	return &Service{cfg: cfg, now: time.Now}
+	if cfg.PgRestore == "" {
+		cfg.PgRestore = "pg_restore"
+	}
+	return &Service{cfg: cfg, now: time.Now, requests: make(chan Plan, 1)}
 }
 
 // Dir is the folder backups are written to, empty while they are off.
@@ -154,16 +176,20 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 var ErrOff = errors.New("backups are off: turn them on under Settings › Backups")
 
 // Run backs the database up into the backup folder, records how it went,
-// then deletes the oldest backups there past the settings' BackupsKept. It
-// is the scheduled task; while backups are off, it fails with ErrOff.
+// then deletes the oldest backups there past the settings' BackupsKept,
+// and sends the backups to the destinations (see send): a destination that
+// fails is recorded there, and does not fail the run. It is the scheduled
+// task; while backups are off, it fails with ErrOff.
 func (s *Service) Run(ctx context.Context) error {
+	s.runs.Lock()
+	defer s.runs.Unlock()
 	// The folder of the run is the one when it starts.
 	dir := s.Dir()
 	if dir == "" {
 		return ErrOff
 	}
 	started := s.now()
-	name, size, err := s.dump(ctx, dir, started)
+	name, size, err := s.dump(ctx, dir, started, "")
 	if ctx.Err() != nil {
 		// A cancelled run leaves what the last one recorded.
 		return ctx.Err()
@@ -177,16 +203,17 @@ func (s *Service) Run(ctx context.Context) error {
 	if len(deleted) > 0 {
 		s.cfg.Logger.Info("Deleted old database backups", "files", deleted)
 	}
+	s.send(ctx, dir)
 	if err != nil {
 		return fmt.Errorf("the backup was made, but older ones could not be deleted: %w", err)
 	}
 	return nil
 }
 
-// dump writes a backup started at started into dir, and returns its name
-// and size.
-func (s *Service) dump(ctx context.Context, dir string, started time.Time) (string, int64, error) {
-	name := "polyfin-" + started.Format(nameLayout) + ".dump"
+// dump writes a backup started at started into dir, its name ending with
+// suffix, and returns its name and size.
+func (s *Service) dump(ctx context.Context, dir string, started time.Time, suffix string) (string, int64, error) {
+	name := "polyfin-" + started.Format(nameLayout) + suffix + ".dump"
 	final := filepath.Join(dir, name)
 	if _, err := os.Lstat(final); !errors.Is(err, fs.ErrNotExist) {
 		return "", 0, fmt.Errorf("%s already exists", name)

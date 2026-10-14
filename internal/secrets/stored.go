@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -14,7 +18,8 @@ import (
 // settings, named below as the admin API names them, the tokens and API
 // keys of the users' tracking connections, what the users' app connections
 // sign in with (see appimport.SignIn), the addresses, tokens and keys
-// of the notification targets, and the passwords of the network shares.
+// of the notification targets, the passwords of the network shares, and
+// the secret keys, passwords and private keys of the backup destinations.
 // Nothing else is sealed: addon addresses, IPTV passwords and guide
 // addresses are stored as they are.
 var settingSecrets = []struct{ column, name string }{
@@ -30,20 +35,24 @@ var settingSecrets = []struct{ column, name string }{
 // Unreadable is a stored secret the key cannot open: a setting, by the
 // admin API's name of it, the tracking connection of a user to a service,
 // the connection of a user to an app, a notification target, by its name,
-// of a user or of the server (User empty), or the password of a network
-// share, by its folder's name.
+// of a user or of the server (User empty), the password of a network
+// share, by its folder's name, or a backup destination, by what it shows
+// (see DestinationName).
 type Unreadable struct {
 	Setting       string
 	Service, User string
 	App           string
 	Target        string
 	Folder        string
+	Destination   string
 }
 
 func (u Unreadable) String() string {
 	switch {
 	case u.Setting != "":
 		return "setting " + u.Setting
+	case u.Destination != "":
+		return "backup destination " + u.Destination
 	case u.Folder != "":
 		return fmt.Sprintf("password of the share %s", u.Folder)
 	case u.Target != "" && u.User == "":
@@ -156,7 +165,10 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 		if err := sealTargets(ctx, b, tx, &sealed); err != nil {
 			return err
 		}
-		return sealShares(ctx, b, tx, &sealed)
+		if err := sealShares(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
+		return sealDestinations(ctx, b, tx, &sealed)
 	})
 	return sealed, err
 }
@@ -263,7 +275,122 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 		}
 		check(password, Unreadable{Folder: name})
 	}
-	return report, shares.Err()
+	if err := shares.Err(); err != nil {
+		return Report{}, err
+	}
+	destinations, err := db.Query(ctx, `SELECT kind, address, port, bucket, folder, username, secret, private_key
+		FROM backup_destinations ORDER BY created_at`)
+	if err != nil {
+		return Report{}, err
+	}
+	defer destinations.Close()
+	for destinations.Next() {
+		var kind, address, bucket, folder, username, secret, privateKey string
+		var port int
+		if err := destinations.Scan(&kind, &address, &port, &bucket, &folder, &username, &secret, &privateKey); err != nil {
+			return Report{}, err
+		}
+		unreadable := Unreadable{Destination: DestinationName(kind, address, port, bucket, folder, username)}
+		before := len(report.Unreadable)
+		check(secret, unreadable)
+		if len(report.Unreadable) == before {
+			check(privateKey, unreadable)
+		}
+	}
+	return report, destinations.Err()
+}
+
+// DestinationName is what a backup destination shows: an S3 bucket and its
+// prefix at its endpoint's host, an SFTP server's user, host, port when
+// not 22, and folder, or a WebDAV folder's address.
+func DestinationName(kind, address string, port int, bucket, folder, username string) string {
+	switch kind {
+	case "s3":
+		name := bucket
+		if folder != "" {
+			name += "/" + folder
+		}
+		host := address
+		if u, err := url.Parse(address); err == nil && u.Host != "" {
+			host = u.Host
+		}
+		return name + " (" + host + ")"
+	case "sftp":
+		name := address
+		if username != "" {
+			name = username + "@" + name
+		}
+		if port != 22 && port != 0 {
+			name += ":" + strconv.Itoa(port)
+		}
+		if folder != "" {
+			name += ":" + folder
+		}
+		return name
+	}
+	return address
+}
+
+// The kinds of stored secrets, as a backup about to be restored counts
+// those the key cannot open.
+const (
+	KindSetting     = "settings"
+	KindTracking    = "tracking"
+	KindApp         = "apps"
+	KindTarget      = "notifications"
+	KindShare       = "shares"
+	KindDestination = "destinations"
+)
+
+// sealedTables are the columns of the stored secrets, by table, and the
+// kind of secret they hold.
+var sealedTables = map[string]struct {
+	kind    string
+	columns []string
+}{
+	"settings":             {KindSetting, settingColumns()},
+	"tracking_connections": {KindTracking, []string{"token", "refresh_token"}},
+	"app_connections":      {KindApp, []string{"sign_in"}},
+	"notification_targets": {KindTarget, []string{"secret"}},
+	"local_folders":        {KindShare, []string{"share_password"}},
+	"backup_destinations":  {KindDestination, []string{"secret", "private_key"}},
+}
+
+func settingColumns() []string {
+	columns := make([]string, len(settingSecrets))
+	for i, secret := range settingSecrets {
+		columns[i] = secret.column
+	}
+	return columns
+}
+
+// SealedTables names the tables that hold stored secrets.
+func SealedTables() []string {
+	return slices.Sorted(maps.Keys(sealedTables))
+}
+
+// UnreadableIn counts the secrets the key cannot open in a row of table,
+// its values by column, as Inspect does: each of the settings, and once
+// for a row of the other tables. It returns their kind, empty for a table
+// that holds none.
+func (b *Box) UnreadableIn(table string, row map[string]string) (kind string, count int) {
+	sealed, ok := sealedTables[table]
+	if !ok {
+		return "", 0
+	}
+	for _, column := range sealed.columns {
+		value := row[column]
+		if !Sealed(value) {
+			continue
+		}
+		if _, err := b.Open(value); err != nil {
+			count++
+			if table != "settings" {
+				break
+			}
+		}
+	}
+	return sealed.kind, count
 }
 
 // sealAppConnections seals what the app connections stored as plaintext
@@ -345,6 +472,40 @@ func sealShares(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 			return err
 		}
 		*sealed++
+	}
+	return nil
+}
+
+// sealDestinations seals the secret keys, passwords and private keys of
+// the backup destinations stored as plaintext, counting them into sealed.
+func sealDestinations(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	rows, err := tx.Query(ctx, `SELECT id, secret, private_key FROM backup_destinations
+		WHERE (secret <> '' AND secret NOT LIKE $1) OR (private_key <> '' AND private_key NOT LIKE $1) FOR UPDATE`, prefix+"%")
+	if err != nil {
+		return err
+	}
+	type row struct {
+		id                 [16]byte
+		secret, privateKey string
+	}
+	plain, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var d row
+		return d, r.Scan(&d.id, &d.secret, &d.privateKey)
+	})
+	if err != nil {
+		return err
+	}
+	for _, d := range plain {
+		for _, value := range []*string{&d.secret, &d.privateKey} {
+			if *value != "" && !Sealed(*value) {
+				*value = b.Seal(*value)
+				*sealed++
+			}
+		}
+		if _, err := tx.Exec(ctx, "UPDATE backup_destinations SET secret = $2, private_key = $3 WHERE id = $1", d.id, d.secret,
+			d.privateKey); err != nil {
+			return err
+		}
 	}
 	return nil
 }

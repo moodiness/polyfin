@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -27,6 +28,33 @@ func URL(t testing.TB) string {
 		t.Skip("POLYFIN_TEST_DATABASE_URL is not set")
 	}
 	return url
+}
+
+// CopyURL returns the address of the database of a pool Copy returned,
+// for programs other than the test, such as pg_dump and pg_restore, to
+// reach it. It fails the test for a pool of New, whose schema they would
+// not see, and checks that the address reaches that database alone.
+func CopyURL(t testing.TB, pool *pgxpool.Pool) string {
+	t.Helper()
+	config := pool.Config().ConnConfig
+	if _, schema := config.RuntimeParams["search_path"]; schema {
+		t.Fatal("the pool is on a schema of the shared test database, not on a database of its own")
+	}
+	address, err := url.Parse(URL(t))
+	if err != nil || address.Scheme == "" {
+		t.Fatalf("POLYFIN_TEST_DATABASE_URL is not a URL: %v", err)
+	}
+	address.Path = "/" + config.Database
+	conn, err := pgx.Connect(t.Context(), address.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	var current string
+	if err := conn.QueryRow(t.Context(), "SELECT current_database()").Scan(&current); err != nil || current != config.Database {
+		t.Fatalf("the address reaches %q, not %q: %v", current, config.Database, err)
+	}
+	return address.String()
 }
 
 // maxConns bounds each test's pool. Tests run in parallel, packages too, and

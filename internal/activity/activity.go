@@ -268,6 +268,13 @@ func (s *Store) MetricsTokenMade(ctx context.Context, administrator string) {
 		Type: "ServerConfigurationUpdated"})
 }
 
+// BackupRestored records, in the database restored, that administrator
+// restored the database backup file.
+func (s *Store) BackupRestored(ctx context.Context, administrator, file string) {
+	s.record(ctx, Entry{Name: s.phrase("%s restored the database backup %s", "%s a restauré la sauvegarde de la base de données %s",
+		administrator, file), Type: "BackupRestored", Severity: Warning})
+}
+
 // secretNames name the secrets that can be revealed, in English and
 // French: the server's, by their admin API name, and the users' own API
 // keys, by service.
