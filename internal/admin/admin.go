@@ -257,6 +257,25 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
 	mux.Handle("GET /admin/api/backup", h.administrator(h.backup))
+	// Without a backup service, as in some tests, the backup routes are not found.
+	backups := func(handler http.HandlerFunc) http.Handler {
+		return h.administrator(func(w http.ResponseWriter, r *http.Request) {
+			if h.Backups == nil {
+				writeError(w, http.StatusNotFound, "not_found")
+				return
+			}
+			handler(w, r)
+		})
+	}
+	mux.Handle("GET /admin/api/backup/destinations", backups(h.backupDestinations))
+	mux.Handle("POST /admin/api/backup/destinations", backups(h.createBackupDestination))
+	mux.Handle("PATCH /admin/api/backup/destinations/{id}", backups(h.updateBackupDestination))
+	mux.Handle("DELETE /admin/api/backup/destinations/{id}", backups(h.deleteBackupDestination))
+	mux.Handle("POST /admin/api/backup/destinations/{id}/test", backups(h.testBackupDestination))
+	mux.Handle("GET /admin/api/backup/files", backups(h.backupFiles))
+	mux.Handle("POST /admin/api/backup/restore/prepare", backups(h.prepareRestore))
+	mux.Handle("POST /admin/api/backup/restore/upload", backups(h.uploadRestore))
+	mux.Handle("POST /admin/api/backup/restore", backups(h.startRestore))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 	server := notificationRoutes{h: h, owner: serverTargets}
 	mux.Handle("GET /admin/api/notifications", h.administrator(server.list))

@@ -41,6 +41,9 @@ const (
 	problemSecretsPlaintext  = "secrets_plaintext"
 	problemBackupFailed      = "backup_failed"
 	problemBackupStale       = "backup_stale"
+	// A destination's last upload failed, or its newest backup is old.
+	problemDestinationFailed = "backup_destination_failed"
+	problemDestinationStale  = "backup_destination_stale"
 	problemIPTV              = "iptv"
 	problemFolder            = "folder"
 	problemFolderUnwatched   = "folder_unwatched"
@@ -281,6 +284,20 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			add(warning("backup", problemBackupStale, "backups"))
 		}
 	}
+	if backup != nil {
+		for _, d := range backup.Destinations {
+			switch {
+			case d.Problem == nil:
+			case *d.Problem == "failed":
+				add(healthProblemJSON{Key: "backup_destination:" + d.ID, Code: problemDestinationFailed, Tone: notifications.SeverityError,
+					To: "/system/health#backups", Name: d.Name})
+			default:
+				p := warning("backup_destination:"+d.ID, problemDestinationStale, "backups")
+				p.Name = d.Name
+				add(p)
+			}
+		}
+	}
 	problems = append(problems, sources...)
 	problems = append(problems, guides...)
 
@@ -487,6 +504,12 @@ func (p healthProblemJSON) text(language string) string {
 		return say("The last database backup failed.", "La dernière sauvegarde de la base de données a échoué.")
 	case problemBackupStale:
 		return say("The last database backup is more than two days old.", "La dernière sauvegarde de la base de données date de plus de deux jours.")
+	case problemDestinationFailed:
+		return say("%s: the last upload of the database backups failed.", "%s : le dernier envoi des sauvegardes de la base de données a échoué.",
+			name)
+	case problemDestinationStale:
+		return say("%s: the newest database backup there is more than two days old.",
+			"%s : la sauvegarde de la base de données la plus récente qui s’y trouve date de plus de deux jours.", name)
 	case problemTask:
 		return say("The task “%s” failed.", "La tâche « %s » a échoué.", p.Task)
 	case problemUnknownProxy:
