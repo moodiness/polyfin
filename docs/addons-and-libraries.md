@@ -44,11 +44,12 @@ Under **Content › Libraries**, each library shows a small image at the start o
 
 - **None**: no image, as before. This is the default.
 - **Automatic**: Polyfin takes it from the catalog's first page: the first backdrop, as library tiles are wide, else the first wide poster, else the first poster. A music library takes the first artwork of its row. A catalog without any shows no image. Users under parental control or blocking genres are not shown it, since it may come from a title hidden from them.
+- **Generated**: Polyfin draws a wide 16:9 image from the posters of the catalog's first titles, up to six, under a gradient, with the library's name written across them (see [Generated images](#generated-images)). A collection library takes the posters of its first collections, and for a collection without one, the first poster of its own generated image. A music library has no posters to draw from: it does not offer this choice. The image comes once Polyfin has read the catalog's first page, as apps do when they open the library. Users under parental control or blocking genres are not shown it, as for **Automatic**.
 - **Custom**: **Upload an image**, or paste an address under **Or an image address**, which Polyfin downloads once. The picture follows the rules of [Edit images](#edit-images): a JPEG, PNG or WebP picture of up to 10 MB, kept in the database. Only administrators can use local network addresses. **Remove the image** deletes it, and the library shows none.
 
 Image changes are saved at once, apart from the list's **Save**. A catalog just added to the list gets its image once the list is saved. Live TV catalogs make no library tile, so they have no image. Users choose the images of their own libraries the same way under **My sources**.
 
-A library image uploaded with jellyfin-web's **Edit images** is its custom image too. Choosing **None** or **Automatic** deletes it.
+A library image uploaded with jellyfin-web's **Edit images** is its custom image too, and wins over the automatic or generated one; deleting it brings that one back. Choosing **None**, **Automatic** or **Generated** in the admin app deletes it.
 
 A library taken out of the list keeps its custom image, for when it is added back. Removing the addon deletes the custom images of all its libraries.
 
@@ -56,6 +57,7 @@ A library taken out of the list keeps its custom image, for when it is added bac
 
 - The library's image is its Primary image: `/UserViews` and `/Items` give its tag in `ImageTags`, `/Items/{id}/Images/Primary` serves it, and `/Library/VirtualFolders` names the library as its `PrimaryImageItemId`.
 - The automatic image is looked up again with the catalog's pages, after **Refresh catalogs after (minutes)**. Its tag changes with the title it comes from. `/UserViews` never waits for it: until it is found, the library shows the image found last, or none.
+- A generated image's tag changes with the library's name and with the titles it shows (see [Generated images](#generated-images)). `/UserViews` never waits for it: it comes from the pages Polyfin keeps.
 
 ### Genre and maximum
 
@@ -102,7 +104,7 @@ A list draws from any catalog of movies or series of the server's addons, enable
 - A list without rules keeps every title of its catalogs.
 - **Sort**: as its catalogs list them, one of each in turn, as an addon's collection does; by premiere date, the latest first; by IMDb rating, the highest first, those without one last; by name; or at random, in an order drawn again each day.
 - **Maximum titles**: from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
-- **Shown as**: a library or a collection.
+- **Shown as**: a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](#generated-images)); one shown as a library shows none.
 
 The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for their description.
 
@@ -323,15 +325,25 @@ On the home page of Jellyfin apps, each collection library has a row of its coll
 
 Some apps list a library by its type: told a collection library holds mixed content, they show the titles of all its collections together, on their home and on the library's page. Tick such apps under **Settings › Catalogs**, in **Apps that show collection libraries by collection**: the list shows the apps that have signed in to the server, by the name they give, and the change applies to their next request. On the home of the apps chosen there, a collection library lists its collections by its own type, and a collection opens on its titles. jellyfin-web and Streamyfin leave libraries of collections out of their home rows: leave them unticked.
 
+A collection whose catalog gives no poster shows one Polyfin draws: the posters of its first four titles, in its own order, under a gradient, with its name written across them, as its Primary image, and of its first six as its Thumb, a wide image for the apps that show wide cards (see [Generated images](#generated-images)). It comes once Polyfin has read the collection's titles, as when an app opens it or **Read every collection** runs: until then the collection shows none, and listing the collections asks the addon for nothing more. A collection whose catalog gives a poster keeps it.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Generate images for collections without one** | **Settings › Content** | On | Draws an image for the addons' collections without a poster, and for the smart lists shown as collections. Off, they show none, as before. Libraries set to **Generated** keep theirs. |
+
+The change applies at once.
+
 **Compared with Jellyfin:**
 
-- A Jellyfin library of collections gets no home row. Polyfin's collection libraries are told to apps as libraries of mixed content, so that they get one, except to the apps chosen under **Apps that show collection libraries by collection**, which are told they hold collections, as Jellyfin's Collections view. Opening one shows its collections. Without an image, its tile shows the icon of a mixed library.
+- A Jellyfin library of collections gets no home row. Polyfin's collection libraries are told to apps as libraries of mixed content, so that they get one, except to the apps chosen under **Apps that show collection libraries by collection**, which are told they hold collections, as Jellyfin's Collections view. Opening one shows its collections. Without an image, its tile shows the icon of a mixed library: set its image to **Generated** to show its first collections' posters (see [Library images](#library-images)).
+- Jellyfin draws no image for a collection without one: apps show their placeholder.
 - jellyfin-web opens a library's Suggestions from the title of its row, whatever its default screen. Polyfin's [web client script](web-client.md#dashboard-links-and-single-sign-on) opens a collection library on its default screen instead: such a library has no suggestions of its own.
 
 **For app developers:**
 
 - A collection library has no `CollectionType`, unlike Jellyfin's Collections view of collections made by users, which keeps `boxsets`. jellyfin-web and Streamyfin leave `boxsets` libraries out of their rows of latest items. For the apps chosen under **Apps that show collection libraries by collection**, whose `Client` in their authorization matches one of the names in any letter case, its `CollectionType` is `boxsets` wherever it is described: `/UserViews`, `/Users/{userId}/Views`, its own description, `/Items?Ids=`, `/Library/MediaFolders`, `/Library/VirtualFolders` and the listing of the root folder. Requests made with an API key never are. Its listings are the same for every app: `IncludeItemTypes=BoxSet&Recursive=true` lists its collections, and a collection with `IncludeItemTypes=Movie,Series&Recursive=true` its titles.
 - `/admin/api/settings` holds the setting as `collectionLibraryApps`, a list of app names, and `GET /admin/api/settings/apps` answers the apps to choose among, `{"apps": [...]}`: the names the signed-in devices of every user give, each once whatever its letter case, by name.
+- A collection without a poster gets `Primary` and `Thumb` tags in `ImageTags` once its generated images are known. `/Items/{id}/Images/Primary` serves a 1,000 × 1,500 JPEG and `/Items/{id}/Images/Thumb` a 1,920 × 1,080 one, resized as other artwork is. `/admin/api/settings` holds the setting as `generateImages`.
 - `/Items/Latest` lists its collections, `BoxSet` items.
 - A listing that asks for `Folder` items keeps them, as jellyfin-web lists a library without type by its folders, movies and series.
 - A `Recursive` listing of a collection library that asks only for titles (no `BoxSet` or `Folder`), such as `IncludeItemTypes=Movie,Series`, lists the titles of its collections, merged one of each catalog in turn as a collection lists them, as Jellyfin lists the movies and series within a mixed library's folders. Apps that make a library's home row so show its titles. Other listings of the library list its collections. Such a listing takes the filters of what the user did, `Filters=IsPlayed`, `IsUnplayed`, `IsFavorite` or `IsResumable` and `isPlayed` or `isFavorite`, as a library of titles does: it lists the titles kept, in pages, with a `TotalRecordCount` that counts them.
@@ -454,6 +466,18 @@ Seasons show their own poster when the metadata addon lists the seasons' posters
 
 That list does not name the seasons. So Polyfin reads it only when it has one poster per season of the series' episodes, with specials included or left out. Otherwise it shows the series' poster on every season, rather than risk showing one season's poster on another. Polyfin asks the addon for nothing more: the posters come with the series' description.
 
+### Generated images
+
+Polyfin draws the images of the addons' collections without a poster, of the smart lists shown as collections, and of the libraries whose image is set to **Generated** (see [Library images](#library-images) and [Collections from addons](#collections-from-addons)).
+
+- The image is a mosaic of the posters of the first titles the item lists, in its own order: four for a poster, six for a wide image. A gradient darkens it toward the bottom, and the item's name is written across the middle. A name too long for three lines, two on a wide image, is cut with an ellipsis.
+- The name is written with the fonts of `POLYFIN_FONTS_DIR`, as the fallback fonts of subtitles are (see [Configuration](configuration.md)): DejaVu in the Docker image, for Latin, Greek and Cyrillic. Each character takes the first font that has it, bold sans-serif fonts first. Mount fonts for other scripts in that folder, for example CJK fonts. A character none of them has is written with Go Bold, built into Polyfin, else left out. Letters are drawn one by one: scripts whose letters join or that are written right to left do not show as they should.
+- Polyfin chooses the titles from the catalog pages and descriptions it keeps, and asks no addon for them: an item gets its image's tag once they are known. It draws the image the first time an app asks for it, from the posters it relays, and keeps it with the relayed artwork, in the cache folder's `images` folder: 1,000 × 1,500 pixels for a poster, 1,920 × 1,080 for a wide image. Apps asking for a smaller size get it resized, as other artwork is.
+- A poster its artwork server does not have is left out. One that cannot be downloaded for now is left out of the image served, which is drawn again at the next request.
+- The titles shown stay while the item keeps its name and fewer than half of them, as a poster or as a wide image, have left its first 20 titles. Past that, when the item is renamed, with **Edit metadata** too, or when it shows fewer titles than it could, Polyfin chooses them again: the image's tag changes, and apps that keep images by tag fetch the new one. Polyfin compares them at most once a minute for each item.
+- Users under parental control or blocking genres get no generated image, since it may show a title hidden from them, and neither do users who hid one of the titles it shows.
+- An image uploaded with **Edit images** replaces the generated one of its type; deleting it brings the generated one back.
+
 ## Editing items
 
 Administrators can use jellyfin-web's **Edit metadata**, **Edit images** and **Identify** on the items apps show: titles, seasons, episodes, people, channels, music, libraries, views, collections and playlists.
@@ -480,7 +504,7 @@ Polyfin keeps these fields: name, original title, sort name, overview, tagline, 
 - The image must be a JPEG, PNG or WebP picture of up to 10 MB.
 - It is scaled down to 3,840 pixels and kept in the database, as profile pictures are.
 - Other image types, and anything that is not such a picture, are refused.
-- Deleting an upload shows the addon's image again. The addon's own artwork cannot be deleted.
+- Deleting an upload shows the addon's image again, or for a collection without a poster the image Polyfin draws (see [Generated images](#generated-images)). The addon's own artwork cannot be deleted.
 
 ### Identify
 
