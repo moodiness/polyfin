@@ -2,10 +2,6 @@ package accounts
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"time"
 
@@ -108,9 +104,6 @@ type NewInvite struct {
 }
 
 const (
-	// inviteSecretSize is the size of the random part of an invite's
-	// token, as large as an admin session token's.
-	inviteSecretSize = 32
 	// modelColumns are the settings a new account copies from an invite's
 	// model: everything an administrator sets on a user's page but the
 	// name, the password, administrator status and the disabled switch.
@@ -118,7 +111,7 @@ const (
 		"video_transcoding, audio_transcoding, content_downloading, personal_addons, " +
 		"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 		"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-		"subtitle_management, live_tv_management, quality_group"
+		"subtitle_management, live_tv_management, quality_group, can_share"
 	inviteColumns = "i.id, i.max_uses, i.uses, i.expires_at, i.created_at, i.revoked_at, " +
 		"m.id, m.name, c.id, c.name, coalesce(i.account_days, 0)"
 	inviteJoins = " FROM invites i LEFT JOIN users m ON m.id = i.model_user_id LEFT JOIN users c ON c.id = i.created_by"
@@ -142,23 +135,6 @@ func scanInvite(row pgx.Row, more ...any) (Invite, error) {
 	return invite, err
 }
 
-// inviteToken is the token of an invite's link: its ID then its secret,
-// in base64 for URLs.
-func inviteToken(id ID, secret []byte) string {
-	return base64.RawURLEncoding.EncodeToString(append(id[:], secret...))
-}
-
-// parseInviteToken splits a token into the invite's ID and its secret.
-func parseInviteToken(token string) (ID, []byte, bool) {
-	var id ID
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) != len(id)+inviteSecretSize {
-		return id, nil, false
-	}
-	copy(id[:], raw)
-	return id, raw[len(id):], true
-}
-
 // CreateInvite creates an invite, and returns it with its token, which is
 // given this once: only its hash is kept.
 func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, string, error) {
@@ -175,9 +151,7 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 	if invite.Days > 0 {
 		expires = new(s.now().Add(time.Duration(invite.Days) * 24 * time.Hour))
 	}
-	secret := make([]byte, inviteSecretSize)
-	_, _ = rand.Read(secret)
-	hash := sha256.Sum256(secret)
+	secret, hash := newLinkSecret()
 	var created Invite
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if invite.Model != nil {
@@ -201,7 +175,7 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 	if err != nil {
 		return Invite{}, "", err
 	}
-	return created, inviteToken(created.ID, secret), nil
+	return created, linkToken(created.ID, secret), nil
 }
 
 // Invites lists every invite, the newest first.
@@ -241,7 +215,7 @@ func (s *Store) RevokeInvite(ctx context.Context, id ID) (Invite, error) {
 func lookUpInvite(ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, token string, forUpdate bool) (Invite, error) {
-	id, secret, ok := parseInviteToken(token)
+	id, secret, ok := parseLinkToken(token)
 	if !ok {
 		return Invite{}, ErrInviteUnknown
 	}
@@ -257,8 +231,7 @@ func lookUpInvite(ctx context.Context, db interface {
 	if err != nil {
 		return Invite{}, err
 	}
-	hash := sha256.Sum256(secret)
-	if subtle.ConstantTimeCompare(hash[:], stored) != 1 {
+	if !secretMatches(secret, stored) {
 		return Invite{}, ErrInviteUnknown
 	}
 	return invite, nil

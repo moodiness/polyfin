@@ -157,9 +157,9 @@ func TestInvitesRefuseGuestsOnceUsedUpExpiredOrRevoked(t *testing.T) {
 	if err := store.DeleteUser(ctx, doomed.ID); err != nil {
 		t.Fatal(err)
 	}
-	id, secret, _ := parseInviteToken(expiring)
+	id, secret, _ := parseLinkToken(expiring)
 	secret[0] ^= 1
-	guessed := inviteToken(id, secret)
+	guessed := linkToken(id, secret)
 
 	now = now.Add(24 * time.Hour)
 	for _, tc := range []struct {
