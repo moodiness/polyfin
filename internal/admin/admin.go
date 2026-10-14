@@ -275,6 +275,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/backup/files", backups(h.backupFiles))
 	mux.Handle("POST /admin/api/backup/restore/prepare", backups(h.prepareRestore))
 	mux.Handle("POST /admin/api/backup/restore/upload", backups(h.uploadRestore))
+	mux.Handle("POST /admin/api/backup/restore/discard", backups(h.discardRestore))
 	mux.Handle("POST /admin/api/backup/restore", backups(h.startRestore))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 	server := notificationRoutes{h: h, owner: serverTargets}

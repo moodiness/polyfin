@@ -301,7 +301,8 @@ func (h *handler) testBackupDestination(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, result)
 }
 
-// backupFileJSON is a backup that can be restored.
+// backupFileJSON is a backup that can be restored: Size is -1 when its
+// destination, a WebDAV server, does not tell it.
 type backupFileJSON struct {
 	Name          string    `json:"name"`
 	Size          int64     `json:"size"`
@@ -429,6 +430,20 @@ func (h *handler) answerPlan(w http.ResponseWriter, r *http.Request, plan backup
 		return
 	}
 	writeJSON(w, http.StatusOK, h.newRestorePlanJSON(plan))
+}
+
+// discardRestore drops the backup prepared, when the restore dialog is
+// closed without restoring it, with its file when it was downloaded or
+// sent: 204, whether it was still prepared or not.
+func (h *handler) discardRestore(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	h.Backups.Discard(body.ID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // startRestore restores the backup prepared, once the administrator typed

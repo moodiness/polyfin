@@ -222,6 +222,9 @@ func TestRestoreRoutes(t *testing.T) {
 		body["error"] != "restore_expired" {
 		t.Errorf("nothing prepared: %d %v", status, body)
 	}
+	if status, _, _ := administrator.call(http.MethodPost, "/backup/restore/discard", map[string]any{"id": "x"}); status != http.StatusNoContent {
+		t.Errorf("discarding nothing: %d", status)
+	}
 	status, body, _ := administrator.call(http.MethodGet, "/backup/files", nil)
 	if folder, _ := body["folder"].([]any); status != http.StatusOK || len(folder) != 1 {
 		t.Errorf("files: %d %v", status, body)
@@ -263,6 +266,14 @@ func TestRestoreRoutesWithATool(t *testing.T) {
 	if status, body, _ := administrator.call(http.MethodPost, "/backup/restore", map[string]any{"id": id, "serverName": "Polyfin"}); status != http.StatusConflict ||
 		body["error"] != "unreadable_secrets" {
 		t.Errorf("not anyway: %d %v", status, body)
+	}
+	// Closing the dialog discards it.
+	if status, _, _ := administrator.call(http.MethodPost, "/backup/restore/discard", map[string]any{"id": id}); status != http.StatusNoContent {
+		t.Errorf("discard: %d", status)
+	}
+	if status, body, _ := administrator.call(http.MethodPost, "/backup/restore", map[string]any{"id": id, "serverName": "Polyfin", "anyway": true}); status != http.StatusConflict ||
+		body["error"] != "restore_expired" {
+		t.Errorf("a discarded plan: %d %v", status, body)
 	}
 
 	// A file sent replaces the backup prepared.
