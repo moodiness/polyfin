@@ -145,6 +145,16 @@ func (d *Data) MarkUnplayed() {
 	d.LastPlayed = nil
 }
 
+// RemoveResume takes the item off Continue Watching at now: its resume
+// point goes, and nothing else. It stays played or not, with its plays
+// and their date, and remembers now, so that an import brings back only
+// a resume point set after it (see ImportResume). Playing the item again
+// sets a resume point as usual.
+func (d *Data) RemoveResume(now time.Time) {
+	d.Position = 0
+	d.ResumeRemoved = new(now.UTC())
+}
+
 // Like rates the item the way a like or a dislike does.
 func (d *Data) Like(likes bool) {
 	rating := 1.0
@@ -197,11 +207,14 @@ const (
 )
 
 // ImportResume adds a resume point another service keeps, under
-// thresholds: none for a played item, nor when Polyfin's is newer; past
-// the played threshold the item is played, before the resume one nothing
-// is kept. It reports ResumeKept, ResumeSet or ResumePlayed.
+// thresholds: none for a played item, nor when Polyfin's is newer, nor
+// when the user took the item off Continue Watching since it was set
+// (see RemoveResume); past the played threshold the item is played,
+// before the resume one nothing is kept. It reports ResumeKept, ResumeSet
+// or ResumePlayed.
 func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
-	if d.Played || d.Position > 0 && d.LastPlayed != nil && !d.LastPlayed.Before(p.At) {
+	if d.Played || d.Position > 0 && d.LastPlayed != nil && !d.LastPlayed.Before(p.At) ||
+		d.ResumeRemoved != nil && !d.ResumeRemoved.Before(p.At) {
 		return ResumeKept
 	}
 	position, runtime := p.Position, p.Runtime

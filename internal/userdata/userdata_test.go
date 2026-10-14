@@ -226,3 +226,71 @@ func TestDataFollowsAsAnImport(t *testing.T) {
 		t.Errorf("another user's favorite given: %+v %v", theirs, err)
 	}
 }
+
+// A title taken off Continue Watching keeps its played state, plays and
+// date, and an import brings back only a resume point set after that.
+func TestARemovedResumePointComesBackOnlyNewer(t *testing.T) {
+	store, alice, _ := setup(t)
+	movie := accounts.ID{1}
+	played := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+	removed := played.Add(24 * time.Hour)
+	change := func(change func(*Data)) Data {
+		t.Helper()
+		if _, err := store.Change(t.Context(), alice, []Item{{ID: movie}}, change); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.Get(t.Context(), alice, []accounts.ID{movie})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got[movie]
+	}
+	change(func(d *Data) { d.PlayCount, d.Position, d.Runtime, d.LastPlayed = 1, time.Hour, 2*time.Hour, &played })
+	d := change(func(d *Data) { d.RemoveResume(removed) })
+	if d.Played || d.PlayCount != 1 || d.Position != 0 || d.LastPlayed == nil || !d.LastPlayed.Equal(played) ||
+		d.ResumeRemoved == nil || !d.ResumeRemoved.Equal(removed) {
+		t.Fatalf("after the removal: %+v", d)
+	}
+	// Set elsewhere after the play here, but before the removal: the very
+	// point taken off, as a service keeps it.
+	var outcome int
+	d = change(func(d *Data) {
+		outcome = d.ImportResume(ImportedResume{Position: 40 * time.Minute, Runtime: 2 * time.Hour, At: removed.Add(-time.Hour)}, jellyfin)
+	})
+	if outcome != ResumeKept || d.Position != 0 {
+		t.Errorf("an older import: %d, %+v", outcome, d)
+	}
+	d = change(func(d *Data) {
+		outcome = d.ImportResume(ImportedResume{Position: 50 * time.Minute, Runtime: 2 * time.Hour, At: removed.Add(time.Hour)}, jellyfin)
+	})
+	if outcome != ResumeSet || d.Position != 50*time.Minute || d.PlayCount != 1 {
+		t.Errorf("a newer import: %d, %+v", outcome, d)
+	}
+}
+
+func TestHiddenTitlesArePerUserLatestFirst(t *testing.T) {
+	store, alice, bob := setup(t)
+	first, second := accounts.ID{1}, accounts.ID{2}
+	at := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+	for i, id := range []accounts.ID{first, second, first} {
+		if err := store.Hide(t.Context(), alice, id, at.Add(time.Duration(i)*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := store.Hidden(t.Context(), alice)
+	if err != nil || len(got) != 2 || got[0].ID != second || got[1].ID != first || !got[1].At.Equal(at) {
+		t.Errorf("hidden: %+v %v", got, err)
+	}
+	if theirs, err := store.Hidden(t.Context(), bob); err != nil || len(theirs) != 0 {
+		t.Errorf("another user's: %+v %v", theirs, err)
+	}
+	if shown, err := store.Show(t.Context(), alice, first); err != nil || !shown {
+		t.Errorf("showing: %v %v", shown, err)
+	}
+	if shown, err := store.Show(t.Context(), alice, first); err != nil || shown {
+		t.Errorf("showing again: %v %v", shown, err)
+	}
+	if got, err := store.Hidden(t.Context(), alice); err != nil || len(got) != 1 || got[0].ID != second {
+		t.Errorf("once shown: %+v %v", got, err)
+	}
+}

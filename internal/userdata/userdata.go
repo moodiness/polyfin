@@ -33,6 +33,9 @@ type Data struct {
 	// rated.
 	Rating     *float64
 	LastPlayed *time.Time
+	// ResumeRemoved is when the user last took the item off Continue
+	// Watching (see RemoveResume), nil if never.
+	ResumeRemoved *time.Time
 }
 
 // Likes tells whether the user likes the item, as Jellyfin reads a
@@ -75,14 +78,15 @@ func New(db *pgxpool.Pool) *Store {
 
 const columns = `item_id, coalesce(series_id, '00000000-0000-0000-0000-000000000000'),
 	coalesce(season_id, '00000000-0000-0000-0000-000000000000'),
-	played, play_count, position_ticks, runtime_ticks, favorite, rating, last_played_at`
+	played, play_count, position_ticks, runtime_ticks, favorite, rating, last_played_at, resume_removed_at`
 
 func scanEntry(row pgx.Row) (Entry, error) {
 	var e Entry
 	var position, runtime int64
 	var rating pgtype.Float8
-	var lastPlayed pgtype.Timestamptz
-	if err := row.Scan(&e.Item, &e.Series, &e.Season, &e.Played, &e.PlayCount, &position, &runtime, &e.Favorite, &rating, &lastPlayed); err != nil {
+	var lastPlayed, resumeRemoved pgtype.Timestamptz
+	if err := row.Scan(&e.Item, &e.Series, &e.Season, &e.Played, &e.PlayCount, &position, &runtime, &e.Favorite, &rating, &lastPlayed,
+		&resumeRemoved); err != nil {
 		return Entry{}, err
 	}
 	e.Position, e.Runtime = time.Duration(position)*tick, time.Duration(runtime)*tick
@@ -91,6 +95,9 @@ func scanEntry(row pgx.Row) (Entry, error) {
 	}
 	if lastPlayed.Valid {
 		e.LastPlayed = new(lastPlayed.Time.UTC())
+	}
+	if resumeRemoved.Valid {
+		e.ResumeRemoved = new(resumeRemoved.Time.UTC())
 	}
 	return e, nil
 }
@@ -231,6 +238,7 @@ func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, 
 		favorites := make([]bool, len(items))
 		ratings := make([]pgtype.Float8, len(items))
 		lastPlayed := make([]pgtype.Timestamptz, len(items))
+		resumeRemoved := make([]pgtype.Timestamptz, len(items))
 		for i, id := range ids {
 			data := byID[id]
 			change(items[i], &data)
@@ -243,13 +251,17 @@ func (s *Store) ChangeEach(ctx context.Context, user accounts.ID, items []Item, 
 			if data.LastPlayed != nil {
 				lastPlayed[i] = pgtype.Timestamptz{Time: *data.LastPlayed, Valid: true}
 			}
+			if data.ResumeRemoved != nil {
+				resumeRemoved[i] = pgtype.Timestamptz{Time: *data.ResumeRemoved, Valid: true}
+			}
 		}
 		_, err = tx.Exec(ctx, `UPDATE user_data SET played = c.played, play_count = c.play_count, position_ticks = c.position_ticks,
-				runtime_ticks = c.runtime_ticks, favorite = c.favorite, rating = c.rating, last_played_at = c.last_played_at
-			FROM unnest($2::uuid[], $3::bool[], $4::int[], $5::bigint[], $6::bigint[], $7::bool[], $8::float8[], $9::timestamptz[])
-				AS c (item_id, played, play_count, position_ticks, runtime_ticks, favorite, rating, last_played_at)
+				runtime_ticks = c.runtime_ticks, favorite = c.favorite, rating = c.rating, last_played_at = c.last_played_at,
+				resume_removed_at = c.resume_removed_at
+			FROM unnest($2::uuid[], $3::bool[], $4::int[], $5::bigint[], $6::bigint[], $7::bool[], $8::float8[], $9::timestamptz[], $10::timestamptz[])
+				AS c (item_id, played, play_count, position_ticks, runtime_ticks, favorite, rating, last_played_at, resume_removed_at)
 			WHERE user_data.user_id = $1 AND user_data.item_id = c.item_id`,
-			user, ids, played, counts, positions, runtimes, favorites, ratings, lastPlayed)
+			user, ids, played, counts, positions, runtimes, favorites, ratings, lastPlayed, resumeRemoved)
 		return err
 	})
 	return result, err
