@@ -41,6 +41,12 @@ On the admin app's **Libraries** page, an administrator can leave any of the ser
 
 **For app developers:** `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>}]}`. Polyfin's own Live TV, Playlists, Collections and Watchlist views are never left out.
 
+### Continue Watching and hidden titles
+
+Jellyfin apps have no button to take a title off Continue Watching without marking it played or unplayed, nor to hide a title from one's lists. The web player gets both in its ⋮ menus, and the admin app's **My account** lists both for the other apps (see [Watch state](users.md#watch-state)). Apps see the result at their next refresh: the title is gone from `/UserItems/Resume`, and a hidden title from every listing; it still opens by its identifier. Apps that keep the live connection (WebSocket) open are told of a `UserDataChanged` for the item, as for any other change.
+
+**For app developers:** `DELETE /Polyfin/UserItems/{id}/Resume` takes the item off Continue Watching, a series or a season its episodes, and answers its `UserItemData`. `POST /Polyfin/UserItems/{id}/Hidden` hides a movie, a home video or a series, a season or an episode standing for its series, and `DELETE` shows it again; both answer 204. `GET /Polyfin/UserItems/Hidden` lists the hidden titles, the latest hidden first, as a listing describes them.
+
 ### Profile pictures
 
 A user changes their own profile picture from their app; an administrator can change anyone's.

@@ -62,7 +62,7 @@ Polyfin finds the titles by their IMDb identifier, the way the usual metadata ad
 ### How the history merges with Polyfin's
 
 - **Played marks**: an import only adds them, never removes one. A title gets the service's date unless Polyfin's is later, and is played at least once; a title already played keeps its play count.
-- **Resume points**: only for titles not played. Of Polyfin's resume point and the service's, the more recent one stays. A position past **Marked played after (%)** marks the title played; one before **Resume point kept after (%)** is ignored (see [Played and resume thresholds](users.md#played-and-resume-thresholds)).
+- **Resume points**: only for titles not played. Of Polyfin's resume point and the service's, the more recent one stays. A title taken off **Continue Watching** gets back only a resume point set after it was taken off (see [Watch state](users.md#watch-state)). A position past **Marked played after (%)** marks the title played; one before **Resume point kept after (%)** is ignored (see [Played and resume thresholds](users.md#played-and-resume-thresholds)).
 - **Several services**: a title played on any of them is played, and the most recent resume point wins.
 - Apps see the changes the next time they refresh: an import does not push them through Jellyfin's live connection, which would ask the addons for every title it changed.
 

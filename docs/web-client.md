@@ -45,6 +45,14 @@ It leaves out of the top bar, its **More** menu and the side menu the libraries 
 
 When the server refuses to play a title, jellyfin-web 12.2 shows the reason, such as "This media cannot be played at this time due to rate limits." for a user playing on as many devices as allowed, then "There was an error processing the request" over it. The script closes that second, generic error as it opens, so only the reason shows. A real Jellyfin server gets the same two errors from jellyfin-web.
 
+It adds Polyfin's entries to the ⋮ menus of cards, which a right click on a card also opens, and of a title's page:
+
+- "Remove from Continue Watching", on a card of a Continue Watching row, the home page's or a library's: the title leaves the row, and keeps whether it is played;
+- "Hide this title", on a movie, a home video or a series, or on a season or an episode, which hides its series: the title leaves the user's lists, its cards leave the page, and a message says so;
+- "Show this title again", in its place, on a title the user hid.
+
+Their words follow the web client's language, English or French. See [Watch state](users.md#watch-state) for what they change.
+
 ### Signing in to the admin app
 
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
