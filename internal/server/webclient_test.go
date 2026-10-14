@@ -2417,17 +2417,21 @@ func TestItemMenusGetPolyfinsEntries(t *testing.T) {
 	// first, as Back closes it, then the change is sent. Then what the row
 	// draws when it refreshes, as the change's message has it do, from the
 	// answer jellyfin-web kept from before the change: the item taken off
-	// stays off, unless played again since.
+	// stays off, unless played again since. Then what a row draws from that
+	// same answer once the page loads again, as jellyfin-web keeps its
+	// answers in IndexedDB: a second, for the same user, for another user,
+	// and 2 minutes and a second later, by when the script kept nothing.
 	const page = "0123456789abcdef0123456789abcdef"
+	const untouched = " | reloaded m1,m2 | another user m1,m2 | later m1,m2"
 	scenarios := map[string]string{
-		"a card of Continue Watching":                 "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m2",
-		"a card right-clicked":                        "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m2",
-		"a card taken off, then played again":         "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m1,m2",
-		"a card of a row that does not resume":        "Hide this title => back, POST Polyfin/UserItems/m1/Hidden, card m1 gone, toast This title is hidden from your lists. | refreshed m2",
-		"a hidden title's page, in French":            "Afficher de nouveau ce titre => back, DELETE Polyfin/UserItems/" + page + "/Hidden, toast Ce titre est de retour dans vos listes. | refreshed m1,m2",
-		"a title's page":                              "Hide this title => back, POST Polyfin/UserItems/" + page + "/Hidden, toast This title is hidden from your lists. | refreshed m1,m2",
-		"an episode of a hidden series":               "Show this title again => back, DELETE Polyfin/UserItems/m1/Hidden, toast This title is back in your lists. | refreshed m1,m2",
-		"an episode card whose series the user hides": "Hide this title => back, POST Polyfin/UserItems/m1/Hidden, card m1 gone, toast This title is hidden from your lists. | refreshed m3",
+		"a card of Continue Watching":                 "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m2 | reloaded m2 | another user m1,m2 | later m1,m2",
+		"a card right-clicked":                        "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m2 | reloaded m2 | another user m1,m2 | later m1,m2",
+		"a card taken off, then played again":         "Remove from Continue Watching | Hide this title => back, DELETE Polyfin/UserItems/m1/Resume, card m1 gone | refreshed m1,m2" + untouched,
+		"a card of a row that does not resume":        "Hide this title => back, POST Polyfin/UserItems/m1/Hidden, card m1 gone, toast This title is hidden from your lists. | refreshed m2 | reloaded m2 | another user m1,m2 | later m1,m2",
+		"a hidden title's page, in French":            "Afficher de nouveau ce titre => back, DELETE Polyfin/UserItems/" + page + "/Hidden, toast Ce titre est de retour dans vos listes. | refreshed m1,m2" + untouched,
+		"a title's page":                              "Hide this title => back, POST Polyfin/UserItems/" + page + "/Hidden, toast This title is hidden from your lists. | refreshed m1,m2" + untouched,
+		"an episode of a hidden series":               "Show this title again => back, DELETE Polyfin/UserItems/m1/Hidden, toast This title is back in your lists. | refreshed m1,m2" + untouched,
+		"an episode card whose series the user hides": "Hide this title => back, POST Polyfin/UserItems/m1/Hidden, card m1 gone, toast This title is hidden from your lists. | refreshed m3 | reloaded m3 | another user m1,m2,m3 | later m1,m2,m3",
 		"a person's card":                             "",
 		"another click before the menu":               "",
 		"a menu too late":                             "",
@@ -2452,20 +2456,21 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
       const set = new Set(initial)
       return { add: (...c) => c.forEach((x) => set.add(x)), contains: (c) => set.has(c), has: set }
     }
-    // A row of cards, the first the one the menu is for.
+    // A row of cards, the first the one the menu is for: a div, whose
+    // fetchData jellyfin-web sets once the script runs.
     const section = { classList: classes(['verticalSection']) }
-    const row = { cards: [] }
+    class HTMLDivElement {}
+    const row = Object.assign(Object.create(HTMLDivElement.prototype), { cards: [] })
     row.closest = (s) => (s === '.verticalSection' ? section : null)
     row.querySelectorAll = (s) => (s === '.card[data-id]' ? row.cards : [])
     row.querySelector = (s) => (s === '.card' ? row.cards[0] || null : null)
     // What the row drew last, as jellyfin-web keeps it, and draws again
-    // when it refreshes within the minute.
+    // when it refreshes within the minute: a Continue Watching row.
     const kept = { Items: [
-      { Id: 'm1', UserData: { LastPlayedDate: name.includes('played again') ? '2026-10-03T20:00:00.0000000Z' : '2026-10-01T20:00:00.0000000Z' } },
-      { Id: 'm2', SeriesId: name.includes('user hides') ? 's1' : undefined },
-      { Id: 'm3' },
+      { Id: 'm1', UserData: { PlaybackPositionTicks: 6000, LastPlayedDate: name.includes('played again') ? '2026-10-03T20:00:00.0000000Z' : '2026-10-01T20:00:00.0000000Z' } },
+      { Id: 'm2', SeriesId: name.includes('user hides') ? 's1' : undefined, UserData: { PlaybackPositionTicks: 6000 } },
+      { Id: 'm3', UserData: { PlaybackPositionTicks: 6000 } },
     ].filter((item) => name.includes('user hides') || item.Id !== 'm3') }
-    row.fetchData = () => Promise.resolve(kept)
     const card = (id, resumes) => {
       const c = { id, attributes: { 'data-id': id, 'data-positionticks': resumes ? '6000' : null } }
       c.getAttribute = (a) => c.attributes[a] || null
@@ -2488,6 +2493,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     const hidden = name.includes('hidden') ? [{ Id: name.includes('episode') ? 's1' : 'm1' }] : []
     const ApiClient = {
       getCurrentUserId: () => 'u1',
+      serverId: () => 'srv',
       getUrl: (path) => path,
       getItem: (user, id) => Promise.resolve(items[id]),
       getJSON: (url) => Promise.resolve(url.endsWith('/Ratings') ? { Pending: false }
@@ -2531,12 +2537,20 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
       if (hidden.length && hidden[0].Id === 'm1') hidden[0].Id = '0123456789abcdef0123456789abcdef'
     }
     const history = { pushState: () => {}, replaceState: () => {}, back: () => did.push('back') }
+    // The session's storage, which outlives a reload.
+    const stored = {}
+    const sessionStorage = {
+      getItem: (key) => (key in stored ? stored[key] : null),
+      setItem: (key, value) => { stored[key] = String(value) },
+      removeItem: (key) => { delete stored[key] },
+    }
     vm.runInNewContext(script, {
-      location, history, URL, document, MutationObserver, Promise,
-      window: { ApiClient, innerHeight: 800, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } },
+      location, history, URL, document, MutationObserver, Promise, HTMLDivElement, WeakMap,
+      window: { ApiClient, innerHeight: 800, sessionStorage, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } },
       Date: { now: () => now, parse: Date.parse }, setTimeout: (run) => run(), clearTimeout: () => {},
       addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
     })
+    row.fetchData = () => Promise.resolve(kept)
     const fire = (type, event) => { for (const listener of listeners[type] || []) listener(event) }
     fire(name.includes('right-clicked') ? 'contextmenu' : 'click', { type: name.includes('right-clicked') ? 'contextmenu' : 'click', target })
     if (name.includes('another click')) fire('click', { type: 'click', target: { closest: () => null } })
@@ -2555,6 +2569,28 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
       const answer = await row.fetchData()
       refreshed = ' | refreshed ' + answer.Items.map((item) => item.Id).join(',')
       if (kept.Items.length !== (name.includes('user hides') ? 3 : 2)) refreshed += ' (the answer kept changed)'
+      // The page loads again: the script runs anew, with the session's
+      // storage, and a new row draws the answer kept.
+      const reload = async (user, at) => {
+        now = at
+        class Div {}
+        const again = Object.create(Div.prototype)
+        vm.runInNewContext(script, {
+          location: { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} },
+          history: { pushState: () => {}, replaceState: () => {}, back: () => {} }, URL, MutationObserver, Promise, HTMLDivElement: Div, WeakMap,
+          document: { head: { appendChild: () => {} }, body: { appendChild: () => {} }, documentElement: { lang: 'en' }, createElement: element,
+            querySelector: () => null, querySelectorAll: () => [] },
+          window: { ApiClient: Object.assign({}, ApiClient, { getCurrentUserId: () => user }), innerHeight: 800, sessionStorage,
+            localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } },
+          Date: { now: () => now, parse: Date.parse }, setTimeout: () => {}, clearTimeout: () => {}, addEventListener: () => {},
+        })
+        again.fetchData = () => Promise.resolve(kept)
+        return (await again.fetchData()).Items.map((item) => item.Id).join(',')
+      }
+      refreshed += ' | reloaded ' + (await reload('u1', 1000))
+      refreshed += ' | another user ' + (await reload('u2', 1000))
+      refreshed += ' | later ' + (await reload('u1', 121000))
+      if (Object.keys(stored).length) refreshed += ' (still kept: ' + JSON.stringify(stored) + ')'
     }
     results[name] = words.join(' | ') + (pressed ? ' => ' + pressed : '') + refreshed
   }

@@ -53,6 +53,8 @@ It adds Polyfin's entries to the ⋮ menus of cards, which a right click on a ca
 
 Their words follow the web client's language, English or French. See [Watch state](users.md#watch-state) for what they change.
 
+jellyfin-web keeps what its home rows list for up to a minute, also across a reload, and draws a row again from it without asking. So that a card taken off does not come back meanwhile, the script remembers what it took off for 2 minutes, in the browser tab's session storage, for that server and user only, and leaves it out of the rows. Nothing is kept past that.
+
 ### Signing in to the admin app
 
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.

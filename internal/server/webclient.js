@@ -191,12 +191,17 @@
 // the first action sheet that opens within 10 seconds, no other click
 // coming between, gets the entries once the answers come. An entry closes
 // the menu as Back does, then acts. jellyfin-web 12.2 keeps the answers of
-// its rows for a minute, and a row the change's UserDataChanged message
-// refreshes within it draws that answer again, asking nothing: the
-// script has the rows' refreshes (their fetchData) leave out the item
-// taken off Continue Watching, unless played since its last play then,
-// and the titles hidden, until shown again. Its words follow
-// jellyfin-web's language, as the third's. Any error just stops it.
+// its rows for a minute, in memory and in the browser's IndexedDB, and
+// draws a row from such an answer, asking nothing, when the change's
+// UserDataChanged message refreshes it or when the page loads again within
+// that minute. The script keeps what its entries took off in the
+// browser's session storage, for the server and user, for 2 minutes, and
+// has every row's answers (their fetchData) leave out, meanwhile, the item
+// taken off Continue Watching from rows whose items all resume, unless
+// played since its last play then, and the titles hidden, with what is in
+// them, from every row. Nothing is kept longer: an older answer is asked
+// again, and Polyfin's leaves them out. Its words follow jellyfin-web's
+// language, as the third's. Any error just stops it.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -1364,14 +1369,7 @@
               act(entry.id, 'DELETE', 'Resume', function (data) {
                 // The answer is what the user did with the item afterwards:
                 // its last play, before the resume point went.
-                var last = Date.parse((data && data.LastPlayedDate) || '') || 0
-                var row = entry.card && entry.card.closest('.itemsContainer')
-                if (row) {
-                  screen(row, function (item) {
-                    var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
-                    return plainId(item.Id) === entry.id && played <= last
-                  })
-                }
+                keepDrop({ kind: 'resume', id: entry.id, last: Date.parse((data && data.LastPlayedDate) || '') || 0 })
                 dropCards(entry.card ? [entry.card] : [])
               })
             }),
@@ -1381,8 +1379,7 @@
           scroller.appendChild(
             menuItem(container, model, 'visibility', say('show'), function () {
               act(entry.id, 'DELETE', 'Hidden', function () {
-                delete hiddenNow[entry.id]
-                delete hiddenNow[facts.series]
+                forgetHidden([entry.id, facts.series])
                 toast(say('shown'))
               })
             }),
@@ -1393,10 +1390,7 @@
               act(entry.id, 'POST', 'Hidden', function () {
                 var titles = [entry.id, facts.series].filter(Boolean)
                 titles.forEach(function (title) {
-                  hiddenNow[title] = true
-                })
-                Array.prototype.forEach.call(document.querySelectorAll('.itemsContainer'), function (row) {
-                  screen(row, hiddenItem)
+                  keepDrop({ kind: 'hidden', id: title })
                 })
                 var cards = Array.prototype.filter.call(document.querySelectorAll('.card[data-id]'), function (card) {
                   return titles.indexOf(plainId(card.getAttribute('data-id'))) >= 0
@@ -1453,36 +1447,104 @@
     if (path === 'Resume') request.dataType = 'json'
     api.ajax(request).then(quietly(done), function () {})
   }
-  // jellyfin-web 12.2 keeps its rows' answers for a minute, and a row that
-  // refreshes within it, as the change's message on the socket has it do,
-  // draws them again from the answer kept: the cards an entry took off
-  // would come back until the page loads again. screen has the rows'
-  // refreshes leave out, from then on, what drop matches; the answer kept
-  // is left as it is. The titles hidden are left out of every row of the
-  // page, until shown again.
-  var hiddenNow = {}
-  function hiddenItem(item) {
-    return !!(hiddenNow[plainId(item.Id)] || (item.SeriesId && hiddenNow[plainId(item.SeriesId)]))
+  // What the entries took off (see the header), kept in the browser's
+  // session storage under dropsKey for dropsKept: jellyfin-web keeps its
+  // answers for a minute. Each names the server and user it is for, and
+  // the item: taken off Continue Watching (resume), with its last play
+  // then, or hidden (hidden), a series standing for what is in it.
+  var dropsKey = 'polyfinDrops'
+  var dropsKept = 120000
+  var drops = []
+  try {
+    var savedDrops = JSON.parse(window.sessionStorage.getItem(dropsKey))
+    if (Array.isArray(savedDrops)) drops = savedDrops
+  } catch (error) {}
+  // Those kept too long are forgotten as soon as the page loads.
+  if (drops.length) saveDrops()
+  function viewerKey() {
+    var api = window.ApiClient
+    if (!api) return ''
+    return (typeof api.serverId === 'function' ? api.serverId() : '') + '/' + (api.getCurrentUserId() || '')
   }
-  function screen(row, drop) {
-    if (typeof row.fetchData !== 'function') return
-    if (!row.polyfinDrops) {
-      var fetch = row.fetchData
-      var drops = (row.polyfinDrops = [])
-      row.fetchData = function () {
-        return fetch.apply(this, arguments).then(function (answer) {
-          function kept(item) {
-            return !item || !drops.some(function (drop) {
-              return drop(item)
-            })
+  // liveDrops forgets the drops kept for longer than dropsKept.
+  function liveDrops() {
+    var now = Date.now()
+    drops = drops.filter(function (drop) {
+      return !!drop && drop.until > now
+    })
+    return drops
+  }
+  function saveDrops() {
+    try {
+      if (liveDrops().length) window.sessionStorage.setItem(dropsKey, JSON.stringify(drops))
+      else window.sessionStorage.removeItem(dropsKey)
+    } catch (error) {}
+  }
+  function keepDrop(drop) {
+    drop.viewer = viewerKey()
+    drop.until = Date.now() + dropsKept
+    drops.push(drop)
+    saveDrops()
+  }
+  function forgetHidden(ids) {
+    drops = drops.filter(function (drop) {
+      return !(drop && drop.kind === 'hidden' && ids.indexOf(drop.id) >= 0)
+    })
+    saveDrops()
+  }
+  // screened is a row's answer without what the drops of the user signed
+  // in take off; the answer itself is left as it is.
+  function screened(answer) {
+    var viewer = viewerKey()
+    var mine = liveDrops().filter(function (drop) {
+      return drop.viewer === viewer
+    })
+    var items = Array.isArray(answer) ? answer : answer && Array.isArray(answer.Items) ? answer.Items : null
+    if (!mine.length || !items) return answer
+    var resumes =
+      items.length > 0 &&
+      items.every(function (item) {
+        return !!item && !!item.UserData && item.UserData.PlaybackPositionTicks > 0
+      })
+    var kept = items.filter(function (item) {
+      return (
+        !item ||
+        !mine.some(function (drop) {
+          if (drop.kind === 'hidden') {
+            return plainId(item.Id) === drop.id || (!!item.SeriesId && plainId(item.SeriesId) === drop.id)
           }
-          if (Array.isArray(answer)) return answer.filter(kept)
-          if (answer && Array.isArray(answer.Items)) return Object.assign({}, answer, { Items: answer.Items.filter(kept) })
-          return answer
+          var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
+          return resumes && plainId(item.Id) === drop.id && played <= drop.last
         })
-      }
-    }
-    if (row.polyfinDrops.indexOf(drop) < 0) row.polyfinDrops.push(drop)
+      )
+    })
+    if (kept.length === items.length) return answer
+    return Array.isArray(answer) ? kept : Object.assign({}, answer, { Items: kept })
+  }
+  // Every row's fetchData goes through screened, as jellyfin-web sets it on
+  // the row: rows are divs, and the script runs before jellyfin-web.
+  if (typeof HTMLDivElement === 'function' && typeof WeakMap === 'function') {
+    var fetchers = new WeakMap()
+    Object.defineProperty(HTMLDivElement.prototype, 'fetchData', {
+      configurable: true,
+      get: function () {
+        return fetchers.get(this)
+      },
+      set: function (fetch) {
+        if (typeof fetch !== 'function') return fetchers.set(this, fetch)
+        fetchers.set(this, function () {
+          var answer = fetch.apply(this, arguments)
+          if (!answer || typeof answer.then !== 'function') return answer
+          return answer.then(function (got) {
+            try {
+              return screened(got)
+            } catch (error) {
+              return got
+            }
+          })
+        })
+      },
+    })
   }
   // dropCards takes cards off the page, and hides a home row left empty.
   function dropCards(cards) {
