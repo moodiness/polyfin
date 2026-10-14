@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/loudness"
@@ -85,7 +86,10 @@ type Options struct {
 	Playlists *playlists.Store
 	// Collections stores the collections users make.
 	Collections *collections.Store
-	Logger      *slog.Logger
+	// HomeRows keeps the rows the web player adds to its home page (see
+	// customrows.go); nil keeps none.
+	HomeRows *homerows.Store
+	Logger   *slog.Logger
 	// Activity records what happens for the activity log; nil records
 	// nothing.
 	Activity *activity.Store

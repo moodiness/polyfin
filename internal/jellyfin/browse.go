@@ -37,6 +37,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Items/{itemId}/Ancestors", h.ancestors)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Versions", h.versionProgress)
 	signedIn(http.MethodGet, "/Polyfin/UserViews", h.menuViews)
+	signedIn(http.MethodGet, "/Polyfin/HomeRows", h.customRowsAnswer)
 	signedIn(http.MethodPost, "/Polyfin/Items/{itemId}/Versions/Search", h.searchVersions)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Ratings", h.titleRatings)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Seasons", h.seasons)
@@ -249,6 +250,9 @@ func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden b
 	}
 	if err == nil {
 		items, err = h.addWatchlistView(r, user, items)
+	}
+	if err == nil {
+		items, err = h.addCustomRowViews(r, user, items)
 	}
 	if err != nil {
 		return nil, err
@@ -487,6 +491,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		page, err = h.Library.Children(ctx, user, parent, max(start, 0), limit, genre)
 	}
 	read := time.Since(asked)
+	if errors.Is(err, library.ErrNotFound) && h.customRowListing(w, r, user, parent, start, limit) {
+		return
+	}
 	if errors.Is(err, library.ErrNotFound) {
 		// Jellyfin refuses to list a folder it does not know.
 		processingError(w, http.StatusBadRequest)
@@ -626,6 +633,9 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 		items = items[:min(len(items), limit)]
 	} else {
 		page, err := h.Library.Latest(r.Context(), user, parent, limit)
+		if errors.Is(err, library.ErrNotFound) && h.customRowLatest(w, r, user, parent, limit) {
+			return
+		}
 		if errors.Is(err, library.ErrNotFound) {
 			writeJSON(w, http.StatusOK, []BaseItemDto{})
 			return
@@ -689,6 +699,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, library.ErrNotFound) && h.describeRecording(w, r, user, id) {
 		return
 	}
+	if errors.Is(err, library.ErrNotFound) && h.describeCustomRow(w, r, user, id) {
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -737,7 +750,8 @@ func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
 		id = owner
 	}
 	folders, err := h.Library.Ancestors(r.Context(), user, id)
-	if errors.Is(err, library.ErrNotFound) && (h.collectionAncestors(w, r, user, id) || h.playlistAncestors(w, r, user, id)) {
+	if errors.Is(err, library.ErrNotFound) && (h.collectionAncestors(w, r, user, id) || h.playlistAncestors(w, r, user, id) ||
+		h.customRowAncestors(w, r, user, id)) {
 		return
 	}
 	if err != nil {

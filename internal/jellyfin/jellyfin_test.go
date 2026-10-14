@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
@@ -143,6 +144,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 		UserData:      userdata.New(pool),
 		Playlists:     playlists.New(pool),
 		Collections:   collections.New(pool),
+		HomeRows:      homerows.New(pool),
 		Thumbnails:    images,
 		Logger:        logger,
 		Activity:      activityLog,
