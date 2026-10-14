@@ -5,7 +5,8 @@
 // the menus for a seventh, gives members a link to the admin app for an
 // eighth, shows a title's three scores for a ninth, adds entries to the
 // item menus for a tenth, adds the server's home rows to the home page for
-// an eleventh, and offers to share a movie or an episode for a twelfth.
+// an eleventh, offers to share a movie or an episode for a twelfth, and adds
+// reminders to a programme's page for a thirteenth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -247,6 +248,30 @@
 // the page anew; nothing changes during a video, and the button goes as the
 // route leaves the title. Its word follows jellyfin-web's language, as for
 // the third. Any error just stops it.
+//
+// Thirteenth, on the page of a Live TV programme that has not started, it
+// adds Polyfin's reminders after the record buttons (.recordingFields,
+// which jellyfin-web draws on every title page and fills for programmes):
+// "Remind me", which has Polyfin tell the user, on their own notification
+// targets, a few minutes before the programme starts, and a menu button
+// whose menu offers "Remind me of every airing": the programmes of the
+// same title on the same channel at the same time of day, within ten
+// minutes, as a series timer finds them. A programme with a reminder shows
+// "Reminder set" instead, which removes it, or the series reminder that
+// made it: a line under the button then tells every airing at about which
+// time. When no target of the user chose Programme starting, and their
+// apps do not show reminders, a line says so, with a link to My account ›
+// Notifications in the admin app. Jellyfin has no reminder: the script asks
+// Polyfin's /Polyfin/Reminders/Programs/{id}, which answers how the
+// programme stands, and nothing useful for an item that is not a programme
+// of the user's guide or for a user without Live TV, who get no button; it
+// posts to /Polyfin/Reminders to set one, with the page's language, which
+// the message is written in, and deletes /Polyfin/Reminders/{id} to remove
+// one. It asks once jellyfin-web has drawn the page's recording fields,
+// and a MutationObserver puts the buttons back as jellyfin-web renders the
+// page anew. Its words follow jellyfin-web's language, as the third's. It
+// never changes the page during a video, and takes the buttons off as the
+// route leaves the programme. Any error just stops it.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -2047,4 +2072,324 @@
   }
   if (document.body) watch()
   else addEventListener('DOMContentLoaded', watch)
+})()
+
+// Polyfin's programme reminders (see the header's thirteenth), on their own:
+// they follow the routes themselves.
+;(function () {
+  var route = /^#!?\/details\?(?:[^#]*&)?id=([0-9a-f]{32})(?:[&#]|$)/i
+  var words = {
+    en: {
+      remind: 'Remind me',
+      set: 'Reminder set',
+      every: 'Remind me of every airing',
+      more: 'More reminders',
+      remove: 'Remove the reminder',
+      everyAiring: 'Reminds you of every airing at about ',
+      noTarget: 'No target of yours receives reminders yet: choose Programme starting for one in ',
+      notifications: 'My account › Notifications',
+      added: 'Reminder set: you will be told before it starts.',
+      removed: 'Reminder removed.',
+    },
+    fr: {
+      remind: 'Me le rappeler',
+      set: 'Rappel prévu',
+      every: 'Me rappeler chaque diffusion',
+      more: 'Autres rappels',
+      remove: 'Supprimer le rappel',
+      everyAiring: 'Vous rappelle chaque diffusion vers ',
+      noTarget: 'Aucune de vos cibles ne reçoit encore les rappels : choisissez « Début d’une émission » pour l’une d’elles dans ',
+      notifications: 'Mon compte › Notifications',
+      added: 'Rappel prévu : vous serez prévenu avant le début.',
+      removed: 'Rappel supprimé.',
+    },
+  }
+  function language() {
+    return /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
+  }
+  function say(key) {
+    return (words[language()] || words.en)[key]
+  }
+  // The programme whose page is followed, how it stands as Polyfin last
+  // answered, whether it was asked, whether a change is under way, the
+  // buttons drawn and the answer they were drawn for, and the observer of
+  // the document while the page is followed.
+  var program = ''
+  var state = null
+  var asked = false
+  var busy = false
+  var drawn = null
+  var drawnFor = null
+  var watcher = null
+  function quietly(listener) {
+    return function () {
+      try {
+        listener.apply(this, arguments)
+      } catch (error) {}
+    }
+  }
+  // shownPage returns the title page shown, unless a video is.
+  function shownPage() {
+    if (document.querySelector('.videoPlayerContainer')) return null
+    return document.querySelector('.page.itemDetailPage:not(.hide)')
+  }
+  // follow starts following the page of the programme the route opens,
+  // or stops, taking the buttons off.
+  function follow() {
+    var match = route.exec(location.hash)
+    var id = match ? match[1].toLowerCase() : ''
+    if (id === program) return
+    program = id
+    state = null
+    asked = false
+    busy = false
+    undraw()
+    if (!id) {
+      if (watcher) watcher.disconnect()
+      watcher = null
+      return
+    }
+    if (!watcher && document.body) {
+      watcher = new MutationObserver(quietly(place))
+      watcher.observe(document.body, { childList: true, subtree: true })
+    }
+    place()
+  }
+  // undraw takes the buttons off.
+  function undraw() {
+    if (drawn && drawn.parentNode) drawn.parentNode.removeChild(drawn)
+    drawn = null
+    drawnFor = null
+  }
+  // place asks Polyfin how the programme stands once jellyfin-web drew
+  // the page's recording fields, then puts the buttons after them, again
+  // whenever jellyfin-web renders the page anew.
+  function place() {
+    if (!program) return
+    var page = shownPage()
+    var fields = page && page.querySelector('.recordingFields')
+    if (!fields) return
+    if (!asked) return ask(program)
+    if (!state || state.Started) return undraw()
+    if (drawn && drawnFor === state && drawn.parentNode === fields.parentNode && drawn.previousSibling === fields) return
+    undraw()
+    style()
+    drawn = draw()
+    drawnFor = state
+    fields.parentNode.insertBefore(drawn, fields.nextSibling)
+  }
+  // ask asks Polyfin how the programme id stands: an item that is not a
+  // programme of the user's guide, or a user without Live TV, gets no
+  // answer, and no button.
+  function ask(id) {
+    var api = window.ApiClient
+    if (!api) return
+    asked = true
+    api.getJSON(api.getUrl('Polyfin/Reminders/Programs/' + id)).then(
+      quietly(function (answer) {
+        if (program !== id || !answer || String(answer.ProgramId || '').toLowerCase() !== id) return
+        state = answer
+        place()
+      }),
+      function () {},
+    )
+  }
+  // button makes a button styled as jellyfin-web's record buttons.
+  function button(className, icon, text) {
+    var made = document.createElement('button')
+    made.type = 'button'
+    made.className = 'raised emby-button ' + className
+    var mark = document.createElement('span')
+    mark.className = 'material-icons polyfinReminderIcon ' + icon
+    mark.setAttribute('aria-hidden', 'true')
+    made.appendChild(mark)
+    if (text) {
+      var label = document.createElement('span')
+      label.textContent = text
+      made.appendChild(label)
+    }
+    return made
+  }
+  // draw makes the buttons for the answer: Remind me, or Reminder set,
+  // and the menu button, unless a series reminder made the reminder; then
+  // the lines that tell of a series reminder, and that no target receives
+  // reminders.
+  function draw() {
+    var block = document.createElement('div')
+    block.className = 'polyfinReminders'
+    var row = document.createElement('div')
+    row.className = 'polyfinReminderRow'
+    block.appendChild(row)
+    var set = !!state.ReminderId
+    var main = button('polyfinRemind' + (set ? ' polyfinReminderSet' : ''), set ? 'notifications_active' : 'notifications_none', say(set ? 'set' : 'remind'))
+    if (set) main.title = say('remove')
+    main.disabled = busy
+    main.addEventListener('click', quietly(set ? remove : remind(false)))
+    row.appendChild(main)
+    if (!state.SeriesReminderId) {
+      var more = button('polyfinReminderMore', 'expand_more', '')
+      more.title = say('more')
+      more.setAttribute('aria-label', say('more'))
+      more.setAttribute('aria-haspopup', 'menu')
+      more.setAttribute('aria-expanded', 'false')
+      more.disabled = busy
+      var menu = document.createElement('div')
+      menu.className = 'polyfinReminderMenu hide'
+      menu.setAttribute('role', 'menu')
+      var every = document.createElement('button')
+      every.type = 'button'
+      every.className = 'polyfinReminderEvery'
+      every.setAttribute('role', 'menuitem')
+      every.textContent = say('every')
+      every.addEventListener('click', quietly(remind(true)))
+      menu.appendChild(every)
+      more.addEventListener(
+        'click',
+        quietly(function () {
+          var open = menu.classList.contains('hide')
+          menu.classList.toggle('hide', !open)
+          more.setAttribute('aria-expanded', open ? 'true' : 'false')
+          if (open) every.focus()
+        }),
+      )
+      row.appendChild(more)
+      row.appendChild(menu)
+    }
+    if (state.SeriesReminderId && state.SeriesStartDate) {
+      var time = new Date(state.SeriesStartDate).toLocaleTimeString(document.documentElement.lang || undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      block.appendChild(note(say('everyAiring') + time + '.'))
+    }
+    if (!state.Reaches) {
+      var hint = note(say('noTarget'))
+      var link = document.createElement('a')
+      link.className = 'polyfinReminderLink'
+      link.href = new URL('..' + (state.NotificationsUrl || '/admin/me/account#notifications'), location.href).href
+      link.textContent = say('notifications')
+      hint.appendChild(link)
+      hint.appendChild(document.createTextNode('.'))
+      block.appendChild(hint)
+    }
+    return block
+  }
+  function note(text) {
+    var line = document.createElement('div')
+    line.className = 'polyfinReminderNote'
+    line.textContent = text
+    return line
+  }
+  // remind sets a reminder of the programme, or of every airing.
+  function remind(series) {
+    return function () {
+      send('POST', 'Polyfin/Reminders', { ProgramId: program, Series: series, Language: language() })
+    }
+  }
+  // remove removes the reminder shown: the series reminder that made it,
+  // if any.
+  function remove() {
+    send('DELETE', 'Polyfin/Reminders/' + (state.SeriesReminderId || state.ReminderId))
+  }
+  // send sends a change, then shows how the programme stands, and says so.
+  function send(method, path, body) {
+    var api = window.ApiClient
+    if (!api || busy) return
+    var id = program
+    busy = true
+    drawnFor = null
+    place()
+    var request = { type: method, url: api.getUrl(path) }
+    if (body) {
+      request.data = JSON.stringify(body)
+      request.contentType = 'application/json'
+      request.dataType = 'json'
+    }
+    api.ajax(request).then(
+      quietly(function (answer) {
+        if (program !== id) return
+        busy = false
+        if (body && answer && answer.ProgramId) state = answer
+        else state = Object.assign({}, state, { ReminderId: '', SeriesReminderId: '', SeriesStartDate: null })
+        toast(say(body ? 'added' : 'removed'))
+        place()
+      }),
+      quietly(function () {
+        if (program !== id) return
+        busy = false
+        drawnFor = null
+        place()
+      }),
+    )
+  }
+  // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
+  function toast(text) {
+    var holder = document.querySelector('.toastContainer')
+    if (!holder) {
+      holder = document.createElement('div')
+      holder.className = 'toastContainer'
+      document.body.appendChild(holder)
+    }
+    var shown = document.createElement('div')
+    shown.className = 'toast'
+    shown.textContent = text
+    holder.appendChild(shown)
+    setTimeout(function () {
+      shown.classList.add('toastVisible')
+    }, 50)
+    setTimeout(function () {
+      shown.classList.add('toastHide')
+      setTimeout(function () {
+        if (shown.parentNode) shown.parentNode.removeChild(shown)
+      }, 300)
+    }, 3300)
+  }
+  // style adds the look of the buttons, the menu and the lines, once.
+  function style() {
+    if (document.getElementById('polyfinRemindersStyle')) return
+    var sheet = document.createElement('style')
+    sheet.id = 'polyfinRemindersStyle'
+    sheet.textContent =
+      '.polyfinReminders{margin:-.5em 0 1.5em}' +
+      '.polyfinReminderRow{position:relative;display:inline-flex;align-items:center;gap:.3em}' +
+      '.polyfinRemind{min-width:10em;margin:0}' +
+      '.polyfinReminderIcon{margin-right:.4em}' +
+      '.polyfinReminderSet .polyfinReminderIcon{color:#00a4dc}' +
+      '.polyfinReminderMore{margin:0;padding-left:.5em;padding-right:.5em;min-width:0}' +
+      '.polyfinReminderMore .polyfinReminderIcon{margin:0}' +
+      '.polyfinReminderMenu{position:absolute;top:100%;left:0;z-index:10;margin-top:.3em;padding:.3em 0;border-radius:.3em;' +
+      'background:#202020;box-shadow:0 .2em .8em rgba(0,0,0,.6)}' +
+      '.polyfinReminderMenu.hide{display:none}' +
+      '.polyfinReminderEvery{display:block;width:100%;padding:.8em 1.2em;border:0;background:none;color:inherit;font:inherit;' +
+      'text-align:left;white-space:nowrap;cursor:pointer}' +
+      '.polyfinReminderEvery:hover,.polyfinReminderEvery:focus{background:rgba(255,255,255,.1)}' +
+      '.polyfinReminderNote{margin-top:.6em;opacity:.8}' +
+      '.polyfinReminderLink{color:#00a4dc}'
+    document.head.appendChild(sheet)
+  }
+  // The router moves through history.pushState and replaceState, which
+  // fire no event; links and typed addresses fire hashchange.
+  ;['pushState', 'replaceState'].forEach(function (name) {
+    var original = history[name]
+    history[name] = function () {
+      var result = original.apply(this, arguments)
+      quietly(follow)()
+      return result
+    }
+  })
+  addEventListener('hashchange', quietly(follow))
+  addEventListener('popstate', quietly(follow))
+  // A click outside the menu closes it.
+  addEventListener(
+    'click',
+    quietly(function (event) {
+      var menu = drawn && drawn.querySelector('.polyfinReminderMenu')
+      if (!menu || menu.classList.contains('hide')) return
+      var target = event.target
+      if (target && target.closest && target.closest('.polyfinReminderRow')) return
+      menu.classList.add('hide')
+    }),
+    true,
+  )
+  quietly(follow)()
 })()
