@@ -121,6 +121,17 @@ const account = {
         'Your stars become your rating out of 10: 3.5 stars is 7. A rating you already have in Polyfin stays.',
       likes: 'Liked movies as favorites',
       likesHelp: 'The movies you liked on Letterboxd become your favorites.',
+      /** The same, on an administrator's page importing into a user's account. */
+      forUser: {
+        watchedHelp:
+          'The movies they watched are marked played, on the latest date their diary gives, as many times as it logs them. Each movie is searched by its name and year in the server’s metadata addons, and kept when they know exactly one movie of that name and year.',
+        watchlist: 'Watchlist to their Watchlist',
+        watchlistHelp:
+          'The movies of their Letterboxd watchlist go to their Watchlist in Jellyfin apps, until they start them.',
+        ratingsHelp:
+          'Their stars become their rating out of 10: 3.5 stars is 7. A rating they already have in Polyfin stays.',
+        likesHelp: 'The movies they liked on Letterboxd become their favorites.',
+      },
       start: 'Import from Letterboxd',
       starting: 'Sending…',
       started: 'The import has started. You can leave this page: it goes on.',

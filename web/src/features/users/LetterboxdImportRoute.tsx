@@ -77,6 +77,7 @@ export default function LetterboxdImportRoute() {
                   <LetterboxdForm
                     key={userId}
                     searchable={status.data.searchable}
+                    own={false}
                     start={(upload) => startUserLetterboxdImport(userId, upload)}
                     onStarted={(started) =>
                       queryClient.setQueryData<UserLetterboxdImport>(

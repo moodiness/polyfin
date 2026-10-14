@@ -40,21 +40,25 @@ const fileCodes = ['letterboxd_export_invalid', 'letterboxd_export_too_large']
  * My account, or a user's, for an administrator. The file only lives in the form's state; the
  * server reads it in memory and never keeps it. `searchable` is false when no metadata addon of the
  * server searches movies, which the form says before anything is sent. `header` comes first in the
- * form, such as the choice of the kind of import.
+ * form, such as the choice of the kind of import. `own` is the user's own account, under My
+ * account: the form speaks to them; else it speaks of the user.
  */
 export function LetterboxdForm({
   searchable,
+  own,
   start,
   onStarted,
   header,
 }: {
   searchable: boolean
+  own: boolean
   start: (upload: LetterboxdUpload) => Promise<LetterboxdImportStatus>
   onStarted: (started: LetterboxdImportStatus) => void
   header?: ReactNode
 }) {
   const { t } = useI18n()
   const text = t.account.letterboxd
+  const person = own ? text : text.forUser
   const toast = useToast()
   const [file, setFile] = useState<File | null>(null)
   const [watchlist, setWatchlist] = useState(true)
@@ -99,25 +103,25 @@ export function LetterboxdForm({
             }}
           />
         </Field>
-        <p className="text-small text-ink-3">{text.watchedHelp}</p>
+        <p className="text-small text-ink-3">{person.watchedHelp}</p>
         <div className="flex flex-col gap-4">
           <Checkbox
             checked={watchlist}
             onChange={setWatchlist}
-            label={text.watchlist}
-            help={text.watchlistHelp}
+            label={person.watchlist}
+            help={person.watchlistHelp}
           />
           <Checkbox
             checked={ratings}
             onChange={setRatings}
             label={text.ratings}
-            help={text.ratingsHelp}
+            help={person.ratingsHelp}
           />
           <Checkbox
             checked={likesAsFavorites}
             onChange={setLikesAsFavorites}
             label={text.likes}
-            help={text.likesHelp}
+            help={person.likesHelp}
           />
         </div>
         {otherError && (

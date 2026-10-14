@@ -104,6 +104,7 @@ export default function ServerImport({ own }: { own: OwnImport }) {
             <LetterboxdForm
               header={picker}
               searchable={own.searchable}
+              own
               start={startOwnLetterboxdImport}
               onStarted={(started) =>
                 queryClient.setQueryData<OwnImport>(

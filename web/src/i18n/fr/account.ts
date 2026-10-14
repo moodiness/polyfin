@@ -120,6 +120,16 @@ const account: typeof en = {
         'Vos étoiles deviennent votre note sur 10 : 3,5 étoiles donnent 7. Une note que vous avez déjà dans Polyfin reste.',
       likes: 'Films aimés en favoris',
       likesHelp: 'Les films que vous avez aimés sur Letterboxd deviennent vos favoris.',
+      forUser: {
+        watchedHelp:
+          'Les films vus sont marqués vus, à la dernière date que donne son journal, autant de fois qu’il les note. Chaque film est cherché par son nom et son année dans les addons de métadonnées du serveur, et retenu quand ils connaissent exactement un film de ce nom et de cette année.',
+        watchlist: 'Watchlist vers sa liste « À regarder »',
+        watchlistHelp:
+          'Les films de sa watchlist Letterboxd vont dans « À regarder » de ses applis Jellyfin, jusqu’à ce qu’ils soient commencés.',
+        ratingsHelp:
+          'Ses étoiles deviennent sa note sur 10 : 3,5 étoiles donnent 7. Une note déjà donnée dans Polyfin reste.',
+        likesHelp: 'Les films aimés sur Letterboxd deviennent ses favoris.',
+      },
       start: 'Importer depuis Letterboxd',
       starting: 'Envoi…',
       started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
