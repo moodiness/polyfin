@@ -658,11 +658,12 @@ func (s *Service) Warm(ctx context.Context) error {
 
 // ReadCollections reads every collection of the server's collection
 // libraries whole, as a whole listing lists it (see Whole), one collection
-// after the other, so that apps then open each at once with all its
-// titles. It asks the addons again for the pages past their refresh age
-// and waits for their answers (see withRefreshing), and reads the pages
-// never read. It reads the libraries a request without a user sees: those
-// of the server's addons.
+// after the other, then every catalog of the server's smart lists up to
+// its maximum, so that apps then open each at once with all its titles. It
+// asks the addons again for the pages past their refresh age and waits for
+// their answers (see withRefreshing), and reads the pages never read. It
+// reads the libraries a request without a user sees: those of the
+// server's addons.
 func (s *Service) ReadCollections(ctx context.Context) error {
 	started := time.Now()
 	ctx = withRefreshing(context.WithValue(ctx, wholeKey{}, true))
@@ -707,6 +708,11 @@ func (s *Service) ReadCollections(ctx context.Context) error {
 			read++
 		}
 	}
-	s.logger.Info("Read the collections", "collections", read, "failed", failed, "took", time.Since(started).Round(time.Second))
+	lists, listsFailed, err := s.readSmartLists(ctx, v)
+	if err != nil {
+		return err
+	}
+	s.logger.Info("Read the collections", "collections", read, "smart_lists", lists, "failed", failed+listsFailed,
+		"took", time.Since(started).Round(time.Second))
 	return nil
 }

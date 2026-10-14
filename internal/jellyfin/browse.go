@@ -487,10 +487,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	// Titles listed whole are sorted as asked, as Jellyfin sorts them: a
 	// saga's movies by premiere date. A listing in pages keeps its catalogs'
-	// order, which pages sorted one by one would mix up, and the Watchlist
-	// view its own, the latest added first, whatever the app asks.
+	// order, which pages sorted one by one would mix up, the Watchlist view
+	// its own, the latest added first, and a smart list the sort it was
+	// given, whatever the app asks.
 	if titlesThrough(r) && parent != library.WatchlistViewID && start <= 0 && !page.More && len(page.Items) == page.Total &&
-		len(listQuery(r, "sortBy")) > 0 {
+		len(listQuery(r, "sortBy")) > 0 && !h.smartList(r, user, parent) {
 		state, err := h.userState(r.Context(), user, page.Items)
 		if err != nil {
 			h.internalError(w, r, err)
@@ -529,6 +530,13 @@ func (h *Handler) hiddenLibrary(w http.ResponseWriter, r *http.Request, user acc
 	}
 	writeJSON(w, http.StatusUnauthorized, user.Name+" is not permitted to access Library "+libraries[i].Name+".")
 	return true
+}
+
+// smartList reports whether parent is a smart list the user sees, which
+// keeps the order it was given. A failure to tell counts as none.
+func (h *Handler) smartList(r *http.Request, user accounts.User, parent accounts.ID) bool {
+	smart, err := h.Library.IsSmartList(r.Context(), user, parent)
+	return err == nil && smart
 }
 
 // genreFilter returns the genre option of a library's catalog a listing is

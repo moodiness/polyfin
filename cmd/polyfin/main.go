@@ -52,6 +52,7 @@ import (
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
+	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -442,6 +443,8 @@ func serve(ctx context.Context) error {
 		Recordings:    recorder,
 		Library:       lib,
 		LibraryImages: lib,
+		SmartLists:    smartlists.New(pool),
+		SmartPreviews: lib,
 		Health: admin.HealthSources{
 			Addons:       addonClient,
 			Cache:        sources,
@@ -599,8 +602,8 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 		Key:      "ReadCollections",
 		Category: tasks.CategoryLibrary,
 		Text: map[string]tasks.Text{
-			"en": {Name: "Read every collection", Description: "Reads every collection of the server's collection libraries whole, one after the other, so that each opens at once with all its titles: every day at the hour set under Settings › Catalogs, never by default."},
-			"fr": {Name: "Lire toutes les collections", Description: "Lit en entier toutes les collections des médiathèques de collections du serveur, l’une après l’autre, pour que chacune s’ouvre tout de suite avec tous ses titres : chaque jour à l’heure choisie dans Paramètres › Catalogues, jamais par défaut."},
+			"en": {Name: "Read every collection", Description: "Reads every collection of the server's collection libraries whole, one after the other, then the catalogs of the server's smart lists, so that each opens at once with all its titles: every day at the hour set under Settings › Catalogs, never by default."},
+			"fr": {Name: "Lire toutes les collections", Description: "Lit en entier toutes les collections des médiathèques de collections du serveur, l’une après l’autre, puis les catalogues des listes intelligentes du serveur, pour que chacune s’ouvre tout de suite avec tous ses titres : chaque jour à l’heure choisie dans Paramètres › Catalogues, jamais par défaut."},
 		},
 		Daily: func() int { return store.Settings().CollectionReadHour },
 		Run:   lib.ReadCollections,

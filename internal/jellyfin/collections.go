@@ -151,8 +151,12 @@ func (h *Handler) collectionChanged(w http.ResponseWriter, r *http.Request, err 
 }
 
 // addToCollection adds titles after those the collection has; those it
-// already has keep their place.
+// already has keep their place. A smart list's titles are its rules':
+// adding to one is refused with an empty 403.
 func (h *Handler) addToCollection(w http.ResponseWriter, r *http.Request) {
+	if h.smartCollection(w, r) {
+		return
+	}
 	id, ids, ok := h.changeCollection(w, r)
 	if !ok {
 		return
@@ -163,9 +167,31 @@ func (h *Handler) addToCollection(w http.ResponseWriter, r *http.Request) {
 	h.collectionChanged(w, r, h.Collections.Add(r.Context(), id, ids))
 }
 
+// smartCollection answers a change to a smart list the caller sees with an
+// empty 403, as Jellyfin answers a change it forbids, and reports whether
+// it did.
+func (h *Handler) smartCollection(w http.ResponseWriter, r *http.Request) bool {
+	id, ok := parseGUID(r.PathValue("collectionId"))
+	if !ok {
+		return false
+	}
+	smart, err := h.Library.IsSmartList(r.Context(), callerFrom(r.Context()).User, id)
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	if smart {
+		w.WriteHeader(http.StatusForbidden)
+	}
+	return smart
+}
+
 // removeFromCollection takes titles out of a collection; those it does not
-// have are ignored.
+// have are ignored. A smart list's are refused, as adding is.
 func (h *Handler) removeFromCollection(w http.ResponseWriter, r *http.Request) {
+	if h.smartCollection(w, r) {
+		return
+	}
 	id, ids, ok := h.changeCollection(w, r)
 	if !ok {
 		return
@@ -215,11 +241,18 @@ func collectionsViewItem() library.Item {
 }
 
 // addCollectionsView adds the Collections view to views once a collection
-// exists, as Jellyfin shows it once there is one.
+// exists, as Jellyfin shows it once there is one: one made by users, or a
+// smart list the user sees as a collection.
 func (h *Handler) addCollectionsView(r *http.Request, user accounts.User, views []BaseItemDto) ([]BaseItemDto, error) {
 	exists, err := h.Collections.Any(r.Context())
-	if err != nil || !exists {
-		return views, err
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		smart, err := h.Library.SmartCollections(r.Context(), user)
+		if err != nil || len(smart) == 0 {
+			return views, err
+		}
 	}
 	view, err := h.folderDtos(r, user, []library.Item{collectionsViewItem()})
 	if err != nil {
@@ -334,7 +367,16 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	}
 	fields := requestedFields(r)
 	filter, filtered := stateFilterOf(r)
-	if !filtered {
+	// The Collections view lists the smart lists the user sees as
+	// collections beside those made by users, by name.
+	var smart []library.Item
+	if within == (accounts.ID{}) && hasParent {
+		if smart, err = h.Library.SmartCollections(r.Context(), user); err != nil {
+			h.internalError(w, r, err)
+			return true
+		}
+	}
+	if !filtered && len(smart) == 0 {
 		from, to := bounds(len(all), start, limit)
 		dtos, err := h.collectionDtos(r, user, all[from:to], fields, false)
 		if err != nil {
@@ -349,7 +391,18 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 		h.internalError(w, r, err)
 		return true
 	}
-	dtos = slices.DeleteFunc(dtos, func(dto BaseItemDto) bool { return !filter.keepsData(dto.UserData, false) })
+	if len(smart) > 0 {
+		listed, err := h.dtos(r, user, smart, fields, nil)
+		if err != nil {
+			h.internalError(w, r, err)
+			return true
+		}
+		dtos = append(dtos, listed...)
+		slices.SortStableFunc(dtos, func(a, b BaseItemDto) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	}
+	if filtered {
+		dtos = slices.DeleteFunc(dtos, func(dto BaseItemDto) bool { return !filter.keepsData(dto.UserData, false) })
+	}
 	from, to := bounds(len(dtos), start, limit)
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos[from:to], TotalRecordCount: len(dtos), StartIndex: start})
 	return true
@@ -372,15 +425,21 @@ func (h *Handler) listedUnder(ctx context.Context, all []collections.Collection,
 
 // writeCollectionsAcrossServer answers a listing of collections across the
 // server as Jellyfin answers one, with every BoxSet the user sees: the
-// collections made by users and those the user's collection libraries
-// list, each once, by name. Strand builds its shelves from such a listing.
-// jellyfin-web makes one only for its Add to collection dialog, where a
-// title can go to collections made by users alone: collectionListing
-// answers it with those.
+// collections made by users, those the user's collection libraries list,
+// each once, and the smart lists the user sees as collections, by name.
+// Strand builds its shelves from such a listing. jellyfin-web makes one
+// only for its Add to collection dialog, where a title can go to
+// collections made by users alone: collectionListing answers it with
+// those.
 func (h *Handler) writeCollectionsAcrossServer(w http.ResponseWriter, r *http.Request, user accounts.User, made []collections.Collection, start, limit int) {
 	fromAddons, err := h.addonCollections(r.Context(), user)
 	if err != nil {
 		h.browseError(w, r, err)
+		return
+	}
+	smart, err := h.Library.SmartCollections(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
 		return
 	}
 	fields := requestedFields(r)
@@ -389,7 +448,7 @@ func (h *Handler) writeCollectionsAcrossServer(w http.ResponseWriter, r *http.Re
 		h.internalError(w, r, err)
 		return
 	}
-	listed, err := h.dtos(r, user, fromAddons, fields, nil)
+	listed, err := h.dtos(r, user, append(fromAddons, smart...), fields, nil)
 	if err != nil {
 		h.internalError(w, r, err)
 		return

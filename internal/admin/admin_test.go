@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -86,6 +87,8 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 		Guides:        lib,
 		IPTV:          channels,
 		LibraryImages: lib,
+		SmartLists:    smartlists.New(pool),
+		SmartPreviews: lib,
 		DataDir:       t.TempDir(),
 	}
 	for _, c := range configure {

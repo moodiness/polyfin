@@ -24,7 +24,9 @@ import (
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/ratings"
+	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
@@ -118,6 +120,16 @@ type Service struct {
 	// ratings looks movies' and series' ratings up on MDBList (see
 	// ratings.go); nil, they show their addons'.
 	ratings *ratings.Service
+	// smart holds the smart lists, which userData tells the users' state
+	// of titles for; smartCache keeps the titles read for each list,
+	// smartFetches holds a place for each description read for them, and
+	// smartWait bounds how long a listing waits for their catalogs (see
+	// smartlists.go).
+	smart        *smartlists.Store
+	userData     *userdata.Store
+	smartCache   *cache.Cache[smartKey, []smartTitle]
+	smartFetches chan struct{}
+	smartWait    time.Duration
 
 	// music asks Eclipse addons for their resources, which musicCache
 	// keeps (see musicCaches).
@@ -229,6 +241,11 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		keptWait:       keptListingWait,
 		music:          eclipse.NewClient(client),
 		watchlist:      watchlist.New(db),
+		smart:          smartlists.New(db),
+		userData:       userdata.New(db),
+		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife),
+		smartFetches:   make(chan struct{}, smartFetches),
+		smartWait:      smartWait,
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
@@ -307,6 +324,9 @@ type view struct {
 	addons    []installed
 	libraries []library
 	channels  []source
+	// smart are the smart lists the user sees, in order (see
+	// smartlists.go).
+	smart []smartList
 	// parental is the user's parental control and genres the genres they
 	// block, which hide titles (see visible). The ratings and genres of the
 	// titles a request lists are looked up until deadline, lookups counting
@@ -440,6 +460,9 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			hideInMenus: l.HideInMenus,
 		})
 	}
+	if err := s.smartLists(ctx, &v, user, scopes); err != nil {
+		return view{}, err
+	}
 	return v, nil
 }
 
@@ -462,14 +485,14 @@ func (v view) library(id accounts.ID) (library, bool) {
 }
 
 // Libraries lists a user's libraries in order, with their images (see
-// libraryimages.go).
+// libraryimages.go), then the smart lists they see as libraries.
 func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 	images := s.automaticImages(ctx, v.libraries)
-	items := make([]Item, 0, len(v.libraries))
+	items := make([]Item, 0, len(v.libraries)+len(v.smart))
 	records := make([]record, 0, len(v.libraries))
 	for i, l := range v.libraries {
 		item := l.item
@@ -478,6 +501,11 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 		}
 		items = append(items, item)
 		records = append(records, libraryRecord(l, images[i]))
+	}
+	for _, l := range v.smart {
+		if l.item.Kind == KindLibrary {
+			items = append(items, l.item)
+		}
 	}
 	return s.overridden(items), s.save(ctx, records)
 }
@@ -519,9 +547,10 @@ type ServerLibrary struct {
 
 // ServerLibraries lists the server's libraries, in order and named in
 // language as apps show them: the enabled catalogs of its enabled addons,
-// but live TV catalogs, which make no library. A user's apps show those
+// but live TV catalogs, which make no library, then the server's smart
+// lists shown as libraries, which offer no genre. A user's apps show those
 // the user does not hide, when the user uses the server's addons.
-func ServerLibraries(ctx context.Context, store *addons.Store, language string) ([]ServerLibrary, error) {
+func ServerLibraries(ctx context.Context, store *addons.Store, lists *smartlists.Store, language string) ([]ServerLibrary, error) {
 	list, err := store.Addons(ctx, addons.Shared())
 	if err != nil {
 		return nil, err
@@ -550,12 +579,24 @@ func ServerLibraries(ctx context.Context, store *addons.Store, language string) 
 		}
 		result = append(result, library)
 	}
+	if lists == nil {
+		return result, nil
+	}
+	smart, err := lists.Lists(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range smart {
+		if item := smartItem(l); item.Kind == KindLibrary {
+			result = append(result, ServerLibrary{ID: item.ID, Name: item.Name, Genres: []string{}, CollectionType: item.CollectionType})
+		}
+	}
 	return result, nil
 }
 
 // ServerLibraries lists the server's libraries (see ServerLibraries).
 func (s *Service) ServerLibraries(ctx context.Context) ([]ServerLibrary, error) {
-	return ServerLibraries(ctx, s.addons, s.settings().Language)
+	return ServerLibraries(ctx, s.addons, s.smart, s.settings().Language)
 }
 
 // source is a catalog to list, possibly narrowed to a genre.
@@ -913,6 +954,9 @@ func (s *Service) children(ctx context.Context, user accounts.User, parent accou
 	}
 	if l, ok := v.library(parent); ok {
 		return s.libraryChildren(ctx, v, l, start, count, genre, first)
+	}
+	if l, ok := v.smartList(parent); ok {
+		return s.smartChildren(ctx, v, l, start, count)
 	}
 	if parent == ReplayViewID {
 		if _, err := s.replayView(ctx, v); err != nil {
@@ -1443,8 +1487,9 @@ func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (
 // listingLimit is how many items a listing of parent that asks for no
 // limit gets: WholeListing, or the maximum of the library the library or
 // collection parent belongs to when lower; 0 for any other parent but the
-// Replay view and its folders, and the Watchlist view, which get
-// WholeListing, atOnce set.
+// Replay view and its folders, the Watchlist view and the smart lists,
+// which get WholeListing, a smart list's maximum when lower, atOnce set: a
+// smart list bounds its own wait (see smartRead).
 func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent accounts.ID) (most int, atOnce bool, err error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -1453,6 +1498,11 @@ func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent a
 	if l, ok := v.library(parent); ok {
 		most = l.maxItems
 	} else if parent == ReplayViewID || parent == WatchlistViewID {
+		return WholeListing, true, nil
+	} else if l, ok := v.smartList(parent); ok {
+		if l.list.MaxItems > 0 {
+			return min(l.list.MaxItems, WholeListing), true, nil
+		}
 		return WholeListing, true, nil
 	} else {
 		r, err := s.load(ctx, parent)
@@ -1768,6 +1818,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 			})
 		}
 		return item, nil
+	}
+	if l, ok := v.smartList(id); ok {
+		return l.item, nil
 	}
 	if id == ReplayViewID {
 		return s.replayView(ctx, v)

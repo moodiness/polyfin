@@ -33,6 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/trackers"
@@ -135,6 +136,10 @@ type Options struct {
 	// Plays keeps the history of the videos played, which the statistics
 	// sum; nil offers none.
 	Plays *plays.History
+	// SmartLists keeps the smart lists, which SmartPreviews judges before
+	// they are saved.
+	SmartLists    *smartlists.Store
+	SmartPreviews SmartPreviews
 }
 
 type handler struct {
@@ -277,6 +282,13 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
+	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.smartLists))
+	mux.Handle("POST /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.createSmartList))
+	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists/catalogs", h.signedIn(h.smartCatalogs))
+	mux.Handle("POST /admin/api/scopes/{scope}/smart-lists/preview", h.signedIn(h.previewSmartList))
+	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists/{id}", h.signedIn(h.smartListOf))
+	mux.Handle("PUT /admin/api/scopes/{scope}/smart-lists/{id}", h.signedIn(h.updateSmartList))
+	mux.Handle("DELETE /admin/api/scopes/{scope}/smart-lists/{id}", h.signedIn(h.deleteSmartList))
 	mux.Handle("GET /admin/api/account/addon-preferences", h.signedIn(h.addonPreferences))
 	mux.Handle("PUT /admin/api/account/addon-preferences", h.signedIn(h.saveAddonPreferences))
 	mux.Handle("PUT /admin/api/scopes/{scope}/guides", h.signedIn(h.saveGuide))

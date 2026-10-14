@@ -236,7 +236,7 @@ type libraryChoiceJSON struct {
 // the server's libraries, in order, and the genres the server's libraries
 // can be narrowed to, which name their genre pages, sorted.
 func (h *handler) userContentChoices(w http.ResponseWriter, r *http.Request) {
-	libraries, err := library.ServerLibraries(r.Context(), h.Addons, h.Accounts.Settings().Language)
+	libraries, err := library.ServerLibraries(r.Context(), h.Addons, h.SmartLists, h.Accounts.Settings().Language)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
