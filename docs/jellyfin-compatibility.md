@@ -29,6 +29,12 @@ A title's page opens as soon as its description is ready, with the versions Poly
 
 **For app developers:** `/Polyfin/Items/{id}/Versions` tells how many addons are still asked, for the first time or again, how many media sources the title's details list now, how many versions are known, and whether the web player adds versions to a page already open (`AddVersions`), and Polyfin pushes the same as a `PolyfinVersions` message on the live connection (WebSocket) as it changes. `POST /Polyfin/Items/{id}/Versions/Search` has the title's addons asked again, once every 20 seconds at most for a user's title (see [Title pages](playback.md#title-pages)).
 
+### Ratings
+
+With the server's **MDBList API key for ratings**, `CommunityRating` carries a movie's or series' IMDb rating from MDBList (0 to 10) and `CriticRating` its critics' score or audience score (0 to 100), as **Critic rating shows** chooses; an administrator's edit still wins. Listings that fit on one page, collections read whole, sort by `SortBy=CriticRating` as by `CommunityRating`, titles without one first; the Watchlist keeps its own order. See [Ratings](addons-and-libraries.md#ratings).
+
+**For app developers:** `/Polyfin/Items/{id}/Ratings` answers a title's `CommunityRating`, `CriticsScore` and `AudienceScore` (null when it has none, all null without a key) and `Pending` while MDBList is being asked about it.
+
 ### Libraries left out of the web player menus
 
 On the admin app's **Libraries** page, an administrator can leave any of the server's libraries out of the web player's menus, and each user any of their own: its top bar, the bar's **More** menu and its side menu. The library keeps its row on the home screen, and other apps keep listing it. Live TV catalogs have no such option: their channels go to Live TV.
@@ -146,7 +152,7 @@ When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matr
 
 ### Refresh metadata
 
-**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists, expired ones included, and the rating it looked up, and stop asking addons again for those lists. It then asks the addons for the description again at once.
+**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists, expired ones included, the rating it looked up and its ratings from MDBList, and stop asking addons again for those lists. It then asks the addons for the description again at once.
 
 **For app developers:** `POST /Items/{id}/Refresh`.
 

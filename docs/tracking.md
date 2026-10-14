@@ -30,7 +30,7 @@ Each user connects their accounts under **My account › Tracking** in the admin
 
 - **Trakt** and **Simkl** show a code to enter on their site, after **Connect**.
 - **Last.fm** opens its site after **Connect**: sign in there if asked, and allow Polyfin.
-- **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences.
+- **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences. It is used for that user's tracking only: titles' ratings come from the server's own key, apart (see [Ratings](addons-and-libraries.md#ratings)).
 - **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from **Settings → API** on its site.
 - For ListenBrainz, the user pastes their token in **ListenBrainz user token**, from the settings of its site.
 
