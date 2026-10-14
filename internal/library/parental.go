@@ -304,10 +304,12 @@ func (v view) withoutWait() view {
 }
 
 // visibleMetas keeps the entries of a catalog page the user's parental
-// control and blocked genres let them see. Entries that are not titles,
-// collections among them, are kept. held reports titles left out only
-// because their rating or genres are not known yet (see visible).
+// control and blocked genres let them see, without the titles they hid.
+// Entries that are not titles, collections among them, are kept. held
+// reports titles left out only because their rating or genres are not
+// known yet (see visible).
 func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []stremio.Meta) ([]stremio.Meta, bool) {
+	metas = v.unhiddenMetas(src, metas)
 	if !v.restricted() || len(metas) == 0 {
 		return metas, false
 	}

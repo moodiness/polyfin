@@ -16,8 +16,8 @@ import (
 // opened, most recently seen first. Addons search titles, not episodes:
 // this asks no addon to search, only to describe the series of the
 // episodes found, as opening them would. Episodes of series the user does
-// not reach, or that their parental control or blocked genres hide, are
-// left out.
+// not reach, that their parental control or blocked genres hide, or that
+// they hid, are left out.
 func (s *Service) SearchEpisodes(ctx context.Context, user accounts.User, term string, count int) ([]Item, error) {
 	term = strings.TrimSpace(term)
 	if term == "" || count <= 0 {
@@ -38,6 +38,11 @@ func (s *Service) SearchEpisodes(ctx context.Context, user accounts.User, term s
 	if err != nil {
 		return nil, err
 	}
+	hidden, err := s.HiddenTitles(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	items = hidden.Without(items)
 	return s.overridden(items[:min(count, len(items))]), nil
 }
 

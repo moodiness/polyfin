@@ -262,11 +262,11 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 // listed, with the complete description when it is still cached (see
 // describedMeta): describing each title anew would cost a request per
 // title. A title keeps its folder only when it came from one of the user's
-// addons.
+// addons. The titles the user hid are left out.
 func (s *Service) creditedTitles(ctx context.Context, v view, credited []record, kinds []Kind) []Item {
 	var items []Item
 	for _, r := range credited {
-		if !slices.Contains(kinds, r.Kind) {
+		if !slices.Contains(kinds, r.Kind) || v.hidden[r.ID] {
 			continue
 		}
 		meta := *r.Meta

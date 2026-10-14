@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
@@ -11,7 +12,7 @@ import (
 // latest added first (see package watchlist). Each user has their own;
 // it shows while it holds titles. Its titles are described as they are
 // anywhere, and those the user may not see, by parental control or
-// blocked genres, are left out.
+// blocked genres, are left out, as are those the user hid.
 
 // WatchlistViewID identifies the Watchlist view, the same on every server.
 var WatchlistViewID = itemID("view|watchlist")
@@ -35,13 +36,14 @@ func (s *Service) watchlistView(ctx context.Context, v view) (Item, error) {
 }
 
 // watchlistIDs lists the titles of the user's watchlist they have not
-// started, the latest added first; none for a request made with an API
-// key.
+// started nor hidden, the latest added first; none for a request made
+// with an API key.
 func (s *Service) watchlistIDs(ctx context.Context, v view) ([]accounts.ID, error) {
 	if v.user == (accounts.ID{}) {
 		return nil, nil
 	}
-	return s.watchlist.Titles(ctx, v.user)
+	ids, err := s.watchlist.Titles(ctx, v.user)
+	return slices.DeleteFunc(ids, func(id accounts.ID) bool { return v.hidden[id] }), err
 }
 
 // watchlistChildren lists the titles of the Watchlist view from start. A

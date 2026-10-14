@@ -120,16 +120,18 @@ type Service struct {
 	// ratings looks movies' and series' ratings up on MDBList (see
 	// ratings.go); nil, they show their addons'.
 	ratings *ratings.Service
-	// smart holds the smart lists, which userData tells the users' state
-	// of titles for; smartCache keeps the titles read for each list,
-	// smartFetches holds a place for each description read for them, and
-	// smartWait bounds how long a listing waits for their catalogs (see
-	// smartlists.go).
+	// smart holds the smart lists; smartCache keeps the titles read for
+	// each list, smartFetches holds a place for each description read for
+	// them, and smartWait bounds how long a listing waits for their
+	// catalogs (see smartlists.go).
 	smart        *smartlists.Store
-	userData     *userdata.Store
 	smartCache   *cache.Cache[smartKey, []smartTitle]
 	smartFetches chan struct{}
 	smartWait    time.Duration
+	// userData tells the users' state of titles, which smart lists judge
+	// by, and holds the titles each user hid, which their listings leave
+	// out (see hidden.go).
+	userData *userdata.Store
 
 	// music asks Eclipse addons for their resources, which musicCache
 	// keeps (see musicCaches).
@@ -337,6 +339,9 @@ type view struct {
 	deadline time.Time
 	lookups  *atomic.Int32
 	held     *atomic.Bool
+	// hidden are the titles the user hid, which listings leave out (see
+	// hidden.go).
+	hidden HiddenTitles
 	// catalogLimit and channelLimit are the settings' limits when the
 	// request came (see limit).
 	catalogLimit int
@@ -397,6 +402,13 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	}
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
+	if user.ID != (accounts.ID{}) {
+		hidden, err := s.hiddenTitles(ctx, user.ID)
+		if err != nil {
+			return view{}, err
+		}
+		v.hidden = hidden
+	}
 	var visible []addons.Library
 	var entries []installed
 	for _, scope := range scopes {
@@ -660,16 +672,16 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // first read asks for every page it needs at once; a size learned from a
 // short first page is only trusted once a second page confirms it, so
 // that a small catalog is not asked for many empty pages. Titles the
-// user's parental control hides are left out before positions are
-// counted. A restricted listing reads at most hiddenReach times as far as
-// an unrestricted one, and stops where titles wait for their rating: it
-// reports that more may follow, which apps ask for later, once the
-// ratings are known.
+// user's parental control hides, and those the user hid, are left out
+// before positions are counted. A restricted listing reads at most
+// hiddenReach times as far as an unrestricted one, and stops where titles
+// wait for their rating: it reports that more may follow, which apps ask
+// for later, once the ratings are known.
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
-	// stored lists, whole, but for a restricted user, whose listing leaves
-	// hidden titles out as it reads.
-	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.restricted() && src.date == "" {
+	// stored lists, whole, but for a restricted user, or one who hid
+	// titles, whose listing leaves those titles out as it reads.
+	if src.addon.addon.IPTV() && !LiveCatalog(src.catalog.Type) && s.iptv != nil && !v.restricted() && len(v.hidden) == 0 && src.date == "" {
 		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
 	}
 	var collected []stremio.Meta
@@ -2181,15 +2193,15 @@ func (s *Service) Search(ctx context.Context, user accounts.User, term string, k
 
 // renamed returns the items of the given kinds an administrator renamed so
 // that term matches their name, which the addons' searches know by another
-// name: those of the user's addons, not already found, until there are
-// limit items.
+// name: those of the user's addons, not already found nor hidden by the
+// user, until there are limit items.
 func (s *Service) renamed(ctx context.Context, v view, term string, kinds []Kind, found []Item, limit int) []Item {
 	var result []Item
 	for _, id := range s.renamedMatches(term) {
 		if len(found)+len(result) >= limit {
 			break
 		}
-		if slices.ContainsFunc(found, func(item Item) bool { return item.ID == id }) {
+		if v.hidden[id] || slices.ContainsFunc(found, func(item Item) bool { return item.ID == id }) {
 			continue
 		}
 		r, err := s.load(ctx, id)
