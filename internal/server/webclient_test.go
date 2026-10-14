@@ -2618,3 +2618,331 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
 		}
 	}
 }
+
+// The home page gets the rows of Settings › Web player › Home rows, as
+// /Polyfin/HomeRows answers them: each at its place among the user's home
+// sections, drawn as jellyfin-web draws a library's row, its name opening
+// its list and each card its title's page, with its played mark, count or
+// progress. They are asked again each time the home page shows, put back
+// from the answer when jellyfin-web draws the page anew, and nothing
+// changes elsewhere or without an answer. It runs in Node.js, in a context
+// that stands for the browser and jellyfin-web.
+func TestTheHomePageGetsTheServersRows(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	type row = map[string]any
+	item := func(id, name string, data row, image bool) row {
+		item := row{"Id": id, "Name": name, "Type": "Movie", "ProductionYear": 2020, "UserData": data, "ImageTags": row{}}
+		if image {
+			item["ImageTags"] = row{"Primary": "tag" + id}
+		}
+		return item
+	}
+	trending := row{"Id": "r1", "Name": "Trending", "Place": "Top", "Items": []row{
+		item("a1", "Alpha", row{"Played": true}, true),
+		item("b2", "Bravo", row{"PlayedPercentage": 40.5}, true),
+	}}
+	picks := row{"Id": "r2", "Name": "Picks", "Place": "AfterResume", "Items": []row{item("c3", "Charlie", row{}, false)}}
+	because := row{"Id": "r3", "Name": "Because you watched Alpha", "Place": "AfterNextUp", "Items": []row{
+		{"Id": "s4", "Name": "Delta", "Type": "Series", "UserData": row{"UnplayedItemCount": 3}, "ImageTags": row{"Primary": "t"}},
+	}}
+	fresh := row{"Id": "r4", "Name": "New", "Place": "Bottom", "Items": []row{item("e5", "Echo", row{}, true)}}
+	all := []row{trending, picks, because, fresh}
+	const (
+		ask      = "ask rows"
+		sections = "s0 s1 s2 s3 s4 s5 s6 s7 s8 s9"
+	)
+	byDefault := "Trending[Alpha Bravo] s0 s1 Picks[Charlie] s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]"
+	type scenario struct {
+		answers     [][]row
+		preferences row
+		tv          bool
+		drops       []row
+		storage     string
+		steps       []string
+		want        []string
+	}
+	scenarios := map[string]scenario{
+		"rows at their places": {answers: [][]row{all}, steps: []string{"home", "wait 100", "show"}, want: []string{ask, byDefault}},
+		"cards as jellyfin-web draws them": {answers: [][]row{all}, steps: []string{"home", "wait 100", "cards"}, want: []string{ask,
+			"Trending → #/list?parentId=r1&serverId=srv: " +
+				"Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 407x272 taga1\"), played) " +
+				"Bravo(#/details?id=b2&serverId=srv, url(\"img b2 Primary 407x272 tagb2\"), progress 40.5%)",
+			"Picks → #/list?parentId=r2&serverId=srv: Charlie(#/details?id=c3&serverId=srv, icon movie)",
+			"Because you watched Alpha → #/list?parentId=r3&serverId=srv: Delta(#/details?id=s4&serverId=srv, url(\"img s4 Primary 407x272 t\"), 3 unplayed)",
+			"New → #/list?parentId=r4&serverId=srv: Echo(#/details?id=e5&serverId=srv, url(\"img e5 Primary 407x272 tage5\"))",
+		}},
+		// Continue Watching first, Next Up left out: its rows take the
+		// place before, after those of Continue Watching.
+		"the user's own sections": {
+			answers: [][]row{all}, preferences: row{"homesection0": "resume", "homesection1": "latestmedia", "homesection2": "none",
+				"homesection3": "none", "homesection4": "none", "homesection5": "none", "homesection6": "none"},
+			steps: []string{"home", "wait 100", "show"},
+			want:  []string{ask, "Trending[Alpha Bravo] s0 Picks[Charlie] Because you watched Alpha[Delta] s1 s2 s3 s4 s5 s6 s7 s8 s9 New[Echo]"},
+		},
+		// The TV layout starts with the library tiles when the user's
+		// sections lack them.
+		"the TV layout": {
+			answers: [][]row{all}, tv: true, preferences: row{"homesection0": "resume", "homesection1": "nextup", "homesection2": "none",
+				"homesection3": "none", "homesection4": "none", "homesection5": "none", "homesection6": "none"},
+			steps: []string{"home", "wait 100", "show"},
+			want:  []string{ask, "Trending[Alpha Bravo] s0 s1 Picks[Charlie] s2 Because you watched Alpha[Delta] s3 s4 s5 s6 s7 s8 s9 New[Echo]"},
+		},
+		"drawn anew": {
+			answers: [][]row{all}, steps: []string{"home", "wait 100", "show", "render", "show"},
+			want: []string{ask, byDefault, byDefault},
+		},
+		// Each time the home page shows, the rows are asked again: a row
+		// the user turned off meanwhile is not drawn.
+		"asked again on each visit": {
+			answers: [][]row{all, {trending, fresh}},
+			steps:   []string{"home", "wait 100", "show", "away", "wait 100", "home", "wait 100", "show"},
+			want:    []string{ask, byDefault, ask, "Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 New[Echo]"},
+		},
+		"elsewhere": {answers: [][]row{all}, steps: []string{"#/movies", "wait 100", "show"}, want: []string{sections}},
+		"no answer": {steps: []string{"home", "wait 100", "show"}, want: []string{ask, sections}},
+		"no row":    {answers: [][]row{{}}, steps: []string{"home", "wait 100", "show", "render", "wait 100", "show"}, want: []string{ask, sections, sections}},
+		"before sections": {answers: [][]row{all}, steps: []string{"empty", "home", "wait 100", "show", "render", "wait 100", "show"},
+			want: []string{ask, "", byDefault}},
+		// The item menus' Hide this title keeps what it hid in the session
+		// storage: a title hidden, or an episode of a series hidden (its
+		// menu keeps the episode and its series), leaves
+		// the rows, also when they are drawn again from the same answer; a
+		// row left without a title goes. Another viewer's entries, or an
+		// expired one, hide nothing.
+		"titles hidden from the menu": {
+			answers: [][]row{{trending, picks, {"Id": "r5", "Name": "Episodes", "Place": "Bottom", "Items": []row{
+				{"Id": "e6", "Name": "Pilot", "Type": "Episode", "SeriesId": "SER-9", "UserData": row{}, "ImageTags": row{}}}}}},
+			drops: []row{
+				{"kind": "hidden", "id": "a1", "viewer": "srv/other", "until": 1e12},
+				{"kind": "hidden", "id": "c3", "viewer": "srv/user", "until": -1},
+			},
+			steps: []string{"home", "wait 100", "show", "hide b2", "hide e6 ser9", "show", "render", "show"},
+			want: []string{ask, "Trending[Alpha Bravo] s0 s1 Picks[Charlie] s2 s3 s4 s5 s6 s7 s8 s9 Episodes[Pilot]",
+				"Trending[Alpha] s0 s1 Picks[Charlie] s2 s3 s4 s5 s6 s7 s8 s9",
+				"Trending[Alpha] s0 s1 Picks[Charlie] s2 s3 s4 s5 s6 s7 s8 s9"},
+		},
+		"malformed drops": {answers: [][]row{all}, storage: "{not json", steps: []string{"home", "wait 100", "show"}, want: []string{ask, byDefault}},
+	}
+	const harness = `
+const vm = require('node:vm')
+const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+async function run(scenario) {
+  const log = []
+  let now = 0
+  const timers = []
+  const listeners = {}
+  const observers = new Set()
+  let queued = false
+  const changed = () => {
+    if (queued) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      for (const observer of [...observers]) if (observers.has(observer)) try { observer.callback([]) } catch (error) {}
+    })
+  }
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe() { observers.add(this) }
+    disconnect() { observers.delete(this) }
+  }
+  const classes = (element) => (element.className || '').split(' ').filter(Boolean)
+  const matches = (element, selector) => /^(\.[\w-]+)+$/.test(selector) && selector.slice(1).split('.').every((c) => classes(element).includes(c))
+  const all = (root, selector) => (root.children || []).flatMap((child) => (child.children ? [...(matches(child, selector) ? [child] : []), ...all(child, selector)] : []))
+  const classList = (element) => ({
+    contains: (c) => classes(element).includes(c),
+    add: (c) => { if (!classes(element).includes(c)) { element.className = [...classes(element), c].join(' '); changed() } },
+    remove: (c) => { element.className = classes(element).filter((x) => x !== c).join(' '); changed() },
+    toggle: () => {},
+  })
+  class Element {
+    constructor(tag, className) { this.tagName = tag; this.className = className || ''; this.children = []; this.parentNode = null; this.style = {}; this.text = ''; this.attributes = {} }
+    get classList() { return classList(this) }
+    set textContent(text) { this.text = text; this.children = []; changed() }
+    get textContent() { return this.text + this.children.map((child) => child.textContent).join('') }
+    get nextSibling() { return this.parentNode ? this.parentNode.children[this.parentNode.children.indexOf(this) + 1] || null : null }
+    get firstChild() { return this.children[0] || null }
+    appendChild(child) { return this.insertBefore(child, null) }
+    insertBefore(child, before) {
+      if (child.parentNode) child.parentNode.removeChild(child)
+      const at = before ? this.children.indexOf(before) : -1
+      this.children.splice(at < 0 ? this.children.length : at, 0, child)
+      child.parentNode = this
+      changed()
+      return child
+    }
+    removeChild(child) { this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; changed(); return child }
+    querySelector(selector) { return all(this, selector)[0] || null }
+    querySelectorAll(selector) { return all(this, selector) }
+    setAttribute(name, value) { this.attributes[name] = String(value) }
+    getAttribute(name) { return name in this.attributes ? this.attributes[name] : null }
+    hasAttribute(name) { return name in this.attributes }
+    removeAttribute(name) { delete this.attributes[name] }
+    addEventListener() {}
+    closest(selector) { for (let e = this; e && e.children; e = e.parentNode) if (matches(e, selector)) return e; return null }
+  }
+  // jellyfin-web's home page, hidden until the route opens it, and its ten
+  // sections, which it fills in place.
+  const body = new Element('body')
+  const page = body.appendChild(new Element('div', 'page homePage hide'))
+  const container = page.appendChild(new Element('div', 'sections homeSectionsContainer'))
+  const render = () => {
+    for (const child of [...container.children]) container.removeChild(child)
+    for (let i = 0; i < 10; i++) container.appendChild(new Element('div', 'verticalSection section' + i))
+  }
+  render()
+  const document = {
+    body,
+    documentElement: { lang: 'en-US', className: scenario.tv ? 'layout-tv' : 'layout-desktop', get classList() { return classList(this) } },
+    head: { appendChild: () => {} },
+    createElement: (tag) => new Element(tag),
+    createTextNode: (text) => ({ textContent: text, parentNode: null }),
+    getElementById: () => null,
+    querySelector: (selector) => body.querySelector(selector),
+    querySelectorAll: (selector) => body.querySelectorAll(selector),
+  }
+  const describe = (element) => {
+    if (classes(element).includes('polyfinHomeRow')) {
+      return element.querySelector('.sectionTitle').textContent + '[' + element.querySelectorAll('.card').map((card) => card.querySelector('.cardText-first').textContent).join(' ') + ']'
+    }
+    return 's' + classes(element).find((c) => /^section\d$/.test(c)).slice(7)
+  }
+  const show = () => log.push(container.children.map(describe).join(' '))
+  const cards = () => {
+    for (const row of container.querySelectorAll('.polyfinHomeRow')) {
+      const title = row.querySelector('.sectionTitleTextButton')
+      const items = row.querySelector('.itemsContainer')
+      const described = items.children.map((card) => {
+        const image = card.querySelector('.cardImageContainer')
+        const marks = [image.getAttribute('href')]
+        marks.push(image.style.backgroundImage || 'icon ' + image.querySelector('.cardImageIcon').className.split(' ').pop())
+        if (image.querySelector('.playedIndicator')) marks.push('played')
+        const count = image.querySelector('.countIndicator')
+        if (count) marks.push(count.textContent + ' unplayed')
+        const bar = image.querySelector('.itemProgressBarForeground')
+        if (bar) marks.push('progress ' + bar.style.width)
+        if (card.getAttribute('data-id') !== card.querySelector('.textActionButton').getAttribute('href').slice(13, 15)) marks.push('wrong id')
+        return card.querySelector('.cardText-first').textContent + '(' + marks.join(', ') + ')'
+      })
+      const shaped = [title.getAttribute('is'), items.getAttribute('is'), row.querySelector('.emby-scroller').getAttribute('is')].join()
+      if (shaped !== 'emby-linkbutton,emby-itemscontainer,emby-scroller') described.push('shaped ' + shaped)
+      log.push(row.querySelector('.sectionTitle').textContent + ' → ' + title.getAttribute('href') + ': ' + described.join(' '))
+    }
+  }
+  const location = { href: 'http://polyfin.test/web/', hash: '' }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  const answers = (scenario.answers || []).slice()
+  // The session storage, where the item menus keep what they hid.
+  const stored = {}
+  if (scenario.storage) stored.polyfinDrops = scenario.storage
+  else if (scenario.drops) stored.polyfinDrops = JSON.stringify(scenario.drops)
+  const sessionStorage = {
+    getItem: (key) => (key in stored ? stored[key] : null),
+    setItem: (key, value) => { stored[key] = String(value) },
+    removeItem: (key) => { delete stored[key] },
+  }
+  // hide does what the menu's Hide this title does: it keeps the title,
+  // and the series of an episode, then takes their cards off the page.
+  const hide = (ids) => {
+    const drops = JSON.parse(stored.polyfinDrops || '[]')
+    for (const id of ids) drops.push({ kind: 'hidden', id, viewer: 'srv/user', until: 1e12 })
+    stored.polyfinDrops = JSON.stringify(drops)
+    for (const card of container.querySelectorAll('.card')) if (ids.includes(card.getAttribute('data-id'))) card.parentNode.removeChild(card)
+  }
+  const ApiClient = {
+    serverId: () => 'srv',
+    getUrl: (path, query) => 'http://polyfin.test/' + path + (query ? '?' + new URLSearchParams(query) : ''),
+    getCurrentUserId: () => 'user',
+    getCurrentUser: () => Promise.resolve({ Id: 'user', Policy: { IsAdministrator: true } }),
+    getScaledImageUrl: (id, options) => 'img ' + id + ' ' + options.type + ' ' + options.fillHeight + 'x' + options.fillWidth + ' ' + options.tag,
+    getDisplayPreferences: (id, user, client) =>
+      id === 'usersettings' && user === 'user' && client === 'emby' ? Promise.resolve({ CustomPrefs: { ...(scenario.preferences || {}) } }) : Promise.reject(new Error('wrong')),
+    getJSON: (url) => {
+      if (!url.startsWith('http://polyfin.test/Polyfin/HomeRows?')) return Promise.reject(new Error('not asked here'))
+      log.push('ask rows')
+      const answer = answers.shift()
+      return answer ? Promise.resolve({ Items: JSON.parse(JSON.stringify(answer)) }) : Promise.reject(new Error('down'))
+    },
+  }
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
+  class Event { constructor(type) { this.type = type } }
+  vm.runInNewContext(script, {
+    location, history, URL, URLSearchParams, document, CustomEvent, Event, MutationObserver, window: { ApiClient, sessionStorage },
+    Date: { now: () => now },
+    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
+    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  await flush()
+  for (const step of scenario.steps) {
+    if (step === 'show') show()
+    else if (step.startsWith('hide ')) hide(step.slice(5).split(' '))
+    else if (step === 'cards') cards()
+    else if (step === 'render') render()
+    else if (step === 'empty') for (const child of [...container.children]) container.removeChild(child)
+    else if (step === 'home') { history.pushState(null, '', '#/home'); page.classList.remove('hide') }
+    else if (step === 'away') { history.pushState(null, '', '#/details?id=x'); page.classList.add('hide') }
+    else if (step.startsWith('wait ')) {
+      const until = now + Number(step.slice(5))
+      for (;;) {
+        let next = -1
+        timers.forEach((timer, i) => { if (timer && timer.at <= until && (next < 0 || timer.at < timers[next].at)) next = i })
+        if (next < 0) break
+        const timer = timers[next]
+        timers[next] = null
+        now = timer.at
+        timer.run()
+        await flush()
+      }
+      now = until
+    } else { history.pushState(null, '', step); page.classList.remove('hide') }
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    try {
+      results[name] = await run(scenario)
+    } catch (error) {
+      results[name] = ['harness: ' + error.stack]
+    }
+  }
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		Answers     [][]row  `json:"answers"`
+		Preferences row      `json:"preferences,omitempty"`
+		TV          bool     `json:"tv"`
+		Drops       []row    `json:"drops,omitempty"`
+		Storage     string   `json:"storage,omitempty"`
+		Steps       []string `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		inputs[name] = input{s.answers, s.preferences, s.tv, s.drops, s.storage, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
+		}
+	}
+}

@@ -3,8 +3,9 @@
 // client's routes for three things, adds a style for a fourth, mends a link
 // for a fifth, closes a duplicate error for a sixth, leaves libraries out of
 // the menus for a seventh, gives members a link to the admin app for an
-// eighth, shows a title's three scores for a ninth, and adds entries to the
-// item menus for a tenth.
+// eighth, shows a title's three scores for a ninth, adds entries to the
+// item menus for a tenth, and adds the server's home rows to the home page
+// for an eleventh.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -202,6 +203,34 @@
 // them, from every row. Nothing is kept longer: an older answer is asked
 // again, and Polyfin's leaves them out. Its words follow jellyfin-web's
 // language, as the third's. Any error just stops it.
+//
+// Eleventh, it adds to jellyfin-web's home page the rows the administrator
+// chose under Settings › Web player › Home rows, as
+// /Polyfin/HomeRows answers them for the user signed in: each with its
+// Name, its Place and its first Items, the rows the user turned off, or
+// without a title, left out. Each time the home page shows (#/home, its
+// .homeSectionsContainer in a page that is not hidden), it asks again,
+// with the user's home sections, as jellyfin-web reads them from the
+// display preferences "usersettings" of the client "emby" (homesection0 to
+// homesection9, jellyfin-web's defaults for those not set, the TV layout
+// starting with the library tiles when they lack); then it puts each row
+// at its place, in the answer's order: Top before the first section,
+// AfterResume after the section of Continue Watching (resume), AfterNextUp
+// after Next Up's (nextup), Bottom after the last; a row after a section
+// the user's home page does not show takes the place before. jellyfin-web
+// fills the sections .section0 to .section9 it made first, in place: the
+// rows go between them. A row is drawn as jellyfin-web draws a library's
+// row of latest items, with its classes, so that its styles, scroll
+// buttons and item actions apply: the row's name opens its list
+// (#/list?parentId= the row's Id), each card a poster with the title's
+// played mark, or count of unplayed episodes, and progress, opening the
+// title's page. When jellyfin-web draws the home page anew, which empties
+// it, a MutationObserver on the page puts the rows back from the last
+// answer. Every time it draws them, it leaves out the titles the item
+// menus hid meanwhile, as the tenth keeps them in the session storage for
+// the user signed in (a series taking its items with it), and a row left
+// without a title. Nothing else changes, nor anything while the answer is awaited.
+// Any error just stops it.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -1603,4 +1632,310 @@
     addEventListener('DOMContentLoaded', watchMenus)
   }
   follow()
+})()
+;(function () {
+  var homeRoute = /^#!?\/home(?:\.html)?(?:[?#]|$)/i
+  // jellyfin-web's home sections by default, in order.
+  var defaultSections = [
+    'smalllibrarytiles',
+    'resume',
+    'resumeaudio',
+    'resumebook',
+    'livetv',
+    'nextup',
+    'latestmedia',
+    'none',
+    'none',
+    'none',
+  ]
+  // The places of rows, from the top: the section each follows, Top
+  // following none.
+  var placeSections = { Top: '', AfterResume: 'resume', AfterNextUp: 'nextup' }
+  var placeOrder = ['Top', 'AfterResume', 'AfterNextUp']
+  // The home page's container of sections the rows were last asked for,
+  // the answer for it, as {user, container, rows, sections}, and the
+  // container being asked for.
+  var shown = null
+  var answer = null
+  var asking = null
+  // homeContainer returns the container of sections of the home page
+  // shown, or null.
+  function homeContainer() {
+    if (!homeRoute.test(location.hash)) return null
+    var containers = document.querySelectorAll('.homeSectionsContainer')
+    for (var i = 0; i < containers.length; i++) {
+      var page = containers[i].closest('.page')
+      if (!page || !page.classList.contains('hide')) return containers[i]
+    }
+    return null
+  }
+  // check asks for the rows each time the home page shows, and draws them
+  // again when jellyfin-web emptied the page.
+  function check() {
+    var container = homeContainer()
+    if (!container) {
+      shown = null
+      return
+    }
+    if (container !== shown) {
+      shown = container
+      ask(container)
+      return
+    }
+    if (answer && answer.container === container && !drawn(container)) draw(container)
+  }
+  // ask asks for the rows and the user's home sections, and draws them
+  // once both answered, unless the home page was left meanwhile.
+  function ask(container) {
+    var api = window.ApiClient
+    var user = api && api.getCurrentUserId()
+    if (!user) {
+      shown = null
+      return
+    }
+    asking = container
+    var rows = api.getJSON(api.getUrl('Polyfin/HomeRows', { Fields: 'PrimaryImageAspectRatio' }))
+    var preferences = api.getDisplayPreferences('usersettings', user, 'emby')
+    Promise.all([rows, preferences])
+      .then(function (answers) {
+        if (asking !== container || shown !== container || api.getCurrentUserId() !== user) return
+        asking = null
+        answer = {
+          user: user,
+          container: container,
+          rows: (answers[0] && answers[0].Items) || [],
+          sections: sectionsOf((answers[1] && answers[1].CustomPrefs) || {}),
+        }
+        draw(container)
+      })
+      .catch(function () {})
+  }
+  // sectionsOf lists the user's home sections, in order, as jellyfin-web
+  // reads them.
+  function sectionsOf(preferences) {
+    var sections = []
+    for (var i = 0; i < 10; i++) {
+      var section = preferences['homesection' + i] || defaultSections[i]
+      if (section === 'folders') section = defaultSections[0]
+      sections.push(section)
+    }
+    var tv = document.documentElement.classList.contains('layout-tv')
+    if (tv && sections.indexOf('smalllibrarytiles') < 0 && sections.indexOf('librarybuttons') < 0) {
+      sections.unshift('smalllibrarytiles')
+    }
+    return sections
+  }
+  // shownRows returns the rows of the answer without the titles the item
+  // menus hid meanwhile (see the tenth): those the tenth keeps in the
+  // session storage under polyfinDrops for the user signed in, until they
+  // expire, a hidden series taking its items with it. A row left without
+  // a title is left out. Storage that fails, or holds anything else, hides
+  // nothing.
+  function shownRows() {
+    var api = window.ApiClient
+    var viewer = (typeof api.serverId === 'function' ? api.serverId() : '') + '/' + (api.getCurrentUserId() || '')
+    var hidden = {}
+    try {
+      var drops = JSON.parse(window.sessionStorage.getItem('polyfinDrops'))
+      if (Array.isArray(drops)) {
+        drops.forEach(function (drop) {
+          if (drop && drop.kind === 'hidden' && drop.viewer === viewer && drop.until > Date.now()) hidden[drop.id] = true
+        })
+      }
+    } catch (error) {}
+    var plain = function (id) {
+      return String(id || '')
+        .replace(/-/g, '')
+        .toLowerCase()
+    }
+    return answer.rows
+      .map(function (row) {
+        var items = (row.Items || []).filter(function (item) {
+          return !hidden[plain(item.Id)] && !(item.SeriesId && hidden[plain(item.SeriesId)])
+        })
+        return Object.assign({}, row, { Items: items })
+      })
+      .filter(function (row) {
+        return row.Items.length > 0
+      })
+  }
+  // drawn tells whether the container holds every row shown, each with all
+  // its titles.
+  function drawn(container) {
+    var rows = shownRows()
+    var drawnRows = []
+    for (var i = 0; i < container.children.length; i++) {
+      if (container.children[i].classList.contains('polyfinHomeRow')) drawnRows.push(container.children[i])
+    }
+    return (
+      drawnRows.length === rows.length &&
+      drawnRows.every(function (element, i) {
+        return element.querySelectorAll('.card').length === rows[i].Items.length
+      })
+    )
+  }
+  // draw puts the rows of the answer at their places in the container,
+  // in place of those drawn before.
+  function draw(container) {
+    if (!container.querySelector('.section0')) return
+    var old = container.querySelectorAll('.polyfinHomeRow')
+    for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i])
+    var rows = shownRows()
+    // The element the next row goes after, null for the top.
+    var after = null
+    placeOrder.forEach(function (place) {
+      var index = placeSections[place] ? answer.sections.indexOf(placeSections[place]) : -1
+      var section = index >= 0 ? container.querySelector('.section' + index) : null
+      if (section && section.parentNode === container) after = section
+      rows.forEach(function (row) {
+        if (row.Place !== place) return
+        var made = rowElement(row)
+        container.insertBefore(made, after ? after.nextSibling : container.firstChild)
+        after = made
+      })
+    })
+    rows.forEach(function (row) {
+      if (placeOrder.indexOf(row.Place) < 0) container.appendChild(rowElement(row))
+    })
+  }
+  // made makes an element with its class, attributes and children.
+  function made(tag, className, attributes, children) {
+    var element = document.createElement(tag)
+    if (className) element.className = className
+    Object.keys(attributes || {}).forEach(function (name) {
+      element.setAttribute(name, attributes[name])
+    })
+    ;(children || []).forEach(function (child) {
+      element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child)
+    })
+    return element
+  }
+  function icon(name, className) {
+    return made('span', 'material-icons ' + (className ? className + ' ' : '') + name, { 'aria-hidden': 'true' })
+  }
+  // rowElement draws a row as jellyfin-web draws a library's row of
+  // latest items.
+  function rowElement(row) {
+    var api = window.ApiClient
+    var server = typeof api.serverId === 'function' ? api.serverId() : ''
+    var title = made('div', 'sectionTitleContainer sectionTitleContainer-cards padded-left', {}, [
+      made(
+        'a',
+        'more button-flat button-flat-mini sectionTitleTextButton emby-button',
+        { is: 'emby-linkbutton', href: '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server) },
+        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')],
+      ),
+    ])
+    var cards = (row.Items || []).map(function (item, index) {
+      return card(api, server, item, index)
+    })
+    var items = made('div', 'itemsContainer scrollSlider focuscontainer-x animatedScrollX', { is: 'emby-itemscontainer' }, cards)
+    var scroller = made(
+      'div',
+      'padded-top-focusscale padded-bottom-focusscale emby-scroller',
+      { is: 'emby-scroller', 'data-centerfocus': 'true' },
+      [items],
+    )
+    return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', { 'data-polyfin-row': row.Id }, [title, scroller])
+  }
+  // card draws a title as jellyfin-web's cards of a row of posters.
+  function card(api, server, item, index) {
+    var link = '#/details?id=' + encodeURIComponent(item.Id) + '&serverId=' + encodeURIComponent(server)
+    var data = item.UserData || {}
+    var tag = item.ImageTags && item.ImageTags.Primary
+    var image = made('a', 'cardImageContainer coveredImage cardContent itemAction', {
+      href: link,
+      'data-action': 'link',
+      'aria-label': item.Name || '',
+      role: 'img',
+    })
+    if (tag) {
+      var url = api.getScaledImageUrl(item.Id, { type: 'Primary', fillHeight: 407, fillWidth: 272, quality: 96, tag: tag })
+      image.style.backgroundImage = 'url("' + url + '")'
+    } else {
+      image.appendChild(icon(item.Type === 'Series' ? 'tv' : item.Type === 'BoxSet' ? 'folder' : 'movie', 'cardImageIcon'))
+    }
+    if (data.UnplayedItemCount) {
+      image.appendChild(
+        made('div', 'cardIndicators', {}, [
+          made('div', 'countIndicator indicator', {}, [
+            String(Math.min(data.UnplayedItemCount, 99)) + (data.UnplayedItemCount > 99 ? '+' : ''),
+          ]),
+        ]),
+      )
+    } else if (data.Played) {
+      image.appendChild(made('div', 'cardIndicators', {}, [made('div', 'playedIndicator indicator', {}, [icon('check', 'indicatorIcon')])]))
+    }
+    if (!data.Played && data.PlayedPercentage > 0 && data.PlayedPercentage < 100) {
+      var bar = made('div', 'itemProgressBarForeground')
+      bar.style.width = data.PlayedPercentage + '%'
+      image.appendChild(
+        made('div', 'innerCardFooter fullInnerCardFooter innerCardFooterClear', {}, [made('div', 'itemProgressBar', {}, [bar])]),
+      )
+    }
+    var overlay = made('div', 'cardOverlayContainer itemAction', { 'data-action': 'link' }, [
+      made(
+        'button',
+        'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light cardOverlayFab-primary',
+        {
+          is: 'paper-icon-button-light',
+          type: 'button',
+          'data-action': 'resume',
+        },
+        [icon('play_arrow', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+      ),
+      made('div', 'cardOverlayButton-br flex', {}, [
+        made(
+          'button',
+          'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light',
+          {
+            is: 'paper-icon-button-light',
+            type: 'button',
+            'data-action': 'menu',
+          },
+          [icon('more_vert', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+        ),
+      ]),
+    ])
+    var name = made('div', 'cardText cardTextCentered cardText-first', {}, [
+      made('bdi', '', {}, [made('a', 'itemAction textActionButton', { href: link, 'data-action': 'link' }, [item.Name || ''])]),
+    ])
+    var year = made('div', 'cardText cardTextCentered cardText-secondary', {}, [
+      made('bdi', '', {}, [item.ProductionYear ? String(item.ProductionYear) : '\u00a0']),
+    ])
+    return made(
+      'div',
+      'card overflowPortraitCard card-hoverable card-withuserdata',
+      {
+        'data-index': String(index),
+        'data-isfolder': item.IsFolder ? 'true' : 'false',
+        'data-serverid': server,
+        'data-id': item.Id,
+        'data-type': item.Type || '',
+        'data-mediatype': item.MediaType || '',
+        'data-context': 'home',
+      },
+      [
+        made('div', 'cardBox cardBox-bottompadded', {}, [
+          made('div', 'cardScalable', {}, [made('div', 'cardPadder cardPadder-overflowPortrait'), image, overlay]),
+          name,
+          year,
+        ]),
+      ],
+    )
+  }
+  // watch checks the page as jellyfin-web changes it, the route included.
+  function watch() {
+    function checked() {
+      try {
+        check()
+      } catch (error) {}
+    }
+    new MutationObserver(checked).observe(document.body, { childList: true, subtree: true })
+    addEventListener('hashchange', checked)
+    addEventListener('popstate', checked)
+    checked()
+  }
+  if (document.body) watch()
+  else addEventListener('DOMContentLoaded', watch)
 })()
