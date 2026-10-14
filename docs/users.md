@@ -186,23 +186,43 @@ Plex is only read, with `GET` requests: it is never written to.
 
 ## Importing your own watch history
 
-Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin or Emby server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know.
+Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin or Emby server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know. It also takes the export file of a Letterboxd account (see [Letterboxd](#letterboxd)).
 
-- **Server**: **Jellyfin** or **Emby**.
+- **Server**: **Jellyfin**, **Emby**, or **Letterboxd (export file)**.
 - **Server address**, then **Your user name there** and **Your password there**, empty if the account has none.
 
 **Import my watch history** signs in to that server as the user, as its apps do, and imports that user's played movies and episodes, resume points and favorites into their own Polyfin account only. Titles are matched and merged as an administrator's import does. The section then shows the import, and its result: what was added, and the titles not found. Polyfin never lists the server's users, which a user's session may not, and reads only the user signed in: even a server that answers every user with the session's data gives them their own. It signs out once done. The password is used for that import only, and never kept.
 
-- One import runs at a time on the whole server. While another runs, the user's or an administrator's, the import is refused (`server_import_running`): try again a few minutes later.
-- A user sees only their own imports. The administrator's **Import from another server** page shows the import running or the last one, saying who started it.
-- **Users may import their watch history from another server or app**, under **Settings › Security**, on by default, turns the section off: it is hidden, and the API refuses (`server_imports_disabled`). It turns off the import from an app too (see [Importing from an app](#importing-from-an-app)).
+- One import from a server runs at a time on the whole server, and one import into an account, from a server or Letterboxd. While another runs, the import is refused (`server_import_running`): try again a few minutes later.
+- A user sees only their own imports: the section shows their latest one, from a server or Letterboxd. The administrator's **Import from another server** page shows the import from a server running or the last one, saying who started it.
+- **Users may import their watch history from another server or app**, under **Settings › Security**, on by default, turns the section off, Letterboxd included: it is hidden, and the API refuses (`server_imports_disabled`). It turns off the import from an app too (see [Importing from an app](#importing-from-an-app)).
 - Plex has no sign-in for its users: only its owner can import from it, under **Users**.
 
 **For app developers:**
 
-- `GET /admin/api/account/server-import` answers `enabled`, and `import`, the user's own import running or their last one, `null` when none.
-- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import.
+- `GET /admin/api/account/server-import` answers `enabled`, `letterboxd` (whether a Letterboxd export may be imported), `searchable` (whether a metadata addon of the server searches movies), and `import`, the user's latest import running or ended, from a server or Letterboxd (`kind` `letterboxd`), `null` when none.
+- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import. A Letterboxd export is sent as described below.
 - Polyfin sends the sign-in, the items requests and the sign-out of the administrator's import, never `/Users`.
+
+### Letterboxd
+
+Letterboxd has no API for this, but gives every member their data as a file: on Letterboxd, Settings › Import & Export, then Export your data, downloads a ZIP of CSV files. Choose **Letterboxd (export file)**, then the ZIP as it is, of 20 MB at most, under **Export file**, tick what to bring besides the movies watched, and choose **Import from Letterboxd**:
+
+- **Watchlist to my Watchlist** (on by default): the movies of the Letterboxd watchlist go to the user's [Watchlist](tracking.md#the-watchlist), as a one-off app import's library does: they stay until started.
+- **Ratings** (on by default): stars × 2 give Polyfin's rating from 0 to 10, so 3.5 stars is 7, and apps see `Rating` and `Likes` (a rating of 5 or more) as for a rating set in them. A movie rated in the diary only takes that rating, its latest.
+- **Liked movies as favorites** (off by default): the movies liked on Letterboxd become favorites.
+
+The movies of `watched.csv` and `diary.csv` are marked played. Each one's date is the latest `Watched Date` of the diary when it has one, else the date of `watched.csv`, and its play count the number of its diary lines, at least 1. Diary lines are joined to movies by name and year, as their links point to the diary entry. Only those files, `ratings.csv`, `watchlist.csv` and the liked movies' file of the `likes` folder are read, by their columns' names, so columns Letterboxd adds later do no harm; reviews, lists and the profile are not. A file without `watched.csv` or `diary.csv`, at the ZIP's root or in the folder holding them, is refused (`letterboxd_export_invalid`), and one over 20 MB too (`letterboxd_export_too_large`). Polyfin reads the file in memory, never writes it to disk, and drops it once read.
+
+**Matching:** The export names movies by their name, year and Letterboxd link only. Each one is searched as a movie by its name in the server's metadata addons, the searches local files use (see [Matching](local-folders.md#matching)), and matches only when they find exactly one movie of that name and year. Searches run one at a time, and each name is searched once per import, whatever the files it is in. Without a metadata addon that searches movies, nothing can match: the form says so before the upload. The result lists the movies not found, with their Letterboxd link and why: **Not found** (no movie of that name and year, a movie listed under another year or name included), **Several movies of that name and year**, or **Search failed**.
+
+**Merging:** As the other imports do (see [How the data merges with Polyfin's](#how-the-data-merges-with-polyfin-s)): played marks, ratings and favorites are only added, a title keeps Polyfin's date when it is later and the larger play count, and a rating Polyfin already has stays. Importing the same export again adds nothing twice.
+
+**Progress:** One import into an account runs at a time. While the movies are searched, the section shows how many were; then it counts the movies marked played, the titles added to the Watchlist, the ratings and favorites set, and lists the movies not found. The import and its result are kept in memory, as an app import's are (see [Progress of an app import](#progress-of-an-app-import)).
+
+An administrator can run it for a user: **Import from Letterboxd**, at the top of **Users**, asks **Into the account of** which user, then takes the file the same way. The setting that turns the users' own imports off does not turn off the administrator's.
+
+**For app developers:** `POST /admin/api/account/server-import`, or `/admin/api/users/{id}/server-import` for an administrator, takes the export as `multipart/form-data`: `kind` (`letterboxd`), `file`, and `watchlist`, `ratings` and `likesAsFavorites` (`true` or `false`, by default `true`, `true` and `false`), and answers `import`: `movies`, `searched`, `added` (`played`, `watchlist`, `ratings`, `favorites`), `unmatchedCount` and `unmatched` (`name`, `year`, `link`, `reason`: `not_found`, `ambiguous` or `search_failed`). `GET /admin/api/users/{id}/server-import` answers `searchable` and the user's Letterboxd `import`.
 
 ## Importing from an app
 
