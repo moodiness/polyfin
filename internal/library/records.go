@@ -1,9 +1,11 @@
 package library
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -63,20 +65,17 @@ func (s *Service) save(ctx context.Context, records []record) error {
 	if len(records) == 0 {
 		return nil
 	}
-	ids := make([]accounts.ID, 0, len(records))
-	keys := make([]string, 0, len(records))
-	kinds := make([]string, 0, len(records))
-	data := make([]string, 0, len(records))
-	seen := map[accounts.ID]bool{}
-	for _, r := range records {
-		if seen[r.ID] {
-			continue
-		}
-		seen[r.ID] = true
+	unique := inLockOrder(records)
+	ids := make([]accounts.ID, 0, len(unique))
+	keys := make([]string, 0, len(unique))
+	kinds := make([]string, 0, len(unique))
+	data := make([]string, 0, len(unique))
+	for _, r := range unique {
 		if r.Meta != nil {
-			preview := *r.Meta
+			trimmed, preview := *r, *r.Meta
 			preview.Videos = nil
-			r.Meta = &preview
+			trimmed.Meta = &preview
+			r = &trimmed
 		}
 		encoded, err := json.Marshal(r)
 		if err != nil {
@@ -101,16 +100,12 @@ func (s *Service) saveNew(ctx context.Context, records []record) error {
 	if len(records) == 0 {
 		return nil
 	}
-	ids := make([]accounts.ID, 0, len(records))
-	keys := make([]string, 0, len(records))
-	kinds := make([]string, 0, len(records))
-	data := make([]string, 0, len(records))
-	seen := map[accounts.ID]bool{}
-	for _, r := range records {
-		if seen[r.ID] {
-			continue
-		}
-		seen[r.ID] = true
+	unique := inLockOrder(records)
+	ids := make([]accounts.ID, 0, len(unique))
+	keys := make([]string, 0, len(unique))
+	kinds := make([]string, 0, len(unique))
+	data := make([]string, 0, len(unique))
+	for _, r := range unique {
 		encoded, err := json.Marshal(r)
 		if err != nil {
 			return err
@@ -120,6 +115,24 @@ func (s *Service) saveNew(ctx context.Context, records []record) error {
 	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
 		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT (id) DO NOTHING`, ids, keys, kinds, data)
 	return err
+}
+
+// inLockOrder returns the first record of each identifier, ordered by
+// identifier. Upserts lock the rows they reach in that order, so listings
+// saving the same items at once in other orders, as smart lists sorted
+// differently do when an app opens its home, take them in the same order
+// and never deadlock (see saveCredits).
+func inLockOrder(records []record) []*record {
+	unique := make([]*record, 0, len(records))
+	seen := make(map[accounts.ID]bool, len(records))
+	for i := range records {
+		if !seen[records[i].ID] {
+			seen[records[i].ID] = true
+			unique = append(unique, &records[i])
+		}
+	}
+	slices.SortFunc(unique, func(a, b *record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
+	return unique
 }
 
 // keptData is the record an upsert stores: the new one, with the stored
