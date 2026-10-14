@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -44,8 +45,12 @@ const (
 	// smartReadTime bounds a background read of a catalog for a list.
 	smartReadTime = 5 * time.Minute
 	// smartLife is how long the titles read for a list serve its next
-	// listings: apps read a list page after page.
-	smartLife = 30 * time.Second
+	// listings: apps read a list page after page. smartBytes bounds what
+	// they take, as the catalog pages kept are bounded: the titles of a
+	// list larger than that on their own are read again from the pages at
+	// each listing.
+	smartLife  = 30 * time.Second
+	smartBytes = 64 << 20
 	// smartLookups bounds the descriptions one listing of a list asks
 	// for, and smartFetches the descriptions asked for at once, across
 	// lists.
@@ -154,12 +159,50 @@ type smartTitle struct {
 	genre     string
 }
 
-// smartKey identifies the titles read for a list, as it was saved, for a
-// user.
+// smartKey identifies the titles read for a list, as it was saved, by the
+// catalogs that read them (see smartReader): users who reach the same
+// catalogs the same way share them, what each did with the titles being
+// applied at each listing (see smartStates).
 type smartKey struct {
 	list    accounts.ID
 	updated time.Time
-	user    accounts.ID
+	reader  string
+}
+
+// smartReader tells apart the ways sources are read: by which addon, at
+// which address and how far, narrowed to which genre. A user whose
+// parental control or blocked genres hide titles reads them apart, as the
+// titles they are shown differ (see visibleMetas).
+func smartReader(v view, sources []source) string {
+	var b strings.Builder
+	if v.restricted() {
+		b.WriteString("user " + v.user.String() + "\n")
+	}
+	for _, src := range sources {
+		fmt.Fprintf(&b, "%s %s %t %q %q %q %d\n", src.addon.addon.ID, configOf(src.addon.addon), src.addon.confined,
+			src.catalog.Type, src.catalog.ID, src.genre, v.limit(src))
+	}
+	return b.String()
+}
+
+// smartTitleSize estimates what a title read for a list takes in memory
+// besides its listing's description: its item's own copies (its people,
+// its identifiers) and the structures holding them.
+const smartTitleSize = 512
+
+// smartTitlesSize is the size the smart list cache counts for the titles
+// read for a list (see cache.Sized): for each, its listing's description,
+// which its item and record share, twice what the page caches count for
+// it, plus smartTitleSize.
+func smartTitlesSize(titles []smartTitle) int {
+	size := 0
+	for _, t := range titles {
+		size += smartTitleSize
+		if t.record.Meta != nil {
+			size += 2 * cache.JSONSize(*t.record.Meta)
+		}
+	}
+	return size
 }
 
 // smartResult is a list as it stands for a user: the titles it lists, in
@@ -236,11 +279,13 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 
 // smartCandidates returns the titles a list's catalogs list, one of each
 // catalog in turn, each once, with what is known of them. Those read for a
-// saved list whole serve its listings for smartLife; the descriptions of
+// saved list whole serve its listings for smartLife, for every user who
+// reads its catalogs the same way (see smartKey); the descriptions of
 // those not described then are looked for again at each listing, as they
 // come in the background.
 func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.List) ([]smartTitle, bool, error) {
-	key := smartKey{list.ID, list.UpdatedAt, v.user}
+	sources := s.smartSources(v, list)
+	key := smartKey{list.ID, list.UpdatedAt, smartReader(v, sources)}
 	cacheable := list.ID != (accounts.ID{}) && !keptOnly(ctx) && !refreshing(ctx)
 	if cacheable {
 		if kept, ok := s.smartCache.Get(key); ok {
@@ -248,7 +293,6 @@ func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.L
 			return titles, true, s.smartDescribed(ctx, v, list, titles)
 		}
 	}
-	sources := s.smartSources(v, list)
 	lists, complete := s.smartRead(ctx, v, sources)
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()

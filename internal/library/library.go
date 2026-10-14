@@ -121,9 +121,10 @@ type Service struct {
 	// ratings.go); nil, they show their addons'.
 	ratings *ratings.Service
 	// smart holds the smart lists; smartCache keeps the titles read for
-	// each list, smartFetches holds a place for each description read for
-	// them, and smartWait bounds how long a listing waits for their
-	// catalogs (see smartlists.go).
+	// each list, by the catalogs that read them and within smartBytes,
+	// smartFetches holds a place for each description read for them, and
+	// smartWait bounds how long a listing waits for their catalogs (see
+	// smartlists.go).
 	smart        *smartlists.Store
 	smartCache   *cache.Cache[smartKey, []smartTitle]
 	smartFetches chan struct{}
@@ -245,7 +246,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		watchlist:      watchlist.New(db),
 		smart:          smartlists.New(db),
 		userData:       userdata.New(db),
-		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife),
+		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize),
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
 	}
