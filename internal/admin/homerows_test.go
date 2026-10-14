@@ -65,6 +65,13 @@ func TestHomeRowRoutes(t *testing.T) {
 		{"name": "Rows", "kind": "new", "place": "top", "addonId": addon["id"], "catalogType": "movie", "catalogId": "top", "everyone": true},
 		{"name": "Rows", "kind": "collection", "place": "top", "collectionId": "not an identifier", "everyone": true},
 		{"name": "Rows", "kind": "because", "place": "top", "count": 11, "everyone": true},
+		// Catalogs the choices do not offer, which no row could draw: one
+		// that cannot be browsed, one the addon does not have, and one of
+		// no addon installed.
+		{"name": "Rows", "kind": "catalog", "place": "top", "addonId": addon["id"], "catalogType": "movie", "catalogId": "search", "everyone": true},
+		{"name": "Rows", "kind": "catalog", "place": "top", "addonId": addon["id"], "catalogType": "collection", "catalogId": "sets", "everyone": true},
+		{"name": "Rows", "kind": "catalog", "place": "top", "addonId": "0123456789abcdef0123456789abcdef", "catalogType": "movie", "catalogId": "top",
+			"everyone": true},
 	} {
 		if status, body, _ := administrator.call(http.MethodPost, "/home-rows", refused); status != http.StatusBadRequest || body["error"] != "invalid_home_row" {
 			t.Errorf("%v: %d %v", refused, status, body)
@@ -96,6 +103,12 @@ func TestHomeRowRoutes(t *testing.T) {
 	if status, body, _ := administrator.call(http.MethodPatch, "/home-rows/"+created["id"].(string), catalog); status != http.StatusOK ||
 		body["place"] != "bottom" || body["name"] != "Top of the week" {
 		t.Errorf("changed: %d %v", status, body)
+	}
+	unbrowsable := map[string]any{"name": "Search", "kind": "catalog", "place": "top", "addonId": addon["id"], "catalogType": "movie",
+		"catalogId": "search", "everyone": true}
+	if status, body, _ := administrator.call(http.MethodPatch, "/home-rows/"+created["id"].(string), unbrowsable); status != http.StatusBadRequest ||
+		body["error"] != "invalid_home_row" {
+		t.Errorf("changed to a catalog not offered: %d %v", status, body)
 	}
 
 	// The member sees the rows shown to them, and turns one off.

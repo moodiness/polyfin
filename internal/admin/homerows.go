@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // HomeRowChoices tells the collections a home row may list, as the Jellyfin
@@ -132,24 +134,46 @@ type homeRowCollectionJSON struct {
 	Source string `json:"source"`
 }
 
+// homeRowCatalogs lists the catalogs a row may list: those of the server's
+// addons that can be browsed.
+func (h *handler) homeRowCatalogs(ctx context.Context, user accounts.User) ([]library.SmartCatalog, error) {
+	if h.SmartPreviews == nil {
+		return nil, nil
+	}
+	found, err := h.SmartPreviews.SmartCatalogs(ctx, user, true)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(found, func(c library.SmartCatalog) bool { return !c.Shared }), nil
+}
+
+// offeredHomeRow reports whether row lists what homeRowChoices offers: for
+// a catalog row, one of homeRowCatalogs. A row of another catalog would
+// never be drawn.
+func (h *handler) offeredHomeRow(ctx context.Context, user accounts.User, row homerows.Row) (bool, error) {
+	if row.Kind != homerows.KindCatalog {
+		return true, nil
+	}
+	catalogs, err := h.homeRowCatalogs(ctx, user)
+	return slices.ContainsFunc(catalogs, func(c library.SmartCatalog) bool {
+		return c.AddonID == row.Addon && c.Catalog.Type == row.CatalogType && c.Catalog.ID == row.CatalogID
+	}), err
+}
+
 // homeRowChoices answers the catalogs and collections a row may list: the
 // catalogs of the server's addons that can be browsed, and the
 // collections the administrator sees.
 func (h *handler) homeRowChoices(w http.ResponseWriter, r *http.Request) {
 	user := sessionFrom(r.Context()).User
-	catalogs := []homeRowCatalogJSON{}
-	if h.SmartPreviews != nil {
-		found, err := h.SmartPreviews.SmartCatalogs(r.Context(), user, true)
-		if err != nil {
-			h.internalError(w, r, err)
-			return
-		}
-		for _, c := range found {
-			if c.Shared {
-				catalogs = append(catalogs, homeRowCatalogJSON{AddonID: c.AddonID.String(), AddonName: c.AddonName, CatalogType: c.Catalog.Type,
-					CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name})
-			}
-		}
+	found, err := h.homeRowCatalogs(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	catalogs := make([]homeRowCatalogJSON, 0, len(found))
+	for _, c := range found {
+		catalogs = append(catalogs, homeRowCatalogJSON{AddonID: c.AddonID.String(), AddonName: c.AddonName, CatalogType: c.Catalog.Type,
+			CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name})
 	}
 	collections := []homeRowCollectionJSON{}
 	if h.HomeRowChoices != nil {
@@ -168,15 +192,33 @@ func (h *handler) homeRowChoices(w http.ResponseWriter, r *http.Request) {
 	}{catalogs, collections})
 }
 
-// createHomeRow adds a row after the others: 201 with the row.
-func (h *handler) createHomeRow(w http.ResponseWriter, r *http.Request) {
+// homeRowFrom reads the row of a request's body, and answers 400 when it
+// is invalid or lists a catalog homeRowChoices does not offer. It reports
+// whether it read one.
+func (h *handler) homeRowFrom(w http.ResponseWriter, r *http.Request) (homerows.Row, bool) {
 	var body homeRowJSON
 	if !decode(w, r, &body) {
-		return
+		return homerows.Row{}, false
 	}
 	row, ok := body.row()
+	if ok {
+		offered, err := h.offeredHomeRow(r.Context(), sessionFrom(r.Context()).User, row)
+		if err != nil {
+			h.internalError(w, r, err)
+			return homerows.Row{}, false
+		}
+		ok = offered
+	}
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid_home_row")
+	}
+	return row, ok
+}
+
+// createHomeRow adds a row after the others: 201 with the row.
+func (h *handler) createHomeRow(w http.ResponseWriter, r *http.Request) {
+	row, ok := h.homeRowFrom(w, r)
+	if !ok {
 		return
 	}
 	created, err := h.HomeRows.Create(r.Context(), row)
@@ -195,13 +237,8 @@ func (h *handler) updateHomeRow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var body homeRowJSON
-	if !decode(w, r, &body) {
-		return
-	}
-	row, ok := body.row()
+	row, ok := h.homeRowFrom(w, r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid_home_row")
 		return
 	}
 	row.ID = id
