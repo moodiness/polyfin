@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 // duration asks ffprobe how long the file at address lasts.
@@ -48,7 +50,7 @@ func listen(ctx context.Context, ffmpeg, address string, start, length time.Dura
 	if err := cmd.Start(); err != nil {
 		return Fingerprint{}, err
 	}
-	lowerPriority(cmd.Process.Pid)
+	media.LowerPriority(cmd.Process.Pid)
 	f, readErr := fingerprint(out, start)
 	if readErr != nil {
 		_ = cmd.Process.Kill()
