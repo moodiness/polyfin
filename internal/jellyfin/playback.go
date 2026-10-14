@@ -307,6 +307,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		rateLimitExceeded(w)
 		return
 	}
+	h.rememberPlay(r.Context(), request)
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
 	item, err := h.played(r.Context(), user, opened)
@@ -400,6 +401,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
+	// Every version listed is named for the profile sent: the one chosen
+	// from its decision, the others from what is known of them.
+	namer := h.playbackNamer(item, request, user)
+	if namer != nil {
+		chosenSource.Name = chosen.version.Name + " " + playback.PlayNote(chosen.decision, true, namer.language)
+	}
 	if chosen.decision.HLS {
 		// The bytes of the segment the play begins with are read while the
 		// app reads the answer.
@@ -436,7 +443,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		case j == chosen.index:
 			sources = append(sources, chosenSource)
 		case !passed[j] && !unreadable[j]:
-			described := h.describedSource(r, p, other, sourceID(opened, other, j == at))
+			described := h.describedSource(r, p, other, sourceID(opened, other, j == at), namer)
 			// A version known to be above the user's limit, or taller than
 			// their quality group, is not offered as it is.
 			if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) || !user.FitsGroup(h.versionHeight(r.Context(), other)) {
@@ -554,12 +561,51 @@ func (h *Handler) unconverted(ctx context.Context, d decided, request playbackIn
 // is, nor on an app that sends no device profile.
 func (h *Handler) decide(r *http.Request, p playable, index int, version library.Version, id accounts.ID, analysis media.Analysis,
 	request playbackInfoRequest, allowed accounts.Conversions, named bool) (decided, bool) {
-	notFile := h.Playback.ReadsInput(version)
-	if notFile && request.DeviceProfile == nil {
+	if h.Playback.ReadsInput(version) && request.DeviceProfile == nil {
 		return decided{}, false
 	}
 	source := h.baseSource(r, p, version, id, analysis, true)
-	streams := source.MediaStreams
+	decision, options, described := h.trackDecision(p, version, source.MediaStreams, analysis, request, allowed, named)
+	// Over HLS, a version is cut into segments: on its keyframes, or,
+	// for a file without an index such as MPEG-TS, every few seconds,
+	// which only converted video allows (see hls.NewGridPlan). Such a
+	// version is not offered to a user who may not have it converted,
+	// rather than offered and failing; nor is a version whose index
+	// cannot be read, which nothing could stream.
+	if request.DeviceProfile != nil && decision.HLS {
+		plan, err := h.Playback.Plan(r.Context(), version)
+		if err != nil {
+			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+			return decided{}, false
+		}
+		if plan.Grid() && decision.Video == nil {
+			converted := options
+			converted.ConvertVideo = true
+			if decision = playback.Decide(request.DeviceProfile, described, converted); !decision.HLS || decision.Video == nil {
+				return decided{}, false
+			}
+		}
+	}
+	// HDR left to the processor for want of its mastering display, on an
+	// Intel GPU, has it learned once, and the version is decided again.
+	if learned, ok := h.Playback.LearnMasteringDisplay(r.Context(), version, analysis, decision.Video); ok {
+		return h.decide(r, p, index, version, id, learned, request, allowed, named)
+	}
+	if unplayable(request, analysis, decision, allowed) {
+		return decided{}, false
+	}
+	return decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}, true
+}
+
+// trackDecision decides how a version plays on the app, for its device
+// profile, from its tracks, streams as described, alone: with the tracks
+// the app asked for when named, else those the user's preferences choose.
+// It reads nothing, leaving to decide whether the version can be cut into
+// HLS segments. options are those the decision was made with, and
+// described the version as it saw it.
+func (h *Handler) trackDecision(p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis,
+	request playbackInfoRequest, allowed accounts.Conversions, named bool) (playback.Decision, playback.Options, playback.MediaSource) {
+	notFile := h.Playback.ReadsInput(version)
 	options := playback.Options{
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
 		UserBitrate:         request.userLimit,
@@ -588,77 +634,52 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		options.SubtitleStreamIndex = p.tracks.subtitle(streams, audio)
 	}
 	container := playback.Container(analysis)
-	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
-	if request.DeviceProfile != nil {
-		described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
-		decision = playback.Decide(request.DeviceProfile, described, options)
-		// A subtitle the app can only take burned into the video is burned
-		// in when it is pictures, an image track inside the file or a
-		// picture file beside it, and the video can be converted, as burning
-		// it in requires, and may be. Any other is left out rather than
-		// preventing playback, and so is one the app would take in HLS when
-		// the version cannot be streamed so.
-		if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
-			method := decision.Subtitles[*selected].Method
-			if method == "Encode" && allowed.Video && burnable(streams, analysis, *selected) {
-				burn := options
-				burn.ConvertVideo = true
-				if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil && permitted(allowed, burned) {
-					decision, method = burned, ""
-				}
-			}
-			if method == "Encode" || (method == "Hls" && !decision.HLS) {
-				without := options
-				without.SubtitleStreamIndex = new(-1)
-				if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.HLS && !decision.HLS) {
-					decision = retry
-				}
-			}
-		}
-		// Over HLS, a version is cut into segments: on its keyframes, or,
-		// for a file without an index such as MPEG-TS, every few seconds,
-		// which only converted video allows (see hls.NewGridPlan). Such a
-		// version is not offered to a user who may not have it converted,
-		// rather than offered and failing; nor is a version whose index
-		// cannot be read, which nothing could stream.
-		if decision.HLS {
-			plan, err := h.Playback.Plan(r.Context(), version)
-			if err != nil {
-				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
-				return decided{}, false
-			}
-			if plan.Grid() && decision.Video == nil {
-				converted := options
-				converted.ConvertVideo = true
-				if decision = playback.Decide(request.DeviceProfile, described, converted); !decision.HLS || decision.Video == nil {
-					return decided{}, false
-				}
-			}
-		}
-	} else {
+	described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
+	if request.DeviceProfile == nil {
+		decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
 		if audio != nil {
 			decision.AudioStreamIndex = *audio
 		}
 		if options.SubtitleStreamIndex != nil {
 			decision.SubtitleStreamIndex = *options.SubtitleStreamIndex
 		}
+		return decision, options, described
 	}
-	// HDR left to the processor for want of its mastering display, on an
-	// Intel GPU, has it learned once, and the version is decided again.
-	if learned, ok := h.Playback.LearnMasteringDisplay(r.Context(), version, analysis, decision.Video); ok {
-		return h.decide(r, p, index, version, id, learned, request, allowed, named)
+	decision := playback.Decide(request.DeviceProfile, described, options)
+	// A subtitle the app can only take burned into the video is burned in
+	// when it is pictures, an image track inside the file or a picture file
+	// beside it, and the video can be converted, as burning it in
+	// requires, and may be. Any other is left out rather than preventing
+	// playback, and so is one the app would take in HLS when the version
+	// cannot be streamed so.
+	if selected := options.SubtitleStreamIndex; !decision.DirectPlay && selected != nil && *selected >= 0 {
+		method := decision.Subtitles[*selected].Method
+		if method == "Encode" && allowed.Video && burnable(streams, analysis, *selected) {
+			burn := options
+			burn.ConvertVideo = true
+			if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil && permitted(allowed, burned) {
+				decision, method = burned, ""
+			}
+		}
+		if method == "Encode" || (method == "Hls" && !decision.HLS) {
+			without := options
+			without.SubtitleStreamIndex = new(-1)
+			if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.HLS && !decision.HLS) {
+				decision = retry
+			}
+		}
 	}
-	if decision.HLS && !permitted(allowed, decision) {
-		return decided{}, false
-	}
-	// Above the user's bitrate limit, a version plays only converted down to
-	// it; else the next version is tried. PreferDirectPlay thus never takes
-	// such a version for one that plays without conversion. So does one
-	// taller than their quality group.
-	if beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision) {
-		return decided{}, false
-	}
-	return decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}, true
+	return decision, options, described
+}
+
+// unplayable reports whether a decision does not play a version on the app:
+// it needs a conversion the user may not have, or would send it above the
+// user's bitrate limit or taller than their quality group, unconverted.
+// Above the limit, a version plays only converted down to it; else the
+// next version is tried. PreferDirectPlay thus never takes such a version
+// for one that plays without conversion.
+func unplayable(request playbackInfoRequest, analysis media.Analysis, decision playback.Decision, allowed accounts.Conversions) bool {
+	return decision.HLS && !permitted(allowed, decision) || beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision)
 }
 
 // decidedSource describes the version an app is about to play, with the

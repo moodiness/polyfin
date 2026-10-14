@@ -363,9 +363,11 @@ type settingsJSON struct {
 	HideVersionsLargerGB *int      `json:"hideVersionsLargerGb"`
 	HiddenVersionCodecs  *[]string `json:"hiddenVersionCodecs"`
 	HiddenVersionWords   *[]string `json:"hiddenVersionWords"`
-	SyncAddonSubtitles   *bool     `json:"syncAddonSubtitles"`
-	MaxConversions       *int      `json:"maxConversions"`
-	MaxConversionHeight  *int      `json:"maxConversionHeight"`
+	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
+	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
+	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
+	MaxConversions      *int  `json:"maxConversions"`
+	MaxConversionHeight *int  `json:"maxConversionHeight"`
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
@@ -566,6 +568,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		HideVersionsLargerGB:  &settings.HideVersionsLargerGB,
 		HiddenVersionCodecs:   &settings.HiddenVersionCodecs,
 		HiddenVersionWords:    &settings.HiddenVersionWords,
+		NameHowVersionsPlay:   &settings.NameHowVersionsPlay,
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
@@ -1131,6 +1134,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		HideVersionsLargerGB:  valueOr(body.HideVersionsLargerGB, current.HideVersionsLargerGB),
 		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
+		NameHowVersionsPlay:   valueOr(body.NameHowVersionsPlay, current.NameHowVersionsPlay),
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),

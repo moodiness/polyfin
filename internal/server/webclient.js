@@ -285,10 +285,23 @@
   // it leaves taking an identifier of its own. When the script knows the
   // option's ETag, a version keeping its ETag as its name or size changes
   // is the same; otherwise jellyfin-web names an option after its source,
-  // and the name and the size the script knows tell.
+  // and the name (see named) and the size the script knows tell.
   function stale(option, source) {
     if (tags.has(option) && source.ETag) return tags.get(option) !== source.ETag
-    return option.textContent !== source.Name || (sizes.has(option) && sizes.get(option) !== source.Size)
+    return !named(option.textContent, source.Name) || (sizes.has(option) && sizes.get(option) !== source.Size)
+  }
+  // named tells whether an option's text names a source: its name, which
+  // may have gained, lost or changed the ending in parentheses that says
+  // how the app plays it, such as " (direct play)", since jellyfin-web
+  // listed it (Settings › Playback › Say in version names how they play).
+  function named(text, name) {
+    var noted = / \([^()]*\)$/
+    return (
+      text === name ||
+      (name.indexOf(text + ' (') === 0 && noted.test(name)) ||
+      (text.indexOf(name + ' (') === 0 && noted.test(text)) ||
+      (noted.test(text) && noted.test(name) && text.replace(noted, '') === name.replace(noted, ''))
+    )
   }
   // remember notes the size and the ETag of the source an option stands for.
   function remember(option, source) {
@@ -308,7 +321,7 @@
     for (var i = 0; i < menu.options.length; i++) {
       var listed = menu.options[i]
       var known = given[listed.value]
-      if (!sizes.has(listed) && known && known.Name === listed.textContent) remember(listed, known)
+      if (!sizes.has(listed) && known && named(listed.textContent, known.Name)) remember(listed, known)
       kept[listed.value] = listed
     }
     given = {}
@@ -364,15 +377,15 @@
     var tag = tags.get(picked)
     var size = sizes.get(picked)
     var found = null
-    var named = []
+    var alike = []
     for (var i = 0; i < sources.length; i++) {
       var source = sources[i]
       if (source.Id === picked.value) continue
       if (tag && source.ETag === tag) found = found || source
       var sized = !(size > 0 && source.Size > 0 && size !== source.Size)
-      if (source.Name === picked.textContent && sized) named.push(source)
+      if (named(picked.textContent, source.Name) && sized) alike.push(source)
     }
-    if (!found && named.length === 1) found = named[0]
+    if (!found && alike.length === 1) found = alike[0]
     if (!found) return
     menu.insertBefore(sourceOption(found), picked)
     menu.removeChild(picked)

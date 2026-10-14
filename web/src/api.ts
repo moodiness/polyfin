@@ -243,6 +243,8 @@ export type Settings = {
   hiddenVersionCodecs: VersionCodec[]
   /** Hides the versions whose labels hold one of these words, in any letter case. */
   hiddenVersionWords: string[]
+  /** Ends version names with how the app asking plays each, as its last playback decides it. */
+  nameHowVersionsPlay: boolean
   /** Times the addons' subtitles to the version played, against when it has speech. */
   syncAddonSubtitles: boolean
   /** Playbacks whose video the server converts at once, 0 for no limit. */

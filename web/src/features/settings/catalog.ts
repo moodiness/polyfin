@@ -121,6 +121,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'name-how-versions-play',
+    label: (t) => s(t).nameHowVersionsPlay,
+    help: (t) => s(t).nameHowVersionsPlayHelp,
+    keywords: ['direct play', 'lecture directe', 'transcoding'],
+  },
+  {
+    section: 'playback',
     anchor: 'sync-addon-subtitles',
     label: (t) => s(t).syncAddonSubtitles,
     help: (t) => s(t).syncAddonSubtitlesHelp,

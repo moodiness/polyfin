@@ -1083,6 +1083,10 @@ type Settings struct {
 	HideVersionsLargerGB int
 	HiddenVersionCodecs  []string
 	HiddenVersionWords   []string
+	// NameHowVersionsPlay ends the names of a movie's or an episode's
+	// versions with how the app asking plays each, as the device profile of
+	// its last PlaybackInfo decides it.
+	NameHowVersionsPlay bool
 	// SyncAddonSubtitles times the addons' subtitles to the version played,
 	// against when the version has speech (see playback.Service.FindSpeech).
 	SyncAddonSubtitles bool
@@ -1350,7 +1354,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"mdblist_ratings_key, critic_rating_shows, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
-	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, " +
+	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -1386,6 +1390,7 @@ func (settings *Settings) fields() []any {
 		&settings.KnownProxyNames, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
+		&settings.NameHowVersionsPlay,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,

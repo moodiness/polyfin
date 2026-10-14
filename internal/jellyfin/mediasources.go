@@ -215,16 +215,19 @@ func sourceID(opened accounts.ID, version library.Version, stands bool) accounts
 }
 
 // mediaSources describes an item's versions for item details and listings,
-// where Jellyfin evaluates no device profile: every version is playable.
-// opened is the identifier the item was asked by. The versions keep their
-// order whatever version the item was opened as: Jellyfin 12.2 puts the
-// source of a version opened as an item first, which jellyfin-web's version
-// menu, opening the version picked, shows as the list reordering itself.
+// where Jellyfin evaluates no device profile: every version is playable,
+// and named, when the setting is on, for the last PlaybackInfo profile of
+// the device asking (see detailsNamer). opened is the identifier the item
+// was asked by. The versions keep their order whatever version the item was
+// opened as: Jellyfin 12.2 puts the source of a version opened as an item
+// first, which jellyfin-web's version menu, opening the version picked,
+// shows as the list reordering itself.
 func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) []MediaSourceInfo {
 	at := openedIndex(opened, p.versions)
+	n := h.detailsNamer(r, p.item)
 	sources := make([]MediaSourceInfo, len(p.versions))
 	for i, version := range p.versions {
-		sources[i] = h.describedSource(r, p, version, sourceID(opened, version, i == at))
+		sources[i] = h.describedSource(r, p, version, sourceID(opened, version, i == at), n)
 	}
 	return sources
 }
@@ -232,8 +235,9 @@ func (h *Handler) mediaSources(r *http.Request, p playable, opened accounts.ID) 
 // describedSource describes a version as item details do, without a
 // device profile: playable as it is, unless it is not one file, its tracks
 // as far as it was analyzed, or, until it is, as RemuxDB describes its
-// file.
-func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID) MediaSourceInfo {
+// file. With n, a version whose tracks are known is named for n's profile
+// (see playName).
+func (h *Handler) describedSource(r *http.Request, p playable, version library.Version, id accounts.ID, n *versionNamer) MediaSourceInfo {
 	analysis, known := h.Playback.Analyzed(r.Context(), version.ID)
 	if !known {
 		analysis, known = h.RemuxDB.Described(version)
@@ -244,6 +248,9 @@ func (h *Handler) describedSource(r *http.Request, p playable, version library.V
 	if known {
 		source.Container = playback.DisplayContainer(analysis, version.Filename)
 		source.DefaultAudioStreamIndex = p.tracks.audio(source.MediaStreams)
+		if n != nil {
+			source.Name = h.playName(n, p, version, source.MediaStreams, analysis)
+		}
 	}
 	source.DefaultSubtitleStreamIndex = p.tracks.subtitle(source.MediaStreams, source.DefaultAudioStreamIndex)
 	return source

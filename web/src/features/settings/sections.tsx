@@ -172,6 +172,13 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           onChange={(preferDirectPlay) => update({ preferDirectPlay })}
         />
         <SwitchRow
+          anchor="name-how-versions-play"
+          label={s.nameHowVersionsPlay}
+          help={s.nameHowVersionsPlayHelp}
+          checked={form.nameHowVersionsPlay}
+          onChange={(nameHowVersionsPlay) => update({ nameHowVersionsPlay })}
+        />
+        <SwitchRow
           anchor="sync-addon-subtitles"
           label={s.syncAddonSubtitles}
           help={s.syncAddonSubtitlesHelp}

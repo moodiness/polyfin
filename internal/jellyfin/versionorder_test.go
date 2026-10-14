@@ -55,6 +55,8 @@ func threeVersionsAddon(t *testing.T) string {
 func TestVersionsKeepTheirOrder(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
+	// The names are the addons': this test follows the versions by them.
+	s.setting(t, func(settings *accounts.Settings) { settings.NameHowVersionsPlay = false })
 	user := s.user("member", nil)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), threeVersionsAddon(t), false); err != nil {
 		t.Fatal(err)

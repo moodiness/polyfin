@@ -210,6 +210,32 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 - While a title's page is open, and Polyfin follows it (see [Title pages](#title-pages)), the versions it shows keep their places, even when an analysis tells more of them; versions that come later take their places by the rules. A page opened again lists them in the rules' order.
 - Merged Live TV channels keep their own order (see [IPTV](iptv.md)).
 
+### Version names
+
+With **Say in version names how they play**, in **Settings › Playback** and on by default, the name of a movie's or an episode's version ends with how the app plays it, as a synced subtitle's ends with "(synced)" (see [Subtitles](subtitles.md)). The rest of the name does not change.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Say in version names how they play** | **Settings › Playback** | On | Ends version names with how the app plays each. Off, names are the addons' as before. |
+
+- "(direct play)": the app plays the file as it is.
+- "(direct stream)": its tracks are copied, without conversion, into HLS.
+- "(converted: reason)", with one reason, the first that applies: "HDR" when the app cannot show the video's HDR or Dolby Vision; "quality limit" when the app's quality setting, the user's **Maximum quality** or their quality group needs the video converted down; "subtitles" when a subtitle is burned into the video; "video" for any other reason about the video; "audio" when only the audio is converted. "(converted)" alone for any other reason.
+- "(cannot play here)": the version needs a conversion the server or the user may not have (see [Transcoding](transcoding.md)).
+
+How names are decided:
+
+- Only versions analyzed, or described by [RemuxDB](#tracks-from-remuxdb), are named. Naming reads nothing: it runs the decision of a play on what is known of each version. A version not known yet has no ending.
+- `PlaybackInfo` names every version it lists for the device profile the app sends, not only the one chosen.
+- Item details know no device profile. Polyfin keeps in memory each device's last `PlaybackInfo` profile and bitrate, and names versions for that device with them: the web player's version menu, Android TV's **Select version** and Swiftfin's version menu read names there. Before a device's first play, after it signs out, or after a restart, names have no ending.
+- The decision uses the audio and subtitle tracks the user's preferences choose. Picking other tracks in the app may change how the version plays; the name cannot tell.
+- A file whose keyframe index turns out to be missing once played, such as some MPEG-TS files, has its video converted all the same, while its name said "(direct stream)": the index is not read for names.
+- Names are in the server language, **Language of generated names** (see [Getting started](getting-started.md#language-of-generated-names)): in French, "(lecture directe)", "(flux direct)", "(converti : HDR)" and so on, "(illisible ici)". An ending is 30 characters at most; apps that cut long names to one line may hide it.
+
+**For app developers:**
+
+- Only `MediaSources[].Name` changes. `Id` and `ETag` stay, so the web player keeps a picked version selected.
+
 ### Video conversions at once
 
 - The cap counts conversions of files and Live TV together, burning subtitles in included.

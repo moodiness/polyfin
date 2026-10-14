@@ -156,6 +156,9 @@ type Handler struct {
 	// sizes remembers what set the size of the video each play session
 	// converts, for the admin dashboard.
 	sizes *cache.Cache[string, playback.ConversionSize]
+	// plays remembers each device's last PlaybackInfo profile and bitrate,
+	// which item details name versions for (see detailsNamer).
+	plays *cache.Cache[accounts.ID, devicePlay]
 }
 
 // New returns the Jellyfin API handler.
@@ -174,6 +177,7 @@ func New(options Options) *Handler {
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
+		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)

@@ -13,6 +13,8 @@ Polyfin picks the lightest way an app can play a file:
 
 Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
 
+With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
+
 ## Size of converted video
 
 Converted video is never larger than its source. It is smaller when one of these limits is below the source's size, the lowest one winning:

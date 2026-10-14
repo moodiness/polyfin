@@ -81,6 +81,9 @@ const settings: typeof en = {
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+    nameHowVersionsPlay: 'Dire dans le nom des versions comment elles se lisent',
+    nameHowVersionsPlayHelp:
+      'Le nom des versions finit par la façon dont l’appli lit chacune : « (lecture directe) », « (flux direct) » quand elle est copiée sans conversion, « (converti : raison) » avec HDR, la limite de qualité, les sous-titres, la vidéo ou l’audio pour raison, ou « (illisible ici) ». Polyfin le décide pour le profil d’appareil envoyé par l’appli à sa dernière lecture : les noms ne disent rien avant la première lecture d’un appareil ni après un redémarrage, et rien pour une version pas encore analysée ni décrite par RemuxDB. Les noms sont dans la langue des noms générés. Rien n’est lu pour cela.',
     versionOrderGroup: 'Ordre des versions',
     versionOrder: {
       label: 'Trier les versions par',

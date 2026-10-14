@@ -37,7 +37,8 @@ Polyfin generates some names that Jellyfin apps show:
 
 - seasons;
 - untitled episodes;
-- the type that tells apart libraries with the same name, such as "Popular (Movies)".
+- the type that tells apart libraries with the same name, such as "Popular (Movies)";
+- the ending of version names that says how the app plays each, such as "(direct play)" (see [Version names](playback.md#version-names)).
 
 These names are in English or French. Set the language under **Settings**. It defaults to the language the setup page was in.
 
