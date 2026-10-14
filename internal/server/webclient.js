@@ -3,7 +3,8 @@
 // client's routes for three things, adds a style for a fourth, mends a link
 // for a fifth, closes a duplicate error for a sixth, leaves libraries out of
 // the menus for a seventh, gives members a link to the admin app for an
-// eighth, and shows a title's three scores for a ninth.
+// eighth, shows a title's three scores for a ninth, and adds entries to the
+// item menus for a tenth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -168,6 +169,34 @@
 // answer, changes nothing; nor does anything during a video. Its words
 // follow jellyfin-web's language, as for the third. Any error just stops
 // it.
+//
+// Tenth, it adds Polyfin's own entries to jellyfin-web's item menu, the
+// action sheet a card's ⋮ button or a right click on a card opens, and the
+// ⋮ button of a title's page (.btnMoreCommands):
+//   "Remove from Continue Watching", for a card of a Continue Watching row:
+//     a row whose cards all have a resume point, as /UserItems/Resume
+//     lists them, the libraries' own rows included. It deletes
+//     /Polyfin/UserItems/{id}/Resume and takes the card off the row;
+//   "Hide this title", for a movie, a home video or a series, or a season
+//     or an episode of one, that the user has not hidden, as
+//     /Polyfin/UserItems/Hidden lists them. It posts to
+//     /Polyfin/UserItems/{id}/Hidden, takes the cards of the title off the
+//     page and says so in a toast, as jellyfin-web's own;
+//   "Show this title again", in its place for a title the user hid, its
+//     series hidden counting for a season or an episode, which deletes
+//     /Polyfin/UserItems/{id}/Hidden.
+// As the button is pressed or the card right-clicked, before jellyfin-web
+// opens its menu, the script asks for the item (ApiClient.getItem), the
+// hidden titles and, for a card with a resume point, Continue Watching;
+// the first action sheet that opens within 10 seconds, no other click
+// coming between, gets the entries once the answers come. An entry closes
+// the menu as Back does, then acts. jellyfin-web 12.2 keeps the answers of
+// its rows for a minute, and a row the change's UserDataChanged message
+// refreshes within it draws that answer again, asking nothing: the
+// script has the rows' refreshes (their fetchData) leave out the item
+// taken off Continue Watching, unless played since its last play then,
+// and the titles hidden, until shown again. Its words follow
+// jellyfin-web's language, as the third's. Any error just stops it.
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -421,8 +450,26 @@
   // The words the script adds to a page, in jellyfin-web's language, which
   // it gives the document; English for any other.
   var words = {
-    en: { searching: 'Looking for sources…', none: 'No source is available for this title.', again: 'Try again' },
-    fr: { searching: 'Recherche des sources…', none: 'Aucune source disponible pour ce titre.', again: 'Réessayer' },
+    en: {
+      searching: 'Looking for sources…',
+      none: 'No source is available for this title.',
+      again: 'Try again',
+      removeResume: 'Remove from Continue Watching',
+      hide: 'Hide this title',
+      show: 'Show this title again',
+      hidden: 'This title is hidden from your lists.',
+      shown: 'This title is back in your lists.',
+    },
+    fr: {
+      searching: 'Recherche des sources…',
+      none: 'Aucune source disponible pour ce titre.',
+      again: 'Réessayer',
+      removeResume: 'Retirer de « Continuer de regarder »',
+      hide: 'Masquer ce titre',
+      show: 'Afficher de nouveau ce titre',
+      hidden: 'Ce titre est masqué de vos listes.',
+      shown: 'Ce titre est de retour dans vos listes.',
+    },
   }
   function say(key) {
     var language = /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
@@ -1073,8 +1120,8 @@
       setTimeout(close, 50)
     })()
   }
-  // Alerts are dialog containers jellyfin-web adds to the body, which the
-  // script, loaded in the head, observes once it exists.
+  // Alerts and item menus are dialog containers jellyfin-web adds to the
+  // body, which the script, loaded in the head, observes once it exists.
   function watchDialogs() {
     if (typeof MutationObserver !== 'function' || !document.body) return
     new MutationObserver(
@@ -1082,7 +1129,11 @@
         for (var i = 0; i < records.length; i++) {
           var added = records[i].addedNodes || []
           for (var j = 0; j < added.length; j++) {
-            if (added[j].classList && added[j].classList.contains('dialogContainer')) closeDuplicate(added[j])
+            if (added[j].classList && added[j].classList.contains('dialogContainer')) {
+              // Each on its own: one failing leaves the other to run.
+              quietly(closeDuplicate)(added[j])
+              quietly(extendMenu)(added[j])
+            }
           }
         }
       }),
@@ -1216,6 +1267,238 @@
       '.polyfinScoreLabel{font-weight:600;opacity:.75;margin-right:.35em}'
     document.head.appendChild(sheet)
   }
+  // The item the last menu button pressed, or card right-clicked, opens a
+  // menu for (see the header): its identifier, its card, when, and the
+  // promise of what Polyfin tells of it; and how soon its menu must open.
+  var aimed = null
+  var menuWithin = 10000
+  // aim follows the presses of the menu buttons of cards and of title
+  // pages, and right clicks on cards; any other click forgets the item.
+  function aim(event) {
+    aimed = null
+    var target = event.target
+    var api = window.ApiClient
+    if (!target || !target.closest || !api) return
+    var card = null
+    var id = ''
+    if (event.type === 'contextmenu') {
+      card = target.closest('.card[data-id]')
+    } else if (target.closest('.btnMoreCommands')) {
+      var route = titleRoute.exec(location.hash)
+      id = route ? route[1] : ''
+    } else {
+      var button = target.closest('button[data-action="menu"]')
+      card = button && button.closest('.card[data-id], .listItem[data-id]')
+    }
+    if (card) id = card.getAttribute('data-id') || ''
+    if (!id) return
+    aimed = { id: plainId(id), card: card, at: Date.now(), facts: askFacts(api, plainId(id), card) }
+  }
+  function plainId(id) {
+    return String(id).replace(/-/g, '').toLowerCase()
+  }
+  // askFacts asks for what the entries of the item's menu depend on: its
+  // type and series, whether the user hid it or its series, and whether
+  // its card stands in a Continue Watching row.
+  function askFacts(api, id, card) {
+    var user = api.getCurrentUserId()
+    var row = card && card.getAttribute('data-positionticks') ? card.closest('.itemsContainer') : null
+    var resume = row
+      ? api.getJSON(api.getUrl('UserItems/Resume', { userId: user, Limit: 100, MediaTypes: 'Video', EnableImages: false }))
+      : null
+    return Promise.all([api.getItem(user, id), api.getJSON(api.getUrl('Polyfin/UserItems/Hidden')), resume]).then(
+      function (answers) {
+        var item = answers[0] || {}
+        var series = item.SeriesId ? plainId(item.SeriesId) : ''
+        function listed(answer) {
+          var ids = {}
+          ;((answer && answer.Items) || []).forEach(function (listed) {
+            ids[plainId(listed.Id)] = true
+          })
+          return ids
+        }
+        var hidden = listed(answers[1])
+        var resumable = listed(answers[2])
+        var cards = row ? row.querySelectorAll('.card[data-id]') : []
+        return {
+          series: series,
+          hideable: /^(Movie|Video|Series)$/.test(item.Type) || (/^(Season|Episode)$/.test(item.Type) && !!series),
+          hidden: !!(hidden[id] || (series && hidden[series])),
+          resume:
+            cards.length > 0 &&
+            Array.prototype.every.call(cards, function (other) {
+              return resumable[plainId(other.getAttribute('data-id'))]
+            }),
+        }
+      },
+    )
+  }
+  // extendMenu adds the entries to the item menu a dialog container holds,
+  // when it opens for the item aimed at, once Polyfin answered.
+  function extendMenu(container) {
+    var sheet = container.querySelector && container.querySelector('.actionSheet')
+    var entry = aimed
+    if (!sheet || !entry || Date.now() - entry.at > menuWithin) return
+    aimed = null
+    entry.facts
+      .then(function (facts) {
+        var scroller = sheet.querySelector('.actionSheetScroller')
+        var model = scroller && scroller.querySelector('.actionSheetMenuItem')
+        if (!container.isConnected || !model) return
+        if (facts.resume) {
+          scroller.appendChild(
+            menuItem(container, model, 'playlist_remove', say('removeResume'), function () {
+              act(entry.id, 'DELETE', 'Resume', function (data) {
+                // The answer is what the user did with the item afterwards:
+                // its last play, before the resume point went.
+                var last = Date.parse((data && data.LastPlayedDate) || '') || 0
+                var row = entry.card && entry.card.closest('.itemsContainer')
+                if (row) {
+                  screen(row, function (item) {
+                    var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
+                    return plainId(item.Id) === entry.id && played <= last
+                  })
+                }
+                dropCards(entry.card ? [entry.card] : [])
+              })
+            }),
+          )
+        }
+        if (facts.hideable && facts.hidden) {
+          scroller.appendChild(
+            menuItem(container, model, 'visibility', say('show'), function () {
+              act(entry.id, 'DELETE', 'Hidden', function () {
+                delete hiddenNow[entry.id]
+                delete hiddenNow[facts.series]
+                toast(say('shown'))
+              })
+            }),
+          )
+        } else if (facts.hideable) {
+          scroller.appendChild(
+            menuItem(container, model, 'visibility_off', say('hide'), function () {
+              act(entry.id, 'POST', 'Hidden', function () {
+                var titles = [entry.id, facts.series].filter(Boolean)
+                titles.forEach(function (title) {
+                  hiddenNow[title] = true
+                })
+                Array.prototype.forEach.call(document.querySelectorAll('.itemsContainer'), function (row) {
+                  screen(row, hiddenItem)
+                })
+                var cards = Array.prototype.filter.call(document.querySelectorAll('.card[data-id]'), function (card) {
+                  return titles.indexOf(plainId(card.getAttribute('data-id'))) >= 0
+                })
+                if (entry.card && cards.indexOf(entry.card) < 0) cards.push(entry.card)
+                dropCards(cards)
+                toast(say('hidden'))
+              })
+            }),
+          )
+        }
+        // The menu was placed for its own entries: it moves up as far as
+        // the added ones need.
+        var box = sheet.getBoundingClientRect()
+        if (sheet.style.top && box.bottom > window.innerHeight) {
+          sheet.style.top = Math.max(0, window.innerHeight - box.height) + 'px'
+        }
+      })
+      .catch(function () {})
+  }
+  // menuItem makes an entry as a copy of one of the menu's own, with its
+  // own icon and words, which closes the menu, as Back does, then runs.
+  function menuItem(container, model, icon, text, run) {
+    var item = model.cloneNode(true)
+    item.setAttribute('data-id', 'polyfin')
+    item.classList.add('polyfinMenuItem')
+    var mark = item.querySelector('.actionsheetMenuItemIcon')
+    if (mark) mark.className = mark.className.replace(/\S+$/, icon)
+    var words = item.querySelector('.actionSheetItemText')
+    if (words) words.textContent = text
+    var aside = item.querySelector('.actionSheetItemAsideText')
+    if (aside) aside.remove()
+    item.addEventListener(
+      'click',
+      quietly(function (event) {
+        // Before the menu hears the click, which would ask jellyfin-web to
+        // run a command it does not know.
+        event.stopPropagation()
+        event.preventDefault()
+        var dialog = container.querySelector('.dialog')
+        if (dialog && dialog.getAttribute('data-history') === 'true') history.back()
+        else container.remove()
+        run()
+      }),
+      true,
+    )
+    return item
+  }
+  // act sends a change of the user's lists, then runs done with the
+  // answer: what the user did with the item, for Resume.
+  function act(id, method, path, done) {
+    var api = window.ApiClient
+    var request = { type: method, url: api.getUrl('Polyfin/UserItems/' + id + '/' + path) }
+    if (path === 'Resume') request.dataType = 'json'
+    api.ajax(request).then(quietly(done), function () {})
+  }
+  // jellyfin-web 12.2 keeps its rows' answers for a minute, and a row that
+  // refreshes within it, as the change's message on the socket has it do,
+  // draws them again from the answer kept: the cards an entry took off
+  // would come back until the page loads again. screen has the rows'
+  // refreshes leave out, from then on, what drop matches; the answer kept
+  // is left as it is. The titles hidden are left out of every row of the
+  // page, until shown again.
+  var hiddenNow = {}
+  function hiddenItem(item) {
+    return !!(hiddenNow[plainId(item.Id)] || (item.SeriesId && hiddenNow[plainId(item.SeriesId)]))
+  }
+  function screen(row, drop) {
+    if (typeof row.fetchData !== 'function') return
+    if (!row.polyfinDrops) {
+      var fetch = row.fetchData
+      var drops = (row.polyfinDrops = [])
+      row.fetchData = function () {
+        return fetch.apply(this, arguments).then(function (answer) {
+          function kept(item) {
+            return !item || !drops.some(function (drop) {
+              return drop(item)
+            })
+          }
+          if (Array.isArray(answer)) return answer.filter(kept)
+          if (answer && Array.isArray(answer.Items)) return Object.assign({}, answer, { Items: answer.Items.filter(kept) })
+          return answer
+        })
+      }
+    }
+    if (row.polyfinDrops.indexOf(drop) < 0) row.polyfinDrops.push(drop)
+  }
+  // dropCards takes cards off the page, and hides a home row left empty.
+  function dropCards(cards) {
+    cards.forEach(function (card) {
+      var row = card.closest('.itemsContainer')
+      card.remove()
+      var section = row && row.closest('.verticalSection')
+      if (section && !row.querySelector('.card')) section.classList.add('hide')
+    })
+  }
+  // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
+  function toast(text) {
+    var holder = document.querySelector('.toastContainer')
+    if (!holder) {
+      holder = element('div', 'toastContainer', '')
+      document.body.appendChild(holder)
+    }
+    var note = element('div', 'toast', text)
+    holder.appendChild(note)
+    setTimeout(function () {
+      note.classList.add('toastVisible')
+    }, 50)
+    setTimeout(function () {
+      note.classList.add('toastHide')
+      setTimeout(function () {
+        note.remove()
+      }, 300)
+    }, 3300)
+  }
   // The router moves through history.pushState and replaceState, which
   // fire no event; links and typed addresses fire hashchange.
   ;['pushState', 'replaceState'].forEach(function (name) {
@@ -1234,6 +1517,9 @@
   // Both run before jellyfin-web follows the link.
   addEventListener('mousedown', quietly(chosenScreen), true)
   addEventListener('click', quietly(chosenScreen), true)
+  // Both run before jellyfin-web opens its item menu.
+  addEventListener('click', quietly(aim), true)
+  addEventListener('contextmenu', quietly(aim), true)
   if (document.body) {
     watchDialogs()
     watchMenus()
