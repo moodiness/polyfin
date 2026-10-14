@@ -1,13 +1,13 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin, an account blocked after wrong passwords, a sign-in on a new device; once a week, what happened that week (see [Weekly summary](#weekly-summary)); and once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin, an account blocked after wrong passwords, a sign-in on a new device, a Live TV programme a user asked to be reminded of that starts soon; once a week, what happened that week (see [Weekly summary](#weekly-summary)); and once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
 
 ## Targets
 
 There are two kinds of owners:
 
 - **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, the users who joined, new versions, the blocked accounts, and the server's weekly summary, month and year in review.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, the blocks of their account and its sign-ins on new devices, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, the users who joined, new versions and every blocked account too, and the server's summaries in place of their own.
+- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, the blocks of their account and its sign-ins on new devices, their programme reminders, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, the users who joined, new versions and every blocked account too, and the server's summaries in place of their own.
 
 **Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
 
@@ -62,6 +62,8 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | **Sender name** | **Settings › Notifications** | empty | The name shown with the sender address. Empty, the server name is. |
 | **Send the weekly summary on** | **Settings › Notifications** | Monday | The day of the week the [weekly summary](#weekly-summary) is sent. |
 | **Send the weekly summary at** | **Settings › Notifications** | 9:00 | Its hour, in the server's time zone. The [month in review](#month-in-review) and the [year in review](#year-in-review) are sent at this hour too. |
+| **Remind me before** | **My account › Notifications** | 5 minutes | How long before its programme each of the user's [programme reminders](#programme-reminders) comes: 1, 5, 10, 15, 30 or 60 minutes. |
+| **Also show reminders on my apps** | **My account › Notifications** | off | Shows each of the user's programme reminders on their Jellyfin apps that accept messages too (see [Programme reminders](#programme-reminders)). |
 
 ## Events
 
@@ -85,6 +87,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Account blocked | `account_blocked` | The server's targets and administrators' own, and the targets of the user whose account it is. |
 | Sign-in on a new device | `new_device` | The targets of the user who signed in only: the server's targets cannot choose it. |
 | Shared link played | `share_played` | The targets of the user who made the share link, and the server's: at most once an hour per link. |
+| Programme starting | `programme_reminder` | The targets of the user who set the reminder only: the server's targets cannot choose it. |
 
 **Shared link played** is not chosen by default for a new target. It tells that a guest without an account started a title through a share link (see [Share links](users.md#share-links)), as "Shared link played: Example Movie (2008)" and "A link shared by alex played Example Movie (2008).", and opens **My account › Shared links**. The event's `share` object holds the link's `id`, the title's `itemId`, `kind` (`movie` or `episode`) and `name`, and the link's `expiresAt`. The guest's playback also counts as the sharer's for the playback events, with `shared` true in their `playback` object and "Shared link" as its `app`.
 
@@ -125,6 +128,14 @@ The server's targets and administrators' own receive "Account blocked: sam", and
 When an account signs in from a Jellyfin app or the web client on a device it never used, its own targets receive "Sign-in on a new device", and "Jellyfin Web on Chrome signed in to sam from 203.0.113.5. If it was not you, change your password: a new password signs every other device out.", which opens **My account**. A device is the identifier the app sends: Polyfin keeps those each account signed in from, after their devices sign out too. The account's first device is not told, nor a device it used before, nor a sign-in through the admin app. The devices signed in when Polyfin started keeping them count as used.
 
 A new target in the admin app has both events chosen; targets saved before they existed receive them once chosen.
+
+### Programme reminders
+
+A user with the **Live TV** permission sets a reminder from a programme's page in the web client, for that programme or for every airing of it (see [Programme reminders](live-tv.md#programme-reminders)). As long before the programme as **Remind me before** says, 5 minutes by default, their own targets receive "Starting at 20:30: Example Show", and "Example Show starts in 5 minutes on Example TV.", which opens the channel in the web client when a **Public address** is set. The time is the server's. The message is in the language of the web client the reminder was set in, English or French, else in the server language. A reminder sent late, after Polyfin was off at its time, tells the minutes left. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+With **Also show reminders on my apps**, under **My account › Notifications**, off by default, the same title and message also show on the user's Jellyfin apps that accept messages, as **Send a message** shows one (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)), until dismissed: the web client while it is open, and the apps that keep a connection open and accept remote control. When no target of the user chose the event and the apps option is off, the web client's button and **My account › Notifications** say that reminders reach the user nowhere.
+
+A new target in the admin app has the event chosen; targets saved before it existed receive it once chosen.
 
 ### Weekly summary
 
@@ -232,12 +243,12 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `programme_reminder`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
-| `title`, `message` | string | The event for people, in the server language. |
+| `title`, `message` | string | The event for people, in the server language; a `programme_reminder` in the language its reminder was set in, English or French, else the server's. |
 | `url` | string or null | Opens what the event is about; null without a public address. For `new_version`, the release notes on GitHub, always set. |
-| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is; for `connection_stopped`, the user whose connection stopped; for `account_blocked` and `new_device`, the account. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
+| `user` | object or null | The user the event is about (`id` as Jellyfin apps know it, `name`): for `user_joined`, the new user; for `weekly_summary`, `monthly_summary` and `yearly_summary`, the user whose week, month or year it is; for `connection_stopped`, the user whose connection stopped; for `account_blocked` and `new_device`, the account; for `programme_reminder`, the user who set the reminder. Null for health events, new versions, new episodes sent to the server's targets, and the server's summaries. |
 | `episode` | object | For `new_episode`: the episode's and its series' item IDs, names, season and number, release date, and the episode's provider IDs. |
 | `recording` | object | For recordings: `id` (its item; gone once it failed), `name`, `channelId`, `channelName`, the programme's planned `start` and `end`, and `partial`. |
 | `problem` | object | For health events: `key`, which names the problem the same way while it lasts, `severity` (`error` or `warning`), `text`, and `since`. |
@@ -247,6 +258,7 @@ A user who joined through an invite link:
 | `summary` | object | For `weekly_summary`, `monthly_summary` and `yearly_summary`; see [The weekly summary event](#the-weekly-summary-event) and [The month and year in review events](#the-month-and-year-in-review-events). |
 | `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
 | `signIn`, `block` | object | For `account_blocked` and `new_device`; see [The sign-in events](#the-sign-in-events). |
+| `programme` | object | For `programme_reminder`: `id`, the programme's item as Jellyfin apps know it, `name`, `channelId`, `channelName`, and its `start` and `end`, RFC 3339 in UTC. `programme_reminder` was added within version 1, with this object; no other field changed. |
 
 The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
 
@@ -360,6 +372,7 @@ The playback events were added within version 1: their `playback` object is new,
 |---|---|---|
 | `signIn` | object | For `new_device`, the sign-in; for `account_blocked`, the wrong password that blocked the account: `address`, the client's address as Polyfin resolves it, `app` and `appVersion`, and `device` and `deviceId`, the device's name and identifier, as the app sent them, empty when it sent none. Through the admin app, `app` is `Polyfin admin`, with no device. |
 | `block` | object | For `account_blocked` only: `until`, when the block ends, RFC 3339 in UTC, and `attempts`, the wrong passwords in a row that blocked it. |
+
 ### The weekly summary event
 
 The weekly summary was added within version 1: its `summary` object is new, and no other field changed. The server's summary has `user` null; a user's names them, and leaves the server's parts empty. `at` is when it was sent, and `url` opens **System › Statistics**, or the user's statistics under **My account**.

@@ -155,6 +155,16 @@ Recommended programmes airing now are listed by channel number; those to come, b
 - XMLTV programmes the guide marks previously shown, and not new, are repeats (`IsRepeat`), as Jellyfin reads XMLTV guides.
 - `/LiveTv/GuideInfo` still answers the seven days Jellyfin's guide spans.
 
+## Programme reminders
+
+A user with the **Live TV** permission can be told before a programme starts, without recording it. On the page of a programme that has not started, the web client shows **Remind me** after the record buttons, and its menu **Remind me of every airing**: the programmes of the same title on the same channel at the same time of day, within ten minutes, as a series timer finds them, looked for in the guide when the reminder is set and every half hour. A programme with a reminder shows **Reminder set**, which removes it, or the series reminder that made it. Reminders follow parental control and blocked genres, as scheduled programmes do; a user who loses the permission, is disabled or whose account ends gets none.
+
+As long before the programme as **Remind me before** says, under **My account › Notifications**, the user's own targets receive **Programme starting** (see [Programme reminders](notifications.md#programme-reminders)), and their apps too when they chose it. **My account › Reminders** lists the user's reminders and series reminders, with each programme's channel and start, and **Delete**.
+
+A reminder is checked against the guide when it is due. A programme the guide moved within the hour keeps its reminder at its new start, also when it moved earlier: the guide is looked at every few minutes during the hour before a reminder is due. A programme gone from the guide sends nothing. Reminders are kept in the database: a restart neither sends one twice nor forgets one, and one due while Polyfin was off is sent on start only before its programme begins.
+
+**For app developers:** Jellyfin's API has nothing for reminders, and Jellyfin apps show no button for them; reminders set in the web client reach the user wherever their targets are. Polyfin's own routes, under the Live TV permission: `GET /Polyfin/Reminders` lists the user's reminders and series reminders; `GET /Polyfin/Reminders/Programs/{programId}` tells how a programme stands (`Started`, `ReminderId`, `SeriesReminderId`, `Reaches`, `BeforeMinutes`); `POST /Polyfin/Reminders` with `ProgramId`, `Series` and `Language` sets one; `DELETE /Polyfin/Reminders/{id}` deletes a reminder or a series reminder.
+
 ## Recordings
 
 Polyfin records Live TV programmes, as Jellyfin's DVR does, once **Record Live TV** is turned on, under **Settings › Recordings**. Recordings are written to **Recordings folder**: when it is empty, to `recordings` in Polyfin's data folder, `/data/recordings` in the Docker image's volume, which Polyfin creates.
