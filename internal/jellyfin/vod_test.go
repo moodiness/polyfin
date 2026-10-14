@@ -185,9 +185,9 @@ func TestIPTVMoviesAndSeriesInApps(t *testing.T) {
 	}
 	// The metadata addon's logo, which the provider has none of, is served
 	// as the details list it.
-	if url, _, err := s.library.Artwork(t.Context(), mustID(t, zeb), "Logo"); details.ImageTags["Logo"] == "" ||
-		err != nil || url != "https://images.example/zeb-logo.png" {
-		t.Errorf("the enriched movie's logo: %v, %q %v", details.ImageTags, url, err)
+	if logo, err := s.library.Artwork(t.Context(), mustID(t, zeb), "Logo"); details.ImageTags["Logo"] == "" ||
+		err != nil || logo.URL != "https://images.example/zeb-logo.png" {
+		t.Errorf("the enriched movie's logo: %v, %q %v", details.ImageTags, logo.URL, err)
 	}
 	s.get(t, "/Users/"+member.ID.String()+"/Items/"+orb, token, &details)
 	if details.Overview == nil || *details.Overview != "The provider's plot of 42" {

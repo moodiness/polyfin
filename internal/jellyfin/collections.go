@@ -740,36 +740,36 @@ func compareRatings(a, b string) int {
 // poster of the title among its own that tag names, as a user's listing
 // tagged it from the first title they see, else its first title's poster.
 // ok is false when id names no collection.
-func (h *Handler) collectionArtwork(r *http.Request, id accounts.ID, imageType string) (url string, confined, ok bool, err error) {
+func (h *Handler) collectionArtwork(r *http.Request, id accounts.ID, imageType string) (found library.Artwork, ok bool, err error) {
 	c, err := h.Collections.Get(r.Context(), id)
 	if errors.Is(err, collections.ErrNotFound) {
-		return "", false, false, nil
+		return library.Artwork{}, false, nil
 	}
 	if err != nil {
-		return "", false, true, err
+		return library.Artwork{}, true, err
 	}
 	if !strings.EqualFold(imageType, "Primary") {
-		return "", false, true, library.ErrNotFound
+		return library.Artwork{}, true, library.ErrNotFound
 	}
 	tag := query(r, "tag")
-	first, firstConfined := "", false
+	var first library.Artwork
 	for _, item := range c.Items {
-		poster, confined, err := h.Library.Poster(r.Context(), item)
+		poster, err := h.Library.Poster(r.Context(), item)
 		if errors.Is(err, library.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return "", false, true, err
+			return library.Artwork{}, true, err
 		}
-		if tag == "" || library.ImageTag(poster) == tag {
-			return poster, confined, true, nil
+		if tag == "" || library.ImageTag(poster.URL) == tag {
+			return poster, true, nil
 		}
-		if first == "" {
-			first, firstConfined = poster, confined
+		if first.URL == "" {
+			first = poster
 		}
 	}
-	if first == "" {
-		return "", false, true, library.ErrNotFound
+	if first.URL == "" {
+		return library.Artwork{}, true, library.ErrNotFound
 	}
-	return first, firstConfined, true, nil
+	return first, true, nil
 }

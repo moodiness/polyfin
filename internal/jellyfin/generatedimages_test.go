@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -428,5 +429,92 @@ func TestLibrariesSetToGeneratedGetAWideImage(t *testing.T) {
 	}
 	if got := views(g.member); got["Top"] != tags["Top"] {
 		t.Errorf("once the upload is deleted: %v, was %v", got, tags)
+	}
+}
+
+// Only the images Polyfin generates are drawn as generated images. An
+// addon's poster written in their URLs' scheme is no image: its posters
+// are never downloaded, so a member's own addon, confined to public
+// addresses, cannot have Polyfin reach a local one through it.
+func TestAddonsCannotGiveGeneratedImages(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	var secretHits, directHits atomic.Int32
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/secret.png":
+			secretHits.Add(1)
+		case "/direct.png":
+			directHits.Add(1)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, image.NewRGBA(image.Rect(0, 0, 60, 90)))
+	}))
+	t.Cleanup(local.Close)
+	generated := "polyfin-generated:poster?" + url.Values{"v": {"1"}, "name": {"x"}, "poster": {local.URL + "/secret.png"}}.Encode()
+	metas := []stremio.Meta{
+		{ID: "own:1", Type: "movie", Name: "Through the scheme", Poster: generated},
+		{ID: "own:2", Type: "movie", Name: "Direct", Poster: local.URL + "/direct.png"},
+	}
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "own", Name: "Mine", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"own:"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+				Catalogs: []stremio.Catalog{{Type: "movie", ID: "mine", Name: "Mine"}}})
+		case strings.HasPrefix(path, "/catalog/movie/mine"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": metas})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/movie/"), ".json")
+			for _, m := range metas {
+				if m.ID == id {
+					_ = json.NewEncoder(w).Encode(map[string]any{"meta": m})
+				}
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(addon.Close)
+
+	// No test server is on a public address: the member's catalog is read
+	// while they are an administrator, whose own addons are not confined,
+	// as it would be from an addon on one. They then become a member, and
+	// their addon is confined.
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	owner := s.user("owner", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	installed, err := s.addons.Install(t.Context(), addons.Personal(owner.ID), addon.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Personal(owner.ID), []addons.LibraryChoice{
+		{AddonID: installed.ID, CatalogType: "movie", CatalogID: "mine"}}); err != nil {
+		t.Fatal(err)
+	}
+	list := func() []BaseItemDto {
+		t.Helper()
+		token := s.signIn("owner", "tv")
+		var page QueryResult
+		if status := s.get(t, "/Items?ParentId="+s.viewIDs(t, token)["Mine"], token, &page); status != http.StatusOK || len(page.Items) != 2 {
+			t.Fatalf("the owner's library: %d %+v", status, page.Items)
+		}
+		return page.Items
+	}
+	list()
+	if _, err := s.store.UpdateUser(t.Context(), owner.ID, accounts.UserChanges{IsAdministrator: new(false)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	statuses := map[string]int{}
+	for _, item := range list() {
+		if item.Name == "Through the scheme" && item.ImageTags["Primary"] != "" {
+			t.Errorf("the poster in the scheme of generated images is listed: %v", item.ImageTags)
+		}
+		statuses[item.Name], _, _ = s.send(http.MethodGet, "/Items/"+item.Id+"/Images/Primary", "", "", "")
+	}
+	if statuses["Direct"] != http.StatusForbidden || directHits.Load() != 0 {
+		t.Errorf("the confined addon's local poster: %d, reached %d times", statuses["Direct"], directHits.Load())
+	}
+	if statuses["Through the scheme"] == http.StatusOK || secretHits.Load() != 0 {
+		t.Errorf("the poster in the scheme of generated images: %d, its poster reached %d times", statuses["Through the scheme"], secretHits.Load())
 	}
 }

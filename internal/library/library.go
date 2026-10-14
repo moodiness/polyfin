@@ -1562,7 +1562,9 @@ func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent a
 func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
 	switch {
 	case addon.addon.Stremio():
-		return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+		meta, err := s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+		withoutGenerated(&meta)
+		return meta, err
 	case addon.addon.Local():
 		if s.local == nil {
 			return stremio.Meta{}, stremio.ErrNotFound
@@ -2393,26 +2395,37 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 	return slices.Clone(addons.Genres(l.catalog)), nil
 }
 
-// Artwork returns the URL of an item's image and whether downloading it is
-// confined to public addresses: the artwork an administrator uploaded, else
-// a local folder's (see Local.Artwork), else the addon's (see Uploaded). It
-// needs no user: Jellyfin apps load images without credentials, and
-// artwork URLs carry no secret. A title's image its listing lacks is the
-// one of its description, whichever addon gave it (see artworkView).
-func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
+// Artwork is an item's image as Artwork finds it. URL stands for it (see
+// ImageTag); downloading it is confined to public addresses when Confined.
+// Generated, when set, is the image Polyfin draws for the item (see
+// GeneratedImage): only Polyfin's own choice is one, never an artwork URL
+// in the scheme of generated images.
+type Artwork struct {
+	URL       string
+	Confined  bool
+	Generated *GeneratedImage
+}
+
+// Artwork returns an item's image: the artwork an administrator uploaded,
+// else a local folder's (see Local.Artwork), else the addon's (see
+// Uploaded), else its generated image, if any. It needs no user: Jellyfin
+// apps load images without credentials, and artwork URLs carry no secret.
+// A title's image its listing lacks is the one of its description,
+// whichever addon gave it (see artworkView).
+func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (Artwork, error) {
 	if url, ok := s.UploadedArtwork(id, imageType); ok {
-		return url, false, nil
+		return Artwork{URL: url}, nil
 	}
 	local := s.localArtwork()
 	if url := local[id].URL(imageType); url != "" {
-		return url, false, nil
+		return Artwork{URL: url}, nil
 	}
 	r, err := s.load(ctx, id)
 	// A smart list shown as a collection has no record: its generated
 	// image, if any, is remembered apart.
 	if errors.Is(err, ErrNotFound) {
-		if url := s.generatedArtwork(ctx, id, imageType); url != "" {
-			return url, false, nil
+		if g := s.generatedArtwork(ctx, id, imageType); g != nil {
+			return g.artwork(), nil
 		}
 	}
 	// An IPTV channel shows its line-up's logo at once, listed or not: the
@@ -2422,16 +2435,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		logo, confined, lineupErr := s.iptv.Logo(ctx, id)
 		switch {
 		case lineupErr == nil && logo == "":
-			return "", false, ErrNotFound
+			return Artwork{}, ErrNotFound
 		case lineupErr == nil:
 			s.iptvHosts.logo(logo)
-			return logo, confined, nil
+			return Artwork{URL: logo, Confined: confined}, nil
 		case !errors.Is(lineupErr, stremio.ErrNotFound):
-			return "", false, lineupErr
+			return Artwork{}, lineupErr
 		}
 	}
 	if err != nil {
-		return "", false, err
+		return Artwork{}, err
 	}
 	// A Replay folder shows its channel's artwork, as does a programme of
 	// it whose guide gives no image.
@@ -2456,7 +2469,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		if images.URL(imageType) == "" {
 			v, err := s.artworkView(ctx, r)
 			if err != nil {
-				return "", false, err
+				return Artwork{}, err
 			}
 			if full, describer, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 				fromMeta(&item, full)
@@ -2474,13 +2487,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	case r.Kind == KindLibrary:
 		// A library's automatic or generated image, when it was last
 		// looked up.
+		if g := s.generatedLibraryArtwork(ctx, r); g != nil && strings.EqualFold(imageType, "Primary") {
+			return g.artwork(), nil
+		}
 		images.Primary = r.Poster
 	case r.Music != nil:
 		images.Primary = r.Music.Artwork
 	case r.Kind == KindSeason:
 		series, err := s.load(ctx, r.seriesItemID())
 		if err != nil || series.Meta == nil {
-			return "", false, ErrNotFound
+			return Artwork{}, ErrNotFound
 		}
 		// The season's own artwork, and its series', are read from the
 		// series' complete metadata while it is kept, else as their last
@@ -2488,7 +2504,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		// without asking the addon again.
 		v, err := s.artworkView(ctx, series)
 		if err != nil {
-			return "", false, err
+			return Artwork{}, err
 		}
 		full, describer, described := s.describedMeta(ctx, v, series, false, inDatabase)
 		images = withLocal(Images{Primary: cmp.Or(full.Poster, series.Meta.Poster), Backdrop: cmp.Or(full.Background, series.Meta.Background)},
@@ -2513,12 +2529,16 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	if url == "" && r.Kind == KindCollection && images.Primary == "" {
 		// An addon's collection without a poster shows its generated
 		// images, if any.
-		url, confined = s.generatedArtwork(ctx, id, imageType), false
+		if g := s.generatedArtwork(ctx, id, imageType); g != nil {
+			return g.artwork(), nil
+		}
 	}
-	if url == "" {
-		return "", false, ErrNotFound
+	// An addon's artwork in the scheme of generated images, kept from
+	// before such artwork was dropped as it came in, is no image.
+	if url == "" || strings.HasPrefix(url, generatedScheme) {
+		return Artwork{}, ErrNotFound
 	}
-	return url, confined, nil
+	return Artwork{URL: url, Confined: confined}, nil
 }
 
 // artworkView is the view a title's artwork is found with (see

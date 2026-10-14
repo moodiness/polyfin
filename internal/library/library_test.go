@@ -452,8 +452,8 @@ func TestSeriesSeasonsAndEpisodes(t *testing.T) {
 	if item, err := e.service.Item(t.Context(), e.member, episodes[1].ID); err != nil || item.Name != "Pilot two" || item.SeasonID != seasons[1].ID {
 		t.Errorf("episode by identifier: %+v %v", item, err)
 	}
-	if url, _, err := e.service.Artwork(t.Context(), seasons[2].ID, "Primary"); err != nil || url != "https://images.example/s2.jpg" {
-		t.Errorf("season 2 poster: %q %v", url, err)
+	if poster, err := e.service.Artwork(t.Context(), seasons[2].ID, "Primary"); err != nil || poster.URL != "https://images.example/s2.jpg" {
+		t.Errorf("season 2 poster: %q %v", poster.URL, err)
 	}
 }
 
@@ -541,8 +541,8 @@ func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
 	if err != nil || r.Addon == nil || *r.Addon != own.ID || r.CatalogID != "mine" || !r.Confined {
 		t.Errorf("record of the member's title: %+v %v", r, err)
 	}
-	if _, confined, err := e.service.Artwork(t.Context(), found[1].ID, "Primary"); err != nil || !confined {
-		t.Errorf("artwork of the member's title: confined %t, %v", confined, err)
+	if art, err := e.service.Artwork(t.Context(), found[1].ID, "Primary"); err != nil || !art.Confined {
+		t.Errorf("artwork of the member's title: confined %t, %v", art.Confined, err)
 	}
 }
 

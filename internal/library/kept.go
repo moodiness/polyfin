@@ -269,6 +269,9 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	if err != nil {
 		return nil, err
 	}
+	for i := range metas {
+		withoutGenerated(&metas[i])
+	}
 	kept := fetched[[]stremio.Meta]{metas, asked}
 	s.pagesOf(key).Put(key, kept)
 	if key.kept() {

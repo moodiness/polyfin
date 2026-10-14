@@ -1212,26 +1212,26 @@ func (h *Handler) addTimers(ctx context.Context, dtos []BaseItemDto) {
 // recordingArtwork is the artwork of a recording: its programme's, read
 // through the library so that it stays within its addon's confinement,
 // else its channel's.
-func (h *Handler) recordingArtwork(ctx context.Context, id accounts.ID, imageType string) (url string, confined bool, err error) {
+func (h *Handler) recordingArtwork(ctx context.Context, id accounts.ID, imageType string) (library.Artwork, error) {
 	if !h.recordable() {
-		return "", false, library.ErrNotFound
+		return library.Artwork{}, library.ErrNotFound
 	}
 	rec, err := h.Recordings.Recording(ctx, id)
 	if errors.Is(err, recordings.ErrNotFound) {
-		return "", false, library.ErrNotFound
+		return library.Artwork{}, library.ErrNotFound
 	}
 	if err != nil {
-		return "", false, err
+		return library.Artwork{}, err
 	}
 	for _, source := range []*accounts.ID{rec.Program, &rec.Channel} {
 		if source == nil {
 			continue
 		}
-		if url, confined, err := h.Library.Artwork(ctx, *source, imageType); err == nil {
-			return url, confined, nil
+		if found, err := h.Library.Artwork(ctx, *source, imageType); err == nil {
+			return found, nil
 		}
 	}
-	return "", false, library.ErrNotFound
+	return library.Artwork{}, library.ErrNotFound
 }
 
 // serveRecordingFile serves a recording's file for /Items/{id}/File and

@@ -50,19 +50,28 @@ type partialImage struct{ image artwork }
 
 func (partialImage) Error() string { return "some posters could not be downloaded" }
 
+// generatedFetches bounds the posters of a generated image downloaded at
+// once.
+const generatedFetches = 3
+
 // generatedArtwork returns the generated image target stands for, drawn
-// once for every request that asks for it at once. A poster its server
-// does not have, or that is no picture, is left out for good; one that
-// cannot be downloaded now is left out of this request's image only.
-func (h *Handler) generatedArtwork(ctx context.Context, target string, g library.GeneratedImage) (artwork, error) {
+// once for every request that asks for it at once, from the posters the
+// image's shape takes, downloaded from public addresses only when confined
+// or g.Confined. A poster its server does not have, or that is no
+// picture, is left out for good; one that cannot be downloaded now is left
+// out of this request's image only.
+func (h *Handler) generatedArtwork(ctx context.Context, target string, g library.GeneratedImage, confined bool) (artwork, error) {
+	confined = confined || g.Confined
 	drawn, err := h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
-		posters := make([]image.Image, len(g.Posters))
+		posters := make([]image.Image, min(len(g.Posters), mosaic.Tiles(g.Wide)))
 		var missing bool
 		var mu sync.Mutex
 		var group errgroup.Group
-		for i, poster := range g.Posters {
+		group.SetLimit(generatedFetches)
+		for i := range posters {
+			poster := g.Posters[i]
 			group.Go(func() error {
-				relayed, err := h.fetchArtwork(ctx, poster, g.Confined, h.iptvHost(ctx, poster))
+				relayed, err := h.fetchArtwork(ctx, poster, confined, h.iptvHost(ctx, poster))
 				if err != nil {
 					if failed, ok := errors.AsType[downloadError](err); !ok || failed.status != http.StatusNotFound && failed.status != http.StatusForbidden {
 						mu.Lock()

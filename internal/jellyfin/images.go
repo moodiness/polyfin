@@ -601,25 +601,29 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	imageType := r.PathValue("imageType")
+	var found library.Artwork
 	url, uploaded := h.Library.UploadedArtwork(id, imageType)
-	var confined, collection bool
-	if !uploaded {
-		url, confined, collection, err = h.collectionArtwork(r, id, imageType)
+	if uploaded {
+		found.URL = url
+	} else {
+		var collection bool
+		found, collection, err = h.collectionArtwork(r, id, imageType)
 		if !collection {
-			url, confined, err = h.Library.Artwork(r.Context(), id, imageType)
+			found, err = h.Library.Artwork(r.Context(), id, imageType)
 		}
 	}
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps show a version opened as an item with its title's artwork.
 		if owner, ok := h.Library.VersionOwner(id); ok {
-			url, confined, err = h.Library.Artwork(r.Context(), owner, r.PathValue("imageType"))
+			found, err = h.Library.Artwork(r.Context(), owner, r.PathValue("imageType"))
 		}
 	}
 	if errors.Is(err, library.ErrNotFound) {
-		url, confined, err = h.recordingArtwork(r.Context(), id, r.PathValue("imageType"))
+		found, err = h.recordingArtwork(r.Context(), id, r.PathValue("imageType"))
 	}
 	if errors.Is(err, library.ErrNotFound) {
-		url, confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
+		found = library.Artwork{}
+		found.URL, found.Confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
 	}
 	if errors.Is(err, library.ErrNotFound) {
 		w.WriteHeader(http.StatusNotFound)
@@ -629,6 +633,7 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	url = found.URL
 	if owner, ownerType, ok := library.Uploaded(url); ok {
 		h.uploadedImage(w, r, owner, ownerType)
 		return
@@ -649,12 +654,13 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	}
 	h.images.open(h.imageDir(), h.Logger)
 	var image artwork
-	if generated, ok := library.ParseGenerated(url); ok {
-		image, err = h.generatedArtwork(r.Context(), url, generated)
+	// Only an image Polyfin chose is drawn, whatever an artwork URL says.
+	if found.Generated != nil {
+		image, err = h.generatedArtwork(r.Context(), url, *found.Generated, found.Confined)
 	} else if key, ok := library.LocalArtworkKey(url); ok {
 		image, err = h.localArtwork(r.Context(), url, key)
 	} else {
-		image, err = h.fetchArtwork(r.Context(), url, confined, h.iptvHost(r.Context(), url))
+		image, err = h.fetchArtwork(r.Context(), url, found.Confined, h.iptvHost(r.Context(), url))
 	}
 	if err != nil {
 		header.Del("ETag")

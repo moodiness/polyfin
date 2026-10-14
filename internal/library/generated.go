@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/mosaic"
 	"github.com/moodiness/polyfin/internal/smartlists"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Generated images.
@@ -35,7 +36,11 @@ import (
 // image (see GeneratedImage), which holds its name and the posters it
 // shows, as soon as the catalog pages Polyfin keeps give them; a listing
 // asks no addon for them. Polyfin draws the image the first time an app
-// asks for it, from the posters it relays (see the jellyfin package).
+// asks for it, from the posters it relays (see the jellyfin package). Only
+// the images Polyfin chose are drawn: Artwork tells them apart from the
+// item's other artwork (see Artwork.Generated), never by their URL, and
+// the artwork addons give in the URLs' scheme is dropped as it comes in
+// (see withoutGenerated).
 //
 // The titles an image shows are remembered for its item, in memory and in
 // the database, so that it does not change with each reordering of its
@@ -92,20 +97,44 @@ func (g GeneratedImage) URL() string {
 	return generatedScheme + shape + "?" + values.Encode()
 }
 
-// ParseGenerated reports whether an artwork URL stands for a generated
-// image, and which.
-func ParseGenerated(address string) (GeneratedImage, bool) {
-	rest, ok := strings.CutPrefix(address, generatedScheme)
-	if !ok {
-		return GeneratedImage{}, false
+// artwork is the image as Artwork returns it.
+func (g *GeneratedImage) artwork() Artwork {
+	return Artwork{URL: g.URL(), Generated: g}
+}
+
+// withoutGenerated drops from a description the artwork whose URL uses the
+// scheme of generated images: an addon's is no image Polyfin draws, and
+// would otherwise be listed with a tag no image answers.
+func withoutGenerated(meta *stremio.Meta) {
+	drop := func(address *string) {
+		if strings.HasPrefix(*address, generatedScheme) {
+			*address = ""
+		}
 	}
-	shape, query, _ := strings.Cut(rest, "?")
-	values, err := url.ParseQuery(query)
-	if err != nil {
-		return GeneratedImage{}, false
+	for _, address := range []*string{&meta.Poster, &meta.Background, &meta.Logo, &meta.LandscapePoster} {
+		drop(address)
 	}
-	return GeneratedImage{Wide: shape == "wide", Name: values.Get("name"), Posters: values["poster"],
-		Confined: values.Get("confined") == "1"}, true
+	for i := range meta.Videos {
+		drop(&meta.Videos[i].Thumbnail)
+	}
+	if meta.Extras != nil {
+		for i := range meta.Extras.SeasonPosters {
+			drop(&meta.Extras.SeasonPosters[i])
+		}
+		for number, poster := range meta.Extras.SeasonPosterByNumber {
+			if strings.HasPrefix(poster, generatedScheme) {
+				delete(meta.Extras.SeasonPosterByNumber, number)
+			}
+		}
+		for i := range meta.Extras.Cast {
+			drop(&meta.Extras.Cast[i].Photo)
+		}
+	}
+	if meta.Collection != nil {
+		for i := range meta.Collection.Items {
+			withoutGenerated(&meta.Collection.Items[i])
+		}
+	}
 }
 
 // generatedChoice is what an item's generated image shows: its name, and
@@ -117,14 +146,22 @@ type generatedChoice struct {
 	confined bool
 }
 
+// generated is the image of the choice, nil when it shows no poster.
+func (c generatedChoice) generated(wide bool) *GeneratedImage {
+	if len(c.posters) == 0 {
+		return nil
+	}
+	return &GeneratedImage{Wide: wide, Name: c.name, Posters: c.posters[:min(len(c.posters), mosaic.Tiles(wide))],
+		Confined: c.confined}
+}
+
 // image is the URL of the image of the choice, "" when it shows no
 // poster.
 func (c generatedChoice) image(wide bool) string {
-	if len(c.posters) == 0 {
-		return ""
+	if g := c.generated(wide); g != nil {
+		return g.URL()
 	}
-	return GeneratedImage{Wide: wide, Name: c.name, Posters: c.posters[:min(len(c.posters), mosaic.Tiles(wide))],
-		Confined: c.confined}.URL()
+	return ""
 }
 
 // candidate is one of an item's first titles, with its poster, if any.
@@ -452,22 +489,40 @@ func (s *Service) libraryCandidates(ctx context.Context, v view, l library) ([]c
 	return candidates, true, l.addon.confined
 }
 
-// generatedArtwork returns the URL of the generated image of type
-// imageType of item id, a collection without a poster, as it was last
-// chosen; "" without one.
-func (s *Service) generatedArtwork(ctx context.Context, id accounts.ID, imageType string) string {
+// generatedArtwork returns the generated image of type imageType of item
+// id, a collection without a poster, as it was last chosen; nil without
+// one.
+func (s *Service) generatedArtwork(ctx context.Context, id accounts.ID, imageType string) *GeneratedImage {
 	if !s.settings().GenerateImages {
-		return ""
+		return nil
 	}
 	entry, err := s.generatedEntryOf(ctx, id)
 	if err != nil || !entry.found {
-		return ""
+		return nil
 	}
 	switch strings.ToLower(imageType) {
 	case "primary":
-		return entry.choice.image(false)
+		return entry.choice.generated(false)
 	case "thumb":
-		return entry.choice.image(true)
+		return entry.choice.generated(true)
 	}
-	return ""
+	return nil
+}
+
+// generatedLibraryArtwork returns the generated image of the library
+// recorded as r, when the image its record remembers is the one chosen
+// for it; nil otherwise, such as for the automatic image of a library
+// that finds its own.
+func (s *Service) generatedLibraryArtwork(ctx context.Context, r record) *GeneratedImage {
+	if r.Poster == "" {
+		return nil
+	}
+	entry, err := s.generatedEntryOf(ctx, r.ID)
+	if err != nil || !entry.found {
+		return nil
+	}
+	if g := entry.choice.generated(true); g != nil && g.URL() == r.Poster {
+		return g
+	}
+	return nil
 }

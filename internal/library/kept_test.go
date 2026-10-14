@@ -867,8 +867,8 @@ func TestDescribedArtworkOutlivesARestart(t *testing.T) {
 	asked := requestsTo(metadata, "meta/")
 	e = e.restarted()
 	for imageType, want := range map[string]string{"Backdrop": described.Background, "Logo": described.Logo} {
-		if url, _, err := e.service.Artwork(t.Context(), id, imageType); err != nil || url != want {
-			t.Errorf("%s after a restart: %q %v, want %q", imageType, url, err, want)
+		if found, err := e.service.Artwork(t.Context(), id, imageType); err != nil || found.URL != want {
+			t.Errorf("%s after a restart: %q %v, want %q", imageType, found.URL, err, want)
 		}
 	}
 	if n := requestsTo(metadata, "meta/"); n != asked {

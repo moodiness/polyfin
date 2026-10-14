@@ -110,8 +110,8 @@ func TestSeasonsShowTheirOwnPosters(t *testing.T) {
 	artwork := func(what string) {
 		t.Helper()
 		for i, season := range seasons {
-			if url, _, err := e.service.Artwork(t.Context(), season.ID, "Primary"); err != nil || url != want[i] {
-				t.Errorf("%s, season %d: %q %v", what, season.IndexNumber, url, err)
+			if poster, err := e.service.Artwork(t.Context(), season.ID, "Primary"); err != nil || poster.URL != want[i] {
+				t.Errorf("%s, season %d: %q %v", what, season.IndexNumber, poster.URL, err)
 			}
 		}
 	}

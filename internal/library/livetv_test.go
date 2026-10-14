@@ -42,9 +42,9 @@ func TestProgrammeArtworkIsConfinedByItsGuide(t *testing.T) {
 		if err := e.service.save(t.Context(), []record{channel, program}); err != nil {
 			t.Fatal(err)
 		}
-		_, confined, err := e.service.Artwork(t.Context(), program.ID, "Primary")
-		if err != nil || confined != tc.want {
-			t.Errorf("%s: confined %v (%v), want %v", tc.name, confined, err, tc.want)
+		found, err := e.service.Artwork(t.Context(), program.ID, "Primary")
+		if err != nil || found.Confined != tc.want {
+			t.Errorf("%s: confined %v (%v), want %v", tc.name, found.Confined, err, tc.want)
 		}
 	}
 }

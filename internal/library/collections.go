@@ -42,19 +42,19 @@ func (s *Service) ListedUnder(ctx context.Context, ids []accounts.ID, folder acc
 	return false, nil
 }
 
-// Poster returns the URL of the poster an item shows in a collection, and
-// whether downloading it is confined to public addresses: an episode shows
-// its series' poster, or its own image when the series has none; anything
-// else, its Primary image. Like Artwork, it needs no user.
-func (s *Service) Poster(ctx context.Context, id accounts.ID) (string, bool, error) {
+// Poster returns the poster an item shows in a collection, as Artwork
+// returns it: an episode shows its series' poster, or its own image when
+// the series has none; anything else, its Primary image. Like Artwork, it
+// needs no user.
+func (s *Service) Poster(ctx context.Context, id accounts.ID) (Artwork, error) {
 	r, err := s.load(ctx, id)
 	if err != nil {
-		return "", false, err
+		return Artwork{}, err
 	}
 	if r.Kind == KindEpisode {
-		url, confined, err := s.Artwork(ctx, r.seriesItemID(), "Primary")
+		poster, err := s.Artwork(ctx, r.seriesItemID(), "Primary")
 		if !errors.Is(err, ErrNotFound) {
-			return url, confined, err
+			return poster, err
 		}
 	}
 	return s.Artwork(ctx, id, "Primary")
