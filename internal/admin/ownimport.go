@@ -9,30 +9,64 @@ import (
 )
 
 // Under My account, a user imports their own watch history from another
-// Jellyfin or Emby server, signing in there as themselves. The password is
-// used for that import only: never stored, never answered back.
+// Jellyfin or Emby server, signing in there as themselves, or from their
+// Letterboxd export file (see letterboxd.go). The password is used for that
+// import only: never stored, never answered back.
 
 // ownImport answers whether the user may import their own watch history,
-// and their own import running, else their last one, null when none.
-// Another user's imports never show.
+// whether they may import a Letterboxd export and the server's metadata
+// addons search movies, without which no movie of it is found, and their
+// latest import, from a server or Letterboxd, running or ended, null when
+// none. Another user's imports never show.
 func (h *handler) ownImport(w http.ResponseWriter, r *http.Request) {
-	enabled := h.JellyfinImport != nil && h.Accounts.Settings().ServerImports
-	var current *jellyfinImportJSON
+	user := sessionFrom(r.Context()).User
+	enabled := (h.JellyfinImport != nil || h.Letterboxd != nil) && h.Accounts.Settings().ServerImports
+	var current any
+	searchable := false
 	if enabled {
-		current = newJellyfinImportJSON(h.JellyfinImport.Own(sessionFrom(r.Context()).User.ID))
+		var fromServer *jellyfinimport.Status
+		if h.JellyfinImport != nil {
+			fromServer = h.JellyfinImport.Own(user.ID)
+		}
+		if fromServer != nil {
+			current = newJellyfinImportJSON(fromServer)
+		}
+		if h.Letterboxd != nil {
+			searchable = h.letterboxdSearchable(r)
+			if own := h.Letterboxd.Current(user.ID); own != nil && (fromServer == nil || own.StartedAt.After(fromServer.StartedAt)) {
+				current = newLetterboxdImportJSON(own)
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, struct {
-		Enabled bool                `json:"enabled"`
-		Import  *jellyfinImportJSON `json:"import"`
-	}{enabled, current})
+		Enabled    bool `json:"enabled"`
+		Letterboxd bool `json:"letterboxd"`
+		Searchable bool `json:"searchable"`
+		Import     any  `json:"import"`
+	}{enabled, enabled && h.Letterboxd != nil, searchable, current})
 }
 
-// startOwnImport signs in to the server as the name and password given, and
-// imports that user's watch data into the caller's account, in the
-// background. One import runs at a time on the whole server: while any
-// runs, it answers 409 server_import_running.
+// startOwnImport imports into the caller's account, in the background,
+// the watch data of a Letterboxd export, which a multipart form sends
+// (see startLetterboxd), or that of the user signing in to a Jellyfin or
+// Emby server with the name and password given. One import from a server
+// runs at a time on the whole server, and one import into an account:
+// while either runs, it answers 409 server_import_running.
 func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
-	if h.JellyfinImport == nil || !h.Accounts.Settings().ServerImports {
+	if !h.Accounts.Settings().ServerImports {
+		writeError(w, http.StatusForbidden, "server_imports_disabled")
+		return
+	}
+	user := sessionFrom(r.Context()).User
+	if multipartForm(r) {
+		if h.Letterboxd == nil {
+			writeError(w, http.StatusForbidden, "server_imports_disabled")
+			return
+		}
+		h.startLetterboxd(w, r, user, user)
+		return
+	}
+	if h.JellyfinImport == nil {
 		writeError(w, http.StatusForbidden, "server_imports_disabled")
 		return
 	}
@@ -51,9 +85,13 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	if h.Letterboxd != nil && h.Letterboxd.Running(user.ID) {
+		writeError(w, http.StatusConflict, "server_import_running")
+		return
+	}
 	connection := jellyfinimport.Connection{Kind: kind, Address: body.Address,
 		Credentials: jellyfinimport.Credentials{Name: name, Password: body.Password}}
-	status, err := h.JellyfinImport.ImportOwn(r.Context(), connection, sessionFrom(r.Context()).User)
+	status, err := h.JellyfinImport.ImportOwn(r.Context(), connection, user)
 	if errors.Is(err, jellyfinimport.ErrRunning) {
 		// Another user's, or the administrator's: the caller waits for it.
 		writeError(w, http.StatusConflict, "server_import_running")

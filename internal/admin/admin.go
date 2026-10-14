@@ -26,6 +26,7 @@ import (
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
+	"github.com/moodiness/polyfin/internal/letterboxd"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -130,6 +131,9 @@ type Options struct {
 	// AppImport imports the watch data of accounts on apps built on
 	// addons; nil offers no import.
 	AppImport *appimport.Service
+	// Letterboxd imports Letterboxd members' export files; nil offers no
+	// import.
+	Letterboxd *letterboxd.Service
 	// Nuvio reads Nuvio accounts, for AppImport; nil offers none.
 	Nuvio *nuvio.Reader
 	// Stremio reads Stremio accounts, for AppImport; nil offers none.
@@ -233,6 +237,8 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/users/{id}/devices/{deviceId}", h.administrator(h.revokeUserDevice))
 	mux.Handle("GET /admin/api/users/{id}/app-import", h.administrator(h.userAppImport))
 	mux.Handle("POST /admin/api/users/{id}/app-import", h.administrator(h.startAppImport(h.userAppImportTarget)))
+	mux.Handle("GET /admin/api/users/{id}/server-import", h.administrator(h.userLetterboxdImport))
+	mux.Handle("POST /admin/api/users/{id}/server-import", h.administrator(h.startUserLetterboxdImport))
 	mux.Handle("POST /admin/api/users/{id}/app-import/nuvio", h.administrator(h.readNuvio(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/link", h.administrator(h.startStremioLink(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/link/poll", h.administrator(h.pollStremioLink(h.userAppImportTarget)))

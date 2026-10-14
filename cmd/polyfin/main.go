@@ -36,6 +36,7 @@ import (
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
+	"github.com/moodiness/polyfin/internal/letterboxd"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
@@ -402,10 +403,17 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Stopped:   func(user accounts.ID, app string) { notifier.ConnectionStopped(user, notifications.ConnectionApp, app) },
 		Watchlist: watchlist.New(pool)})
 	defer fromApps.Close()
+	// Letterboxd exports name their movies by name and year only: they are
+	// searched in the server's metadata addons, then merge the same way,
+	// their watchlist going on the users' watchlists.
+	fromLetterboxd := letterboxd.New(letterboxd.Options{Titles: lib, UserData: userData, Watchlist: watchlist.New(pool), Logger: logger})
+	defer fromLetterboxd.Close()
 	// Deleting a user signs out, in the background, the sessions Polyfin
-	// opened for them at apps and tracking services.
+	// opened for them at apps and tracking services, and stops their
+	// Letterboxd import.
 	store.OnDelete(tracking.Leaving)
 	store.OnDelete(fromApps.Leaving)
+	store.OnDelete(fromLetterboxd.Leaving)
 	// The playbacks apps report are followed: the history keeps the videos
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
@@ -514,6 +522,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Backups:        backups,
 		JellyfinImport: fromJellyfin,
 		AppImport:      fromApps,
+		Letterboxd:     fromLetterboxd,
 		Nuvio:          fromNuvio,
 		Stremio:        fromStremio,
 		Plays:          history,

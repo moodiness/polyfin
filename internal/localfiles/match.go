@@ -161,12 +161,24 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 // chooseResult keeps the one title of results of the name and kind of n,
 // and of its year when it gives one.
 func chooseResult(kind string, n name, results []library.RemoteResult) match {
-	want := fold(n.title)
+	item, reason := chooseItem(titleKind(kind), n.title, n.year, results)
+	if reason != "" {
+		return match{reason: reason}
+	}
+	return match{stremioID: stremioID(item), imdb: item.ProviderIDs["Imdb"], tmdb: item.ProviderIDs["Tmdb"], name: item.Name,
+		poster: item.Images.Primary, year: item.ProductionYear, by: bySearch}
+}
+
+// chooseItem keeps the one title of results of kind named title, and of
+// year when it is not zero, or answers why there is none: reasonNotFound,
+// reasonOtherYear or reasonAmbiguous.
+func chooseItem(kind library.Kind, title string, year int, results []library.RemoteResult) (library.Item, string) {
+	want := fold(title)
 	var named, dated []library.Item
 	seen := map[string]bool{}
 	for _, r := range results {
 		item := r.Item
-		if item.Kind != titleKind(kind) || item.StremioID == "" || fold(item.Name) != want {
+		if item.Kind != kind || item.StremioID == "" || fold(item.Name) != want {
 			continue
 		}
 		id := stremioID(item)
@@ -175,21 +187,31 @@ func chooseResult(kind string, n name, results []library.RemoteResult) match {
 		}
 		seen[id] = true
 		named = append(named, item)
-		if n.year == 0 || item.ProductionYear == n.year {
+		if year == 0 || item.ProductionYear == year {
 			dated = append(dated, item)
 		}
 	}
 	switch {
 	case len(named) == 0:
-		return match{reason: reasonNotFound}
+		return library.Item{}, reasonNotFound
 	case len(dated) == 0:
-		return match{reason: reasonOtherYear}
+		return library.Item{}, reasonOtherYear
 	case len(dated) > 1:
-		return match{reason: reasonAmbiguous}
+		return library.Item{}, reasonAmbiguous
 	}
-	item := dated[0]
-	return match{stremioID: stremioID(item), imdb: item.ProviderIDs["Imdb"], tmdb: item.ProviderIDs["Tmdb"], name: item.Name,
-		poster: item.Images.Primary, year: item.ProductionYear, by: bySearch}
+	return dated[0], ""
+}
+
+// SearchLimit is how many titles a search reads, as a scan's do.
+const SearchLimit = searchLimit
+
+// ChooseTitle keeps, of the results of a search for title, the one title
+// of kind of that name, and of year when it is not zero, by the rule a
+// scan matches files by (see local-folders.md, Matching): found is false
+// when there is none, and ambiguous true when there are several.
+func ChooseTitle(kind library.Kind, title string, year int, results []library.RemoteResult) (item library.Item, found, ambiguous bool) {
+	item, reason := chooseItem(kind, title, year, results)
+	return item, reason == "", reason == reasonAmbiguous
 }
 
 // stremioID is the identifier a title found is kept under: its IMDb

@@ -673,18 +673,7 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	if err != nil {
 		return nil, err
 	}
-	var sources []source
-	for _, entry := range v.addons {
-		// A local folder's titles are those this search finds.
-		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() {
-			continue
-		}
-		for _, catalog := range entry.addon.Manifest.Catalogs {
-			if catalogKind, ok := titleKind(catalog.Type); ok && catalogKind == kind && searchable(catalog) {
-				sources = append(sources, source{addon: entry, catalog: catalog, search: name})
-			}
-		}
-	}
+	sources := remoteSources(v, kind, name)
 	if len(sources) == 0 {
 		return nil, nil
 	}
@@ -704,4 +693,32 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 		records = append(records, r)
 	}
 	return results, s.save(ctx, records)
+}
+
+// RemoteSearches reports whether RemoteSearch can find titles of kind: a
+// server's addon describing titles searches them.
+func (s *Service) RemoteSearches(ctx context.Context, kind Kind) (bool, error) {
+	v, err := s.view(ctx, accounts.User{})
+	if err != nil {
+		return false, err
+	}
+	return len(remoteSources(v, kind, "")) > 0, nil
+}
+
+// remoteSources are the search catalogs of titles of kind of the addons of
+// v that describe titles, searching name.
+func remoteSources(v view, kind Kind, name string) []source {
+	var sources []source
+	for _, entry := range v.addons {
+		// A local folder's titles are those this search finds.
+		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() {
+			continue
+		}
+		for _, catalog := range entry.addon.Manifest.Catalogs {
+			if catalogKind, ok := titleKind(catalog.Type); ok && catalogKind == kind && searchable(catalog) {
+				sources = append(sources, source{addon: entry, catalog: catalog, search: name})
+			}
+		}
+	}
+	return sources
 }

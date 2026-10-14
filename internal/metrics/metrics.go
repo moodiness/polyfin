@@ -55,7 +55,7 @@ var (
 	}, []string{"method"})
 	imports = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "polyfin_imports_total",
-		Help: "Imports of app connections and tracking services, by service and outcome.",
+		Help: "Imports of app connections, tracking services and Letterboxd exports, by service and outcome.",
 	}, []string{"service", "outcome"})
 	trackingSent = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "polyfin_tracking_sent_total",
@@ -111,8 +111,9 @@ func EncodingFailed(method string) {
 	encodingFailures.WithLabelValues(method).Inc()
 }
 
-// Imported counts an import of an app connection or a tracking service,
-// by its service, ok when it read and imported everything.
+// Imported counts an import of an app connection, a tracking service or a
+// Letterboxd export, by its service, ok when it read and imported
+// everything.
 func Imported(service string, ok bool) {
 	imports.WithLabelValues(service, outcome(ok)).Inc()
 }
