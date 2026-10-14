@@ -3,6 +3,7 @@ import {
   CaretRightIcon,
   DeviceMobileIcon,
   DownloadSimpleIcon,
+  FileZipIcon,
   LinkIcon,
   PlusIcon,
   UsersIcon,
@@ -83,6 +84,9 @@ export default function UsersList() {
       </ButtonLink>
       <ButtonLink to="/users/app-import" icon={DeviceMobileIcon}>
         {t.users.appImport.open}
+      </ButtonLink>
+      <ButtonLink to="/users/letterboxd-import" icon={FileZipIcon}>
+        {t.users.letterboxdImport.open}
       </ButtonLink>
       <Button icon={LinkIcon} onClick={() => setInviting(true)}>
         {t.invites.create}

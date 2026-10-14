@@ -215,13 +215,13 @@ export default function AccountRoute() {
           <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
         </AccountSection>
       )}
-      {importing && (
+      {ownImport.data !== undefined && importing && (
         <AccountSection
           id="import"
           title={text.sections.import}
           help={text.serverImport.description}
         >
-          <ServerImport current={ownImport.data?.import ?? null} />
+          <ServerImport own={ownImport.data} />
         </AccountSection>
       )}
       {ownAppImport.data !== undefined && (importingFromApps || appConnections.length > 0) && (

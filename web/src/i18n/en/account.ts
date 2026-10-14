@@ -61,7 +61,7 @@ const account = {
           : `every ${minutes / 60} hours`,
     serverImport: {
       description:
-        'Bring your played movies and episodes, resume points and favorites over from a Jellyfin or Emby server you used before. They go into your account only, matched by IMDb, TMDB or TVDB, and only add to what Polyfin already has. Nothing is written to the other server.',
+        'Bring your played movies and episodes, resume points and favorites over from a Jellyfin or Emby server you used before, or your movies from your Letterboxd export. They go into your account only, and only add to what Polyfin already has. Nothing is written to the other server.',
       serverKind: 'Server',
       address: 'Server address',
       addressHelp:
@@ -75,6 +75,65 @@ const account = {
       started: 'The import has started. You can leave this page: it goes on.',
       lastTitle: 'Your last import',
       from: (server: string) => `From ${server}`,
+    },
+    /** My account › Import from another server, with Letterboxd's export file. */
+    letterboxd: {
+      option: 'Letterboxd (export file)',
+      help: 'In Letterboxd, open Settings › Import & Export and choose Export your data: Letterboxd gives a ZIP file. Choose it here as it is. Polyfin reads it in memory, and never keeps it.',
+      watchedHelp:
+        'The movies you watched are marked played, on the latest date your diary gives, as many times as it logs them. Each movie is searched by its name and year in the server’s metadata addons, and kept when they know exactly one movie of that name and year.',
+      noSearch:
+        'No metadata addon of this server searches movies: no movie of the export can be found. Ask an administrator to add one.',
+      file: 'Export file',
+      fileHelp: 'The ZIP file Letterboxd gives, of 20 MB at most.',
+      choose: 'Choose the file',
+      chooseAnother: 'Choose another file',
+      tooLarge: 'This file is larger than 20 MB: choose the ZIP file Letterboxd gives.',
+      watchlist: 'Watchlist to my Watchlist',
+      watchlistHelp:
+        'The movies of your Letterboxd watchlist go to your Watchlist in Jellyfin apps, until you start them.',
+      ratings: 'Ratings',
+      ratingsHelp:
+        'Your stars become your rating out of 10: 3.5 stars is 7. A rating you already have in Polyfin stays.',
+      likes: 'Liked movies as favorites',
+      likesHelp: 'The movies you liked on Letterboxd become your favorites.',
+      start: 'Import from Letterboxd',
+      starting: 'Sending…',
+      started: 'The import has started. You can leave this page: it goes on.',
+      currentTitle: 'Import in progress',
+      lastTitle: 'Last import',
+      ownLastTitle: 'Your last import',
+      from: 'From a Letterboxd export',
+      startedLabel: 'Started',
+      endedLabel: 'Ended',
+      startedBy: (name: string) => `Started by ${name}`,
+      states: { running: 'Running', done: 'Done', failed: 'Failed' },
+      problem:
+        'Polyfin ran into an error during the import: the server log tells more. What was imported is kept.',
+      runningHelp:
+        'You can leave this page: the import goes on. If Polyfin restarts meanwhile, the import stops: what it imported stays, and importing again adds nothing twice.',
+      searching: (searched: number, movies: number) =>
+        `Searching the movies: ${searched} of ${movies}.`,
+      searchingLabel: 'Movies searched',
+      summary: (movies: number, added: string) =>
+        `${movies === 1 ? '1 movie' : `${movies} movies`}: ${added}.`,
+      played: (count: number) => `${count} marked played`,
+      addedToWatchlist: (count: number) => `${count} added to the Watchlist`,
+      rated: (count: number) => `${count} rated`,
+      favorites: (count: number) => `${count} made favorites`,
+      unmatched: (count: number) =>
+        count === 1 ? '1 movie not found' : `${count} movies not found`,
+      unmatchedTitle: 'Movies not found',
+      unmatchedHelp:
+        'These movies were not imported. Each one is searched by its name and year, and kept only when the server’s metadata addons know exactly one movie of that name and year. Open it on Letterboxd to check them.',
+      movieColumn: 'Movie',
+      reasonColumn: 'Reason',
+      onLetterboxd: 'On Letterboxd',
+      reasons: {
+        not_found: 'Not found',
+        ambiguous: 'Several movies of that name and year',
+        search_failed: 'Search failed',
+      },
     },
     appImport: {
       description:

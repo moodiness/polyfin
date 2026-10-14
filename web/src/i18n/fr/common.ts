@@ -380,9 +380,13 @@ const common: typeof en = {
     emby_user_key:
       'Cette clé est celle d’un utilisateur, et Emby ne dit pas à qui elle appartient. Créez une clé d’API dans les paramètres d’Emby, ou connectez-vous avec un compte utilisateur.',
     server_import_running:
-      'Une autre importation est en cours sur ce serveur. Réessayez dans quelques minutes.',
+      'Une autre importation est en cours sur ce serveur ou dans ce compte. Réessayez dans quelques minutes.',
     server_imports_disabled:
       'L’importation de votre historique depuis un autre serveur ou une appli est désactivée sur ce serveur.',
+    letterboxd_export_invalid:
+      'Ce fichier n’est pas un export Letterboxd : choisissez le fichier ZIP que donne Letterboxd, tel quel. Il contient watched.csv ou diary.csv.',
+    letterboxd_export_too_large:
+      'Ce fichier dépasse 20 Mo : choisissez le fichier ZIP que donne Letterboxd.',
     invalid_nuvio_address:
       'Saisissez l’adresse du serveur Nuvio, par exemple https://api.nuvio.tv, ou laissez vide pour celui de Nuvio.',
     nuvio_sign_in_refused: 'Nuvio a refusé cet e-mail ou ce mot de passe.',

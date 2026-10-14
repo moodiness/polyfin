@@ -351,9 +351,14 @@ const common = {
       'A Jellyfin user is no longer on that server. Connect again to read its users.',
     emby_user_key:
       'This key is a user’s own, and Emby does not tell whose it is. Create an API key in Emby’s settings, or connect with a user account.',
-    server_import_running: 'Another import is running on this server. Try again in a few minutes.',
+    server_import_running:
+      'Another import is running on this server or into this account. Try again in a few minutes.',
     server_imports_disabled:
       'Importing your watch history from another server or app is turned off on this server.',
+    letterboxd_export_invalid:
+      'This file is not a Letterboxd export: choose the ZIP file Letterboxd gives, as it is. It holds watched.csv or diary.csv.',
+    letterboxd_export_too_large:
+      'This file is larger than 20 MB: choose the ZIP file Letterboxd gives.',
     invalid_nuvio_address:
       'Enter the address of the Nuvio backend, such as https://api.nuvio.tv, or leave it empty for Nuvio’s own.',
     nuvio_sign_in_refused: 'Nuvio refused this email or password.',

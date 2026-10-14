@@ -61,7 +61,7 @@ const account: typeof en = {
           : `toutes les ${minutes / 60} heures`,
     serverImport: {
       description:
-        'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin ou Emby que vous utilisiez. Ils vont dans votre compte seulement, reconnus par IMDb, TMDB ou TVDB, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
+        'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin ou Emby que vous utilisiez, ou vos films depuis votre export Letterboxd. Ils vont dans votre compte seulement, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
       serverKind: 'Serveur',
       address: 'Adresse du serveur',
       addressHelp:
@@ -75,6 +75,66 @@ const account: typeof en = {
       started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
       lastTitle: 'Votre dernière importation',
       from: (server: string) => `Depuis ${server}`,
+    },
+    letterboxd: {
+      option: 'Letterboxd (fichier d’export)',
+      help: 'Dans Letterboxd, ouvrez Settings › Import & Export et choisissez Export your data : Letterboxd donne un fichier ZIP. Choisissez-le ici tel quel. Polyfin le lit en mémoire, et ne le garde jamais.',
+      watchedHelp:
+        'Les films que vous avez vus sont marqués vus, à la dernière date que donne votre journal, autant de fois qu’il les note. Chaque film est cherché par son nom et son année dans les addons de métadonnées du serveur, et retenu quand ils connaissent exactement un film de ce nom et de cette année.',
+      noSearch:
+        'Aucun addon de métadonnées de ce serveur ne cherche de films : aucun film de l’export ne peut être trouvé. Demandez à un administrateur d’en ajouter un.',
+      file: 'Fichier d’export',
+      fileHelp: 'Le fichier ZIP que donne Letterboxd, de 20 Mo au plus.',
+      choose: 'Choisir le fichier',
+      chooseAnother: 'Choisir un autre fichier',
+      tooLarge: 'Ce fichier dépasse 20 Mo : choisissez le fichier ZIP que donne Letterboxd.',
+      watchlist: 'Watchlist vers ma liste « À regarder »',
+      watchlistHelp:
+        'Les films de votre watchlist Letterboxd vont dans « À regarder » de vos applis Jellyfin, jusqu’à ce que vous les commenciez.',
+      ratings: 'Notes',
+      ratingsHelp:
+        'Vos étoiles deviennent votre note sur 10 : 3,5 étoiles donnent 7. Une note que vous avez déjà dans Polyfin reste.',
+      likes: 'Films aimés en favoris',
+      likesHelp: 'Les films que vous avez aimés sur Letterboxd deviennent vos favoris.',
+      start: 'Importer depuis Letterboxd',
+      starting: 'Envoi…',
+      started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
+      currentTitle: 'Importation en cours',
+      lastTitle: 'Dernière importation',
+      ownLastTitle: 'Votre dernière importation',
+      from: 'Depuis un export Letterboxd',
+      startedLabel: 'Commencée',
+      endedLabel: 'Terminée',
+      startedBy: (name: string) => `Lancée par ${name}`,
+      states: { running: 'En cours', done: 'Terminée', failed: 'Échouée' },
+      problem:
+        'Polyfin a rencontré une erreur pendant l’importation : le journal du serveur en dit plus. Ce qui a été importé est conservé.',
+      runningHelp:
+        'Vous pouvez quitter cette page : l’importation continue. Si Polyfin redémarre entre-temps, elle s’arrête : ce qu’elle a importé reste, et importer à nouveau n’ajoute rien deux fois.',
+      searching: (searched: number, movies: number) =>
+        `Recherche des films : ${searched} sur ${movies}.`,
+      searchingLabel: 'Films cherchés',
+      summary: (movies: number, added: string) =>
+        `${movies <= 1 ? `${movies} film` : `${movies} films`} : ${added}.`,
+      played: (count: number) => (count <= 1 ? `${count} marqué vu` : `${count} marqués vus`),
+      addedToWatchlist: (count: number) =>
+        count <= 1 ? `${count} ajouté à « À regarder »` : `${count} ajoutés à « À regarder »`,
+      rated: (count: number) => (count <= 1 ? `${count} noté` : `${count} notés`),
+      favorites: (count: number) =>
+        count <= 1 ? `${count} mis en favori` : `${count} mis en favoris`,
+      unmatched: (count: number) =>
+        count <= 1 ? `${count} film non trouvé` : `${count} films non trouvés`,
+      unmatchedTitle: 'Films non trouvés',
+      unmatchedHelp:
+        'Ces films n’ont pas été importés. Chacun est cherché par son nom et son année, et retenu seulement quand les addons de métadonnées du serveur connaissent exactement un film de ce nom et de cette année. Ouvrez-le sur Letterboxd pour les vérifier.',
+      movieColumn: 'Film',
+      reasonColumn: 'Raison',
+      onLetterboxd: 'Sur Letterboxd',
+      reasons: {
+        not_found: 'Non trouvé',
+        ambiguous: 'Plusieurs films de ce nom et de cette année',
+        search_failed: 'Échec de la recherche',
+      },
     },
     appImport: {
       description:

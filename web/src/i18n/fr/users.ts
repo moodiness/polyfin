@@ -369,6 +369,14 @@ const users: typeof en = {
       userHelp:
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',
     },
+    letterboxdImport: {
+      open: 'Importer depuis Letterboxd',
+      title: 'Importer depuis Letterboxd',
+      description:
+        'Reprenez les films d’un utilisateur depuis son fichier d’export Letterboxd : les films vus avec leurs dates et leur nombre de lectures, sa watchlist, ses notes, et les films aimés en favoris si vous le choisissez. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer le leur, sous Mon compte.',
+      user: 'Dans le compte de',
+      userHelp: 'L’utilisateur de Polyfin dont l’importation complète les données de visionnage.',
+    },
   },
   invites: {
     title: 'Liens d’invitation',

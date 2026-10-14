@@ -356,6 +356,14 @@ const users = {
       user: 'Into the account of',
       userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
     },
+    letterboxdImport: {
+      open: 'Import from Letterboxd',
+      title: 'Import from Letterboxd',
+      description:
+        'Bring a user’s movies over from their Letterboxd export file: the movies they watched with their dates and play counts, their watchlist, their ratings, and the movies they liked as favorites if you choose. Polyfin’s data is only added to. Users can also import their own, under My account.',
+      user: 'Into the account of',
+      userHelp: 'The Polyfin user whose watch data the import adds to.',
+    },
   },
   invites: {
     title: 'Invite links',

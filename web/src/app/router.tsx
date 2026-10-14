@@ -25,6 +25,7 @@ import LogsRoute from '@/features/system/LogsRoute'
 import ScheduleRoute from '@/features/system/ScheduleRoute'
 import AppImportRoute from '@/features/users/AppImportRoute'
 import JellyfinImportRoute from '@/features/users/JellyfinImport'
+import LetterboxdImportRoute from '@/features/users/LetterboxdImportRoute'
 import UsersRoute from '@/features/users/UsersRoute'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
@@ -144,6 +145,7 @@ export const router = createBrowserRouter(
           children: [
             { path: 'users/jellyfin-import', element: <JellyfinImportRoute /> },
             { path: 'users/app-import', element: <AppImportRoute /> },
+            { path: 'users/letterboxd-import', element: <LetterboxdImportRoute /> },
             { path: 'users/:id?', element: <UsersRoute /> },
             {
               path: 'system',

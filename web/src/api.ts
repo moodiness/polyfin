@@ -1914,10 +1914,17 @@ export const stopJellyfinImport = async () =>
   (await request<JellyfinImportAnswer>('POST', '/jellyfin-import/stop')).import
 
 /**
- * Whether the signed-in user may import their own watch history from another server, and their
- * own import running, else their last one, else null.
+ * Whether the signed-in user may import their own watch history from another server, whether they
+ * may import a Letterboxd export and the server's metadata addons search movies (without one, no
+ * movie of an export is found), and their latest import, from a server or Letterboxd, running or
+ * ended, else null.
  */
-export type OwnImport = { enabled: boolean; import: JellyfinImportStatus | null }
+export type OwnImport = {
+  enabled: boolean
+  letterboxd: boolean
+  searchable: boolean
+  import: JellyfinImportStatus | LetterboxdImportStatus | null
+}
 
 export const fetchOwnImport = (signal?: AbortSignal) =>
   request<OwnImport>('GET', '/account/server-import', undefined, signal)
@@ -1933,6 +1940,94 @@ export const startOwnImport = async (body: {
   password: string
 }) =>
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
+
+/** Why a movie of a Letterboxd export was not found. */
+export type LetterboxdReason = 'not_found' | 'ambiguous' | 'search_failed'
+
+/** A movie of a Letterboxd export no title matched, with its Letterboxd link when it has one. */
+export type LetterboxdUnmatched = {
+  name: string
+  year: number | null
+  link: string | null
+  reason: LetterboxdReason
+}
+
+/**
+ * An import of a Letterboxd export into a user's account, running or the last one since Polyfin
+ * started: the switches it was started with, how many of its movies were looked up, then what it
+ * added, and the movies not found (the first 500 in `unmatched`).
+ */
+export type LetterboxdImportStatus = {
+  id: string
+  kind: 'letterboxd'
+  user: { id: string; name: string }
+  startedBy: { id: string; name: string }
+  watchlist: boolean
+  ratings: boolean
+  likesAsFavorites: boolean
+  state: 'running' | 'done' | 'failed'
+  problem: 'internal' | null
+  startedAt: string
+  endedAt: string | null
+  movies: number
+  searched: number
+  added: { played: number; watchlist: number; ratings: number; favorites: number }
+  unmatchedCount: number
+  unmatched: LetterboxdUnmatched[]
+}
+
+/** Whether an import of the user's account is one of a Letterboxd export. */
+export const isLetterboxdImport = (
+  current: JellyfinImportStatus | LetterboxdImportStatus,
+): current is LetterboxdImportStatus => 'kind' in current && current.kind === 'letterboxd'
+
+/** What a Letterboxd import takes: the export's ZIP, and what to import besides the movies watched. */
+export type LetterboxdUpload = {
+  file: File
+  watchlist: boolean
+  ratings: boolean
+  likesAsFavorites: boolean
+}
+
+/** The largest export the server takes, in bytes. */
+export const maxLetterboxdExportBytes = 20 * 1024 * 1024
+
+/** Sends a Letterboxd export as a multipart form to `path`, which imports it in the background. */
+async function uploadLetterboxd(path: string, upload: LetterboxdUpload) {
+  const form = new FormData()
+  form.append('kind', 'letterboxd')
+  form.append('watchlist', String(upload.watchlist))
+  form.append('ratings', String(upload.ratings))
+  form.append('likesAsFavorites', String(upload.likesAsFavorites))
+  form.append('file', upload.file)
+  // The browser writes the multipart Content-Type, with its boundary.
+  const response = await fetch(`${apiBase}${path}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: form,
+  })
+  if (!response.ok) throw await apiError(response)
+  // The server answers the import started, as for the other kinds.
+  const answer: { import: LetterboxdImportStatus } = await response.json()
+  return answer.import
+}
+
+/** Imports a Letterboxd export into the signed-in user's account. */
+export const startOwnLetterboxdImport = (upload: LetterboxdUpload) =>
+  uploadLetterboxd('/account/server-import', upload)
+
+/**
+ * For an administrator: whether the server's metadata addons search movies, and the Letterboxd
+ * import into a user's account, running or the last one, else null.
+ */
+export type UserLetterboxdImport = { searchable: boolean; import: LetterboxdImportStatus | null }
+
+export const fetchUserLetterboxdImport = (id: string, signal?: AbortSignal) =>
+  request<UserLetterboxdImport>('GET', `/users/${seg(id)}/server-import`, undefined, signal)
+
+/** Imports a Letterboxd export into a user's account, for an administrator. */
+export const startUserLetterboxdImport = (id: string, upload: LetterboxdUpload) =>
+  uploadLetterboxd(`/users/${seg(id)}/server-import`, upload)
 
 /** An app whose accounts Polyfin imports. */
 export type AppKind = 'nuvio' | 'stremio'
@@ -3221,6 +3316,7 @@ export const queryKeys = {
   ownImport: ['account', 'server-import'] as const,
   ownAppImport: ['account', 'app-import'] as const,
   userAppImport: (id: string) => ['users', id, 'app-import'] as const,
+  userLetterboxdImport: (id: string) => ['users', id, 'server-import'] as const,
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   settingsApps: ['settings', 'apps'] as const,
