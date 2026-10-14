@@ -2147,3 +2147,256 @@ async function run(scenario) {
 		}
 	}
 }
+
+// On a title's page, the script shows the title's three scores, as
+// /Polyfin/Items/{id}/Ratings answers them, in the first line of its
+// details, before jellyfin-web's own star and critic rating, which it
+// hides: labelled, with a tooltip, in jellyfin-web's language. It asks
+// again 3 seconds later while MDBList is asked about the title, 10 times
+// at most; an answer without a score, or none, changes nothing; a video
+// playing is never touched; jellyfin-web's renders find the scores again,
+// and leaving the title gives the line back. It runs in Node.js, in a
+// context that stands for the browser: a small document holding the title
+// page and its first line of details, a clock and timers the harness moves
+// on.
+func TestTitlePagesShowTheirThreeScores(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	const (
+		id    = "0123456789abcdef0123456789abcdef"
+		title = "#/details?id=" + id + "&serverId=fedcba9876543210fedcba9876543210"
+		other = "ffffffffffffffffffffffffffffffff"
+		ask   = "ask ratings"
+		plain = "line year star critic"
+		kept  = `line year scores(IMDb 8.1 "IMDb rating", Critics 97% "Critics’ score", Audience 92% "Audience score") (star) (critic)`
+	)
+	all := map[string]any{"CommunityRating": 8.1, "CriticsScore": 97, "AudienceScore": 92, "Pending": false}
+	type scenario struct {
+		answers []map[string]any
+		forever bool
+		lang    string
+		steps   []string
+		want    []string
+	}
+	scenarios := map[string]scenario{
+		"scores kept": {answers: []map[string]any{all}, steps: []string{title, "show"}, want: []string{ask, kept}},
+		"asked again while MDBList is asked": {
+			answers: []map[string]any{{"Pending": true}, {"CommunityRating": 7, "AudienceScore": 60.4, "Pending": false}},
+			steps:   []string{title, "show", "wait 2999", "show", "wait 1", "show", "wait 10000"},
+			want: []string{ask, plain, plain, ask,
+				`line year scores(IMDb 7.0 "IMDb rating", Audience 60% "Audience score") (star) (critic)`},
+		},
+		"ten asks at most": {
+			answers: []map[string]any{{"Pending": true}}, forever: true, steps: []string{title, "wait 60000", "show"},
+			want: []string{ask, ask, ask, ask, ask, ask, ask, ask, ask, ask, plain},
+		},
+		"no score":  {answers: []map[string]any{{"Pending": false}}, steps: []string{title, "show", "wait 10000"}, want: []string{ask, plain}},
+		"no answer": {steps: []string{title, "show", "wait 10000"}, want: []string{ask, plain}},
+		"rendered anew": {
+			answers: []map[string]any{all}, steps: []string{title, "show", "render", "show"}, want: []string{ask, kept, kept},
+		},
+		"leaving the title": {
+			answers: []map[string]any{all}, steps: []string{title, "show", "#/home", "show"}, want: []string{ask, kept, plain},
+		},
+		"another title": {
+			answers: []map[string]any{all}, steps: []string{title, "show", "#/details?id=" + other, "show"},
+			want: []string{ask, kept, "ask http://polyfin.test/Polyfin/Items/" + other + "/Ratings", plain},
+		},
+		"in French": {
+			answers: []map[string]any{all}, lang: "fr-FR", steps: []string{title, "show"},
+			want: []string{ask, "line year scores(IMDb 8.1 \"Note IMDb\", Critiques 97\u00a0% \"Score des critiques\", " +
+				"Public 92\u00a0% \"Score du public\") (star) (critic)"},
+		},
+		"during a video": {
+			answers: []map[string]any{all}, steps: []string{"video", title, "show", "end video", "show"}, want: []string{ask, plain, kept},
+		},
+	}
+	const harness = `
+const vm = require('node:vm')
+const { script, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+const TITLE = '0123456789abcdef0123456789abcdef'
+async function run(scenario) {
+  const log = []
+  let now = 0
+  const timers = []
+  const listeners = {}
+  // Changes reach the observers once the code that made them is done.
+  const observers = new Set()
+  let queued = false
+  const changed = () => {
+    if (queued) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      for (const observer of [...observers]) if (observers.has(observer)) try { observer.callback([]) } catch (error) {}
+    })
+  }
+  class MutationObserver {
+    constructor(callback) { this.callback = callback }
+    observe() { observers.add(this) }
+    disconnect() { observers.delete(this) }
+  }
+  const classes = (element) => element.className.split(' ').filter(Boolean)
+  const matches = (element, selector) => /^(\.[\w-]+)+$/.test(selector) && selector.slice(1).split('.').every((c) => classes(element).includes(c))
+  const all = (root, selector) => root.children.flatMap((child) => (child.children ? [...(matches(child, selector) ? [child] : []), ...all(child, selector)] : []))
+  class Element {
+    constructor(tag, className) { this.tagName = tag; this.className = className || ''; this.children = []; this.parentNode = null; this.title = ''; this.style = {}; this.text = '' }
+    get classList() {
+      return {
+        contains: (c) => classes(this).includes(c),
+        add: (c) => { if (!classes(this).includes(c)) { this.className = [...classes(this), c].join(' '); changed() } },
+        remove: (c) => { this.className = classes(this).filter((x) => x !== c).join(' '); changed() },
+        toggle: () => {},
+      }
+    }
+    set textContent(text) { this.text = text; this.children = []; changed() }
+    get textContent() { return this.text + this.children.map((child) => child.textContent).join('') }
+    appendChild(child) { return this.insertBefore(child, null) }
+    insertBefore(child, before) {
+      if (child.parentNode) child.parentNode.removeChild(child)
+      const at = before ? this.children.indexOf(before) : -1
+      this.children.splice(at < 0 ? this.children.length : at, 0, child)
+      child.parentNode = this
+      changed()
+      return child
+    }
+    removeChild(child) { this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; changed(); return child }
+    querySelector(selector) { return all(this, selector)[0] || null }
+    querySelectorAll(selector) { return all(this, selector) }
+    setAttribute() {}
+    getAttribute() { return null }
+    hasAttribute() { return false }
+    removeAttribute() {}
+    addEventListener() {}
+    closest() { return null }
+  }
+  // The title page and its first line of details, as jellyfin-web renders
+  // it: the year, its star and its critic rating.
+  const body = new Element('body')
+  const page = body.appendChild(new Element('div', 'page itemDetailPage'))
+  const line = page.appendChild(new Element('div', 'itemMiscInfo itemMiscInfo-primary'))
+  const render = () => {
+    for (const child of [...line.children]) line.removeChild(child)
+    for (const name of ['year', 'starRatingContainer', 'mediaInfoCriticRating mediaInfoCriticRatingFresh']) line.appendChild(new Element('div', 'mediaInfoItem ' + name))
+  }
+  render()
+  const sheets = []
+  const document = {
+    body,
+    documentElement: { lang: scenario.lang || 'en-US' },
+    head: { appendChild: (sheet) => sheets.push(sheet) },
+    createElement: (tag) => new Element(tag),
+    createTextNode: (text) => ({ textContent: text, parentNode: null }),
+    getElementById: (id) => sheets.find((sheet) => sheet.id === id) || null,
+    querySelector: (selector) => {
+      if (selector === '.page.itemDetailPage:not(.hide)') return body.querySelector('.page.itemDetailPage')
+      return body.querySelector(selector)
+    },
+    querySelectorAll: (selector) => body.querySelectorAll(selector),
+  }
+  // A score shows its label, its value and its tooltip; jellyfin-web's own
+  // ratings show in brackets where the script's style hides them.
+  function show() {
+    const hidden = line.classList.contains('polyfinRated') && sheets.some((sheet) => sheet.textContent.includes('.polyfinRated .starRatingContainer'))
+    const words = line.children.map((child) => {
+      if (classes(child).includes('polyfinScores')) {
+        return 'scores(' + child.children.map((score) => score.children[0].textContent + ' ' + score.children[1].textContent + ' "' + score.title + '"').join(', ') + ')'
+      }
+      if (classes(child).includes('starRatingContainer')) return hidden ? '(star)' : 'star'
+      if (classes(child).includes('mediaInfoCriticRating')) return hidden ? '(critic)' : 'critic'
+      return 'year'
+    })
+    log.push(['line', ...words].join(' '))
+  }
+  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
+  const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
+  const answers = (scenario.answers || []).slice()
+  const ApiClient = {
+    getUrl: (path) => 'http://polyfin.test/' + path,
+    getCurrentUserId: () => 'user',
+    getCurrentUser: () => Promise.resolve({ Id: 'user', Policy: { IsAdministrator: true } }),
+    getJSON: (url) => {
+      // The title's versions and the user's views are another part's.
+      if (!url.endsWith('/Ratings')) return Promise.reject(new Error('not asked here'))
+      log.push('ask ' + (url === 'http://polyfin.test/Polyfin/Items/' + TITLE + '/Ratings' ? 'ratings' : url))
+      const answer = scenario.forever && answers.length === 1 ? answers[0] : answers.shift()
+      return answer ? Promise.resolve({ ...answer }) : Promise.reject(new Error('down'))
+    },
+  }
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
+  class Event { constructor(type) { this.type = type } }
+  vm.runInNewContext(script, {
+    location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
+    Date: { now: () => now },
+    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
+    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
+  })
+  await flush()
+  let video = null
+  for (const step of scenario.steps) {
+    if (step === 'show') show()
+    else if (step === 'render') render()
+    else if (step === 'video') video = body.appendChild(new Element('div', 'videoPlayerContainer'))
+    else if (step === 'end video') body.removeChild(video)
+    else if (step.startsWith('wait ')) {
+      const until = now + Number(step.slice(5))
+      for (;;) {
+        let next = -1
+        timers.forEach((timer, i) => { if (timer && timer.at <= until && (next < 0 || timer.at < timers[next].at)) next = i })
+        if (next < 0) break
+        const timer = timers[next]
+        timers[next] = null
+        now = timer.at
+        timer.run()
+        await flush()
+      }
+      now = until
+    } else history.pushState(null, '', step)
+    await flush()
+  }
+  return log
+}
+;(async () => {
+  const results = {}
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    try {
+      results[name] = await run(scenario)
+    } catch (error) {
+      results[name] = ['harness: ' + error.stack]
+    }
+  }
+  process.stdout.write(JSON.stringify(results))
+})()
+`
+	type input struct {
+		Answers []map[string]any `json:"answers"`
+		Forever bool             `json:"forever"`
+		Lang    string           `json:"lang,omitempty"`
+		Steps   []string         `json:"steps"`
+	}
+	inputs := map[string]input{}
+	for name, s := range scenarios {
+		inputs[name] = input{s.answers, s.forever, s.lang, s.steps}
+	}
+	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(data))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string][]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	for name, s := range scenarios {
+		if got := results[name]; !slices.Equal(got, s.want) {
+			t.Errorf("%s:\n got  %q\n want %q", name, got, s.want)
+		}
+	}
+}
