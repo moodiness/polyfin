@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -136,14 +137,8 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) er
 		return fmt.Errorf("read schema_migrations: %w", err)
 	}
 
-	known := len(migrations)
-	for version, checksum := range applied {
-		if version > known || version < 1 {
-			return fmt.Errorf("the database schema is at version %d but this Polyfin build only knows %d: upgrade Polyfin", version, known)
-		}
-		if m := migrations[version-1]; m.checksum != checksum {
-			return fmt.Errorf("migration %04d_%s was changed after it was applied to the database", m.version, m.name)
-		}
+	if err := checkApplied(applied, migrations); err != nil {
+		return err
 	}
 
 	for _, m := range migrations {
@@ -161,6 +156,49 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) er
 		})
 		if err != nil {
 			return fmt.Errorf("apply migration %04d_%s: %w", m.version, m.name, err)
+		}
+	}
+	return nil
+}
+
+// ErrNewerSchema reports a database a newer Polyfin migrated, and
+// ErrChangedMigration one whose applied migrations differ from those this
+// build ships: Polyfin refuses to start on either.
+var (
+	ErrNewerSchema      = errors.New("the database schema is newer than this Polyfin build")
+	ErrChangedMigration = errors.New("a migration was changed after it was applied")
+)
+
+// schemaError tells what differs, and is one of the errors above.
+type schemaError struct {
+	kind    error
+	message string
+}
+
+func (e *schemaError) Error() string { return e.message }
+func (e *schemaError) Unwrap() error { return e.kind }
+
+// CheckApplied checks the migrations a database applied, their checksums by
+// version as schema_migrations holds them, against those this build
+// ships, as Migrate does before migrating: it fails with ErrNewerSchema or
+// ErrChangedMigration, saying what differs.
+func CheckApplied(applied map[int]string) error {
+	migrations, err := shippedMigrations()
+	if err != nil {
+		return err
+	}
+	return checkApplied(applied, migrations)
+}
+
+func checkApplied(applied map[int]string, migrations []migration) error {
+	known := len(migrations)
+	for version, checksum := range applied {
+		if version > known || version < 1 {
+			return &schemaError{ErrNewerSchema,
+				fmt.Sprintf("the database schema is at version %d but this Polyfin build only knows %d: upgrade Polyfin", version, known)}
+		}
+		if m := migrations[version-1]; m.checksum != checksum {
+			return &schemaError{ErrChangedMigration, fmt.Sprintf("migration %04d_%s was changed after it was applied to the database", m.version, m.name)}
 		}
 	}
 	return nil
