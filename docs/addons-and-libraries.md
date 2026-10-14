@@ -253,6 +253,24 @@ Playback reports count plays and mark songs played, without resume points. Audio
 
 Eclipse's video renditions are not used: Jellyfin music apps cannot show a video for a song.
 
+### Volume between songs
+
+Songs from different albums and addons are mastered at very different volumes. Polyfin tells apps how much to raise or lower each song and each album, as Jellyfin's `NormalizationGain` does, and apps that apply it, such as the web player, play them all at about the same volume. The songs themselves are not changed: an app that ignores the gain plays them as before.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Even the volume between songs** | **Settings › Content** | On | Gives apps the gains known. Off, apps get none and nothing is measured. |
+| **Measure the loudness of songs without a gain** | **Settings › Content** | Off | **Off**, **Local songs** or **Local and addon songs**: measures, with FFmpeg's `ebur128` filter (EBU R128), the songs that have no track gain. |
+
+- Gains are relative to -18 LUFS, the reference of ReplayGain 2.0 and of Jellyfin's gains.
+- A song's gain is its ReplayGain track tag (see [Files and tags](local-folders.md#files-and-tags)), else its measured loudness.
+- An album's gain is its album tag, when all its songs agree on one, else the loudness of all its songs together, each weighed by its length, once each one's is known.
+- Songs of a [local music folder](local-folders.md#music-folders) are measured in the background after a scan. Addon songs are measured after their first play, by reading their stream once more through the same relay and link renewal as playback; never a whole album or catalog ahead.
+- A song is measured once, its audio alone decoded. Its loudness is kept in the database with the song, as an analysis is, and measured again only when a local file changes.
+- Two songs are measured at a time, over local and addon songs, with FFmpeg at the lowest priority, as for the audio of local episodes (see [Skip segments](skip-segments.md)).
+- Songs longer than 15 minutes, podcasts' long episodes among them, songs whose length the addon does not give, and audiobooks are never measured.
+- A song whose stream fails is tried again after a day, three times at most. A silent song has no gain.
+
 ### Health and parental control
 
 Music addon requests count in **System › Health** like a Stremio addon's: last answer, failures and response time, with the same manifest check (see [Administration](administration.md)).

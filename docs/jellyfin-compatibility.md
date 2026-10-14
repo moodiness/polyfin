@@ -35,6 +35,10 @@ With the server's **MDBList API key for ratings**, `CommunityRating` carries a m
 
 **For app developers:** `/Polyfin/Items/{id}/Ratings` answers a title's `CommunityRating`, `CriticsScore` and `AudienceScore` (null when it has none, all null without a key) and `Pending` while MDBList is being asked about it.
 
+### Volume between songs
+
+With **Even the volume between songs** on, the default, songs (`Audio`) and albums (`MusicAlbum`) carry `NormalizationGain`, in dB relative to -18 LUFS, in listings and details, once it is known, as on Jellyfin 10.9 and later: the ReplayGain tags of local songs, else their measured loudness (see [Volume between songs](addons-and-libraries.md#volume-between-songs)). The stream itself is not changed: apps apply the gain, the song's or the album's as their playback settings choose, and an app that ignores it plays as before. The web player takes a song's from the list it plays from, and its album's from the album's details. Music libraries' `LibraryOptions` report `EnableLUFSScan` as measuring is set for their songs. Off, no item carries a gain and nothing is measured.
+
 ### Libraries left out of the web player menus
 
 On the admin app's **Libraries** page, an administrator can leave any of the server's libraries out of the web player's menus, and each user any of their own: its top bar, the bar's **More** menu and its side menu. The library keeps its row on the home screen, and other apps keep listing it. Live TV catalogs have no such option: their channels go to Live TV.

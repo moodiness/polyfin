@@ -446,6 +446,8 @@ A scan lists the files ending in `.mp3`, `.flac`, `.m4a`, `.m4b`, `.alac`, `.aac
 
 Each new or changed file is read with ffprobe: its title, artist, artists, album, album artist, track and disc numbers, year (from its date), genres (several separated by `;`), whether it is part of a compilation, its lyrics, its length, its audio and whether it embeds a cover. Tags of MP3 (ID3), FLAC, Ogg and Opus (Vorbis comments), MP4 and M4A, WMA and WAV are read as ffprobe reads them.
 
+A scan also keeps a file's gains, which even the volume between songs (see [Volume between songs](addons-and-libraries.md#volume-between-songs)): its `REPLAYGAIN_TRACK_GAIN` and `REPLAYGAIN_ALBUM_GAIN` tags, from ID3, Vorbis comments and MP4 alike, such as `-6.54 dB`, else Opus's `R128_TRACK_GAIN` and `R128_ALBUM_GAIN`, moved from EBU R128's -23 LUFS to the same -18 LUFS reference. The first scan after the upgrade that brought gains reads the tags of the files already kept again, once. With **Measure the loudness of songs without a gain** set to **Local songs** or **Local and addon songs**, the songs without a track gain are measured in the background after each scan, once, and again when their file changes; songs longer than 15 minutes never are.
+
 A file without some tags takes them from its path, as in `Artist/Album/01 Title.flac`:
 
 - its title is its name without the number heading it, which is its track number (`1-07 Title` gives disc 1, track 7);
@@ -466,7 +468,7 @@ On a share, ffprobe and FFmpeg read each new or changed file through Polyfin, at
 - An artist's picture is `artist`, `folder` or `photo` (`.jpg`, `.jpeg`, `.png` or `.webp`, any letter case) in their folder: the folder holding the folders of their albums, and of no album of another artist. Without one, it is the artwork of their first album. The artists views show it.
 - Search finds songs by title, artist and album, albums by title and artist, and artists by name; every word must be found, in any letter case.
 
-The folder's figures count its tracks, albums and album artists, and the tracks left out.
+The folder's figures count its tracks, albums and album artists, its tracks with a gain (from their tags or measured) and those measured, and the tracks left out.
 
 ### Playlists
 
