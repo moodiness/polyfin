@@ -57,6 +57,12 @@ jellyfin-web keeps what its home rows list for up to a minute, also across a rel
 
 On the home page, it adds the rows chosen under **Settings › Web player › Home rows** (see [Home rows](#home-rows)), each at its place among the sections the user chose under jellyfin-web's **Settings › Home**. They look like the library rows: posters, played marks, counts of unplayed episodes and progress bars, with the ⋮ menu and the play button. A card opens the title's page, and the row's name opens its full list. The script asks for the rows each time the home page shows, and puts them back when jellyfin-web redraws the page. It changes nothing elsewhere.
 
+On a movie's or an episode's page, it adds a **Share** button before the ⋮ button, for a user who may share titles while the server allows share links (see [Share links](users.md#share-links)). It opens **My account › Shared links** in the admin app, in the same tab, with the title chosen: the user picks when the link expires and how many may watch at once, then copies the link. A series, a season, a title the user may not see, or a user without the permission gets no button. Its word follows the web client's language, English or French. It changes nothing during a video, comes back when jellyfin-web redraws the page, and goes when you leave the title.
+
+**For app developers:**
+
+- The script asks `GET /Polyfin/Items/{id}/Share`, with the web client's token. It answers `{"Shareable": true, "Url": "/admin/me/account?share=<id>#shared-links"}` when the title may be shared, and `{"Shareable": false, "Url": null}` otherwise.
+
 ### Signing in to the admin app
 
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
