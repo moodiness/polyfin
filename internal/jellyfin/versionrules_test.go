@@ -361,3 +361,26 @@ func TestKeptInPlace(t *testing.T) {
 		t.Errorf("kept in place: %v", names)
 	}
 }
+
+// A page opened again once it is no longer watched lists the versions in
+// the rules' order: the versions it listed before keep no place, so that
+// what analyses told since moves them.
+func TestPageOpenedAgainKeepsNoPlaces(t *testing.T) {
+	t.Parallel()
+	h := &Handler{watched: newWatchedPages()}
+	user, title := accounts.User{ID: accounts.ID{1}}, accounts.ID{2}
+	versions := []library.Version{{ID: accounts.ID{3}}, {ID: accounts.ID{4}}}
+	h.watch(user, title, title)
+	h.watched.show(user.ID, title, versions, "language")
+	h.watch(user, title, title)
+	if shown := h.watched.shown(user.ID, title, "language"); len(shown) != 2 {
+		t.Fatalf("a page watched lists %v", shown)
+	}
+	h.watched.mu.Lock()
+	h.watched.titles[title][user.ID].until = time.Now().Add(-time.Second)
+	h.watched.mu.Unlock()
+	h.watch(user, title, title)
+	if shown := h.watched.shown(user.ID, title, "language"); shown != nil {
+		t.Errorf("a page opened again keeps %v in place", shown)
+	}
+}

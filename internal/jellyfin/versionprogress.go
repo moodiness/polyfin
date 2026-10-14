@@ -106,7 +106,8 @@ func newWatchedPages() *watchedPages {
 }
 
 // watch has a user's page of a title, opened as opened, told of the
-// title's versions for watchedFor.
+// title's versions for watchedFor. A page no longer watched starts anew:
+// the versions it listed keep no place (see keptInPlace).
 func (h *Handler) watch(user accounts.User, title, opened accounts.ID) {
 	w := h.watched
 	now := time.Now()
@@ -130,7 +131,7 @@ func (h *Handler) watch(user accounts.User, title, opened accounts.ID) {
 		w.titles[title] = users
 	}
 	page := users[user.ID]
-	if page == nil {
+	if page == nil || now.After(page.until) {
 		page = &pageWatch{opened: map[accounts.ID]bool{}}
 		users[user.ID] = page
 	}
