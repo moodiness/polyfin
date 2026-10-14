@@ -11,9 +11,10 @@ import (
 // Refresh forgets what Polyfin keeps of a title for the user's addons, and
 // asks them to describe it again: its description (a season's or an
 // episode's is their series'), the version and subtitle lists of the movie
-// or of the series' episodes, stale ones included, and the rating and
-// genres looked up for parental control. Items that are not titles have
-// nothing to forget.
+// or of the series' episodes, stale ones included, the rating and genres
+// looked up for parental control, and the ratings MDBList gave, asked for
+// again as the title next shows. Items that are not titles have nothing
+// to forget.
 // ErrNotFound is returned for an item the user cannot reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
 	v, err := s.view(ctx, user)
@@ -84,6 +85,11 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	}
 	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'genres' WHERE id = $1", title.ID); err != nil {
 		return err
+	}
+	if t, ok := ratingsTitle(Item{Kind: title.Kind, ProviderIDs: providerIDs(*title.Meta)}); ok {
+		if err := s.ratings.Forget(ctx, t); err != nil {
+			return err
+		}
 	}
 	// The description is asked for again now, as apps show the title's
 	// page again after a refresh; it gives the rating again too.

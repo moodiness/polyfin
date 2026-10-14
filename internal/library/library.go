@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -114,6 +115,9 @@ type Service struct {
 	// watchlist holds the users' watchlists, which the Watchlist view
 	// lists (see watchlist.go).
 	watchlist *watchlist.Store
+	// ratings looks movies' and series' ratings up on MDBList (see
+	// ratings.go); nil, they show their addons'.
+	ratings *ratings.Service
 
 	// music asks Eclipse addons for their resources, which musicCache
 	// keeps (see musicCaches).
@@ -1629,7 +1633,7 @@ func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) 
 	return s.overriddenItem(item), nil
 }
 
-// Original describes one item as its addon does, without what
+// Original describes one item as its addon and MDBList do, without what
 // administrators changed of it: what their edits are made against (see
 // SaveOverrides).
 func (s *Service) Original(ctx context.Context, user accounts.User, id accounts.ID) (Item, error) {
@@ -1637,7 +1641,11 @@ func (s *Service) Original(ctx context.Context, user accounts.User, id accounts.
 	if err != nil {
 		return Item{}, err
 	}
-	return s.item(ctx, v, id)
+	item, err := s.item(ctx, v, id)
+	if err != nil {
+		return Item{}, err
+	}
+	return s.rated(item), nil
 }
 
 // Items describes the items of ids the user can reach, in order. Items

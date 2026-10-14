@@ -18,11 +18,11 @@ import (
 // Jellyfin apps let administrators edit an item's metadata and upload its
 // artwork. Polyfin keeps what they change apart from what addons say: the
 // fields set (Overrides) and the images uploaded, by item. They win over
-// the addons' values for every user, wherever the item shows (see
-// overridden), and parental control judges titles by the ratings and
-// genres set (see overriddenTraits). A field cleared, or set back to the
-// addon's value, follows the addon again. People and provider identifiers
-// are the addons' only.
+// the addons' values, and MDBList's ratings (see ratings.go), for every
+// user, wherever the item shows (see overridden), and parental control
+// judges titles by the ratings and genres set (see overriddenTraits). A
+// field cleared, or set back to the value it would have otherwise, follows
+// the addon again. People and provider identifiers are the addons' only.
 
 // UploadedImageTypes are the image types an administrator may upload for
 // an item.
@@ -577,31 +577,38 @@ func (set *overrideSet) rename(c *Credit) {
 	}
 }
 
-// overridden returns items with their local artwork (see applyLocal) and
-// what administrators changed of them (see overrideSet.apply). Items may
-// come from caches: they are copied, never changed in place.
+// overridden returns items with their local artwork (see applyLocal), the
+// ratings MDBList gives them (see keptScores), and what administrators
+// changed of them (see overrideSet.apply). Items may come from caches:
+// they are copied, never changed in place.
 func (s *Service) overridden(items []Item) []Item {
 	set := s.overridesNow()
 	local := s.localArtwork()
-	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 {
+	scores := s.keptScores(items)
+	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 && scores == nil {
 		return items
 	}
+	audience := scores != nil && s.audienceShown()
 	result := slices.Clone(items)
 	for i := range result {
 		if len(local) > 0 {
 			applyLocal(&result[i], local)
+		}
+		if scores != nil {
+			rate(&result[i], scores[i], audience)
 		}
 		set.apply(&result[i])
 	}
 	return result
 }
 
-// overriddenItem returns an item with its local artwork and what
-// administrators changed of it.
+// overriddenItem returns an item with its local artwork, its ratings from
+// MDBList and what administrators changed of it.
 func (s *Service) overriddenItem(item Item) Item {
 	if local := s.localArtwork(); len(local) > 0 {
 		applyLocal(&item, local)
 	}
+	item = s.rated(item)
 	s.overridesNow().apply(&item)
 	return item
 }
