@@ -81,6 +81,12 @@ func (h *handler) saveLibraryImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_library")
 		return
 	}
+	// A music library lists no posters to draw a generated image from; one
+	// already set to it keeps it.
+	if body.Image == addons.LibraryImageGenerated && !catalogs[index].Filterable && catalogs[index].Image != addons.LibraryImageGenerated {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
 	id := library.LibraryID(catalogs[index])
 	key := addons.LibraryKey{AddonID: addonID, CatalogType: body.CatalogType, CatalogID: body.CatalogID}
 	switch {

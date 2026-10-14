@@ -316,3 +316,58 @@ func TestRemovedAddonsTakeTheirLibraryImages(t *testing.T) {
 		}
 	}
 }
+
+// A music library, which lists no posters, may not be set to a generated
+// image, which the admin app does not offer it; one already set to it
+// keeps it.
+func TestMusicLibrariesTakeNoGeneratedImage(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/manifest.json" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "com.example.tones", "name": "Tones", "version": "1.0.0",
+			"resources": []string{"search", "stream", "catalog"}, "catalogs": []map[string]string{{"id": "top", "type": "album", "name": "Top albums"}}})
+	}))
+	t.Cleanup(server.Close)
+	var store *addons.Store
+	api := newTestAPI(t, 10, func(_ *Options, deps testDeps) { store = deps.addons })
+	administrator := api.signedIn("administrator", true)
+	addon, err := store.Install(t.Context(), addons.Shared(), server.URL+"/manifest.json", false)
+	if err != nil || !addon.HasMusic() {
+		t.Fatalf("installing the music addon: %v %+v", err, addon)
+	}
+	if _, err := store.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "album", CatalogID: "top"}}); err != nil {
+		t.Fatal(err)
+	}
+	albums := func(image string) map[string]any {
+		return map[string]any{"addonId": addon.ID.String(), "catalogType": "album", "catalogId": "top", "image": image}
+	}
+	image := func() any {
+		t.Helper()
+		for _, l := range administrator.libraries("shared") {
+			if l["catalogType"] == "album" && l["catalogId"] == "top" {
+				return l["image"]
+			}
+		}
+		t.Fatal("no music library")
+		return nil
+	}
+	if status, code, _ := administrator.libraryImageCall("shared", albums("automatic")); status != http.StatusOK || image() != "automatic" {
+		t.Errorf("automatic: %d %s", status, code)
+	}
+	if status, code, _ := administrator.libraryImageCall("shared", albums("generated")); status != http.StatusBadRequest || code != "invalid_request" ||
+		image() != "automatic" {
+		t.Errorf("generated: %d %s, image %v", status, code, image())
+	}
+	// Set before it was refused.
+	key := addons.LibraryKey{AddonID: addon.ID, CatalogType: "album", CatalogID: "top"}
+	if err := store.SetLibraryImage(t.Context(), addons.Shared(), key, addons.LibraryImageGenerated); err != nil {
+		t.Fatal(err)
+	}
+	if status, code, _ := administrator.libraryImageCall("shared", albums("generated")); status != http.StatusOK || image() != "generated" {
+		t.Errorf("generated, already set: %d %s, image %v", status, code, image())
+	}
+}
