@@ -513,6 +513,87 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Ajouter les versions à la page ouverte d’un titre',
     addVersionsToOpenPageHelp:
       'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version ; les autres apparaissent à la prochaine ouverture de la page.',
+    homeRows: 'Rangées d’accueil',
+    homeRowsHelp:
+      'Les rangées que le lecteur web ajoute à sa page d’accueil, à leur place, pour tous les utilisateurs ou pour ceux choisis. Chaque utilisateur peut désactiver une rangée dans Mon compte › Rangées d’accueil ; les sections propres au lecteur web restent dans ses Paramètres › Accueil. Chaque rangée laisse de côté ce que l’utilisateur ne peut pas voir : les titres au-dessus de son contrôle parental, les genres bloqués, les titres masqués et les bibliothèques qui lui sont masquées.',
+    homeRow: {
+      loading: 'Chargement des rangées d’accueil…',
+      empty: 'Aucune rangée d’accueil',
+      emptyHint: 'La page d’accueil du lecteur web n’affiche que ses propres sections.',
+      add: 'Ajouter une rangée',
+      addTitle: 'Ajouter une rangée d’accueil',
+      editTitle: (name: string) => `Modifier ${name}`,
+      edit: 'Modifier',
+      delete: 'Supprimer',
+      deleteTitle: (name: string) => `Supprimer ${name} ?`,
+      deleteBody:
+        'La rangée quitte la page d’accueil de chaque utilisateur, et sa bibliothèque quitte les autres applis.',
+      deleted: (name: string) => `${name} est supprimée.`,
+      saved: (name: string) => `${name} est enregistrée.`,
+      create: 'Ajouter',
+      creating: 'Ajout…',
+      save: 'Enregistrer',
+      saving: 'Enregistrement…',
+      name: 'Nom',
+      nameHelp: 'Le titre de la rangée sur la page d’accueil.',
+      becauseNameHelp:
+        'Chaque rangée porte ce nom, suivi du titre qu’elle suit : « Parce que vous avez regardé Film exemple ».',
+      kind: 'Type',
+      kinds: {
+        catalog: 'Un catalogue',
+        collection: 'Une collection',
+        because: 'Parce que vous avez regardé',
+        new: 'Nouveautés dans vos bibliothèques',
+      },
+      kindHelp: {
+        catalog:
+          'La première page d’un catalogue des addons du serveur, bibliothèque ou non, comme un catalogue des tendances. Les utilisateurs qui n’utilisent pas les addons du serveur, ou à qui sa bibliothèque est masquée, ne la voient pas.',
+        collection:
+          'Les titres d’une collection : une collection faite par les utilisateurs, une liste intelligente affichée comme collection, ou une collection d’un addon.',
+        because:
+          'Une rangée pour chacun des derniers films et séries vus par l’utilisateur, avec les titres similaires, comme les recommandations de films les donnent. Aucune tant que Titres similaires est désactivé.',
+        new: 'Les titres arrivés dans les catalogues des bibliothèques de l’utilisateur ces 7 derniers jours, les plus récents d’abord. Polyfin les compte depuis la première fois qu’il a vu chaque titre dans chaque catalogue.',
+      },
+      defaultNames: {
+        because: 'Parce que vous avez regardé',
+        new: 'Nouveautés dans vos bibliothèques',
+      },
+      catalog: 'Catalogue',
+      noCatalog: 'Les addons du serveur n’ont aucun catalogue à afficher.',
+      collection: 'Collection',
+      noCollection: 'Il n’y a encore aucune collection.',
+      collectionSources: {
+        users: 'Faite par les utilisateurs',
+        smart: 'Liste intelligente',
+        addon: 'Addon',
+      },
+      choose: 'Choisir…',
+      unknownCatalog: 'Un catalogue qui n’est plus proposé',
+      unknownCollection: 'Une collection qui n’est plus proposée',
+      count: 'Rangées',
+      countHelp: 'Combien des derniers films et séries vus ont une rangée, de 1 à 10.',
+      place: 'Place',
+      places: {
+        top: 'En haut',
+        resume: 'Après « Continuer de regarder »',
+        nextup: 'Après « À suivre »',
+        bottom: 'En bas',
+      },
+      placeHelp:
+        'Là où le lecteur web l’affiche. Quand la page d’accueil d’un utilisateur n’affiche pas cette section, la rangée prend la place précédente.',
+      shownTo: 'Affichée pour',
+      everyone: 'Tous les utilisateurs',
+      chosenUsers: 'Les utilisateurs choisis',
+      users: 'Utilisateurs',
+      noUser: 'Choisissez au moins un utilisateur.',
+      shownToUsers: (count: number) => (count === 1 ? '1 utilisateur' : `${count} utilisateurs`),
+      rowsCount: (count: number) => (count === 1 ? '1 rangée' : `${count} rangées`),
+      library: 'Aussi une bibliothèque dans les autres applis',
+      libraryHelp:
+        'On ne peut pas donner aux autres applis un nouveau type de section d’accueil : la rangée devient aussi une bibliothèque, sans type, qu’elles affichent parmi les bibliothèques de l’utilisateur, avec une rangée de ses derniers titres sur leur accueil.',
+      libraryBadge: 'Bibliothèque',
+      moveLabel: 'Déplacer',
+    },
     codeSize: (used: number, max: number) =>
       `${used} Ko sur ${max >= 1024 ? `${max / 1024} Mo` : `${max} Ko`}`,
     codeKeys: 'Tab insère des espaces ; appuyez sur Échap puis Tab pour quitter le champ.',

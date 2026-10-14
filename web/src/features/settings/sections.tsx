@@ -26,6 +26,7 @@ import NotificationTargets from '@/features/notifications/NotificationTargets'
 import CodeEditor from './CodeEditor'
 import CollectionLibraryApps from './CollectionLibraryApps'
 import BackupDestinations from './BackupDestinations'
+import HomeRows from './HomeRows'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
 import MetricsToken from './MetricsToken'
@@ -1138,63 +1139,71 @@ function WebPlayer({ form, update, error, limits }: SectionFormApi) {
     queryFn: ({ signal }) => fetchStatus(signal),
   })
   return (
-    <SettingsGroup>
-      {status.data?.webClient === true && (
-        <SettingRow anchor="open-web-player">
-          <ExternalButtonLink
-            href="/web/"
-            target="_blank"
-            rel="noopener"
-            icon={PlayIcon}
-            iconEnd={ArrowSquareOutIcon}
-          >
-            {s.openWebPlayer}
-          </ExternalButtonLink>
+    <>
+      <SettingsGroup>
+        {status.data?.webClient === true && (
+          <SettingRow anchor="open-web-player">
+            <ExternalButtonLink
+              href="/web/"
+              target="_blank"
+              rel="noopener"
+              icon={PlayIcon}
+              iconEnd={ArrowSquareOutIcon}
+            >
+              {s.openWebPlayer}
+            </ExternalButtonLink>
+          </SettingRow>
+        )}
+        <SettingRow anchor="custom-css">
+          <CodeEditor
+            label={s.customCss}
+            help={s.customCssHelp}
+            value={form.customCss}
+            onValue={(customCss) => update({ customCss })}
+            maxBytes={limits('customCss').max ?? 0}
+            error={error('custom-css')}
+          />
         </SettingRow>
-      )}
-      <SettingRow anchor="custom-css">
-        <CodeEditor
-          label={s.customCss}
-          help={s.customCssHelp}
-          value={form.customCss}
-          onValue={(customCss) => update({ customCss })}
-          maxBytes={limits('customCss').max ?? 0}
-          error={error('custom-css')}
+        <SettingRow anchor="custom-js">
+          <CodeEditor
+            label={s.customJs}
+            help={s.customJsHelp}
+            value={form.customJs}
+            onValue={(customJs) => update({ customJs })}
+            maxBytes={limits('customJs').max ?? 0}
+            error={error('custom-js')}
+          >
+            <Notice tone="warn">
+              <strong className="font-medium">{s.customJsWarningTitle}.</strong> {s.customJsWarning}
+            </Notice>
+          </CodeEditor>
+        </SettingRow>
+        <SettingRow anchor="login-disclaimer">
+          <CodeEditor
+            label={s.loginDisclaimer}
+            help={s.loginDisclaimerHelp}
+            value={form.loginDisclaimer}
+            onValue={(loginDisclaimer) => update({ loginDisclaimer })}
+            maxBytes={limits('loginDisclaimer').max ?? 0}
+            rows={4}
+            error={error('login-disclaimer')}
+          />
+        </SettingRow>
+        <SwitchRow
+          anchor="add-versions-to-open-page"
+          label={s.addVersionsToOpenPage}
+          help={s.addVersionsToOpenPageHelp}
+          checked={form.addVersionsToOpenPage}
+          onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
         />
-      </SettingRow>
-      <SettingRow anchor="custom-js">
-        <CodeEditor
-          label={s.customJs}
-          help={s.customJsHelp}
-          value={form.customJs}
-          onValue={(customJs) => update({ customJs })}
-          maxBytes={limits('customJs').max ?? 0}
-          error={error('custom-js')}
-        >
-          <Notice tone="warn">
-            <strong className="font-medium">{s.customJsWarningTitle}.</strong> {s.customJsWarning}
-          </Notice>
-        </CodeEditor>
-      </SettingRow>
-      <SettingRow anchor="login-disclaimer">
-        <CodeEditor
-          label={s.loginDisclaimer}
-          help={s.loginDisclaimerHelp}
-          value={form.loginDisclaimer}
-          onValue={(loginDisclaimer) => update({ loginDisclaimer })}
-          maxBytes={limits('loginDisclaimer').max ?? 0}
-          rows={4}
-          error={error('login-disclaimer')}
-        />
-      </SettingRow>
-      <SwitchRow
-        anchor="add-versions-to-open-page"
-        label={s.addVersionsToOpenPage}
-        help={s.addVersionsToOpenPageHelp}
-        checked={form.addVersionsToOpenPage}
-        onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
-      />
-    </SettingsGroup>
+      </SettingsGroup>
+      <SettingsGroup title={s.homeRows}>
+        <SettingRow anchor="home-rows">
+          <p className="mb-4 max-w-[60ch] text-small text-ink-3">{s.homeRowsHelp}</p>
+          <HomeRows />
+        </SettingRow>
+      </SettingsGroup>
+    </>
   )
 }
 

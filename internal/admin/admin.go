@@ -23,6 +23,7 @@ import (
 	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/config"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
 	"github.com/moodiness/polyfin/internal/localfiles"
@@ -143,6 +144,11 @@ type Options struct {
 	// they are saved.
 	SmartLists    *smartlists.Store
 	SmartPreviews SmartPreviews
+	// HomeRows keeps the rows of the web player's home page, and the rows
+	// each user turned off; nil keeps none. HomeRowChoices tells the
+	// collections they may list.
+	HomeRows       *homerows.Store
+	HomeRowChoices HomeRowChoices
 }
 
 type handler struct {
@@ -204,6 +210,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/resume", h.signedIn(h.ownResume))
 	mux.Handle("DELETE /admin/api/account/resume/{id}", h.signedIn(h.removeOwnResume))
 	mux.Handle("GET /admin/api/account/hidden", h.signedIn(h.ownHidden))
+	mux.Handle("GET /admin/api/account/home-rows", h.signedIn(h.ownHomeRows))
+	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
@@ -278,6 +286,22 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/backup/restore/discard", backups(h.discardRestore))
 	mux.Handle("POST /admin/api/backup/restore", backups(h.startRestore))
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
+	// Without a store, as in tests that leave it out, there are no rows.
+	homeRows := func(next http.HandlerFunc) http.Handler {
+		return h.administrator(func(w http.ResponseWriter, r *http.Request) {
+			if h.HomeRows == nil {
+				writeError(w, http.StatusNotFound, "not_found")
+				return
+			}
+			next(w, r)
+		})
+	}
+	mux.Handle("GET /admin/api/home-rows", homeRows(h.homeRows))
+	mux.Handle("GET /admin/api/home-rows/choices", homeRows(h.homeRowChoices))
+	mux.Handle("POST /admin/api/home-rows", homeRows(h.createHomeRow))
+	mux.Handle("PUT /admin/api/home-rows/order", homeRows(h.orderHomeRows))
+	mux.Handle("PATCH /admin/api/home-rows/{id}", homeRows(h.updateHomeRow))
+	mux.Handle("DELETE /admin/api/home-rows/{id}", homeRows(h.deleteHomeRow))
 	server := notificationRoutes{h: h, owner: serverTargets}
 	mux.Handle("GET /admin/api/notifications", h.administrator(server.list))
 	mux.Handle("POST /admin/api/notifications/targets", h.administrator(server.create))

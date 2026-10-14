@@ -204,6 +204,9 @@ const common = {
     invalid_backup_folder:
       'The backups folder must be an absolute path to a folder Polyfin can write to.',
     too_many_destinations: 'There are already 10 backup destinations: delete one first.',
+    too_many_home_rows: 'There are already 20 home rows: delete one first.',
+    invalid_home_row:
+      'Give the row a name of at most 100 characters, and choose its catalog or its collection.',
     invalid_destination_kind: 'Choose the kind of destination from the list.',
     invalid_destination_address:
       'Enter the address as asked: an http:// or https:// address without a path for S3 storage, a host name or IP address for an SFTP server, the address of a folder for a WebDAV server.',

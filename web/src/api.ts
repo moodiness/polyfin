@@ -1287,6 +1287,84 @@ export type AccountTitle = {
   posterId: string
 }
 
+/** What a home row of the web player lists. */
+export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new'
+
+/** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
+export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
+
+/**
+ * A row of the web player's home page (Settings › Web player › Home rows). A catalog row names its
+ * catalog, a collection row its collection; `count` is how many rows Because you watched makes;
+ * `users` are those a row not shown to everyone is shown to; `library` also makes it a library in
+ * other apps.
+ */
+export type HomeRow = {
+  id: string
+  name: string
+  kind: HomeRowKind
+  place: HomeRowPlace
+  addonId: string
+  catalogType: string
+  catalogId: string
+  collectionId: string
+  count: number
+  everyone: boolean
+  users: string[]
+  library: boolean
+}
+
+export type HomeRowDraft = Omit<HomeRow, 'id'>
+
+/** A catalog of the server's addons a home row may list. */
+export type HomeRowCatalog = {
+  addonId: string
+  addonName: string
+  catalogType: string
+  catalogId: string
+  catalogName: string
+}
+
+/** A collection a home row may list: made by users, a smart list or an addon's. */
+export type HomeRowCollection = { id: string; name: string; source: 'users' | 'smart' | 'addon' }
+
+export const fetchHomeRows = (signal?: AbortSignal) =>
+  request<{ rows: HomeRow[] }>('GET', '/home-rows', undefined, signal)
+
+export const fetchHomeRowChoices = (signal?: AbortSignal) =>
+  request<{ catalogs: HomeRowCatalog[]; collections: HomeRowCollection[] }>(
+    'GET',
+    '/home-rows/choices',
+    undefined,
+    signal,
+  )
+
+export const createHomeRow = (draft: HomeRowDraft) => request<HomeRow>('POST', '/home-rows', draft)
+
+export const updateHomeRow = (id: string, draft: HomeRowDraft) =>
+  request<HomeRow>('PATCH', `/home-rows/${seg(id)}`, draft)
+
+export const deleteHomeRow = (id: string) => request<void>('DELETE', `/home-rows/${seg(id)}`)
+
+/** Puts the rows in this order, and answers them. */
+export const orderHomeRows = (ids: string[]) =>
+  request<{ rows: HomeRow[] }>('PUT', '/home-rows/order', { ids })
+
+/** A home row shown to the signed-in user, and whether they turned it off. */
+export type OwnHomeRow = {
+  id: string
+  name: string
+  kind: HomeRowKind
+  place: HomeRowPlace
+  off: boolean
+}
+
+export const fetchOwnHomeRows = (signal?: AbortSignal) =>
+  request<{ rows: OwnHomeRow[] }>('GET', '/account/home-rows', undefined, signal)
+
+export const setOwnHomeRow = (id: string, off: boolean) =>
+  request<void>('PUT', `/account/home-rows/${seg(id)}`, { off })
+
 /** A title of Continue Watching: its resume point and runtime in seconds, 0 when unknown. */
 export type ResumeTitle = {
   item: AccountTitle
@@ -3036,6 +3114,9 @@ export const queryKeys = {
   myDevices: ['account', 'devices'] as const,
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
+  ownHomeRows: ['account', 'home-rows'] as const,
+  homeRows: ['home-rows'] as const,
+  homeRowChoices: ['home-rows', 'choices'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   jellyfinImport: ['jellyfin-import'] as const,

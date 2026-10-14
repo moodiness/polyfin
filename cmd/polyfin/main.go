@@ -32,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/jellyfinimport"
@@ -422,6 +423,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// as playback reads them; their measures end before playback closes.
 	songLoudness := loudness.New(pool, meter, logger, store.Settings)
 	defer songLoudness.Close()
+	homeRows := homerows.New(pool)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:     serverID,
 		Accounts:     store,
@@ -444,6 +446,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Loudness:       songLoudness,
 		Playlists:      playlists.New(pool),
 		Collections:    collections.New(pool),
+		HomeRows:       homeRows,
 		Thumbnails:     images,
 		Logger:         logger,
 		Activity:       activityLog,
@@ -484,6 +487,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		LibraryImages: lib,
 		SmartLists:    smartlists.New(pool),
 		SmartPreviews: lib,
+		// The rows of the web player's home page, and the collections they
+		// may list as the Jellyfin API tells them.
+		HomeRows:       homeRows,
+		HomeRowChoices: jellyfinAPI,
 		Health: admin.HealthSources{
 			Addons:       addonClient,
 			Cache:        sources,

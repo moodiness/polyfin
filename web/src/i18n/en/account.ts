@@ -9,11 +9,21 @@ const account = {
       tracking: 'Tracking',
       resume: 'Continue Watching',
       hidden: 'Hidden titles',
+      homeRows: 'Home rows',
       import: 'Import from another server',
       appImport: 'Import from an app',
       notifications: 'Notifications',
       devices: 'Devices',
       password: 'Password',
+    },
+    /** My account › Home rows. */
+    homeRows: {
+      help: 'The rows the administrator adds to the web player’s home page for you. Turn one off to leave it out of your home page, and out of your libraries in other apps when it is one there too. The web player’s own sections stay in its Settings › Home.',
+      empty: 'No home row',
+      emptyHelp: 'The administrator added no row to the web player’s home page for you.',
+      shown: (name: string) => `Show ${name} on your home page`,
+      on: (name: string) => `${name} is back on your home page.`,
+      off: (name: string) => `${name} is off your home page.`,
     },
     /** My account › Continue Watching and Hidden titles. */
     watching: {

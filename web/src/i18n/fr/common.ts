@@ -222,6 +222,9 @@ const common: typeof en = {
       'Le dossier des sauvegardes doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     too_many_destinations:
       'Il y a déjà 10 destinations des sauvegardes : supprimez-en une d’abord.',
+    too_many_home_rows: 'Il y a déjà 20 rangées d’accueil : supprimez-en une d’abord.',
+    invalid_home_row:
+      'Donnez à la rangée un nom de 100 caractères au plus, et choisissez son catalogue ou sa collection.',
     invalid_destination_kind: 'Choisissez le type de destination dans la liste.',
     invalid_destination_address:
       'Saisissez l’adresse demandée : une adresse http:// ou https:// sans chemin pour un stockage S3, un nom d’hôte ou une adresse IP pour un serveur SFTP, l’adresse d’un dossier pour un serveur WebDAV.',

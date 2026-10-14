@@ -3,6 +3,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
   FilmSlateIcon,
+  RowsIcon,
   TelevisionSimpleIcon,
   XIcon,
 } from '@phosphor-icons/react'
@@ -10,12 +11,15 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
   fetchOwnHidden,
+  fetchOwnHomeRows,
   fetchOwnResume,
   queryClient,
   queryKeys,
   removeOwnResume,
+  setOwnHomeRow,
   showOwnHidden,
   type AccountTitle,
+  type OwnHomeRow,
 } from '@/api'
 import { errorMessage, formatClock, formatEpisode } from '@/format'
 import { useI18n } from '@/i18n'
@@ -28,6 +32,7 @@ import {
   Row,
   RowList,
   SkeletonRows,
+  Switch,
   useToast,
 } from '@/ui'
 
@@ -197,6 +202,66 @@ export function HiddenList() {
                 >
                   {text.showAgain}
                 </Button>
+              }
+            />
+          ))}
+        </RowList>
+      )}
+    </div>
+  )
+}
+
+/** My account › Home rows: the rows shown to the user on the web player's home, each with a switch. */
+export function HomeRowList() {
+  const { t } = useI18n()
+  const text = t.account.homeRows
+  const places = t.settings.homeRow.places
+  const kinds = t.settings.homeRow.kinds
+  const toast = useToast()
+  const rows = useQuery({
+    queryKey: queryKeys.ownHomeRows,
+    queryFn: ({ signal }) => fetchOwnHomeRows(signal),
+  })
+  const change = useMutation({
+    mutationFn: (row: OwnHomeRow) => setOwnHomeRow(row.id, !row.off),
+    onSuccess: (_data, row) => toast(row.off ? text.on(row.name) : text.off(row.name)),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.ownHomeRows }),
+  })
+
+  if (rows.isPending) return <SkeletonRows rows={2} boxed label={t.common.loading} />
+  if (rows.isError) {
+    return (
+      <InlineError onRetry={() => void rows.refetch()} retrying={rows.isFetching}>
+        {errorMessage(t, rows.error)}
+      </InlineError>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {change.isError && <Notice tone="danger">{errorMessage(t, change.error)}</Notice>}
+      {rows.data.rows.length === 0 ? (
+        <EmptyState icon={RowsIcon} title={text.empty}>
+          {text.emptyHelp}
+        </EmptyState>
+      ) : (
+        <RowList aria-label={t.account.sections.homeRows}>
+          {rows.data.rows.map((row) => (
+            <Row
+              key={row.id}
+              title={row.name}
+              muted={row.off}
+              meta={
+                <span className="truncate">
+                  {kinds[row.kind]} · {places[row.place]}
+                </span>
+              }
+              trailing={
+                <Switch
+                  checked={!row.off}
+                  label={text.shown(row.name)}
+                  disabled={change.isPending && change.variables.id === row.id}
+                  onChange={() => change.mutate(row)}
+                />
               }
             />
           ))}

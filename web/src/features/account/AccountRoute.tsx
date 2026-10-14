@@ -8,6 +8,7 @@ import {
   EyeSlashIcon,
   ListChecksIcon,
   PasswordIcon,
+  RowsIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
@@ -34,13 +35,14 @@ import AppImport, { AppConnections } from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
-import { HiddenList, ResumeList } from './WatchingLists'
+import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 
 const sectionIds = [
   'statistics',
   'tracking',
   'resume',
   'hidden',
+  'home-rows',
   'import',
   'app-import',
   'notifications',
@@ -53,9 +55,9 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, importing from
- * another server and from an app (unless the server turns it off), notifications, devices and
- * password, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows,
+ * importing from another server and from an app (unless the server turns it off), notifications,
+ * devices and password, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -117,6 +119,12 @@ export default function AccountRoute() {
               to: '#resume',
             },
             { id: 'hidden', label: text.sections.hidden, icon: EyeSlashIcon, to: '#hidden' },
+            {
+              id: 'home-rows',
+              label: text.sections.homeRows,
+              icon: RowsIcon,
+              to: '#home-rows',
+            },
             ...(importing
               ? [
                   {
@@ -162,6 +170,9 @@ export default function AccountRoute() {
       </AccountSection>
       <AccountSection id="hidden" title={text.sections.hidden} help={text.watching.hiddenHelp}>
         <HiddenList />
+      </AccountSection>
+      <AccountSection id="home-rows" title={text.sections.homeRows} help={text.homeRows.help}>
+        <HomeRowList />
       </AccountSection>
       {importing && (
         <AccountSection

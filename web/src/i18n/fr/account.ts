@@ -10,11 +10,21 @@ const account: typeof en = {
       tracking: 'Suivi',
       resume: 'Continuer de regarder',
       hidden: 'Titres masqués',
+      homeRows: 'Rangées d’accueil',
       import: 'Importer depuis un autre serveur',
       appImport: 'Importer depuis une appli',
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
+    },
+    homeRows: {
+      help: 'Les rangées que l’administrateur ajoute pour vous à la page d’accueil du lecteur web. Désactivez-en une pour la retirer de votre page d’accueil, et de vos bibliothèques dans les autres applis quand elle en est aussi une. Les sections propres au lecteur web restent dans ses Paramètres › Accueil.',
+      empty: 'Aucune rangée d’accueil',
+      emptyHelp:
+        'L’administrateur n’a ajouté aucune rangée pour vous à la page d’accueil du lecteur web.',
+      shown: (name: string) => `Afficher ${name} sur votre page d’accueil`,
+      on: (name: string) => `${name} est de retour sur votre page d’accueil.`,
+      off: (name: string) => `${name} est retirée de votre page d’accueil.`,
     },
     watching: {
       resumeHelp:

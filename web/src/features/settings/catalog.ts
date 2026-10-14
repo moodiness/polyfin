@@ -877,6 +877,13 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).addVersionsToOpenPageHelp,
     keywords: ['versions', 'jellyfin-web'],
   },
+  {
+    section: 'web-player',
+    anchor: 'home-rows',
+    label: (t) => s(t).homeRows,
+    help: (t) => s(t).homeRowsHelp,
+    keywords: ['home', 'rows', 'jellyfin-web', 'because you watched', 'trending'],
+  },
   // Diagnostics
   {
     section: 'diagnostics',
