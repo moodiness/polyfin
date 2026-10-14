@@ -235,6 +235,8 @@ const sources = {
     tracks: 'Tracks',
     albums: 'Albums',
     artists: 'Artists',
+    gained: 'With a gain',
+    measured: 'Measured',
     leftOut: 'Left out',
     videos: 'Videos',
     datedBy: {

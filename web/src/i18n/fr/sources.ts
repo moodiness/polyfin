@@ -253,6 +253,8 @@ const sources: typeof en = {
     tracks: 'Morceaux',
     albums: 'Albums',
     artists: 'Artistes',
+    gained: 'Avec un gain',
+    measured: 'Mesurés',
     leftOut: 'Laissés de côté',
     videos: 'Vidéos',
     datedBy: {

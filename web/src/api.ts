@@ -203,6 +203,10 @@ export type Settings = {
   criticRatingShows: 'critics' | 'audience'
   /** Whether songs get lyrics from LRCLIB, which is sent their artist, title, album and length. */
   lyrics: boolean
+  /** Whether apps get the gains of songs and albums known, which even the volume between songs. */
+  evenVolume: boolean
+  /** Which songs without a gain have their loudness measured: none, local songs, or addons' songs too. */
+  measureLoudness: 'off' | 'local' | 'all'
   /** Percent of a title's runtime past which a reported position marks it played. */
   playedPercent: number
   /** Percent of a title's runtime past which a reported position is kept to resume; below playedPercent. */
@@ -559,6 +563,9 @@ export type LocalFolder = {
   /** A music folder's albums, and their artists. */
   albums: number
   artists: number
+  /** A music folder's tracks with a gain, from their tags or measured, and those measured. */
+  gained: number
+  measured: number
   /**
    * A home videos folder's videos by where their dates come from: an NFO file, the recording's
    * creation time, or the file's modification time.

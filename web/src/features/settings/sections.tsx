@@ -509,6 +509,30 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           checked={form.lyrics}
           onChange={(lyrics) => update({ lyrics })}
         />
+        <SwitchRow
+          anchor="even-volume"
+          label={s.evenVolume}
+          help={s.evenVolumeHelp}
+          checked={form.evenVolume}
+          onChange={(evenVolume) => update({ evenVolume })}
+        />
+        <FieldRow
+          anchor="measure-loudness"
+          label={s.measureLoudness}
+          help={s.measureLoudnessHelp}
+          error={error('measure-loudness')}
+        >
+          <Select
+            value={form.measureLoudness}
+            options={(['off', 'local', 'all'] as const).map((value) => ({
+              value,
+              label: s.measureLoudnessChoices[value],
+            }))}
+            onValue={(measureLoudness) => update({ measureLoudness })}
+            disabled={!form.evenVolume}
+            className="max-w-xs"
+          />
+        </FieldRow>
       </SettingsGroup>
       <SettingsGroup title={groups.thresholds}>
         <div className="grid gap-x-8 sm:grid-cols-2">

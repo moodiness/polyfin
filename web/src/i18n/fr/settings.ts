@@ -376,6 +376,17 @@ const settings: typeof en = {
     lyrics: 'Paroles des chansons depuis LRCLIB',
     lyricsHelp:
       'Les applications affichent les paroles des chansons, synchronisées ligne par ligne quand LRCLIB, une base de paroles libre, les connaît. Polyfin recherche une chanson une seule fois, par son artiste, son titre, son album et sa durée, quand sa lecture commence ou que sa fiche ou ses paroles s’ouvrent. Si cette option est désactivée, les chansons n’ont pas de paroles et LRCLIB n’est jamais consulté.',
+    evenVolume: 'Égaliser le volume entre les chansons',
+    evenVolumeHelp:
+      'Les applications montent ou baissent chaque chanson, ou chaque album, au même volume, d’après les balises ReplayGain des chansons locales ou leur volume mesuré. Les chansons elles-mêmes ne changent pas. Si cette option est désactivée, les applications ne reçoivent aucun gain et rien n’est mesuré.',
+    measureLoudness: 'Mesurer le volume des chansons sans gain',
+    measureLoudnessHelp:
+      'FFmpeg mesure le volume des chansons sans balise ReplayGain, deux à la fois à la priorité la plus basse, une seule fois chacune : les chansons locales après une analyse, celles des addons après leur première lecture. Les chansons de plus de 15 minutes et les livres audio ne sont jamais mesurés.',
+    measureLoudnessChoices: {
+      off: 'Non',
+      local: 'Chansons locales',
+      all: 'Chansons locales et des addons',
+    },
     playedPercent: 'Marqué comme vu après (%)',
     playedPercentHelp: (r: RangeText) =>
       `Un titre est marqué comme vu dès que la lecture dépasse cette part de sa durée. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin.`,
@@ -529,7 +540,7 @@ const settings: typeof en = {
         'Le nom du serveur, sa langue, la connexion des applications et leur découverte du serveur, et la recherche de nouvelles versions.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content:
-        'Passer l’intro, titres similaires, images générées, notes, paroles des chansons et seuils de lecture.',
+        'Passer l’intro, titres similaires, images générées, notes, paroles des chansons, volume égal entre les chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
       security:
         'Addons et importations des utilisateurs, comptes bloqués, appareils inutilisés et proxys inverses.',

@@ -383,8 +383,9 @@ function KindChange({ folder, kind }: { folder: LocalFolder; kind: FolderKind })
 
 /**
  * A folder's figures: its files, those matched, how, and the others, its last scan, and why it
- * cannot be read when it cannot. A music folder's are its tracks, albums and artists, and its
- * tracks left out; a home videos folder's its videos, by where their dates come from.
+ * cannot be read when it cannot. A music folder's are its tracks, albums and artists, its tracks
+ * with a gain and those measured, and its tracks left out; a home videos folder's its videos, by
+ * where their dates come from.
  */
 export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const { language, t } = useI18n()
@@ -395,6 +396,8 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           { label: text.tracks, value: folder.files, warn: false },
           { label: text.albums, value: folder.albums, warn: false },
           { label: text.artists, value: folder.artists, warn: false },
+          { label: text.gained, value: folder.gained, warn: false },
+          { label: text.measured, value: folder.measured, warn: false },
           { label: text.leftOut, value: folder.unmatched, warn: folder.unmatched > 0 },
         ]
       : folder.kind === 'homevideos'
@@ -413,13 +416,15 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
     .filter((method) => folder.matchedBy[method] > 0)
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
+  // Figures wrap onto rows: only those after the first of their row are set apart.
+  const columns = figures.length === 4 ? 4 : 3
   return (
     <PanelSection>
-      <dl className={cx('grid gap-y-4', figures.length === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
+      <dl className={cx('grid gap-y-4', columns === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
         {figures.map((figure, i) => (
           <div
             key={figure.label}
-            className={cx('min-w-0 px-4 first:pl-0', i > 0 && 'border-l border-line')}
+            className={cx('min-w-0 px-4', i % columns === 0 ? 'pl-0' : 'border-l border-line')}
           >
             <dt className="text-small text-ink-3">{figure.label}</dt>
             <dd

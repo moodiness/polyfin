@@ -463,6 +463,21 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'even-volume',
+    label: (t) => s(t).evenVolume,
+    help: (t) => s(t).evenVolumeHelp,
+    keywords: ['ReplayGain', 'NormalizationGain', 'volume', 'loudness', 'music', 'songs'],
+  },
+  {
+    section: 'content',
+    anchor: 'measure-loudness',
+    label: (t) => s(t).measureLoudness,
+    help: (t) => s(t).measureLoudnessHelp,
+    keywords: ['EBU R128', 'LUFS', 'ebur128', 'loudness', 'volume', 'FFmpeg'],
+    codes: ['invalid_measure_loudness'],
+  },
+  {
+    section: 'content',
     anchor: 'played-percent',
     label: (t) => s(t).playedPercent,
     help: (t, r) => s(t).playedPercentHelp(r('playedPercent')),

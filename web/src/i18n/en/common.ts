@@ -188,6 +188,7 @@ const common = {
     mdblist_unreachable:
       'MDBList could not be reached to check the key. Nothing was saved: try again later.',
     invalid_critic_rating_shows: 'Choose from the list which score the critic rating shows.',
+    invalid_measure_loudness: 'Choose from the list which songs have their loudness measured.',
     invalid_segment_order:
       'The order of the skip marker sources must list each source once. Reload the page.',
     invalid_trakt_app:

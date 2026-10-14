@@ -368,6 +368,13 @@ const settings = {
     lyrics: 'Song lyrics from LRCLIB',
     lyricsHelp:
       'Apps show the lyrics of songs, synced line by line when LRCLIB, a free lyrics database, has them. Polyfin looks a song up once, by its artist, title, album and length, when it starts playing or its details or lyrics open. When off, songs have no lyrics and LRCLIB is never asked.',
+    evenVolume: 'Even the volume between songs',
+    evenVolumeHelp:
+      'Apps raise or lower each song, or each album, to the same loudness, from the ReplayGain tags of local songs or their measured loudness. The songs themselves are not changed. When off, apps get no gain and nothing is measured.',
+    measureLoudness: 'Measure the loudness of songs without a gain',
+    measureLoudnessHelp:
+      'FFmpeg measures the loudness of the songs that have no ReplayGain tag, two at a time at the lowest priority, once each: local songs after a scan, addon songs after their first play. Songs longer than 15 minutes and audiobooks are never measured.',
+    measureLoudnessChoices: { off: 'Off', local: 'Local songs', all: 'Local and addon songs' },
     playedPercent: 'Marked played after (%)',
     playedPercentHelp: (r: RangeText) =>
       `A title is marked played once playback goes past this share of its length. From ${r.min} to ${r.max}; ${r.default} by default, like Jellyfin.`,
@@ -519,7 +526,7 @@ const settings = {
         'The server’s name, its language, how apps sign in and find it, and the check for new versions.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
       content:
-        'Skip intro buttons, similar titles, generated images, ratings, song lyrics and playback thresholds.',
+        'Skip intro buttons, similar titles, generated images, ratings, song lyrics, even volume between songs and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
       security:
         'Users’ own addons and imports, blocked accounts, unused devices and reverse proxies.',
