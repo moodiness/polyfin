@@ -10,6 +10,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/audiosegments"
+	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
@@ -105,6 +106,9 @@ type Options struct {
 	// Recordings schedules and keeps Live TV recordings; nil, or one
 	// without a folder, records nothing.
 	Recordings *recordings.Service
+	// Backups backs the database up into the folder the settings give, and
+	// restores a backup; nil, or one while backups are off, lists none.
+	Backups *backup.Service
 	// Trackers sends what users watch to the tracking services they
 	// connected; nil sends nothing.
 	Trackers *trackers.Service
@@ -248,6 +252,7 @@ func New(options Options) *Handler {
 	h.appRoutes(rt)
 	h.subtitleUploadRoutes(rt)
 	h.absentRoutes(rt)
+	h.backupRoutes(rt)
 	h.metadataRoutes(rt)
 	h.rootRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)

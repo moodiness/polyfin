@@ -11,7 +11,7 @@ import (
 // absentRoutes registers dashboard features Polyfin does without: plugins,
 // packages and their repositories, browsing the server's file system,
 // library folders and metadata providers, Live TV tuners and listing
-// providers, the startup wizard and backups. Each answers as a Jellyfin 12.2
+// providers, and the startup wizard. Each answers as a Jellyfin 12.2
 // on which nothing of the kind is configured, so that apps probing them get
 // empty lists and defaults rather than 404, and writes are refused the way
 // Jellyfin refuses them for things that do not exist. No write here claims
@@ -111,20 +111,6 @@ func (h *Handler) absentRoutes(rt *router) {
 	administrator(http.MethodPost, "/Startup/User", refused)
 	administrator(http.MethodPost, "/Startup/Configuration", refused)
 	administrator(http.MethodPost, "/Startup/RemoteAccess", refused)
-
-	// Backups: there are none. Deliberate difference: Jellyfin creates one
-	// on request; Polyfin's database is backed up outside the server, so it
-	// refuses.
-	administrator(http.MethodGet, "/Backup", emptyList)
-	administrator(http.MethodPost, "/Backup/Create", refused)
-	administrator(http.MethodGet, "/Backup/Manifest", func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := queryParam(r, "path"); !ok {
-			validationProblem(w, map[string][]string{"path": {"A value for the 'path' parameter or property was not provided."}})
-			return
-		}
-		notFoundProblem(w)
-	})
-	administrator(http.MethodPost, "/Backup/Restore", notFound)
 }
 
 func emptyList(w http.ResponseWriter, _ *http.Request) {

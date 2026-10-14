@@ -72,11 +72,6 @@ func TestAbsentFeaturesAnswerAsAnUnconfiguredJellyfin(t *testing.T) {
 		{"POST", "/Startup/User", map[string]string{"Name": "x", "Password": "y"}, 403, "", "", 403},
 		{"POST", "/Startup/Configuration", map[string]string{"ServerName": "x"}, 403, "", "", 403},
 		{"POST", "/Startup/RemoteAccess", map[string]bool{"EnableRemoteAccess": true}, 403, "", "", 403},
-		{"GET", "/Backup", nil, 200, "backups", "[]", 403},
-		{"POST", "/Backup/Create", map[string]any{}, 403, "", "", 403},
-		{"GET", "/Backup/Manifest?path=x", nil, 404, "", `"Not Found"`, 403},
-		{"GET", "/Backup/Manifest", nil, 400, "", "path", 403},
-		{"POST", "/Backup/Restore", map[string]string{"ArchiveFileName": "x.zip"}, 404, "", `"Not Found"`, 403},
 	} {
 		name := c.method + " " + c.path
 		status, body := s.call(c.method, c.path, admin, c.body)
