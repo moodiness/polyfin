@@ -57,6 +57,8 @@ const statistics = {
     shared: 'Shared',
     sharedHelp: 'Played by a guest through a share link',
     sharedLink: 'Shared link',
+    /** The device of a guest's playback through a share link. */
+    webBrowser: 'Web browser',
     showMore: 'Show more',
     loadingMore: 'Loading…',
   },

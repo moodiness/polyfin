@@ -23,7 +23,8 @@ func (s *Service) shareEvent(link accounts.ShareLink) Event {
 	ev.User = &UserJSON{ID: link.User.ID.String(), Name: link.User.Name}
 	ev.Share = &ShareJSON{ID: link.ID.String(), ItemID: link.Item.String(), Kind: link.Kind, Name: link.Title, ExpiresAt: link.ExpiresAt.UTC()}
 	ev.Title = s.phrase("Shared link played: %s", "Lien partagé lu : %s", link.Title)
-	ev.Message = s.phrase("A link shared by %s played %s.", "Un lien partagé par %s a lu %s.", link.User.Name, link.Title)
+	ev.Message = s.phrase("A guest played %[2]s through the link shared by %[1]s.",
+		"Un invité a lu %[2]s grâce au lien partagé par %[1]s.", link.User.Name, link.Title)
 	ev.URL = s.adminLink("/me/account#shared-links")
 	return ev
 }

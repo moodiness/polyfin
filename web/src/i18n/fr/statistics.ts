@@ -60,6 +60,7 @@ const statistics: typeof en = {
     shared: 'Partagé',
     sharedHelp: 'Lu par un invité grâce à un lien de partage',
     sharedLink: 'Lien partagé',
+    webBrowser: 'navigateur web',
     showMore: 'Afficher plus',
     loadingMore: 'Chargement…',
   },

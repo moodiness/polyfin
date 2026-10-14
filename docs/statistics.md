@@ -70,7 +70,7 @@ The admin API serves the statistics, the history and the CSV, everyone's to admi
   - `users`: `id`, `name`, `plays`, `played`;
   - `buckets`: each day or month with playbacks, `start` as `YYYY-MM-DD`, `played`, and `users` (`id`, `played`);
   - `movies`, `series`, `channels`: `id`, the latest `name`, `plays`, `users` (how many played it), `played`;
-  - `apps` (`name`), `devices` (`name`, `app`) and `methods` (`method`: `direct_play`, `direct_stream`, `conversion`, or empty when no report told), each with `plays` and `played`;
+  - `apps` (`name`, `shared`), `devices` (`name`, `app`, `shared`) and `methods` (`method`: `direct_play`, `direct_stream`, `conversion`, or empty when no report told), each with `plays` and `played`; `shared` is true for the app and device of guests' playbacks through share links, which the admin names "Shared link" and "Web browser" in its language;
   - `hours`: 168 numbers, the seconds watched in each hour of the week from Monday 0:00;
   - `historyEnabled` and `historyDays`, the settings.
 

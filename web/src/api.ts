@@ -3263,8 +3263,9 @@ export type Statistics = {
   movies: RankedTitle[]
   series: RankedTitle[]
   channels: RankedTitle[]
-  apps: { name: string; plays: number; played: number }[]
-  devices: { name: string; app: string; plays: number; played: number }[]
+  /** shared marks the app and device of guests' playbacks through share links. */
+  apps: { name: string; shared: boolean; plays: number; played: number }[]
+  devices: { name: string; app: string; shared: boolean; plays: number; played: number }[]
   methods: { method: PlayMethod; plays: number; played: number }[]
   hours: number[]
   /** Whether the history is kept, and for how many days. */

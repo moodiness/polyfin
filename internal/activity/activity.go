@@ -381,6 +381,7 @@ func (s *Store) ShareLinkExpiredAt(ctx context.Context, link accounts.ShareLink)
 // SharedPlayed records that a guest without an account, from address,
 // played the title of link.
 func (s *Store) SharedPlayed(ctx context.Context, link accounts.ShareLink, address string) {
-	s.record(ctx, Entry{Name: s.phrase("A link shared by %s played %s", "Un lien partagé par %s a lu %s", link.User.Name, link.Title),
+	s.record(ctx, Entry{Name: s.phrase("A guest played %[2]s through the link shared by %[1]s",
+		"Un invité a lu %[2]s grâce au lien partagé par %[1]s", link.User.Name, link.Title),
 		Type: SharedPlayback, UserID: &link.User.ID, ItemID: new(link.Item.String()), ShortOverview: s.address(address)})
 }

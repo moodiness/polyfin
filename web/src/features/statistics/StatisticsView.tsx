@@ -144,8 +144,8 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
     {
       title: text.apps,
       items: statistics.apps.map((app) => ({
-        key: app.name,
-        label: app.name || text.unknownApp,
+        key: `${app.shared}|${app.name}`,
+        label: app.shared ? text.sharedLink : app.name || text.unknownApp,
         detail: `${formatSpan(app.played, language)} · ${text.plays(app.plays)}`,
         value: app.played,
       })),
@@ -153,8 +153,10 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
     {
       title: text.devices,
       items: statistics.devices.map((device) => ({
-        key: `${device.app}|${device.name}`,
-        label: text.appOn(device.app, device.name) || text.unknownDevice,
+        key: `${device.shared}|${device.app}|${device.name}`,
+        label: device.shared
+          ? text.appOn(text.sharedLink, text.webBrowser)
+          : text.appOn(device.app, device.name) || text.unknownDevice,
         detail: `${formatSpan(device.played, language)} · ${text.plays(device.plays)}`,
         value: device.played,
       })),

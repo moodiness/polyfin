@@ -456,7 +456,7 @@ The guest plays as the sharer would, with less:
 - The sharer's **Allowed hours** apply: outside them, nothing plays.
 - A guest changes nothing of the sharer's played marks, resume points or Next Up. Their plays count in the sharer's statistics, marked **Shared**, and Home in the admin app shows them under the sharer's name, with "Shared link" as the app.
 
-Each link made, revoked or expired, and each guest playback, is written to the activity log, as "A link shared by alex played Example Movie" (see [Administration](administration.md#activity-log)). The event **Shared link played** tells the sharer's notification targets and the server's, at most once an hour per link (see [Notifications](notifications.md#events)).
+Each link made, revoked or expired, and each guest playback, is written to the activity log, as "A guest played Example Movie through the link shared by alex" (see [Administration](administration.md#activity-log)). The event **Shared link played** tells the sharer's notification targets and the server's, at most once an hour per link (see [Notifications](notifications.md#events)).
 
 ### How share links are kept safe
 

@@ -247,7 +247,7 @@ The activity log records:
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - settings saved;
 - addons installed or removed;
-- share links made, revoked or expired, and each guest playback through one, as "A link shared by alex played Example Movie (2008)" (see [Share links](users.md#share-links)).
+- share links made, revoked or expired, and each guest playback through one, as "A guest played Example Movie (2008) through the link shared by alex" (see [Share links](users.md#share-links)).
 
 It keeps 30 days. Its last entries show on the admin app's [**Home**](#home), and Jellyfin apps can read it.
 

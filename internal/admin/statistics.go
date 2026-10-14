@@ -75,16 +75,20 @@ type statRankedJSON struct {
 }
 
 type statGroupJSON struct {
-	Name   string `json:"name"`
-	Plays  int    `json:"plays"`
-	Played int64  `json:"played"`
+	Name string `json:"name"`
+	// Shared marks the app of guests' playbacks through share links.
+	Shared bool  `json:"shared"`
+	Plays  int   `json:"plays"`
+	Played int64 `json:"played"`
 }
 
 type statDeviceJSON struct {
-	Name   string `json:"name"`
-	App    string `json:"app"`
-	Plays  int    `json:"plays"`
-	Played int64  `json:"played"`
+	Name string `json:"name"`
+	App  string `json:"app"`
+	// Shared marks the device of guests' playbacks through share links.
+	Shared bool  `json:"shared"`
+	Plays  int   `json:"plays"`
+	Played int64 `json:"played"`
 }
 
 // statMethodJSON is a play method: "direct_play", "direct_stream",
@@ -220,10 +224,10 @@ func (s statisticsRoutes) statistics(w http.ResponseWriter, r *http.Request) {
 		result.Buckets = append(result.Buckets, bucket)
 	}
 	for _, g := range st.Apps {
-		result.Apps = append(result.Apps, statGroupJSON{Name: g.Name, Plays: g.Plays, Played: secondsOf(g.Played)})
+		result.Apps = append(result.Apps, statGroupJSON{Name: g.Name, Shared: g.Shared, Plays: g.Plays, Played: secondsOf(g.Played)})
 	}
 	for _, g := range st.Devices {
-		result.Devices = append(result.Devices, statDeviceJSON{Name: g.Name, App: g.App, Plays: g.Plays, Played: secondsOf(g.Played)})
+		result.Devices = append(result.Devices, statDeviceJSON{Name: g.Name, App: g.App, Shared: g.Shared, Plays: g.Plays, Played: secondsOf(g.Played)})
 	}
 	for _, g := range st.Methods {
 		result.Methods = append(result.Methods, statMethodJSON{Method: g.Name, Plays: g.Plays, Played: secondsOf(g.Played)})

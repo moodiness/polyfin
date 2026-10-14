@@ -62,8 +62,11 @@ type Ranked struct {
 
 // Group is an app, a device or a play method.
 type Group struct {
-	Name   string
-	App    string
+	Name string
+	App  string
+	// Shared is set for apps and devices of guests' playbacks through
+	// share links, whose stored names are English.
+	Shared bool
 	Plays  int
 	Played time.Duration
 }
@@ -142,18 +145,21 @@ func (h *History) Statistics(ctx context.Context, f Filter, unit string, zone *t
 		return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Group, error) {
 			var g Group
 			targets := []any{&g.Name}
-			if columns == "h.device, h.app" {
-				targets = append(targets, &g.App)
+			switch columns {
+			case "h.app, h.shared":
+				targets = append(targets, &g.Shared)
+			case "h.device, h.app, h.shared":
+				targets = append(targets, &g.App, &g.Shared)
 			}
 			err := row.Scan(append(targets, &g.Plays, &played)...)
 			g.Played = seconds(played)
 			return g, err
 		})
 	}
-	if st.Apps, err = grouped("h.app"); err != nil {
+	if st.Apps, err = grouped("h.app, h.shared"); err != nil {
 		return st, err
 	}
-	if st.Devices, err = grouped("h.device, h.app"); err != nil {
+	if st.Devices, err = grouped("h.device, h.app, h.shared"); err != nil {
 		return st, err
 	}
 	if st.Methods, err = grouped("h.method"); err != nil {
