@@ -5,8 +5,12 @@ package localization
 import (
 	_ "embed"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 )
 
 // Language is an ISO 639-2 language.
@@ -86,4 +90,82 @@ func LanguageCode(code string) string {
 func SameLanguage(a, b string) bool {
 	a, b = LanguageCode(a), LanguageCode(b)
 	return a != "" && a == b
+}
+
+// KnownLanguage reports whether code is one of an ISO 639 language's codes,
+// in any letter case.
+func KnownLanguage(code string) bool {
+	_, ok := codes()[strings.ToLower(strings.TrimSpace(code))]
+	return ok
+}
+
+// LanguageTag returns the shortest code of a language given by any of its
+// codes, as browsers name languages: its ISO 639-1 code ("fre" gives
+// "fr"), else its ISO 639-2/T code, else its only one. An unknown code is
+// returned in lower case.
+func LanguageTag(code string) string {
+	bibliographic := LanguageCode(code)
+	for _, l := range languages() {
+		if l.Bibliographic == bibliographic {
+			if l.Alpha2 != "" {
+				return l.Alpha2
+			}
+			if l.Terminology != "" {
+				return l.Terminology
+			}
+			return l.Bibliographic
+		}
+	}
+	return bibliographic
+}
+
+// names maps the names of the languages that have an ISO 639-1 code, in
+// lower case, to their bibliographic code: their English names as the
+// standard lists them ("Spanish; Castilian" gives both), and as the
+// Unicode CLDR names them in English, in French and in the language
+// itself ("français").
+var names = sync.OnceValue(func() map[string]string {
+	index := map[string]string{}
+	add := func(name, code string) {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			if _, taken := index[name]; !taken {
+				index[name] = code
+			}
+		}
+	}
+	english, french := display.English.Languages(), display.French.Languages()
+	for _, l := range languages() {
+		for name := range strings.SplitSeq(l.Name, ";") {
+			add(name, l.Bibliographic)
+		}
+		if l.Alpha2 == "" {
+			continue
+		}
+		tag := language.Make(l.Alpha2)
+		add(english.Name(tag), l.Bibliographic)
+		add(french.Name(tag), l.Bibliographic)
+		add(display.Self.Name(tag), l.Bibliographic)
+	}
+	return index
+})
+
+// LanguageCodes returns the ISO 639-2/B codes of the languages a text
+// names, each once, as addons give a title's language: by code ("fr",
+// "fre", "fr-CA") or by name ("French", "Français"), several separated by
+// commas, slashes, semicolons or "|". What names no language is left out.
+func LanguageCodes(text string) []string {
+	var result []string
+	for part := range strings.FieldsFuncSeq(text, func(r rune) bool { return r == ',' || r == '/' || r == ';' || r == '|' }) {
+		part = strings.ToLower(strings.TrimSpace(part))
+		code, ok := names()[part]
+		if !ok {
+			if code = LanguageCode(part); !KnownLanguage(code) {
+				continue
+			}
+		}
+		if !slices.Contains(result, code) {
+			result = append(result, code)
+		}
+	}
+	return result
 }

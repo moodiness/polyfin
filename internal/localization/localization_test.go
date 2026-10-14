@@ -1,6 +1,9 @@
 package localization
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLanguagesCompareWhicheverCodeNamesThem(t *testing.T) {
 	for _, test := range []struct {
@@ -22,6 +25,23 @@ func TestLanguagesCompareWhicheverCodeNamesThem(t *testing.T) {
 	} {
 		if got := SameLanguage(test.a, test.b); got != test.same {
 			t.Errorf("SameLanguage(%q, %q) = %v", test.a, test.b, got)
+		}
+	}
+}
+
+// A title's language, as addons give it, names languages by code or by
+// name, in English, in French or in the language itself.
+func TestLanguagesAreReadFromTheirCodesAndNames(t *testing.T) {
+	for text, want := range map[string]string{
+		"fr":                          "fre",
+		"French":                      "fre",
+		"français":                    "fre",
+		"en, Deutsch / Spanish; xx-y": "eng ger spa",
+		"Allemand|fr-CA|fr":           "ger fre",
+		"none":                        "",
+	} {
+		if got := strings.Join(LanguageCodes(text), " "); got != want {
+			t.Errorf("LanguageCodes(%q) = %q, want %q", text, got, want)
 		}
 	}
 }
