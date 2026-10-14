@@ -275,6 +275,9 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 		if err := s.storePage(ctx, src, key, kept); err != nil {
 			s.logger.Debug("A catalog page could not be kept", "catalog", src.catalog.ID, "error", err)
 		}
+		if err := s.recordArrivals(ctx, src, key.skip, metas, asked); err != nil {
+			s.logger.Debug("The titles new in a catalog could not be noted", "catalog", src.catalog.ID, "error", err)
+		}
 	}
 	return metas, nil
 }
@@ -586,7 +589,8 @@ const WarmInterval = time.Hour
 // home screen waits for an addon: those of the server's addons, and of
 // users' own addons when the settings allow them. Pages already fresh are
 // not asked again; stale ones are refreshed. It also forgets the pages
-// and descriptions kept in the database that no one read for long.
+// and descriptions kept in the database that no one read for long, and
+// the catalogs and titles no read saw for long (see arrivals.go).
 func (s *Service) Warm(ctx context.Context) error {
 	scopes := []struct {
 		scope    addons.Scope
@@ -652,8 +656,10 @@ func (s *Service) Warm(ctx context.Context) error {
 	if _, err := s.db.Exec(ctx, "DELETE FROM catalog_pages WHERE fetched_at < $1", s.now().Add(-s.keptCatalogLife())); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(ctx, "DELETE FROM metas WHERE fetched_at < $1", s.now().Add(-metaKept))
-	return err
+	if _, err := s.db.Exec(ctx, "DELETE FROM metas WHERE fetched_at < $1", s.now().Add(-metaKept)); err != nil {
+		return err
+	}
+	return s.forgetArrivals(ctx)
 }
 
 // ReadCollections reads every collection of the server's collection
