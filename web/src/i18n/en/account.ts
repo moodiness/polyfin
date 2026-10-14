@@ -7,11 +7,39 @@ const account = {
     sections: {
       statistics: 'Statistics',
       tracking: 'Tracking',
+      resume: 'Continue Watching',
+      hidden: 'Hidden titles',
       import: 'Import from another server',
       appImport: 'Import from an app',
       notifications: 'Notifications',
       devices: 'Devices',
       password: 'Password',
+    },
+    /** My account › Continue Watching and Hidden titles. */
+    watching: {
+      resumeHelp:
+        'The titles under way in your Continue Watching, for the apps that cannot take one off. Remove takes a title off without changing whether it is played. An import from a tracking service or an app brings it back only with a more recent resume point.',
+      hiddenHelp:
+        'The titles you hid from your libraries, home rows, searches and similar titles. They still open from a link. In the web player, a title’s ⋮ menu hides it.',
+      remove: 'Remove',
+      removeLabel: (name: string) => `Remove ${name} from Continue Watching`,
+      removed: (name: string) => `${name} is off Continue Watching.`,
+      resumeEmpty: 'Nothing under way',
+      resumeEmptyHelp: 'The movies and episodes you start show here until you finish them.',
+      progress: (position: string, runtime: string) => `${position} of ${runtime}`,
+      showAgain: 'Show again',
+      showLabel: (name: string) => `Show ${name} again`,
+      shown: (name: string) => `${name} is back in your lists.`,
+      hiddenEmpty: 'No hidden title',
+      hiddenEmptyHelp: 'Hide a title from its ⋮ menu in the web player.',
+      hiddenOn: 'Hidden',
+      kinds: {
+        movie: 'Movie',
+        series: 'Series',
+        episode: 'Episode',
+        video: 'Home video',
+        replay: 'Replay',
+      } as Record<string, string>,
     },
     /** How often connected accounts are imported, from the server's setting, in minutes. */
     importEvery: (minutes: number) =>

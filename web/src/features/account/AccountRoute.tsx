@@ -2,8 +2,10 @@ import {
   ArrowSquareInIcon,
   BellIcon,
   ChartBarIcon,
+  ClockCounterClockwiseIcon,
   DeviceMobileIcon,
   DevicesIcon,
+  EyeSlashIcon,
   ListChecksIcon,
   PasswordIcon,
 } from '@phosphor-icons/react'
@@ -32,10 +34,13 @@ import AppImport, { AppConnections } from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import TrackingServices from './TrackingServices'
+import { HiddenList, ResumeList } from './WatchingLists'
 
 const sectionIds = [
   'statistics',
   'tracking',
+  'resume',
+  'hidden',
   'import',
   'app-import',
   'notifications',
@@ -48,9 +53,9 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, importing from another server and from an app
- * (unless the server turns it off), notifications, devices and password, with a list of sections
- * beside them.
+ * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, importing from
+ * another server and from an app (unless the server turns it off), notifications, devices and
+ * password, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -105,6 +110,13 @@ export default function AccountRoute() {
               icon: ListChecksIcon,
               to: '#tracking',
             },
+            {
+              id: 'resume',
+              label: text.sections.resume,
+              icon: ClockCounterClockwiseIcon,
+              to: '#resume',
+            },
+            { id: 'hidden', label: text.sections.hidden, icon: EyeSlashIcon, to: '#hidden' },
             ...(importing
               ? [
                   {
@@ -144,6 +156,12 @@ export default function AccountRoute() {
       </AccountSection>
       <AccountSection id="tracking" title={text.sections.tracking} help={text.tracking.description}>
         <TrackingServices />
+      </AccountSection>
+      <AccountSection id="resume" title={text.sections.resume} help={text.watching.resumeHelp}>
+        <ResumeList />
+      </AccountSection>
+      <AccountSection id="hidden" title={text.sections.hidden} help={text.watching.hiddenHelp}>
+        <HiddenList />
       </AccountSection>
       {importing && (
         <AccountSection

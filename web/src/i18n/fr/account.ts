@@ -8,11 +8,39 @@ const account: typeof en = {
     sections: {
       statistics: 'Statistiques',
       tracking: 'Suivi',
+      resume: 'Continuer de regarder',
+      hidden: 'Titres masqués',
       import: 'Importer depuis un autre serveur',
       appImport: 'Importer depuis une appli',
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
+    },
+    watching: {
+      resumeHelp:
+        'Les titres en cours de votre liste « Continuer de regarder », pour les applis qui ne savent pas en retirer un. Retirer enlève un titre sans changer s’il est vu ou non. Un import depuis un service de suivi ou une appli ne le ramène qu’avec un point de reprise plus récent.',
+      hiddenHelp:
+        'Les titres que vous avez masqués de vos bibliothèques, rangées d’accueil, recherches et titres similaires. Ils s’ouvrent toujours depuis un lien. Dans le lecteur web, le menu ⋮ d’un titre le masque.',
+      remove: 'Retirer',
+      removeLabel: (name: string) => `Retirer ${name} de « Continuer de regarder »`,
+      removed: (name: string) => `${name} est retiré de « Continuer de regarder ».`,
+      resumeEmpty: 'Rien en cours',
+      resumeEmptyHelp:
+        'Les films et les épisodes que vous commencez s’affichent ici jusqu’à ce que vous les finissiez.',
+      progress: (position: string, runtime: string) => `${position} sur ${runtime}`,
+      showAgain: 'Afficher de nouveau',
+      showLabel: (name: string) => `Afficher de nouveau ${name}`,
+      shown: (name: string) => `${name} est de retour dans vos listes.`,
+      hiddenEmpty: 'Aucun titre masqué',
+      hiddenEmptyHelp: 'Masquez un titre depuis son menu ⋮ dans le lecteur web.',
+      hiddenOn: 'Masqué',
+      kinds: {
+        movie: 'Film',
+        series: 'Série',
+        episode: 'Épisode',
+        video: 'Vidéo personnelle',
+        replay: 'Replay',
+      },
     },
     importEvery: (minutes: number) =>
       minutes < 60

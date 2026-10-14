@@ -1221,6 +1221,43 @@ export const fetchMyDevices = (signal?: AbortSignal) =>
 export const signOutMyDevice = (id: string) =>
   request<void>('DELETE', `/account/devices/${seg(id)}`)
 
+/** A title of the user's lists on My account. */
+export type AccountTitle = {
+  id: string
+  kind: 'movie' | 'series' | 'episode' | 'video' | 'replay' | string
+  name: string
+  seriesName: string
+  season: number
+  episode: number
+  year: number
+  /** Seconds, 0 when unknown. */
+  runtime: number
+  /** The item whose Primary image is the poster: the series of an episode. */
+  posterId: string
+}
+
+/** A title of Continue Watching: its resume point and runtime in seconds, 0 when unknown. */
+export type ResumeTitle = {
+  item: AccountTitle
+  position: number
+  runtime: number
+  played: boolean
+  lastPlayedAt: string | null
+}
+
+/** A title hidden from the user's lists, and when. */
+export type HiddenTitle = { item: AccountTitle; hiddenAt: string }
+
+export const fetchOwnResume = (signal?: AbortSignal) =>
+  request<ResumeTitle[]>('GET', '/account/resume', undefined, signal)
+
+export const removeOwnResume = (id: string) => request<void>('DELETE', `/account/resume/${seg(id)}`)
+
+export const fetchOwnHidden = (signal?: AbortSignal) =>
+  request<HiddenTitle[]>('GET', '/account/hidden', undefined, signal)
+
+export const showOwnHidden = (id: string) => request<void>('DELETE', `/account/hidden/${seg(id)}`)
+
 /** The tracking services, in the order the server lists them. */
 export type TrackingServiceName =
   'trakt' | 'simkl' | 'mdblist' | 'publicmetadb' | 'lastfm' | 'listenbrainz'
@@ -2814,6 +2851,8 @@ export const queryKeys = {
   status: ['status'] as const,
   session: ['session'] as const,
   myDevices: ['account', 'devices'] as const,
+  ownResume: ['account', 'resume'] as const,
+  ownHidden: ['account', 'hidden'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   jellyfinImport: ['jellyfin-import'] as const,
