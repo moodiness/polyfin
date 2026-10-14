@@ -105,12 +105,25 @@ func main() {
 	switch command {
 	case "serve":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		err := serve(ctx)
+		var restore pendingRestore
+		err := serve(ctx, &restore)
 		// A stop requested while waiting for PostgreSQL is not a failure.
 		interrupted := ctx.Err() != nil && errors.Is(err, context.Canceled)
+		// Polyfin stopped to restore a backup: it starts again afterwards,
+		// unless asked to stop meanwhile.
+		restart := err == nil && restore.plan != nil && ctx.Err() == nil
+		if restart {
+			restoreBackup(ctx, restore)
+			restart = ctx.Err() == nil
+		}
 		stop()
 		if err != nil && !interrupted {
 			fmt.Fprintln(os.Stderr, "polyfin:", err)
+			os.Exit(1)
+		}
+		if restart {
+			err := startAgain()
+			fmt.Fprintln(os.Stderr, "polyfin: start again after the restore:", err)
 			os.Exit(1)
 		}
 	case "healthcheck":
@@ -128,8 +141,15 @@ func main() {
 	}
 }
 
-func serve(ctx context.Context) error {
+// serve runs Polyfin until ctx ends, or until an administrator restores a
+// backup: restore then holds what Restore needs, once every part of
+// Polyfin has stopped.
+func serve(ctx context.Context, restore *pendingRestore) error {
 	started := time.Now()
+	// Everything Polyfin runs in the background ends with ctx, or when it
+	// stops to restore a backup.
+	ctx, stopAll := context.WithCancel(ctx)
+	defer stopAll()
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return err
@@ -310,12 +330,17 @@ func serve(ctx context.Context) error {
 		logger.Info("Live TV recording is on", "folder", recorder.Dir())
 	}
 	registerRecordingTasks(registry, recorder)
+	// The destinations' passwords and keys are sealed as the other secrets.
 	backups := backup.New(backup.Config{Folder: func() string { return store.Settings().BackupDir(cfg.DataDir) }, DatabaseURL: cfg.DatabaseURL,
-		DB: pool, Settings: store.Settings, Logger: logger})
+		DB: pool, Secrets: box, Settings: store.Settings, Logger: logger})
 	if backups.Available() {
 		logger.Info("Database backups are on", "folder", backups.Dir())
 		if _, err := exec.LookPath(backups.PgDump()); err != nil {
 			logger.Warn("pg_dump was not found: database backups fail until it is installed", "pg_dump", backups.PgDump())
+		}
+		if _, err := exec.LookPath(backups.PgRestore()); err != nil {
+			logger.Warn("pg_restore was not found: backups cannot be restored from the admin app until it is installed", "pg_restore",
+				backups.PgRestore())
 		}
 	}
 	registerBackupTask(registry, backups)
@@ -416,6 +441,7 @@ func serve(ctx context.Context) error {
 		CacheDir:       cfg.CacheDir,
 		FontsDir:       cfg.FontsDir,
 		Recordings:     recorder,
+		Backups:        backups,
 		Trackers:       tracking,
 		Plays:          playbacks,
 	})
@@ -524,8 +550,14 @@ func serve(ctx context.Context) error {
 	case err := <-served:
 		return err
 	case <-ctx.Done():
+		logger.Info("Polyfin is stopping")
+	case plan := <-backups.Requested():
+		// Playbacks, conversions, recordings and tasks stop with the rest:
+		// the backup is restored once nothing uses the database.
+		logger.Info("Polyfin is stopping to restore a backup")
+		*restore = pendingRestore{plan: &plan, backups: backups, listen: cfg.Listen, logger: logger}
+		stopAll()
 	}
-	logger.Info("Polyfin is stopping")
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -697,8 +729,8 @@ func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 		Key:      "BackUpDatabase",
 		Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{
-			"en": {Name: "Back up the database", Description: "Copies the database into the backup folder every day at the hour set under Settings › Backups, while backups are on, and deletes the oldest copies past the number kept."},
-			"fr": {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans le dossier des sauvegardes chaque jour à l’heure choisie dans Paramètres › Sauvegardes, quand elles sont activées, et supprime les plus anciennes copies au-delà du nombre conservé."},
+			"en": {Name: "Back up the database", Description: "Copies the database into the backup folder every day at the hour set under Settings › Backups, while backups are on, sends the copies to the backup destinations, and deletes the oldest copies past the number each place keeps."},
+			"fr": {Name: "Sauvegarder la base de données", Description: "Copie la base de données dans le dossier des sauvegardes chaque jour à l’heure choisie dans Paramètres › Sauvegardes, quand elles sont activées, envoie les copies aux destinations des sauvegardes, et supprime les plus anciennes copies au-delà du nombre que chaque endroit conserve."},
 		},
 		Daily: backups.Hour,
 		Run:   backups.Run,
