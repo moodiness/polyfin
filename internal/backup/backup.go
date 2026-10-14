@@ -86,14 +86,21 @@ type Config struct {
 type Service struct {
 	cfg Config
 	now func() time.Time
-	// runs keeps backups from being made at the same time.
-	runs sync.Mutex
+	// runs keeps backups from being made, and sent, at the same time;
+	// dumps keeps the folder to one pg_dump at a time, a backup before a
+	// restore included, which so never waits on a destination.
+	runs  sync.Mutex
+	dumps sync.Mutex
+	// idle is how long a destination may move no byte (see
+	// DefaultIdleTimeout).
+	idle time.Duration
 	// mu guards the backup prepared to be restored, and whether a restore
-	// was started.
-	mu        sync.Mutex
-	plan      *Plan
-	restoring bool
-	requests  chan Plan
+	// was started. A plan not started is dropped after planLifetime.
+	mu           sync.Mutex
+	plan         *Plan
+	restoring    bool
+	requests     chan Plan
+	planLifetime time.Duration
 }
 
 // New returns the backup service of cfg.
@@ -104,7 +111,7 @@ func New(cfg Config) *Service {
 	if cfg.PgRestore == "" {
 		cfg.PgRestore = "pg_restore"
 	}
-	return &Service{cfg: cfg, now: time.Now, requests: make(chan Plan, 1)}
+	return &Service{cfg: cfg, now: time.Now, idle: DefaultIdleTimeout, requests: make(chan Plan, 1), planLifetime: PlanLifetime}
 }
 
 // Dir is the folder backups are written to, empty while they are off.
@@ -188,26 +195,45 @@ func (s *Service) Run(ctx context.Context) error {
 	if dir == "" {
 		return ErrOff
 	}
-	started := s.now()
-	name, size, err := s.dump(ctx, dir, started, "")
+	name, size, deleted, err := s.dumpAndPrune(ctx, dir)
 	if ctx.Err() != nil {
 		// A cancelled run leaves what the last one recorded.
 		return ctx.Err()
 	}
-	s.record(ctx, started, name, size, err)
-	if err != nil {
+	if name == "" {
 		return err
 	}
 	s.cfg.Logger.Info("The database was backed up", "file", name, "size", size)
-	deleted, err := prune(dir, s.cfg.Settings().BackupsKept)
 	if len(deleted) > 0 {
 		s.cfg.Logger.Info("Deleted old database backups", "files", deleted)
 	}
+	// The folder is left to a backup before a restore meanwhile: a
+	// restore never waits on a destination.
 	s.send(ctx, dir)
 	if err != nil {
 		return fmt.Errorf("the backup was made, but older ones could not be deleted: %w", err)
 	}
 	return nil
+}
+
+// dumpAndPrune makes a backup into dir, records how it went, and deletes
+// the oldest past the settings' BackupsKept, the folder held meanwhile. It
+// returns the backup's name, empty when it failed, its size, and the
+// backups deleted.
+func (s *Service) dumpAndPrune(ctx context.Context, dir string) (string, int64, []string, error) {
+	s.dumps.Lock()
+	defer s.dumps.Unlock()
+	started := s.now()
+	name, size, err := s.dump(ctx, dir, started, "")
+	if ctx.Err() != nil {
+		return "", 0, nil, ctx.Err()
+	}
+	s.record(ctx, started, name, size, err)
+	if err != nil {
+		return "", 0, nil, err
+	}
+	deleted, err := prune(dir, s.cfg.Settings().BackupsKept)
+	return name, size, deleted, err
 }
 
 // dump writes a backup started at started into dir, its name ending with

@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // webdavRemote is a folder of a WebDAV server, signed in to with basic
@@ -20,7 +21,7 @@ type webdavRemote struct {
 	password string
 }
 
-func newWebDAVRemote(d Destination, password string) (*webdavRemote, error) {
+func newWebDAVRemote(d Destination, password string, idle time.Duration) (*webdavRemote, error) {
 	folder, err := url.Parse(d.Address)
 	if err != nil {
 		return nil, ErrInvalidDestinationAddress
@@ -29,10 +30,10 @@ func newWebDAVRemote(d Destination, password string) (*webdavRemote, error) {
 		folder.Path += "/"
 		folder.RawPath = ""
 	}
-	return &webdavRemote{client: newHTTPClient(), folder: folder, user: d.Username, password: password}, nil
+	return &webdavRemote{client: newHTTPClient(idle), folder: folder, user: d.Username, password: password}, nil
 }
 
-func (w *webdavRemote) close() error { return nil }
+func (w *webdavRemote) close() error { return closeHTTP(w.client) }
 
 // webdavServer names WebDAV destinations in errors.
 const webdavServer = "The WebDAV server"
@@ -123,7 +124,8 @@ func (w *webdavRemote) list(ctx context.Context) ([]remoteFile, error) {
 		if strings.TrimSuffix(dir, "/") != strings.TrimSuffix(w.folder.Path, "/") || name == "" {
 			continue
 		}
-		file := remoteFile{name: name}
+		// A server need not tell the length: unknown is -1.
+		file := remoteFile{name: name, size: unknownSize}
 		collection := false
 		for _, propstat := range r.Propstat {
 			if !strings.Contains(propstat.Status, " 200 ") && propstat.Status != "" {

@@ -193,6 +193,8 @@ type Plan struct {
 	// path is the file restored, temporary when it was downloaded or sent.
 	path      string
 	temporary bool
+	// expires is when it is dropped unless its restore was started.
+	expires time.Time
 	// By is the administrator who started the restore, BeforeRestore the
 	// backup made of the current database first.
 	By            string
@@ -259,6 +261,9 @@ func (s *Service) Prepare(ctx context.Context, destination *accounts.ID, name st
 	if err := s.CanRestore(); err != nil {
 		return Plan{}, err
 	}
+	if err := s.checkNotRestoring(); err != nil {
+		return Plan{}, err
+	}
 	d, err := s.loadDestination(ctx, *destination)
 	if err != nil {
 		return Plan{}, err
@@ -270,13 +275,28 @@ func (s *Service) Prepare(ctx context.Context, destination *accounts.ID, name st
 		return Plan{}, err
 	}
 	defer r.close()
-	path, err := temporaryPath(dir)
+	// The download is the size the destination lists, never more.
+	files, err := r.list(ctx)
 	if err != nil {
 		return Plan{}, err
 	}
-	size, err := copyTo(path, func(w io.Writer) error { return r.get(ctx, name, w) })
+	index := slices.IndexFunc(files, func(f remoteFile) bool { return f.name == name })
+	if index < 0 {
+		return Plan{}, ErrBackupNotFound
+	}
+	// A size the destination does not tell is bounded as a file sent is.
+	listed, limit := files[index].size, files[index].size
+	if listed == unknownSize {
+		limit = maxDownload
+	}
+	path := temporaryPath(dir)
+	size, err := copyTo(path, func(w io.Writer) error { return r.get(ctx, name, &cappedWriter{w: w, max: limit}) })
 	if errors.Is(err, errNotFound) {
 		return Plan{}, ErrBackupNotFound
+	}
+	if err == nil && listed != unknownSize && size != listed {
+		_ = os.Remove(path)
+		err = fmt.Errorf("the destination sent %d bytes of the %d it lists", size, listed)
 	}
 	if err != nil {
 		return Plan{}, fmt.Errorf("download %s: %w", name, err)
@@ -291,10 +311,10 @@ func (s *Service) PrepareUpload(ctx context.Context, name string, body io.Reader
 	if err := s.CanRestore(); err != nil {
 		return Plan{}, err
 	}
-	path, err := temporaryPath(s.Dir())
-	if err != nil {
+	if err := s.checkNotRestoring(); err != nil {
 		return Plan{}, err
 	}
+	path := temporaryPath(s.Dir())
 	size, err := copyTo(path, func(w io.Writer) error {
 		_, err := io.Copy(w, body)
 		return err
@@ -309,21 +329,13 @@ func (s *Service) PrepareUpload(ctx context.Context, name string, body io.Reader
 	return s.prepare(ctx, Plan{File: name, Uploaded: true, path: path, temporary: true, Size: size})
 }
 
-// temporaryPath is the path of a new backup to restore in dir. Those left
-// from before are deleted: a restore prepared replaces the last one.
-func temporaryPath(dir string) (string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", err
-	}
-	for _, entry := range entries {
-		if restoreTemporary.MatchString(entry.Name()) {
-			_ = os.Remove(filepath.Join(dir, entry.Name()))
-		}
-	}
+// temporaryPath is the path of a new backup to restore in dir, a name of
+// its own: the files of other plans, or of a restore under way, are never
+// touched.
+func temporaryPath(dir string) string {
 	random := make([]byte, 8)
 	_, _ = rand.Read(random)
-	return filepath.Join(dir, ".polyfin-restore-"+hex.EncodeToString(random)+".dump"), nil
+	return filepath.Join(dir, ".polyfin-restore-"+hex.EncodeToString(random)+".dump")
 }
 
 // prepare inspects plan's file and keeps it as the backup to restore.
@@ -350,8 +362,70 @@ func (s *Service) prepare(ctx context.Context, plan Plan) (Plan, error) {
 	if s.plan != nil && s.plan.temporary && s.plan.path != plan.path {
 		_ = os.Remove(s.plan.path)
 	}
+	plan.expires = time.Now().Add(s.planLifetime)
 	s.plan = &plan
+	// A plan never started is dropped, with its file, after a while; one
+	// whose start fails past that time, by Start.
+	time.AfterFunc(s.planLifetime, func() { s.Discard(plan.ID) })
 	return plan, nil
+}
+
+// PlanLifetime is how long a backup prepared to be restored stays so: its
+// file, downloaded or sent, is deleted after it.
+const PlanLifetime = time.Hour
+
+// Discard drops the backup prepared as id, and deletes its file when it
+// was downloaded or sent, unless its restore was started. It reports
+// whether it dropped it.
+func (s *Service) Discard(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restoring || s.plan == nil || s.plan.ID != id {
+		return false
+	}
+	if s.plan.temporary {
+		_ = os.Remove(s.plan.path)
+	}
+	s.plan = nil
+	return true
+}
+
+// checkNotRestoring fails with ErrRestoring while a restore is under way:
+// nothing is downloaded nor written then.
+func (s *Service) checkNotRestoring() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restoring {
+		return ErrRestoring
+	}
+	return nil
+}
+
+// RemoveRestoreLeftovers deletes from the folder the backups downloaded or
+// sent to be restored that a stop left behind. Polyfin calls it at
+// startup, before any is prepared.
+func (s *Service) RemoveRestoreLeftovers() {
+	dir := s.Dir()
+	if dir == "" {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if !entry.Type().IsRegular() || !restoreTemporary.MatchString(entry.Name()) || (s.plan != nil && s.plan.path == path) {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			s.cfg.Logger.Warn("Could not delete a backup left from a restore", "file", entry.Name(), "error", err)
+		} else {
+			s.cfg.Logger.Info("Deleted a backup left from a restore", "file", entry.Name())
+		}
+	}
 }
 
 // inspect checks that the file at path is a backup of Polyfin's database
@@ -465,6 +539,14 @@ func (s *Service) Start(ctx context.Context, id string, anyway bool, administrat
 	if err != nil {
 		s.mu.Lock()
 		s.restoring = false
+		// Its time passed while the backup was made: the timer could not
+		// drop it then.
+		if s.plan != nil && s.plan.ID == id && !time.Now().Before(s.plan.expires) {
+			if s.plan.temporary {
+				_ = os.Remove(s.plan.path)
+			}
+			s.plan = nil
+		}
 		s.mu.Unlock()
 		return fmt.Errorf("the current database could not be backed up first, so nothing was restored: %w", err)
 	}
@@ -486,8 +568,8 @@ func (s *Service) Requested() <-chan Plan {
 // a backup named before-restore that retention never deletes, and returns
 // its name.
 func (s *Service) backUpBeforeRestore(ctx context.Context) (string, error) {
-	s.runs.Lock()
-	defer s.runs.Unlock()
+	s.dumps.Lock()
+	defer s.dumps.Unlock()
 	dir := s.Dir()
 	if dir == "" {
 		return "", ErrOff
@@ -548,8 +630,28 @@ func (s *Service) Restore(ctx context.Context, plan Plan) error {
 		}
 		activity.New(pool, func() accounts.Settings { return accounts.Settings{Language: language} }, s.cfg.Logger).
 			BackupRestored(ctx, plan.By, plan.File)
+		s.recordBeforeRestore(ctx, pool, plan.BeforeRestore)
 	}
 	return err
+}
+
+// recordBeforeRestore records, in the database restored, the backup made
+// before the restore as the last backup made: the backup's own record
+// predates it, and would tell of none, or of an older one.
+func (s *Service) recordBeforeRestore(ctx context.Context, db DB, name string) {
+	made, ok := madeAt(name)
+	if !ok {
+		return
+	}
+	info, err := os.Stat(filepath.Join(s.Dir(), name))
+	if err != nil {
+		return
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO backup_status (ran_at, error, made_at, file, size) VALUES ($1, '', $1, $2, $3)
+		ON CONFLICT (singleton) DO UPDATE SET ran_at = excluded.ran_at, error = '', made_at = excluded.made_at,
+			file = excluded.file, size = excluded.size`, made, name, info.Size()); err != nil {
+		s.cfg.Logger.Warn("Could not record the backup made before the restore", "error", err)
+	}
 }
 
 // restore runs pg_restore's script of plan's backup in one transaction,

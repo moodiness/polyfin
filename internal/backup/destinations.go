@@ -460,11 +460,11 @@ func (s *Service) open(ctx context.Context, d stored) (remote, error) {
 	}
 	switch d.Kind {
 	case KindS3:
-		return newS3Remote(d.Destination, secret)
+		return newS3Remote(d.Destination, secret, s.idle)
 	case KindWebDAV:
-		return newWebDAVRemote(d.Destination, secret)
+		return newWebDAVRemote(d.Destination, secret, s.idle)
 	}
-	return dialSFTP(ctx, d.Destination, secret, privateKey, func(hostKey string) {
+	return dialSFTP(ctx, d.Destination, secret, privateKey, s.idle, func(hostKey string) {
 		// Saved once: a key saved meanwhile is kept.
 		if _, err := s.cfg.DB.Exec(context.WithoutCancel(ctx), "UPDATE backup_destinations SET host_key = $2 WHERE id = $1 AND host_key = ''",
 			d.ID, hostKey); err != nil {
@@ -511,8 +511,10 @@ func (s *Service) test(ctx context.Context, d stored) error {
 		return err
 	}
 	defer func() { _ = r.remove(context.WithoutCancel(ctx), name) }()
+	// The file read back is the size written: a server sending more fails
+	// the test rather than filling the memory.
 	var read bytes.Buffer
-	if err := r.get(ctx, name, &read); err != nil {
+	if err := r.get(ctx, name, &cappedWriter{w: &read, max: int64(len(data))}); err != nil {
 		return fmt.Errorf("read back the test file: %w", err)
 	}
 	if !bytes.Equal(read.Bytes(), data) {
@@ -543,9 +545,17 @@ func (s *Service) send(ctx context.Context, dir string) int {
 	failed := 0
 	for _, d := range destinations {
 		started := s.now()
-		newest, err := s.sendTo(ctx, d, dir, local)
+		// Each destination has a time of its own, after which it fails and
+		// the next is sent to: what it is sent bounds it.
+		limit := sendDeadline(dir, local[max(len(local)-d.Kept, 0):])
+		destinationCtx, cancel := context.WithTimeout(ctx, limit)
+		newest, err := s.sendTo(destinationCtx, d, dir, local)
+		cancel()
 		if ctx.Err() != nil {
 			return failed
+		}
+		if err != nil && errors.Is(destinationCtx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("the destination did not take the backups within %s: %w", limit.Round(time.Second), err)
 		}
 		if err != nil {
 			failed++
@@ -554,6 +564,25 @@ func (s *Service) send(ctx context.Context, dir string) int {
 		s.recordSent(ctx, d.ID, started, newest, err)
 	}
 	return failed
+}
+
+// The time a destination is given to take the backups: sendBase, and the
+// time their bytes take at minSendRate, a slow connection's.
+const (
+	sendBase    = 10 * time.Minute
+	minSendRate = 32 << 10
+)
+
+// sendDeadline is the time a destination is given to take names, the
+// newest backups of dir it keeps.
+func sendDeadline(dir string, names []string) time.Duration {
+	var bytes int64
+	for _, name := range names {
+		if info, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			bytes += info.Size()
+		}
+	}
+	return sendBase + time.Duration(bytes/minSendRate)*time.Second
 }
 
 // localBackups lists Polyfin's backups in dir, oldest first.

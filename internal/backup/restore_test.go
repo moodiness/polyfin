@@ -165,8 +165,16 @@ func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 	// The before-restore backup is kept, listed, and never deleted to keep
 	// the newest.
 	beforeRestore := "polyfin-20261001-050000-before-restore.dump"
-	if _, err := os.Stat(filepath.Join(r.dir, beforeRestore)); err != nil {
+	info, err := os.Stat(filepath.Join(r.dir, beforeRestore))
+	if err != nil {
 		t.Fatalf("no before-restore backup: %v", err)
+	}
+	// The panel tells of it as the last backup made, not of the restored
+	// database's own record, which predates the backup restored.
+	status, err := r.service.Status(ctx)
+	if err != nil || status.File != beforeRestore || status.Error != "" || status.Size != info.Size() || status.MadeAt == nil ||
+		!status.MadeAt.Equal(at.Add(time.Hour)) || status.Problem(at.Add(2*time.Hour)) {
+		t.Errorf("status after the restore: %+v %v", status, err)
 	}
 	if deleted, err := prune(r.dir, 1); err != nil || len(deleted) != 0 {
 		t.Errorf("retention deleted %v %v", deleted, err)

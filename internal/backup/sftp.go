@@ -34,8 +34,11 @@ type sftpRemote struct {
 
 // dialSFTP signs in to the SFTP server of d with password or privateKey.
 // The server's host key must be d.HostKey; without one, any is accepted,
-// and seen is called with it, in the authorized_keys format.
-func dialSFTP(ctx context.Context, d Destination, password, privateKey string, seen func(hostKey string)) (*sftpRemote, error) {
+// and seen is called with it, in the authorized_keys format. A server that
+// moves no byte for idle, while being asked or answering, fails what was
+// asked (see idleConn).
+func dialSFTP(ctx context.Context, d Destination, password, privateKey string, idle time.Duration,
+	seen func(hostKey string)) (*sftpRemote, error) {
 	var auth []ssh.AuthMethod
 	if privateKey != "" {
 		signer, err := ssh.ParsePrivateKey([]byte(privateKey))
@@ -74,7 +77,7 @@ func dialSFTP(ctx context.Context, d Destination, password, privateKey string, s
 	address := net.JoinHostPort(d.Address, strconv.Itoa(d.Port))
 	dialCtx, cancel := context.WithTimeout(ctx, sftpDialTimeout)
 	defer cancel()
-	raw, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", address)
+	raw, err := dialIdle(dialCtx, "tcp", address, idle)
 	if err != nil {
 		return nil, err
 	}

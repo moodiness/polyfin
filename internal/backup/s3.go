@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,7 +34,7 @@ type s3Remote struct {
 	now      func() time.Time
 }
 
-func newS3Remote(d Destination, secret string) (*s3Remote, error) {
+func newS3Remote(d Destination, secret string, idle time.Duration) (*s3Remote, error) {
 	endpoint, err := url.Parse(d.Address)
 	if err != nil {
 		return nil, ErrInvalidDestinationAddress
@@ -41,11 +43,11 @@ func newS3Remote(d Destination, secret string) (*s3Remote, error) {
 	if region == "" {
 		region = defaultRegion
 	}
-	return &s3Remote{client: newHTTPClient(), endpoint: endpoint, bucket: d.Bucket, prefix: d.Folder, region: region, access: d.Username,
+	return &s3Remote{client: newHTTPClient(idle), endpoint: endpoint, bucket: d.Bucket, prefix: d.Folder, region: region, access: d.Username,
 		secret: secret, now: time.Now}, nil
 }
 
-func (s *s3Remote) close() error { return nil }
+func (s *s3Remote) close() error { return closeHTTP(s.client) }
 
 // key is the object key of name.
 func (s *s3Remote) key(name string) string {
@@ -186,14 +188,27 @@ type listResult struct {
 	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
+// maxListPages bounds the pages of a listing: a million objects at
+// 1,000 a page, far more than a prefix holding backups has.
+const maxListPages = 1000
+
+// errListing reports a storage whose listing does not end: it gives a
+// continuation token it gave before.
+var errListing = errors.New("the S3 storage lists the same objects again and again")
+
 func (s *s3Remote) list(ctx context.Context) ([]remoteFile, error) {
 	prefix := ""
 	if s.prefix != "" {
 		prefix = s.prefix + "/"
 	}
 	var files []remoteFile
+	// A key listed again, as a storage may, is kept once. Pages may hold
+	// fewer keys than asked, or none: a token given twice, or too many
+	// pages, end a listing that loops.
+	seen := map[string]bool{}
+	tokens := map[string]bool{}
 	token := ""
-	for {
+	for range maxListPages {
 		query := url.Values{"list-type": {"2"}, "prefix": {prefix}, "delimiter": {"/"}}
 		if token != "" {
 			query.Set("continuation-token", token)
@@ -214,6 +229,10 @@ func (s *s3Remote) list(ctx context.Context) ([]remoteFile, error) {
 			return nil, err
 		}
 		for _, object := range result.Contents {
+			if seen[object.Key] {
+				continue
+			}
+			seen[object.Key] = true
 			if name, ok := strings.CutPrefix(object.Key, prefix); ok && name != "" && !strings.Contains(name, "/") {
 				files = append(files, remoteFile{name: name, size: object.Size})
 			}
@@ -221,8 +240,13 @@ func (s *s3Remote) list(ctx context.Context) ([]remoteFile, error) {
 		if !result.IsTruncated || result.NextContinuationToken == "" {
 			return files, nil
 		}
+		if tokens[result.NextContinuationToken] {
+			return nil, errListing
+		}
+		tokens[result.NextContinuationToken] = true
 		token = result.NextContinuationToken
 	}
+	return nil, fmt.Errorf("the S3 storage lists more than %d pages under the prefix", maxListPages)
 }
 
 func (s *s3Remote) get(ctx context.Context, name string, w io.Writer) error {
