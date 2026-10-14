@@ -438,6 +438,7 @@ func serve(ctx context.Context) error {
 		DataDir:       cfg.DataDir,
 		WebClient:     webClient != nil,
 		Sessions:      jellyfinAPI,
+		Watching:      jellyfinAPI,
 		Tasks:         registry,
 		Logs:          recent,
 		Recordings:    recorder,

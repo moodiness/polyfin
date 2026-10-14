@@ -98,6 +98,9 @@ type Options struct {
 	// Sessions are the playbacks under way, which the dashboard shows and
 	// stops; nil shows none.
 	Sessions Sessions
+	// Watching shows and changes the Continue Watching and hidden titles
+	// of the user signed in, on My account; nil shows none.
+	Watching Watching
 	// Tasks are the server's periodic jobs; nil shows none.
 	Tasks *tasks.Registry
 	// Logs keeps the recent log lines, redacted; nil keeps none.
@@ -198,6 +201,10 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
 	mux.Handle("GET /admin/api/account/history/export", h.signedIn(ownPlays.export))
+	mux.Handle("GET /admin/api/account/resume", h.signedIn(h.ownResume))
+	mux.Handle("DELETE /admin/api/account/resume/{id}", h.signedIn(h.removeOwnResume))
+	mux.Handle("GET /admin/api/account/hidden", h.signedIn(h.ownHidden))
+	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
